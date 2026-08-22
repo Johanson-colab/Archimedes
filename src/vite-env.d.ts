@@ -9,6 +9,7 @@ interface ResearchDeskBridge {
     deleteLibrary: (id: string) => Promise<{ deleted: boolean }>;
     listLibraryPapers: (libraryId: string, query?: string) => Promise<LibraryPaper[]>;
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
+    discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
     addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
@@ -52,6 +53,37 @@ interface AcademicSearchResult {
   pdf_url: string;
   citation_count: number;
   source: string;
+}
+
+type DailyDiscoveryMode = "latest" | "trending";
+type DailyDiscoveryRange = "1d" | "3d" | "7d";
+
+interface DailyDiscoveryOptions {
+  mode?: DailyDiscoveryMode;
+  range?: DailyDiscoveryRange;
+  categories?: string[];
+  query?: string;
+  limit?: number;
+  forceRefresh?: boolean;
+}
+
+interface DailyPaper extends AcademicSearchResult {
+  published_at: string;
+  discovered_at: string;
+  categories: string[];
+  upvotes: number;
+  github_url: string;
+  github_stars: number;
+}
+
+interface DailyDiscoveryResponse {
+  papers: DailyPaper[];
+  providers: string[];
+  options: Required<Omit<DailyDiscoveryOptions, "forceRefresh">>;
+  fetched_at: string;
+  cached: boolean;
+  stale: boolean;
+  warning?: string;
 }
 
 interface LibraryPaper extends AcademicSearchResult {

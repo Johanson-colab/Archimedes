@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   deleteLibrary: (id) => ipcRenderer.invoke("library:delete", id),
   listLibraryPapers: (libraryId, query = "") => ipcRenderer.invoke("library:list-papers", { libraryId, query }),
   searchAcademicPapers: (query, limit = 12) => ipcRenderer.invoke("library:search-external", { query, limit }),
+  discoverDailyPapers: (input = {}) => ipcRenderer.invoke("library:discover-daily", input),
   addLibraryPaper: (libraryId, paper) => ipcRenderer.invoke("library:add-paper", { libraryId, paper }),
   updateLibraryPaper: (paperId, patch) => ipcRenderer.invoke("library:update-paper", { paperId, patch }),
   removeLibraryPaper: (libraryId, paperId) => ipcRenderer.invoke("library:remove-paper", { libraryId, paperId }),

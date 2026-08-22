@@ -79,6 +79,34 @@ export const previewLibraryBridge = {
     const matches = catalog.filter((paper) => !terms.length || terms.some((term) => `${paper.title} ${paper.abstract}`.toLowerCase().includes(term)));
     return (matches.length ? matches : catalog).slice(0, limit).map(({ canonical_key: _canonicalKey, reading_status: _readingStatus, starred: _starred, notes: _notes, tags: _tags, created_at: _createdAt, updated_at: _updatedAt, id, ...paper }) => ({ ...paper, external_id: paper.external_id || id }));
   },
+  discoverDailyPapers: async (input: DailyDiscoveryOptions = {}) => {
+    const mode = input.mode === "trending" ? "trending" : "latest";
+    const range = input.range ?? "3d";
+    const categories = input.categories?.length ? input.categories : ["cs.AI", "cs.LG", "cs.CL"];
+    const query = input.query?.trim().toLowerCase() ?? "";
+    const limit = input.limit ?? 40;
+    const papers = [...previewPapers.values()]
+      .filter((paper) => !query || `${paper.title} ${paper.abstract}`.toLowerCase().includes(query))
+      .slice(0, limit)
+      .map(({ canonical_key: _canonicalKey, reading_status: _readingStatus, starred: _starred, notes: _notes, tags: _tags, created_at: _createdAt, updated_at: _updatedAt, id, ...paper }, index): DailyPaper => ({
+        ...paper,
+        external_id: paper.external_id || id,
+        published_at: new Date(Date.now() - index * 3_600_000).toISOString(),
+        discovered_at: new Date(Date.now() - index * 3_600_000).toISOString(),
+        categories: [categories[index % categories.length]],
+        upvotes: mode === "trending" ? Math.max(1, 18 - index) : 0,
+        github_url: "",
+        github_stars: 0,
+      }));
+    return {
+      papers,
+      providers: ["browser-preview"],
+      options: { mode, range, categories, query: input.query?.trim() ?? "", limit },
+      fetched_at: new Date().toISOString(),
+      cached: false,
+      stale: false,
+    };
+  },
   addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult) => {
     const existing = [...previewPapers.values()].find((candidate) => candidate.arxiv_id && candidate.arxiv_id === paper.arxiv_id)
       ?? [...previewPapers.values()].find((candidate) => candidate.title === paper.title);

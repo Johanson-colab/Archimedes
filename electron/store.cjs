@@ -91,6 +91,12 @@ function schema(db) {
       PRIMARY KEY (library_id, paper_id)
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS daily_feed_cache (
+      cache_key TEXT PRIMARY KEY NOT NULL,
+      response_json TEXT NOT NULL,
+      fetched_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE INDEX IF NOT EXISTS idx_library_papers_library ON library_papers(library_id, added_at DESC);
     CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title);
   `);
@@ -306,6 +312,26 @@ function removePaper(libraryId, paperId) {
   return { removed: result.changes > 0 };
 }
 
+function getDailyFeedCache(cacheKey, maxAgeMs = Number.POSITIVE_INFINITY) {
+  const db = requireDatabase();
+  const row = db.prepare("SELECT response_json, fetched_at FROM daily_feed_cache WHERE cache_key = ?").get(cacheKey);
+  if (!row) return null;
+  const age = Date.now() - new Date(row.fetched_at).getTime();
+  if (!Number.isFinite(age) || age > maxAgeMs) return null;
+  return { ...JSON.parse(row.response_json), fetched_at: row.fetched_at };
+}
+
+function setDailyFeedCache(cacheKey, response) {
+  const db = requireDatabase();
+  const fetchedAt = timestamp();
+  db.prepare(`
+    INSERT INTO daily_feed_cache (cache_key, response_json, fetched_at) VALUES (?, ?, ?)
+    ON CONFLICT(cache_key) DO UPDATE SET response_json = excluded.response_json, fetched_at = excluded.fetched_at
+  `).run(cacheKey, JSON.stringify(response), fetchedAt);
+  db.prepare("DELETE FROM daily_feed_cache WHERE fetched_at < ?").run(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString());
+  return { ...response, fetched_at: fetchedAt };
+}
+
 function startTask({ prompt }) {
   const db = requireDatabase();
   const task = { id: randomUUID(), prompt, response: "", status: "running", created_at: timestamp() };
@@ -394,6 +420,7 @@ module.exports = {
   deleteLibrary,
   finishCommand,
   finishTask,
+  getDailyFeedCache,
   getAction,
   getSnapshot,
   listLibraries,
@@ -402,6 +429,7 @@ module.exports = {
   removePaper,
   resolveAction,
   saveTask,
+  setDailyFeedCache,
   startCommand,
   startTask,
   updateLibrary,

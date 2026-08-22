@@ -3,6 +3,12 @@ const { XMLParser } = require("fast-xml-parser");
 const S2_BASE_URL = "https://api.semanticscholar.org/graph/v1";
 const OPENALEX_BASE_URL = "https://api.openalex.org";
 const ARXIV_API_URL = "https://export.arxiv.org/api/query";
+const HF_DAILY_PAPERS_URLS = [
+  "https://hf-mirror.com/api/daily_papers",
+  "https://huggingface.co/api/daily_papers",
+];
+const DAILY_CATEGORIES = new Set(["cs.AI", "cs.LG", "cs.CL", "cs.CV", "cs.RO", "cs.SE"]);
+const DAILY_RANGES = new Set(["1d", "3d", "7d"]);
 
 function sanitizeLimit(value) {
   const parsed = Number(value);
@@ -31,6 +37,7 @@ function normalizeArxivEntry(entry, requestedId) {
   const published = normalizeWhitespace(entry.published);
   const primaryCategory = entry["arxiv:primary_category"]?.term || "";
   const arxivId = normalizeWhitespace(entry.id).match(/\/abs\/(.+?)(?:v\d+)?$/)?.[1] || requestedId;
+  const categories = asArray(entry.category).map((category) => category.term).filter(Boolean);
 
   return {
     external_id: `arxiv:${arxivId}`,
@@ -46,6 +53,12 @@ function normalizeArxivEntry(entry, requestedId) {
     pdf_url: `https://arxiv.org/pdf/${arxivId}`,
     citation_count: 0,
     source: "arxiv",
+    published_at: published,
+    discovered_at: published,
+    categories,
+    upvotes: 0,
+    github_url: "",
+    github_stars: 0,
   };
 }
 
@@ -61,6 +74,124 @@ async function searchArxiv(arxivId) {
   const entry = asArray(payload.feed?.entry)[0];
   if (!entry) throw new Error(`arXiv paper ${arxivId} was not found.`);
   return [normalizeArxivEntry(entry, arxivId)];
+}
+
+function normalizeDailyOptions(input = {}) {
+  const mode = input.mode === "trending" ? "trending" : "latest";
+  const range = DAILY_RANGES.has(input.range) ? input.range : "3d";
+  const requestedCategories = Array.isArray(input.categories) ? input.categories : [];
+  const categories = [...new Set(requestedCategories.filter((category) => DAILY_CATEGORIES.has(category)))];
+  const query = typeof input.query === "string" ? input.query.trim().slice(0, 160) : "";
+  const parsedLimit = Number(input.limit);
+  const limit = Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, Math.trunc(parsedLimit))) : 40;
+  return { mode, range, categories: categories.length ? categories : ["cs.AI", "cs.LG", "cs.CL"], query, limit };
+}
+
+function rangeStart(range) {
+  const days = Number(range.slice(0, -1));
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
+function formatArxivDate(date) {
+  return date.toISOString().replace(/[-:TZ.]/g, "").slice(0, 12);
+}
+
+function matchesDailyQuery(paper, query) {
+  if (!query) return true;
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const haystack = `${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")}`.toLowerCase();
+  return terms.every((term) => haystack.includes(term));
+}
+
+async function discoverArxivPapers(options) {
+  const categoryQuery = options.categories.map((category) => `cat:${category}`).join(" OR ");
+  const submittedRange = `submittedDate:[${formatArxivDate(rangeStart(options.range))} TO ${formatArxivDate(new Date())}]`;
+  const params = new URLSearchParams({
+    search_query: `(${categoryQuery}) AND ${submittedRange}`,
+    start: "0",
+    max_results: String(Math.min(100, Math.max(options.limit, 50))),
+    sortBy: "submittedDate",
+    sortOrder: "descending",
+  });
+  const response = await fetch(`${ARXIV_API_URL}?${params}`, {
+    headers: { Accept: "application/atom+xml", "User-Agent": "Axiom-Research/0.1" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`arXiv daily feed returned ${response.status}.`);
+
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
+  const payload = parser.parse(await response.text());
+  return asArray(payload.feed?.entry)
+    .map((entry) => normalizeArxivEntry(entry, ""))
+    .filter((paper) => matchesDailyQuery(paper, options.query))
+    .slice(0, options.limit);
+}
+
+function normalizeHuggingFacePaper(item) {
+  const paper = item.paper || item;
+  const arxivId = normalizeWhitespace(paper.id);
+  const publishedAt = paper.publishedAt || item.publishedAt || paper.submittedOnDailyAt || "";
+  const discoveredAt = paper.submittedOnDailyAt || item.publishedAt || publishedAt;
+  const categories = asArray(paper.ai_keywords).map((keyword) => normalizeWhitespace(keyword)).filter(Boolean);
+  const authors = asArray(paper.authors).map((author) => normalizeWhitespace(typeof author === "string" ? author : author.name)).filter(Boolean);
+  return {
+    external_id: arxivId ? `arxiv:${arxivId}` : `hf:${normalizeWhitespace(paper.title).toLowerCase()}`,
+    s2_id: "",
+    arxiv_id: arxivId,
+    doi: "",
+    title: normalizeWhitespace(paper.title) || "Untitled paper",
+    authors,
+    year: publishedAt ? Number(publishedAt.slice(0, 4)) || null : null,
+    venue: "Hugging Face Daily Papers",
+    abstract: normalizeWhitespace(paper.ai_summary || paper.summary),
+    url: arxivId ? `https://arxiv.org/abs/${arxivId}` : "",
+    pdf_url: arxivId ? `https://arxiv.org/pdf/${arxivId}` : "",
+    citation_count: 0,
+    source: "hugging-face",
+    published_at: publishedAt,
+    discovered_at: discoveredAt,
+    categories,
+    upvotes: Number(paper.upvotes ?? item.upvotes) || 0,
+    github_url: normalizeWhitespace(paper.githubRepo),
+    github_stars: Number(paper.githubStars) || 0,
+  };
+}
+
+async function discoverHuggingFacePapers(options) {
+  const params = new URLSearchParams({ sort: "trending", limit: "100" });
+  let response;
+  const errors = [];
+  for (const baseUrl of HF_DAILY_PAPERS_URLS) {
+    try {
+      const candidate = await fetch(`${baseUrl}?${params}`, {
+        headers: { Accept: "application/json", "User-Agent": "Axiom-Research/0.1" },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!candidate.ok) throw new Error(`returned ${candidate.status}`);
+      response = candidate;
+      break;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "connection failed");
+    }
+  }
+  if (!response) throw new Error(`Hugging Face Daily Papers is unavailable. ${errors.join(" ")}`);
+
+  const cutoff = rangeStart(options.range).getTime();
+  const payload = await response.json();
+  return asArray(payload)
+    .map(normalizeHuggingFacePaper)
+    .filter((paper) => !paper.discovered_at || new Date(paper.discovered_at).getTime() >= cutoff)
+    .filter((paper) => matchesDailyQuery(paper, options.query))
+    .sort((left, right) => right.upvotes - left.upvotes || right.github_stars - left.github_stars)
+    .slice(0, options.limit);
+}
+
+async function discoverDailyPapers(input) {
+  const options = normalizeDailyOptions(input);
+  const papers = options.mode === "trending"
+    ? await discoverHuggingFacePapers(options)
+    : await discoverArxivPapers(options);
+  return { papers, providers: options.mode === "trending" ? ["hugging-face"] : ["arxiv"] };
 }
 
 function normalizeS2Paper(paper) {
@@ -166,4 +297,4 @@ async function searchAcademicPapers(query, requestedLimit) {
   throw new Error(`No paper metadata could be retrieved. ${errors.join(" ")}`);
 }
 
-module.exports = { searchAcademicPapers };
+module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers };

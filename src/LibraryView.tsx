@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookOpen,
   CalendarDays,
   Check,
+  Clock3,
+  Code2,
   ExternalLink,
+  Flame,
   Library,
   LoaderCircle,
   Pencil,
@@ -256,35 +259,109 @@ function readableError(error: unknown, fallback: string) {
 }
 
 function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
-  const [query, setQuery] = useState("large language model agents");
+  const [mode, setMode] = useState<DailyDiscoveryMode>("latest");
+  const [range, setRange] = useState<DailyDiscoveryRange>("3d");
+  const [categories, setCategories] = useState(["cs.AI", "cs.LG", "cs.CL"]);
+  const [query, setQuery] = useState("");
   const [targetLibraryId, setTargetLibraryId] = useState("");
-  const [papers, setPapers] = useState<AcademicSearchResult[]>([]);
+  const [response, setResponse] = useState<DailyDiscoveryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const feedRequestId = useRef(0);
   useEffect(() => { if (!targetLibraryId && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
   const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
-  async function discover() {
+  const categoryKey = categories.join(",");
+  const loadFeed = useCallback(async (forceRefresh = false) => {
+    const requestId = ++feedRequestId.current;
     setLoading(true);
     setError("");
-    try { setPapers(await bridge.searchAcademicPapers(query, 16)); } catch (discoverError) { setError(String(discoverError)); } finally { setLoading(false); }
+    if (!forceRefresh) setResponse(null);
+    try {
+      const nextResponse = await bridge.discoverDailyPapers({ mode, range, categories, limit: 60, forceRefresh });
+      if (requestId !== feedRequestId.current) return;
+      setResponse(nextResponse);
+      if (nextResponse.warning) setError(nextResponse.warning);
+    } catch (discoverError) {
+      if (requestId !== feedRequestId.current) return;
+      setError(readableError(discoverError, "The daily paper feed could not be refreshed."));
+    } finally {
+      if (requestId === feedRequestId.current) setLoading(false);
+    }
+  }, [bridge, categoryKey, mode, range]);
+
+  useEffect(() => {
+    void loadFeed(false);
+    return () => { feedRequestId.current += 1; };
+  }, [loadFeed]);
+
+  const visiblePapers = useMemo(() => {
+    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!terms.length) return response?.papers ?? [];
+    return (response?.papers ?? []).filter((paper) => {
+      const text = `${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")}`.toLowerCase();
+      return terms.every((term) => text.includes(term));
+    });
+  }, [query, response]);
+
+  function toggleCategory(category: string) {
+    setCategories((current) => current.includes(category)
+      ? current.length === 1 ? current : current.filter((item) => item !== category)
+      : [...current, category]);
   }
-  async function add(paper: AcademicSearchResult) {
+
+  async function add(paper: DailyPaper) {
     if (!targetLibraryId) return;
-    await bridge.addLibraryPaper(targetLibraryId, paper);
-    setAdded((current) => new Set(current).add(paper.external_id || paper.title));
-    await onImported();
+    const key = paper.external_id || paper.title;
+    setAdding(key);
+    setError("");
+    try {
+      await bridge.addLibraryPaper(targetLibraryId, paper);
+      setAdded((current) => new Set(current).add(key));
+      await onImported();
+    } catch (addError) {
+      setError(readableError(addError, "The paper could not be saved."));
+    } finally {
+      setAdding(null);
+    }
   }
+
   return <section className="library-page daily-page">
-    <header className="library-page-header"><div><span className="eyebrow">Live discovery</span><h1>Daily papers</h1><p>Query current academic indexes, triage results, and save useful work into a curated library.</p></div><span className="daily-mark"><CalendarDays size={20} /></span></header>
-    <div className="daily-controls"><div className="external-search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void discover()} /><button className="primary-button" disabled={loading || !query.trim()} onClick={() => void discover()}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Discover</button></div><label>Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label></div>
-    {error && <div className="library-error">{error}</div>}
-    {!papers.length && !loading ? <div className="daily-empty"><CalendarDays size={28} /><strong>Run a discovery query</strong><span>Try AI agents, test-time scaling, retrieval, or embodied intelligence.</span></div> : <div className="daily-paper-list">{papers.map((paper) => {
+    <header className="library-page-header"><div><span className="eyebrow">Live research feed</span><h1>Daily papers</h1><p>Track newly submitted arXiv work and community-trending papers, then save useful records into your library.</p></div><span className="daily-mark"><CalendarDays size={20} /></span></header>
+    <div className="daily-feed-toolbar">
+      <div className="daily-mode-tabs" role="tablist" aria-label="Paper feed mode">
+        <button className={mode === "latest" ? "active" : ""} role="tab" aria-selected={mode === "latest"} onClick={() => setMode("latest")}><Clock3 size={14} />Latest</button>
+        <button className={mode === "trending" ? "active" : ""} role="tab" aria-selected={mode === "trending"} onClick={() => setMode("trending")}><Flame size={14} />Trending</button>
+      </div>
+      <div className="daily-range-control" aria-label="Publication range">{(["1d", "3d", "7d"] as DailyDiscoveryRange[]).map((item) => <button key={item} className={range === item ? "active" : ""} onClick={() => setRange(item)}>{item === "1d" ? "24h" : item === "3d" ? "3 days" : "7 days"}</button>)}</div>
+      <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>
+      <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
+    </div>
+    {mode === "latest" && <div className="daily-category-filter"><span>arXiv fields</span>{["cs.AI", "cs.LG", "cs.CL", "cs.CV", "cs.RO", "cs.SE"].map((category) => <label key={category} className={categories.includes(category) ? "selected" : ""}><input type="checkbox" checked={categories.includes(category)} onChange={() => toggleCategory(category)} />{category}</label>)}</div>}
+    <div className="daily-search-row"><div className="external-search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter the current feed by title, author, topic, or abstract" /></div><span>{visiblePapers.length} papers{response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}</span></div>
+    {error && <div className="library-error" role="alert">{error}</div>}
+    {loading && !response ? <LoadingState /> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers in this view</strong><span>Expand the date range, select more fields, or clear the local filter.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
-      return <article className="daily-paper-row" key={key}><div className="daily-paper-date"><strong>{paper.year ?? "—"}</strong><span>{paper.source}</span></div><div><h2>{paper.title}</h2><p>{paper.authors.slice(0, 4).join(", ")}</p><small>{paper.abstract || "No abstract available."}</small></div><button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : "Save"}</button></article>;
+      const isAdding = adding === key;
+      return <article className="daily-paper-row" key={key}>
+        <div className="daily-paper-date"><strong>{formatPaperDate(paper.published_at)}</strong><span>{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}</span></div>
+        <div className="daily-paper-content"><div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}</div><p>{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</p><small>{paper.abstract || "No abstract available."}</small><div className="daily-paper-signals">{paper.categories.slice(0, 3).map((category) => <span key={category}>{category}</span>)}{paper.upvotes > 0 && <span><Flame size={11} />{paper.upvotes}</span>}{paper.github_url && <a href={paper.github_url} target="_blank" rel="noreferrer"><Code2 size={11} />{paper.github_stars > 0 ? paper.github_stars : "Code"}</a>}</div></div>
+        <button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button>
+      </article>;
     })}</div>}
   </section>;
+}
+
+function formatPaperDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatFeedTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "now" : date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 function LoadingState() {

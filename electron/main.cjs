@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const agent = require("./agent.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
-const { searchAcademicPapers } = require("./literature.cjs");
+const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
 const store = require("./store.cjs");
 
 let mainWindow;
@@ -89,6 +89,35 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("library:search-external", (_event, { query, limit }) => searchAcademicPapers(query, limit));
+
+  ipcMain.handle("library:discover-daily", async (_event, input = {}) => {
+    if (!input || typeof input !== "object") throw new Error("Daily discovery options are required.");
+    const options = normalizeDailyOptions(input);
+    const cacheKey = JSON.stringify(options);
+    const cacheTtl = 20 * 60 * 1000;
+    if (!input.forceRefresh) {
+      const cached = store.getDailyFeedCache(cacheKey, cacheTtl);
+      if (cached) return { ...cached, options, cached: true, stale: false };
+    }
+
+    try {
+      const response = await discoverDailyPapers(options);
+      const saved = store.setDailyFeedCache(cacheKey, response);
+      return { ...saved, options, cached: false, stale: false };
+    } catch (error) {
+      const stale = store.getDailyFeedCache(cacheKey);
+      if (stale) {
+        return {
+          ...stale,
+          options,
+          cached: true,
+          stale: true,
+          warning: error instanceof Error ? error.message : "Live refresh failed; showing cached papers.",
+        };
+      }
+      throw error;
+    }
+  });
 
   ipcMain.handle("library:add-paper", (_event, { libraryId, paper }) => {
     if (typeof libraryId !== "string" || !paper || typeof paper.title !== "string" || !paper.title.trim()) {
