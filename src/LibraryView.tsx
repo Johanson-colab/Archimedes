@@ -203,28 +203,56 @@ function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: 
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
   const [imported, setImported] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState<string | null>(null);
   if (!open) return null;
   async function search() {
     if (!query.trim()) return;
     setSearching(true);
     setError("");
-    try { setResults(await bridge.searchAcademicPapers(query.trim(), 12)); } catch (searchError) { setError(String(searchError)); } finally { setSearching(false); }
+    setResults([]);
+    try {
+      const nextResults = await bridge.searchAcademicPapers(query.trim(), 12);
+      setResults(nextResults);
+      if (!nextResults.length) setError("No matching papers were found. Check the identifier or try a title keyword.");
+    } catch (searchError) {
+      setError(readableError(searchError, "Paper search failed."));
+    } finally {
+      setSearching(false);
+    }
   }
   async function add(paper: AcademicSearchResult) {
-    await onImport(paper);
-    setImported((current) => new Set(current).add(paper.external_id || paper.title));
+    const key = paper.external_id || paper.title;
+    setAdding(key);
+    setError("");
+    try {
+      await onImport(paper);
+      setImported((current) => new Set(current).add(key));
+    } catch (importError) {
+      setError(readableError(importError, "The paper could not be added."));
+    } finally {
+      setAdding(null);
+    }
   }
   return <div className="modal-backdrop" onMouseDown={onClose}><section className="workspace-modal paper-import-modal" role="dialog" aria-modal="true" aria-label="Import paper" onMouseDown={(event) => event.stopPropagation()}>
     <div className="modal-header"><div><span className="eyebrow">Import into {library.name}</span><h2>Find academic papers</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
-    <p>Search by title, topic, DOI, arXiv URL, or arXiv ID. Metadata comes from Semantic Scholar with an OpenAlex fallback.</p>
+    <p>Search by title, topic, DOI, arXiv URL, or arXiv ID. arXiv links are resolved directly; other queries use Semantic Scholar and OpenAlex.</p>
     <div className="external-search-box"><Search size={16} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void search()} placeholder="e.g. adaptive retrieval or 2401.18059" /><button className="primary-button" disabled={searching || !query.trim()} onClick={() => void search()}>{searching ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div>
-    {error && <div className="library-error">{error}</div>}
+    {error && <div className="library-error" role="alert">{error}</div>}
     <div className="external-results">{results.map((paper) => {
       const key = paper.external_id || paper.title;
       const isImported = imported.has(key);
-      return <article className="external-paper" key={key}><div><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")} · {paper.year ?? "n.d."} · {paper.venue || paper.source}</small></div><button className={isImported ? "secondary-button imported" : "outline-button"} disabled={isImported} onClick={() => void add(paper)}>{isImported ? <Check size={14} /> : <Plus size={14} />}{isImported ? "Added" : "Add"}</button></article>;
+      const isAdding = adding === key;
+      return <article className="external-paper" key={key}><div><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")} · {paper.year ?? "n.d."} · {paper.venue || paper.source}</small></div><button className={isImported ? "secondary-button imported" : "outline-button"} disabled={isImported || Boolean(adding)} onClick={() => void add(paper)}>{isImported ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isImported ? "Added" : isAdding ? "Adding" : "Add"}</button></article>;
     })}</div>
   </section></div>;
+}
+
+function readableError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : String(error || fallback);
+  return message
+    .replace(/^Error invoking remote method '[^']+':\s*/i, "")
+    .replace(/^Error:\s*/i, "")
+    .trim() || fallback;
 }
 
 function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {

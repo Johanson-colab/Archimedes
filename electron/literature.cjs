@@ -1,5 +1,8 @@
+const { XMLParser } = require("fast-xml-parser");
+
 const S2_BASE_URL = "https://api.semanticscholar.org/graph/v1";
 const OPENALEX_BASE_URL = "https://api.openalex.org";
+const ARXIV_API_URL = "https://export.arxiv.org/api/query";
 
 function sanitizeLimit(value) {
   const parsed = Number(value);
@@ -13,6 +16,51 @@ function detectPaperId(query) {
   const doiMatch = value.match(/(?:doi\.org\/|doi:\s*)?(10\.\d{4,9}\/[-._;()/:a-z0-9]+)/i);
   if (doiMatch) return `DOI:${doiMatch[1]}`;
   return null;
+}
+
+function normalizeWhitespace(value) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function asArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function normalizeArxivEntry(entry, requestedId) {
+  const published = normalizeWhitespace(entry.published);
+  const primaryCategory = entry["arxiv:primary_category"]?.term || "";
+  const arxivId = normalizeWhitespace(entry.id).match(/\/abs\/(.+?)(?:v\d+)?$/)?.[1] || requestedId;
+
+  return {
+    external_id: `arxiv:${arxivId}`,
+    s2_id: "",
+    arxiv_id: arxivId,
+    doi: normalizeWhitespace(entry["arxiv:doi"]),
+    title: normalizeWhitespace(entry.title) || "Untitled paper",
+    authors: asArray(entry.author).map((author) => normalizeWhitespace(author.name)).filter(Boolean),
+    year: published ? Number(published.slice(0, 4)) || null : null,
+    venue: primaryCategory ? `arXiv:${primaryCategory}` : "arXiv",
+    abstract: normalizeWhitespace(entry.summary),
+    url: `https://arxiv.org/abs/${arxivId}`,
+    pdf_url: `https://arxiv.org/pdf/${arxivId}`,
+    citation_count: 0,
+    source: "arxiv",
+  };
+}
+
+async function searchArxiv(arxivId) {
+  const response = await fetch(`${ARXIV_API_URL}?id_list=${encodeURIComponent(arxivId)}&max_results=1`, {
+    headers: { Accept: "application/atom+xml", "User-Agent": "Axiom-Research/0.1" },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`arXiv returned ${response.status}.`);
+
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
+  const payload = parser.parse(await response.text());
+  const entry = asArray(payload.feed?.entry)[0];
+  if (!entry) throw new Error(`arXiv paper ${arxivId} was not found.`);
+  return [normalizeArxivEntry(entry, arxivId)];
 }
 
 function normalizeS2Paper(paper) {
@@ -50,7 +98,7 @@ async function searchSemanticScholar(query, limit) {
 }
 
 function reconstructAbstract(invertedIndex) {
-  if (!invertewdIndex) return "";
+  if (!invertedIndex) return "";
   const tokens = [];
   for (const [word, positions] of Object.entries(invertedIndex)) {
     for (const position of positions) tokens[position] = word;
@@ -78,7 +126,9 @@ function normalizeOpenAlexWork(work) {
 }
 
 async function searchOpenAlex(query, limit) {
-  const url = `${OPENALEX_BASE_URL}/works?search=${encodeURIComponent(query)}&per-page=${limit}`;
+  const detectedId = detectPaperId(query);
+  const searchQuery = detectedId?.startsWith("ARXIV:") ? detectedId.slice(6) : query;
+  const url = `${OPENALEX_BASE_URL}/works?search=${encodeURIComponent(searchQuery)}&per-page=${limit}`;
   const response = await fetch(url, {
     headers: { Accept: "application/json", "User-Agent": "Axiom-Research/0.1" },
     signal: AbortSignal.timeout(15_000),
@@ -92,15 +142,28 @@ async function searchAcademicPapers(query, requestedLimit) {
   const trimmedQuery = typeof query === "string" ? query.trim() : "";
   if (!trimmedQuery || trimmedQuery.length > 300) throw new Error("Enter a paper title, DOI, arXiv ID, or research query.");
   const limit = sanitizeLimit(requestedLimit);
-  try {
-    return await searchSemanticScholar(trimmedQuery, limit);
-  } catch (semanticScholarError) {
+  const detectedId = detectPaperId(trimmedQuery);
+  const providers = [];
+  if (detectedId?.startsWith("ARXIV:")) {
+    providers.push(["arXiv", () => searchArxiv(detectedId.slice(6))]);
+  }
+  providers.push(
+    ["Semantic Scholar", () => searchSemanticScholar(trimmedQuery, limit)],
+    ["OpenAlex", () => searchOpenAlex(trimmedQuery, limit)],
+  );
+
+  const errors = [];
+  for (const [name, search] of providers) {
     try {
-      return await searchOpenAlex(trimmedQuery, limit);
-    } catch (openAlexError) {
-      throw new Error(`${semanticScholarError.message} ${openAlexError.message}`);
+      const papers = await search();
+      if (papers.length) return papers;
+      errors.push(`${name} returned no results.`);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : `${name} search failed.`);
     }
   }
+
+  throw new Error(`No paper metadata could be retrieved. ${errors.join(" ")}`);
 }
 
 module.exports = { searchAcademicPapers };

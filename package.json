@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "fast-xml-parser": "^5.11.0",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
