@@ -37,6 +37,8 @@ type TimelineEvent = {
   state: "done" | "active" | "waiting";
 };
 
+type PendingAction = AgentAction & { source: "agent" | "manual" };
+
 const papers = [
   { title: "Evidence-aware retrieval for long-context reasoning", meta: "Rao et al. · 2025", score: "94%" },
   { title: "Measuring retrieval budget in agentic systems", meta: "Kim et al. · 2024", score: "88%" },
@@ -60,12 +62,18 @@ const initialMessages: Message[] = [
 
 const DEFAULT_WORKSPACE = import.meta.env.VITE_DEFAULT_WORKSPACE ?? "";
 const previewListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
+const previewAgentListeners = new Set<(payload: AgentEvent) => void>();
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
 const previewTasks: SavedTask[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
+const previewActions: AgentAction[] = [];
 
 function previewSnapshot(): WorkspaceSnapshot {
-  return { workspace: previewWorkspace, tasks: [...previewTasks].reverse(), commands: [...previewCommands].reverse() };
+  return { workspace: previewWorkspace, tasks: [...previewTasks].reverse(), commands: [...previewCommands].reverse(), actions: [...previewActions].reverse() };
+}
+
+function emitPreviewAgentEvent(payload: AgentEvent) {
+  for (const listener of previewAgentListeners) listener(payload);
 }
 
 const previewBridge = {
@@ -78,6 +86,39 @@ const previewBridge = {
     const task = { id: crypto.randomUUID(), prompt, response, status, created_at: new Date().toISOString() };
     previewTasks.push(task);
     return task;
+  },
+  runAgent: async ({ prompt }: { prompt: string; workspace: string }) => {
+    emitPreviewAgentEvent({ type: "status", title: "Research task started", detail: "Browser preview Agent" });
+    const actions: AgentAction[] = [];
+    if (/(write|draft|note|生成|写入)/i.test(prompt)) {
+      const action: AgentAction = {
+        id: crypto.randomUUID(), task_id: crypto.randomUUID(), kind: "write",
+        payload: { path: "notes/agent-research-brief.md", content: "# Research brief\n\nThis artifact was proposed by the browser preview Agent.\n" },
+        status: "pending", created_at: new Date().toISOString(), resolved_at: null,
+      };
+      previewActions.push(action);
+      actions.push(action);
+      emitPreviewAgentEvent({ type: "tool", title: "write artifact", detail: "Prepared a draft for approval" });
+    }
+    const response = "Preview Agent: I reviewed the active research workspace and framed the request as an evidence-backed next step. In the desktop app, this same request will use your configured model and restricted workspace tools.";
+    const task = { id: crypto.randomUUID(), prompt, response, status: "completed", created_at: new Date().toISOString() };
+    previewTasks.push(task);
+    emitPreviewAgentEvent({ type: "complete", title: "Research task complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
+    return { taskId: task.id, response, status: "completed", actions };
+  },
+  approveAgentAction: async (actionId: string) => {
+    const action = previewActions.find((candidate) => candidate.id === actionId);
+    if (!action) throw new Error("Agent action not found.");
+    action.status = "approved";
+    action.resolved_at = new Date().toISOString();
+    return action;
+  },
+  rejectAgentAction: async (actionId: string) => {
+    const action = previewActions.find((candidate) => candidate.id === actionId);
+    if (!action) throw new Error("Agent action not found.");
+    action.status = "rejected";
+    action.resolved_at = new Date().toISOString();
+    return action;
   },
   runTerminal: async ({ command }: { command: string; cwd?: string }) => {
     const sessionId = crypto.randomUUID();
@@ -97,6 +138,10 @@ const previewBridge = {
     previewListeners.add(callback);
     return () => previewListeners.delete(callback);
   },
+  onAgentEvent: (callback: (payload: AgentEvent) => void) => {
+    previewAgentListeners.add(callback);
+    return () => previewAgentListeners.delete(callback);
+  },
 };
 
 const desktopBridge = window.researchDesk ?? previewBridge;
@@ -109,7 +154,7 @@ function App() {
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [savedTaskCount, setSavedTaskCount] = useState(0);
-  const [pendingCommand, setPendingCommand] = useState<string | null>("git status --short");
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [terminalInput, setTerminalInput] = useState("git status --short");
   const [terminalLog, setTerminalLog] = useState("Axiom terminal ready.\n");
   const [runningSession, setRunningSession] = useState<string | null>(null);
@@ -123,6 +168,14 @@ function App() {
     });
     return unsubscribe;
   }, [runningSession]);
+
+  useEffect(() => {
+    const unsubscribe = desktopBridge.onAgentEvent((event) => {
+      const state = event.type === "complete" ? "done" : event.type === "configuration" || event.type === "failed" ? "waiting" : "active";
+      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     void loadWorkspace(DEFAULT_WORKSPACE);
@@ -159,9 +212,12 @@ function App() {
         .join("\n");
       if (previousOutput) setTerminalLog(`Axiom terminal history\n\n${previousOutput}\n`);
     }
+
+    const action = snapshot.actions.find((candidate) => candidate.status === "pending");
+    setPendingAction(action ? { ...action, source: "agent" } : null);
   }
 
-  function submitPrompt() {
+  async function submitPrompt() {
     const question = prompt.trim();
     if (!question || agentBusy) return;
 
@@ -173,33 +229,35 @@ function App() {
       { title: "Evidence synthesis", detail: "Reading attached research context", state: "active" },
     ]);
 
-    window.setTimeout(() => {
-      const response = "我会把这个问题收敛成可验证的假设：在固定总 token 预算下，比较静态检索和自适应检索对长上下文推理的影响。实验应记录每步检索量、引用证据和最终任务指标，而不仅仅看最终准确率。";
+    try {
+      const result = await desktopBridge.runAgent({ prompt: question, workspace });
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          text: response,
-          sources: ["Rao et al., §4.2", "Kim et al., Table 3", "Current research brief"],
+          text: result.response,
         },
       ]);
       setEvents((current) =>
         current.map((event) =>
           event.title === "Evidence synthesis"
-            ? { ...event, detail: "3 sources linked to the hypothesis", state: "done" }
+            ? { ...event, detail: result.status === "completed" ? "Task record saved" : "Task saved with follow-up needed", state: result.status === "completed" ? "done" : "waiting" }
             : event,
         ),
       );
-      setPendingCommand("git status --short");
+      const proposedAction = result.actions.find((action) => action.status === "pending");
+      if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
+      setSavedTaskCount((count) => count + 1);
+    } catch (error) {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Axiom could not start this task: ${String(error)}` }]);
+    } finally {
       setAgentBusy(false);
-      void desktopBridge.saveTask({ prompt: question, response }).then(() => setSavedTaskCount((count) => count + 1));
-    }, 850);
+    }
   }
 
   async function runCommand(command: string) {
     setTerminalLog((current) => `${current}\n$ ${command}\n`);
-    setPendingCommand(null);
     try {
       const { sessionId } = await desktopBridge.runTerminal({ command, cwd: workspace });
       setRunningSession(sessionId);
@@ -210,6 +268,36 @@ function App() {
     } catch (error) {
       setTerminalLog((current) => `${current}[could not start] ${String(error)}\n`);
     }
+  }
+
+  function requestCommandApproval(command: string) {
+    setPendingAction({
+      id: crypto.randomUUID(), task_id: "manual", kind: "command", payload: { command, cwd: workspace },
+      status: "pending", created_at: new Date().toISOString(), resolved_at: null, source: "manual",
+    });
+  }
+
+  async function approvePendingAction() {
+    const action = pendingAction;
+    if (!action) return;
+    try {
+      if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
+      setPendingAction(null);
+      if (action.kind === "command" && action.payload.command) {
+        await runCommand(action.payload.command);
+      } else if (action.kind === "write" && action.payload.path) {
+        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Approved and wrote ${action.payload.path}.` }]);
+      }
+    } catch (error) {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not approve this action: ${String(error)}` }]);
+    }
+  }
+
+  async function rejectPendingAction() {
+    const action = pendingAction;
+    if (!action) return;
+    if (action.source === "agent") await desktopBridge.rejectAgentAction(action.id);
+    setPendingAction(null);
   }
 
   return (
@@ -280,6 +368,9 @@ function App() {
           </div>
 
           <div className="context-strip"><ShieldCheck size={14} />12 papers · 38 evidence spans · 2 files attached</div>
+          <div className="agent-activity">
+            {events.slice(-3).map((event) => <div className={`activity-item ${event.state}`} key={`${event.title}-${event.detail}`}><span /><div><strong>{event.title}</strong><small>{event.detail}</small></div></div>)}
+          </div>
 
           <div className="message-list">
             {messages.map((message) => (
@@ -292,16 +383,17 @@ function App() {
             {agentBusy && <div className="agent-typing"><span /><span /><span /></div>}
           </div>
 
-          {pendingCommand && (
+          {pendingAction && (
             <section className="approval-card">
-              <div className="approval-icon"><SquareTerminal size={16} /></div>
+              <div className="approval-icon">{pendingAction.kind === "write" ? <FileText size={16} /> : <SquareTerminal size={16} />}</div>
               <div className="approval-content">
-                <span>Command requires approval</span>
-                <code>{pendingCommand}</code>
-                <p>Runs in the selected workspace and records its output.</p>
+                <span>{pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval"}</span>
+                <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
+                {pendingAction.kind === "write" && pendingAction.payload.content && <pre className="proposal-preview">{pendingAction.payload.content.slice(0, 260)}</pre>}
+                <p>{pendingAction.kind === "write" ? "Writes this artifact into the selected workspace." : "Runs in the selected workspace and records its output."}</p>
                 <div className="approval-actions">
-                  <button className="secondary-button" onClick={() => setPendingCommand(null)}><X size={14} />Dismiss</button>
-                  <button className="primary-button" onClick={() => runCommand(pendingCommand)}><Play size={14} />Run</button>
+                  <button className="secondary-button" onClick={() => void rejectPendingAction()}><X size={14} />Dismiss</button>
+                  <button className="primary-button" onClick={() => void approvePendingAction()}>{pendingAction.kind === "write" ? <Check size={14} /> : <Play size={14} />}{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
                 </div>
               </div>
             </section>
@@ -328,7 +420,7 @@ function App() {
       <section className="terminal-pane">
           <div className="terminal-header"><div><PanelBottom size={15} />Terminal <span>Workspace session</span></div><div className="terminal-actions"><button className="icon-button" title="Clear terminal" onClick={() => setTerminalLog("")}>Clear</button>{runningSession && <button className="icon-button danger" title="Stop process" onClick={() => desktopBridge.stopTerminal(runningSession)}><X size={15} /></button>}</div></div>
         <pre className="terminal-output" ref={terminalRef}>{terminalLog}</pre>
-        <div className="terminal-command"><span>$</span><input value={terminalInput} onChange={(event) => setTerminalInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && terminalInput.trim()) setPendingCommand(terminalInput.trim()); }} aria-label="Terminal command" /><button className="icon-button" title="Review command" onClick={() => terminalInput.trim() && setPendingCommand(terminalInput.trim())}><ArrowUp size={16} /></button></div>
+        <div className="terminal-command"><span>$</span><input value={terminalInput} onChange={(event) => setTerminalInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && terminalInput.trim()) requestCommandApproval(terminalInput.trim()); }} aria-label="Terminal command" /><button className="icon-button" title="Review command" onClick={() => terminalInput.trim() && requestCommandApproval(terminalInput.trim())}><ArrowUp size={16} /></button></div>
       </section>
     </main>
   );

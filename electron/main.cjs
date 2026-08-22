@@ -3,6 +3,8 @@ const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const agent = require("./agent.cjs");
+const { loadLocalAgentEnvironment } = require("./config.cjs");
 const store = require("./store.cjs");
 
 let mainWindow;
@@ -43,6 +45,7 @@ function resolveWorkspace(value) {
 }
 
 app.whenReady().then(() => {
+  loadLocalAgentEnvironment();
   createWindow();
 
   ipcMain.handle("workspace:choose", async () => {
@@ -66,6 +69,29 @@ app.whenReady().then(() => {
       throw new Error("Task payload is too large.");
     }
     return store.saveTask(task);
+  });
+
+  ipcMain.handle("agent:run", async (event, input) => {
+    if (!input || typeof input.prompt !== "string" || !input.prompt.trim() || input.prompt.length > 20_000) {
+      throw new Error("An Agent task requires a prompt of at most 20000 characters.");
+    }
+    const workspace = resolveWorkspace(input.workspace);
+    store.openWorkspace(workspace);
+    return agent.runAgent({
+      prompt: input.prompt.trim(),
+      workspace,
+      emit: (payload) => event.sender.send("agent:event", payload),
+    });
+  });
+
+  ipcMain.handle("agent:approve-action", (_event, actionId) => {
+    if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");
+    return store.approveAction(actionId);
+  });
+
+  ipcMain.handle("agent:reject-action", (_event, actionId) => {
+    if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");
+    return store.resolveAction(actionId, "rejected");
   });
 
   ipcMain.handle("terminal:run", (event, { command, cwd }) => {

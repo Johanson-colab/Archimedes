@@ -21,6 +21,18 @@ The renderer is also available at `http://127.0.0.1:5173` while development is r
 
 When a workspace is opened, Axiom creates `.axiom/axiom.db` inside that folder. It stores Agent task runs and approved command history locally; the directory is ignored by Git. For this development checkout, `.env.local` selects the surrounding `AI Research` directory without committing that personal path.
 
+## Agent configuration
+
+Copy the Agent variables from `.env.example` into `.env.local` and set a local API key for an OpenAI-compatible Chat Completions endpoint:
+
+```bash
+AXIOM_LLM_API_KEY=your-local-api-key
+AXIOM_LLM_BASE_URL=https://api.openai.com/v1
+AXIOM_LLM_MODEL=gpt-4.1-mini
+```
+
+The Agent can list and read non-hidden workspace files automatically. It can only propose file writes and shell commands; Axiom requires explicit approval before either is applied. Without a configured key, each Agent request is saved with a clear configuration-required status.
+
 ## Validation
 
 ```bash
