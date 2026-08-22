@@ -4,18 +4,23 @@ import {
   Beaker,
   BookOpen,
   Bot,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
   CircleDot,
   Clock3,
   Code2,
+  FileCheck2,
   FileText,
+  Folder,
   FolderOpen,
   Lightbulb,
   PanelBottom,
+  PenLine,
   Play,
   Plus,
+  Scale,
   Search,
   SendHorizontal,
   ShieldCheck,
@@ -38,8 +43,10 @@ type TimelineEvent = {
 };
 
 type PendingAction = AgentAction & { source: "agent" | "manual" };
+type Artifact = { name: string; kind: "artifact" | "experiment"; body: string };
+type Modal = "artifact" | "evidence" | "search" | "settings" | "source" | null;
 
-const papers = [
+const initialPapers = [
   { title: "Evidence-aware retrieval for long-context reasoning", meta: "Rao et al. · 2025", score: "94%" },
   { title: "Measuring retrieval budget in agentic systems", meta: "Kim et al. · 2024", score: "88%" },
   { title: "Grounded reasoning under noisy observations", meta: "Alvarez et al. · 2025", score: "81%" },
@@ -159,6 +166,23 @@ function App() {
   const [terminalLog, setTerminalLog] = useState("Axiom terminal ready.\n");
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([
+    { name: "research-brief.md", kind: "artifact", body: "# Research brief\n\nFrame the open research question and link the evidence needed to answer it." },
+    { name: "evidence-map.md", kind: "artifact", body: "# Evidence map\n\nTrack claims, source passages, and unresolved contradictions in the active literature set." },
+    { name: "retrieval-gap.md", kind: "artifact", body: "# Retrieval gap\n\nIdentify where static retrieval budgets hide intermediate reasoning failures." },
+    { name: "budget-ablation.yaml", kind: "experiment", body: "baseline: static-top-k\ntreatment: adaptive-budget\nmetrics: [accuracy, evidence_recall, tokens]" },
+    { name: "metrics.py", kind: "experiment", body: "# Metrics entry point\n# Compute accuracy, evidence recall, token expenditure, and allocation entropy." },
+  ]);
+  const [selectedArtifact, setSelectedArtifact] = useState("evidence-map.md");
+  const [papers, setPapers] = useState(initialPapers);
+  const [modal, setModal] = useState<Modal>(null);
+  const [artifactName, setArtifactName] = useState("");
+  const [evidenceTitle, setEvidenceTitle] = useState("");
+  const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [searchQuery, setSearchQuery] = useState("retrieval budget reasoning");
+  const [selectedSource, setSelectedSource] = useState("");
+  const [activeWorkflow, setActiveWorkflow] = useState("idea-generation");
+  const terminalInputRef = useRef<HTMLInputElement>(null);
   const terminalRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -277,6 +301,55 @@ function App() {
     });
   }
 
+  function openArtifact(name: string) {
+    setSelectedArtifact(name);
+    setActiveView("draft");
+  }
+
+  function createArtifact() {
+    const name = artifactName.trim();
+    if (!name) return;
+    const normalizedName = name.endsWith(".md") ? name : `${name}.md`;
+    setArtifacts((current) => [...current, { name: normalizedName, kind: "artifact", body: `# ${normalizedName.replace(/\.md$/, "")}\n\nStart writing your research note here.` }]);
+    setArtifactName("");
+    setModal(null);
+    openArtifact(normalizedName);
+  }
+
+  function addEvidence(title = evidenceTitle, url = evidenceUrl) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return;
+    setPapers((current) => [...current, { title: trimmedTitle, meta: url.trim() || "Manually added source", score: "New" }]);
+    setEvidenceTitle("");
+    setEvidenceUrl("");
+    setModal(null);
+  }
+
+  function focusTerminal() {
+    document.querySelector(".terminal-pane")?.scrollIntoView({ behavior: "smooth", block: "end" });
+    window.setTimeout(() => terminalInputRef.current?.focus(), 240);
+  }
+
+  function reviewExecution() {
+    requestCommandApproval("python -m experiments.run --config budget-ablation.yaml");
+    setEvents((current) => [...current.filter((event) => event.title !== "Experiment execution"), { title: "Experiment execution", detail: "Command prepared for your approval", state: "waiting" }]);
+  }
+
+  function startWorkflow(stage: string) {
+    setActiveWorkflow(stage);
+    if (stage === "idea-generation") {
+      setPrompt("Generate several research ideas grounded in the active evidence ledger.");
+    } else if (stage === "idea-review") {
+      setPrompt("Review the active research idea for novelty, feasibility, operability, and impact.");
+    } else if (stage === "experiment") {
+      setActiveView("plan");
+    } else if (stage === "writing") {
+      openArtifact("research-brief.md");
+    } else if (stage === "review") {
+      setPrompt("Review the active manuscript like a strict conference reviewer and list actionable revisions.");
+    }
+  }
+
   async function approvePendingAction() {
     const action = pendingAction;
     if (!action) return;
@@ -311,28 +384,40 @@ function App() {
         </button>
         <div className="topbar-actions">
           <span className="sync-state"><span className="status-dot" />{workspaceReady ? `${savedTaskCount} saved task${savedTaskCount === 1 ? "" : "s"}` : "Opening workspace"}</span>
-          <button className="icon-button" title="New research artifact"><Plus size={17} /></button>
+          <button className="icon-button" onClick={() => setModal("artifact")} title="New research artifact"><Plus size={17} /></button>
         </div>
       </header>
 
       <section className="workspace-grid">
         <aside className="sidebar" aria-label="Research navigation">
-          <div className="sidebar-label">Research space</div>
-          <button className="project-row active"><CircleDot size={15} /><span>Long-context retrieval</span></button>
+          <div className="sidebar-section">
+            <div className="sidebar-label">Knowledge</div>
+            <button className="project-row active"><CircleDot size={15} /><span>Adaptive retrieval</span></button>
+            <button className="sidebar-command" onClick={() => setModal("search")}><BookOpen size={15} /><span>Literature library</span></button>
+            <button className="sidebar-command" onClick={() => { setSearchQuery(""); setModal("search"); }}><CalendarDays size={15} /><span>Daily papers</span></button>
+          </div>
           <div className="tree-section">
             <div className="tree-heading"><ChevronDown size={14} />Artifacts</div>
-            <button className="tree-row"><FileText size={14} /><span>research-brief.md</span></button>
-            <button className="tree-row selected"><BookOpen size={14} /><span>evidence-map.md</span></button>
-            <button className="tree-row"><Lightbulb size={14} /><span>retrieval-gap.md</span></button>
-          </div>
-          <div className="tree-section">
-            <div className="tree-heading"><ChevronDown size={14} />Experiments</div>
-            <button className="tree-row"><Beaker size={14} /><span>budget-ablation.yaml</span></button>
-            <button className="tree-row"><Code2 size={14} /><span>metrics.py</span></button>
+            <div className="artifact-paper">
+              <div className="artifact-paper-title"><FolderOpen size={14} /><span>adaptive-retrieval</span></div>
+              <div className="artifact-folder">
+                <div className="artifact-folder-title"><ChevronDown size={13} /><Folder size={14} /><span>paper</span></div>
+                {artifacts.filter((artifact) => artifact.kind === "artifact").map((artifact) => <button className={selectedArtifact === artifact.name ? "tree-row artifact-file selected" : "tree-row artifact-file"} key={artifact.name} onClick={() => openArtifact(artifact.name)}><FileText size={14} /><span>{artifact.name}</span></button>)}
+              </div>
+              <div className="artifact-folder">
+                <div className="artifact-folder-title"><ChevronDown size={13} /><Folder size={14} /><span>code</span></div>
+                {artifacts.filter((artifact) => artifact.kind === "experiment").map((artifact) => <button className={selectedArtifact === artifact.name ? "tree-row artifact-file selected" : "tree-row artifact-file"} key={artifact.name} onClick={() => openArtifact(artifact.name)}><Code2 size={14} /><span>{artifact.name}</span></button>)}
+              </div>
+            </div>
           </div>
           <div className="sidebar-bottom">
-            <button className="sidebar-command"><Search size={15} /><span>Search research</span></button>
-            <button className="sidebar-command"><SquareTerminal size={15} /><span>Open terminal</span></button>
+            <div className="sidebar-label">Research workflow</div>
+            <button className={activeWorkflow === "idea-generation" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("idea-generation")}><span>01</span><Lightbulb size={15} />Idea generation</button>
+            <button className={activeWorkflow === "idea-review" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("idea-review")}><span>02</span><Scale size={15} />Idea review</button>
+            <button className={activeWorkflow === "experiment" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("experiment")}><span>03</span><Beaker size={15} />Experiment setup</button>
+            <button className={activeWorkflow === "writing" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("writing")}><span>04</span><PenLine size={15} />Paper writing</button>
+            <button className={activeWorkflow === "review" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("review")}><span>05</span><FileCheck2 size={15} />Paper review</button>
+            <button className="sidebar-command terminal-shortcut" onClick={focusTerminal}><SquareTerminal size={15} /><span>Open terminal</span></button>
           </div>
         </aside>
 
@@ -356,15 +441,15 @@ function App() {
             <div><span>Next gate</span><strong className="pending-text">Approve baseline run</strong></div>
           </div>
 
-          {activeView === "evidence" && <EvidenceView />}
-          {activeView === "draft" && <DraftView />}
-          {activeView === "plan" && <PlanView />}
+          {activeView === "evidence" && <EvidenceView papers={papers} onAddEvidence={() => setModal("evidence")} onSourceOpen={setSelectedSource} />}
+          {activeView === "draft" && <DraftView artifact={artifacts.find((artifact) => artifact.name === selectedArtifact)} onSourceOpen={setSelectedSource} />}
+          {activeView === "plan" && <PlanView onReviewExecution={reviewExecution} />}
         </section>
 
         <aside className="agent-pane" aria-label="Research agent">
           <div className="agent-header">
             <div className="agent-title"><span className="agent-avatar"><Bot size={17} /></span><div><strong>Research agent</strong><span>Evidence-aware</span></div></div>
-            <button className="icon-button" title="Agent settings"><ChevronRight size={17} /></button>
+            <button className="icon-button" onClick={() => setModal("settings")} title="Agent settings"><ChevronRight size={17} /></button>
           </div>
 
           <div className="context-strip"><ShieldCheck size={14} />12 papers · 38 evidence spans · 2 files attached</div>
@@ -377,7 +462,7 @@ function App() {
               <article className={`message ${message.role}`} key={message.id}>
                 <div className="message-role">{message.role === "assistant" ? "Research agent" : "You"}</div>
                 <p>{message.text}</p>
-                {message.sources && <div className="source-chips">{message.sources.map((source) => <button key={source}>{source}</button>)}</div>}
+                {message.sources && <div className="source-chips">{message.sources.map((source) => <button key={source} onClick={() => setSelectedSource(source)}>{source}</button>)}</div>}
               </article>
             ))}
             {agentBusy && <div className="agent-typing"><span /><span /><span /></div>}
@@ -420,22 +505,37 @@ function App() {
       <section className="terminal-pane">
           <div className="terminal-header"><div><PanelBottom size={15} />Terminal <span>Workspace session</span></div><div className="terminal-actions"><button className="icon-button" title="Clear terminal" onClick={() => setTerminalLog("")}>Clear</button>{runningSession && <button className="icon-button danger" title="Stop process" onClick={() => desktopBridge.stopTerminal(runningSession)}><X size={15} /></button>}</div></div>
         <pre className="terminal-output" ref={terminalRef}>{terminalLog}</pre>
-        <div className="terminal-command"><span>$</span><input value={terminalInput} onChange={(event) => setTerminalInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && terminalInput.trim()) requestCommandApproval(terminalInput.trim()); }} aria-label="Terminal command" /><button className="icon-button" title="Review command" onClick={() => terminalInput.trim() && requestCommandApproval(terminalInput.trim())}><ArrowUp size={16} /></button></div>
+        <div className="terminal-command"><span>$</span><input ref={terminalInputRef} value={terminalInput} onChange={(event) => setTerminalInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && terminalInput.trim()) requestCommandApproval(terminalInput.trim()); }} aria-label="Terminal command" /><button className="icon-button" title="Review command" onClick={() => terminalInput.trim() && requestCommandApproval(terminalInput.trim())}><ArrowUp size={16} /></button></div>
       </section>
+      <WorkspaceModal
+        modal={modal ?? (selectedSource ? "source" : null)}
+        artifactName={artifactName}
+        evidenceTitle={evidenceTitle}
+        evidenceUrl={evidenceUrl}
+        searchQuery={searchQuery}
+        selectedSource={selectedSource}
+        onArtifactName={setArtifactName}
+        onEvidenceTitle={setEvidenceTitle}
+        onEvidenceUrl={setEvidenceUrl}
+        onSearchQuery={setSearchQuery}
+        onClose={() => { setModal(null); setSelectedSource(""); }}
+        onCreateArtifact={createArtifact}
+        onAddEvidence={addEvidence}
+      />
     </main>
   );
 }
 
-function EvidenceView() {
+function EvidenceView({ papers, onAddEvidence, onSourceOpen }: { papers: typeof initialPapers; onAddEvidence: () => void; onSourceOpen: (source: string) => void }) {
   return <div className="evidence-view">
     <section className="claim-panel">
       <div className="panel-kicker"><Lightbulb size={15} />Candidate gap</div>
       <h2>Retrieval budgets are often treated as a fixed hyperparameter instead of a reasoning decision.</h2>
       <p>Across the current reading set, final accuracy is usually reported without exposing how retrieval volume changes at each intermediate reasoning step.</p>
-      <div className="claim-footer"><span><Check size={14} />Grounded in 3 sources</span><button>Open claim record <ChevronRight size={14} /></button></div>
+      <div className="claim-footer"><span><Check size={14} />Grounded in 3 sources</span><button onClick={() => onSourceOpen("Candidate gap claim record")}>Open claim record <ChevronRight size={14} /></button></div>
     </section>
     <section className="evidence-grid">
-      <div className="section-heading"><div><span className="eyebrow">Linked sources</span><h2>Evidence ledger</h2></div><button className="outline-button"><Plus size={14} />Add evidence</button></div>
+      <div className="section-heading"><div><span className="eyebrow">Linked sources</span><h2>Evidence ledger</h2></div><button className="outline-button" onClick={onAddEvidence}><Plus size={14} />Add evidence</button></div>
       <div className="paper-list">
         {papers.map((paper, index) => <article className="paper-row" key={paper.title}><div className="paper-index">0{index + 1}</div><div className="paper-copy"><h3>{paper.title}</h3><p>{paper.meta}</p><blockquote>“Evaluation focuses on aggregate task outcomes rather than allocation behavior during intermediate reasoning.”</blockquote></div><div className="relevance"><span>Relevance</span><strong>{paper.score}</strong></div></article>)}
       </div>
@@ -443,12 +543,28 @@ function EvidenceView() {
   </div>;
 }
 
-function DraftView() {
-  return <section className="document-view"><div className="document-meta">drafts/method.md · autosaved</div><h2>Adaptive retrieval allocation</h2><p>We study retrieval as a budget allocation policy over a multi-step reasoning trace. Instead of setting a single top-k value for an entire task, the policy allocates evidence requests according to the uncertainty of each intermediate step.</p><h3>Claim trace</h3><div className="inline-citation"><BookOpen size={15} />This framing is motivated by evidence gaps identified in the active literature set.<button>3 linked sources</button></div><p>The evaluation records task accuracy, evidence recall, token expenditure, and allocation entropy for every completed run.</p></section>;
+function DraftView({ artifact, onSourceOpen }: { artifact?: Artifact; onSourceOpen: (source: string) => void }) {
+  return <section className="document-view"><div className="document-meta">{artifact?.kind === "experiment" ? "experiments" : "drafts"}/{artifact?.name ?? "method.md"} · local draft</div><h2>{artifact?.name?.replace(/\.(md|yaml|py)$/, "") ?? "Adaptive retrieval allocation"}</h2><p>{artifact?.body ?? "Select an artifact from the workspace to inspect its local draft."}</p><h3>Claim trace</h3><div className="inline-citation"><BookOpen size={15} />This framing is motivated by evidence gaps identified in the active literature set.<button onClick={() => onSourceOpen("3 linked sources")}>3 linked sources</button></div><p>Browser preview keeps this draft in the current session. In the desktop build, artifact creation will be routed through the same approval boundary before it writes to disk.</p></section>;
 }
 
-function PlanView() {
-  return <section className="plan-view"><div className="section-heading"><div><span className="eyebrow">Experiment</span><h2>Budget allocation ablation</h2></div><span className="status-label"><Clock3 size={14} />Awaiting approval</span></div><div className="plan-table"><div><span>Baseline</span><strong>Static top-k retrieval</strong></div><div><span>Treatment</span><strong>Adaptive budget policy</strong></div><div><span>Metrics</span><strong>Accuracy · evidence recall · tokens</strong></div><div><span>Artifacts</span><strong>trace.jsonl · metrics.csv · plot.png</strong></div></div><button className="primary-button"><Play size={15} />Review execution</button></section>;
+function PlanView({ onReviewExecution }: { onReviewExecution: () => void }) {
+  return <section className="plan-view"><div className="section-heading"><div><span className="eyebrow">Experiment</span><h2>Budget allocation ablation</h2></div><span className="status-label"><Clock3 size={14} />Awaiting approval</span></div><div className="plan-table"><div><span>Baseline</span><strong>Static top-k retrieval</strong></div><div><span>Treatment</span><strong>Adaptive budget policy</strong></div><div><span>Metrics</span><strong>Accuracy · evidence recall · tokens</strong></div><div><span>Artifacts</span><strong>trace.jsonl · metrics.csv · plot.png</strong></div></div><button className="primary-button" onClick={onReviewExecution}><Play size={15} />Review execution</button></section>;
+}
+
+function WorkspaceModal({ modal, artifactName, evidenceTitle, evidenceUrl, searchQuery, selectedSource, onArtifactName, onEvidenceTitle, onEvidenceUrl, onSearchQuery, onClose, onCreateArtifact, onAddEvidence }: { modal: Modal; artifactName: string; evidenceTitle: string; evidenceUrl: string; searchQuery: string; selectedSource: string; onArtifactName: (value: string) => void; onEvidenceTitle: (value: string) => void; onEvidenceUrl: (value: string) => void; onSearchQuery: (value: string) => void; onClose: () => void; onCreateArtifact: () => void; onAddEvidence: () => void }) {
+  if (!modal) return null;
+  const firstTerm = searchQuery.toLowerCase().trim().split(" ")[0];
+  const previewResults = initialPapers.filter((paper) => !firstTerm || paper.title.toLowerCase().includes(firstTerm));
+  const title = modal === "artifact" ? "New research artifact" : modal === "evidence" ? "Add evidence" : modal === "search" ? "Search research" : modal === "settings" ? "Agent settings" : "Source record";
+
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="workspace-modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+    <div className="modal-header"><div><span className="eyebrow">Axiom workspace</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
+    {modal === "artifact" && <><p>Create a session draft, then select it from the left workspace tree.</p><label>Artifact name<input autoFocus value={artifactName} onChange={(event) => onArtifactName(event.target.value)} placeholder="literature-gap.md" onKeyDown={(event) => event.key === "Enter" && onCreateArtifact()} /></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onCreateArtifact}><Plus size={14} />Create draft</button></div></>}
+    {modal === "evidence" && <><p>Add a paper, dataset, or web source to the current evidence ledger.</p><label>Title<input autoFocus value={evidenceTitle} onChange={(event) => onEvidenceTitle(event.target.value)} placeholder="Paper or source title" /></label><label>URL or citation<input value={evidenceUrl} onChange={(event) => onEvidenceUrl(event.target.value)} placeholder="https://... or Author et al., 2025" onKeyDown={(event) => event.key === "Enter" && onAddEvidence()} /></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onAddEvidence}><Plus size={14} />Add evidence</button></div></>}
+    {modal === "search" && <><p>Search is a local preview catalogue for now; choose a result, then add it to the evidence ledger.</p><label>Research query<input autoFocus value={searchQuery} onChange={(event) => onSearchQuery(event.target.value)} /></label><div className="search-results">{previewResults.length ? previewResults.map((paper) => <button key={paper.title} className="search-result" onClick={() => { onEvidenceTitle(paper.title); onEvidenceUrl(`${paper.meta} · preview catalogue`); }}><Search size={15} /><span>{paper.title}</span><Plus size={14} /></button>) : <p>No local preview matches. Use Add evidence to enter a source manually.</p>}</div><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Close</button><button className="primary-button" onClick={onAddEvidence}><Plus size={14} />Add selected</button></div></>}
+    {modal === "settings" && <><p>Model credentials stay outside the renderer. Configure an OpenAI-compatible model in <code>.env.local</code>, then restart the desktop app.</p><div className="settings-list"><code>AXIOM_LLM_API_KEY</code><code>AXIOM_LLM_BASE_URL</code><code>AXIOM_LLM_MODEL</code></div><div className="modal-actions"><button className="primary-button" onClick={onClose}>Done</button></div></>}
+    {modal === "source" && <><p><strong>{selectedSource}</strong></p><p>This is a linked-source detail placeholder. The next data layer will persist a citation, source URL, extracted passage, and its connection to a claim.</p><div className="modal-actions"><button className="primary-button" onClick={onClose}>Close record</button></div></>}
+  </section></div>;
 }
 
 export default App;
