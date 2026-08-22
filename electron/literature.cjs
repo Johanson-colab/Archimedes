@@ -103,11 +103,21 @@ function matchesDailyQuery(paper, query) {
   return terms.every((term) => haystack.includes(term));
 }
 
+function buildArxivKeywordQuery(query) {
+  const terms = query
+    .match(/"[^"]+"|\S+/g)
+    ?.map((term) => term.replace(/^"|"$/g, "").replace(/[^\p{L}\p{N}_-]+/gu, " ").trim())
+    .filter(Boolean) || [];
+  return terms.map((term) => `all:"${term}"`).join(" AND ");
+}
+
 async function discoverArxivPapers(options) {
   const categoryQuery = options.categories.map((category) => `cat:${category}`).join(" OR ");
   const submittedRange = `submittedDate:[${formatArxivDate(rangeStart(options.range))} TO ${formatArxivDate(new Date())}]`;
+  const keywordQuery = buildArxivKeywordQuery(options.query);
+  const searchQuery = [`(${categoryQuery})`, submittedRange, keywordQuery ? `(${keywordQuery})` : ""].filter(Boolean).join(" AND ");
   const params = new URLSearchParams({
-    search_query: `(${categoryQuery}) AND ${submittedRange}`,
+    search_query: searchQuery,
     start: "0",
     max_results: String(Math.min(100, Math.max(options.limit, 50))),
     sortBy: "submittedDate",
@@ -123,7 +133,6 @@ async function discoverArxivPapers(options) {
   const payload = parser.parse(await response.text());
   return asArray(payload.feed?.entry)
     .map((entry) => normalizeArxivEntry(entry, ""))
-    .filter((paper) => matchesDailyQuery(paper, options.query))
     .slice(0, options.limit);
 }
 

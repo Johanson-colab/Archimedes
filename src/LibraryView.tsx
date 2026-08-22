@@ -263,6 +263,7 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
   const [range, setRange] = useState<DailyDiscoveryRange>("3d");
   const [categories, setCategories] = useState(["cs.AI", "cs.LG", "cs.CL"]);
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [targetLibraryId, setTargetLibraryId] = useState("");
   const [response, setResponse] = useState<DailyDiscoveryResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -279,7 +280,7 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
     setError("");
     if (!forceRefresh) setResponse(null);
     try {
-      const nextResponse = await bridge.discoverDailyPapers({ mode, range, categories, limit: 60, forceRefresh });
+      const nextResponse = await bridge.discoverDailyPapers({ mode, range, categories, query: submittedQuery, limit: 60, forceRefresh });
       if (requestId !== feedRequestId.current) return;
       setResponse(nextResponse);
       if (nextResponse.warning) setError(nextResponse.warning);
@@ -289,21 +290,20 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
-  }, [bridge, categoryKey, mode, range]);
+  }, [bridge, categoryKey, mode, range, submittedQuery]);
 
   useEffect(() => {
     void loadFeed(false);
     return () => { feedRequestId.current += 1; };
   }, [loadFeed]);
 
-  const visiblePapers = useMemo(() => {
-    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    if (!terms.length) return response?.papers ?? [];
-    return (response?.papers ?? []).filter((paper) => {
-      const text = `${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")}`.toLowerCase();
-      return terms.every((term) => text.includes(term));
-    });
-  }, [query, response]);
+  const visiblePapers = response?.papers ?? [];
+
+  function submitSearch() {
+    const nextQuery = query.trim();
+    if (nextQuery === submittedQuery) void loadFeed(true);
+    else setSubmittedQuery(nextQuery);
+  }
 
   function toggleCategory(category: string) {
     setCategories((current) => current.includes(category)
@@ -339,9 +339,9 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
     </div>
     {mode === "latest" && <div className="daily-category-filter"><span>arXiv fields</span>{["cs.AI", "cs.LG", "cs.CL", "cs.CV", "cs.RO", "cs.SE"].map((category) => <label key={category} className={categories.includes(category) ? "selected" : ""}><input type="checkbox" checked={categories.includes(category)} onChange={() => toggleCategory(category)} />{category}</label>)}</div>}
-    <div className="daily-search-row"><div className="external-search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter the current feed by title, author, topic, or abstract" /></div><span>{visiblePapers.length} papers{response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}</span></div>
+    <div className="daily-search-row"><div className="external-search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /><button className="primary-button" disabled={loading} onClick={submitSearch}>{loading ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div><span>{visiblePapers.length} papers{submittedQuery ? ` · “${submittedQuery}”` : ""}{response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}</span></div>
     {error && <div className="library-error" role="alert">{error}</div>}
-    {loading && !response ? <LoadingState /> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers in this view</strong><span>Expand the date range, select more fields, or clear the local filter.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    {loading && !response ? <LoadingState /> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try a broader keyword, expand the date range, or select more arXiv fields.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;
