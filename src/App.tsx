@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import LibraryView from "./LibraryView";
+import { previewLibraryBridge } from "./library-preview";
 import {
   ArrowUp,
   Beaker,
@@ -84,6 +86,7 @@ function emitPreviewAgentEvent(payload: AgentEvent) {
 }
 
 const previewBridge = {
+  ...previewLibraryBridge,
   chooseWorkspace: async () => DEFAULT_WORKSPACE || "Browser preview workspace",
   openWorkspace: async (workspacePath?: string) => {
     previewWorkspace = workspacePath || previewWorkspace;
@@ -151,10 +154,11 @@ const previewBridge = {
   },
 };
 
-const desktopBridge = window.researchDesk ?? previewBridge;
+const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
 
 function App() {
   const [activeView, setActiveView] = useState<"evidence" | "draft" | "plan">("evidence");
+  const [mainSection, setMainSection] = useState<"workspace" | "library" | "daily">("workspace");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
   const [prompt, setPrompt] = useState("");
@@ -392,9 +396,9 @@ function App() {
         <aside className="sidebar" aria-label="Research navigation">
           <div className="sidebar-section">
             <div className="sidebar-label">Knowledge</div>
-            <button className="project-row active"><CircleDot size={15} /><span>Adaptive retrieval</span></button>
-            <button className="sidebar-command" onClick={() => setModal("search")}><BookOpen size={15} /><span>Literature library</span></button>
-            <button className="sidebar-command" onClick={() => { setSearchQuery(""); setModal("search"); }}><CalendarDays size={15} /><span>Daily papers</span></button>
+            <button className={mainSection === "workspace" ? "project-row active" : "project-row"} onClick={() => setMainSection("workspace")}><CircleDot size={15} /><span>Adaptive retrieval</span></button>
+            <button className={mainSection === "library" ? "sidebar-command active" : "sidebar-command"} onClick={() => setMainSection("library")}><BookOpen size={15} /><span>Literature library</span></button>
+            <button className={mainSection === "daily" ? "sidebar-command active" : "sidebar-command"} onClick={() => setMainSection("daily")}><CalendarDays size={15} /><span>Daily papers</span></button>
           </div>
           <div className="tree-section">
             <div className="tree-heading"><ChevronDown size={14} />Artifacts</div>
@@ -421,7 +425,8 @@ function App() {
           </div>
         </aside>
 
-        <section className="content-pane">
+        <section className={mainSection === "workspace" ? "content-pane" : "content-pane library-content-pane"}>
+          {mainSection === "workspace" ? <>
           <div className="content-header">
             <div className="question-heading">
               <div className="eyebrow"><span className="research-id">RAG-042</span> Research question</div>
@@ -444,6 +449,7 @@ function App() {
           {activeView === "evidence" && <EvidenceView papers={papers} onAddEvidence={() => setModal("evidence")} onSourceOpen={setSelectedSource} />}
           {activeView === "draft" && <DraftView artifact={artifacts.find((artifact) => artifact.name === selectedArtifact)} onSourceOpen={setSelectedSource} />}
           {activeView === "plan" && <PlanView onReviewExecution={reviewExecution} />}
+          </> : <LibraryView bridge={desktopBridge} mode={mainSection} />}
         </section>
 
         <aside className="agent-pane" aria-label="Research agent">

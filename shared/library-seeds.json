@@ -1,0 +1,238 @@
+{
+  "libraries": [
+    {
+      "id": "seed-agents",
+      "name": "AI Agents & Tool Use",
+      "description": "Agent architectures, tool use, computer interfaces, and reliable environment interaction.",
+      "color": "#3973c8",
+      "papers": [
+        {
+          "id": "seed-react",
+          "title": "ReAct: Synergizing Reasoning and Acting in Language Models",
+          "authors": ["Shunyu Yao", "Jeffrey Zhao", "Dian Yu", "Karthik Narasimhan"],
+          "year": 2022,
+          "venue": "ICLR",
+          "abstract": "Introduces interleaved reasoning traces and environment actions so language models can plan, gather information, and recover from exceptions.",
+          "arxiv_id": "2210.03629",
+          "url": "https://arxiv.org/abs/2210.03629",
+          "pdf_url": "https://arxiv.org/pdf/2210.03629.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-toolformer",
+          "title": "Toolformer: Language Models Can Teach Themselves to Use Tools",
+          "authors": ["Timo Schick", "Jane Dwivedi-Yu", "Roberto Dessi", "Thomas Scialom"],
+          "year": 2023,
+          "venue": "NeurIPS",
+          "abstract": "Shows how a language model can learn when and how to call external APIs using self-supervised tool-use examples.",
+          "arxiv_id": "2302.04761",
+          "doi": "10.48550/arXiv.2302.04761",
+          "url": "https://arxiv.org/abs/2302.04761",
+          "pdf_url": "https://arxiv.org/pdf/2302.04761.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-swe-agent",
+          "title": "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering",
+          "authors": ["John Yang", "Carlos E. Jimenez", "Alexander Wettig", "Ofir Press"],
+          "year": 2024,
+          "venue": "NeurIPS",
+          "abstract": "Demonstrates that an agent-computer interface designed for language models materially improves repository navigation, editing, and testing.",
+          "arxiv_id": "2405.15793",
+          "doi": "10.48550/arXiv.2405.15793",
+          "url": "https://arxiv.org/abs/2405.15793",
+          "pdf_url": "https://arxiv.org/pdf/2405.15793.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-coala",
+          "title": "Cognitive Architectures for Language Agents",
+          "authors": ["Theodore R. Sumers", "Shunyu Yao", "Karthik Narasimhan", "Thomas L. Griffiths"],
+          "year": 2023,
+          "venue": "TMLR",
+          "abstract": "Organizes language agents around modular memory, structured action spaces, and a generalized decision-making loop.",
+          "arxiv_id": "2309.02427",
+          "doi": "10.48550/arXiv.2309.02427",
+          "url": "https://arxiv.org/abs/2309.02427",
+          "pdf_url": "https://arxiv.org/pdf/2309.02427.pdf",
+          "source": "arxiv"
+        }
+      ]
+    },
+    {
+      "id": "seed-reasoning",
+      "name": "Reasoning & Test-Time Scaling",
+      "description": "Process supervision, reasoning models, inference-time compute, and efficient deliberation.",
+      "color": "#a8652e",
+      "papers": [
+        {
+          "id": "seed-deepseek-r1",
+          "title": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+          "authors": ["DeepSeek-AI"],
+          "year": 2025,
+          "venue": "arXiv",
+          "abstract": "Studies reinforcement learning recipes that elicit long-form reasoning behavior and distill it into smaller language models.",
+          "arxiv_id": "2501.12948",
+          "url": "https://arxiv.org/abs/2501.12948",
+          "pdf_url": "https://arxiv.org/pdf/2501.12948.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-s1",
+          "title": "s1: Simple test-time scaling",
+          "authors": ["Niklas Muennighoff", "Zitong Yang", "Weijia Shi", "Xiang Lisa Li"],
+          "year": 2025,
+          "venue": "arXiv",
+          "abstract": "Explores a compact reasoning dataset and budget forcing as a simple route to test-time scaling.",
+          "arxiv_id": "2501.19393",
+          "url": "https://arxiv.org/abs/2501.19393",
+          "pdf_url": "https://arxiv.org/pdf/2501.19393.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-verify-step",
+          "title": "Let's Verify Step by Step",
+          "authors": ["Hunter Lightman", "Vineet Kosaraju", "Yura Burda", "Karl Cobbe"],
+          "year": 2023,
+          "venue": "arXiv",
+          "abstract": "Compares outcome and process supervision, introducing step-level feedback data for training more reliable mathematical reasoning.",
+          "arxiv_id": "2305.20050",
+          "url": "https://arxiv.org/abs/2305.20050",
+          "pdf_url": "https://arxiv.org/pdf/2305.20050.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-quiet-star",
+          "title": "Quiet-STaR: Language Models Can Teach Themselves to Think Before Speaking",
+          "authors": ["Eric Zelikman", "Georges Harik", "Yijia Shao", "Noah D. Goodman"],
+          "year": 2024,
+          "venue": "arXiv",
+          "abstract": "Trains language models to generate latent rationales before future text, extending self-taught reasoning beyond question answering.",
+          "arxiv_id": "2403.09629",
+          "doi": "10.48550/arXiv.2403.09629",
+          "url": "https://arxiv.org/abs/2403.09629",
+          "pdf_url": "https://arxiv.org/pdf/2403.09629.pdf",
+          "source": "arxiv"
+        }
+      ]
+    },
+    {
+      "id": "seed-retrieval",
+      "name": "RAG & Long Context",
+      "description": "Retrieval-augmented generation, hierarchical indexing, adaptive retrieval, and long-context readers.",
+      "color": "#2d8a68",
+      "papers": [
+        {
+          "id": "seed-rag",
+          "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+          "authors": ["Patrick Lewis", "Ethan Perez", "Aleksandra Piktus", "Douwe Kiela"],
+          "year": 2020,
+          "venue": "NeurIPS",
+          "abstract": "Establishes a general retrieval-augmented generation recipe combining parametric models with an explicit dense knowledge index.",
+          "arxiv_id": "2005.11401",
+          "url": "https://arxiv.org/abs/2005.11401",
+          "pdf_url": "https://arxiv.org/pdf/2005.11401.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-self-rag",
+          "title": "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection",
+          "authors": ["Akari Asai", "Zeqiu Wu", "Yizhong Wang", "Hannaneh Hajishirzi"],
+          "year": 2023,
+          "venue": "ICLR",
+          "abstract": "Adds learned retrieval and reflection decisions so a model can retrieve on demand and critique evidence and generations.",
+          "arxiv_id": "2310.11511",
+          "url": "https://arxiv.org/abs/2310.11511",
+          "pdf_url": "https://arxiv.org/pdf/2310.11511.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-raptor",
+          "title": "RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval",
+          "authors": ["Parth Sarthi", "Salman Abdullah", "Aditi Tuli", "Christopher D. Manning"],
+          "year": 2024,
+          "venue": "ICLR",
+          "abstract": "Builds a hierarchy of clustered summaries to retrieve information at several abstraction levels across long documents.",
+          "arxiv_id": "2401.18059",
+          "doi": "10.48550/arXiv.2401.18059",
+          "url": "https://arxiv.org/abs/2401.18059",
+          "pdf_url": "https://arxiv.org/pdf/2401.18059.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-longrag",
+          "title": "LongRAG: Enhancing Retrieval-Augmented Generation with Long-context LLMs",
+          "authors": ["Ziyan Jiang", "Xueguang Ma", "Wenhu Chen"],
+          "year": 2024,
+          "venue": "arXiv",
+          "abstract": "Rebalances retrieval and reading by using larger retrieval units and long-context models instead of many short chunks.",
+          "arxiv_id": "2406.15319",
+          "doi": "10.48550/arXiv.2406.15319",
+          "url": "https://arxiv.org/abs/2406.15319",
+          "pdf_url": "https://arxiv.org/pdf/2406.15319.pdf",
+          "source": "arxiv"
+        }
+      ]
+    },
+    {
+      "id": "seed-embodied",
+      "name": "Embodied AI & VLA",
+      "description": "Vision-language-action models, generalist robot policies, and embodied reasoning in 3D environments.",
+      "color": "#7a5bb5",
+      "papers": [
+        {
+          "id": "seed-rt2",
+          "title": "RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control",
+          "authors": ["Anthony Brohan", "Noah Brown", "Yevgen Chebotar", "Chelsea Finn"],
+          "year": 2023,
+          "venue": "CoRL",
+          "abstract": "Represents robot actions as tokens and co-fine-tunes on web-scale vision-language data and robot trajectories.",
+          "arxiv_id": "2307.15818",
+          "doi": "10.48550/arXiv.2307.15818",
+          "url": "https://arxiv.org/abs/2307.15818",
+          "pdf_url": "https://arxiv.org/pdf/2307.15818.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-openvla",
+          "title": "OpenVLA: An Open-Source Vision-Language-Action Model",
+          "authors": ["Moo Jin Kim", "Karl Pertsch", "Siddharth Karamcheti", "Chelsea Finn"],
+          "year": 2024,
+          "venue": "CoRL",
+          "abstract": "Presents an open 7B vision-language-action model trained on diverse robot demonstrations with efficient fine-tuning support.",
+          "arxiv_id": "2406.09246",
+          "doi": "10.48550/arXiv.2406.09246",
+          "url": "https://arxiv.org/abs/2406.09246",
+          "pdf_url": "https://arxiv.org/pdf/2406.09246.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-leo",
+          "title": "An Embodied Generalist Agent in 3D World",
+          "authors": ["Jiangyong Huang", "Silong Yong", "Xiaojian Ma", "Siyuan Huang"],
+          "year": 2023,
+          "venue": "ICML",
+          "abstract": "Introduces LEO, a generalist multimodal agent for 3D perception, grounding, reasoning, navigation, and manipulation.",
+          "arxiv_id": "2311.12871",
+          "doi": "10.48550/arXiv.2311.12871",
+          "url": "https://arxiv.org/abs/2311.12871",
+          "pdf_url": "https://arxiv.org/pdf/2311.12871.pdf",
+          "source": "arxiv"
+        },
+        {
+          "id": "seed-octo",
+          "title": "Octo: An Open-Source Generalist Robot Policy",
+          "authors": ["Octo Model Team", "Dibya Ghosh", "Homer Walke", "Sergey Levine"],
+          "year": 2024,
+          "venue": "RSS",
+          "abstract": "Trains a generalist transformer policy on a large cross-robot dataset and adapts it to new sensors, actions, and platforms.",
+          "arxiv_id": "2405.12213",
+          "doi": "10.48550/arXiv.2405.12213",
+          "url": "https://arxiv.org/abs/2405.12213",
+          "pdf_url": "https://arxiv.org/pdf/2405.12213.pdf",
+          "source": "arxiv"
+        }
+      ]
+    }
+  ]
+}

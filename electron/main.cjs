@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const agent = require("./agent.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
+const { searchAcademicPapers } = require("./literature.cjs");
 const store = require("./store.cjs");
 
 let mainWindow;
@@ -59,6 +60,52 @@ app.whenReady().then(() => {
   ipcMain.handle("workspace:open", (_event, requestedWorkspace) => {
     const workspace = resolveWorkspace(requestedWorkspace);
     return store.openWorkspace(workspace);
+  });
+
+  ipcMain.handle("library:list", () => store.listLibraries());
+
+  ipcMain.handle("library:create", (_event, input) => {
+    if (!input || typeof input.name !== "string" || !input.name.trim() || input.name.length > 120) {
+      throw new Error("A library name of at most 120 characters is required.");
+    }
+    return store.createLibrary(input);
+  });
+
+  ipcMain.handle("library:update", (_event, { id, patch }) => {
+    if (typeof id !== "string" || !patch || typeof patch !== "object") throw new Error("A library and update payload are required.");
+    return store.updateLibrary(id, patch);
+  });
+
+  ipcMain.handle("library:delete", (_event, id) => {
+    if (typeof id !== "string") throw new Error("A library ID is required.");
+    return store.deleteLibrary(id);
+  });
+
+  ipcMain.handle("library:list-papers", (_event, { libraryId, query = "" }) => {
+    if (typeof libraryId !== "string" || typeof query !== "string" || query.length > 300) {
+      throw new Error("A library ID and a short search query are required.");
+    }
+    return store.listPapers(libraryId, query);
+  });
+
+  ipcMain.handle("library:search-external", (_event, { query, limit }) => searchAcademicPapers(query, limit));
+
+  ipcMain.handle("library:add-paper", (_event, { libraryId, paper }) => {
+    if (typeof libraryId !== "string" || !paper || typeof paper.title !== "string" || !paper.title.trim()) {
+      throw new Error("Choose a library and a valid paper before importing.");
+    }
+    if (paper.title.length > 1000 || String(paper.abstract || "").length > 100_000) throw new Error("Paper metadata is too large.");
+    return store.addPaper(libraryId, paper);
+  });
+
+  ipcMain.handle("library:update-paper", (_event, { paperId, patch }) => {
+    if (typeof paperId !== "string" || !patch || typeof patch !== "object") throw new Error("A paper and update payload are required.");
+    return store.updatePaper(paperId, patch);
+  });
+
+  ipcMain.handle("library:remove-paper", (_event, { libraryId, paperId }) => {
+    if (typeof libraryId !== "string" || typeof paperId !== "string") throw new Error("A library and paper are required.");
+    return store.removePaper(libraryId, paperId);
   });
 
   ipcMain.handle("task:save", (_event, task) => {
