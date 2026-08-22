@@ -3,6 +3,7 @@ const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const store = require("./store.cjs");
 
 let mainWindow;
 const terminalSessions = new Map();
@@ -49,7 +50,22 @@ app.whenReady().then(() => {
       properties: ["openDirectory"],
       title: "Choose a research workspace",
     });
-    return result.canceled ? null : result.filePaths[0];
+    return result.canceled ? null : resolveWorkspace(result.filePaths[0]);
+  });
+
+  ipcMain.handle("workspace:open", (_event, requestedWorkspace) => {
+    const workspace = resolveWorkspace(requestedWorkspace);
+    return store.openWorkspace(workspace);
+  });
+
+  ipcMain.handle("task:save", (_event, task) => {
+    if (!task || typeof task.prompt !== "string" || typeof task.response !== "string") {
+      throw new Error("A task requires prompt and response text.");
+    }
+    if (task.prompt.length > 20_000 || task.response.length > 100_000) {
+      throw new Error("Task payload is too large.");
+    }
+    return store.saveTask(task);
   });
 
   ipcMain.handle("terminal:run", (event, { command, cwd }) => {
@@ -57,24 +73,31 @@ app.whenReady().then(() => {
       throw new Error("A non-empty command of at most 2000 characters is required.");
     }
 
+    const workspace = resolveWorkspace(cwd);
+    store.openWorkspace(workspace);
     const sessionId = randomUUID();
+    const commandRun = store.startCommand({ command, cwd: workspace });
     const shell = process.platform === "win32" ? "cmd.exe" : "/bin/zsh";
     const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
     const child = spawn(shell, args, {
-      cwd: resolveWorkspace(cwd),
+      cwd: workspace,
       env: process.env,
     });
 
     terminalSessions.set(sessionId, child);
-    const send = (data) => event.sender.send("terminal:data", { sessionId, data });
+    const send = (data) => {
+      store.appendCommandOutput(commandRun.id, data);
+      event.sender.send("terminal:data", { sessionId, commandRunId: commandRun.id, data });
+    };
     child.stdout.on("data", (chunk) => send(chunk.toString()));
     child.stderr.on("data", (chunk) => send(chunk.toString()));
     child.on("error", (error) => send(`\n[process error] ${error.message}\n`));
     child.on("close", (code) => {
       send(`\n[process exited with code ${code ?? "unknown"}]\n`);
+      store.finishCommand(commandRun.id, code, code === 0 ? "completed" : "failed");
       terminalSessions.delete(sessionId);
     });
-    return { sessionId };
+    return { sessionId, commandRunId: commandRun.id, workspace };
   });
 
   ipcMain.handle("terminal:stop", (_event, sessionId) => {

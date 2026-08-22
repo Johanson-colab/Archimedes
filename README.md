@@ -17,6 +17,10 @@ npm run dev
 
 The renderer is also available at `http://127.0.0.1:5173` while development is running. On the first Electron launch, npm downloads the platform-specific Electron runtime.
 
+## Local workspace data
+
+When a workspace is opened, Axiom creates `.axiom/axiom.db` inside that folder. It stores Agent task runs and approved command history locally; the directory is ignored by Git. For this development checkout, `.env.local` selects the surrounding `AI Research` directory without committing that personal path.
+
 ## Validation
 
 ```bash

@@ -58,18 +58,37 @@ const initialMessages: Message[] = [
   },
 ];
 
+const DEFAULT_WORKSPACE = import.meta.env.VITE_DEFAULT_WORKSPACE ?? "";
 const previewListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
+let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
+const previewTasks: SavedTask[] = [];
+const previewCommands: WorkspaceSnapshot["commands"] = [];
+
+function previewSnapshot(): WorkspaceSnapshot {
+  return { workspace: previewWorkspace, tasks: [...previewTasks].reverse(), commands: [...previewCommands].reverse() };
+}
 
 const previewBridge = {
-  chooseWorkspace: async () => "/Users/jackson/Research/sample-workspace",
+  chooseWorkspace: async () => DEFAULT_WORKSPACE || "Browser preview workspace",
+  openWorkspace: async (workspacePath?: string) => {
+    previewWorkspace = workspacePath || previewWorkspace;
+    return previewSnapshot();
+  },
+  saveTask: async ({ prompt, response, status = "completed" }: { prompt: string; response: string; status?: string }) => {
+    const task = { id: crypto.randomUUID(), prompt, response, status, created_at: new Date().toISOString() };
+    previewTasks.push(task);
+    return task;
+  },
   runTerminal: async ({ command }: { command: string; cwd?: string }) => {
     const sessionId = crypto.randomUUID();
+    const commandRunId = crypto.randomUUID();
+    previewCommands.push({ id: commandRunId, command, cwd: previewWorkspace, status: "completed", output: "", exit_code: 0, created_at: new Date().toISOString(), completed_at: new Date().toISOString() });
     window.setTimeout(() => {
       for (const listener of previewListeners) {
         listener({ sessionId, data: `[browser preview] Command approved: ${command}\n[process exited with code 0]\n` });
       }
     }, 260);
-    return { sessionId };
+    return { sessionId, commandRunId, workspace: previewWorkspace };
   },
   stopTerminal: async (sessionId: string) => {
     for (const listener of previewListeners) listener({ sessionId, data: "[process stopped]\n" });
@@ -87,7 +106,9 @@ function App() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
   const [prompt, setPrompt] = useState("");
-  const [workspace, setWorkspace] = useState("~/Research/long-context-rag");
+  const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [savedTaskCount, setSavedTaskCount] = useState(0);
   const [pendingCommand, setPendingCommand] = useState<string | null>("git status --short");
   const [terminalInput, setTerminalInput] = useState("git status --short");
   const [terminalLog, setTerminalLog] = useState("Axiom terminal ready.\n");
@@ -104,12 +125,40 @@ function App() {
   }, [runningSession]);
 
   useEffect(() => {
+    void loadWorkspace(DEFAULT_WORKSPACE);
+  }, []);
+
+  useEffect(() => {
     terminalRef.current?.scrollTo({ top: terminalRef.current.scrollHeight });
   }, [terminalLog]);
 
   async function chooseWorkspace() {
     const selected = await desktopBridge.chooseWorkspace();
-    if (selected) setWorkspace(selected);
+    if (selected) await loadWorkspace(selected);
+  }
+
+  async function loadWorkspace(workspacePath: string) {
+    setWorkspaceReady(false);
+    const snapshot = await desktopBridge.openWorkspace(workspacePath);
+    setWorkspace(snapshot.workspace);
+    setSavedTaskCount(snapshot.tasks.length);
+    setWorkspaceReady(true);
+
+    if (snapshot.tasks.length) {
+      const restoredMessages = [...snapshot.tasks].reverse().flatMap((task) => [
+        { id: `${task.id}-prompt`, role: "user" as const, text: task.prompt },
+        { id: `${task.id}-response`, role: "assistant" as const, text: task.response },
+      ]);
+      setMessages([...initialMessages, ...restoredMessages]);
+    }
+
+    if (snapshot.commands.length) {
+      const previousOutput = [...snapshot.commands].reverse()
+        .slice(-5)
+        .map((run) => `$ ${run.command}\n${run.output}`)
+        .join("\n");
+      if (previousOutput) setTerminalLog(`Axiom terminal history\n\n${previousOutput}\n`);
+    }
   }
 
   function submitPrompt() {
@@ -125,12 +174,13 @@ function App() {
     ]);
 
     window.setTimeout(() => {
+      const response = "我会把这个问题收敛成可验证的假设：在固定总 token 预算下，比较静态检索和自适应检索对长上下文推理的影响。实验应记录每步检索量、引用证据和最终任务指标，而不仅仅看最终准确率。";
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          text: "我会把这个问题收敛成可验证的假设：在固定总 token 预算下，比较静态检索和自适应检索对长上下文推理的影响。实验应记录每步检索量、引用证据和最终任务指标，而不仅仅看最终准确率。",
+          text: response,
           sources: ["Rao et al., §4.2", "Kim et al., Table 3", "Current research brief"],
         },
       ]);
@@ -143,6 +193,7 @@ function App() {
       );
       setPendingCommand("git status --short");
       setAgentBusy(false);
+      void desktopBridge.saveTask({ prompt: question, response }).then(() => setSavedTaskCount((count) => count + 1));
     }, 850);
   }
 
@@ -171,7 +222,7 @@ function App() {
           <ChevronDown size={14} />
         </button>
         <div className="topbar-actions">
-          <span className="sync-state"><span className="status-dot" />Local workspace</span>
+          <span className="sync-state"><span className="status-dot" />{workspaceReady ? `${savedTaskCount} saved task${savedTaskCount === 1 ? "" : "s"}` : "Opening workspace"}</span>
           <button className="icon-button" title="New research artifact"><Plus size={17} /></button>
         </div>
       </header>
