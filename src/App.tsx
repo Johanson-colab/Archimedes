@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import LibraryView from "./LibraryView";
+import ContextPicker, { ContextChips } from "./ContextPicker";
 import TerminalPanel from "./TerminalPanel";
 import { previewLibraryBridge } from "./library-preview";
 import {
@@ -95,6 +96,8 @@ function emitPreviewAgentEvent(payload: AgentEvent) {
 const previewBridge = {
   ...previewLibraryBridge,
   chooseWorkspace: async () => DEFAULT_WORKSPACE || "Browser preview workspace",
+  chooseContextPaths: async () => { throw new Error("Use the desktop app to choose local files and folders."); },
+  listContextResources: async () => [],
   openWorkspace: async (workspacePath?: string) => {
     previewWorkspace = workspacePath || previewWorkspace;
     return previewSnapshot();
@@ -104,7 +107,7 @@ const previewBridge = {
     previewTasks.push(task);
     return task;
   },
-  runAgent: async ({ prompt, mode }: { prompt: string; workspace: string; mode: ResearchMode }) => {
+  runAgent: async ({ prompt, mode, contextItems }: { prompt: string; workspace: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {
     emitPreviewAgentEvent({ type: "status", title: "Research task started", detail: "Browser preview Agent" });
     const actions: AgentAction[] = [];
     if (/(write|draft|note|生成|写入)/i.test(prompt)) {
@@ -118,7 +121,8 @@ const previewBridge = {
       emitPreviewAgentEvent({ type: "tool", title: "write artifact", detail: "Prepared a draft for approval" });
     }
     const selectedMode = researchModes.find((candidate) => candidate.id === mode)?.label ?? "Research";
-    const response = `Preview Agent (${selectedMode}): I reviewed the active research workspace and framed the request as an evidence-backed next step. In the desktop app, this same request will use your configured model and restricted workspace tools.`;
+    const contextNote = contextItems?.length ? ` I received ${contextItems.length} attached context item${contextItems.length === 1 ? "" : "s"}.` : "";
+    const response = `Preview Agent (${selectedMode}): I reviewed the active research workspace and framed the request as an evidence-backed next step.${contextNote} In the desktop app, this same request will use your configured model and restricted workspace tools.`;
     const task = { id: crypto.randomUUID(), prompt, response, status: "completed", created_at: new Date().toISOString() };
     previewTasks.push(task);
     emitPreviewAgentEvent({ type: "complete", title: "Research task complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
@@ -225,6 +229,7 @@ function App() {
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
+  const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([
     { name: "research-brief.md", kind: "artifact", body: "# Research brief\n\nFrame the open research question and link the evidence needed to answer it." },
     { name: "evidence-map.md", kind: "artifact", body: "# Evidence map\n\nTrack claims, source passages, and unresolved contradictions in the active literature set." },
@@ -303,6 +308,7 @@ function App() {
     setMessages(initialMessages);
     setPrompt("");
     setPendingAction(null);
+    setContextItems([]);
   }
 
   function openSavedTask(task: SavedTask) {
@@ -317,6 +323,7 @@ function App() {
   async function submitPrompt() {
     const question = prompt.trim();
     if (!question || agentBusy) return;
+    const submittedContext = contextItems;
 
     setPrompt("");
     setAgentBusy(true);
@@ -327,7 +334,7 @@ function App() {
     ]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: question, workspace, mode: researchMode });
+      const result = await desktopBridge.runAgent({ prompt: question, workspace, mode: researchMode, contextItems: submittedContext });
       const nextTask: SavedTask = { id: result.taskId, prompt: question, response: result.response, status: result.status, created_at: new Date().toISOString() };
       setMessages((current) => [...current, { id: `${result.taskId}-response`, role: "assistant", text: result.response }]);
       setSavedTasks((current) => [nextTask, ...current.filter((task) => task.id !== nextTask.id)]);
@@ -335,6 +342,7 @@ function App() {
       setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Task saved to this workspace", state: "done" } : event));
       const proposedAction = result.actions.find((action) => action.status === "pending");
       if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
+      setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Axiom could not start this task: ${String(error)}` }]);
     } finally {
@@ -490,7 +498,9 @@ function App() {
               onSubmit={() => void submitPrompt()}
               researchMode={researchMode}
               onResearchMode={setResearchMode}
-              onOpenKnowledge={() => setMainSection("library")}
+              contextItems={contextItems}
+              onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
+              onRemoveContext={(id) => setContextItems((current) => current.filter((item) => item.id !== id))}
               onSourceOpen={setSelectedSource}
               onApprove={() => void approvePendingAction()}
               onReject={() => void rejectPendingAction()}
@@ -524,7 +534,7 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, prompt, workspace, agentBusy, pendingAction, conversationEndRef, researchMode, onPrompt, onSubmit, onResearchMode, onOpenKnowledge, onSourceOpen, onApprove, onReject }: {
+function ConversationView({ messages, events, prompt, workspace, agentBusy, pendingAction, conversationEndRef, researchMode, contextItems, onPrompt, onSubmit, onResearchMode, onAddContext, onRemoveContext, onSourceOpen, onApprove, onReject }: {
   messages: Message[];
   events: TimelineEvent[];
   prompt: string;
@@ -533,10 +543,12 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, pend
   pendingAction: PendingAction | null;
   conversationEndRef: React.RefObject<HTMLDivElement | null>;
   researchMode: ResearchMode;
+  contextItems: ContextAttachment[];
   onPrompt: (value: string) => void;
   onSubmit: () => void;
   onResearchMode: (mode: ResearchMode) => void;
-  onOpenKnowledge: () => void;
+  onAddContext: (items: ContextAttachment[]) => void;
+  onRemoveContext: (id: string) => void;
   onSourceOpen: (source: string) => void;
   onApprove: () => void;
   onReject: () => void;
@@ -598,8 +610,9 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, pend
             onSubmit();
           }
         }} placeholder={activeMode.placeholder} rows={3} />
+        <ContextChips items={contextItems} onRemove={onRemoveContext} />
         <div className="conversation-composer-footer">
-          <button className="composer-tool" onClick={onOpenKnowledge} title="Add context from Knowledge"><Plus size={15} /><span>Knowledge</span></button>
+          <ContextPicker bridge={desktopBridge} workspace={workspace} items={contextItems} onAdd={onAddContext} />
           <div className="research-mode-picker" ref={modeMenuRef}>
             <button className={modeMenuOpen ? "composer-tool mode-trigger active" : "composer-tool mode-trigger"} onClick={() => setModeMenuOpen((open) => !open)} title="Choose research mode" aria-haspopup="menu" aria-expanded={modeMenuOpen}>
               {activeMode.icon}<span>{activeMode.label}</span><ChevronDown size={13} />

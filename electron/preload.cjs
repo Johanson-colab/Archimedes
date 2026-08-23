@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("researchDesk", {
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
+  chooseContextPaths: (kind, workspace) => ipcRenderer.invoke("context:choose-paths", { kind, workspace }),
+  listContextResources: (kind, workspace) => ipcRenderer.invoke("context:list-resources", { kind, workspace }),
   openWorkspace: (workspacePath) => ipcRenderer.invoke("workspace:open", workspacePath),
   listLibraries: () => ipcRenderer.invoke("library:list"),
   createLibrary: (input) => ipcRenderer.invoke("library:create", input),

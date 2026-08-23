@@ -13,6 +13,7 @@ const store = require("./store.cjs");
 let mainWindow;
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
+const allowedContextPaths = new Set();
 
 function cleanTerminalEnvironment() {
   return Object.fromEntries(Object.entries({
@@ -86,6 +87,81 @@ function resolveWorkspace(value) {
     : app.getPath("home");
 }
 
+function contextItem(type, resourcePath, detail = "") {
+  const resolved = path.resolve(resourcePath);
+  allowedContextPaths.add(resolved);
+  return { id: `${type}:${resolved}`, type, name: path.basename(resolved), path: resolved, detail };
+}
+
+function installedSkills(workspace) {
+  const roots = [
+    path.join(workspace, ".agents", "skills"),
+    path.join(workspace, ".codex", "skills"),
+    path.join(app.getPath("home"), ".agents", "skills"),
+    path.join(app.getPath("home"), ".codex", "skills"),
+  ];
+  const seen = new Set();
+  const results = [];
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const skillPath = path.join(root, entry.name);
+      if (!fs.existsSync(path.join(skillPath, "SKILL.md"))) continue;
+      const key = path.resolve(skillPath);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(contextItem("skill", skillPath, path.relative(workspace, skillPath).startsWith("..") ? "Installed skill" : "Workspace skill"));
+    }
+  }
+  return results.sort((left, right) => left.name.localeCompare(right.name)).slice(0, 160);
+}
+
+function installedPlugins() {
+  const cacheRoot = path.join(app.getPath("home"), ".codex", "plugins", "cache");
+  if (!fs.existsSync(cacheRoot)) return [];
+  const results = [];
+  for (const provider of fs.readdirSync(cacheRoot, { withFileTypes: true })) {
+    if (!provider.isDirectory() || provider.name.startsWith(".")) continue;
+    const providerPath = path.join(cacheRoot, provider.name);
+    for (const plugin of fs.readdirSync(providerPath, { withFileTypes: true })) {
+      if (!plugin.isDirectory() || plugin.name.startsWith(".")) continue;
+      const pluginPath = path.join(providerPath, plugin.name);
+      const versions = fs.readdirSync(pluginPath, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+      const resolved = versions.length ? path.join(pluginPath, versions.at(-1)) : pluginPath;
+      results.push(contextItem("plugin", resolved, provider.name.replace(/^openai-/, "")));
+    }
+  }
+  return results.sort((left, right) => left.name.localeCompare(right.name)).slice(0, 80);
+}
+
+function sanitizeAgentContext(items) {
+  if (!Array.isArray(items)) return [];
+  return items.slice(0, 12).flatMap((item) => {
+    if (!item || typeof item !== "object" || typeof item.id !== "string" || typeof item.name !== "string") return [];
+    if (item.type === "paper") {
+      const paper = item.paper;
+      if (!paper || typeof paper.title !== "string") return [];
+      return [{
+        id: item.id.slice(0, 500), type: "paper", name: item.name.slice(0, 1000),
+        detail: String(item.detail || "").slice(0, 2000),
+        paper: {
+          title: paper.title.slice(0, 1000), authors: Array.isArray(paper.authors) ? paper.authors.slice(0, 100).map((author) => String(author).slice(0, 300)) : [],
+          year: Number.isInteger(paper.year) ? paper.year : null, abstract: String(paper.abstract || "").slice(0, 100_000),
+          url: String(paper.url || "").slice(0, 3000), pdfUrl: String(paper.pdfUrl || "").slice(0, 3000),
+        },
+      }];
+    }
+    if (!["file", "folder", "plugin", "skill"].includes(item.type) || typeof item.path !== "string") return [];
+    const resolved = path.resolve(item.path);
+    if (!allowedContextPaths.has(resolved) || !fs.existsSync(resolved)) return [];
+    const stats = fs.statSync(resolved);
+    if (item.type === "file" && !stats.isFile()) return [];
+    if (item.type !== "file" && !stats.isDirectory()) return [];
+    return [{ id: `${item.type}:${resolved}`, type: item.type, name: path.basename(resolved), path: resolved, detail: String(item.detail || "").slice(0, 2000) }];
+  });
+}
+
 app.whenReady().then(() => {
   loadLocalAgentEnvironment();
   createWindow();
@@ -96,6 +172,22 @@ app.whenReady().then(() => {
       title: "Choose a research workspace",
     });
     return result.canceled ? null : resolveWorkspace(result.filePaths[0]);
+  });
+
+  ipcMain.handle("context:choose-paths", async (_event, input = {}) => {
+    const kind = input.kind === "folder" ? "folder" : "file";
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: kind === "folder" ? "Add a folder to Axiom context" : "Add files to Axiom context",
+      defaultPath: resolveWorkspace(input.workspace),
+      properties: kind === "folder" ? ["openDirectory", "multiSelections"] : ["openFile", "multiSelections"],
+    });
+    if (result.canceled) return [];
+    return result.filePaths.map((selectedPath) => contextItem(kind, selectedPath, path.dirname(selectedPath)));
+  });
+
+  ipcMain.handle("context:list-resources", (_event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    return input.kind === "plugin" ? installedPlugins() : installedSkills(workspace);
   });
 
   ipcMain.handle("workspace:open", (_event, requestedWorkspace) => {
@@ -196,10 +288,12 @@ app.whenReady().then(() => {
     const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
     const workspace = resolveWorkspace(input.workspace);
     store.openWorkspace(workspace);
+    const contextItems = sanitizeAgentContext(input.contextItems);
     return agent.runAgent({
       prompt: input.prompt.trim(),
       workspace,
       mode,
+      contextItems,
       emit: (payload) => event.sender.send("agent:event", payload),
     });
   });

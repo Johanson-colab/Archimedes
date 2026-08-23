@@ -2,6 +2,8 @@
 
 interface ResearchDeskBridge {
     chooseWorkspace: () => Promise<string | null>;
+    chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
+    listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
     listLibraries: () => Promise<ResearchLibrary[]>;
     createLibrary: (input: { name: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
@@ -14,7 +16,7 @@ interface ResearchDeskBridge {
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; mode: ResearchMode }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
     runTerminal: (input: { command: string; cwd?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
@@ -43,6 +45,25 @@ interface Window {
 
 type ReadingStatus = "unread" | "reading" | "read";
 type ResearchMode = "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
+type ContextAttachmentType = "file" | "folder" | "paper" | "plugin" | "skill";
+
+interface ContextPaperMetadata {
+  title: string;
+  authors: string[];
+  year: number | null;
+  abstract: string;
+  url: string;
+  pdfUrl: string;
+}
+
+interface ContextAttachment {
+  id: string;
+  type: ContextAttachmentType;
+  name: string;
+  path?: string;
+  detail?: string;
+  paper?: ContextPaperMetadata;
+}
 
 interface ResearchLibrary {
   id: string;
