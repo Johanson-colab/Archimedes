@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import LibraryView from "./LibraryView";
+import TerminalPanel from "./TerminalPanel";
 import { previewLibraryBridge } from "./library-preview";
 import {
   BookOpen,
@@ -11,6 +12,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  PanelBottom,
   PenLine,
   Play,
   Plus,
@@ -61,7 +63,10 @@ const initialMessages: Message[] = [
 
 const DEFAULT_WORKSPACE = import.meta.env.VITE_DEFAULT_WORKSPACE ?? "";
 const previewListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
+const previewPtyListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
+const previewPtyExitListeners = new Set<(payload: { sessionId: string; exitCode: number; signal?: number }) => void>();
 const previewAgentListeners = new Set<(payload: AgentEvent) => void>();
+const previewPtySessions = new Map<string, { cwd: string; line: string; ready: boolean }>();
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
 const previewTasks: SavedTask[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
@@ -134,9 +139,53 @@ const previewBridge = {
   stopTerminal: async (sessionId: string) => {
     for (const listener of previewListeners) listener({ sessionId, data: "[process stopped]\n" });
   },
+  createTerminal: async ({ cwd }: { cwd?: string; cols?: number; rows?: number }) => {
+    const sessionId = crypto.randomUUID();
+    previewPtySessions.set(sessionId, { cwd: cwd || previewWorkspace, line: "", ready: false });
+    return { sessionId, workspace: cwd || previewWorkspace, shell: "zsh", pid: 0 };
+  },
+  readyTerminal: async (sessionId: string) => {
+    const session = previewPtySessions.get(sessionId);
+    if (!session || session.ready) return;
+    session.ready = true;
+    const folder = session.cwd.split("/").filter(Boolean).at(-1) || "workspace";
+    for (const listener of previewPtyListeners) listener({ sessionId, data: `\x1b[32m${folder}\x1b[0m % ` });
+  },
+  writeTerminal: (sessionId: string, data: string) => {
+    const session = previewPtySessions.get(sessionId);
+    if (!session) return;
+    if (data === "\r") {
+      const command = session.line.trim();
+      const output = command ? `\r\n\x1b[90m[browser preview]\x1b[0m ${command}\r\n` : "\r\n";
+      session.line = "";
+      for (const listener of previewPtyListeners) listener({ sessionId, data: `${output}\x1b[32maxiom\x1b[0m % ` });
+      return;
+    }
+    if (data === "\u007f") {
+      session.line = session.line.slice(0, -1);
+      for (const listener of previewPtyListeners) listener({ sessionId, data: "\b \b" });
+      return;
+    }
+    if (data === "\t") return;
+    session.line += data;
+    for (const listener of previewPtyListeners) listener({ sessionId, data });
+  },
+  resizeTerminal: (_sessionId: string, _cols: number, _rows: number) => undefined,
+  closeTerminal: async (sessionId: string) => {
+    if (!previewPtySessions.delete(sessionId)) return;
+    for (const listener of previewPtyExitListeners) listener({ sessionId, exitCode: 0 });
+  },
   onTerminalData: (callback: (payload: { sessionId: string; data: string }) => void) => {
     previewListeners.add(callback);
     return () => previewListeners.delete(callback);
+  },
+  onPtyData: (callback: (payload: { sessionId: string; data: string }) => void) => {
+    previewPtyListeners.add(callback);
+    return () => previewPtyListeners.delete(callback);
+  },
+  onPtyExit: (callback: (payload: { sessionId: string; exitCode: number; signal?: number }) => void) => {
+    previewPtyExitListeners.add(callback);
+    return () => previewPtyExitListeners.delete(callback);
   },
   onAgentEvent: (callback: (payload: AgentEvent) => void) => {
     previewAgentListeners.add(callback);
@@ -158,6 +207,8 @@ function App() {
   const [savedTasks, setSavedTasks] = useState<SavedTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(260);
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [artifacts, setArtifacts] = useState<Artifact[]>([
@@ -179,9 +230,9 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onTerminalData(({ sessionId, data }) => {
-      if (sessionId === runningSession && data.includes("[process exited")) {
+      if (sessionId === runningSession && (data.includes("[process exited") || data.includes("[process stopped]"))) {
         setRunningSession(null);
-        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: "The approved command finished. Its output was recorded in the workspace history." }]);
+        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: "The approved command finished and its output was recorded in the workspace history." }]);
       }
     });
     return unsubscribe;
@@ -229,6 +280,7 @@ function App() {
 
     const action = snapshot.actions.find((candidate) => candidate.status === "pending");
     setPendingAction(action ? { ...action, source: "agent" } : null);
+
   }
 
   function startNewTask() {
@@ -277,10 +329,12 @@ function App() {
   }
 
   async function runCommand(command: string) {
+    const trimmedCommand = command.trim();
+    if (!trimmedCommand || runningSession) return;
+    setTerminalOpen(true);
     try {
-      const { sessionId } = await desktopBridge.runTerminal({ command, cwd: workspace });
+      const { sessionId } = await desktopBridge.runTerminal({ command: trimmedCommand, cwd: workspace });
       setRunningSession(sessionId);
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Running the approved command in the workspace:\n\n${command}` }]);
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `The command could not start: ${String(error)}` }]);
     }
@@ -339,6 +393,7 @@ function App() {
 
   const currentTask = savedTasks.find((task) => task.id === selectedTaskId);
   const activeArtifact = artifacts.find((artifact) => artifact.name === selectedArtifact);
+  const mainTitle = mainSection === "chat" ? currentTask?.prompt ?? "New research task" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : "Artifacts";
 
   return (
     <main className="codex-shell">
@@ -396,31 +451,42 @@ function App() {
         </div>
       </aside>
 
-      <section className={mainSection === "chat" ? "codex-main chat-main" : "codex-main knowledge-main"}>
-        {mainSection === "chat" && (
-          <ConversationView
-            title={currentTask?.prompt ?? "New research task"}
-            messages={messages}
-            events={events}
-            prompt={prompt}
-            workspace={workspace}
-            workspaceReady={workspaceReady}
-            agentBusy={agentBusy}
-            pendingAction={pendingAction}
-            conversationEndRef={conversationEndRef}
-            onPrompt={setPrompt}
-            onSubmit={() => void submitPrompt()}
-            onOpenSettings={() => setModal("settings")}
-            onOpenKnowledge={() => setMainSection("library")}
-            onSourceOpen={setSelectedSource}
-            onApprove={() => void approvePendingAction()}
-            onReject={() => void rejectPendingAction()}
-          />
-        )}
-        {(mainSection === "library" || mainSection === "daily") && <LibraryView bridge={desktopBridge} mode={mainSection} />}
-        {mainSection === "artifacts" && (
-          <ArtifactsView artifacts={artifacts} activeArtifact={activeArtifact} selectedArtifact={selectedArtifact} onOpenArtifact={openArtifact} onNewArtifact={() => setModal("artifact")} onChangeBody={updateArtifactBody} />
-        )}
+      <section className={terminalOpen ? "codex-main panel-open" : "codex-main"} style={{ "--terminal-height": `${terminalHeight}px` } as React.CSSProperties}>
+        <header className="main-toolbar">
+          <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
+          <div className="main-toolbar-actions">
+            {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setModal("settings")} title="Agent settings"><Bot size={17} /></button>}
+            <button className={terminalOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => setTerminalOpen((open) => !open)} title={terminalOpen ? "Hide bottom panel" : "Show bottom panel"} aria-pressed={terminalOpen}>
+              <PanelBottom size={18} />
+            </button>
+          </div>
+        </header>
+
+        <div className={mainSection === "chat" ? "main-view chat-main" : "main-view knowledge-main"}>
+          {mainSection === "chat" && (
+            <ConversationView
+              messages={messages}
+              events={events}
+              prompt={prompt}
+              workspace={workspace}
+              agentBusy={agentBusy}
+              pendingAction={pendingAction}
+              conversationEndRef={conversationEndRef}
+              onPrompt={setPrompt}
+              onSubmit={() => void submitPrompt()}
+              onOpenKnowledge={() => setMainSection("library")}
+              onSourceOpen={setSelectedSource}
+              onApprove={() => void approvePendingAction()}
+              onReject={() => void rejectPendingAction()}
+            />
+          )}
+          {(mainSection === "library" || mainSection === "daily") && <LibraryView bridge={desktopBridge} mode={mainSection} />}
+          {mainSection === "artifacts" && (
+            <ArtifactsView artifacts={artifacts} activeArtifact={activeArtifact} selectedArtifact={selectedArtifact} onOpenArtifact={openArtifact} onNewArtifact={() => setModal("artifact")} onChangeBody={updateArtifactBody} />
+          )}
+        </div>
+
+        <TerminalPanel bridge={desktopBridge} open={terminalOpen} workspace={workspace} height={terminalHeight} onHeightChange={setTerminalHeight} onClose={() => setTerminalOpen(false)} />
       </section>
 
       <WorkspaceModal
@@ -442,19 +508,16 @@ function App() {
   );
 }
 
-function ConversationView({ title, messages, events, prompt, workspace, workspaceReady, agentBusy, pendingAction, conversationEndRef, onPrompt, onSubmit, onOpenSettings, onOpenKnowledge, onSourceOpen, onApprove, onReject }: {
-  title: string;
+function ConversationView({ messages, events, prompt, workspace, agentBusy, pendingAction, conversationEndRef, onPrompt, onSubmit, onOpenKnowledge, onSourceOpen, onApprove, onReject }: {
   messages: Message[];
   events: TimelineEvent[];
   prompt: string;
   workspace: string;
-  workspaceReady: boolean;
   agentBusy: boolean;
   pendingAction: PendingAction | null;
   conversationEndRef: React.RefObject<HTMLDivElement | null>;
   onPrompt: (value: string) => void;
   onSubmit: () => void;
-  onOpenSettings: () => void;
   onOpenKnowledge: () => void;
   onSourceOpen: (source: string) => void;
   onApprove: () => void;
@@ -463,11 +526,6 @@ function ConversationView({ title, messages, events, prompt, workspace, workspac
   const latestEvent = events.at(-1);
 
   return <div className="conversation-layout">
-    <header className="conversation-header">
-      <div className="conversation-title"><strong>{title}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
-      <button className="quiet-icon-button" onClick={onOpenSettings} title="Agent settings"><Bot size={17} /></button>
-    </header>
-
     <div className="conversation-scroll">
       <div className="conversation-thread">
         {messages.map((message) => (

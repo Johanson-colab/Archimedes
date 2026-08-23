@@ -1,15 +1,51 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
+const os = require("node:os");
 const fs = require("node:fs");
 const path = require("node:path");
+const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
 const store = require("./store.cjs");
 
 let mainWindow;
-const terminalSessions = new Map();
+const commandSessions = new Map();
+const interactiveTerminalSessions = new Map();
+
+function cleanTerminalEnvironment() {
+  return Object.fromEntries(Object.entries({
+    ...process.env,
+    TERM: "xterm-256color",
+    COLORTERM: "truecolor",
+    TERM_PROGRAM: "Axiom",
+    TERM_PROGRAM_VERSION: app.getVersion(),
+  }).filter(([, value]) => typeof value === "string"));
+}
+
+function getInteractiveTerminal(event, sessionId) {
+  const session = interactiveTerminalSessions.get(sessionId);
+  if (!session || session.senderId !== event.sender.id) throw new Error("Terminal session not found.");
+  return session;
+}
+
+function closeInteractiveTerminal(sessionId) {
+  const session = interactiveTerminalSessions.get(sessionId);
+  if (!session) return;
+  interactiveTerminalSessions.delete(sessionId);
+  try {
+    session.process.kill();
+  } catch {
+    // The shell may already have exited.
+  }
+}
+
+function closeAllTerminals() {
+  for (const sessionId of interactiveTerminalSessions.keys()) closeInteractiveTerminal(sessionId);
+  for (const child of commandSessions.values()) child.kill("SIGTERM");
+  commandSessions.clear();
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -33,6 +69,11 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
+
+  mainWindow.on("closed", () => {
+    closeAllTerminals();
+    mainWindow = null;
+  });
 }
 
 function resolveWorkspace(value) {
@@ -186,7 +227,7 @@ app.whenReady().then(() => {
       env: process.env,
     });
 
-    terminalSessions.set(sessionId, child);
+    commandSessions.set(sessionId, child);
     const send = (data) => {
       store.appendCommandOutput(commandRun.id, data);
       event.sender.send("terminal:data", { sessionId, commandRunId: commandRun.id, data });
@@ -197,14 +238,81 @@ app.whenReady().then(() => {
     child.on("close", (code) => {
       send(`\n[process exited with code ${code ?? "unknown"}]\n`);
       store.finishCommand(commandRun.id, code, code === 0 ? "completed" : "failed");
-      terminalSessions.delete(sessionId);
+      commandSessions.delete(sessionId);
     });
     return { sessionId, commandRunId: commandRun.id, workspace };
   });
 
   ipcMain.handle("terminal:stop", (_event, sessionId) => {
-    const child = terminalSessions.get(sessionId);
+    const child = commandSessions.get(sessionId);
     if (child) child.kill("SIGTERM");
+  });
+
+  ipcMain.handle("terminal:create", (event, input = {}) => {
+    const workspace = resolveWorkspace(input.cwd);
+    const cols = Math.max(2, Math.min(500, Number(input.cols) || 80));
+    const rows = Math.max(1, Math.min(200, Number(input.rows) || 24));
+    const shell = process.platform === "win32" ? (process.env.COMSPEC || "powershell.exe") : (process.env.SHELL || os.userInfo().shell || "/bin/zsh");
+    const args = process.platform === "win32" ? [] : ["-l"];
+    const sessionId = randomUUID();
+    const terminalProcess = pty.spawn(shell, args, {
+      name: "xterm-256color",
+      cols,
+      rows,
+      cwd: workspace,
+      env: cleanTerminalEnvironment(),
+    });
+    const session = { process: terminalProcess, senderId: event.sender.id, sender: event.sender, ready: false, buffer: "" };
+    interactiveTerminalSessions.set(sessionId, session);
+
+    terminalProcess.onData((data) => {
+      if (!interactiveTerminalSessions.has(sessionId)) return;
+      if (!session.ready) {
+        session.buffer = (session.buffer + data).slice(-200_000);
+      } else if (!session.sender.isDestroyed()) {
+        session.sender.send("terminal:pty-data", { sessionId, data });
+      }
+    });
+    terminalProcess.onExit(({ exitCode, signal }) => {
+      interactiveTerminalSessions.delete(sessionId);
+      if (!session.sender.isDestroyed()) session.sender.send("terminal:pty-exit", { sessionId, exitCode, signal });
+    });
+
+    event.sender.once("destroyed", () => closeInteractiveTerminal(sessionId));
+    return { sessionId, workspace, shell: path.basename(shell), pid: terminalProcess.pid };
+  });
+
+  ipcMain.handle("terminal:ready", (event, sessionId) => {
+    const session = getInteractiveTerminal(event, sessionId);
+    session.ready = true;
+    if (session.buffer && !session.sender.isDestroyed()) {
+      session.sender.send("terminal:pty-data", { sessionId, data: session.buffer });
+      session.buffer = "";
+    }
+  });
+
+  ipcMain.on("terminal:write", (event, { sessionId, data }) => {
+    if (typeof data !== "string" || data.length > 65_536) return;
+    try {
+      getInteractiveTerminal(event, sessionId).process.write(data);
+    } catch {
+      // Ignore input racing with a shell exit.
+    }
+  });
+
+  ipcMain.on("terminal:resize", (event, { sessionId, cols, rows }) => {
+    const width = Math.max(2, Math.min(500, Number(cols) || 80));
+    const height = Math.max(1, Math.min(200, Number(rows) || 24));
+    try {
+      getInteractiveTerminal(event, sessionId).process.resize(width, height);
+    } catch {
+      // Ignore resize events racing with a shell exit.
+    }
+  });
+
+  ipcMain.handle("terminal:close", (event, sessionId) => {
+    getInteractiveTerminal(event, sessionId);
+    closeInteractiveTerminal(sessionId);
   });
 });
 

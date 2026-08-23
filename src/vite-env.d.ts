@@ -19,8 +19,22 @@ interface ResearchDeskBridge {
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
     runTerminal: (input: { command: string; cwd?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
     stopTerminal: (sessionId: string) => Promise<void>;
+    createTerminal: (input: { cwd?: string; cols?: number; rows?: number }) => Promise<TerminalSessionInfo>;
+    readyTerminal: (sessionId: string) => Promise<void>;
+    writeTerminal: (sessionId: string, data: string) => void;
+    resizeTerminal: (sessionId: string, cols: number, rows: number) => void;
+    closeTerminal: (sessionId: string) => Promise<void>;
     onTerminalData: (callback: (payload: { sessionId: string; data: string }) => void) => () => void;
+    onPtyData: (callback: (payload: { sessionId: string; data: string }) => void) => () => void;
+    onPtyExit: (callback: (payload: { sessionId: string; exitCode: number; signal?: number }) => void) => () => void;
     onAgentEvent: (callback: (payload: AgentEvent) => void) => () => void;
+}
+
+interface TerminalSessionInfo {
+  sessionId: string;
+  workspace: string;
+  shell: string;
+  pid: number;
 }
 
 interface Window {
