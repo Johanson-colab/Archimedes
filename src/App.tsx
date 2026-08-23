@@ -2,27 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import LibraryView from "./LibraryView";
 import { previewLibraryBridge } from "./library-preview";
 import {
-  ArrowUp,
-  Beaker,
   BookOpen,
   Bot,
   CalendarDays,
   Check,
   ChevronDown,
-  ChevronRight,
-  CircleDot,
-  Clock3,
   Code2,
-  FileCheck2,
   FileText,
   Folder,
   FolderOpen,
-  Lightbulb,
-  PanelBottom,
   PenLine,
   Play,
   Plus,
-  Scale,
   Search,
   SendHorizontal,
   ShieldCheck,
@@ -64,8 +55,7 @@ const initialMessages: Message[] = [
   {
     id: "welcome",
     role: "assistant",
-    text: "我已经整理了当前研究问题的证据脉络。现有文献普遍报告最终准确率，但很少隔离检索预算如何影响推理质量。",
-    sources: ["Rao et al., §4.2", "Kim et al., Table 3"],
+    text: "What would you like to research? I can search your knowledge base, compare papers, plan experiments, and prepare workspace changes for your approval.",
   },
 ];
 
@@ -156,18 +146,18 @@ const previewBridge = {
 
 const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
 
+type MainSection = "chat" | "library" | "daily" | "artifacts";
+
 function App() {
-  const [activeView, setActiveView] = useState<"evidence" | "draft" | "plan">("evidence");
-  const [mainSection, setMainSection] = useState<"workspace" | "library" | "daily">("workspace");
+  const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
   const [prompt, setPrompt] = useState("");
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
-  const [savedTaskCount, setSavedTaskCount] = useState(0);
+  const [savedTasks, setSavedTasks] = useState<SavedTask[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [terminalInput, setTerminalInput] = useState("git status --short");
-  const [terminalLog, setTerminalLog] = useState("Axiom terminal ready.\n");
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [artifacts, setArtifacts] = useState<Artifact[]>([
@@ -185,14 +175,14 @@ function App() {
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("retrieval budget reasoning");
   const [selectedSource, setSelectedSource] = useState("");
-  const [activeWorkflow, setActiveWorkflow] = useState("idea-generation");
-  const terminalInputRef = useRef<HTMLInputElement>(null);
-  const terminalRef = useRef<HTMLPreElement>(null);
+  const conversationEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onTerminalData(({ sessionId, data }) => {
-      setTerminalLog((current) => current + data);
-      if (sessionId === runningSession && data.includes("[process exited")) setRunningSession(null);
+      if (sessionId === runningSession && data.includes("[process exited")) {
+        setRunningSession(null);
+        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: "The approved command finished. Its output was recorded in the workspace history." }]);
+      }
     });
     return unsubscribe;
   }, [runningSession]);
@@ -210,8 +200,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    terminalRef.current?.scrollTo({ top: terminalRef.current.scrollHeight });
-  }, [terminalLog]);
+    conversationEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, agentBusy, pendingAction]);
 
   async function chooseWorkspace() {
     const selected = await desktopBridge.chooseWorkspace();
@@ -222,7 +212,7 @@ function App() {
     setWorkspaceReady(false);
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
     setWorkspace(snapshot.workspace);
-    setSavedTaskCount(snapshot.tasks.length);
+    setSavedTasks(snapshot.tasks);
     setWorkspaceReady(true);
 
     if (snapshot.tasks.length) {
@@ -230,19 +220,32 @@ function App() {
         { id: `${task.id}-prompt`, role: "user" as const, text: task.prompt },
         { id: `${task.id}-response`, role: "assistant" as const, text: task.response },
       ]);
-      setMessages([...initialMessages, ...restoredMessages]);
-    }
-
-    if (snapshot.commands.length) {
-      const previousOutput = [...snapshot.commands].reverse()
-        .slice(-5)
-        .map((run) => `$ ${run.command}\n${run.output}`)
-        .join("\n");
-      if (previousOutput) setTerminalLog(`Axiom terminal history\n\n${previousOutput}\n`);
+      setMessages(restoredMessages);
+      setSelectedTaskId(snapshot.tasks[0]?.id ?? null);
+    } else {
+      setMessages(initialMessages);
+      setSelectedTaskId(null);
     }
 
     const action = snapshot.actions.find((candidate) => candidate.status === "pending");
     setPendingAction(action ? { ...action, source: "agent" } : null);
+  }
+
+  function startNewTask() {
+    setMainSection("chat");
+    setSelectedTaskId(null);
+    setMessages(initialMessages);
+    setPrompt("");
+    setPendingAction(null);
+  }
+
+  function openSavedTask(task: SavedTask) {
+    setMainSection("chat");
+    setSelectedTaskId(task.id);
+    setMessages([
+      { id: `${task.id}-prompt`, role: "user", text: task.prompt },
+      { id: `${task.id}-response`, role: "assistant", text: task.response },
+    ]);
   }
 
   async function submitPrompt() {
@@ -254,29 +257,18 @@ function App() {
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: question }]);
     setEvents((current) => [
       ...current.filter((event) => event.title !== "Evidence synthesis"),
-      { title: "Evidence synthesis", detail: "Reading attached research context", state: "active" },
+      { title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" },
     ]);
 
     try {
       const result = await desktopBridge.runAgent({ prompt: question, workspace });
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          text: result.response,
-        },
-      ]);
-      setEvents((current) =>
-        current.map((event) =>
-          event.title === "Evidence synthesis"
-            ? { ...event, detail: result.status === "completed" ? "Task record saved" : "Task saved with follow-up needed", state: result.status === "completed" ? "done" : "waiting" }
-            : event,
-        ),
-      );
+      const nextTask: SavedTask = { id: result.taskId, prompt: question, response: result.response, status: result.status, created_at: new Date().toISOString() };
+      setMessages((current) => [...current, { id: `${result.taskId}-response`, role: "assistant", text: result.response }]);
+      setSavedTasks((current) => [nextTask, ...current.filter((task) => task.id !== nextTask.id)]);
+      setSelectedTaskId(result.taskId);
+      setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Task saved to this workspace", state: "done" } : event));
       const proposedAction = result.actions.find((action) => action.status === "pending");
       if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
-      setSavedTaskCount((count) => count + 1);
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Axiom could not start this task: ${String(error)}` }]);
     } finally {
@@ -285,29 +277,18 @@ function App() {
   }
 
   async function runCommand(command: string) {
-    setTerminalLog((current) => `${current}\n$ ${command}\n`);
     try {
       const { sessionId } = await desktopBridge.runTerminal({ command, cwd: workspace });
       setRunningSession(sessionId);
-      setEvents((current) => [
-        ...current.filter((event) => event.title !== "Workspace check"),
-        { title: "Workspace check", detail: command, state: "active" },
-      ]);
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Running the approved command in the workspace:\n\n${command}` }]);
     } catch (error) {
-      setTerminalLog((current) => `${current}[could not start] ${String(error)}\n`);
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `The command could not start: ${String(error)}` }]);
     }
-  }
-
-  function requestCommandApproval(command: string) {
-    setPendingAction({
-      id: crypto.randomUUID(), task_id: "manual", kind: "command", payload: { command, cwd: workspace },
-      status: "pending", created_at: new Date().toISOString(), resolved_at: null, source: "manual",
-    });
   }
 
   function openArtifact(name: string) {
     setSelectedArtifact(name);
-    setActiveView("draft");
+    setMainSection("artifacts");
   }
 
   function createArtifact() {
@@ -320,6 +301,10 @@ function App() {
     openArtifact(normalizedName);
   }
 
+  function updateArtifactBody(body: string) {
+    setArtifacts((current) => current.map((artifact) => artifact.name === selectedArtifact ? { ...artifact, body } : artifact));
+  }
+
   function addEvidence(title = evidenceTitle, url = evidenceUrl) {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
@@ -327,31 +312,6 @@ function App() {
     setEvidenceTitle("");
     setEvidenceUrl("");
     setModal(null);
-  }
-
-  function focusTerminal() {
-    document.querySelector(".terminal-pane")?.scrollIntoView({ behavior: "smooth", block: "end" });
-    window.setTimeout(() => terminalInputRef.current?.focus(), 240);
-  }
-
-  function reviewExecution() {
-    requestCommandApproval("python -m experiments.run --config budget-ablation.yaml");
-    setEvents((current) => [...current.filter((event) => event.title !== "Experiment execution"), { title: "Experiment execution", detail: "Command prepared for your approval", state: "waiting" }]);
-  }
-
-  function startWorkflow(stage: string) {
-    setActiveWorkflow(stage);
-    if (stage === "idea-generation") {
-      setPrompt("Generate several research ideas grounded in the active evidence ledger.");
-    } else if (stage === "idea-review") {
-      setPrompt("Review the active research idea for novelty, feasibility, operability, and impact.");
-    } else if (stage === "experiment") {
-      setActiveView("plan");
-    } else if (stage === "writing") {
-      openArtifact("research-brief.md");
-    } else if (stage === "review") {
-      setPrompt("Review the active manuscript like a strict conference reviewer and list actionable revisions.");
-    }
   }
 
   async function approvePendingAction() {
@@ -377,142 +337,92 @@ function App() {
     setPendingAction(null);
   }
 
+  const currentTask = savedTasks.find((task) => task.id === selectedTaskId);
+  const activeArtifact = artifacts.find((artifact) => artifact.name === selectedArtifact);
+
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark"><Sparkles size={16} /></span>Axiom</div>
-        <button className="workspace-picker" onClick={chooseWorkspace} title="Choose workspace">
-          <FolderOpen size={15} />
-          <span>{workspace}</span>
-          <ChevronDown size={14} />
-        </button>
-        <div className="topbar-actions">
-          <span className="sync-state"><span className="status-dot" />{workspaceReady ? `${savedTaskCount} saved task${savedTaskCount === 1 ? "" : "s"}` : "Opening workspace"}</span>
-          <button className="icon-button" onClick={() => setModal("artifact")} title="New research artifact"><Plus size={17} /></button>
+    <main className="codex-shell">
+      <aside className="codex-sidebar" aria-label="Axiom navigation">
+        <div className="codex-brand">
+          <span className="codex-brand-mark"><Sparkles size={16} /></span>
+          <strong>Axiom</strong>
         </div>
-      </header>
 
-      <section className="workspace-grid">
-        <aside className="sidebar" aria-label="Research navigation">
-          <div className="sidebar-section">
-            <div className="sidebar-label">Knowledge</div>
-            <button className={mainSection === "workspace" ? "project-row active" : "project-row"} onClick={() => setMainSection("workspace")}><CircleDot size={15} /><span>Adaptive retrieval</span></button>
-            <button className={mainSection === "library" ? "sidebar-command active" : "sidebar-command"} onClick={() => setMainSection("library")}><BookOpen size={15} /><span>Literature library</span></button>
-            <button className={mainSection === "daily" ? "sidebar-command active" : "sidebar-command"} onClick={() => setMainSection("daily")}><CalendarDays size={15} /><span>Daily papers</span></button>
-          </div>
-          <div className="tree-section">
-            <div className="tree-heading"><ChevronDown size={14} />Artifacts</div>
-            <div className="artifact-paper">
-              <div className="artifact-paper-title"><FolderOpen size={14} /><span>adaptive-retrieval</span></div>
-              <div className="artifact-folder">
-                <div className="artifact-folder-title"><ChevronDown size={13} /><Folder size={14} /><span>paper</span></div>
-                {artifacts.filter((artifact) => artifact.kind === "artifact").map((artifact) => <button className={selectedArtifact === artifact.name ? "tree-row artifact-file selected" : "tree-row artifact-file"} key={artifact.name} onClick={() => openArtifact(artifact.name)}><FileText size={14} /><span>{artifact.name}</span></button>)}
-              </div>
-              <div className="artifact-folder">
-                <div className="artifact-folder-title"><ChevronDown size={13} /><Folder size={14} /><span>code</span></div>
-                {artifacts.filter((artifact) => artifact.kind === "experiment").map((artifact) => <button className={selectedArtifact === artifact.name ? "tree-row artifact-file selected" : "tree-row artifact-file"} key={artifact.name} onClick={() => openArtifact(artifact.name)}><Code2 size={14} /><span>{artifact.name}</span></button>)}
-              </div>
-            </div>
-          </div>
-          <div className="sidebar-bottom">
-            <div className="sidebar-label">Research workflow</div>
-            <button className={activeWorkflow === "idea-generation" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("idea-generation")}><span>01</span><Lightbulb size={15} />Idea generation</button>
-            <button className={activeWorkflow === "idea-review" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("idea-review")}><span>02</span><Scale size={15} />Idea review</button>
-            <button className={activeWorkflow === "experiment" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("experiment")}><span>03</span><Beaker size={15} />Experiment setup</button>
-            <button className={activeWorkflow === "writing" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("writing")}><span>04</span><PenLine size={15} />Paper writing</button>
-            <button className={activeWorkflow === "review" ? "workflow-step active" : "workflow-step"} onClick={() => startWorkflow("review")}><span>05</span><FileCheck2 size={15} />Paper review</button>
-            <button className="sidebar-command terminal-shortcut" onClick={focusTerminal}><SquareTerminal size={15} /><span>Open terminal</span></button>
-          </div>
-        </aside>
+        <button className="new-task-button" onClick={startNewTask} title="New task">
+          <PenLine size={16} />
+          <span>New task</span>
+        </button>
 
-        <section className={mainSection === "workspace" ? "content-pane" : "content-pane library-content-pane"}>
-          {mainSection === "workspace" ? <>
-          <div className="content-header">
-            <div className="question-heading">
-              <div className="eyebrow"><span className="research-id">RAG-042</span> Research question</div>
-              <h1>How should retrieval budget be allocated during long-context reasoning?</h1>
-              <div className="question-meta"><span>Updated 8 min ago</span><span>12 linked papers</span><span>38 evidence spans</span></div>
-            </div>
-            <div className="view-tabs" role="tablist">
-              <button className={activeView === "evidence" ? "tab active" : "tab"} onClick={() => setActiveView("evidence")}>Evidence</button>
-              <button className={activeView === "draft" ? "tab active" : "tab"} onClick={() => setActiveView("draft")}>Draft</button>
-              <button className={activeView === "plan" ? "tab active" : "tab"} onClick={() => setActiveView("plan")}>Plan</button>
-            </div>
-          </div>
+        <nav className="sidebar-nav" aria-label="Primary">
+          <button className={mainSection === "chat" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("chat")} title="Research chat">
+            <Bot size={16} /><span>Research chat</span>
+          </button>
+          <button className="codex-nav-item" onClick={() => setModal("search")} title="Search knowledge">
+            <Search size={16} /><span>Search</span>
+          </button>
+        </nav>
 
-          <div className="research-summary">
-            <div><span>Core claim</span><strong>Adaptive allocation over static top-k</strong></div>
-            <div><span>Open question</span><strong>When does extra retrieval stop helping?</strong></div>
-            <div><span>Next gate</span><strong className="pending-text">Approve baseline run</strong></div>
-          </div>
-
-          {activeView === "evidence" && <EvidenceView papers={papers} onAddEvidence={() => setModal("evidence")} onSourceOpen={setSelectedSource} />}
-          {activeView === "draft" && <DraftView artifact={artifacts.find((artifact) => artifact.name === selectedArtifact)} onSourceOpen={setSelectedSource} />}
-          {activeView === "plan" && <PlanView onReviewExecution={reviewExecution} />}
-          </> : <LibraryView bridge={desktopBridge} mode={mainSection} />}
+        <section className="sidebar-group knowledge-group">
+          <div className="codex-sidebar-label">Knowledge</div>
+          <button className={mainSection === "library" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("library")} title="Literature library">
+            <BookOpen size={16} /><span>Literature library</span>
+          </button>
+          <button className={mainSection === "daily" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("daily")} title="Daily papers">
+            <CalendarDays size={16} /><span>Daily papers</span>
+          </button>
+          <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
+            <Folder size={16} /><span>Artifacts</span><span className="nav-count">{artifacts.length}</span>
+          </button>
         </section>
 
-        <aside className="agent-pane" aria-label="Research agent">
-          <div className="agent-header">
-            <div className="agent-title"><span className="agent-avatar"><Bot size={17} /></span><div><strong>Research agent</strong><span>Evidence-aware</span></div></div>
-            <button className="icon-button" onClick={() => setModal("settings")} title="Agent settings"><ChevronRight size={17} /></button>
-          </div>
-
-          <div className="context-strip"><ShieldCheck size={14} />12 papers · 38 evidence spans · 2 files attached</div>
-          <div className="agent-activity">
-            {events.slice(-3).map((event) => <div className={`activity-item ${event.state}`} key={`${event.title}-${event.detail}`}><span /><div><strong>{event.title}</strong><small>{event.detail}</small></div></div>)}
-          </div>
-
-          <div className="message-list">
-            {messages.map((message) => (
-              <article className={`message ${message.role}`} key={message.id}>
-                <div className="message-role">{message.role === "assistant" ? "Research agent" : "You"}</div>
-                <p>{message.text}</p>
-                {message.sources && <div className="source-chips">{message.sources.map((source) => <button key={source} onClick={() => setSelectedSource(source)}>{source}</button>)}</div>}
-              </article>
+        <section className="sidebar-group recent-group">
+          <div className="codex-sidebar-label">Recent</div>
+          <div className="recent-task-list">
+            {savedTasks.slice(0, 6).map((task) => (
+              <button className={selectedTaskId === task.id && mainSection === "chat" ? "recent-task active" : "recent-task"} key={task.id} onClick={() => openSavedTask(task)} title={task.prompt}>
+                <span>{task.prompt}</span>
+              </button>
             ))}
-            {agentBusy && <div className="agent-typing"><span /><span /><span /></div>}
+            {workspaceReady && savedTasks.length === 0 && <div className="recent-empty">No saved tasks yet</div>}
           </div>
+        </section>
 
-          {pendingAction && (
-            <section className="approval-card">
-              <div className="approval-icon">{pendingAction.kind === "write" ? <FileText size={16} /> : <SquareTerminal size={16} />}</div>
-              <div className="approval-content">
-                <span>{pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval"}</span>
-                <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
-                {pendingAction.kind === "write" && pendingAction.payload.content && <pre className="proposal-preview">{pendingAction.payload.content.slice(0, 260)}</pre>}
-                <p>{pendingAction.kind === "write" ? "Writes this artifact into the selected workspace." : "Runs in the selected workspace and records its output."}</p>
-                <div className="approval-actions">
-                  <button className="secondary-button" onClick={() => void rejectPendingAction()}><X size={14} />Dismiss</button>
-                  <button className="primary-button" onClick={() => void approvePendingAction()}>{pendingAction.kind === "write" ? <Check size={14} /> : <Play size={14} />}{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
-                </div>
-              </div>
-            </section>
-          )}
+        <div className="sidebar-workspace">
+          <button className="workspace-button" onClick={chooseWorkspace} title="Choose workspace">
+            <span className="workspace-icon"><FolderOpen size={15} /></span>
+            <span className="workspace-copy"><strong>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "Choose workspace"}</strong><small>{workspaceReady ? `${savedTasks.length} saved tasks` : "Opening workspace"}</small></span>
+            <ChevronDown size={14} />
+          </button>
+        </div>
+      </aside>
 
-          <div className="composer">
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  submitPrompt();
-                }
-              }}
-              placeholder="Ask about the research workspace"
-              rows={3}
-            />
-            <div className="composer-footer"><span><Plus size={14} />Attach context</span><button className="send-button" onClick={submitPrompt} disabled={!prompt.trim() || agentBusy} title="Send"><SendHorizontal size={16} /></button></div>
-          </div>
-        </aside>
+      <section className={mainSection === "chat" ? "codex-main chat-main" : "codex-main knowledge-main"}>
+        {mainSection === "chat" && (
+          <ConversationView
+            title={currentTask?.prompt ?? "New research task"}
+            messages={messages}
+            events={events}
+            prompt={prompt}
+            workspace={workspace}
+            workspaceReady={workspaceReady}
+            agentBusy={agentBusy}
+            pendingAction={pendingAction}
+            conversationEndRef={conversationEndRef}
+            onPrompt={setPrompt}
+            onSubmit={() => void submitPrompt()}
+            onOpenSettings={() => setModal("settings")}
+            onOpenKnowledge={() => setMainSection("library")}
+            onSourceOpen={setSelectedSource}
+            onApprove={() => void approvePendingAction()}
+            onReject={() => void rejectPendingAction()}
+          />
+        )}
+        {(mainSection === "library" || mainSection === "daily") && <LibraryView bridge={desktopBridge} mode={mainSection} />}
+        {mainSection === "artifacts" && (
+          <ArtifactsView artifacts={artifacts} activeArtifact={activeArtifact} selectedArtifact={selectedArtifact} onOpenArtifact={openArtifact} onNewArtifact={() => setModal("artifact")} onChangeBody={updateArtifactBody} />
+        )}
       </section>
 
-      <section className="terminal-pane">
-          <div className="terminal-header"><div><PanelBottom size={15} />Terminal <span>Workspace session</span></div><div className="terminal-actions"><button className="icon-button" title="Clear terminal" onClick={() => setTerminalLog("")}>Clear</button>{runningSession && <button className="icon-button danger" title="Stop process" onClick={() => desktopBridge.stopTerminal(runningSession)}><X size={15} /></button>}</div></div>
-        <pre className="terminal-output" ref={terminalRef}>{terminalLog}</pre>
-        <div className="terminal-command"><span>$</span><input ref={terminalInputRef} value={terminalInput} onChange={(event) => setTerminalInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && terminalInput.trim()) requestCommandApproval(terminalInput.trim()); }} aria-label="Terminal command" /><button className="icon-button" title="Review command" onClick={() => terminalInput.trim() && requestCommandApproval(terminalInput.trim())}><ArrowUp size={16} /></button></div>
-      </section>
       <WorkspaceModal
         modal={modal ?? (selectedSource ? "source" : null)}
         artifactName={artifactName}
@@ -532,29 +442,115 @@ function App() {
   );
 }
 
-function EvidenceView({ papers, onAddEvidence, onSourceOpen }: { papers: typeof initialPapers; onAddEvidence: () => void; onSourceOpen: (source: string) => void }) {
-  return <div className="evidence-view">
-    <section className="claim-panel">
-      <div className="panel-kicker"><Lightbulb size={15} />Candidate gap</div>
-      <h2>Retrieval budgets are often treated as a fixed hyperparameter instead of a reasoning decision.</h2>
-      <p>Across the current reading set, final accuracy is usually reported without exposing how retrieval volume changes at each intermediate reasoning step.</p>
-      <div className="claim-footer"><span><Check size={14} />Grounded in 3 sources</span><button onClick={() => onSourceOpen("Candidate gap claim record")}>Open claim record <ChevronRight size={14} /></button></div>
-    </section>
-    <section className="evidence-grid">
-      <div className="section-heading"><div><span className="eyebrow">Linked sources</span><h2>Evidence ledger</h2></div><button className="outline-button" onClick={onAddEvidence}><Plus size={14} />Add evidence</button></div>
-      <div className="paper-list">
-        {papers.map((paper, index) => <article className="paper-row" key={paper.title}><div className="paper-index">0{index + 1}</div><div className="paper-copy"><h3>{paper.title}</h3><p>{paper.meta}</p><blockquote>“Evaluation focuses on aggregate task outcomes rather than allocation behavior during intermediate reasoning.”</blockquote></div><div className="relevance"><span>Relevance</span><strong>{paper.score}</strong></div></article>)}
+function ConversationView({ title, messages, events, prompt, workspace, workspaceReady, agentBusy, pendingAction, conversationEndRef, onPrompt, onSubmit, onOpenSettings, onOpenKnowledge, onSourceOpen, onApprove, onReject }: {
+  title: string;
+  messages: Message[];
+  events: TimelineEvent[];
+  prompt: string;
+  workspace: string;
+  workspaceReady: boolean;
+  agentBusy: boolean;
+  pendingAction: PendingAction | null;
+  conversationEndRef: React.RefObject<HTMLDivElement | null>;
+  onPrompt: (value: string) => void;
+  onSubmit: () => void;
+  onOpenSettings: () => void;
+  onOpenKnowledge: () => void;
+  onSourceOpen: (source: string) => void;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const latestEvent = events.at(-1);
+
+  return <div className="conversation-layout">
+    <header className="conversation-header">
+      <div className="conversation-title"><strong>{title}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
+      <button className="quiet-icon-button" onClick={onOpenSettings} title="Agent settings"><Bot size={17} /></button>
+    </header>
+
+    <div className="conversation-scroll">
+      <div className="conversation-thread">
+        {messages.map((message) => (
+          <article className={`conversation-message ${message.role}`} key={message.id}>
+            {message.role === "assistant" && <span className="assistant-mark"><Sparkles size={15} /></span>}
+            <div className="conversation-message-copy">
+              <div className="conversation-message-role">{message.role === "assistant" ? "Axiom" : "You"}</div>
+              <p>{message.text}</p>
+              {message.sources && <div className="source-chips">{message.sources.map((source) => <button key={source} onClick={() => onSourceOpen(source)}>{source}</button>)}</div>}
+            </div>
+          </article>
+        ))}
+
+        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Sparkles size={15} /></span><div><strong>{latestEvent?.title ?? "Axiom is working"}</strong><small>{latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
+
+        {pendingAction && (
+          <section className="conversation-approval">
+            <div className="approval-icon">{pendingAction.kind === "write" ? <FileText size={16} /> : <SquareTerminal size={16} />}</div>
+            <div className="approval-content">
+              <span>{pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval"}</span>
+              <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
+              {pendingAction.kind === "write" && pendingAction.payload.content && <pre className="proposal-preview">{pendingAction.payload.content.slice(0, 260)}</pre>}
+              <p>{pendingAction.kind === "write" ? "This will write a file inside the selected workspace." : "This will run in the selected workspace and record its output."}</p>
+              <div className="approval-actions">
+                <button className="secondary-button" onClick={onReject}><X size={14} />Dismiss</button>
+                <button className="primary-button" onClick={onApprove}>{pendingAction.kind === "write" ? <Check size={14} /> : <Play size={14} />}{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
+              </div>
+            </div>
+          </section>
+        )}
+        <div ref={conversationEndRef} />
       </div>
-    </section>
+    </div>
+
+    <div className="conversation-composer-wrap">
+      <div className="conversation-composer">
+        <textarea value={prompt} onChange={(event) => onPrompt(event.target.value)} onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            onSubmit();
+          }
+        }} placeholder="Ask Axiom to research, compare, write, or run..." rows={3} />
+        <div className="conversation-composer-footer">
+          <button className="composer-tool" onClick={onOpenKnowledge} title="Add context from Knowledge"><Plus size={15} /><span>Knowledge</span></button>
+          <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
+          <button className="conversation-send" onClick={onSubmit} disabled={!prompt.trim() || agentBusy} title="Send"><SendHorizontal size={16} /></button>
+        </div>
+      </div>
+      <p className="composer-note">Axiom can make mistakes. Review sources and workspace changes.</p>
+    </div>
   </div>;
 }
 
-function DraftView({ artifact, onSourceOpen }: { artifact?: Artifact; onSourceOpen: (source: string) => void }) {
-  return <section className="document-view"><div className="document-meta">{artifact?.kind === "experiment" ? "experiments" : "drafts"}/{artifact?.name ?? "method.md"} · local draft</div><h2>{artifact?.name?.replace(/\.(md|yaml|py)$/, "") ?? "Adaptive retrieval allocation"}</h2><p>{artifact?.body ?? "Select an artifact from the workspace to inspect its local draft."}</p><h3>Claim trace</h3><div className="inline-citation"><BookOpen size={15} />This framing is motivated by evidence gaps identified in the active literature set.<button onClick={() => onSourceOpen("3 linked sources")}>3 linked sources</button></div><p>Browser preview keeps this draft in the current session. In the desktop build, artifact creation will be routed through the same approval boundary before it writes to disk.</p></section>;
+function ArtifactsView({ artifacts, activeArtifact, selectedArtifact, onOpenArtifact, onNewArtifact, onChangeBody }: {
+  artifacts: Artifact[];
+  activeArtifact?: Artifact;
+  selectedArtifact: string;
+  onOpenArtifact: (name: string) => void;
+  onNewArtifact: () => void;
+  onChangeBody: (body: string) => void;
+}) {
+  return <div className="artifacts-page">
+    <header className="artifacts-header">
+      <div><span className="page-kicker">Knowledge</span><h1>Artifacts</h1><p>Research notes, paper drafts, experiment configs, and code attached to this workspace.</p></div>
+      <button className="primary-button" onClick={onNewArtifact}><Plus size={15} />New artifact</button>
+    </header>
+    <div className="artifacts-workspace">
+      <aside className="artifact-browser">
+        <ArtifactGroup title="paper" icon={<FileText size={14} />} artifacts={artifacts.filter((artifact) => artifact.kind === "artifact")} selectedArtifact={selectedArtifact} onOpenArtifact={onOpenArtifact} />
+        <ArtifactGroup title="code" icon={<Code2 size={14} />} artifacts={artifacts.filter((artifact) => artifact.kind === "experiment")} selectedArtifact={selectedArtifact} onOpenArtifact={onOpenArtifact} />
+      </aside>
+      <section className="artifact-editor">
+        {activeArtifact ? <><div className="artifact-editor-header"><span>{activeArtifact.kind === "artifact" ? <FileText size={15} /> : <Code2 size={15} />}</span><strong>{activeArtifact.name}</strong><small>Local draft</small></div><textarea value={activeArtifact.body} onChange={(event) => onChangeBody(event.target.value)} spellCheck={false} aria-label={`Edit ${activeArtifact.name}`} /></> : <div className="artifact-empty">Choose an artifact to open it.</div>}
+      </section>
+    </div>
+  </div>;
 }
 
-function PlanView({ onReviewExecution }: { onReviewExecution: () => void }) {
-  return <section className="plan-view"><div className="section-heading"><div><span className="eyebrow">Experiment</span><h2>Budget allocation ablation</h2></div><span className="status-label"><Clock3 size={14} />Awaiting approval</span></div><div className="plan-table"><div><span>Baseline</span><strong>Static top-k retrieval</strong></div><div><span>Treatment</span><strong>Adaptive budget policy</strong></div><div><span>Metrics</span><strong>Accuracy · evidence recall · tokens</strong></div><div><span>Artifacts</span><strong>trace.jsonl · metrics.csv · plot.png</strong></div></div><button className="primary-button" onClick={onReviewExecution}><Play size={15} />Review execution</button></section>;
+function ArtifactGroup({ title, icon, artifacts, selectedArtifact, onOpenArtifact }: { title: string; icon: React.ReactNode; artifacts: Artifact[]; selectedArtifact: string; onOpenArtifact: (name: string) => void }) {
+  return <div className="artifact-group">
+    <div className="artifact-group-title"><ChevronDown size={13} />{icon}<span>{title}</span></div>
+    {artifacts.map((artifact) => <button className={artifact.name === selectedArtifact ? "artifact-browser-row active" : "artifact-browser-row"} key={artifact.name} onClick={() => onOpenArtifact(artifact.name)}><span>{artifact.kind === "artifact" ? <FileText size={14} /> : <Code2 size={14} />}</span><strong>{artifact.name}</strong></button>)}
+  </div>;
 }
 
 function WorkspaceModal({ modal, artifactName, evidenceTitle, evidenceUrl, searchQuery, selectedSource, onArtifactName, onEvidenceTitle, onEvidenceUrl, onSearchQuery, onClose, onCreateArtifact, onAddEvidence }: { modal: Modal; artifactName: string; evidenceTitle: string; evidenceUrl: string; searchQuery: string; selectedSource: string; onArtifactName: (value: string) => void; onEvidenceTitle: (value: string) => void; onEvidenceUrl: (value: string) => void; onSearchQuery: (value: string) => void; onClose: () => void; onCreateArtifact: () => void; onAddEvidence: () => void }) {
