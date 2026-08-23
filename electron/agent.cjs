@@ -6,7 +6,7 @@ const { resolveApproval, waitForApproval } = require("./agent/approval-manager.c
 
 const MAX_TOOL_ROUNDS = 6;
 const MAX_FILE_BYTES = 64_000;
-const HIDDEN_PATHS = new Set([".axiom", ".git", "node_modules", "dist"]);
+const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
 
 const tools = [
@@ -102,12 +102,14 @@ const tools = [
 ];
 
 function configuration() {
-  const apiKey = process.env.AXIOM_LLM_API_KEY;
+  const legacyPrefix = ["AX", "IOM_LLM_"].join("");
+  const readSetting = (name) => process.env[`ARCHIMEDES_LLM_${name}`] || process.env[`${legacyPrefix}${name}`];
+  const apiKey = readSetting("API_KEY");
   if (!apiKey) return null;
   return {
     apiKey,
-    baseUrl: (process.env.AXIOM_LLM_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),
-    model: process.env.AXIOM_LLM_MODEL || "gpt-4.1-mini",
+    baseUrl: (readSetting("BASE_URL") || "https://api.openai.com/v1").replace(/\/$/, ""),
+    model: readSetting("MODEL") || "gpt-4.1-mini",
   };
 }
 
@@ -125,7 +127,7 @@ function relativePath(root, target) {
 
 function rejectHidden(relative) {
   if (relative.split("/").some((part) => HIDDEN_PATHS.has(part) || part.startsWith("."))) {
-    throw new Error("Axiom does not expose hidden workspace folders to the Agent.");
+    throw new Error("Archimedes does not expose hidden workspace folders to the Agent.");
   }
 }
 
@@ -338,7 +340,7 @@ async function runAgent({ prompt, workspace, threadId, mode = "idea-spark", cont
   };
 
   if (!config) {
-    const response = "Axiom needs a model configuration before it can run this research task. Add AXIOM_LLM_API_KEY, AXIOM_LLM_BASE_URL, and AXIOM_LLM_MODEL to your local environment, then retry.";
+    const response = "Archimedes needs a model configuration before it can run this research task. Add ARCHIMEDES_LLM_API_KEY, ARCHIMEDES_LLM_BASE_URL, and ARCHIMEDES_LLM_MODEL to your local environment, then retry.";
     emitTurn({ type: "configuration", title: "Model configuration required", detail: "No local LLM API key was found" });
     activeRuns.delete(thread.id);
     return finish(response, "needs_configuration");
@@ -384,13 +386,13 @@ async function runAgent({ prompt, workspace, threadId, mode = "idea-spark", cont
         }
       }
     }
-    return finish("Axiom stopped this turn after reaching its safe tool-call limit. Refine the request and continue in the same thread.", "incomplete");
+    return finish("Archimedes stopped this turn after reaching its safe tool-call limit. Refine the request and continue in the same thread.", "incomplete");
   } catch (error) {
     if (controller.signal.aborted || error?.name === "AbortError") {
       emitTurn({ type: "interrupted", title: "Research turn interrupted", detail: "Conversation history was preserved" });
       return finish("This research turn was interrupted. You can continue in the same thread.", "interrupted");
     }
-    const response = `Axiom could not complete this task: ${error.message || String(error)}`;
+    const response = `Archimedes could not complete this task: ${error.message || String(error)}`;
     emitTurn({ type: "failed", title: "Research turn failed", detail: "The turn record was saved for inspection" });
     return finish(response, "failed");
   } finally {

@@ -20,7 +20,7 @@ function cleanTerminalEnvironment() {
     ...process.env,
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
-    TERM_PROGRAM: "Axiom",
+    TERM_PROGRAM: "Archimedes",
     TERM_PROGRAM_VERSION: app.getVersion(),
   }).filter(([, value]) => typeof value === "string"));
 }
@@ -177,7 +177,7 @@ app.whenReady().then(() => {
   ipcMain.handle("context:choose-paths", async (_event, input = {}) => {
     const kind = input.kind === "folder" ? "folder" : "file";
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: kind === "folder" ? "Add a folder to Axiom context" : "Add files to Axiom context",
+      title: kind === "folder" ? "Add a folder to Archimedes context" : "Add files to Archimedes context",
       defaultPath: resolveWorkspace(input.workspace),
       properties: kind === "folder" ? ["openDirectory", "multiSelections"] : ["openFile", "multiSelections"],
     });

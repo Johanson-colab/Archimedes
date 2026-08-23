@@ -133,7 +133,7 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
         {view === "root" && <>
           <div className="context-picker-label">Add context</div>
           <PickerAction icon={<FilePlus2 size={16} />} label="Local file" detail="Attach one or more files" onClick={() => void chooseLocal("file")} />
-          <PickerAction icon={<FolderPlus size={16} />} label="Local folder" detail="Give Axiom access to a folder" onClick={() => void chooseLocal("folder")} />
+          <PickerAction icon={<FolderPlus size={16} />} label="Local folder" detail="Give Archimedes access to a folder" onClick={() => void chooseLocal("folder")} />
           <div className="context-picker-divider" />
           <PickerAction icon={<BookMarked size={16} />} label="Literature Library" detail="Add papers from your collections" onClick={() => void showLibraries()} />
           <PickerAction icon={<Plug size={16} />} label="Plugins" detail="Attach an installed plugin" onClick={() => void showResources("plugin")} />

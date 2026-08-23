@@ -207,7 +207,7 @@ const previewBridge = {
       const command = session.line.trim();
       const output = command ? `\r\n\x1b[90m[browser preview]\x1b[0m ${command}\r\n` : "\r\n";
       session.line = "";
-      for (const listener of previewPtyListeners) listener({ sessionId, data: `${output}\x1b[32maxiom\x1b[0m % ` });
+      for (const listener of previewPtyListeners) listener({ sessionId, data: `${output}\x1b[32marchimedes\x1b[0m % ` });
       return;
     }
     if (data === "\u007f") {
@@ -389,7 +389,7 @@ function App() {
       if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
       setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
     } catch (error) {
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Axiom could not start this task: ${String(error)}` }]);
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Archimedes could not start this task: ${String(error)}` }]);
     } finally {
       setAgentBusy(false);
       setRunningThreadId(null);
@@ -470,10 +470,10 @@ function App() {
 
   return (
     <main className="codex-shell">
-      <aside className="codex-sidebar" aria-label="Axiom navigation">
+      <aside className="codex-sidebar" aria-label="Archimedes navigation">
         <div className="codex-brand">
           <span className="codex-brand-mark"><Sparkles size={16} /></span>
-          <strong>Axiom</strong>
+          <strong>Archimedes</strong>
         </div>
 
         <button className="new-task-button" onClick={startNewTask} title="New task" disabled={agentBusy}>
@@ -629,14 +629,14 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
           <article className={`conversation-message ${message.role}`} key={message.id}>
             {message.role === "assistant" && <span className="assistant-mark"><Sparkles size={15} /></span>}
             <div className="conversation-message-copy">
-              <div className="conversation-message-role">{message.role === "assistant" ? "Axiom" : "You"}</div>
+              <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
               <p>{message.text}</p>
               {message.sources && <div className="source-chips">{message.sources.map((source) => <button key={source} onClick={() => onSourceOpen(source)}>{source}</button>)}</div>}
             </div>
           </article>
         ))}
 
-        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Sparkles size={15} /></span><div><strong>{latestEvent?.title ?? "Axiom is working"}</strong><small>{latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
+        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Sparkles size={15} /></span><div><strong>{latestEvent?.title ?? "Archimedes is working"}</strong><small>{latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
 
         {pendingAction && (
           <section className="conversation-approval">
@@ -687,7 +687,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
           </button>
         </div>
       </div>
-      <p className="composer-note">Axiom can make mistakes. Review sources and workspace changes.</p>
+      <p className="composer-note">Archimedes can make mistakes. Review sources and workspace changes.</p>
     </div>
   </div>;
 }
@@ -731,11 +731,11 @@ function WorkspaceModal({ modal, artifactName, evidenceTitle, evidenceUrl, searc
   const title = modal === "artifact" ? "New research artifact" : modal === "evidence" ? "Add evidence" : modal === "search" ? "Search research" : modal === "settings" ? "Agent settings" : "Source record";
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="workspace-modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
-    <div className="modal-header"><div><span className="eyebrow">Axiom workspace</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
+    <div className="modal-header"><div><span className="eyebrow">Archimedes workspace</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
     {modal === "artifact" && <><p>Create a session draft, then select it from the left workspace tree.</p><label>Artifact name<input autoFocus value={artifactName} onChange={(event) => onArtifactName(event.target.value)} placeholder="literature-gap.md" onKeyDown={(event) => event.key === "Enter" && onCreateArtifact()} /></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onCreateArtifact}><Plus size={14} />Create draft</button></div></>}
     {modal === "evidence" && <><p>Add a paper, dataset, or web source to the current evidence ledger.</p><label>Title<input autoFocus value={evidenceTitle} onChange={(event) => onEvidenceTitle(event.target.value)} placeholder="Paper or source title" /></label><label>URL or citation<input value={evidenceUrl} onChange={(event) => onEvidenceUrl(event.target.value)} placeholder="https://... or Author et al., 2025" onKeyDown={(event) => event.key === "Enter" && onAddEvidence()} /></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onAddEvidence}><Plus size={14} />Add evidence</button></div></>}
     {modal === "search" && <><p>Search is a local preview catalogue for now; choose a result, then add it to the evidence ledger.</p><label>Research query<input autoFocus value={searchQuery} onChange={(event) => onSearchQuery(event.target.value)} /></label><div className="search-results">{previewResults.length ? previewResults.map((paper) => <button key={paper.title} className="search-result" onClick={() => { onEvidenceTitle(paper.title); onEvidenceUrl(`${paper.meta} · preview catalogue`); }}><Search size={15} /><span>{paper.title}</span><Plus size={14} /></button>) : <p>No local preview matches. Use Add evidence to enter a source manually.</p>}</div><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Close</button><button className="primary-button" onClick={onAddEvidence}><Plus size={14} />Add selected</button></div></>}
-    {modal === "settings" && <><p>Model credentials stay outside the renderer. Configure an OpenAI-compatible model in <code>.env.local</code>, then restart the desktop app.</p><div className="settings-list"><code>AXIOM_LLM_API_KEY</code><code>AXIOM_LLM_BASE_URL</code><code>AXIOM_LLM_MODEL</code></div><div className="modal-actions"><button className="primary-button" onClick={onClose}>Done</button></div></>}
+    {modal === "settings" && <><p>Model credentials stay outside the renderer. Configure an OpenAI-compatible model in <code>.env.local</code>, then restart the desktop app.</p><div className="settings-list"><code>ARCHIMEDES_LLM_API_KEY</code><code>ARCHIMEDES_LLM_BASE_URL</code><code>ARCHIMEDES_LLM_MODEL</code></div><div className="modal-actions"><button className="primary-button" onClick={onClose}>Done</button></div></>}
     {modal === "source" && <><p><strong>{selectedSource}</strong></p><p>This is a linked-source detail placeholder. The next data layer will persist a citation, source URL, extracted passage, and its connection to a claim.</p><div className="modal-actions"><button className="primary-button" onClick={onClose}>Close record</button></div></>}
   </section></div>;
 }

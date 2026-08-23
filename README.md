@@ -1,12 +1,16 @@
-# Axiom
+# Archimedes
 
-Axiom is a local-first desktop research IDE. The first slice brings the main research loop into one interface:
+Archimedes is a local-first AI-for-Research agent that brings research conversations, literature, workspace tools, experiments, and scientific writing into one desktop application.
 
-- an evidence ledger connecting research claims to papers and evidence spans;
-- persistent literature libraries with paper search, reading state, notes, and import;
-- a research-agent task panel with visible context and source links;
-- an approval gate for commands proposed by the agent or typed by the user;
-- a local process panel that streams command output back into the workspace.
+The current implementation includes:
+
+- persistent multi-turn Research Chat with resumable threads;
+- streaming model responses and auditable tool-call events;
+- approval-gated workspace writes and shell commands;
+- persistent literature libraries with search, import, reading state, and notes;
+- daily arXiv paper discovery and keyword search;
+- local files, folders, papers, plugins, and skills as selectable Agent context;
+- an interactive terminal connected to the active research workspace.
 
 ## Run locally
 
@@ -16,43 +20,33 @@ npm install
 npm run dev
 ```
 
-The renderer is also available at `http://127.0.0.1:5173` while development is running. On the first Electron launch, npm downloads the platform-specific Electron runtime.
+The renderer is available at `http://127.0.0.1:5173` while development is running. The full Agent, SQLite, filesystem, approval, and terminal capabilities run inside Electron.
 
 ## Local workspace data
 
-When a workspace is opened, Axiom creates `.axiom/axiom.db` inside that folder. It stores literature libraries, paper metadata, Agent task runs, and approved command history locally; the directory is ignored by Git. For this development checkout, `.env.local` selects the surrounding `AI Research` directory without committing that personal path.
+Archimedes creates `.archimedes/archimedes.db` inside the selected workspace. It stores Research Chat threads and turns, Agent events, literature metadata, approvals, and command history locally. The directory is ignored by Git.
 
-## Literature library
+Existing local data created by earlier versions is migrated automatically when the workspace is opened.
 
-The first-run library contains four curated research directions and verified metadata for representative papers. Paper records keep canonical arXiv/DOI links without automatically downloading PDFs.
+## Model configuration
 
-Inside the desktop app you can:
-
-- create, edit, and delete literature libraries;
-- search, inspect, star, annotate, and remove saved papers;
-- search by topic, title, DOI, arXiv URL, or arXiv ID;
-- import metadata from Semantic Scholar, with OpenAlex as a fallback;
-- discover papers and save them into a selected library.
-
-## Agent configuration
-
-Copy the Agent variables from `.env.example` into `.env.local` and set a local API key for an OpenAI-compatible Chat Completions endpoint:
+Copy `.env.example` to `.env.local` and configure an OpenAI-compatible Chat Completions endpoint:
 
 ```bash
-AXIOM_LLM_API_KEY=your-local-api-key
-AXIOM_LLM_BASE_URL=https://api.openai.com/v1
-AXIOM_LLM_MODEL=gpt-4.1-mini
+ARCHIMEDES_LLM_API_KEY=your-local-api-key
+ARCHIMEDES_LLM_BASE_URL=https://api.openai.com/v1
+ARCHIMEDES_LLM_MODEL=gpt-4.1-mini
 ```
 
-The Agent can list and read non-hidden workspace files automatically. It can only propose file writes and shell commands; Axiom requires explicit approval before either is applied. Without a configured key, each Agent request is saved with a clear configuration-required status.
+Model credentials stay in the Electron main process and are never exposed to the React renderer. Archimedes can read approved context automatically, while workspace writes and commands pause the Agent until the user approves or rejects them.
 
 ## Validation
 
 ```bash
-npm run build
 npm run lint
+npm run build
 ```
 
 ## Current boundary
 
-The browser renderer uses a deterministic preview bridge so the literature, Agent, approval, and terminal interactions can be tested without desktop permissions. The Electron build uses SQLite and live academic metadata providers. PDF download, local full-text extraction, FTS indexing, evidence-span citations, and scheduled daily feeds remain the next literature milestones.
+The Agent currently provides persistent threads, streaming responses, bounded conversation context, tool execution records, and approval-aware continuation. Project memory, semantic retrieval over full-text papers, dynamic MCP discovery, and background research jobs are planned as later harness layers.

@@ -1,9 +1,9 @@
 {
-  "name": "axiom-research",
+  "name": "archimedes-research",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A local-first research IDE for evidence, agent tasks, and experiments.",
+  "description": "A local-first AI-for-Research agent for evidence, experiments, and scientific writing.",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",

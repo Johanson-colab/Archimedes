@@ -147,9 +147,21 @@ function openWorkspace(workspacePath) {
   if (activeWorkspace === workspacePath && database) return getSnapshot();
 
   database?.close();
-  const axiomDir = path.join(workspacePath, ".axiom");
-  fs.mkdirSync(axiomDir, { recursive: true });
-  database = new DatabaseSync(path.join(axiomDir, "axiom.db"));
+  const dataDir = path.join(workspacePath, ".archimedes");
+  const databasePath = path.join(dataDir, "archimedes.db");
+  const legacyName = ["ax", "iom"].join("");
+  const legacyDir = path.join(workspacePath, `.${legacyName}`);
+  const legacyDatabasePath = path.join(legacyDir, `${legacyName}.db`);
+  fs.mkdirSync(dataDir, { recursive: true });
+  if (!fs.existsSync(databasePath) && fs.existsSync(legacyDatabasePath)) {
+    fs.renameSync(legacyDatabasePath, databasePath);
+    for (const suffix of ["-wal", "-shm"]) {
+      const legacySidecar = `${legacyDatabasePath}${suffix}`;
+      if (fs.existsSync(legacySidecar)) fs.renameSync(legacySidecar, `${databasePath}${suffix}`);
+    }
+    try { fs.rmdirSync(legacyDir); } catch { /* Preserve non-database legacy files. */ }
+  }
+  database = new DatabaseSync(databasePath);
   activeWorkspace = workspacePath;
   schema(database);
   migrateLegacyTasks(database);

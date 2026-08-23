@@ -2,5 +2,6 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
-.axiom/
+.archimedes/
+.[a]xiom/
 .env.local

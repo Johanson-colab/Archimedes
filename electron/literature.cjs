@@ -64,7 +64,7 @@ function normalizeArxivEntry(entry, requestedId) {
 
 async function searchArxiv(arxivId) {
   const response = await fetch(`${ARXIV_API_URL}?id_list=${encodeURIComponent(arxivId)}&max_results=1`, {
-    headers: { Accept: "application/atom+xml", "User-Agent": "Axiom-Research/0.1" },
+    headers: { Accept: "application/atom+xml", "User-Agent": "Archimedes-Research/0.1" },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`arXiv returned ${response.status}.`);
@@ -124,7 +124,7 @@ async function discoverArxivPapers(options) {
     sortOrder: "descending",
   });
   const response = await fetch(`${ARXIV_API_URL}?${params}`, {
-    headers: { Accept: "application/atom+xml", "User-Agent": "Axiom-Research/0.1" },
+    headers: { Accept: "application/atom+xml", "User-Agent": "Archimedes-Research/0.1" },
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`arXiv daily feed returned ${response.status}.`);
@@ -173,7 +173,7 @@ async function discoverHuggingFacePapers(options) {
   for (const baseUrl of HF_DAILY_PAPERS_URLS) {
     try {
       const candidate = await fetch(`${baseUrl}?${params}`, {
-        headers: { Accept: "application/json", "User-Agent": "Axiom-Research/0.1" },
+        headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
         signal: AbortSignal.timeout(15_000),
       });
       if (!candidate.ok) throw new Error(`returned ${candidate.status}`);
@@ -228,7 +228,7 @@ async function searchSemanticScholar(query, limit) {
     ? `${S2_BASE_URL}/paper/${encodeURIComponent(detectedId)}?fields=${fields}`
     : `${S2_BASE_URL}/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=${fields}`;
   const response = await fetch(url, {
-    headers: { Accept: "application/json", "User-Agent": "Axiom-Research/0.1" },
+    headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`Semantic Scholar search returned ${response.status}.`);
@@ -270,7 +270,7 @@ async function searchOpenAlex(query, limit) {
   const searchQuery = detectedId?.startsWith("ARXIV:") ? detectedId.slice(6) : query;
   const url = `${OPENALEX_BASE_URL}/works?search=${encodeURIComponent(searchQuery)}&per-page=${limit}`;
   const response = await fetch(url, {
-    headers: { Accept: "application/json", "User-Agent": "Axiom-Research/0.1" },
+    headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`OpenAlex search returned ${response.status}.`);
