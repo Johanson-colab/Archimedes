@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   ScanSearch,
   Sparkles,
+  Square,
   SquareTerminal,
   X,
 } from "lucide-react";
@@ -82,11 +83,18 @@ const previewAgentListeners = new Set<(payload: AgentEvent) => void>();
 const previewPtySessions = new Map<string, { cwd: string; line: string; ready: boolean }>();
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
 const previewTasks: SavedTask[] = [];
+const previewThreads: ResearchThreadDetail[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
 const previewActions: AgentAction[] = [];
 
 function previewSnapshot(): WorkspaceSnapshot {
-  return { workspace: previewWorkspace, tasks: [...previewTasks].reverse(), commands: [...previewCommands].reverse(), actions: [...previewActions].reverse() };
+  return {
+    workspace: previewWorkspace,
+    tasks: [...previewTasks].reverse(),
+    threads: previewThreads.map(({ turns: _turns, messages: _messages, ...thread }) => thread),
+    commands: [...previewCommands].reverse(),
+    actions: [...previewActions].reverse(),
+  };
 }
 
 function emitPreviewAgentEvent(payload: AgentEvent) {
@@ -102,32 +110,56 @@ const previewBridge = {
     previewWorkspace = workspacePath || previewWorkspace;
     return previewSnapshot();
   },
+  getResearchThread: async (threadId: string) => {
+    const thread = previewThreads.find((candidate) => candidate.id === threadId);
+    if (!thread) throw new Error("Research thread not found.");
+    return structuredClone(thread);
+  },
   saveTask: async ({ prompt, response, status = "completed" }: { prompt: string; response: string; status?: string }) => {
     const task = { id: crypto.randomUUID(), prompt, response, status, created_at: new Date().toISOString() };
     previewTasks.push(task);
     return task;
   },
-  runAgent: async ({ prompt, mode, contextItems }: { prompt: string; workspace: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {
-    emitPreviewAgentEvent({ type: "status", title: "Research task started", detail: "Browser preview Agent" });
+  runAgent: async ({ prompt, threadId, mode, contextItems }: { prompt: string; workspace: string; threadId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {
+    const now = new Date().toISOString();
+    let thread = previewThreads.find((candidate) => candidate.id === threadId);
+    if (!thread) {
+      thread = { id: crypto.randomUUID(), title: prompt.slice(0, 72), mode, status: "running", context_summary: "", turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, turns: [], messages: [] };
+      previewThreads.unshift(thread);
+    }
+    const turnId = crypto.randomUUID();
+    const taskId = crypto.randomUUID();
+    thread.messages.push({ id: `${turnId}:user`, turn_id: turnId, role: "user", text: prompt, created_at: now });
+    emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: "Browser preview Agent" });
     const actions: AgentAction[] = [];
     if (/(write|draft|note|生成|写入)/i.test(prompt)) {
       const action: AgentAction = {
-        id: crypto.randomUUID(), task_id: crypto.randomUUID(), kind: "write",
+        id: crypto.randomUUID(), task_id: taskId, kind: "write",
         payload: { path: "notes/agent-research-brief.md", content: "# Research brief\n\nThis artifact was proposed by the browser preview Agent.\n" },
         status: "pending", created_at: new Date().toISOString(), resolved_at: null,
       };
       previewActions.push(action);
       actions.push(action);
-      emitPreviewAgentEvent({ type: "tool", title: "write artifact", detail: "Prepared a draft for approval" });
+      emitPreviewAgentEvent({ type: "tool", threadId: thread.id, turnId, title: "write artifact", detail: "Prepared a draft for approval" });
     }
     const selectedMode = researchModes.find((candidate) => candidate.id === mode)?.label ?? "Research";
     const contextNote = contextItems?.length ? ` I received ${contextItems.length} attached context item${contextItems.length === 1 ? "" : "s"}.` : "";
     const response = `Preview Agent (${selectedMode}): I reviewed the active research workspace and framed the request as an evidence-backed next step.${contextNote} In the desktop app, this same request will use your configured model and restricted workspace tools.`;
-    const task = { id: crypto.randomUUID(), prompt, response, status: "completed", created_at: new Date().toISOString() };
+    emitPreviewAgentEvent({ type: "assistant_delta", threadId: thread.id, turnId, title: "Writing response", detail: "Streaming model output", delta: response });
+    const completedAt = new Date().toISOString();
+    const task = { id: taskId, prompt, response, status: "completed", created_at: now };
     previewTasks.push(task);
-    emitPreviewAgentEvent({ type: "complete", title: "Research task complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
-    return { taskId: task.id, response, status: "completed", actions };
+    thread.turns.push({ id: turnId, thread_id: thread.id, task_id: taskId, mode, user_message: prompt, assistant_message: response, status: "completed", created_at: now, completed_at: completedAt });
+    thread.messages.push({ id: `${turnId}:assistant`, turn_id: turnId, role: "assistant", text: response, created_at: completedAt });
+    thread.mode = mode;
+    thread.status = "idle";
+    thread.turn_count = thread.turns.length;
+    thread.updated_at = completedAt;
+    thread.last_turn_at = completedAt;
+    emitPreviewAgentEvent({ type: "complete", threadId: thread.id, turnId, title: "Research turn complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
+    return { threadId: thread.id, turnId, taskId: task.id, response, status: "completed", actions, thread: structuredClone(thread) };
   },
+  interruptAgent: async () => ({ interrupted: true }),
   approveAgentAction: async (actionId: string) => {
     const action = previewActions.find((candidate) => candidate.id === actionId);
     if (!action) throw new Error("Agent action not found.");
@@ -221,8 +253,9 @@ function App() {
   const [prompt, setPrompt] = useState("");
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
-  const [savedTasks, setSavedTasks] = useState<SavedTask[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<ResearchThread[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(260);
@@ -259,7 +292,19 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
-      const state = event.type === "complete" ? "done" : event.type === "configuration" || event.type === "failed" ? "waiting" : "active";
+      if (event.threadId) setRunningThreadId(event.threadId);
+      if (event.type === "assistant_delta" && event.turnId && event.delta) {
+        const streamId = `${event.turnId}:stream`;
+        setMessages((current) => {
+          const existing = current.find((message) => message.id === streamId);
+          return existing
+            ? current.map((message) => message.id === streamId ? { ...message, text: `${message.text}${event.delta}` } : message)
+            : [...current, { id: streamId, role: "assistant", text: event.delta || "" }];
+        });
+        return;
+      }
+      if (event.type === "approval" && event.action) setPendingAction({ ...event.action, source: "agent" });
+      const state = event.type === "complete" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "interrupted" ? "waiting" : "active";
       setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
     });
     return unsubscribe;
@@ -274,6 +319,7 @@ function App() {
   }, [messages, agentBusy, pendingAction]);
 
   async function chooseWorkspace() {
+    if (agentBusy) return;
     const selected = await desktopBridge.chooseWorkspace();
     if (selected) await loadWorkspace(selected);
   }
@@ -282,19 +328,17 @@ function App() {
     setWorkspaceReady(false);
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
     setWorkspace(snapshot.workspace);
-    setSavedTasks(snapshot.tasks);
+    setThreads(snapshot.threads);
     setWorkspaceReady(true);
 
-    if (snapshot.tasks.length) {
-      const restoredMessages = [...snapshot.tasks].reverse().flatMap((task) => [
-        { id: `${task.id}-prompt`, role: "user" as const, text: task.prompt },
-        { id: `${task.id}-response`, role: "assistant" as const, text: task.response },
-      ]);
-      setMessages(restoredMessages);
-      setSelectedTaskId(snapshot.tasks[0]?.id ?? null);
+    if (snapshot.threads.length) {
+      const thread = await desktopBridge.getResearchThread(snapshot.threads[0].id, snapshot.workspace);
+      setMessages(thread.messages.length ? thread.messages : initialMessages);
+      setActiveThreadId(thread.id);
+      setResearchMode(thread.mode);
     } else {
       setMessages(initialMessages);
-      setSelectedTaskId(null);
+      setActiveThreadId(null);
     }
 
     const action = snapshot.actions.find((candidate) => candidate.status === "pending");
@@ -303,21 +347,23 @@ function App() {
   }
 
   function startNewTask() {
+    if (agentBusy) return;
     setMainSection("chat");
-    setSelectedTaskId(null);
+    setActiveThreadId(null);
     setMessages(initialMessages);
     setPrompt("");
     setPendingAction(null);
     setContextItems([]);
   }
 
-  function openSavedTask(task: SavedTask) {
+  async function openResearchThread(threadSummary: ResearchThread) {
     setMainSection("chat");
-    setSelectedTaskId(task.id);
-    setMessages([
-      { id: `${task.id}-prompt`, role: "user", text: task.prompt },
-      { id: `${task.id}-response`, role: "assistant", text: task.response },
-    ]);
+    const thread = await desktopBridge.getResearchThread(threadSummary.id, workspace);
+    setActiveThreadId(thread.id);
+    setMessages(thread.messages.length ? thread.messages : initialMessages);
+    setResearchMode(thread.mode);
+    const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
+    setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
   }
 
   async function submitPrompt() {
@@ -334,12 +380,11 @@ function App() {
     ]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: question, workspace, mode: researchMode, contextItems: submittedContext });
-      const nextTask: SavedTask = { id: result.taskId, prompt: question, response: result.response, status: result.status, created_at: new Date().toISOString() };
-      setMessages((current) => [...current, { id: `${result.taskId}-response`, role: "assistant", text: result.response }]);
-      setSavedTasks((current) => [nextTask, ...current.filter((task) => task.id !== nextTask.id)]);
-      setSelectedTaskId(result.taskId);
-      setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Task saved to this workspace", state: "done" } : event));
+      const result = await desktopBridge.runAgent({ prompt: question, workspace, threadId: activeThreadId || undefined, mode: researchMode, contextItems: submittedContext });
+      setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
+      setActiveThreadId(result.threadId);
+      setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
+      setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research thread", state: "done" } : event));
       const proposedAction = result.actions.find((action) => action.status === "pending");
       if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
       setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
@@ -347,7 +392,13 @@ function App() {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Axiom could not start this task: ${String(error)}` }]);
     } finally {
       setAgentBusy(false);
+      setRunningThreadId(null);
     }
+  }
+
+  async function interruptResearchTurn() {
+    if (!runningThreadId) return;
+    await desktopBridge.interruptAgent(runningThreadId);
   }
 
   async function runCommand(command: string) {
@@ -413,9 +464,9 @@ function App() {
     setPendingAction(null);
   }
 
-  const currentTask = savedTasks.find((task) => task.id === selectedTaskId);
+  const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const activeArtifact = artifacts.find((artifact) => artifact.name === selectedArtifact);
-  const mainTitle = mainSection === "chat" ? currentTask?.prompt ?? "New research task" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : "Artifacts";
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : "Artifacts";
 
   return (
     <main className="codex-shell">
@@ -425,7 +476,7 @@ function App() {
           <strong>Axiom</strong>
         </div>
 
-        <button className="new-task-button" onClick={startNewTask} title="New task">
+        <button className="new-task-button" onClick={startNewTask} title="New task" disabled={agentBusy}>
           <PenLine size={16} />
           <span>New task</span>
         </button>
@@ -455,19 +506,19 @@ function App() {
         <section className="sidebar-group recent-group">
           <div className="codex-sidebar-label">Recent</div>
           <div className="recent-task-list">
-            {savedTasks.slice(0, 6).map((task) => (
-              <button className={selectedTaskId === task.id && mainSection === "chat" ? "recent-task active" : "recent-task"} key={task.id} onClick={() => openSavedTask(task)} title={task.prompt}>
-                <span>{task.prompt}</span>
+            {threads.slice(0, 8).map((thread) => (
+              <button className={activeThreadId === thread.id && mainSection === "chat" ? "recent-task active" : "recent-task"} key={thread.id} onClick={() => void openResearchThread(thread)} title={thread.title} disabled={agentBusy}>
+                <span>{thread.title}</span>
               </button>
             ))}
-            {workspaceReady && savedTasks.length === 0 && <div className="recent-empty">No saved tasks yet</div>}
+            {workspaceReady && threads.length === 0 && <div className="recent-empty">No research chats yet</div>}
           </div>
         </section>
 
         <div className="sidebar-workspace">
-          <button className="workspace-button" onClick={chooseWorkspace} title="Choose workspace">
+          <button className="workspace-button" onClick={chooseWorkspace} title="Choose workspace" disabled={agentBusy}>
             <span className="workspace-icon"><FolderOpen size={15} /></span>
-            <span className="workspace-copy"><strong>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "Choose workspace"}</strong><small>{workspaceReady ? `${savedTasks.length} saved tasks` : "Opening workspace"}</small></span>
+            <span className="workspace-copy"><strong>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "Choose workspace"}</strong><small>{workspaceReady ? `${threads.length} research chats` : "Opening workspace"}</small></span>
             <ChevronDown size={14} />
           </button>
         </div>
@@ -496,6 +547,8 @@ function App() {
               conversationEndRef={conversationEndRef}
               onPrompt={setPrompt}
               onSubmit={() => void submitPrompt()}
+              onInterrupt={() => void interruptResearchTurn()}
+              canInterrupt={Boolean(runningThreadId)}
               researchMode={researchMode}
               onResearchMode={setResearchMode}
               contextItems={contextItems}
@@ -534,18 +587,20 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, prompt, workspace, agentBusy, pendingAction, conversationEndRef, researchMode, contextItems, onPrompt, onSubmit, onResearchMode, onAddContext, onRemoveContext, onSourceOpen, onApprove, onReject }: {
+function ConversationView({ messages, events, prompt, workspace, agentBusy, canInterrupt, pendingAction, conversationEndRef, researchMode, contextItems, onPrompt, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onSourceOpen, onApprove, onReject }: {
   messages: Message[];
   events: TimelineEvent[];
   prompt: string;
   workspace: string;
   agentBusy: boolean;
+  canInterrupt: boolean;
   pendingAction: PendingAction | null;
   conversationEndRef: React.RefObject<HTMLDivElement | null>;
   researchMode: ResearchMode;
   contextItems: ContextAttachment[];
   onPrompt: (value: string) => void;
   onSubmit: () => void;
+  onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
   onAddContext: (items: ContextAttachment[]) => void;
   onRemoveContext: (id: string) => void;
@@ -627,7 +682,9 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, pend
             </div>}
           </div>
           <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
-          <button className="conversation-send" onClick={onSubmit} disabled={!prompt.trim() || agentBusy} title="Send"><SendHorizontal size={16} /></button>
+          <button className="conversation-send" onClick={agentBusy ? onInterrupt : onSubmit} disabled={agentBusy ? !canInterrupt : !prompt.trim()} title={agentBusy ? "Stop" : "Send"}>
+            {agentBusy ? <Square size={14} fill="currentColor" /> : <SendHorizontal size={16} />}
+          </button>
         </div>
       </div>
       <p className="composer-note">Axiom can make mistakes. Review sources and workspace changes.</p>

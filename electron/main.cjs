@@ -195,6 +195,13 @@ app.whenReady().then(() => {
     return store.openWorkspace(workspace);
   });
 
+  ipcMain.handle("research-thread:get", (_event, input = {}) => {
+    if (typeof input.threadId !== "string") throw new Error("A research thread ID is required.");
+    const workspace = resolveWorkspace(input.workspace);
+    store.openWorkspace(workspace);
+    return store.getResearchThread(input.threadId);
+  });
+
   ipcMain.handle("library:list", () => store.listLibraries());
 
   ipcMain.handle("library:create", (_event, input) => {
@@ -292,6 +299,7 @@ app.whenReady().then(() => {
     return agent.runAgent({
       prompt: input.prompt.trim(),
       workspace,
+      threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
       mode,
       contextItems,
       emit: (payload) => event.sender.send("agent:event", payload),
@@ -300,12 +308,21 @@ app.whenReady().then(() => {
 
   ipcMain.handle("agent:approve-action", (_event, actionId) => {
     if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");
-    return store.approveAction(actionId);
+    const action = store.approveAction(actionId);
+    agent.resolveApproval(actionId, true);
+    return action;
   });
 
   ipcMain.handle("agent:reject-action", (_event, actionId) => {
     if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");
-    return store.resolveAction(actionId, "rejected");
+    const action = store.resolveAction(actionId, "rejected");
+    agent.resolveApproval(actionId, false);
+    return action;
+  });
+
+  ipcMain.handle("agent:interrupt", (_event, threadId) => {
+    if (typeof threadId !== "string") throw new Error("A research thread ID is required.");
+    return { interrupted: agent.interruptAgent(threadId) };
   });
 
   ipcMain.handle("terminal:run", (event, { command, cwd }) => {

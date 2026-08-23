@@ -5,6 +5,7 @@ interface ResearchDeskBridge {
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
+    getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     listLibraries: () => Promise<ResearchLibrary[]>;
     createLibrary: (input: { name: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
     updateLibrary: (id: string, patch: { name?: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
@@ -16,7 +17,8 @@ interface ResearchDeskBridge {
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; threadId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
+    interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
     runTerminal: (input: { command: string; cwd?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
@@ -144,6 +146,7 @@ interface SavedTask {
 interface WorkspaceSnapshot {
   workspace: string;
   tasks: SavedTask[];
+  threads: ResearchThread[];
   commands: Array<{
     id: string;
     command: string;
@@ -157,6 +160,43 @@ interface WorkspaceSnapshot {
   actions: AgentAction[];
 }
 
+interface ResearchThread {
+  id: string;
+  title: string;
+  mode: ResearchMode;
+  status: string;
+  context_summary: string;
+  turn_count: number;
+  created_at: string;
+  updated_at: string;
+  last_turn_at: string;
+}
+
+interface ResearchThreadMessage {
+  id: string;
+  turn_id: string;
+  role: "user" | "assistant";
+  text: string;
+  created_at: string;
+}
+
+interface ResearchTurn {
+  id: string;
+  thread_id: string;
+  task_id: string | null;
+  mode: ResearchMode;
+  user_message: string;
+  assistant_message: string;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+}
+
+interface ResearchThreadDetail extends ResearchThread {
+  turns: ResearchTurn[];
+  messages: ResearchThreadMessage[];
+}
+
 interface AgentAction {
   id: string;
   task_id: string;
@@ -168,14 +208,21 @@ interface AgentAction {
 }
 
 interface AgentRunResult {
+  threadId: string;
+  turnId: string;
   taskId: string;
   response: string;
   status: string;
   actions: AgentAction[];
+  thread: ResearchThreadDetail;
 }
 
 interface AgentEvent {
-  type: "status" | "tool" | "complete" | "failed" | "configuration";
+  type: "status" | "tool" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted";
   title: string;
   detail: string;
+  threadId?: string;
+  turnId?: string;
+  delta?: string;
+  action?: AgentAction;
 }
