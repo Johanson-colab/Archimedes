@@ -12,13 +12,17 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  FlaskConical,
+  Lightbulb,
   PanelBottom,
+  FilePenLine,
   PenLine,
   Play,
   Plus,
   Search,
   SendHorizontal,
   ShieldCheck,
+  ScanSearch,
   Sparkles,
   SquareTerminal,
   X,
@@ -40,6 +44,14 @@ type TimelineEvent = {
 type PendingAction = AgentAction & { source: "agent" | "manual" };
 type Artifact = { name: string; kind: "artifact" | "experiment"; body: string };
 type Modal = "artifact" | "evidence" | "search" | "settings" | "source" | null;
+type ResearchMode = "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
+
+const researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [
+  { id: "idea-spark", label: "Idea spark", description: "Find gaps and form testable research ideas", icon: <Lightbulb size={15} />, placeholder: "Describe a topic, observation, or open question..." },
+  { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
+  { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
+  { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <ScanSearch size={15} />, placeholder: "What paper or draft would you like to review?" },
+];
 
 const initialPapers = [
   { title: "Evidence-aware retrieval for long-context reasoning", meta: "Rao et al. · 2025", score: "94%" },
@@ -92,7 +104,7 @@ const previewBridge = {
     previewTasks.push(task);
     return task;
   },
-  runAgent: async ({ prompt }: { prompt: string; workspace: string }) => {
+  runAgent: async ({ prompt, mode }: { prompt: string; workspace: string; mode: ResearchMode }) => {
     emitPreviewAgentEvent({ type: "status", title: "Research task started", detail: "Browser preview Agent" });
     const actions: AgentAction[] = [];
     if (/(write|draft|note|生成|写入)/i.test(prompt)) {
@@ -105,7 +117,8 @@ const previewBridge = {
       actions.push(action);
       emitPreviewAgentEvent({ type: "tool", title: "write artifact", detail: "Prepared a draft for approval" });
     }
-    const response = "Preview Agent: I reviewed the active research workspace and framed the request as an evidence-backed next step. In the desktop app, this same request will use your configured model and restricted workspace tools.";
+    const selectedMode = researchModes.find((candidate) => candidate.id === mode)?.label ?? "Research";
+    const response = `Preview Agent (${selectedMode}): I reviewed the active research workspace and framed the request as an evidence-backed next step. In the desktop app, this same request will use your configured model and restricted workspace tools.`;
     const task = { id: crypto.randomUUID(), prompt, response, status: "completed", created_at: new Date().toISOString() };
     previewTasks.push(task);
     emitPreviewAgentEvent({ type: "complete", title: "Research task complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
@@ -211,6 +224,7 @@ function App() {
   const [terminalHeight, setTerminalHeight] = useState(260);
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
   const [artifacts, setArtifacts] = useState<Artifact[]>([
     { name: "research-brief.md", kind: "artifact", body: "# Research brief\n\nFrame the open research question and link the evidence needed to answer it." },
     { name: "evidence-map.md", kind: "artifact", body: "# Evidence map\n\nTrack claims, source passages, and unresolved contradictions in the active literature set." },
@@ -313,7 +327,7 @@ function App() {
     ]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: question, workspace });
+      const result = await desktopBridge.runAgent({ prompt: question, workspace, mode: researchMode });
       const nextTask: SavedTask = { id: result.taskId, prompt: question, response: result.response, status: result.status, created_at: new Date().toISOString() };
       setMessages((current) => [...current, { id: `${result.taskId}-response`, role: "assistant", text: result.response }]);
       setSavedTasks((current) => [nextTask, ...current.filter((task) => task.id !== nextTask.id)]);
@@ -474,6 +488,8 @@ function App() {
               conversationEndRef={conversationEndRef}
               onPrompt={setPrompt}
               onSubmit={() => void submitPrompt()}
+              researchMode={researchMode}
+              onResearchMode={setResearchMode}
               onOpenKnowledge={() => setMainSection("library")}
               onSourceOpen={setSelectedSource}
               onApprove={() => void approvePendingAction()}
@@ -508,7 +524,7 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, prompt, workspace, agentBusy, pendingAction, conversationEndRef, onPrompt, onSubmit, onOpenKnowledge, onSourceOpen, onApprove, onReject }: {
+function ConversationView({ messages, events, prompt, workspace, agentBusy, pendingAction, conversationEndRef, researchMode, onPrompt, onSubmit, onResearchMode, onOpenKnowledge, onSourceOpen, onApprove, onReject }: {
   messages: Message[];
   events: TimelineEvent[];
   prompt: string;
@@ -516,14 +532,28 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, pend
   agentBusy: boolean;
   pendingAction: PendingAction | null;
   conversationEndRef: React.RefObject<HTMLDivElement | null>;
+  researchMode: ResearchMode;
   onPrompt: (value: string) => void;
   onSubmit: () => void;
+  onResearchMode: (mode: ResearchMode) => void;
   onOpenKnowledge: () => void;
   onSourceOpen: (source: string) => void;
   onApprove: () => void;
   onReject: () => void;
 }) {
   const latestEvent = events.at(-1);
+  const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!modeMenuOpen) return;
+    const closeMenu = (event: MouseEvent) => {
+      if (!modeMenuRef.current?.contains(event.target as Node)) setModeMenuOpen(false);
+    };
+    document.addEventListener("click", closeMenu);
+    return () => document.removeEventListener("click", closeMenu);
+  }, [modeMenuOpen]);
 
   return <div className="conversation-layout">
     <div className="conversation-scroll">
@@ -567,9 +597,22 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, pend
             event.preventDefault();
             onSubmit();
           }
-        }} placeholder="Ask Axiom to research, compare, write, or run..." rows={3} />
+        }} placeholder={activeMode.placeholder} rows={3} />
         <div className="conversation-composer-footer">
           <button className="composer-tool" onClick={onOpenKnowledge} title="Add context from Knowledge"><Plus size={15} /><span>Knowledge</span></button>
+          <div className="research-mode-picker" ref={modeMenuRef}>
+            <button className={modeMenuOpen ? "composer-tool mode-trigger active" : "composer-tool mode-trigger"} onClick={() => setModeMenuOpen((open) => !open)} title="Choose research mode" aria-haspopup="menu" aria-expanded={modeMenuOpen}>
+              {activeMode.icon}<span>{activeMode.label}</span><ChevronDown size={13} />
+            </button>
+            {modeMenuOpen && <div className="research-mode-menu" role="menu" aria-label="Research mode">
+              <div className="research-mode-menu-label">Research mode</div>
+              {researchModes.map((mode) => <button key={mode.id} className={mode.id === researchMode ? "research-mode-option selected" : "research-mode-option"} role="menuitemradio" aria-checked={mode.id === researchMode} onClick={() => { onResearchMode(mode.id); setModeMenuOpen(false); }}>
+                <span className="research-mode-icon">{mode.icon}</span>
+                <span className="research-mode-copy"><strong>{mode.label}</strong><small>{mode.description}</small></span>
+                {mode.id === researchMode && <Check size={14} />}
+              </button>)}
+            </div>}
+          </div>
           <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
           <button className="conversation-send" onClick={onSubmit} disabled={!prompt.trim() || agentBusy} title="Send"><SendHorizontal size={16} /></button>
         </div>

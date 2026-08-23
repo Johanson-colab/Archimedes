@@ -324,7 +324,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
 .conversation-composer-wrap { width: min(100%, 820px); margin: 0 auto; padding: 0 30px 12px; }
 .conversation-composer {
-  overflow: hidden;
+  overflow: visible;
   background: #fff;
   border: 1px solid #d4d4ce;
   border-radius: 8px;
@@ -337,6 +337,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .conversation-composer-footer { display: flex; min-height: 39px; align-items: center; gap: 8px; padding: 4px 6px 6px; }
 .composer-tool { display: inline-flex; height: 29px; align-items: center; gap: 6px; padding: 0 8px; color: #686862; background: transparent; border-radius: 5px; font-size: 10px; }
 .composer-tool:hover { color: #292926; background: #f0f0ed; }
+.composer-tool.active { color: #292926; background: #ecece8; }
+.research-mode-picker { position: relative; }
+.mode-trigger svg:last-child { margin-left: 1px; color: #92928c; transition: transform .15s ease; }
+.mode-trigger.active svg:last-child { transform: rotate(180deg); }
+.research-mode-menu {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 310px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid #d8d8d2;
+  border-radius: 7px;
+  box-shadow: 0 12px 30px rgba(28, 28, 25, .14);
+}
+.research-mode-menu-label { padding: 6px 8px 5px; color: #92928b; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.research-mode-option { display: grid; width: 100%; grid-template-columns: 28px minmax(0, 1fr) 16px; align-items: center; gap: 8px; padding: 8px; color: #4a4a46; background: transparent; border-radius: 5px; text-align: left; }
+.research-mode-option:hover, .research-mode-option.selected { background: #f2f2ef; }
+.research-mode-icon { display: grid; width: 28px; height: 28px; place-items: center; color: #65655f; background: #e8e8e4; border-radius: 5px; }
+.research-mode-option.selected .research-mode-icon { color: #25634f; background: #e1eee7; }
+.research-mode-copy { display: grid; min-width: 0; gap: 2px; }
+.research-mode-copy strong { color: #30302d; font-size: 10px; font-weight: 700; }
+.research-mode-copy small { overflow: hidden; color: #8a8a84; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.research-mode-option > svg { color: #2c7359; }
 .composer-context { display: flex; min-width: 0; align-items: center; gap: 5px; color: #969690; font-size: 9px; }
 .composer-context span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-send { display: grid; width: 29px; height: 29px; flex: 0 0 auto; margin-left: auto; place-items: center; color: #fff; background: #242421; border-radius: 6px; }
@@ -464,6 +489,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
   .conversation-composer-wrap { padding: 0 12px 9px; }
   .conversation-message.user .conversation-message-copy { max-width: 90%; }
   .composer-context, .composer-note { display: none; }
+  .research-mode-menu { width: min(310px, calc(100vw - 96px)); }
   .artifacts-page { padding: 20px 14px; }
   .artifacts-header { align-items: stretch; flex-direction: column; gap: 12px; }
   .artifacts-header .primary-button { align-self: flex-start; }

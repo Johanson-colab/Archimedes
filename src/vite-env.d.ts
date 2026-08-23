@@ -14,7 +14,7 @@ interface ResearchDeskBridge {
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; mode: ResearchMode }) => Promise<AgentRunResult>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
     runTerminal: (input: { command: string; cwd?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
@@ -42,6 +42,7 @@ interface Window {
 }
 
 type ReadingStatus = "unread" | "reading" | "read";
+type ResearchMode = "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
 
 interface ResearchLibrary {
   id: string;
