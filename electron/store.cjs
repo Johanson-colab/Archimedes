@@ -31,14 +31,25 @@ function schema(db) {
       created_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS research_projects (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      archived_at TEXT
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS research_threads (
       id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT REFERENCES research_projects(id) ON DELETE SET NULL,
       title TEXT NOT NULL,
       mode TEXT NOT NULL,
       status TEXT NOT NULL,
       context_summary TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      archived_at TEXT
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS research_turns (
@@ -136,6 +147,32 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
   `);
+
+  ensureColumn(db, "research_threads", "project_id", "TEXT");
+  ensureColumn(db, "research_threads", "archived_at", "TEXT");
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_research_projects_updated ON research_projects(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
+  `);
+  const projectId = ensureDefaultProject(db);
+  db.prepare("UPDATE research_threads SET project_id = ? WHERE project_id IS NULL").run(projectId);
+}
+
+function ensureColumn(db, table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!columns.some((entry) => entry.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+function ensureDefaultProject(db) {
+  const existing = db.prepare("SELECT id FROM research_projects WHERE archived_at IS NULL ORDER BY created_at ASC LIMIT 1").get();
+  if (existing) return existing.id;
+  const id = randomUUID();
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO research_projects (id, name, description, created_at, updated_at)
+    VALUES (?, 'General', 'Default research project', ?, ?)
+  `).run(id, now, now);
+  return id;
 }
 
 function requireDatabase() {
@@ -181,7 +218,9 @@ function getSnapshot() {
   return {
     workspace: activeWorkspace,
     tasks: db.prepare("SELECT id, prompt, response, status, created_at FROM task_runs ORDER BY created_at DESC LIMIT 24").all(),
+    projects: listResearchProjects(),
     threads: listResearchThreads(),
+    archivedThreads: listResearchThreads({ archived: true }),
     commands: db.prepare("SELECT id, command, cwd, status, output, exit_code, created_at, completed_at FROM command_runs ORDER BY created_at DESC LIMIT 24").all(),
     actions: db.prepare("SELECT id, task_id, kind, payload_json, status, created_at, resolved_at FROM agent_actions ORDER BY created_at DESC LIMIT 24").all().map(hydrateAction),
   };
@@ -201,9 +240,11 @@ function migrateLegacyTasks(db) {
   `).all();
   if (!legacyTasks.length) return;
 
+  const projectId = ensureDefaultProject(db);
+
   const insertThread = db.prepare(`
-    INSERT INTO research_threads (id, title, mode, status, context_summary, created_at, updated_at)
-    VALUES (?, ?, 'idea-spark', ?, '', ?, ?)
+    INSERT INTO research_threads (id, project_id, title, mode, status, context_summary, created_at, updated_at)
+    VALUES (?, ?, ?, 'idea-spark', ?, '', ?, ?)
   `);
   const insertTurn = db.prepare(`
     INSERT INTO research_turns (id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at)
@@ -211,7 +252,7 @@ function migrateLegacyTasks(db) {
   `);
   for (const task of legacyTasks) {
     const threadId = randomUUID();
-    insertThread.run(threadId, threadTitle(task.prompt), task.status, task.created_at, task.created_at);
+    insertThread.run(threadId, projectId, threadTitle(task.prompt), task.status, task.created_at, task.created_at);
     insertTurn.run(randomUUID(), threadId, task.id, task.prompt, task.response, task.status, task.created_at, task.created_at);
   }
 }
@@ -411,7 +452,51 @@ function setDailyFeedCache(cacheKey, response) {
   return { ...response, fetched_at: fetchedAt };
 }
 
-function listResearchThreads() {
+function listResearchProjects({ archived = false } = {}) {
+  const db = requireDatabase();
+  return db.prepare(`
+    SELECT research_projects.*,
+      COUNT(CASE WHEN research_threads.id IS NOT NULL AND research_threads.archived_at IS NULL THEN 1 END) AS chat_count,
+      MAX(research_threads.updated_at) AS last_chat_at
+    FROM research_projects
+    LEFT JOIN research_threads ON research_threads.project_id = research_projects.id
+    WHERE CASE WHEN ? = 1 THEN research_projects.archived_at IS NOT NULL ELSE research_projects.archived_at IS NULL END
+    GROUP BY research_projects.id
+    ORDER BY COALESCE(MAX(research_threads.updated_at), research_projects.updated_at) DESC
+  `).all(archived ? 1 : 0);
+}
+
+function createResearchProject({ name, description = "" }) {
+  const db = requireDatabase();
+  const normalizedName = String(name || "").replace(/\s+/g, " ").trim();
+  if (!normalizedName || normalizedName.length > 100) throw new Error("A project name of at most 100 characters is required.");
+  const now = timestamp();
+  const project = { id: randomUUID(), name: normalizedName, description: String(description || "").slice(0, 500), created_at: now, updated_at: now, archived_at: null, chat_count: 0, last_chat_at: null };
+  db.prepare(`
+    INSERT INTO research_projects (id, name, description, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.description, project.created_at, project.updated_at);
+  return project;
+}
+
+function archiveResearchProject(id, archived = true) {
+  const db = requireDatabase();
+  const project = db.prepare("SELECT id FROM research_projects WHERE id = ?").get(id);
+  if (!project) throw new Error("Research project not found.");
+  const now = timestamp();
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE research_projects SET archived_at = ?, updated_at = ? WHERE id = ?").run(archived ? now : null, now, id);
+    db.prepare("UPDATE research_threads SET archived_at = ?, updated_at = ? WHERE project_id = ?").run(archived ? now : null, now, id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return { archived };
+}
+
+function listResearchThreads({ archived = false, projectId = null } = {}) {
   const db = requireDatabase();
   return db.prepare(`
     SELECT research_threads.*,
@@ -419,29 +504,49 @@ function listResearchThreads() {
       COALESCE(MAX(research_turns.created_at), research_threads.created_at) AS last_turn_at
     FROM research_threads
     LEFT JOIN research_turns ON research_turns.thread_id = research_threads.id
+    WHERE CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END
+      AND (? IS NULL OR research_threads.project_id = ?)
     GROUP BY research_threads.id
     ORDER BY research_threads.updated_at DESC
-    LIMIT 48
-  `).all();
+    LIMIT 120
+  `).all(archived ? 1 : 0, projectId, projectId);
 }
 
-function createResearchThread({ prompt, mode }) {
+function createResearchThread({ prompt, mode, projectId }) {
   const db = requireDatabase();
+  const selectedProject = projectId
+    ? db.prepare("SELECT id FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId)
+    : null;
+  const resolvedProjectId = selectedProject?.id || ensureDefaultProject(db);
   const now = timestamp();
   const thread = {
     id: randomUUID(),
+    project_id: resolvedProjectId,
     title: threadTitle(prompt),
     mode,
     status: "idle",
     context_summary: "",
     created_at: now,
     updated_at: now,
+    archived_at: null,
   };
   db.prepare(`
-    INSERT INTO research_threads (id, title, mode, status, context_summary, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(thread.id, thread.title, thread.mode, thread.status, thread.context_summary, thread.created_at, thread.updated_at);
+    INSERT INTO research_threads (id, project_id, title, mode, status, context_summary, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(thread.id, thread.project_id, thread.title, thread.mode, thread.status, thread.context_summary, thread.created_at, thread.updated_at);
+  db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, resolvedProjectId);
   return { ...thread, turn_count: 0, last_turn_at: now };
+}
+
+function archiveResearchThread(id, archived = true) {
+  const db = requireDatabase();
+  const thread = db.prepare("SELECT id, project_id, status FROM research_threads WHERE id = ?").get(id);
+  if (!thread) throw new Error("Research thread not found.");
+  if (thread.status === "running") throw new Error("Stop the running research turn before archiving this chat.");
+  const now = timestamp();
+  db.prepare("UPDATE research_threads SET archived_at = ?, updated_at = ? WHERE id = ?").run(archived ? now : null, now, id);
+  if (thread.project_id) db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, thread.project_id);
+  return getResearchThread(id);
 }
 
 function getResearchThread(id) {
@@ -621,6 +726,7 @@ module.exports = {
   approveAction,
   createLibrary,
   createAction,
+  createResearchProject,
   createResearchThread,
   deleteLibrary,
   finishCommand,
@@ -631,8 +737,11 @@ module.exports = {
   getResearchThread,
   getResearchThreadContext,
   getSnapshot,
+  archiveResearchProject,
+  archiveResearchThread,
   listLibraries,
   listPapers,
+  listResearchProjects,
   listResearchThreads,
   openWorkspace,
   removePaper,

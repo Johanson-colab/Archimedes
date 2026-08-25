@@ -6,6 +6,12 @@ interface ResearchDeskBridge {
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
+    createResearchProject: (input: { name: string; description?: string }) => Promise<ResearchProject>;
+    archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
+    archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
+    getModelConfig: () => Promise<PublicModelConfig>;
+    saveModelConfig: (input: ModelConfigInput) => Promise<PublicModelConfig>;
+    testModelConfig: (input: ModelConfigInput) => Promise<ModelConnectionResult>;
     listLibraries: () => Promise<ResearchLibrary[]>;
     createLibrary: (input: { name: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
     updateLibrary: (id: string, patch: { name?: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
@@ -17,7 +23,7 @@ interface ResearchDeskBridge {
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; threadId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
@@ -146,7 +152,9 @@ interface SavedTask {
 interface WorkspaceSnapshot {
   workspace: string;
   tasks: SavedTask[];
+  projects: ResearchProject[];
   threads: ResearchThread[];
+  archivedThreads: ResearchThread[];
   commands: Array<{
     id: string;
     command: string;
@@ -160,8 +168,20 @@ interface WorkspaceSnapshot {
   actions: AgentAction[];
 }
 
+interface ResearchProject {
+  id: string;
+  name: string;
+  description: string;
+  chat_count: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  last_chat_at: string | null;
+}
+
 interface ResearchThread {
   id: string;
+  project_id: string;
   title: string;
   mode: ResearchMode;
   status: string;
@@ -170,6 +190,30 @@ interface ResearchThread {
   created_at: string;
   updated_at: string;
   last_turn_at: string;
+  archived_at: string | null;
+}
+
+type ModelProviderId = "openai" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "custom";
+
+interface ModelConfigInput {
+  provider: ModelProviderId;
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+}
+
+interface PublicModelConfig {
+  provider: ModelProviderId;
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  source: "saved" | "environment";
+}
+
+interface ModelConnectionResult {
+  ok: boolean;
+  latencyMs: number;
+  resolvedModel: string;
 }
 
 interface ResearchThreadMessage {

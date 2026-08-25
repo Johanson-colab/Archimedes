@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import LibraryView from "./LibraryView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
+import ModelSettingsModal from "./ModelSettingsModal";
+import ProjectSidebar, { NewProjectModal } from "./ProjectSidebar";
 import TerminalPanel from "./TerminalPanel";
 import { previewLibraryBridge } from "./library-preview";
 import {
@@ -45,7 +47,7 @@ type TimelineEvent = {
 
 type PendingAction = AgentAction & { source: "agent" | "manual" };
 type Artifact = { name: string; kind: "artifact" | "experiment"; body: string };
-type Modal = "artifact" | "evidence" | "search" | "settings" | "source" | null;
+type Modal = "artifact" | "evidence" | "search" | "source" | null;
 type ResearchMode = "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
 
 const researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [
@@ -83,7 +85,9 @@ const previewAgentListeners = new Set<(payload: AgentEvent) => void>();
 const previewPtySessions = new Map<string, { cwd: string; line: string; ready: boolean }>();
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
 const previewTasks: SavedTask[] = [];
+const previewProjects: ResearchProject[] = [{ id: "preview-general", name: "General", description: "Default research project", chat_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, last_chat_at: null }];
 const previewThreads: ResearchThreadDetail[] = [];
+const previewArchivedThreads: ResearchThreadDetail[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
 const previewActions: AgentAction[] = [];
 
@@ -91,7 +95,9 @@ function previewSnapshot(): WorkspaceSnapshot {
   return {
     workspace: previewWorkspace,
     tasks: [...previewTasks].reverse(),
+    projects: structuredClone(previewProjects),
     threads: previewThreads.map(({ turns: _turns, messages: _messages, ...thread }) => thread),
+    archivedThreads: previewArchivedThreads.map(({ turns: _turns, messages: _messages, ...thread }) => thread),
     commands: [...previewCommands].reverse(),
     actions: [...previewActions].reverse(),
   };
@@ -120,11 +126,32 @@ const previewBridge = {
     previewTasks.push(task);
     return task;
   },
-  runAgent: async ({ prompt, threadId, mode, contextItems }: { prompt: string; workspace: string; threadId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {
+  createResearchProject: async ({ name, description = "" }: { name: string; description?: string }) => {
+    const now = new Date().toISOString();
+    const project = { id: crypto.randomUUID(), name, description, chat_count: 0, created_at: now, updated_at: now, archived_at: null, last_chat_at: null };
+    previewProjects.unshift(project);
+    return structuredClone(project);
+  },
+  archiveResearchProject: async (id: string, archived = true) => ({ archived: Boolean(id && archived) }),
+  archiveResearchThread: async (id: string, archived = true) => {
+    const source = archived ? previewThreads : previewArchivedThreads;
+    const target = archived ? previewArchivedThreads : previewThreads;
+    const index = source.findIndex((thread) => thread.id === id);
+    if (index < 0) throw new Error("Research thread not found.");
+    const [thread] = source.splice(index, 1);
+    thread.archived_at = archived ? new Date().toISOString() : null;
+    target.unshift(thread);
+    return structuredClone(thread);
+  },
+  getModelConfig: async () => ({ provider: "custom" as ModelProviderId, baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", hasApiKey: false, source: "environment" as const }),
+  saveModelConfig: async ({ provider, baseUrl, model }: ModelConfigInput) => ({ provider, baseUrl, model, hasApiKey: true, source: "saved" as const }),
+  testModelConfig: async ({ model }: ModelConfigInput) => ({ ok: true, latencyMs: 184, resolvedModel: model }),
+  runAgent: async ({ prompt, threadId, projectId, mode, contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
-      thread = { id: crypto.randomUUID(), title: prompt.slice(0, 72), mode, status: "running", context_summary: "", turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, turns: [], messages: [] };
+      const resolvedProjectId = projectId || previewProjects[0]?.id || "preview-general";
+      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, title: prompt.slice(0, 72), mode, status: "running", context_summary: "", turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [] };
       previewThreads.unshift(thread);
     }
     const turnId = crypto.randomUUID();
@@ -253,7 +280,10 @@ function App() {
   const [prompt, setPrompt] = useState("");
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [threads, setThreads] = useState<ResearchThread[]>([]);
+  const [archivedThreads, setArchivedThreads] = useState<ResearchThread[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -273,6 +303,9 @@ function App() {
   const [selectedArtifact, setSelectedArtifact] = useState("evidence-map.md");
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
   const [artifactName, setArtifactName] = useState("");
   const [evidenceTitle, setEvidenceTitle] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
@@ -328,17 +361,21 @@ function App() {
     setWorkspaceReady(false);
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
     setWorkspace(snapshot.workspace);
+    setProjects(snapshot.projects ?? []);
     setThreads(snapshot.threads);
+    setArchivedThreads(snapshot.archivedThreads ?? []);
     setWorkspaceReady(true);
 
     if (snapshot.threads.length) {
       const thread = await desktopBridge.getResearchThread(snapshot.threads[0].id, snapshot.workspace);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setActiveThreadId(thread.id);
+      setActiveProjectId(thread.project_id);
       setResearchMode(thread.mode);
     } else {
       setMessages(initialMessages);
       setActiveThreadId(null);
+      setActiveProjectId(snapshot.projects?.[0]?.id ?? null);
     }
 
     const action = snapshot.actions.find((candidate) => candidate.status === "pending");
@@ -346,9 +383,10 @@ function App() {
 
   }
 
-  function startNewTask() {
+  function startNewTask(projectId = activeProjectId) {
     if (agentBusy) return;
     setMainSection("chat");
+    if (projectId) setActiveProjectId(projectId);
     setActiveThreadId(null);
     setMessages(initialMessages);
     setPrompt("");
@@ -360,10 +398,34 @@ function App() {
     setMainSection("chat");
     const thread = await desktopBridge.getResearchThread(threadSummary.id, workspace);
     setActiveThreadId(thread.id);
+    setActiveProjectId(thread.project_id);
     setMessages(thread.messages.length ? thread.messages : initialMessages);
     setResearchMode(thread.mode);
     const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
     setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
+  }
+
+  async function createProject() {
+    const name = newProjectName.trim();
+    if (!name || agentBusy) return;
+    const project = await desktopBridge.createResearchProject({ name });
+    setProjects((current) => [project, ...current]);
+    setNewProjectName("");
+    setNewProjectOpen(false);
+    startNewTask(project.id);
+  }
+
+  async function archiveThread(thread: ResearchThread, archived: boolean) {
+    if (agentBusy) return;
+    await desktopBridge.archiveResearchThread(thread.id, archived);
+    const snapshot = await desktopBridge.openWorkspace(workspace);
+    setProjects(snapshot.projects);
+    setThreads(snapshot.threads);
+    setArchivedThreads(snapshot.archivedThreads);
+    if (archived && activeThreadId === thread.id) {
+      const next = snapshot.threads.find((candidate) => candidate.project_id === thread.project_id);
+      if (next) await openResearchThread(next); else startNewTask(thread.project_id);
+    }
   }
 
   async function submitPrompt() {
@@ -380,9 +442,10 @@ function App() {
     ]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: question, workspace, threadId: activeThreadId || undefined, mode: researchMode, contextItems: submittedContext });
+      const result = await desktopBridge.runAgent({ prompt: question, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: researchMode, contextItems: submittedContext });
       setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
       setActiveThreadId(result.threadId);
+      setActiveProjectId(result.thread.project_id);
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research thread", state: "done" } : event));
       const proposedAction = result.actions.find((action) => action.status === "pending");
@@ -476,7 +539,7 @@ function App() {
           <strong>Archimedes</strong>
         </div>
 
-        <button className="new-task-button" onClick={startNewTask} title="New task" disabled={agentBusy}>
+        <button className="new-task-button" onClick={() => startNewTask()} title="New task" disabled={agentBusy}>
           <PenLine size={16} />
           <span>New task</span>
         </button>
@@ -503,17 +566,18 @@ function App() {
           </button>
         </section>
 
-        <section className="sidebar-group recent-group">
-          <div className="codex-sidebar-label">Recent</div>
-          <div className="recent-task-list">
-            {threads.slice(0, 8).map((thread) => (
-              <button className={activeThreadId === thread.id && mainSection === "chat" ? "recent-task active" : "recent-task"} key={thread.id} onClick={() => void openResearchThread(thread)} title={thread.title} disabled={agentBusy}>
-                <span>{thread.title}</span>
-              </button>
-            ))}
-            {workspaceReady && threads.length === 0 && <div className="recent-empty">No research chats yet</div>}
-          </div>
-        </section>
+        <ProjectSidebar
+          projects={projects}
+          threads={threads}
+          archivedThreads={archivedThreads}
+          activeProjectId={activeProjectId}
+          activeThreadId={mainSection === "chat" ? activeThreadId : null}
+          disabled={agentBusy}
+          onNewProject={() => setNewProjectOpen(true)}
+          onNewChat={(projectId) => startNewTask(projectId)}
+          onOpenThread={(thread) => void openResearchThread(thread)}
+          onArchiveThread={(thread, archived) => void archiveThread(thread, archived)}
+        />
 
         <div className="sidebar-workspace">
           <button className="workspace-button" onClick={chooseWorkspace} title="Choose workspace" disabled={agentBusy}>
@@ -528,7 +592,7 @@ function App() {
         <header className="main-toolbar">
           <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
           <div className="main-toolbar-actions">
-            {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setModal("settings")} title="Agent settings"><Bot size={17} /></button>}
+            {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setModelSettingsOpen(true)} title="Model providers"><Bot size={17} /></button>}
             <button className={terminalOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => setTerminalOpen((open) => !open)} title={terminalOpen ? "Hide bottom panel" : "Show bottom panel"} aria-pressed={terminalOpen}>
               <PanelBottom size={18} />
             </button>
@@ -583,6 +647,8 @@ function App() {
         onCreateArtifact={createArtifact}
         onAddEvidence={addEvidence}
       />
+      <ModelSettingsModal bridge={desktopBridge} open={modelSettingsOpen} onClose={() => setModelSettingsOpen(false)} />
+      <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />
     </main>
   );
 }
@@ -728,14 +794,13 @@ function WorkspaceModal({ modal, artifactName, evidenceTitle, evidenceUrl, searc
   if (!modal) return null;
   const firstTerm = searchQuery.toLowerCase().trim().split(" ")[0];
   const previewResults = initialPapers.filter((paper) => !firstTerm || paper.title.toLowerCase().includes(firstTerm));
-  const title = modal === "artifact" ? "New research artifact" : modal === "evidence" ? "Add evidence" : modal === "search" ? "Search research" : modal === "settings" ? "Agent settings" : "Source record";
+  const title = modal === "artifact" ? "New research artifact" : modal === "evidence" ? "Add evidence" : modal === "search" ? "Search research" : "Source record";
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="workspace-modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
     <div className="modal-header"><div><span className="eyebrow">Archimedes workspace</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
     {modal === "artifact" && <><p>Create a session draft, then select it from the left workspace tree.</p><label>Artifact name<input autoFocus value={artifactName} onChange={(event) => onArtifactName(event.target.value)} placeholder="literature-gap.md" onKeyDown={(event) => event.key === "Enter" && onCreateArtifact()} /></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onCreateArtifact}><Plus size={14} />Create draft</button></div></>}
     {modal === "evidence" && <><p>Add a paper, dataset, or web source to the current evidence ledger.</p><label>Title<input autoFocus value={evidenceTitle} onChange={(event) => onEvidenceTitle(event.target.value)} placeholder="Paper or source title" /></label><label>URL or citation<input value={evidenceUrl} onChange={(event) => onEvidenceUrl(event.target.value)} placeholder="https://... or Author et al., 2025" onKeyDown={(event) => event.key === "Enter" && onAddEvidence()} /></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onAddEvidence}><Plus size={14} />Add evidence</button></div></>}
     {modal === "search" && <><p>Search is a local preview catalogue for now; choose a result, then add it to the evidence ledger.</p><label>Research query<input autoFocus value={searchQuery} onChange={(event) => onSearchQuery(event.target.value)} /></label><div className="search-results">{previewResults.length ? previewResults.map((paper) => <button key={paper.title} className="search-result" onClick={() => { onEvidenceTitle(paper.title); onEvidenceUrl(`${paper.meta} · preview catalogue`); }}><Search size={15} /><span>{paper.title}</span><Plus size={14} /></button>) : <p>No local preview matches. Use Add evidence to enter a source manually.</p>}</div><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Close</button><button className="primary-button" onClick={onAddEvidence}><Plus size={14} />Add selected</button></div></>}
-    {modal === "settings" && <><p>Model credentials stay outside the renderer. Configure an OpenAI-compatible model in <code>.env.local</code>, then restart the desktop app.</p><div className="settings-list"><code>ARCHIMEDES_LLM_API_KEY</code><code>ARCHIMEDES_LLM_BASE_URL</code><code>ARCHIMEDES_LLM_MODEL</code></div><div className="modal-actions"><button className="primary-button" onClick={onClose}>Done</button></div></>}
     {modal === "source" && <><p><strong>{selectedSource}</strong></p><p>This is a linked-source detail placeholder. The next data layer will persist a citation, source URL, extracted passage, and its connection to a claim.</p><div className="modal-actions"><button className="primary-button" onClick={onClose}>Close record</button></div></>}
   </section></div>;
 }

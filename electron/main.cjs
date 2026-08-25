@@ -7,6 +7,7 @@ const path = require("node:path");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
+const modelConfig = require("./model-config.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
 const store = require("./store.cjs");
 
@@ -164,6 +165,7 @@ function sanitizeAgentContext(items) {
 
 app.whenReady().then(() => {
   loadLocalAgentEnvironment();
+  modelConfig.initializeModelConfig(app.getPath("userData"));
   createWindow();
 
   ipcMain.handle("workspace:choose", async () => {
@@ -201,6 +203,26 @@ app.whenReady().then(() => {
     store.openWorkspace(workspace);
     return store.getResearchThread(input.threadId);
   });
+
+  ipcMain.handle("research-project:create", (_event, input = {}) => {
+    return store.createResearchProject(input);
+  });
+
+  ipcMain.handle("research-project:archive", (_event, input = {}) => {
+    if (typeof input.id !== "string") throw new Error("A research project ID is required.");
+    return store.archiveResearchProject(input.id, input.archived !== false);
+  });
+
+  ipcMain.handle("research-thread:archive", (_event, input = {}) => {
+    if (typeof input.id !== "string") throw new Error("A research thread ID is required.");
+    return store.archiveResearchThread(input.id, input.archived !== false);
+  });
+
+  ipcMain.handle("model-config:get", () => modelConfig.getPublicModelConfig());
+
+  ipcMain.handle("model-config:save", (_event, input = {}) => modelConfig.saveModelConfig(input));
+
+  ipcMain.handle("model-config:test", (_event, input = {}) => modelConfig.testModelConfig(input));
 
   ipcMain.handle("library:list", () => store.listLibraries());
 
@@ -300,6 +322,7 @@ app.whenReady().then(() => {
       prompt: input.prompt.trim(),
       workspace,
       threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
+      projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
       mode,
       contextItems,
       emit: (payload) => event.sender.send("agent:event", payload),

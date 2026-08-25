@@ -1,15 +1,34 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const store = require("./store.cjs");
+const { getActiveModelConfig } = require("./model-config.cjs");
+const { searchAcademicPapers } = require("./literature.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { resolveApproval, waitForApproval } = require("./agent/approval-manager.cjs");
 
-const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_ROUNDS = 8;
+const MAX_ACADEMIC_SEARCHES = 4;
 const MAX_FILE_BYTES = 64_000;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
 
 const tools = [
+  {
+    type: "function",
+    function: {
+      name: "search_academic_papers",
+      description: "Search current scholarly metadata from Semantic Scholar with an OpenAlex fallback. Use this first for broad research topics, literature surveys, prior work, or paper discovery instead of scanning unrelated workspace folders.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "A focused English paper title, concept, or research query." },
+          limit: { type: "integer", description: "Number of results to return, from 1 to 12." },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
   {
     type: "function",
     function: {
@@ -101,24 +120,16 @@ const tools = [
   },
 ];
 
-function configuration() {
-  const legacyPrefix = ["AX", "IOM_LLM_"].join("");
-  const readSetting = (name) => process.env[`ARCHIMEDES_LLM_${name}`] || process.env[`${legacyPrefix}${name}`];
-  const apiKey = readSetting("API_KEY");
-  if (!apiKey) return null;
-  return {
-    apiKey,
-    baseUrl: (readSetting("BASE_URL") || "https://api.openai.com/v1").replace(/\/$/, ""),
-    model: readSetting("MODEL") || "gpt-4.1-mini",
-  };
-}
-
 function workspacePath(root, requested = "") {
   const candidate = path.resolve(root, requested || ".");
   if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
     throw new Error("The requested path is outside the active workspace.");
   }
   return candidate;
+}
+
+function workspaceActionRequested(prompt) {
+  return /(save|write|create|edit|modify|implement|build|run|execute|保存|写入|创建|新建|编辑|修改|实现|搭建|运行|执行)/i.test(String(prompt || ""));
 }
 
 function relativePath(root, target) {
@@ -224,18 +235,45 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, signal }) {
+async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, signal, allowWorkspaceActions }) {
   const args = parseArguments(call.function.arguments);
   const name = call.function.name;
   store.appendResearchEvent({ threadId, turnId, type: "tool_call", payload: { call_id: call.id, name, arguments: args } });
-  emit({ type: "tool", title: name.replaceAll("_", " "), detail: "Working in the research workspace" });
+  emit({
+    type: "tool",
+    title: name.replaceAll("_", " "),
+    detail: name === "search_academic_papers" ? "Searching scholarly metadata" : "Working in the research workspace",
+  });
 
+  if (name === "search_academic_papers") {
+    if (typeof args.query !== "string" || !args.query.trim()) throw new Error("Academic search requires a focused query.");
+    const papers = await searchAcademicPapers(args.query, args.limit);
+    return {
+      content: JSON.stringify({
+        query: args.query,
+        papers: papers.slice(0, 6).map((paper) => ({
+          title: paper.title,
+          authors: paper.authors,
+          year: paper.year,
+          venue: paper.venue,
+          abstract: String(paper.abstract || "").slice(0, 1_500),
+          url: paper.url,
+          pdf_url: paper.pdf_url,
+          arxiv_id: paper.arxiv_id,
+          doi: paper.doi,
+          citation_count: paper.citation_count,
+          source: paper.source,
+        })),
+      }),
+    };
+  }
   if (name === "list_workspace_files") return { content: JSON.stringify({ entries: listFiles(root, args.directory) }) };
   if (name === "read_workspace_file") return { content: JSON.stringify({ path: args.path, content: readFile(root, args.path) }) };
   if (name === "list_attached_files") return { content: JSON.stringify({ attachment_id: args.attachment_id, entries: listAttachedFiles(contextItems, args.attachment_id, args.directory) }) };
   if (name === "read_attached_file") return { content: JSON.stringify({ attachment_id: args.attachment_id, path: args.path || "", content: readAttachedFile(contextItems, args.attachment_id, args.path) }) };
 
   if (name === "write_artifact") {
+    if (!allowWorkspaceActions) throw new Error("The user did not request a workspace write in this turn. Return the result in chat instead.");
     if (typeof args.path !== "string" || typeof args.content !== "string" || args.content.length > 200_000) {
       throw new Error("A write proposal needs a path and no more than 200000 characters of content.");
     }
@@ -250,6 +288,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   }
 
   if (name === "propose_command") {
+    if (!allowWorkspaceActions) throw new Error("The user did not request command execution in this turn. Explain any suggested command in chat instead.");
     if (typeof args.command !== "string" || !args.command.trim() || args.command.length > 2_000) {
       throw new Error("A command proposal needs a non-empty command of at most 2000 characters.");
     }
@@ -279,11 +318,13 @@ function applyDelta(accumulator, delta, onTextDelta) {
   }
 }
 
-async function complete(config, messages, { signal, onTextDelta }) {
+async function complete(config, messages, { signal, onTextDelta, allowTools = true, availableTools = tools }) {
+  const request = { model: config.model, messages, temperature: 0.2, stream: true };
+  if (allowTools && availableTools.length) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify({ model: config.model, messages, tools, tool_choice: "auto", temperature: 0.2, stream: true }),
+    body: JSON.stringify(request),
     signal,
   });
   if (!response.ok) {
@@ -322,12 +363,12 @@ async function complete(config, messages, { signal, onTextDelta }) {
   return message;
 }
 
-async function runAgent({ prompt, workspace, threadId, mode = "idea-spark", contextItems = [], emit = () => {} }) {
-  const thread = threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode });
+async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", contextItems = [], emit = () => {} }) {
+  const thread = threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId });
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
   const task = store.startTask({ prompt });
   const turn = store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode });
-  const config = configuration();
+  const config = getActiveModelConfig();
   const controller = new AbortController();
   const actions = [];
   activeRuns.set(thread.id, controller);
@@ -339,8 +380,8 @@ async function runAgent({ prompt, workspace, threadId, mode = "idea-spark", cont
     return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: store.getResearchThread(thread.id) };
   };
 
-  if (!config) {
-    const response = "Archimedes needs a model configuration before it can run this research task. Add ARCHIMEDES_LLM_API_KEY, ARCHIMEDES_LLM_BASE_URL, and ARCHIMEDES_LLM_MODEL to your local environment, then retry.";
+  if (!config.apiKey) {
+    const response = "Archimedes needs a model configuration before it can run this research task. Open Model settings, choose a provider, add the API key and model, then retry.";
     emitTurn({ type: "configuration", title: "Model configuration required", detail: "No local LLM API key was found" });
     activeRuns.delete(thread.id);
     return finish(response, "needs_configuration");
@@ -358,11 +399,17 @@ async function runAgent({ prompt, workspace, threadId, mode = "idea-spark", cont
       store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "context_compacted", payload: { omitted_turn_count: context.omittedTurnCount } });
     }
     const messages = context.messages;
+    let academicSearches = 0;
+    const allowWorkspaceActions = workspaceActionRequested(prompt);
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model}` });
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+      const availableTools = academicSearches >= MAX_ACADEMIC_SEARCHES
+        ? tools.filter((tool) => tool.function.name !== "search_academic_papers")
+        : tools;
       const message = await complete(config, messages, {
         signal: controller.signal,
+        availableTools,
         onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Streaming model output", delta }),
       });
       messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
@@ -375,7 +422,16 @@ async function runAgent({ prompt, workspace, threadId, mode = "idea-spark", cont
 
       for (const call of message.tool_calls) {
         try {
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, signal: controller.signal });
+          if (call.function.name === "search_academic_papers") {
+            if (academicSearches >= MAX_ACADEMIC_SEARCHES) {
+              const content = JSON.stringify({ error: "The academic search budget is exhausted. Synthesize the findings already collected." });
+              messages.push({ role: "tool", tool_call_id: call.id, content });
+              store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
+              continue;
+            }
+            academicSearches += 1;
+          }
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, signal: controller.signal, allowWorkspaceActions });
           if (result.action) actions.push(result.action);
           messages.push({ role: "tool", tool_call_id: call.id, content: result.content });
           store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content: result.content } });
@@ -386,7 +442,19 @@ async function runAgent({ prompt, workspace, threadId, mode = "idea-spark", cont
         }
       }
     }
-    return finish("Archimedes stopped this turn after reaching its safe tool-call limit. Refine the request and continue in the same thread.", "incomplete");
+    messages.push({
+      role: "system",
+      content: "The tool budget for this turn is exhausted. Do not request more tools. Synthesize the best useful final answer from the evidence already collected, explicitly state important gaps, and suggest a focused next step.",
+    });
+    emitTurn({ type: "status", title: "Synthesizing findings", detail: "Tool budget reached; preparing an evidence-aware answer" });
+    const finalMessage = await complete(config, messages, {
+      signal: controller.signal,
+      allowTools: false,
+      onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Synthesizing collected evidence", delta }),
+    });
+    const response = finalMessage.content || "The tool budget was reached before enough evidence was collected. Continue in this chat with a narrower research question.";
+    emitTurn({ type: "complete", title: "Research turn complete", detail: "Answer synthesized at the tool budget" });
+    return finish(response, "completed");
   } catch (error) {
     if (controller.signal.aborted || error?.name === "AbortError") {
       emitTurn({ type: "interrupted", title: "Research turn interrupted", detail: "Conversation history was preserved" });
