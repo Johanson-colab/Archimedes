@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -11,10 +11,12 @@ const modelConfig = require("./model-config.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
 const store = require("./store.cjs");
 
-let mainWindow;
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
+const windowWorkspaces = new Map();
 const allowedContextPaths = new Set();
+
+app.setName("Archimedes");
 
 function cleanTerminalEnvironment() {
   return Object.fromEntries(Object.entries({
@@ -45,12 +47,23 @@ function closeInteractiveTerminal(sessionId) {
 
 function closeAllTerminals() {
   for (const sessionId of interactiveTerminalSessions.keys()) closeInteractiveTerminal(sessionId);
-  for (const child of commandSessions.values()) child.kill("SIGTERM");
+  for (const session of commandSessions.values()) session.process.kill("SIGTERM");
   commandSessions.clear();
 }
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
+function closeWindowTerminals(senderId) {
+  for (const [sessionId, session] of interactiveTerminalSessions) {
+    if (session.senderId === senderId) closeInteractiveTerminal(sessionId);
+  }
+  for (const [sessionId, session] of commandSessions) {
+    if (session.senderId !== senderId) continue;
+    session.process.kill("SIGTERM");
+    commandSessions.delete(sessionId);
+  }
+}
+
+function createWindow(workspace) {
+  const browserWindow = new BrowserWindow({
     width: 1560,
     height: 980,
     minWidth: 1100,
@@ -65,17 +78,22 @@ function createWindow() {
     },
   });
 
+  const senderId = browserWindow.webContents.id;
+  if (workspace) windowWorkspaces.set(senderId, resolveWorkspace(workspace));
+
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
-    mainWindow.loadURL(devServerUrl);
+    browserWindow.loadURL(devServerUrl);
   } else {
-    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+    browserWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 
-  mainWindow.on("closed", () => {
-    closeAllTerminals();
-    mainWindow = null;
+  browserWindow.on("closed", () => {
+    closeWindowTerminals(senderId);
+    windowWorkspaces.delete(senderId);
   });
+
+  return browserWindow;
 }
 
 function resolveWorkspace(value) {
@@ -86,6 +104,85 @@ function resolveWorkspace(value) {
   return expanded && fs.existsSync(expanded) && fs.statSync(expanded).isDirectory()
     ? expanded
     : app.getPath("home");
+}
+
+function focusedWindow() {
+  return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
+}
+
+function workspaceForWindow(browserWindow) {
+  return browserWindow ? windowWorkspaces.get(browserWindow.webContents.id) : undefined;
+}
+
+async function chooseFolderForWindow(browserWindow, title = "Open Folder") {
+  const options = {
+    properties: ["openDirectory"],
+    title,
+    defaultPath: workspaceForWindow(browserWindow) ?? app.getPath("home"),
+  };
+  const result = browserWindow
+    ? await dialog.showOpenDialog(browserWindow, options)
+    : await dialog.showOpenDialog(options);
+  return result.canceled ? null : resolveWorkspace(result.filePaths[0]);
+}
+
+async function openFolderFromMenu() {
+  const browserWindow = focusedWindow();
+  if (!browserWindow) return;
+  const workspace = await chooseFolderForWindow(browserWindow);
+  if (!workspace || browserWindow.isDestroyed()) return;
+  windowWorkspaces.set(browserWindow.webContents.id, workspace);
+  browserWindow.webContents.send("menu:open-folder", workspace);
+}
+
+function installApplicationMenu() {
+  const template = [];
+  if (process.platform === "darwin") {
+    template.push({
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    });
+  }
+
+  template.push(
+    {
+      label: "File",
+      submenu: [
+        {
+          label: "New Window",
+          accelerator: "CmdOrCtrl+Shift+N",
+          click: () => createWindow(workspaceForWindow(focusedWindow())),
+        },
+        {
+          label: "New Chat",
+          accelerator: "CmdOrCtrl+N",
+          click: () => focusedWindow()?.webContents.send("menu:new-chat"),
+        },
+        {
+          label: "Open Folder...",
+          accelerator: "CmdOrCtrl+O",
+          click: () => void openFolderFromMenu(),
+        },
+        { type: "separator" },
+        process.platform === "darwin" ? { role: "close" } : { role: "quit" },
+      ],
+    },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+  );
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function contextItem(type, resourcePath, detail = "") {
@@ -166,23 +263,27 @@ function sanitizeAgentContext(items) {
 app.whenReady().then(() => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
-  createWindow();
+  installApplicationMenu();
 
-  ipcMain.handle("workspace:choose", async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ["openDirectory"],
-      title: "Choose a research workspace",
-    });
-    return result.canceled ? null : resolveWorkspace(result.filePaths[0]);
+  ipcMain.handle("window:initial-workspace", (event) => {
+    return windowWorkspaces.get(event.sender.id) ?? null;
   });
 
-  ipcMain.handle("context:choose-paths", async (_event, input = {}) => {
+  ipcMain.handle("workspace:choose", async (event) => {
+    return chooseFolderForWindow(BrowserWindow.fromWebContents(event.sender), "Choose a research workspace");
+  });
+
+  ipcMain.handle("context:choose-paths", async (event, input = {}) => {
     const kind = input.kind === "folder" ? "folder" : "file";
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    const options = {
       title: kind === "folder" ? "Add a folder to Archimedes context" : "Add files to Archimedes context",
       defaultPath: resolveWorkspace(input.workspace),
       properties: kind === "folder" ? ["openDirectory", "multiSelections"] : ["openFile", "multiSelections"],
-    });
+    };
+    const result = browserWindow
+      ? await dialog.showOpenDialog(browserWindow, options)
+      : await dialog.showOpenDialog(options);
     if (result.canceled) return [];
     return result.filePaths.map((selectedPath) => contextItem(kind, selectedPath, path.dirname(selectedPath)));
   });
@@ -192,8 +293,9 @@ app.whenReady().then(() => {
     return input.kind === "plugin" ? installedPlugins() : installedSkills(workspace);
   });
 
-  ipcMain.handle("workspace:open", (_event, requestedWorkspace) => {
+  ipcMain.handle("workspace:open", (event, requestedWorkspace) => {
     const workspace = resolveWorkspace(requestedWorkspace);
+    windowWorkspaces.set(event.sender.id, workspace);
     return store.openWorkspace(workspace);
   });
 
@@ -364,10 +466,12 @@ app.whenReady().then(() => {
       env: process.env,
     });
 
-    commandSessions.set(sessionId, child);
+    commandSessions.set(sessionId, { process: child, senderId: event.sender.id });
     const send = (data) => {
       store.appendCommandOutput(commandRun.id, data);
-      event.sender.send("terminal:data", { sessionId, commandRunId: commandRun.id, data });
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("terminal:data", { sessionId, commandRunId: commandRun.id, data });
+      }
     };
     child.stdout.on("data", (chunk) => send(chunk.toString()));
     child.stderr.on("data", (chunk) => send(chunk.toString()));
@@ -380,9 +484,9 @@ app.whenReady().then(() => {
     return { sessionId, commandRunId: commandRun.id, workspace };
   });
 
-  ipcMain.handle("terminal:stop", (_event, sessionId) => {
-    const child = commandSessions.get(sessionId);
-    if (child) child.kill("SIGTERM");
+  ipcMain.handle("terminal:stop", (event, sessionId) => {
+    const session = commandSessions.get(sessionId);
+    if (session?.senderId === event.sender.id) session.process.kill("SIGTERM");
   });
 
   ipcMain.handle("terminal:create", (event, input = {}) => {
@@ -451,6 +555,8 @@ app.whenReady().then(() => {
     getInteractiveTerminal(event, sessionId);
     closeInteractiveTerminal(sessionId);
   });
+
+  createWindow();
 });
 
 app.on("window-all-closed", () => {
@@ -460,3 +566,5 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
+
+app.on("before-quit", closeAllTerminals);

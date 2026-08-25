@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("researchDesk", {
+  getInitialWorkspace: () => ipcRenderer.invoke("window:initial-workspace"),
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
   chooseContextPaths: (kind, workspace) => ipcRenderer.invoke("context:choose-paths", { kind, workspace }),
   listContextResources: (kind, workspace) => ipcRenderer.invoke("context:list-resources", { kind, workspace }),
@@ -53,5 +54,15 @@ contextBridge.exposeInMainWorld("researchDesk", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("agent:event", listener);
     return () => ipcRenderer.removeListener("agent:event", listener);
+  },
+  onMenuNewChat: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("menu:new-chat", listener);
+    return () => ipcRenderer.removeListener("menu:new-chat", listener);
+  },
+  onMenuOpenFolder: (callback) => {
+    const listener = (_event, workspace) => callback(workspace);
+    ipcRenderer.on("menu:open-folder", listener);
+    return () => ipcRenderer.removeListener("menu:open-folder", listener);
   },
 });

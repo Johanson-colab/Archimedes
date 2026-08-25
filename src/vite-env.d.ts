@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ResearchDeskBridge {
+    getInitialWorkspace: () => Promise<string | null>;
     chooseWorkspace: () => Promise<string | null>;
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
@@ -38,6 +39,8 @@ interface ResearchDeskBridge {
     onPtyData: (callback: (payload: { sessionId: string; data: string }) => void) => () => void;
     onPtyExit: (callback: (payload: { sessionId: string; exitCode: number; signal?: number }) => void) => () => void;
     onAgentEvent: (callback: (payload: AgentEvent) => void) => () => void;
+    onMenuNewChat: (callback: () => void) => () => void;
+    onMenuOpenFolder: (callback: (workspace: string) => void) => () => void;
 }
 
 interface TerminalSessionInfo {

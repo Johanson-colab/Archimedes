@@ -109,6 +109,7 @@ function emitPreviewAgentEvent(payload: AgentEvent) {
 
 const previewBridge = {
   ...previewLibraryBridge,
+  getInitialWorkspace: async () => null,
   chooseWorkspace: async () => DEFAULT_WORKSPACE || "Browser preview workspace",
   chooseContextPaths: async () => { throw new Error("Use the desktop app to choose local files and folders."); },
   listContextResources: async () => [],
@@ -267,6 +268,8 @@ const previewBridge = {
     previewAgentListeners.add(callback);
     return () => previewAgentListeners.delete(callback);
   },
+  onMenuNewChat: () => () => undefined,
+  onMenuOpenFolder: () => () => undefined,
 };
 
 const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
@@ -345,9 +348,20 @@ function App() {
   }, []);
 
   useEffect(() => {
-    void loadWorkspace(DEFAULT_WORKSPACE);
+    void desktopBridge.getInitialWorkspace().then((initialWorkspace) => loadWorkspace(initialWorkspace ?? DEFAULT_WORKSPACE));
     void desktopBridge.getModelConfig().then(setActiveModelConfig).catch(() => setActiveModelConfig(null));
   }, []);
+
+  useEffect(() => {
+    const unsubscribeNewChat = desktopBridge.onMenuNewChat(() => startNewTask());
+    const unsubscribeOpenFolder = desktopBridge.onMenuOpenFolder((selectedWorkspace) => {
+      if (!agentBusy) void loadWorkspace(selectedWorkspace);
+    });
+    return () => {
+      unsubscribeNewChat();
+      unsubscribeOpenFolder();
+    };
+  }, [activeProjectId, agentBusy]);
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
