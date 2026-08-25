@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const librarySeeds = require("../shared/library-seeds.json");
+const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
 
 const OUTPUT_LIMIT = 200_000;
 let database;
@@ -556,7 +557,10 @@ function getResearchThread(id) {
   const turns = db.prepare(`
     SELECT id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at
     FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC
-  `).all(id);
+  `).all(id).map((turn) => ({
+    ...turn,
+    assistant_message: presentStoredAssistantMessage(turn.assistant_message),
+  }));
   return {
     ...thread,
     turn_count: turns.length,

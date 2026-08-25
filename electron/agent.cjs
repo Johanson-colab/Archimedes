@@ -5,6 +5,7 @@ const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { resolveApproval, waitForApproval } = require("./agent/approval-manager.cjs");
+const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 
 const MAX_TOOL_ROUNDS = 8;
 const MAX_ACADEMIC_SEARCHES = 4;
@@ -337,13 +338,15 @@ async function complete(config, messages, { signal, onTextDelta, allowTools = tr
     const body = await response.json();
     const message = body?.choices?.[0]?.message;
     if (!message) throw new Error("The model response did not contain a message.");
-    if (message.content) onTextDelta(message.content);
-    return { content: message.content || "", tool_calls: message.tool_calls || [] };
+    const normalized = normalizeAssistantMessage(message);
+    if (normalized.content) onTextDelta(normalized.content);
+    return normalized;
   }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const message = { content: "", tool_calls: [] };
+  const contentGuard = new StreamContentGuard(onTextDelta);
   let buffer = "";
   while (true) {
     const { done, value } = await reader.read();
@@ -355,12 +358,14 @@ async function complete(config, messages, { signal, onTextDelta, allowTools = tr
       if (!serialized || serialized === "[DONE]") continue;
       let body;
       try { body = JSON.parse(serialized); } catch { continue; }
-      applyDelta(message, body?.choices?.[0]?.delta || {}, onTextDelta);
+      applyDelta(message, body?.choices?.[0]?.delta || {}, (delta) => contentGuard.push(delta));
     }
     if (done) break;
   }
   if (!message.content && !message.tool_calls.length) throw new Error("The streamed model response did not contain a message.");
-  return message;
+  const normalized = normalizeAssistantMessage(message);
+  contentGuard.finish(normalized);
+  return normalized;
 }
 
 async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", contextItems = [], emit = () => {} }) {
@@ -413,7 +418,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
         onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Streaming model output", delta }),
       });
       messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
-      store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls } });
+      store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls, protocol: message.protocol } });
       if (!message.tool_calls.length) {
         const response = message.content || "The research turn completed without a final text response.";
         emitTurn({ type: "complete", title: "Research turn complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
