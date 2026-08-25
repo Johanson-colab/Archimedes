@@ -2,19 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BrainCircuit,
   Check,
-  Cloud,
   KeyRound,
   LoaderCircle,
   Network,
   Route,
   Save,
   Server,
-  Sparkles,
   X,
-  Zap,
 } from "lucide-react";
+import deepseekLogo from "./assets/providers/deepseek.png";
+import moonshotLogo from "./assets/providers/moonshot.jpg";
+import openaiLogo from "./assets/providers/openai.png";
+import qwenLogo from "./assets/providers/qwen.png";
 
 type ProviderId = ModelProviderId;
+
+function brandIcon(src: string) {
+  return <img className="provider-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
+}
 
 const providers: Array<{
   id: ProviderId;
@@ -24,10 +29,10 @@ const providers: Array<{
   models: string[];
   icon: React.ReactNode;
 }> = [
-  { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-5", "gpt-4.1", "gpt-4.1-mini"], icon: <Sparkles size={17} /> },
-  { id: "deepseek", name: "DeepSeek", caption: "Chat and reasoning models", baseUrl: "https://api.deepseek.com", models: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash"], icon: <BrainCircuit size={17} /> },
-  { id: "qwen", name: "Qwen", caption: "DashScope compatible API", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", models: ["qwen-plus", "qwen-max", "qwen3-coder-plus"], icon: <Cloud size={17} /> },
-  { id: "moonshot", name: "Moonshot", caption: "Kimi OpenAI-compatible API", baseUrl: "https://api.moonshot.cn/v1", models: ["kimi-k2.5", "moonshot-v1-32k", "moonshot-v1-128k"], icon: <Zap size={17} /> },
+  { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-5", "gpt-4.1", "gpt-4.1-mini"], icon: brandIcon(openaiLogo) },
+  { id: "deepseek", name: "DeepSeek", caption: "Chat and reasoning models", baseUrl: "https://api.deepseek.com", models: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash"], icon: brandIcon(deepseekLogo) },
+  { id: "qwen", name: "Qwen", caption: "DashScope compatible API", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", models: ["qwen-plus", "qwen-max", "qwen3-coder-plus"], icon: brandIcon(qwenLogo) },
+  { id: "moonshot", name: "Moonshot", caption: "Kimi OpenAI-compatible API", baseUrl: "https://api.moonshot.cn/v1", models: ["kimi-k2.5", "moonshot-v1-32k", "moonshot-v1-128k"], icon: brandIcon(moonshotLogo) },
   { id: "openrouter", name: "OpenRouter", caption: "Models from multiple providers", baseUrl: "https://openrouter.ai/api/v1", models: ["openai/gpt-5", "deepseek/deepseek-chat", "anthropic/claude-sonnet-4"], icon: <Route size={17} /> },
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [], icon: <Network size={17} /> },
 ];

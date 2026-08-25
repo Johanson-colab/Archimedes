@@ -53,6 +53,9 @@
 .provider-option.active { color: #242421; background: #fff; box-shadow: inset 0 0 0 1px #dadad4, 0 1px 2px rgba(20, 20, 18, .04); }
 .provider-icon { display: grid; width: 29px; height: 29px; place-items: center; color: #5d675f; background: #e7e9e6; border: 1px solid #d9ddd9; border-radius: 6px; }
 .provider-option.active .provider-icon { color: #22614d; background: #e5f0ea; border-color: #c6dacf; }
+.provider-brand-logo { display: block; width: 21px; height: 21px; object-fit: contain; border-radius: 4px; }
+.provider-icon:has(.provider-brand-logo) { overflow: hidden; background: #fff; border-color: #deded8; }
+.provider-option.active .provider-icon:has(.provider-brand-logo) { background: #fff; border-color: #cfd5d0; }
 .provider-option > span:nth-child(2) { min-width: 0; }
 .provider-option strong, .provider-option small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .provider-option strong { font-size: 11px; }
@@ -61,6 +64,7 @@
 .provider-config { min-width: 0; padding: 25px 28px; overflow: auto; background: #fff; }
 .provider-config-title { display: flex; align-items: center; gap: 11px; margin-bottom: 24px; }
 .provider-icon.large { width: 38px; height: 38px; color: #245f4c; background: #e8f0eb; }
+.provider-icon.large .provider-brand-logo { width: 29px; height: 29px; border-radius: 5px; }
 .provider-config-title h3 { margin: 0; color: #2b2b28; font-size: 15px; }
 .provider-config-title p { margin: 4px 0 0; color: #8b8b85; font-size: 10px; }
 .provider-config label { display: grid; gap: 7px; margin-top: 16px; color: #565650; font-size: 10px; font-weight: 700; }
