@@ -304,6 +304,7 @@ function App() {
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
+  const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [artifactName, setArtifactName] = useState("");
@@ -345,6 +346,7 @@ function App() {
 
   useEffect(() => {
     void loadWorkspace(DEFAULT_WORKSPACE);
+    void desktopBridge.getModelConfig().then(setActiveModelConfig).catch(() => setActiveModelConfig(null));
   }, []);
 
   useEffect(() => {
@@ -592,7 +594,7 @@ function App() {
         <header className="main-toolbar">
           <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
           <div className="main-toolbar-actions">
-            {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setModelSettingsOpen(true)} title="Model providers"><Bot size={17} /></button>}
+            {mainSection === "chat" && <button className="model-provider-button" onClick={() => setModelSettingsOpen(true)} title={`Model providers${activeModelConfig?.model ? ` · ${activeModelConfig.model}` : ""}`}><Bot size={16} /><span>{activeModelConfig?.model || "Choose model"}</span></button>}
             <button className={terminalOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => setTerminalOpen((open) => !open)} title={terminalOpen ? "Hide bottom panel" : "Show bottom panel"} aria-pressed={terminalOpen}>
               <PanelBottom size={18} />
             </button>
@@ -647,7 +649,7 @@ function App() {
         onCreateArtifact={createArtifact}
         onAddEvidence={addEvidence}
       />
-      <ModelSettingsModal bridge={desktopBridge} open={modelSettingsOpen} onClose={() => setModelSettingsOpen(false)} />
+      <ModelSettingsModal bridge={desktopBridge} open={modelSettingsOpen} onClose={() => setModelSettingsOpen(false)} onSaved={setActiveModelConfig} />
       <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />
     </main>
   );

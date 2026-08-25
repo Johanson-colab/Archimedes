@@ -44,6 +44,16 @@ function normalizeBaseUrl(value) {
   return baseUrl;
 }
 
+function validateModelId(baseUrl, value) {
+  const model = String(value || "").trim();
+  if (!model || model.length > 160) throw new Error("Enter a model name of at most 160 characters.");
+  const hostname = new URL(normalizeBaseUrl(baseUrl)).hostname.toLowerCase();
+  if ((hostname === "openrouter.ai" || hostname.endsWith(".openrouter.ai")) && !model.includes("/")) {
+    throw new Error(`OpenRouter model IDs must include the provider prefix, for example openai/${model}.`);
+  }
+  return model;
+}
+
 function getActiveModelConfig() {
   const saved = readSavedConfig();
   const fallback = environmentConfig();
@@ -71,11 +81,11 @@ function saveModelConfig(input = {}) {
   if (!configPath) throw new Error("Model configuration storage is not ready.");
   const previous = getActiveModelConfig();
   const provider = PROVIDERS.has(input.provider) ? input.provider : "custom";
-  const model = String(input.model || "").trim();
-  if (!model || model.length > 160) throw new Error("Enter a model name of at most 160 characters.");
+  const baseUrl = normalizeBaseUrl(input.baseUrl);
+  const model = validateModelId(baseUrl, input.model);
   const apiKey = String(input.apiKey || "").trim() || previous.apiKey;
   if (!apiKey || apiKey.length > 2_000) throw new Error("Enter a valid API key.");
-  const config = { provider, baseUrl: normalizeBaseUrl(input.baseUrl), model, apiKey };
+  const config = { provider, baseUrl, model, apiKey };
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
   try { fs.chmodSync(configPath, 0o600); } catch { /* Windows and some filesystems ignore POSIX modes. */ }
@@ -87,7 +97,7 @@ async function testModelConfig(input = null) {
   const candidate = input && typeof input === "object" ? {
     provider: PROVIDERS.has(input.provider) ? input.provider : "custom",
     baseUrl: normalizeBaseUrl(input.baseUrl || current.baseUrl),
-    model: String(input.model || current.model).trim(),
+    model: validateModelId(input.baseUrl || current.baseUrl, input.model || current.model),
     apiKey: String(input.apiKey || "").trim() || current.apiKey,
   } : current;
   if (!candidate.apiKey) throw new Error("Add an API key before testing the connection.");
@@ -103,8 +113,6 @@ async function testModelConfig(input = null) {
       body: JSON.stringify({
         model: candidate.model,
         messages: [{ role: "user", content: "Reply with OK." }],
-        max_tokens: 16,
-        temperature: 0,
         stream: false,
       }),
       signal: controller.signal,
@@ -134,4 +142,5 @@ module.exports = {
   initializeModelConfig,
   saveModelConfig,
   testModelConfig,
+  validateModelId,
 };

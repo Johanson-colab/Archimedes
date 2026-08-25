@@ -341,7 +341,7 @@ function applyDelta(accumulator, delta, onTextDelta) {
 }
 
 async function complete(config, messages, { signal, onTextDelta, allowTools = true, availableTools = tools }) {
-  const request = { model: config.model, messages, temperature: 0.2, stream: true };
+  const request = { model: config.model, messages, stream: true };
   if (allowTools && availableTools.length) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",

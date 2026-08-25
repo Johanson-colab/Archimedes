@@ -33,16 +33,17 @@ const providers: Array<{
   { id: "deepseek", name: "DeepSeek", caption: "Chat and reasoning models", baseUrl: "https://api.deepseek.com", models: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash"], icon: brandIcon(deepseekLogo) },
   { id: "qwen", name: "Qwen", caption: "DashScope compatible API", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", models: ["qwen-plus", "qwen-max", "qwen3-coder-plus"], icon: brandIcon(qwenLogo) },
   { id: "moonshot", name: "Moonshot", caption: "Kimi OpenAI-compatible API", baseUrl: "https://api.moonshot.cn/v1", models: ["kimi-k2.5", "moonshot-v1-32k", "moonshot-v1-128k"], icon: brandIcon(moonshotLogo) },
-  { id: "openrouter", name: "OpenRouter", caption: "Models from multiple providers", baseUrl: "https://openrouter.ai/api/v1", models: ["openai/gpt-5", "deepseek/deepseek-chat", "anthropic/claude-sonnet-4"], icon: <Route size={17} /> },
+  { id: "openrouter", name: "OpenRouter", caption: "Models from multiple providers", baseUrl: "https://openrouter.ai/api/v1", models: ["openai/gpt-5.6-terra", "openai/gpt-5.6-sol", "deepseek/deepseek-v4-flash-0731"], icon: <Route size={17} /> },
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [], icon: <Network size={17} /> },
 ];
 
-export default function ModelSettingsModal({ bridge, open, onClose }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void }) {
+export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void }) {
   const [provider, setProvider] = useState<ProviderId>("custom");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [savedConfig, setSavedConfig] = useState<PublicModelConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -57,6 +58,7 @@ export default function ModelSettingsModal({ bridge, open, onClose }: { bridge: 
       setProvider(config.provider);
       setBaseUrl(config.baseUrl);
       setModel(config.model);
+      setSavedConfig(config);
       setHasApiKey(config.hasApiKey);
       setApiKey("");
     }).catch((error) => setFeedback({ kind: "error", text: String(error) })).finally(() => setLoading(false));
@@ -64,7 +66,10 @@ export default function ModelSettingsModal({ bridge, open, onClose }: { bridge: 
 
   function chooseProvider(next: typeof providers[number]) {
     setProvider(next.id);
-    if (next.id !== "custom") {
+    if (next.id === "custom") {
+      setBaseUrl(savedConfig?.provider === "custom" ? savedConfig.baseUrl : "");
+      setModel(savedConfig?.provider === "custom" ? savedConfig.model : "");
+    } else {
       setBaseUrl(next.baseUrl);
       setModel(next.models[0] || "");
     }
@@ -89,9 +94,14 @@ export default function ModelSettingsModal({ bridge, open, onClose }: { bridge: 
     setFeedback({ kind: "idle", text: "" });
     try {
       const config = await bridge.saveModelConfig({ provider, baseUrl, model, apiKey });
+      setProvider(config.provider);
+      setBaseUrl(config.baseUrl);
+      setModel(config.model);
+      setSavedConfig(config);
       setHasApiKey(config.hasApiKey);
       setApiKey("");
-      setFeedback({ kind: "success", text: "Configuration saved. New Agent turns will use this model." });
+      onSaved(config);
+      setFeedback({ kind: "success", text: `Saved ${config.model}. New Agent turns will use this model.` });
     } catch (error) {
       setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
     } finally {
@@ -111,14 +121,14 @@ export default function ModelSettingsModal({ bridge, open, onClose }: { bridge: 
         <nav className="provider-list" aria-label="Model providers">
           {providers.map((item) => <button key={item.id} className={item.id === provider ? "provider-option active" : "provider-option"} onClick={() => chooseProvider(item)}>
             <span className="provider-icon">{item.icon}</span>
-            <span><strong>{item.name}</strong><small>{item.caption}</small></span>
+            <span><strong>{item.name}</strong><small>{item.id === provider && model ? model : item.caption}</small></span>
             {item.id === provider && <Check size={14} />}
           </button>)}
         </nav>
 
         <div className="provider-config">
           {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />Loading configuration</div> : <>
-            <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{selected.caption}</p></div></div>
+            <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{model || selected.caption}</p></div></div>
             <label><span><Server size={14} />Base URL</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
             <label><span><KeyRound size={14} />API key</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? "Saved securely · enter a new key to replace" : "Enter API key"} autoComplete="off" spellCheck={false} /></label>
             <label><span><BrainCircuit size={14} />Model</span><input list={`models-${provider}`} value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model identifier" spellCheck={false} />
