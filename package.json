@@ -24,6 +24,7 @@
     "fast-xml-parser": "^5.11.0",
     "lucide-react": "latest",
     "node-pty": "^1.1.0",
+    "pdfjs-dist": "5.4.624",
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"

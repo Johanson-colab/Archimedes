@@ -6,6 +6,7 @@ const { searchAcademicPapers } = require("./literature.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { resolveApproval, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
+const { extractPdfText } = require("./agent/pdf-reader.cjs");
 
 const MAX_TOOL_ROUNDS = 8;
 const MAX_ACADEMIC_SEARCHES = 4;
@@ -75,12 +76,14 @@ const tools = [
     type: "function",
     function: {
       name: "read_attached_file",
-      description: "Read a UTF-8 file explicitly attached by the user, or a file inside an attached folder, plugin, or skill.",
+      description: "Read a UTF-8 file explicitly attached by the user, or extract text from a page range of an attached PDF. PDF reads return page-numbered text and pagination metadata; continue from next_page when more pages are relevant.",
       parameters: {
         type: "object",
         properties: {
           attachment_id: { type: "string", description: "The exact attachment ID from the context manifest." },
           path: { type: "string", description: "Attachment-relative file path. Omit for a directly attached file." },
+          start_page: { type: "integer", description: "First PDF page to extract. Defaults to page 1." },
+          end_page: { type: "integer", description: "Last PDF page to extract. At most 24 pages are returned per call." },
         },
         required: ["attachment_id"],
         additionalProperties: false,
@@ -194,13 +197,24 @@ function listAttachedFiles(items, id, directory) {
   }));
 }
 
-function readAttachedFile(items, id, requested) {
+function readAttachedTextFile(items, id, requested) {
   const item = attachedItem(items, id);
   const target = attachedPath(item, requested);
   const stats = fs.statSync(target);
   if (!stats.isFile()) throw new Error("The requested attachment path is not a file.");
   if (stats.size > MAX_FILE_BYTES) throw new Error(`The attached file is larger than ${MAX_FILE_BYTES} bytes.`);
   return fs.readFileSync(target, "utf8");
+}
+
+async function readAttachedFile(items, id, requested, options = {}) {
+  const item = attachedItem(items, id);
+  const target = attachedPath(item, requested);
+  const stats = fs.statSync(target);
+  if (!stats.isFile()) throw new Error("The requested attachment path is not a file.");
+  if (path.extname(target).toLowerCase() === ".pdf") {
+    return extractPdfText(target, options);
+  }
+  return { kind: "text", name: path.basename(target), size_bytes: stats.size, content: readAttachedTextFile(items, id, requested) };
 }
 
 function attachedContextManifest(items) {
@@ -211,11 +225,15 @@ function attachedContextManifest(items) {
     }
     const base = { id: item.id, type: item.type, name: item.name, detail: item.detail };
     if (item.type === "skill") {
-      try { return `${JSON.stringify(base)}\n<skill_instructions>\n${readAttachedFile(items, item.id, "SKILL.md").slice(0, 48_000)}\n</skill_instructions>`; }
+      try { return `${JSON.stringify(base)}\n<skill_instructions>\n${readAttachedTextFile(items, item.id, "SKILL.md").slice(0, 48_000)}\n</skill_instructions>`; }
       catch { return JSON.stringify(base); }
     }
     if (item.type === "file") {
-      try { return `${JSON.stringify(base)}\n<file_content>\n${readAttachedFile(items, item.id, "").slice(0, 24_000)}\n</file_content>`; }
+      if (path.extname(item.path).toLowerCase() === ".pdf") {
+        const stats = fs.statSync(item.path);
+        return `${JSON.stringify({ ...base, media_type: "application/pdf", size_bytes: stats.size })}\nThis PDF can be parsed with read_attached_file. Read relevant page ranges and follow next_page when needed.`;
+      }
+      try { return `${JSON.stringify(base)}\n<file_content>\n${readAttachedTextFile(items, item.id, "").slice(0, 24_000)}\n</file_content>`; }
       catch { return `${JSON.stringify(base)}\nThe file is binary or too large to inline; use read_attached_file when appropriate.`; }
     }
     try { return `${JSON.stringify(base)}\nTop-level entries: ${JSON.stringify(listAttachedFiles(items, item.id, ""))}`; }
@@ -271,7 +289,10 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   if (name === "list_workspace_files") return { content: JSON.stringify({ entries: listFiles(root, args.directory) }) };
   if (name === "read_workspace_file") return { content: JSON.stringify({ path: args.path, content: readFile(root, args.path) }) };
   if (name === "list_attached_files") return { content: JSON.stringify({ attachment_id: args.attachment_id, entries: listAttachedFiles(contextItems, args.attachment_id, args.directory) }) };
-  if (name === "read_attached_file") return { content: JSON.stringify({ attachment_id: args.attachment_id, path: args.path || "", content: readAttachedFile(contextItems, args.attachment_id, args.path) }) };
+  if (name === "read_attached_file") {
+    const result = await readAttachedFile(contextItems, args.attachment_id, args.path, { startPage: args.start_page, endPage: args.end_page });
+    return { content: JSON.stringify({ attachment_id: args.attachment_id, path: args.path || "", ...result }) };
+  }
 
   if (name === "write_artifact") {
     if (!allowWorkspaceActions) throw new Error("The user did not request a workspace write in this turn. Return the result in chat instead.");
