@@ -132,6 +132,11 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
     }]);
   }
 
+  function addResource(resource: ContextAttachment) {
+    onAdd([resource]);
+    reset(false);
+  }
+
   const filteredPapers = papers.filter((paper) => `${paper.title} ${paper.authors.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()));
   const resourceTerms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const filteredResources = resources.filter((resource) => {
@@ -141,10 +146,10 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
   const title = view === "libraries" ? "Literature Library" : view === "papers" ? selectedLibrary?.name ?? "Papers" : view === "plugins" ? "Plugins" : view === "skills" ? "Skills" : "Add context";
 
   return <div className="context-picker" ref={pickerRef}>
-      <button className={open ? "composer-add-button active" : "composer-add-button"} onClick={() => reset(!open)} title="Add context" aria-label="Add context" aria-haspopup="menu" aria-expanded={open}>
+      <button className={open ? "composer-add-button active" : "composer-add-button"} onClick={() => reset(!open)} title="Add context" aria-label="Add context" aria-haspopup="dialog" aria-expanded={open}>
         <Plus size={17} />
       </button>
-      {open && <div className="context-picker-menu" role="menu" aria-label="Add context">
+      {open && <div className="context-picker-menu" role="dialog" aria-label="Add context">
         {view !== "root" && <div className="context-picker-header"><button onClick={() => { setView(view === "papers" ? "libraries" : "root"); setError(""); }} title="Back"><ArrowLeft size={15} /></button><strong>{title}</strong></div>}
 
         {view === "root" && <>
@@ -177,7 +182,7 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
         {!loading && (view === "plugins" || view === "skills") && <>
           <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${view}`} /></label>
           <div className="context-picker-list">
-            {filteredResources.map((resource) => <button key={resource.id} className="context-list-row" onClick={() => onAdd([resource])} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
+            {filteredResources.map((resource) => <button key={resource.id} className="context-list-row" onClick={() => addResource(resource)} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
             {!filteredResources.length && <div className="context-picker-state">No matching {view} found.</div>}
           </div>
         </>}
@@ -195,7 +200,7 @@ export function ContextChips({ items, onRemove }: { items: ContextAttachment[]; 
 }
 
 function PickerAction({ icon, label, detail, onClick }: { icon: React.ReactNode; label: string; detail: string; onClick: () => void }) {
-  return <button type="button" className="context-picker-action" role="menuitem" onClick={(event) => { event.stopPropagation(); onClick(); }}><span className="context-source-icon">{icon}</span><span><strong>{label}</strong><small>{detail}</small></span></button>;
+  return <button type="button" className="context-picker-action" onClick={(event) => { event.stopPropagation(); onClick(); }}><span className="context-source-icon">{icon}</span><span><strong>{label}</strong><small>{detail}</small></span></button>;
 }
 
 function ContextTypeIcon({ type }: { type: ContextAttachmentType }) {
