@@ -1,6 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
+import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
+import c from "react-syntax-highlighter/dist/esm/languages/prism/c";
+import cpp from "react-syntax-highlighter/dist/esm/languages/prism/cpp";
+import css from "react-syntax-highlighter/dist/esm/languages/prism/css";
+import go from "react-syntax-highlighter/dist/esm/languages/prism/go";
+import java from "react-syntax-highlighter/dist/esm/languages/prism/java";
+import javascript from "react-syntax-highlighter/dist/esm/languages/prism/javascript";
+import json from "react-syntax-highlighter/dist/esm/languages/prism/json";
+import jsx from "react-syntax-highlighter/dist/esm/languages/prism/jsx";
+import latex from "react-syntax-highlighter/dist/esm/languages/prism/latex";
+import markdown from "react-syntax-highlighter/dist/esm/languages/prism/markdown";
+import markup from "react-syntax-highlighter/dist/esm/languages/prism/markup";
+import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
+import rust from "react-syntax-highlighter/dist/esm/languages/prism/rust";
+import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
+import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
+import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
+import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
+import vsCodeLight from "react-syntax-highlighter/dist/esm/styles/prism/vs";
 import LibraryView from "./LibraryView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
@@ -37,6 +57,16 @@ import {
   SquareTerminal,
   X,
 } from "lucide-react";
+
+const syntaxLanguages: Array<[string, unknown]> = [
+  ["markup", markup], ["css", css], ["c", c], ["cpp", cpp], ["javascript", javascript],
+  ["jsx", jsx], ["typescript", typescript], ["tsx", tsx], ["bash", bash], ["go", go],
+  ["java", java], ["json", json], ["latex", latex], ["markdown", markdown], ["python", python],
+  ["rust", rust], ["sql", sql], ["yaml", yaml],
+];
+for (const [name, grammar] of syntaxLanguages) {
+  SyntaxHighlighter.registerLanguage(name, grammar);
+}
 
 type Message = {
   id: string;
@@ -358,6 +388,7 @@ function App() {
   const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
   const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
+  const [openFiles, setOpenFiles] = useState<WorkspaceFilePreview[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<WorkspaceFilePreview | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
@@ -377,10 +408,15 @@ function App() {
   const conversationEndRef = useRef<HTMLDivElement>(null);
   const activeThreadIdRef = useRef<string | null>(null);
   const threadOpenRequestRef = useRef(0);
+  const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
 
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
   }, [activeThreadId]);
+
+  useEffect(() => {
+    openFilesRef.current = openFiles;
+  }, [openFiles]);
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onTerminalData(({ sessionId, data }) => {
@@ -473,6 +509,8 @@ function App() {
     const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace);
     setFileTree(nextTree);
     setLoadingDirectories(new Set());
+    openFilesRef.current = [];
+    setOpenFiles([]);
     setSelectedFilePath(null);
     setSelectedFile(null);
     setFileError("");
@@ -501,14 +539,18 @@ function App() {
     if (!workspace) return;
     const nextTree = await desktopBridge.listWorkspaceFiles(workspace);
     setFileTree(nextTree);
-    if (selectedFilePath) {
-      try {
-        setSelectedFile(await desktopBridge.readWorkspaceFile(workspace, selectedFilePath));
-        setFileError("");
-      } catch {
-        setSelectedFile(null);
-        setSelectedFilePath(null);
-      }
+    const currentOpenFiles = openFilesRef.current;
+    if (currentOpenFiles.length) {
+      const refreshedFiles = await Promise.all(currentOpenFiles.map(async (file) => {
+        try {
+          return await desktopBridge.readWorkspaceFile(workspace, file.path);
+        } catch {
+          return file;
+        }
+      }));
+      openFilesRef.current = refreshedFiles;
+      setOpenFiles(refreshedFiles);
+      if (selectedFilePath) setSelectedFile(refreshedFiles.find((file) => file.path === selectedFilePath) ?? null);
     }
   }
 
@@ -650,13 +692,43 @@ function App() {
     setFileLoading(true);
     setFileError("");
     try {
-      setSelectedFile(await desktopBridge.readWorkspaceFile(workspace, filePath));
+      const file = await desktopBridge.readWorkspaceFile(workspace, filePath);
+      setSelectedFile(file);
+      setOpenFiles((current) => {
+        const existingIndex = current.findIndex((candidate) => candidate.path === file.path);
+        const next = existingIndex < 0
+          ? [...current, file]
+          : current.map((candidate, index) => index === existingIndex ? file : candidate);
+        openFilesRef.current = next;
+        return next;
+      });
     } catch (error) {
       setSelectedFile(null);
       setFileError(error instanceof Error ? error.message : String(error));
     } finally {
       setFileLoading(false);
     }
+  }
+
+  function selectOpenArtifact(file: WorkspaceFilePreview) {
+    setMainSection("artifacts");
+    setSelectedFilePath(file.path);
+    setSelectedFile(file);
+    setFileError("");
+  }
+
+  function closeArtifact(filePath: string) {
+    const current = openFilesRef.current;
+    const closedIndex = current.findIndex((file) => file.path === filePath);
+    if (closedIndex < 0) return;
+    const next = current.filter((file) => file.path !== filePath);
+    openFilesRef.current = next;
+    setOpenFiles(next);
+    if (selectedFilePath !== filePath) return;
+    const replacement = next[Math.min(closedIndex, next.length - 1)] ?? null;
+    setSelectedFilePath(replacement?.path ?? null);
+    setSelectedFile(replacement);
+    setFileError("");
   }
 
   async function createArtifact() {
@@ -801,7 +873,7 @@ function App() {
           )}
           {(mainSection === "library" || mainSection === "daily") && <LibraryView bridge={desktopBridge} mode={mainSection} />}
           {mainSection === "artifacts" && (
-            <ArtifactsView workspace={workspace} tree={fileTree} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
+            <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
           )}
         </div>
 
@@ -1011,7 +1083,7 @@ function FilePreview({ file, loading, error }: { file: WorkspaceFilePreview | nu
     </div>
     <div className="artifact-preview-surface">
       {file.kind === "markdown" && markdownMode === "preview" && <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{file.content || ""}</ReactMarkdown></article>}
-      {(file.kind === "text" || (file.kind === "markdown" && markdownMode === "source")) && <CodePreview content={file.content || ""} />}
+      {(file.kind === "text" || (file.kind === "markdown" && markdownMode === "source")) && <CodePreview content={file.content || ""} filePath={file.path} />}
       {file.kind === "pdf" && file.previewUrl && <iframe className="pdf-preview" src={file.previewUrl} title={file.name} />}
       {file.kind === "image" && file.previewUrl && <div className="image-preview"><img src={file.previewUrl} alt={file.name} /></div>}
       {file.kind === "binary" && <div className="artifact-empty"><File size={24} /><strong>Binary preview is unavailable</strong><span>{file.name} is still available in the workspace.</span></div>}
@@ -1019,8 +1091,33 @@ function FilePreview({ file, loading, error }: { file: WorkspaceFilePreview | nu
   </section>;
 }
 
-function CodePreview({ content }: { content: string }) {
-  return <pre className="code-preview">{content.split("\n").map((line, index) => <span className="code-line" key={`${index}:${line.slice(0, 20)}`}><i>{index + 1}</i><code>{line || " "}</code></span>)}</pre>;
+function languageForFile(filePath: string) {
+  const name = filePath.split("/").at(-1)?.toLowerCase() || "";
+  if (name === "dockerfile" || name === "makefile") return "bash";
+  const extension = name.includes(".") ? name.split(".").at(-1) : "";
+  return ({
+    bash: "bash", c: "c", cc: "cpp", cjs: "javascript", cpp: "cpp", css: "css", go: "go",
+    h: "c", hpp: "cpp", htm: "markup", html: "markup", java: "java", js: "javascript",
+    json: "json", jsonl: "json", jsx: "jsx", latex: "latex", md: "markdown", mdx: "markdown",
+    mjs: "javascript", py: "python", rs: "rust", sh: "bash", sql: "sql", tex: "latex",
+    toml: "yaml", ts: "typescript", tsx: "tsx", xml: "markup", yaml: "yaml", yml: "yaml", zsh: "bash",
+  } as Record<string, string>)[extension || ""];
+}
+
+function CodePreview({ content, filePath }: { content: string; filePath: string }) {
+  return <div className="code-preview">
+    <SyntaxHighlighter
+      language={languageForFile(filePath)}
+      style={vsCodeLight}
+      showLineNumbers
+      wrapLines
+      wrapLongLines={false}
+      lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", color: "#aaa9a3", textAlign: "right", userSelect: "none" }}
+      lineProps={{ className: "syntax-line" }}
+      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", background: "#fbfbfa", fontSize: "11px", lineHeight: 1.65, tabSize: 2 }}
+      codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
+    >{content || " "}</SyntaxHighlighter>
+  </div>;
 }
 
 function formatFileSize(size: number) {
@@ -1029,15 +1126,18 @@ function formatFileSize(size: number) {
   return `${(size / 1_048_576).toFixed(1)} MB`;
 }
 
-function ArtifactsView({ workspace, tree, selectedPath, file, loading, error, loadingDirectories, onOpenFile, onLoadDirectory, onRefresh, onNewArtifact }: {
+function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewArtifact }: {
   workspace: string;
   tree: WorkspaceFileTree;
+  openFiles: WorkspaceFilePreview[];
   selectedPath: string | null;
   file: WorkspaceFilePreview | null;
   loading: boolean;
   error: string;
   loadingDirectories: Set<string>;
   onOpenFile: (filePath: string) => void;
+  onSelectOpenFile: (file: WorkspaceFilePreview) => void;
+  onCloseFile: (filePath: string) => void;
   onLoadDirectory: (directory: string) => void;
   onRefresh: () => void;
   onNewArtifact: () => void;
@@ -1070,7 +1170,17 @@ function ArtifactsView({ workspace, tree, selectedPath, file, loading, error, lo
         {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
         {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
       </aside>
-      <FilePreview file={file} loading={loading} error={error} />
+      <div className="artifact-editor-pane">
+        <div className="artifact-tabs" role="tablist" aria-label="Open files">
+          {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
+            <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
+              {workspaceFileIcon({ type: "file", kind: openFile.kind })}<span>{openFile.name}</span>
+            </button>
+            <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
+          </div>)}
+        </div>
+        <FilePreview file={file} loading={loading} error={error} />
+      </div>
     </div>
   </div>;
 }
