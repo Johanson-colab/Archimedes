@@ -149,7 +149,7 @@ const previewSkillCollections: SkillCollection[] = [
   { id: "academic-research-skills", name: "Academic Research", description: "Deep research, academic pipelines, paper drafting, and rigorous review workflows.", skillCount: 1 },
   { id: "nature-skills", name: "Nature Research Toolkit", description: "Literature reading, figures, citations, statistics, proposals, and publication workflows.", skillCount: 2 },
   { id: "paper-craft-skills", name: "Paper Craft", description: "Turn papers into polished analysis pages, visual stories, and presentation decks.", skillCount: 1 },
-  { id: "scientific-agent-skills", name: "Scientific Agents", description: "Reusable capabilities for autonomous scientific agents and experiment workflows.", skillCount: 0 },
+  { id: "ARIS", name: "ARIS", description: "End-to-end research automation for literature, ideas, experiments, review, and scientific writing.", skillCount: 2 },
 ];
 const previewSkills: SkillDetail[] = [
   { id: "AI-Research-SKILLs/21-research-ideation/idea-spark", collectionId: "AI-Research-SKILLs", collectionName: "AI Research Skills", name: "idea-spark", description: "Turn observations into testable research hypotheses.", category: "Research Ideation", path: "/preview/Skills/AI-Research-SKILLs/idea-spark", content: "---\nname: idea-spark\n---\n# Idea Spark\n\nDevelop concrete, falsifiable research ideas from evidence and open questions.\n\n## Workflow\n\n1. Identify the unresolved tension.\n2. Form a falsifiable hypothesis.\n3. Design the fastest useful test." },
@@ -159,6 +159,8 @@ const previewSkills: SkillDetail[] = [
   { id: "nature-skills/skills/nature-reader", collectionId: "nature-skills", collectionName: "Nature Research Toolkit", name: "nature-reader", description: "Build source-grounded, figure-aware full-paper readers.", category: "General", path: "/preview/Skills/nature-skills/nature-reader", content: "# Nature Reader\n\nRead complete papers with source anchors, figures, tables, and equations." },
   { id: "nature-skills/skills/nature-figure", collectionId: "nature-skills", collectionName: "Nature Research Toolkit", name: "nature-figure", description: "Produce publication-ready scientific figures.", category: "General", path: "/preview/Skills/nature-skills/nature-figure", content: "# Nature Figure\n\nDesign clear scientific figures and visual narratives." },
   { id: "paper-craft-skills/skills/paper-analyzer", collectionId: "paper-craft-skills", collectionName: "Paper Craft", name: "paper-analyzer", description: "Turn a paper into a deep, shareable analysis page.", category: "General", path: "/preview/Skills/paper-craft-skills/paper-analyzer", content: "# Paper Analyzer\n\nCreate an illustrated, code-aware explanation of an academic paper." },
+  { id: "ARIS/research-lit", collectionId: "ARIS", collectionName: "ARIS", name: "research-lit", description: "Search and synthesize research literature with source verification.", category: "Literature & Evidence", path: "/preview/.agents/skills/research-lit", content: "# Research Literature\n\nSearch, verify, and synthesize literature for a focused research question." },
+  { id: "ARIS/experiment-plan", collectionId: "ARIS", collectionName: "ARIS", name: "experiment-plan", description: "Turn a hypothesis into a decision-complete experiment plan.", category: "Experiments & Compute", path: "/preview/.agents/skills/experiment-plan", content: "# Experiment Plan\n\nDesign baselines, metrics, ablations, and execution checkpoints." },
 ];
 
 function previewSnapshot(): WorkspaceSnapshot {

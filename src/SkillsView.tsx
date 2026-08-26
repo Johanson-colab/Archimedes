@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
-  Bot,
   BrainCircuit,
   Check,
   ChevronRight,
@@ -14,6 +13,7 @@ import {
   Plus,
   Presentation,
   Search,
+  Workflow,
 } from "lucide-react";
 
 const collectionAppearance: Record<string, { icon: React.ReactNode; tone: string }> = {
@@ -22,7 +22,7 @@ const collectionAppearance: Record<string, { icon: React.ReactNode; tone: string
   "academic-research-skills": { icon: <LibraryBig size={22} />, tone: "blue" },
   "nature-skills": { icon: <Microscope size={22} />, tone: "teal" },
   "paper-craft-skills": { icon: <Presentation size={22} />, tone: "coral" },
-  "scientific-agent-skills": { icon: <Bot size={22} />, tone: "graphite" },
+  ARIS: { icon: <Workflow size={22} />, tone: "graphite" },
 };
 
 function collectionIcon(collectionId: string, size = 22) {

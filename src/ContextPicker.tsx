@@ -36,7 +36,7 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
   useEffect(() => {
     if (!open) return;
     const close = (event: MouseEvent) => {
-      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
+      if (pickerRef.current && !event.composedPath().includes(pickerRef.current)) setOpen(false);
     };
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
@@ -96,7 +96,18 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
     setError("");
     setQuery("");
     try {
-      setResources(await bridge.listContextResources(kind, workspace));
+      if (kind === "skill") {
+        const skills = await bridge.listSkills(workspace);
+        setResources(skills.map((skill) => ({
+          id: `skill:${skill.path}`,
+          type: "skill" as const,
+          name: skill.name,
+          path: skill.path,
+          detail: `${skill.collectionName} · ${skill.category}`,
+        })));
+      } else {
+        setResources(await bridge.listContextResources(kind, workspace));
+      }
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -184,7 +195,7 @@ export function ContextChips({ items, onRemove }: { items: ContextAttachment[]; 
 }
 
 function PickerAction({ icon, label, detail, onClick }: { icon: React.ReactNode; label: string; detail: string; onClick: () => void }) {
-  return <button className="context-picker-action" role="menuitem" onClick={onClick}><span className="context-source-icon">{icon}</span><span><strong>{label}</strong><small>{detail}</small></span></button>;
+  return <button type="button" className="context-picker-action" role="menuitem" onClick={(event) => { event.stopPropagation(); onClick(); }}><span className="context-source-icon">{icon}</span><span><strong>{label}</strong><small>{detail}</small></span></button>;
 }
 
 function ContextTypeIcon({ type }: { type: ContextAttachmentType }) {

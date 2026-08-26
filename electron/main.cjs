@@ -255,17 +255,17 @@ function installedSkills(workspace) {
   for (const root of roots) {
     if (!fs.existsSync(root)) continue;
     for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name.startsWith(".")) continue;
       const skillPath = path.join(root, entry.name);
       if (!fs.existsSync(path.join(skillPath, "SKILL.md"))) continue;
-      const key = path.resolve(skillPath);
+      const key = fs.realpathSync(skillPath);
       if (seen.has(key)) continue;
       seen.add(key);
       results.push(contextItem("skill", skillPath, path.relative(workspace, skillPath).startsWith("..") ? "Installed skill" : "Workspace skill"));
     }
   }
   for (const skill of skillCatalog.listSkills(workspace)) {
-    const key = path.resolve(skill.path);
+    const key = fs.realpathSync(skill.path);
     if (seen.has(key)) continue;
     seen.add(key);
     results.push(contextItem("skill", skill.path, `${skill.collectionName} · ${skill.category}`));
@@ -369,7 +369,9 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("skills:list", (_event, input = {}) => {
-    return skillCatalog.listSkills(resolveWorkspace(input.workspace), input.collectionId);
+    const skills = skillCatalog.listSkills(resolveWorkspace(input.workspace), input.collectionId);
+    for (const skill of skills) allowedContextPaths.add(path.resolve(skill.path));
+    return skills;
   });
 
   ipcMain.handle("skills:read", (_event, input = {}) => {

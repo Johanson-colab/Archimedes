@@ -26,9 +26,9 @@ const COLLECTION_METADATA = {
     name: "Paper Craft",
     description: "Turn papers into polished analysis pages, visual stories, and presentation decks.",
   },
-  "scientific-agent-skills": {
-    name: "Scientific Agents",
-    description: "Reusable capabilities for autonomous scientific agents and experiment workflows.",
+  ARIS: {
+    name: "ARIS",
+    description: "End-to-end research automation for literature, ideas, experiments, review, and scientific writing.",
   },
 };
 
@@ -91,6 +91,52 @@ function displayCategory(relativeDirectory) {
   return value.replace(/^\d+[-_]?/, "").replaceAll(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function arisCategory(name) {
+  const value = name.toLowerCase();
+  if (/patent|invention|jurisdiction|prior-art/.test(value)) return "Patents & Invention";
+  if (/review|audit|proof|citation|claim|novelty|scoop|kill-argument/.test(value)) return "Review & Verification";
+  if (/arxiv|openalex|semantic|literature|research-lit|deepxiv|exa-search|gemini-search|wiki/.test(value)) return "Literature & Evidence";
+  if (/experiment|ablation|training|result|monitor|dse|vast|serverless|analyze/.test(value)) return "Experiments & Compute";
+  if (/paper|writing|rebuttal|figure|slides|poster|talk|overleaf|grant/.test(value)) return "Writing & Communication";
+  if (/idea|research-refine|meta-|research-pipeline|research-review/.test(value)) return "Research Development";
+  return "Research Operations";
+}
+
+function arisSkillsRoot(workspace) {
+  if (!workspace) return null;
+  const root = path.join(path.resolve(workspace), ".agents", "skills");
+  return fs.existsSync(root) && fs.statSync(root).isDirectory() ? root : null;
+}
+
+function listArisSkills(workspace) {
+  const root = arisSkillsRoot(workspace);
+  if (!root) return [];
+  return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name.startsWith(".") || (!entry.isDirectory() && !entry.isSymbolicLink())) return [];
+    const skillPath = path.join(root, entry.name);
+    let manifest;
+    try {
+      const resolved = fs.realpathSync(skillPath);
+      if (!fs.statSync(resolved).isDirectory()) return [];
+      manifest = path.join(resolved, "SKILL.md");
+      if (!fs.existsSync(manifest) || !fs.statSync(manifest).isFile() || fs.statSync(manifest).size > MAX_SKILL_BYTES) return [];
+    } catch {
+      return [];
+    }
+    const content = fs.readFileSync(manifest, "utf8");
+    const parsed = parseSkillDocument(content, entry.name);
+    return [{
+      id: `ARIS/${entry.name}`,
+      collectionId: "ARIS",
+      collectionName: COLLECTION_METADATA.ARIS.name,
+      name: parsed.name,
+      description: parsed.description,
+      category: arisCategory(parsed.name),
+      path: skillPath,
+    }];
+  }).sort((left, right) => left.category.localeCompare(right.category) || left.name.localeCompare(right.name));
+}
+
 function walkSkills(collectionPath) {
   const results = [];
   function visit(directory, depth = 0) {
@@ -134,12 +180,14 @@ function listSkillCollections(workspace, preferredRoot) {
   const discovered = fs.readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
     .map((entry) => entry.name);
-  const collectionIds = [...new Set([...Object.keys(COLLECTION_METADATA), ...discovered])];
+  const collectionIds = [...new Set([...Object.keys(COLLECTION_METADATA), ...discovered.filter((id) => id !== "scientific-agent-skills")])];
   return collectionIds
     .map((collectionId) => {
       const metadata = COLLECTION_METADATA[collectionId] || { name: collectionId, description: "Local research skills collection." };
       const collectionPath = path.join(root, collectionId);
-      const skillCount = fs.existsSync(collectionPath) && fs.statSync(collectionPath).isDirectory() ? walkSkills(collectionPath).length : 0;
+      const skillCount = collectionId === "ARIS"
+        ? listArisSkills(workspace).length
+        : fs.existsSync(collectionPath) && fs.statSync(collectionPath).isDirectory() ? walkSkills(collectionPath).length : 0;
       return { id: collectionId, ...metadata, skillCount };
     })
     .sort((left, right) => Object.keys(COLLECTION_METADATA).indexOf(left.id) - Object.keys(COLLECTION_METADATA).indexOf(right.id));
@@ -153,6 +201,7 @@ function listSkills(workspace, collectionId = "", preferredRoot) {
     : listSkillCollections(workspace, preferredRoot).map((collection) => collection.id);
   return collectionIds.flatMap((id) => {
     if (!id || id.includes("/")) return [];
+    if (id === "ARIS") return listArisSkills(workspace);
     const collectionPath = pathInside(root, id);
     if (!fs.existsSync(collectionPath) || !fs.statSync(collectionPath).isDirectory()) return [];
     return walkSkills(collectionPath).flatMap((directory) => {
@@ -162,6 +211,15 @@ function listSkills(workspace, collectionId = "", preferredRoot) {
 }
 
 function readSkill(workspace, skillId, preferredRoot) {
+  const normalizedId = normalizeRelative(skillId);
+  if (normalizedId.startsWith("ARIS/")) {
+    const parts = normalizedId.split("/");
+    if (parts.length !== 2 || !parts[1]) throw new Error("The requested ARIS skill is invalid.");
+    const skill = listArisSkills(workspace).find((candidate) => candidate.id === normalizedId);
+    if (!skill) throw new Error("The requested ARIS skill was not found.");
+    const manifest = path.join(skill.path, "SKILL.md");
+    return { ...skill, content: fs.readFileSync(manifest, "utf8") };
+  }
   const root = resolveSkillsRoot(workspace, preferredRoot);
   const skillDirectory = pathInside(root, skillId);
   const manifest = path.join(skillDirectory, "SKILL.md");
@@ -174,4 +232,4 @@ function readSkill(workspace, skillId, preferredRoot) {
   return { ...summary, content: fs.readFileSync(manifest, "utf8") };
 }
 
-module.exports = { listSkillCollections, listSkills, parseSkillDocument, readSkill, resolveSkillsRoot };
+module.exports = { listArisSkills, listSkillCollections, listSkills, parseSkillDocument, readSkill, resolveSkillsRoot };
