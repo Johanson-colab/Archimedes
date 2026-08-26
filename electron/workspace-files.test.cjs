@@ -6,6 +6,7 @@ const test = require("node:test");
 const {
   compareWorkspaceSnapshots,
   fileChangeForContent,
+  listWorkspaceDirectory,
   listWorkspaceTree,
   readWorkspaceFile,
   snapshotWorkspace,
@@ -22,11 +23,12 @@ function fixture() {
   return root;
 }
 
-test("lists a bounded workspace tree and ignores dependency folders", () => {
+test("lists complete directories lazily and ignores dependency folders", () => {
   const root = fixture();
   const tree = listWorkspaceTree(root);
   assert.equal(tree.entries[0].name, "src");
-  assert.equal(tree.entries[0].children[0].path, "src/index.js");
+  assert.equal(tree.entries[0].children, undefined);
+  assert.equal(listWorkspaceDirectory(root, "src").entries[0].path, "src/index.js");
   assert.equal(tree.entries.some((entry) => entry.name === "node_modules"), false);
   fs.rmSync(root, { recursive: true, force: true });
 });

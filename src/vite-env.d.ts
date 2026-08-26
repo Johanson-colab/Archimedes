@@ -6,7 +6,7 @@ interface ResearchDeskBridge {
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
-    listWorkspaceFiles: (workspace: string) => Promise<WorkspaceFileTree>;
+    listWorkspaceFiles: (workspace: string, directory?: string) => Promise<WorkspaceFileTree>;
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
     writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
@@ -59,6 +59,7 @@ interface WorkspaceFileEntry {
 }
 
 interface WorkspaceFileTree {
+  directory?: string;
   entries: WorkspaceFileEntry[];
   count: number;
   truncated: boolean;

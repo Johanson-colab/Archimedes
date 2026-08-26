@@ -12,7 +12,7 @@ const TEXT_EXTENSIONS = new Set([
   ".yaml", ".yml",
 ]);
 const IMAGE_EXTENSIONS = new Set([".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"]);
-const MAX_TREE_ENTRIES = 5_000;
+const MAX_SNAPSHOT_ENTRIES = 5_000;
 const MAX_TEXT_BYTES = 2_000_000;
 const MAX_SNAPSHOT_TEXT_BYTES = 1_000_000;
 
@@ -78,54 +78,39 @@ function fileChangeForContent(root, relative, nextContent) {
   return { path: normalized, status: "modified", ...lineStats(previous, nextContent) };
 }
 
-function listWorkspaceTree(root, options = {}) {
-  const maxDepth = Math.max(1, Math.min(20, Number(options.maxDepth) || 12));
-  let count = 0;
-  let truncated = false;
-
-  function visit(directory, depth) {
-    if (depth > maxDepth || count >= MAX_TREE_ENTRIES) {
-      truncated = true;
-      return [];
-    }
-    let entries;
-    try {
-      entries = fs.readdirSync(directory, { withFileTypes: true });
-    } catch {
-      return [];
-    }
-    return entries
-      .filter((entry) => !IGNORED_NAMES.has(entry.name) && !entry.isSymbolicLink())
-      .sort((left, right) => {
-        if (left.isDirectory() !== right.isDirectory()) return left.isDirectory() ? -1 : 1;
-        return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" });
-      })
-      .flatMap((entry) => {
-        if (count >= MAX_TREE_ENTRIES) {
-          truncated = true;
-          return [];
-        }
-        count += 1;
-        const target = path.join(directory, entry.name);
-        const relative = relativePath(root, target);
-        if (entry.isDirectory()) {
-          return [{ name: entry.name, path: relative, type: "directory", children: visit(target, depth + 1) }];
-        }
-        if (!entry.isFile()) return [];
+function listWorkspaceDirectory(root, relative = "") {
+  const directory = workspacePath(root, relative);
+  if (!fs.statSync(directory).isDirectory()) throw new Error("The requested path is not a directory.");
+  const entries = fs.readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => !IGNORED_NAMES.has(entry.name) && !entry.isSymbolicLink())
+    .sort((left, right) => {
+      if (left.isDirectory() !== right.isDirectory()) return left.isDirectory() ? -1 : 1;
+      return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" });
+    })
+    .flatMap((entry) => {
+      const target = path.join(directory, entry.name);
+      const entryPath = relativePath(root, target);
+      if (entry.isDirectory()) return [{ name: entry.name, path: entryPath, type: "directory" }];
+      if (!entry.isFile()) return [];
+      try {
         const stats = fs.statSync(target);
         return [{
           name: entry.name,
-          path: relative,
+          path: entryPath,
           type: "file",
           kind: fileKind(target),
           size: stats.size,
           modifiedAt: stats.mtime.toISOString(),
         }];
-      });
-  }
+      } catch {
+        return [];
+      }
+    });
+  return { directory: normalizeRelative(relative), entries, count: entries.length, truncated: false };
+}
 
-  const workspace = workspacePath(root);
-  return { entries: visit(workspace, 0), count, truncated };
+function listWorkspaceTree(root) {
+  return listWorkspaceDirectory(root);
 }
 
 function readWorkspaceFile(root, relative) {
@@ -170,7 +155,7 @@ function snapshotWorkspace(root) {
       return;
     }
     for (const entry of entries) {
-      if (files.size >= MAX_TREE_ENTRIES || IGNORED_NAMES.has(entry.name) || entry.isSymbolicLink()) continue;
+      if (files.size >= MAX_SNAPSHOT_ENTRIES || IGNORED_NAMES.has(entry.name) || entry.isSymbolicLink()) continue;
       const target = path.join(directory, entry.name);
       if (entry.isDirectory()) {
         visit(target);
@@ -220,6 +205,7 @@ module.exports = {
   compareWorkspaceSnapshots,
   fileChangeForContent,
   fileKind,
+  listWorkspaceDirectory,
   listWorkspaceTree,
   readWorkspaceFile,
   snapshotWorkspace,

@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   chooseContextPaths: (kind, workspace) => ipcRenderer.invoke("context:choose-paths", { kind, workspace }),
   listContextResources: (kind, workspace) => ipcRenderer.invoke("context:list-resources", { kind, workspace }),
   openWorkspace: (workspacePath) => ipcRenderer.invoke("workspace:open", workspacePath),
-  listWorkspaceFiles: (workspace) => ipcRenderer.invoke("workspace:list-files", { workspace }),
+  listWorkspaceFiles: (workspace, directory = "") => ipcRenderer.invoke("workspace:list-files", { workspace, directory }),
   readWorkspaceFile: (workspace, filePath) => ipcRenderer.invoke("workspace:read-file", { workspace, path: filePath }),
   writeWorkspaceFile: (workspace, filePath, content) => ipcRenderer.invoke("workspace:write-file", { workspace, path: filePath, content }),
   getResearchThread: (threadId, workspace) => ipcRenderer.invoke("research-thread:get", { threadId, workspace }),

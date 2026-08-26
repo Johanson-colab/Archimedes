@@ -366,7 +366,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("workspace:list-files", (_event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
-    return workspaceFiles.listWorkspaceTree(workspace);
+    return workspaceFiles.listWorkspaceDirectory(workspace, input.directory);
   });
 
   ipcMain.handle("workspace:read-file", (event, input = {}) => {

@@ -87,6 +87,15 @@ function upsertChangeSet(current: WorkspaceChangeSet[], incoming: WorkspaceChang
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
+function setDirectoryChildren(entries: WorkspaceFileEntry[], directory: string, children: WorkspaceFileEntry[]): WorkspaceFileEntry[] {
+  return entries.map((entry) => {
+    if (entry.type !== "directory") return entry;
+    if (entry.path === directory) return { ...entry, children };
+    if (!entry.children) return entry;
+    return { ...entry, children: setDirectoryChildren(entry.children, directory, children) };
+  });
+}
+
 const DEFAULT_WORKSPACE = import.meta.env.VITE_DEFAULT_WORKSPACE ?? "";
 const previewListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
 const previewPtyListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
@@ -129,14 +138,15 @@ const previewBridge = {
     previewWorkspace = workspacePath || previewWorkspace;
     return previewSnapshot();
   },
-  listWorkspaceFiles: async () => ({
-    count: 4,
-    truncated: false,
-    entries: [
-      { name: "notes", path: "notes", type: "directory" as const, children: [{ name: "research-brief.md", path: "notes/research-brief.md", type: "file" as const, kind: "markdown" as const, size: 92, modifiedAt: new Date().toISOString() }] },
-      { name: "src", path: "src", type: "directory" as const, children: [{ name: "experiment.py", path: "src/experiment.py", type: "file" as const, kind: "text" as const, size: 54, modifiedAt: new Date().toISOString() }] },
-    ],
-  }),
+  listWorkspaceFiles: async (_workspace: string, directory = "") => {
+    const now = new Date().toISOString();
+    const entries = directory === "notes"
+      ? [{ name: "research-brief.md", path: "notes/research-brief.md", type: "file" as const, kind: "markdown" as const, size: 92, modifiedAt: now }]
+      : directory === "src"
+        ? [{ name: "experiment.py", path: "src/experiment.py", type: "file" as const, kind: "text" as const, size: 54, modifiedAt: now }]
+        : [{ name: "notes", path: "notes", type: "directory" as const }, { name: "src", path: "src", type: "directory" as const }];
+    return { directory, count: entries.length, truncated: false, entries };
+  },
   readWorkspaceFile: async (_workspace: string, filePath: string) => ({
     name: filePath.split("/").at(-1) || filePath,
     path: filePath,
@@ -347,6 +357,7 @@ function App() {
   const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
   const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
   const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
+  const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<WorkspaceFilePreview | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
@@ -461,6 +472,7 @@ function App() {
     setArchivedThreads(snapshot.archivedThreads ?? []);
     const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace);
     setFileTree(nextTree);
+    setLoadingDirectories(new Set());
     setSelectedFilePath(null);
     setSelectedFile(null);
     setFileError("");
@@ -497,6 +509,23 @@ function App() {
         setSelectedFile(null);
         setSelectedFilePath(null);
       }
+    }
+  }
+
+  async function loadWorkspaceDirectory(directory: string) {
+    if (!workspace || !directory) return;
+    setLoadingDirectories((current) => new Set(current).add(directory));
+    try {
+      const listing = await desktopBridge.listWorkspaceFiles(workspace, directory);
+      setFileTree((current) => ({ ...current, entries: setDirectoryChildren(current.entries, directory, listing.entries) }));
+    } catch {
+      setFileTree((current) => ({ ...current, entries: setDirectoryChildren(current.entries, directory, []) }));
+    } finally {
+      setLoadingDirectories((current) => {
+        const next = new Set(current);
+        next.delete(directory);
+        return next;
+      });
     }
   }
 
@@ -707,7 +736,7 @@ function App() {
             <CalendarDays size={16} /><span>Daily papers</span>
           </button>
           <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
-            <Folder size={16} /><span>Artifacts</span><span className="nav-count">{fileTree.count}</span>
+            <Folder size={16} /><span>Artifacts</span>
           </button>
         </section>
 
@@ -772,7 +801,7 @@ function App() {
           )}
           {(mainSection === "library" || mainSection === "daily") && <LibraryView bridge={desktopBridge} mode={mainSection} />}
           {mainSection === "artifacts" && (
-            <ArtifactsView workspace={workspace} tree={fileTree} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} onOpenFile={(filePath) => void openArtifact(filePath)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
+            <ArtifactsView workspace={workspace} tree={fileTree} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
           )}
         </div>
 
@@ -939,23 +968,29 @@ function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind">) {
   return <File size={14} />;
 }
 
-function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, onToggle, onOpenFile }: {
+function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirectories, onToggle, onLoadDirectory, onOpenFile }: {
   entry: WorkspaceFileEntry;
   depth: number;
   expanded: Set<string>;
   selectedPath: string | null;
+  loadingDirectories: Set<string>;
   onToggle: (filePath: string) => void;
+  onLoadDirectory: (filePath: string) => void;
   onOpenFile: (filePath: string) => void;
 }) {
   const isDirectory = entry.type === "directory";
   const isExpanded = isDirectory && expanded.has(entry.path);
+  const isLoading = loadingDirectories.has(entry.path);
+  useEffect(() => {
+    if (isExpanded && entry.children === undefined && !isLoading) onLoadDirectory(entry.path);
+  }, [entry.children, entry.path, isExpanded, isLoading, onLoadDirectory]);
   return <div className="workspace-tree-node">
     <button className={entry.path === selectedPath ? "workspace-tree-row active" : "workspace-tree-row"} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
-      <span className="tree-disclosure">{isDirectory ? isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}</span>
+      <span className="tree-disclosure">{isLoading ? <RefreshCw className="spin" size={11} /> : isDirectory ? isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}</span>
       <span className="tree-file-icon">{workspaceFileIcon(entry)}</span>
       <strong>{entry.name}</strong>
     </button>
-    {isExpanded && entry.children?.map((child) => <WorkspaceTreeNode key={child.path} entry={child} depth={depth + 1} expanded={expanded} selectedPath={selectedPath} onToggle={onToggle} onOpenFile={onOpenFile} />)}
+    {isExpanded && entry.children?.map((child) => <WorkspaceTreeNode key={child.path} entry={child} depth={depth + 1} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={onToggle} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
   </div>;
 }
 
@@ -994,14 +1029,16 @@ function formatFileSize(size: number) {
   return `${(size / 1_048_576).toFixed(1)} MB`;
 }
 
-function ArtifactsView({ workspace, tree, selectedPath, file, loading, error, onOpenFile, onRefresh, onNewArtifact }: {
+function ArtifactsView({ workspace, tree, selectedPath, file, loading, error, loadingDirectories, onOpenFile, onLoadDirectory, onRefresh, onNewArtifact }: {
   workspace: string;
   tree: WorkspaceFileTree;
   selectedPath: string | null;
   file: WorkspaceFilePreview | null;
   loading: boolean;
   error: string;
+  loadingDirectories: Set<string>;
   onOpenFile: (filePath: string) => void;
+  onLoadDirectory: (directory: string) => void;
   onRefresh: () => void;
   onNewArtifact: () => void;
 }) {
@@ -1029,10 +1066,9 @@ function ArtifactsView({ workspace, tree, selectedPath, file, loading, error, on
     </header>
     <div className="artifacts-workspace">
       <aside className="artifact-browser">
-        <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong><span>{tree.count}</span></div>
-        {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} onToggle={toggleDirectory} onOpenFile={onOpenFile} />)}
+        <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong></div>
+        {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
         {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
-        {tree.truncated && <p className="artifact-browser-empty">Large workspace: showing the first 5,000 entries.</p>}
       </aside>
       <FilePreview file={file} loading={loading} error={error} />
     </div>
