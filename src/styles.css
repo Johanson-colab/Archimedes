@@ -396,6 +396,27 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .conversation-message.user .conversation-message-role { display: none; }
 .conversation-message p { margin: 0; color: #343430; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .conversation-message.user p { color: #30302d; }
+.message-markdown { min-width: 0; color: #343430; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.message-markdown > :first-child { margin-top: 0; }
+.message-markdown > :last-child { margin-bottom: 0; }
+.conversation-message .message-markdown p { margin: .7em 0; white-space: normal; }
+.message-markdown h1, .message-markdown h2, .message-markdown h3, .message-markdown h4 { margin: 1.35em 0 .55em; color: #292926; line-height: 1.35; }
+.message-markdown h1 { font-size: 20px; }.message-markdown h2 { font-size: 17px; }.message-markdown h3 { font-size: 14px; }.message-markdown h4 { font-size: 13px; }
+.message-markdown ul, .message-markdown ol { margin: .7em 0; padding-left: 1.65em; }
+.message-markdown li { margin: .28em 0; padding-left: .15em; }
+.message-markdown li > p { margin: .25em 0; }
+.message-markdown blockquote { margin: 1em 0; padding: 2px 0 2px 13px; color: #666660; border-left: 3px solid #b8c8c0; }
+.message-markdown code { font-family: "SFMono-Regular", Consolas, monospace; font-size: .9em; }
+.message-markdown :not(pre) > code { padding: 2px 5px; color: #3b4841; background: #eeeeea; border-radius: 4px; }
+.message-markdown pre { margin: 1em 0; overflow: auto; background: #f4f4f1; border: 1px solid #e0e0db; border-radius: 7px; }
+.message-markdown pre > code { display: block; min-width: max-content; padding: 13px 15px; white-space: pre; }
+.message-markdown pre > div { overflow: auto; }
+.message-markdown a { color: #226c55; text-decoration: underline; text-decoration-color: #a8c5ba; text-underline-offset: 2px; }
+.message-markdown a:hover { color: #174c3c; text-decoration-color: currentColor; }
+.message-markdown table { display: block; width: 100%; margin: 1em 0; overflow-x: auto; border-collapse: collapse; }
+.message-markdown th, .message-markdown td { padding: 7px 9px; border: 1px solid #ddddD8; text-align: left; }
+.message-markdown th { background: #f2f2ef; font-weight: 700; }
+.message-markdown hr { height: 1px; margin: 1.4em 0; background: #dfdfda; border: 0; }
 
 .conversation-running { display: flex; align-items: flex-start; gap: 13px; margin: 0 0 28px; color: #484844; }
 .conversation-running > div:last-child { display: grid; gap: 3px; }

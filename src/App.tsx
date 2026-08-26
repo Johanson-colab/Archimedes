@@ -980,7 +980,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
             {message.role === "assistant" && <span className="assistant-mark"><Sparkles size={15} /></span>}
             <div className="conversation-message-copy">
               <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
-              <p>{message.text}</p>
+              {message.role === "assistant" ? <MarkdownMessage content={message.text} /> : <p>{message.text}</p>}
               {message.sources && <div className="source-chips">{message.sources.map((source) => <button key={source} onClick={() => onSourceOpen(source)}>{source}</button>)}</div>}
             </div>
           </article>
@@ -1042,6 +1042,28 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
       </div>
       <p className="composer-note">Archimedes can make mistakes. Review sources and workspace changes.</p>
     </div>
+  </div>;
+}
+
+function MarkdownMessage({ content }: { content: string }) {
+  return <div className="message-markdown">
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        a: ({ children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
+        code: ({ className, children, ...props }) => {
+          const language = /language-([\w-]+)/.exec(className || "")?.[1];
+          if (!language) return <code className={className} {...props}>{children}</code>;
+          return <SyntaxHighlighter
+            language={language}
+            style={vsCodeLight}
+            PreTag="div"
+            customStyle={{ margin: 0, padding: "13px 15px", background: "#f4f4f1", fontSize: "11px", lineHeight: 1.65 }}
+            codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
+          >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>;
+        },
+      }}
+    >{content}</ReactMarkdown>
   </div>;
 }
 
