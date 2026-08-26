@@ -417,6 +417,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .message-markdown th, .message-markdown td { padding: 7px 9px; border: 1px solid #ddddD8; text-align: left; }
 .message-markdown th { background: #f2f2ef; font-weight: 700; }
 .message-markdown hr { height: 1px; margin: 1.4em 0; background: #dfdfda; border: 0; }
+.message-markdown .katex-display { max-width: 100%; margin: 1em 0; padding: 3px 0; overflow-x: auto; overflow-y: hidden; }
+.message-markdown .katex { font-size: 1.05em; }
+.message-markdown .katex-display > .katex { min-width: min-content; text-align: center; }
 
 .conversation-running { display: flex; align-items: flex-start; gap: 13px; margin: 0 0 28px; color: #484844; }
 .conversation-running > div:last-child { display: grid; gap: 3px; }

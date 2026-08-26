@@ -24,6 +24,7 @@
     "@xterm/xterm": "^6.0.0",
     "diff": "^9.0.0",
     "fast-xml-parser": "^5.11.0",
+    "katex": "^0.18.4",
     "lucide-react": "latest",
     "node-pty": "^1.1.0",
     "pdfjs-dist": "5.4.624",
@@ -31,7 +32,9 @@
     "react-dom": "latest",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "vite": "latest"
   },
   "devDependencies": {

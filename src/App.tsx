@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
 import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
 import c from "react-syntax-highlighter/dist/esm/languages/prism/c";
@@ -1048,7 +1051,8 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
 function MarkdownMessage({ content }: { content: string }) {
   return <div className="message-markdown">
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
       components={{
         a: ({ children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
         code: ({ className, children, ...props }) => {
@@ -1063,8 +1067,51 @@ function MarkdownMessage({ content }: { content: string }) {
           >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>;
         },
       }}
-    >{content}</ReactMarkdown>
+    >{normalizeMathDelimiters(content)}</ReactMarkdown>
   </div>;
+}
+
+function normalizeMathDelimiters(markdownContent: string) {
+  let activeFence = "";
+  return markdownContent.split("\n").map((line) => {
+    const fence = /^\s*(`{3,}|~{3,})/.exec(line)?.[1] || "";
+    if (fence) {
+      if (!activeFence) activeFence = fence[0];
+      else if (fence[0] === activeFence) activeFence = "";
+      return line;
+    }
+    if (activeFence) return line;
+    return normalizeMathDelimitersInLine(line);
+  }).join("\n");
+}
+
+function normalizeMathDelimitersInLine(line: string) {
+  let result = "";
+  let index = 0;
+  while (index < line.length) {
+    if (line[index] === "`") {
+      const tickCount = /^`+/.exec(line.slice(index))?.[0].length || 1;
+      const closingIndex = line.indexOf("`".repeat(tickCount), index + tickCount);
+      if (closingIndex < 0) return result + line.slice(index);
+      result += line.slice(index, closingIndex + tickCount);
+      index = closingIndex + tickCount;
+      continue;
+    }
+    const delimiter = line.slice(index, index + 2);
+    if (delimiter === "\\[" || delimiter === "\\]") {
+      result += "$$";
+      index += 2;
+      continue;
+    }
+    if (delimiter === "\\(" || delimiter === "\\)") {
+      result += "$";
+      index += 2;
+      continue;
+    }
+    result += line[index];
+    index += 1;
+  }
+  return result;
 }
 
 function WorkspaceChangesCard({ changeSet, onOpenFile }: { changeSet: WorkspaceChangeSet; onOpenFile: (filePath: string) => void }) {
