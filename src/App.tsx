@@ -25,11 +25,13 @@ import LibraryView from "./LibraryView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
 import ProjectSidebar, { NewProjectModal } from "./ProjectSidebar";
+import SkillsView from "./SkillsView";
 import TerminalPanel from "./TerminalPanel";
 import { previewLibraryBridge } from "./library-preview";
 import {
   BookOpen,
   Bot,
+  Blocks,
   CalendarDays,
   Check,
   ChevronDown,
@@ -141,6 +143,23 @@ const previewThreads: ResearchThreadDetail[] = [];
 const previewArchivedThreads: ResearchThreadDetail[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
 const previewActions: AgentAction[] = [];
+const previewSkillCollections: SkillCollection[] = [
+  { id: "AI-Research-SKILLs", name: "AI Research Skills", description: "Model engineering, agents, evaluation, RAG, training, and research ideation.", skillCount: 2 },
+  { id: "Research-Paper-Writing-Skills", name: "Research Paper Writing", description: "Reviewer-facing structure, argument flow, evidence alignment, and paper revision.", skillCount: 1 },
+  { id: "academic-research-skills", name: "Academic Research", description: "Deep research, academic pipelines, paper drafting, and rigorous review workflows.", skillCount: 1 },
+  { id: "nature-skills", name: "Nature Research Toolkit", description: "Literature reading, figures, citations, statistics, proposals, and publication workflows.", skillCount: 2 },
+  { id: "paper-craft-skills", name: "Paper Craft", description: "Turn papers into polished analysis pages, visual stories, and presentation decks.", skillCount: 1 },
+  { id: "scientific-agent-skills", name: "Scientific Agents", description: "Reusable capabilities for autonomous scientific agents and experiment workflows.", skillCount: 0 },
+];
+const previewSkills: SkillDetail[] = [
+  { id: "AI-Research-SKILLs/21-research-ideation/idea-spark", collectionId: "AI-Research-SKILLs", collectionName: "AI Research Skills", name: "idea-spark", description: "Turn observations into testable research hypotheses.", category: "Research Ideation", path: "/preview/Skills/AI-Research-SKILLs/idea-spark", content: "---\nname: idea-spark\n---\n# Idea Spark\n\nDevelop concrete, falsifiable research ideas from evidence and open questions.\n\n## Workflow\n\n1. Identify the unresolved tension.\n2. Form a falsifiable hypothesis.\n3. Design the fastest useful test." },
+  { id: "AI-Research-SKILLs/14-agents/agent-evaluation", collectionId: "AI-Research-SKILLs", collectionName: "AI Research Skills", name: "agent-evaluation", description: "Design reliable capability and failure-mode evaluations for agents.", category: "Agents", path: "/preview/Skills/AI-Research-SKILLs/agent-evaluation", content: "# Agent Evaluation\n\nBuild trajectory-aware evaluations for long-horizon agents." },
+  { id: "Research-Paper-Writing-Skills/research-paper-writing", collectionId: "Research-Paper-Writing-Skills", collectionName: "Research Paper Writing", name: "research-paper-writing", description: "Improve paper structure, paragraph flow, and reviewer-facing presentation.", category: "General", path: "/preview/Skills/Research-Paper-Writing-Skills/research-paper-writing", content: "# Research Paper Writing\n\nCreate clear, evidence-aligned academic manuscripts." },
+  { id: "academic-research-skills/deep-research", collectionId: "academic-research-skills", collectionName: "Academic Research", name: "deep-research", description: "A rigorous workflow for literature search and cross-source synthesis.", category: "General", path: "/preview/Skills/academic-research-skills/deep-research", content: "# Deep Research\n\nPlan, search, verify, synthesize, and review academic evidence." },
+  { id: "nature-skills/skills/nature-reader", collectionId: "nature-skills", collectionName: "Nature Research Toolkit", name: "nature-reader", description: "Build source-grounded, figure-aware full-paper readers.", category: "General", path: "/preview/Skills/nature-skills/nature-reader", content: "# Nature Reader\n\nRead complete papers with source anchors, figures, tables, and equations." },
+  { id: "nature-skills/skills/nature-figure", collectionId: "nature-skills", collectionName: "Nature Research Toolkit", name: "nature-figure", description: "Produce publication-ready scientific figures.", category: "General", path: "/preview/Skills/nature-skills/nature-figure", content: "# Nature Figure\n\nDesign clear scientific figures and visual narratives." },
+  { id: "paper-craft-skills/skills/paper-analyzer", collectionId: "paper-craft-skills", collectionName: "Paper Craft", name: "paper-analyzer", description: "Turn a paper into a deep, shareable analysis page.", category: "General", path: "/preview/Skills/paper-craft-skills/paper-analyzer", content: "# Paper Analyzer\n\nCreate an illustrated, code-aware explanation of an academic paper." },
+];
 
 function previewSnapshot(): WorkspaceSnapshot {
   return {
@@ -163,7 +182,14 @@ const previewBridge = {
   getInitialWorkspace: async () => null,
   chooseWorkspace: async () => DEFAULT_WORKSPACE || "Browser preview workspace",
   chooseContextPaths: async () => { throw new Error("Use the desktop app to choose local files and folders."); },
-  listContextResources: async () => [],
+  listContextResources: async (kind: "plugin" | "skill") => kind === "skill" ? previewSkills.map((skill) => ({ id: `skill:${skill.path}`, type: "skill" as const, name: skill.name, path: skill.path, detail: `${skill.collectionName} · ${skill.category}` })) : [],
+  listSkillCollections: async () => structuredClone(previewSkillCollections),
+  listSkills: async (_workspace: string, collectionId = "") => structuredClone(previewSkills.filter((skill) => !collectionId || skill.collectionId === collectionId).map(({ content: _content, ...skill }) => skill)),
+  readSkill: async (_workspace: string, skillId: string) => {
+    const skill = previewSkills.find((candidate) => candidate.id === skillId);
+    if (!skill) throw new Error("Skill not found.");
+    return structuredClone(skill);
+  },
   openWorkspace: async (workspacePath?: string) => {
     previewWorkspace = workspacePath || previewWorkspace;
     return previewSnapshot();
@@ -364,7 +390,7 @@ const previewBridge = {
 
 const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
 
-type MainSection = "chat" | "library" | "daily" | "artifacts";
+type MainSection = "chat" | "skills" | "library" | "daily" | "artifacts";
 
 function App() {
   const [mainSection, setMainSection] = useState<MainSection>("chat");
@@ -775,7 +801,7 @@ function App() {
   }
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
-  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : "Artifacts";
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : "Artifacts";
 
   return (
     <main className="codex-shell">
@@ -796,6 +822,9 @@ function App() {
           </button>
           <button className="codex-nav-item" onClick={() => setModal("search")} title="Search knowledge">
             <Search size={16} /><span>Search</span>
+          </button>
+          <button className={mainSection === "skills" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("skills")} title="Browse skills">
+            <Blocks size={16} /><span>Skills</span>
           </button>
         </nav>
 
@@ -872,6 +901,7 @@ function App() {
             />
           )}
           {(mainSection === "library" || mainSection === "daily") && <LibraryView bridge={desktopBridge} mode={mainSection} />}
+          {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (
             <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
           )}

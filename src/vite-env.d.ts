@@ -5,6 +5,9 @@ interface ResearchDeskBridge {
     chooseWorkspace: () => Promise<string | null>;
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
+    listSkillCollections: (workspace?: string) => Promise<SkillCollection[]>;
+    listSkills: (workspace?: string, collectionId?: string) => Promise<SkillSummary[]>;
+    readSkill: (workspace: string | undefined, skillId: string) => Promise<SkillDetail>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
     listWorkspaceFiles: (workspace: string, directory?: string) => Promise<WorkspaceFileTree>;
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
@@ -56,6 +59,27 @@ interface WorkspaceFileEntry {
   size?: number;
   modifiedAt?: string;
   children?: WorkspaceFileEntry[];
+}
+
+interface SkillCollection {
+  id: string;
+  name: string;
+  description: string;
+  skillCount: number;
+}
+
+interface SkillSummary {
+  id: string;
+  collectionId: string;
+  collectionName: string;
+  name: string;
+  description: string;
+  category: string;
+  path: string;
+}
+
+interface SkillDetail extends SkillSummary {
+  content: string;
 }
 
 interface WorkspaceFileTree {

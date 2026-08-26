@@ -94,6 +94,7 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
     setView(kind === "plugin" ? "plugins" : "skills");
     setLoading(true);
     setError("");
+    setQuery("");
     try {
       setResources(await bridge.listContextResources(kind, workspace));
     } catch (reason) {
@@ -121,6 +122,11 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
   }
 
   const filteredPapers = papers.filter((paper) => `${paper.title} ${paper.authors.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const resourceTerms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filteredResources = resources.filter((resource) => {
+    const searchable = `${resource.name} ${resource.detail || ""}`.toLowerCase();
+    return resourceTerms.every((term) => searchable.includes(term));
+  });
   const title = view === "libraries" ? "Literature Library" : view === "papers" ? selectedLibrary?.name ?? "Papers" : view === "plugins" ? "Plugins" : view === "skills" ? "Skills" : "Add context";
 
   return <div className="context-picker" ref={pickerRef}>
@@ -157,10 +163,13 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
           </div>
         </>}
 
-        {!loading && (view === "plugins" || view === "skills") && <div className="context-picker-list">
-          {resources.map((resource) => <button key={resource.id} className="context-list-row" onClick={() => onAdd([resource])} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
-          {!resources.length && <div className="context-picker-state">No installed {view} found.</div>}
-        </div>}
+        {!loading && (view === "plugins" || view === "skills") && <>
+          <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${view}`} /></label>
+          <div className="context-picker-list">
+            {filteredResources.map((resource) => <button key={resource.id} className="context-list-row" onClick={() => onAdd([resource])} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
+            {!filteredResources.length && <div className="context-picker-state">No matching {view} found.</div>}
+          </div>
+        </>}
 
         {error && <div className="context-picker-error">{error.replace(/^Error:\s*/, "")}</div>}
       </div>}

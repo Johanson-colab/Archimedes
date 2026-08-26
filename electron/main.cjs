@@ -10,6 +10,7 @@ const agent = require("./agent.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const modelConfig = require("./model-config.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
+const skillCatalog = require("./skill-catalog.cjs");
 const store = require("./store.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 
@@ -263,7 +264,13 @@ function installedSkills(workspace) {
       results.push(contextItem("skill", skillPath, path.relative(workspace, skillPath).startsWith("..") ? "Installed skill" : "Workspace skill"));
     }
   }
-  return results.sort((left, right) => left.name.localeCompare(right.name)).slice(0, 160);
+  for (const skill of skillCatalog.listSkills(workspace)) {
+    const key = path.resolve(skill.path);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push(contextItem("skill", skill.path, `${skill.collectionName} · ${skill.category}`));
+  }
+  return results.sort((left, right) => left.name.localeCompare(right.name)).slice(0, 400);
 }
 
 function installedPlugins() {
@@ -355,6 +362,20 @@ app.whenReady().then(() => {
   ipcMain.handle("context:list-resources", (_event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
     return input.kind === "plugin" ? installedPlugins() : installedSkills(workspace);
+  });
+
+  ipcMain.handle("skills:list-collections", (_event, input = {}) => {
+    return skillCatalog.listSkillCollections(resolveWorkspace(input.workspace));
+  });
+
+  ipcMain.handle("skills:list", (_event, input = {}) => {
+    return skillCatalog.listSkills(resolveWorkspace(input.workspace), input.collectionId);
+  });
+
+  ipcMain.handle("skills:read", (_event, input = {}) => {
+    const skill = skillCatalog.readSkill(resolveWorkspace(input.workspace), input.skillId);
+    allowedContextPaths.add(path.resolve(skill.path));
+    return skill;
   });
 
   ipcMain.handle("workspace:open", (event, requestedWorkspace) => {
