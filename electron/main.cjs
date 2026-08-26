@@ -526,7 +526,7 @@ app.whenReady().then(() => {
     if (!input || typeof input.prompt !== "string" || !input.prompt.trim() || input.prompt.length > 20_000) {
       throw new Error("An Agent task requires a prompt of at most 20000 characters.");
     }
-    const researchModes = new Set(["idea-spark", "experiment-setup", "paper-generation", "paper-review"]);
+    const researchModes = new Set(["free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review"]);
     const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
     const workspace = resolveWorkspace(input.workspace);
     store.openWorkspace(workspace);

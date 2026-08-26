@@ -129,7 +129,7 @@ interface Window {
 }
 
 type ReadingStatus = "unread" | "reading" | "read";
-type ResearchMode = "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
+type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
 type ContextAttachmentType = "file" | "folder" | "paper" | "plugin" | "skill";
 
 interface ContextPaperMetadata {

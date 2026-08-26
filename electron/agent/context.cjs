@@ -4,6 +4,7 @@ const MAX_SUMMARY_CHARS = 20_000;
 const MIN_RECENT_TURNS = 4;
 
 const modeInstructions = {
+  "free-chat": "Operate in Free chat mode. Respond naturally and directly without forcing the conversation into a research workflow. Do not search literature, inspect the workspace, or propose actions unless the user asks or doing so is clearly necessary to answer the request. You may still use attached context and available tools when genuinely useful.",
   "idea-spark": "Operate in Idea spark mode. Explore the literature and workspace for underexamined gaps, tensions, or combinations. Produce a small set of novel, testable ideas with hypotheses, expected contribution, supporting evidence, and the fastest falsification test. Clearly separate evidence from speculation.",
   "experiment-setup": "Operate in Experiment setup mode. Turn the request into an executable experimental plan covering hypotheses, datasets, baselines, controls, metrics, ablations, compute assumptions, reproducibility, and failure criteria. Inspect existing code and configs before proposing changes.",
   "paper-generation": "Operate in Paper writing mode. Build an evidence-grounded argument and publication-ready structure. Track claims to sources, expose missing evidence, preserve citation placeholders, and propose file writes for drafts rather than claiming they were written.",

@@ -44,6 +44,7 @@ import {
   FolderOpen,
   FlaskConical,
   Lightbulb,
+  MessageCircle,
   PanelBottom,
   FilePenLine,
   PenLine,
@@ -85,9 +86,10 @@ type TimelineEvent = {
 
 type PendingAction = AgentAction & { source: "agent" | "manual" };
 type Modal = "artifact" | "evidence" | "search" | "source" | null;
-type ResearchMode = "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
+type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
 
 const researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [
+  { id: "free-chat", label: "Free chat", description: "Talk with AI without a predefined workflow", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },
   { id: "idea-spark", label: "Idea spark", description: "Find gaps and form testable research ideas", icon: <Lightbulb size={15} />, placeholder: "Describe a topic, observation, or open question..." },
   { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
   { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
