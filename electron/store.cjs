@@ -561,11 +561,35 @@ function getResearchThread(id) {
     ...turn,
     assistant_message: presentStoredAssistantMessage(turn.assistant_message),
   }));
+  const changeSets = db.prepare(`
+    SELECT agent_actions.id, agent_actions.task_id, agent_actions.kind, agent_actions.payload_json,
+      agent_actions.status, agent_actions.created_at, agent_actions.resolved_at, research_turns.id AS turn_id
+    FROM agent_actions
+    JOIN research_turns ON research_turns.task_id = agent_actions.task_id
+    WHERE research_turns.thread_id = ? AND agent_actions.status = 'approved'
+    ORDER BY agent_actions.created_at ASC
+  `).all(id).flatMap((row) => {
+    const action = hydrateAction(row);
+    const changes = Array.isArray(action.payload.changes)
+      ? action.payload.changes
+      : action.payload.change ? [action.payload.change] : [];
+    return changes.length ? [{
+      id: action.id,
+      actionId: action.id,
+      taskId: action.task_id,
+      threadId: id,
+      turnId: row.turn_id,
+      kind: action.kind,
+      changes,
+      createdAt: action.created_at,
+    }] : [];
+  });
   return {
     ...thread,
     turn_count: turns.length,
     last_turn_at: turns.at(-1)?.created_at || thread.created_at,
     turns,
+    changeSets,
     messages: turns.flatMap((turn) => {
       const items = [{ id: `${turn.id}:user`, turn_id: turn.id, role: "user", text: turn.user_message, created_at: turn.created_at }];
       if (turn.assistant_message) {
@@ -574,6 +598,15 @@ function getResearchThread(id) {
       return items;
     }),
   };
+}
+
+function getResearchThreadIdForTask(taskId) {
+  const db = requireDatabase();
+  const turn = db.prepare(`
+    SELECT thread_id FROM research_turns
+    WHERE task_id = ? ORDER BY created_at DESC LIMIT 1
+  `).get(taskId);
+  return turn?.thread_id || null;
 }
 
 function getResearchThreadContext(id) {
@@ -688,6 +721,14 @@ function resolveAction(id, status) {
   return getAction(id);
 }
 
+function updateActionPayload(id, patch) {
+  const db = requireDatabase();
+  const action = getAction(id);
+  const payload = { ...action.payload, ...patch };
+  db.prepare("UPDATE agent_actions SET payload_json = ? WHERE id = ?").run(JSON.stringify(payload), id);
+  return getAction(id);
+}
+
 function approveAction(id) {
   const action = getAction(id);
   if (action.status !== "pending") throw new Error("Only pending Agent actions can be approved.");
@@ -739,6 +780,7 @@ module.exports = {
   getDailyFeedCache,
   getAction,
   getResearchThread,
+  getResearchThreadIdForTask,
   getResearchThreadContext,
   getSnapshot,
   archiveResearchProject,
@@ -757,5 +799,6 @@ module.exports = {
   startTask,
   updateLibrary,
   updatePaper,
+  updateActionPayload,
   updateResearchThreadSummary,
 };

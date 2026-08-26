@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import LibraryView from "./LibraryView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
@@ -11,7 +13,10 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
-  Code2,
+  ChevronRight,
+  File,
+  FileCode2,
+  FileImage,
   FileText,
   Folder,
   FolderOpen,
@@ -22,6 +27,7 @@ import {
   PenLine,
   Play,
   Plus,
+  RefreshCw,
   Search,
   SendHorizontal,
   ShieldCheck,
@@ -46,7 +52,6 @@ type TimelineEvent = {
 };
 
 type PendingAction = AgentAction & { source: "agent" | "manual" };
-type Artifact = { name: string; kind: "artifact" | "experiment"; body: string };
 type Modal = "artifact" | "evidence" | "search" | "source" | null;
 type ResearchMode = "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
 
@@ -77,11 +82,18 @@ const initialMessages: Message[] = [
   },
 ];
 
+function upsertChangeSet(current: WorkspaceChangeSet[], incoming: WorkspaceChangeSet) {
+  return [...current.filter((changeSet) => changeSet.id !== incoming.id), incoming]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
 const DEFAULT_WORKSPACE = import.meta.env.VITE_DEFAULT_WORKSPACE ?? "";
 const previewListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
 const previewPtyListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
 const previewPtyExitListeners = new Set<(payload: { sessionId: string; exitCode: number; signal?: number }) => void>();
 const previewAgentListeners = new Set<(payload: AgentEvent) => void>();
+const previewWorkspaceListeners = new Set<(payload: { path: string }) => void>();
+const previewChangeSetListeners = new Set<(payload: WorkspaceChangeSet) => void>();
 const previewPtySessions = new Map<string, { cwd: string; line: string; ready: boolean }>();
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
 const previewTasks: SavedTask[] = [];
@@ -116,6 +128,26 @@ const previewBridge = {
   openWorkspace: async (workspacePath?: string) => {
     previewWorkspace = workspacePath || previewWorkspace;
     return previewSnapshot();
+  },
+  listWorkspaceFiles: async () => ({
+    count: 4,
+    truncated: false,
+    entries: [
+      { name: "notes", path: "notes", type: "directory" as const, children: [{ name: "research-brief.md", path: "notes/research-brief.md", type: "file" as const, kind: "markdown" as const, size: 92, modifiedAt: new Date().toISOString() }] },
+      { name: "src", path: "src", type: "directory" as const, children: [{ name: "experiment.py", path: "src/experiment.py", type: "file" as const, kind: "text" as const, size: 54, modifiedAt: new Date().toISOString() }] },
+    ],
+  }),
+  readWorkspaceFile: async (_workspace: string, filePath: string) => ({
+    name: filePath.split("/").at(-1) || filePath,
+    path: filePath,
+    kind: filePath.endsWith(".md") ? "markdown" as const : "text" as const,
+    size: 92,
+    modifiedAt: new Date().toISOString(),
+    content: filePath.endsWith(".md") ? "# Research brief\n\nBrowser preview of the active workspace." : "def run_experiment():\n    return {\"status\": \"ready\"}\n",
+  }),
+  writeWorkspaceFile: async (_workspace: string, filePath: string, content: string) => {
+    for (const listener of previewWorkspaceListeners) listener({ path: filePath });
+    return { name: filePath.split("/").at(-1) || filePath, path: filePath, kind: filePath.endsWith(".md") ? "markdown" as const : "text" as const, size: content.length, modifiedAt: new Date().toISOString(), content };
   },
   getResearchThread: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
@@ -152,7 +184,7 @@ const previewBridge = {
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
       const resolvedProjectId = projectId || previewProjects[0]?.id || "preview-general";
-      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, title: prompt.slice(0, 72), mode, status: "running", context_summary: "", turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [] };
+      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, title: prompt.slice(0, 72), mode, status: "running", context_summary: "", turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [] };
       previewThreads.unshift(thread);
     }
     const turnId = crypto.randomUUID();
@@ -163,7 +195,11 @@ const previewBridge = {
     if (/(write|draft|note|生成|写入)/i.test(prompt)) {
       const action: AgentAction = {
         id: crypto.randomUUID(), task_id: taskId, kind: "write",
-        payload: { path: "notes/agent-research-brief.md", content: "# Research brief\n\nThis artifact was proposed by the browser preview Agent.\n" },
+        payload: {
+          path: "notes/agent-research-brief.md",
+          content: "# Research brief\n\nThis artifact was proposed by the browser preview Agent.\n",
+          change: { path: "notes/agent-research-brief.md", status: "created", additions: 3, deletions: 0 },
+        },
         status: "pending", created_at: new Date().toISOString(), resolved_at: null,
       };
       previewActions.push(action);
@@ -193,6 +229,12 @@ const previewBridge = {
     if (!action) throw new Error("Agent action not found.");
     action.status = "approved";
     action.resolved_at = new Date().toISOString();
+    if (action.payload.change) {
+      const thread = previewThreads.find((candidate) => candidate.turns.some((turn) => turn.task_id === action.task_id));
+      const changeSet: WorkspaceChangeSet = { id: action.id, actionId: action.id, taskId: action.task_id, threadId: thread?.id, kind: action.kind, changes: [action.payload.change], createdAt: action.created_at };
+      if (thread) thread.changeSets.push(changeSet);
+      for (const listener of previewChangeSetListeners) listener(changeSet);
+    }
     return action;
   },
   rejectAgentAction: async (actionId: string) => {
@@ -270,6 +312,14 @@ const previewBridge = {
   },
   onMenuNewChat: () => () => undefined,
   onMenuOpenFolder: () => () => undefined,
+  onWorkspaceFilesChanged: (callback: (payload: { path: string }) => void) => {
+    previewWorkspaceListeners.add(callback);
+    return () => previewWorkspaceListeners.delete(callback);
+  },
+  onWorkspaceChangeSet: (callback: (payload: WorkspaceChangeSet) => void) => {
+    previewChangeSetListeners.add(callback);
+    return () => previewChangeSetListeners.delete(callback);
+  },
 };
 
 const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
@@ -296,14 +346,12 @@ function App() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
   const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
-  const [artifacts, setArtifacts] = useState<Artifact[]>([
-    { name: "research-brief.md", kind: "artifact", body: "# Research brief\n\nFrame the open research question and link the evidence needed to answer it." },
-    { name: "evidence-map.md", kind: "artifact", body: "# Evidence map\n\nTrack claims, source passages, and unresolved contradictions in the active literature set." },
-    { name: "retrieval-gap.md", kind: "artifact", body: "# Retrieval gap\n\nIdentify where static retrieval budgets hide intermediate reasoning failures." },
-    { name: "budget-ablation.yaml", kind: "experiment", body: "baseline: static-top-k\ntreatment: adaptive-budget\nmetrics: [accuracy, evidence_recall, tokens]" },
-    { name: "metrics.py", kind: "experiment", body: "# Metrics entry point\n# Compute accuracy, evidence recall, token expenditure, and allocation entropy." },
-  ]);
-  const [selectedArtifact, setSelectedArtifact] = useState("evidence-map.md");
+  const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<WorkspaceFilePreview | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+  const [fileError, setFileError] = useState("");
+  const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
@@ -316,6 +364,12 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("retrieval budget reasoning");
   const [selectedSource, setSelectedSource] = useState("");
   const conversationEndRef = useRef<HTMLDivElement>(null);
+  const activeThreadIdRef = useRef<string | null>(null);
+  const threadOpenRequestRef = useRef(0);
+
+  useEffect(() => {
+    activeThreadIdRef.current = activeThreadId;
+  }, [activeThreadId]);
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onTerminalData(({ sessionId, data }) => {
@@ -329,8 +383,15 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
-      if (event.threadId) setRunningThreadId(event.threadId);
+      if (event.threadId) {
+        setRunningThreadId(event.threadId);
+        if (!activeThreadIdRef.current) {
+          activeThreadIdRef.current = event.threadId;
+          setActiveThreadId(event.threadId);
+        }
+      }
       if (event.type === "assistant_delta" && event.turnId && event.delta) {
+        if (event.threadId && activeThreadIdRef.current !== event.threadId) return;
         const streamId = `${event.turnId}:stream`;
         setMessages((current) => {
           const existing = current.find((message) => message.id === streamId);
@@ -340,12 +401,30 @@ function App() {
         });
         return;
       }
-      if (event.type === "approval" && event.action) setPendingAction({ ...event.action, source: "agent" });
+      if (event.type === "approval" && event.action && (!event.threadId || activeThreadIdRef.current === event.threadId)) {
+        setPendingAction({ ...event.action, source: "agent" });
+      }
       const state = event.type === "complete" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "interrupted" ? "waiting" : "active";
       setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    const unsubscribeFiles = desktopBridge.onWorkspaceFilesChanged(() => {
+      if (workspace) void refreshWorkspaceFiles();
+    });
+    const unsubscribeChanges = desktopBridge.onWorkspaceChangeSet((changeSet) => {
+      if (!changeSet.threadId || activeThreadIdRef.current === changeSet.threadId) {
+        setChangeSets((current) => upsertChangeSet(current, changeSet));
+      }
+      if (workspace) void refreshWorkspaceFiles();
+    });
+    return () => {
+      unsubscribeFiles();
+      unsubscribeChanges();
+    };
+  }, [workspace, selectedFilePath]);
 
   useEffect(() => {
     void desktopBridge.getInitialWorkspace().then((initialWorkspace) => loadWorkspace(initialWorkspace ?? DEFAULT_WORKSPACE));
@@ -365,7 +444,7 @@ function App() {
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, agentBusy, pendingAction]);
+  }, [messages, agentBusy, pendingAction, changeSets]);
 
   async function chooseWorkspace() {
     if (agentBusy) return;
@@ -380,6 +459,11 @@ function App() {
     setProjects(snapshot.projects ?? []);
     setThreads(snapshot.threads);
     setArchivedThreads(snapshot.archivedThreads ?? []);
+    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace);
+    setFileTree(nextTree);
+    setSelectedFilePath(null);
+    setSelectedFile(null);
+    setFileError("");
     setWorkspaceReady(true);
 
     if (snapshot.threads.length) {
@@ -388,10 +472,12 @@ function App() {
       setActiveThreadId(thread.id);
       setActiveProjectId(thread.project_id);
       setResearchMode(thread.mode);
+      setChangeSets(thread.changeSets ?? []);
     } else {
       setMessages(initialMessages);
       setActiveThreadId(null);
       setActiveProjectId(snapshot.projects?.[0]?.id ?? null);
+      setChangeSets([]);
     }
 
     const action = snapshot.actions.find((candidate) => candidate.status === "pending");
@@ -399,26 +485,56 @@ function App() {
 
   }
 
+  async function refreshWorkspaceFiles() {
+    if (!workspace) return;
+    const nextTree = await desktopBridge.listWorkspaceFiles(workspace);
+    setFileTree(nextTree);
+    if (selectedFilePath) {
+      try {
+        setSelectedFile(await desktopBridge.readWorkspaceFile(workspace, selectedFilePath));
+        setFileError("");
+      } catch {
+        setSelectedFile(null);
+        setSelectedFilePath(null);
+      }
+    }
+  }
+
   function startNewTask(projectId = activeProjectId) {
     if (agentBusy) return;
     setMainSection("chat");
     if (projectId) setActiveProjectId(projectId);
+    activeThreadIdRef.current = null;
     setActiveThreadId(null);
     setMessages(initialMessages);
     setPrompt("");
     setPendingAction(null);
     setContextItems([]);
+    setChangeSets([]);
   }
 
   async function openResearchThread(threadSummary: ResearchThread) {
     setMainSection("chat");
-    const thread = await desktopBridge.getResearchThread(threadSummary.id, workspace);
-    setActiveThreadId(thread.id);
-    setActiveProjectId(thread.project_id);
-    setMessages(thread.messages.length ? thread.messages : initialMessages);
-    setResearchMode(thread.mode);
-    const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
-    setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
+    activeThreadIdRef.current = threadSummary.id;
+    setActiveThreadId(threadSummary.id);
+    setActiveProjectId(threadSummary.project_id);
+    const requestId = ++threadOpenRequestRef.current;
+    try {
+      const thread = await desktopBridge.getResearchThread(threadSummary.id, workspace);
+      if (requestId !== threadOpenRequestRef.current) return;
+      activeThreadIdRef.current = thread.id;
+      setActiveThreadId(thread.id);
+      setActiveProjectId(thread.project_id);
+      setMessages(thread.messages.length ? thread.messages : initialMessages);
+      setResearchMode(thread.mode);
+      setChangeSets(thread.changeSets ?? []);
+      const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
+      setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
+    } catch (error) {
+      if (requestId !== threadOpenRequestRef.current) return;
+      setMessages([{ id: crypto.randomUUID(), role: "assistant", text: `Could not open this research chat: ${String(error)}` }]);
+      setChangeSets([]);
+    }
   }
 
   async function createProject() {
@@ -448,6 +564,7 @@ function App() {
     const question = prompt.trim();
     if (!question || agentBusy) return;
     const submittedContext = contextItems;
+    const submittedThreadId = activeThreadIdRef.current;
 
     setPrompt("");
     setAgentBusy(true);
@@ -459,13 +576,19 @@ function App() {
 
     try {
       const result = await desktopBridge.runAgent({ prompt: question, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: researchMode, contextItems: submittedContext });
-      setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
-      setActiveThreadId(result.threadId);
-      setActiveProjectId(result.thread.project_id);
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
-      setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research thread", state: "done" } : event));
-      const proposedAction = result.actions.find((action) => action.status === "pending");
-      if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
+      const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
+        || (submittedThreadId === null && activeThreadIdRef.current === null);
+      if (stillViewingSubmittedThread) {
+        activeThreadIdRef.current = result.threadId;
+        setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
+        setActiveThreadId(result.threadId);
+        setActiveProjectId(result.thread.project_id);
+        setChangeSets(result.thread.changeSets ?? []);
+        setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research thread", state: "done" } : event));
+        const proposedAction = result.actions.find((action) => action.status === "pending");
+        if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
+      }
       setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Archimedes could not start this task: ${String(error)}` }]);
@@ -480,35 +603,42 @@ function App() {
     await desktopBridge.interruptAgent(runningThreadId);
   }
 
-  async function runCommand(command: string) {
+  async function runCommand(command: string, actionId?: string) {
     const trimmedCommand = command.trim();
     if (!trimmedCommand || runningSession) return;
     setTerminalOpen(true);
     try {
-      const { sessionId } = await desktopBridge.runTerminal({ command: trimmedCommand, cwd: workspace });
+      const { sessionId } = await desktopBridge.runTerminal({ command: trimmedCommand, cwd: workspace, actionId });
       setRunningSession(sessionId);
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `The command could not start: ${String(error)}` }]);
     }
   }
 
-  function openArtifact(name: string) {
-    setSelectedArtifact(name);
+  async function openArtifact(filePath: string) {
     setMainSection("artifacts");
+    setSelectedFilePath(filePath);
+    setFileLoading(true);
+    setFileError("");
+    try {
+      setSelectedFile(await desktopBridge.readWorkspaceFile(workspace, filePath));
+    } catch (error) {
+      setSelectedFile(null);
+      setFileError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setFileLoading(false);
+    }
   }
 
-  function createArtifact() {
+  async function createArtifact() {
     const name = artifactName.trim();
     if (!name) return;
     const normalizedName = name.endsWith(".md") ? name : `${name}.md`;
-    setArtifacts((current) => [...current, { name: normalizedName, kind: "artifact", body: `# ${normalizedName.replace(/\.md$/, "")}\n\nStart writing your research note here.` }]);
+    await desktopBridge.writeWorkspaceFile(workspace, normalizedName, `# ${normalizedName.split("/").at(-1)?.replace(/\.md$/, "")}\n\n`);
     setArtifactName("");
     setModal(null);
-    openArtifact(normalizedName);
-  }
-
-  function updateArtifactBody(body: string) {
-    setArtifacts((current) => current.map((artifact) => artifact.name === selectedArtifact ? { ...artifact, body } : artifact));
+    await refreshWorkspaceFiles();
+    await openArtifact(normalizedName);
   }
 
   function addEvidence(title = evidenceTitle, url = evidenceUrl) {
@@ -527,9 +657,9 @@ function App() {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
       setPendingAction(null);
       if (action.kind === "command" && action.payload.command) {
-        await runCommand(action.payload.command);
+        await runCommand(action.payload.command, action.id);
       } else if (action.kind === "write" && action.payload.path) {
-        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Approved and wrote ${action.payload.path}.` }]);
+        await refreshWorkspaceFiles();
       }
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not approve this action: ${String(error)}` }]);
@@ -544,7 +674,6 @@ function App() {
   }
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
-  const activeArtifact = artifacts.find((artifact) => artifact.name === selectedArtifact);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : "Artifacts";
 
   return (
@@ -578,7 +707,7 @@ function App() {
             <CalendarDays size={16} /><span>Daily papers</span>
           </button>
           <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
-            <Folder size={16} /><span>Artifacts</span><span className="nav-count">{artifacts.length}</span>
+            <Folder size={16} /><span>Artifacts</span><span className="nav-count">{fileTree.count}</span>
           </button>
         </section>
 
@@ -587,7 +716,7 @@ function App() {
           threads={threads}
           archivedThreads={archivedThreads}
           activeProjectId={activeProjectId}
-          activeThreadId={mainSection === "chat" ? activeThreadId : null}
+          activeThreadId={activeThreadId}
           disabled={agentBusy}
           onNewProject={() => setNewProjectOpen(true)}
           onNewChat={(projectId) => startNewTask(projectId)}
@@ -624,6 +753,7 @@ function App() {
               workspace={workspace}
               agentBusy={agentBusy}
               pendingAction={pendingAction}
+              changeSets={changeSets}
               conversationEndRef={conversationEndRef}
               onPrompt={setPrompt}
               onSubmit={() => void submitPrompt()}
@@ -637,11 +767,12 @@ function App() {
               onSourceOpen={setSelectedSource}
               onApprove={() => void approvePendingAction()}
               onReject={() => void rejectPendingAction()}
+              onOpenFile={(filePath) => void openArtifact(filePath)}
             />
           )}
           {(mainSection === "library" || mainSection === "daily") && <LibraryView bridge={desktopBridge} mode={mainSection} />}
           {mainSection === "artifacts" && (
-            <ArtifactsView artifacts={artifacts} activeArtifact={activeArtifact} selectedArtifact={selectedArtifact} onOpenArtifact={openArtifact} onNewArtifact={() => setModal("artifact")} onChangeBody={updateArtifactBody} />
+            <ArtifactsView workspace={workspace} tree={fileTree} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} onOpenFile={(filePath) => void openArtifact(filePath)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
           )}
         </div>
 
@@ -660,7 +791,7 @@ function App() {
         onEvidenceUrl={setEvidenceUrl}
         onSearchQuery={setSearchQuery}
         onClose={() => { setModal(null); setSelectedSource(""); }}
-        onCreateArtifact={createArtifact}
+        onCreateArtifact={() => void createArtifact()}
         onAddEvidence={addEvidence}
       />
       <ModelSettingsModal bridge={desktopBridge} open={modelSettingsOpen} onClose={() => setModelSettingsOpen(false)} onSaved={setActiveModelConfig} />
@@ -669,7 +800,7 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, prompt, workspace, agentBusy, canInterrupt, pendingAction, conversationEndRef, researchMode, contextItems, onPrompt, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onSourceOpen, onApprove, onReject }: {
+function ConversationView({ messages, events, prompt, workspace, agentBusy, canInterrupt, pendingAction, changeSets, conversationEndRef, researchMode, contextItems, onPrompt, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onSourceOpen, onApprove, onReject, onOpenFile }: {
   messages: Message[];
   events: TimelineEvent[];
   prompt: string;
@@ -677,6 +808,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   agentBusy: boolean;
   canInterrupt: boolean;
   pendingAction: PendingAction | null;
+  changeSets: WorkspaceChangeSet[];
   conversationEndRef: React.RefObject<HTMLDivElement | null>;
   researchMode: ResearchMode;
   contextItems: ContextAttachment[];
@@ -689,6 +821,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   onSourceOpen: (source: string) => void;
   onApprove: () => void;
   onReject: () => void;
+  onOpenFile: (filePath: string) => void;
 }) {
   const latestEvent = events.at(-1);
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
@@ -718,6 +851,8 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
           </article>
         ))}
 
+        {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
+
         {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Sparkles size={15} /></span><div><strong>{latestEvent?.title ?? "Archimedes is working"}</strong><small>{latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
 
         {pendingAction && (
@@ -726,6 +861,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
             <div className="approval-content">
               <span>{pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval"}</span>
               <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
+              {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
               {pendingAction.kind === "write" && pendingAction.payload.content && <pre className="proposal-preview">{pendingAction.payload.content.slice(0, 260)}</pre>}
               <p>{pendingAction.kind === "write" ? "This will write a file inside the selected workspace." : "This will run in the selected workspace and record its output."}</p>
               <div className="approval-actions">
@@ -774,35 +910,132 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   </div>;
 }
 
-function ArtifactsView({ artifacts, activeArtifact, selectedArtifact, onOpenArtifact, onNewArtifact, onChangeBody }: {
-  artifacts: Artifact[];
-  activeArtifact?: Artifact;
-  selectedArtifact: string;
-  onOpenArtifact: (name: string) => void;
-  onNewArtifact: () => void;
-  onChangeBody: (body: string) => void;
-}) {
-  return <div className="artifacts-page">
-    <header className="artifacts-header">
-      <div><span className="page-kicker">Knowledge</span><h1>Artifacts</h1><p>Research notes, paper drafts, experiment configs, and code attached to this workspace.</p></div>
-      <button className="primary-button" onClick={onNewArtifact}><Plus size={15} />New artifact</button>
+function WorkspaceChangesCard({ changeSet, onOpenFile }: { changeSet: WorkspaceChangeSet; onOpenFile: (filePath: string) => void }) {
+  const [expanded, setExpanded] = useState(changeSet.changes.length <= 4);
+  const visible = expanded ? changeSet.changes : changeSet.changes.slice(0, 3);
+  const additions = changeSet.changes.reduce((total, change) => total + change.additions, 0);
+  const deletions = changeSet.changes.reduce((total, change) => total + change.deletions, 0);
+  return <section className="workspace-change-card">
+    <header>
+      <span className="change-card-icon"><FileCode2 size={17} /></span>
+      <div><strong>Edited {changeSet.changes.length} {changeSet.changes.length === 1 ? "file" : "files"}</strong><small><span>+{additions}</span><span>-{deletions}</span></small></div>
     </header>
-    <div className="artifacts-workspace">
-      <aside className="artifact-browser">
-        <ArtifactGroup title="paper" icon={<FileText size={14} />} artifacts={artifacts.filter((artifact) => artifact.kind === "artifact")} selectedArtifact={selectedArtifact} onOpenArtifact={onOpenArtifact} />
-        <ArtifactGroup title="code" icon={<Code2 size={14} />} artifacts={artifacts.filter((artifact) => artifact.kind === "experiment")} selectedArtifact={selectedArtifact} onOpenArtifact={onOpenArtifact} />
-      </aside>
-      <section className="artifact-editor">
-        {activeArtifact ? <><div className="artifact-editor-header"><span>{activeArtifact.kind === "artifact" ? <FileText size={15} /> : <Code2 size={15} />}</span><strong>{activeArtifact.name}</strong><small>Local draft</small></div><textarea value={activeArtifact.body} onChange={(event) => onChangeBody(event.target.value)} spellCheck={false} aria-label={`Edit ${activeArtifact.name}`} /></> : <div className="artifact-empty">Choose an artifact to open it.</div>}
-      </section>
+    <div className="change-file-list">
+      {visible.map((change) => <button key={change.path} disabled={change.status === "deleted"} onClick={() => onOpenFile(change.path)} title={change.status === "deleted" ? "Deleted file" : `Open ${change.path}`}>
+        <span>{change.path}</span>
+        <small className={`change-status ${change.status}`}>{change.status}</small>
+        <em>+{change.additions}</em><i>-{change.deletions}</i>
+      </button>)}
     </div>
+    {changeSet.changes.length > 3 && <button className="change-card-expand" onClick={() => setExpanded((current) => !current)}>{expanded ? "Show less" : `Show ${changeSet.changes.length - 3} more`}<ChevronDown size={14} /></button>}
+  </section>;
+}
+
+function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind">) {
+  if (entry.type === "directory") return <Folder size={14} />;
+  if (entry.kind === "pdf" || entry.kind === "markdown") return <FileText size={14} />;
+  if (entry.kind === "image") return <FileImage size={14} />;
+  if (entry.kind === "text") return <FileCode2 size={14} />;
+  return <File size={14} />;
+}
+
+function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, onToggle, onOpenFile }: {
+  entry: WorkspaceFileEntry;
+  depth: number;
+  expanded: Set<string>;
+  selectedPath: string | null;
+  onToggle: (filePath: string) => void;
+  onOpenFile: (filePath: string) => void;
+}) {
+  const isDirectory = entry.type === "directory";
+  const isExpanded = isDirectory && expanded.has(entry.path);
+  return <div className="workspace-tree-node">
+    <button className={entry.path === selectedPath ? "workspace-tree-row active" : "workspace-tree-row"} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
+      <span className="tree-disclosure">{isDirectory ? isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}</span>
+      <span className="tree-file-icon">{workspaceFileIcon(entry)}</span>
+      <strong>{entry.name}</strong>
+    </button>
+    {isExpanded && entry.children?.map((child) => <WorkspaceTreeNode key={child.path} entry={child} depth={depth + 1} expanded={expanded} selectedPath={selectedPath} onToggle={onToggle} onOpenFile={onOpenFile} />)}
   </div>;
 }
 
-function ArtifactGroup({ title, icon, artifacts, selectedArtifact, onOpenArtifact }: { title: string; icon: React.ReactNode; artifacts: Artifact[]; selectedArtifact: string; onOpenArtifact: (name: string) => void }) {
-  return <div className="artifact-group">
-    <div className="artifact-group-title"><ChevronDown size={13} />{icon}<span>{title}</span></div>
-    {artifacts.map((artifact) => <button className={artifact.name === selectedArtifact ? "artifact-browser-row active" : "artifact-browser-row"} key={artifact.name} onClick={() => onOpenArtifact(artifact.name)}><span>{artifact.kind === "artifact" ? <FileText size={14} /> : <Code2 size={14} />}</span><strong>{artifact.name}</strong></button>)}
+function FilePreview({ file, loading, error }: { file: WorkspaceFilePreview | null; loading: boolean; error: string }) {
+  const [markdownMode, setMarkdownMode] = useState<"preview" | "source">("preview");
+  useEffect(() => setMarkdownMode("preview"), [file?.path]);
+
+  if (loading) return <div className="artifact-empty"><RefreshCw className="spin" size={18} />Loading file...</div>;
+  if (error) return <div className="artifact-empty error"><FileText size={22} /><strong>Could not open this file</strong><span>{error}</span></div>;
+  if (!file) return <div className="artifact-empty"><FolderOpen size={24} /><strong>Select a file from the workspace</strong><span>Code, Markdown, PDF, and images can be previewed here.</span></div>;
+
+  return <section className="artifact-editor">
+    <div className="artifact-editor-header">
+      <span>{workspaceFileIcon({ type: "file", kind: file.kind })}</span>
+      <strong>{file.path}</strong>
+      <small>{formatFileSize(file.size)}</small>
+      {file.kind === "markdown" && <div className="artifact-view-toggle"><button className={markdownMode === "preview" ? "active" : ""} onClick={() => setMarkdownMode("preview")}>Preview</button><button className={markdownMode === "source" ? "active" : ""} onClick={() => setMarkdownMode("source")}>Source</button></div>}
+    </div>
+    <div className="artifact-preview-surface">
+      {file.kind === "markdown" && markdownMode === "preview" && <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{file.content || ""}</ReactMarkdown></article>}
+      {(file.kind === "text" || (file.kind === "markdown" && markdownMode === "source")) && <CodePreview content={file.content || ""} />}
+      {file.kind === "pdf" && file.previewUrl && <iframe className="pdf-preview" src={file.previewUrl} title={file.name} />}
+      {file.kind === "image" && file.previewUrl && <div className="image-preview"><img src={file.previewUrl} alt={file.name} /></div>}
+      {file.kind === "binary" && <div className="artifact-empty"><File size={24} /><strong>Binary preview is unavailable</strong><span>{file.name} is still available in the workspace.</span></div>}
+    </div>
+  </section>;
+}
+
+function CodePreview({ content }: { content: string }) {
+  return <pre className="code-preview">{content.split("\n").map((line, index) => <span className="code-line" key={`${index}:${line.slice(0, 20)}`}><i>{index + 1}</i><code>{line || " "}</code></span>)}</pre>;
+}
+
+function formatFileSize(size: number) {
+  if (size < 1_024) return `${size} B`;
+  if (size < 1_048_576) return `${(size / 1_024).toFixed(1)} KB`;
+  return `${(size / 1_048_576).toFixed(1)} MB`;
+}
+
+function ArtifactsView({ workspace, tree, selectedPath, file, loading, error, onOpenFile, onRefresh, onNewArtifact }: {
+  workspace: string;
+  tree: WorkspaceFileTree;
+  selectedPath: string | null;
+  file: WorkspaceFilePreview | null;
+  loading: boolean;
+  error: string;
+  onOpenFile: (filePath: string) => void;
+  onRefresh: () => void;
+  onNewArtifact: () => void;
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const workspaceName = workspace.split("/").filter(Boolean).at(-1) || "Workspace";
+  useEffect(() => {
+    if (!selectedPath) return;
+    const parts = selectedPath.split("/");
+    setExpanded((current) => {
+      const next = new Set(current);
+      for (let index = 1; index < parts.length; index += 1) next.add(parts.slice(0, index).join("/"));
+      return next;
+    });
+  }, [selectedPath]);
+  const toggleDirectory = (filePath: string) => setExpanded((current) => {
+    const next = new Set(current);
+    if (next.has(filePath)) next.delete(filePath); else next.add(filePath);
+    return next;
+  });
+
+  return <div className="artifacts-page">
+    <header className="artifacts-header">
+      <div><span className="page-kicker">Workspace</span><h1>Artifacts</h1><p>Browse the active folder and inspect files created or changed by Archimedes.</p></div>
+      <div className="artifacts-header-actions"><button className="secondary-button" onClick={onRefresh} title="Refresh workspace files"><RefreshCw size={14} />Refresh</button><button className="primary-button" onClick={onNewArtifact}><Plus size={15} />New file</button></div>
+    </header>
+    <div className="artifacts-workspace">
+      <aside className="artifact-browser">
+        <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong><span>{tree.count}</span></div>
+        {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} onToggle={toggleDirectory} onOpenFile={onOpenFile} />)}
+        {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
+        {tree.truncated && <p className="artifact-browser-empty">Large workspace: showing the first 5,000 entries.</p>}
+      </aside>
+      <FilePreview file={file} loading={loading} error={error} />
+    </div>
   </div>;
 }
 

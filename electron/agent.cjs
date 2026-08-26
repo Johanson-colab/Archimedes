@@ -7,6 +7,7 @@ const { prepareConversation } = require("./agent/context.cjs");
 const { resolveApproval, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { extractPdfText } = require("./agent/pdf-reader.cjs");
+const { fileChangeForContent } = require("./workspace-files.cjs");
 
 const MAX_TOOL_ROUNDS = 8;
 const MAX_ACADEMIC_SEARCHES = 4;
@@ -302,7 +303,8 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     const target = workspacePath(root, args.path);
     const relative = relativePath(root, target);
     rejectHidden(relative);
-    const action = store.createAction({ taskId, kind: "write", payload: { path: relative, content: args.content } });
+    const change = fileChangeForContent(root, relative, args.content);
+    const action = store.createAction({ taskId, kind: "write", payload: { path: relative, content: args.content, change } });
     emit({ type: "approval", title: "Approval required", detail: `Write ${relative}`, action });
     const decision = await waitForApproval(action.id, signal);
     if (!decision.approved && store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");

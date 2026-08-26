@@ -50,7 +50,7 @@ export default function ProjectSidebar({ projects, threads, archivedThreads, act
           </div>
           {isExpanded && <div className="project-chat-list">
             {projectThreads.map((thread) => <div className={activeThreadId === thread.id ? "project-chat-row active" : "project-chat-row"} key={thread.id}>
-              <button className="project-chat-open" onClick={() => onOpenThread(thread)} title={thread.title} disabled={disabled}><span>{thread.title}</span></button>
+              <button className="project-chat-open" onClick={() => onOpenThread(thread)} title={thread.title}><span>{thread.title}</span></button>
               <button className="project-chat-archive" onClick={() => onArchiveThread(thread, true)} title="Archive chat" disabled={disabled}><Archive size={12} /></button>
             </div>)}
             {!projectThreads.length && <div className="project-chat-empty">No chats yet</div>}

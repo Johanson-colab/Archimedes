@@ -6,6 +6,9 @@ interface ResearchDeskBridge {
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
+    listWorkspaceFiles: (workspace: string) => Promise<WorkspaceFileTree>;
+    readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
+    writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     createResearchProject: (input: { name: string; description?: string }) => Promise<ResearchProject>;
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
@@ -28,7 +31,7 @@ interface ResearchDeskBridge {
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
-    runTerminal: (input: { command: string; cwd?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
+    runTerminal: (input: { command: string; cwd?: string; actionId?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
     stopTerminal: (sessionId: string) => Promise<void>;
     createTerminal: (input: { cwd?: string; cols?: number; rows?: number }) => Promise<TerminalSessionInfo>;
     readyTerminal: (sessionId: string) => Promise<void>;
@@ -41,6 +44,52 @@ interface ResearchDeskBridge {
     onAgentEvent: (callback: (payload: AgentEvent) => void) => () => void;
     onMenuNewChat: (callback: () => void) => () => void;
     onMenuOpenFolder: (callback: (workspace: string) => void) => () => void;
+    onWorkspaceFilesChanged: (callback: (payload: { path: string }) => void) => () => void;
+    onWorkspaceChangeSet: (callback: (changeSet: WorkspaceChangeSet) => void) => () => void;
+}
+
+interface WorkspaceFileEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  kind?: "text" | "markdown" | "pdf" | "image" | "binary";
+  size?: number;
+  modifiedAt?: string;
+  children?: WorkspaceFileEntry[];
+}
+
+interface WorkspaceFileTree {
+  entries: WorkspaceFileEntry[];
+  count: number;
+  truncated: boolean;
+}
+
+interface WorkspaceFilePreview {
+  name: string;
+  path: string;
+  kind: "text" | "markdown" | "pdf" | "image" | "binary";
+  size: number;
+  modifiedAt: string;
+  content?: string;
+  previewUrl?: string;
+}
+
+interface WorkspaceFileChange {
+  path: string;
+  status: "created" | "modified" | "deleted";
+  additions: number;
+  deletions: number;
+}
+
+interface WorkspaceChangeSet {
+  id: string;
+  actionId: string;
+  taskId: string;
+  threadId?: string | null;
+  turnId?: string;
+  kind: "write" | "command";
+  changes: WorkspaceFileChange[];
+  createdAt: string;
 }
 
 interface TerminalSessionInfo {
@@ -242,13 +291,14 @@ interface ResearchTurn {
 interface ResearchThreadDetail extends ResearchThread {
   turns: ResearchTurn[];
   messages: ResearchThreadMessage[];
+  changeSets: WorkspaceChangeSet[];
 }
 
 interface AgentAction {
   id: string;
   task_id: string;
   kind: "write" | "command";
-  payload: { path?: string; content?: string; command?: string; cwd?: string };
+  payload: { path?: string; content?: string; command?: string; cwd?: string; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
   status: "pending" | "approved" | "rejected";
   created_at: string;
   resolved_at: string | null;

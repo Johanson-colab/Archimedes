@@ -6,6 +6,9 @@ contextBridge.exposeInMainWorld("researchDesk", {
   chooseContextPaths: (kind, workspace) => ipcRenderer.invoke("context:choose-paths", { kind, workspace }),
   listContextResources: (kind, workspace) => ipcRenderer.invoke("context:list-resources", { kind, workspace }),
   openWorkspace: (workspacePath) => ipcRenderer.invoke("workspace:open", workspacePath),
+  listWorkspaceFiles: (workspace) => ipcRenderer.invoke("workspace:list-files", { workspace }),
+  readWorkspaceFile: (workspace, filePath) => ipcRenderer.invoke("workspace:read-file", { workspace, path: filePath }),
+  writeWorkspaceFile: (workspace, filePath, content) => ipcRenderer.invoke("workspace:write-file", { workspace, path: filePath, content }),
   getResearchThread: (threadId, workspace) => ipcRenderer.invoke("research-thread:get", { threadId, workspace }),
   createResearchProject: (input) => ipcRenderer.invoke("research-project:create", input),
   archiveResearchProject: (id, archived = true) => ipcRenderer.invoke("research-project:archive", { id, archived }),
@@ -64,5 +67,15 @@ contextBridge.exposeInMainWorld("researchDesk", {
     const listener = (_event, workspace) => callback(workspace);
     ipcRenderer.on("menu:open-folder", listener);
     return () => ipcRenderer.removeListener("menu:open-folder", listener);
+  },
+  onWorkspaceFilesChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("workspace:files-changed", listener);
+    return () => ipcRenderer.removeListener("workspace:files-changed", listener);
+  },
+  onWorkspaceChangeSet: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("workspace:change-set", listener);
+    return () => ipcRenderer.removeListener("workspace:change-set", listener);
   },
 });

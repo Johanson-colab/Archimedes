@@ -1,22 +1,31 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const modelConfig = require("./model-config.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
 const store = require("./store.cjs");
+const workspaceFiles = require("./workspace-files.cjs");
 
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
 const windowWorkspaces = new Map();
+const windowPreviewTokens = new Map();
+const previewTokenWorkspaces = new Map();
+const workspaceWatchers = new Map();
 const allowedContextPaths = new Set();
 
 app.setName("Archimedes");
+protocol.registerSchemesAsPrivileged([{
+  scheme: "archimedes-file",
+  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+}]);
 
 function cleanTerminalEnvironment() {
   return Object.fromEntries(Object.entries({
@@ -62,6 +71,43 @@ function closeWindowTerminals(senderId) {
   }
 }
 
+function stopWorkspaceWatcher(senderId) {
+  const current = workspaceWatchers.get(senderId);
+  if (!current) return;
+  if (current.timer) clearTimeout(current.timer);
+  current.watcher.close();
+  workspaceWatchers.delete(senderId);
+}
+
+function setWindowWorkspace(senderId, workspace) {
+  windowWorkspaces.set(senderId, workspace);
+  let token = windowPreviewTokens.get(senderId);
+  if (!token) {
+    token = randomUUID();
+    windowPreviewTokens.set(senderId, token);
+  }
+  previewTokenWorkspaces.set(token, workspace);
+  return token;
+}
+
+function watchWorkspace(sender, workspace) {
+  stopWorkspaceWatcher(sender.id);
+  try {
+    const state = { watcher: null, timer: null };
+    state.watcher = fs.watch(workspace, { recursive: true }, (_eventType, filename) => {
+      const changedPath = String(filename || "").replaceAll("\\", "/");
+      if (changedPath.split("/").some((part) => [".archimedes", ".git", "node_modules", "dist", "build", ".next"].includes(part))) return;
+      if (state.timer) clearTimeout(state.timer);
+      state.timer = setTimeout(() => {
+        if (!sender.isDestroyed()) sender.send("workspace:files-changed", { path: changedPath });
+      }, 180);
+    });
+    workspaceWatchers.set(sender.id, state);
+  } catch {
+    // Recursive watching is not available on every platform; manual refresh remains available.
+  }
+}
+
 function createWindow(workspace) {
   const browserWindow = new BrowserWindow({
     width: 1560,
@@ -75,11 +121,12 @@ function createWindow(workspace) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      plugins: true,
     },
   });
 
   const senderId = browserWindow.webContents.id;
-  if (workspace) windowWorkspaces.set(senderId, resolveWorkspace(workspace));
+  if (workspace) setWindowWorkspace(senderId, resolveWorkspace(workspace));
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
@@ -90,6 +137,10 @@ function createWindow(workspace) {
 
   browserWindow.on("closed", () => {
     closeWindowTerminals(senderId);
+    stopWorkspaceWatcher(senderId);
+    const token = windowPreviewTokens.get(senderId);
+    if (token) previewTokenWorkspaces.delete(token);
+    windowPreviewTokens.delete(senderId);
     windowWorkspaces.delete(senderId);
   });
 
@@ -131,7 +182,7 @@ async function openFolderFromMenu() {
   if (!browserWindow) return;
   const workspace = await chooseFolderForWindow(browserWindow);
   if (!workspace || browserWindow.isDestroyed()) return;
-  windowWorkspaces.set(browserWindow.webContents.id, workspace);
+  setWindowWorkspace(browserWindow.webContents.id, workspace);
   browserWindow.webContents.send("menu:open-folder", workspace);
 }
 
@@ -264,6 +315,19 @@ app.whenReady().then(() => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
   installApplicationMenu();
+  protocol.handle("archimedes-file", (request) => {
+    try {
+      const url = new URL(request.url);
+      const workspace = previewTokenWorkspaces.get(url.hostname);
+      if (!workspace) return new Response("Preview token expired.", { status: 403 });
+      const relative = decodeURIComponent(url.pathname.slice(1));
+      const target = workspaceFiles.workspacePath(workspace, relative);
+      if (!fs.statSync(target).isFile()) return new Response("File not found.", { status: 404 });
+      return net.fetch(pathToFileURL(target).toString());
+    } catch {
+      return new Response("File preview unavailable.", { status: 404 });
+    }
+  });
 
   ipcMain.handle("window:initial-workspace", (event) => {
     return windowWorkspaces.get(event.sender.id) ?? null;
@@ -295,8 +359,32 @@ app.whenReady().then(() => {
 
   ipcMain.handle("workspace:open", (event, requestedWorkspace) => {
     const workspace = resolveWorkspace(requestedWorkspace);
-    windowWorkspaces.set(event.sender.id, workspace);
+    setWindowWorkspace(event.sender.id, workspace);
+    watchWorkspace(event.sender, workspace);
     return store.openWorkspace(workspace);
+  });
+
+  ipcMain.handle("workspace:list-files", (_event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    return workspaceFiles.listWorkspaceTree(workspace);
+  });
+
+  ipcMain.handle("workspace:read-file", (event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    const file = workspaceFiles.readWorkspaceFile(workspace, input.path);
+    if (file.kind === "pdf" || file.kind === "image") {
+      const token = setWindowWorkspace(event.sender.id, workspace);
+      const encodedPath = file.path.split("/").map(encodeURIComponent).join("/");
+      return { ...file, previewUrl: `archimedes-file://${token}/${encodedPath}` };
+    }
+    return file;
+  });
+
+  ipcMain.handle("workspace:write-file", (event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    const file = workspaceFiles.writeWorkspaceTextFile(workspace, input.path, input.content);
+    if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
+    return file;
   });
 
   ipcMain.handle("research-thread:get", (_event, input = {}) => {
@@ -431,10 +519,21 @@ app.whenReady().then(() => {
     });
   });
 
-  ipcMain.handle("agent:approve-action", (_event, actionId) => {
+  ipcMain.handle("agent:approve-action", (event, actionId) => {
     if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");
     const action = store.approveAction(actionId);
     agent.resolveApproval(actionId, true);
+    if (action.kind === "write" && action.payload.change && !event.sender.isDestroyed()) {
+      event.sender.send("workspace:change-set", {
+        id: action.id,
+        actionId: action.id,
+        taskId: action.task_id,
+        threadId: store.getResearchThreadIdForTask(action.task_id),
+        kind: action.kind,
+        changes: [action.payload.change],
+        createdAt: action.created_at,
+      });
+    }
     return action;
   });
 
@@ -450,13 +549,14 @@ app.whenReady().then(() => {
     return { interrupted: agent.interruptAgent(threadId) };
   });
 
-  ipcMain.handle("terminal:run", (event, { command, cwd }) => {
+  ipcMain.handle("terminal:run", (event, { command, cwd, actionId }) => {
     if (typeof command !== "string" || command.trim().length === 0 || command.length > 2000) {
       throw new Error("A non-empty command of at most 2000 characters is required.");
     }
 
     const workspace = resolveWorkspace(cwd);
     store.openWorkspace(workspace);
+    const beforeSnapshot = typeof actionId === "string" ? workspaceFiles.snapshotWorkspace(workspace) : null;
     const sessionId = randomUUID();
     const commandRun = store.startCommand({ command, cwd: workspace });
     const shell = process.platform === "win32" ? "cmd.exe" : "/bin/zsh";
@@ -479,6 +579,23 @@ app.whenReady().then(() => {
     child.on("close", (code) => {
       send(`\n[process exited with code ${code ?? "unknown"}]\n`);
       store.finishCommand(commandRun.id, code, code === 0 ? "completed" : "failed");
+      if (beforeSnapshot && typeof actionId === "string") {
+        const changes = workspaceFiles.compareWorkspaceSnapshots(beforeSnapshot, workspaceFiles.snapshotWorkspace(workspace));
+        if (changes.length) {
+          const action = store.updateActionPayload(actionId, { changes });
+          if (!event.sender.isDestroyed()) {
+            event.sender.send("workspace:change-set", {
+              id: action.id,
+              actionId: action.id,
+              taskId: action.task_id,
+              threadId: store.getResearchThreadIdForTask(action.task_id),
+              kind: action.kind,
+              changes,
+              createdAt: action.created_at,
+            });
+          }
+        }
+      }
       commandSessions.delete(sessionId);
     });
     return { sessionId, commandRunId: commandRun.id, workspace };
