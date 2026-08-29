@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   archiveResearchProject: (id, archived = true) => ipcRenderer.invoke("research-project:archive", { id, archived }),
   archiveResearchThread: (id, archived = true) => ipcRenderer.invoke("research-thread:archive", { id, archived }),
   getModelConfig: () => ipcRenderer.invoke("model-config:get"),
+  listProviderModels: (input) => ipcRenderer.invoke("model-config:list-models", input),
   saveModelConfig: (input) => ipcRenderer.invoke("model-config:save", input),
   testModelConfig: (input) => ipcRenderer.invoke("model-config:test", input),
   listLibraries: () => ipcRenderer.invoke("library:list"),

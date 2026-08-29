@@ -259,6 +259,7 @@ const previewBridge = {
     return structuredClone(thread);
   },
   getModelConfig: async () => ({ provider: "custom" as ModelProviderId, baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", hasApiKey: false, source: "environment" as const }),
+  listProviderModels: async () => ({ models: [], source: "live" as const }),
   saveModelConfig: async ({ provider, baseUrl, model }: ModelConfigInput) => ({ provider, baseUrl, model, hasApiKey: true, source: "saved" as const }),
   testModelConfig: async ({ model }: ModelConfigInput) => ({ ok: true, latencyMs: 184, resolvedModel: model }),
   runAgent: async ({ prompt, threadId, projectId, mode, contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {

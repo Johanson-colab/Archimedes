@@ -75,6 +75,20 @@
 .provider-config label > span { display: flex; align-items: center; gap: 6px; }
 .provider-config input { width: 100%; height: 38px; padding: 0 11px; color: #2e2e2b; background: #fff; border: 1px solid #d5d5cf; border-radius: 5px; outline: 0; font-size: 11px; }
 .provider-config input:focus { border-color: #7ca794; box-shadow: 0 0 0 3px rgba(64, 124, 99, .1); }
+.model-combobox { position: relative; }
+.model-combobox input { padding-right: 42px; }
+.model-catalog-toggle { position: absolute; top: 1px; right: 1px; display: grid; width: 36px; height: 36px; place-items: center; color: #53534e; background: transparent; border-radius: 4px; }
+.model-catalog-toggle:hover { color: #1f5f4a; background: #edf3ef; }
+.model-catalog { position: absolute; z-index: 3; top: calc(100% + 5px); right: 0; left: 0; overflow: hidden; background: #fff; border: 1px solid #cfd8d1; border-radius: 6px; box-shadow: 0 10px 25px rgba(24, 35, 27, .15); }
+.model-catalog-header { display: flex; height: 33px; align-items: center; justify-content: space-between; padding: 0 7px 0 10px; color: #68766d; background: #f4f7f4; border-bottom: 1px solid #e1e7e2; font-size: 9px; font-weight: 700; }
+.model-catalog-header button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 5px; color: #326b55; background: transparent; border-radius: 4px; font-size: 9px; font-weight: 700; }
+.model-catalog-header button:hover:not(:disabled) { background: #e4eee7; }
+.model-catalog-note, .model-catalog-empty { margin: 0; padding: 8px 10px; color: #8d6640; background: #fff9ed; border-bottom: 1px solid #efe4ce; font-size: 9px; line-height: 1.4; }
+.model-catalog-empty { color: #85857f; background: #fff; border-bottom: 0; }
+.model-catalog-list { max-height: 220px; overflow: auto; }
+.model-catalog-list button { display: flex; width: 100%; min-height: 29px; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; color: #41413d; background: #fff; font-size: 10px; text-align: left; }
+.model-catalog-list button:hover, .model-catalog-list button.active { color: #225e49; background: #edf5ef; }
+.model-catalog-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-security-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 17px; color: #8b8b85; font-size: 9px; line-height: 1.45; }
 .model-security-note svg { flex: 0 0 auto; color: #6f7b73; }
 .model-feedback { display: flex; align-items: flex-start; gap: 7px; margin-top: 16px; padding: 9px 10px; border-radius: 5px; font-size: 10px; line-height: 1.45; }

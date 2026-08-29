@@ -54,6 +54,24 @@ function validateModelId(baseUrl, value) {
   return model;
 }
 
+function modelListUrl(provider, baseUrl) {
+  const endpoint = new URL(normalizeBaseUrl(baseUrl));
+  if (provider === "qwen" && endpoint.hostname === "dashscope.aliyuncs.com" && endpoint.pathname.includes("compatible-mode")) {
+    return "https://dashscope.aliyuncs.com/api/v1/models?providers=qwen&page_size=100";
+  }
+  return `${endpoint.toString().replace(/\/$/, "")}/models`;
+}
+
+function extractModelIds(payload) {
+  const candidates = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.output?.models)
+      ? payload.output.models
+      : [];
+  return [...new Set(candidates.map((entry) => String(entry?.id || entry?.model || "").trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
 function getActiveModelConfig() {
   const saved = readSavedConfig();
   const fallback = environmentConfig();
@@ -64,6 +82,33 @@ function getActiveModelConfig() {
     model: saved.model || fallback.model,
     apiKey: saved.apiKey || fallback.apiKey,
   };
+}
+
+async function listProviderModels(input = {}) {
+  const current = getActiveModelConfig();
+  const provider = PROVIDERS.has(input.provider) ? input.provider : current.provider;
+  const baseUrl = normalizeBaseUrl(input.baseUrl || current.baseUrl);
+  const suppliedKey = String(input.apiKey || "").trim();
+  const canReuseSavedKey = current.provider === provider && normalizeBaseUrl(current.baseUrl) === baseUrl;
+  const apiKey = suppliedKey || (canReuseSavedKey ? current.apiKey : "");
+  if (!apiKey && provider !== "openrouter") throw new Error("Enter or save this provider's API key before refreshing its live model catalog.");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const headers = { Accept: "application/json" };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    const response = await fetch(modelListUrl(provider, baseUrl), { headers, signal: controller.signal });
+    if (!response.ok) throw new Error(`Model catalog request failed (${response.status}).`);
+    const models = extractModelIds(await response.json());
+    if (!models.length) throw new Error("The provider returned no compatible chat models.");
+    return { models, source: "live" };
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Model catalog request timed out after 15 seconds.");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function getPublicModelConfig() {
@@ -140,7 +185,9 @@ module.exports = {
   getActiveModelConfig,
   getPublicModelConfig,
   initializeModelConfig,
+  listProviderModels,
   saveModelConfig,
   testModelConfig,
+  extractModelIds,
   validateModelId,
 };

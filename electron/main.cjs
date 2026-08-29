@@ -438,6 +438,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle("model-config:get", () => modelConfig.getPublicModelConfig());
 
+  ipcMain.handle("model-config:list-models", (_event, input = {}) => modelConfig.listProviderModels(input));
+
   ipcMain.handle("model-config:save", (_event, input = {}) => modelConfig.saveModelConfig(input));
 
   ipcMain.handle("model-config:test", (_event, input = {}) => modelConfig.testModelConfig(input));

@@ -18,6 +18,7 @@ interface ResearchDeskBridge {
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
     getModelConfig: () => Promise<PublicModelConfig>;
+    listProviderModels: (input: ModelCatalogInput) => Promise<ModelCatalogResponse>;
     saveModelConfig: (input: ModelConfigInput) => Promise<PublicModelConfig>;
     testModelConfig: (input: ModelConfigInput) => Promise<ModelConnectionResult>;
     listLibraries: () => Promise<ResearchLibrary[]>;
@@ -278,6 +279,17 @@ interface ModelConfigInput {
   baseUrl: string;
   model: string;
   apiKey?: string;
+}
+
+interface ModelCatalogInput {
+  provider: ModelProviderId;
+  baseUrl: string;
+  apiKey?: string;
+}
+
+interface ModelCatalogResponse {
+  models: string[];
+  source: "live";
 }
 
 interface PublicModelConfig {
