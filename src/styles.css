@@ -23,6 +23,7 @@
 .project-rename-field { display: flex; min-width: 0; height: 29px; flex: 1; align-items: center; gap: 7px; color: #6e6e68; }
 .project-rename-field > svg { flex: 0 0 auto; }
 .project-rename-field input { width: 100%; min-width: 0; height: 23px; padding: 0 5px; color: #272724; background: #fff; border: 1px solid #80a898; border-radius: 4px; outline: none; font: inherit; font-size: 11px; font-weight: 650; }
+.project-rename-error { margin: 3px 8px 5px; color: #a34b42; font-size: 9px; line-height: 1.35; }
 .project-row-actions { display: none; align-items: center; padding-right: 3px; }
 .project-tree-row:hover .project-row-actions, .project-tree-row:focus-within .project-row-actions { display: flex; }
 .project-chat-list { margin-left: 17px; padding: 1px 0 4px 10px; border-left: 1px solid #ddddd7; }

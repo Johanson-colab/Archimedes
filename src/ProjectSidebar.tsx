@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Folder, FolderPlus, MessageSquarePlus, Pencil, Plus } from "lucide-react";
 
 export default function ProjectSidebar({ projects, threads, archivedThreads, activeProjectId, activeThreadId, disabled, onNewProject, onNewChat, onRenameProject, onOpenThread, onArchiveThread }: {
@@ -19,6 +19,8 @@ export default function ProjectSidebar({ projects, threads, archivedThreads, act
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState("");
+  const renameInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!projects.length) return;
@@ -40,19 +42,25 @@ export default function ProjectSidebar({ projects, threads, archivedThreads, act
 
   function beginRename(project: ResearchProject) {
     if (disabled) return;
+    setRenameError("");
     setProjectNameDraft(project.name);
     setEditingProjectId(project.id);
   }
 
   async function finishRename(project: ResearchProject) {
-    if (editingProjectId !== project.id || renaming) return;
+    if (editingProjectId !== project.id || renameInFlightRef.current) return;
     const name = projectNameDraft.replace(/\s+/g, " ").trim();
     setEditingProjectId(null);
     if (!name || name === project.name) return;
+    renameInFlightRef.current = true;
     setRenaming(true);
     try {
       await onRenameProject(project.id, name);
+      setRenameError("");
+    } catch (error) {
+      setRenameError(`Could not rename project: ${String(error)}`);
     } finally {
+      renameInFlightRef.current = false;
       setRenaming(false);
     }
   }
@@ -68,8 +76,15 @@ export default function ProjectSidebar({ projects, threads, archivedThreads, act
             <button className="project-toggle" onClick={() => toggleProject(project.id)} title={isExpanded ? "Collapse project" : "Expand project"}>{isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</button>
             {editingProjectId === project.id
               ? <span className="project-rename-field"><Folder size={14} /><input autoFocus value={projectNameDraft} aria-label="Project name" maxLength={100} disabled={renaming} onChange={(event) => setProjectNameDraft(event.target.value)} onBlur={() => void finishRename(project)} onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-                if (event.key === "Escape") setEditingProjectId(null);
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void finishRename(project);
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setRenameError("");
+                  setEditingProjectId(null);
+                }
               }} /></span>
               : <button className="project-select" onClick={() => onNewChat(project.id)} title={project.name} disabled={disabled}><Folder size={14} /><span>{project.name}</span><small>{projectThreads.length}</small></button>}
             <span className="project-row-actions">
@@ -88,6 +103,7 @@ export default function ProjectSidebar({ projects, threads, archivedThreads, act
       })}
       {!projects.length && <div className="recent-empty">Create a project to begin</div>}
     </div>
+    {renameError && <div className="project-rename-error" role="alert">{renameError}</div>}
     <button className={showArchived ? "archived-toggle active" : "archived-toggle"} onClick={() => setShowArchived((visible) => !visible)}><Archive size={13} /><span>Archived</span><small>{archivedThreads.length}</small></button>
     {showArchived && <div className="archived-chat-list">
       {archivedThreads.map((thread) => <div className="archived-chat-row" key={thread.id}><span>{thread.title}</span><button onClick={() => onArchiveThread(thread, false)} title="Restore chat"><ArchiveRestore size={12} /></button></div>)}
