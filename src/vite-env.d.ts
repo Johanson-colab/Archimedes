@@ -16,6 +16,7 @@ interface ResearchDeskBridge {
     createResearchProject: (input: { name: string; description?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
+    deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
     getModelConfig: () => Promise<PublicModelConfig>;
     listProviderModels: (input: ModelCatalogInput) => Promise<ModelCatalogResponse>;
@@ -232,6 +233,7 @@ interface WorkspaceSnapshot {
   workspace: string;
   tasks: SavedTask[];
   projects: ResearchProject[];
+  archivedProjects: ResearchProject[];
   threads: ResearchThread[];
   archivedThreads: ResearchThread[];
   commands: Array<{

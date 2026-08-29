@@ -8,8 +8,8 @@
 /* Project-scoped research chats */
 .projects-group { display: flex; min-height: 0; flex: 1; flex-direction: column; padding-top: 10px; }
 .projects-heading { display: flex; height: 25px; flex: 0 0 auto; align-items: center; justify-content: space-between; padding: 0 5px 5px 8px; color: #8a8a84; font-size: 10px; font-weight: 700; }
-.projects-heading button, .project-toggle, .project-row-actions button, .project-chat-archive, .archived-chat-row button { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; color: #85857f; background: transparent; border-radius: 5px; }
-.projects-heading button:hover, .project-toggle:hover, .project-row-actions button:hover, .project-chat-archive:hover, .archived-chat-row button:hover { color: #282825; background: #e4e4df; }
+.projects-heading button, .project-toggle, .project-row-actions button, .project-chat-archive, .archived-chat-row button, .archived-project-row button { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; color: #85857f; background: transparent; border-radius: 5px; }
+.projects-heading button:hover, .project-toggle:hover, .project-row-actions button:hover, .project-chat-archive:hover, .archived-chat-row button:hover, .archived-project-row button:hover { color: #282825; background: #e4e4df; }
 .project-tree { min-height: 0; overflow: auto; }
 .project-node + .project-node { margin-top: 2px; }
 .project-tree-row { display: flex; min-width: 0; height: 31px; align-items: center; border-radius: 6px; }
@@ -39,9 +39,19 @@
 .archived-toggle:hover, .archived-toggle.active { color: #343431; background: #eaeae6; }
 .archived-toggle small { margin-left: auto; color: #999993; font-size: 9px; }
 .archived-chat-list { max-height: 122px; flex: 0 0 auto; padding: 3px 0; overflow: auto; border-top: 1px solid #e2e2dc; }
+.archived-project-list { max-height: 122px; flex: 0 0 auto; padding: 3px 0; overflow: auto; border-top: 1px solid #e2e2dc; }
+.archived-project-row { display: flex; min-width: 0; height: 27px; align-items: center; padding-left: 8px; color: #85857f; font-size: 9px; }
+.archived-project-row > span { display: flex; min-width: 0; flex: 1; align-items: center; gap: 6px; }
+.archived-project-row strong { min-width: 0; overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.archived-project-row small { margin-left: auto; padding-right: 4px; color: #aaa9a3; font-size: 9px; }
+.archived-project-row > div { display: none; padding-right: 2px; }
+.archived-project-row:hover > div, .archived-project-row:focus-within > div { display: flex; }
 .archived-chat-row { display: flex; min-width: 0; height: 27px; align-items: center; padding-left: 8px; color: #85857f; font-size: 9px; }
 .archived-chat-row > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-create-modal { width: min(100%, 420px); }
+.project-remove-modal { width: min(100%, 410px); }
+.danger-button { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; padding: 0 11px; color: #fff; background: #b34942; border-radius: 5px; font-size: 10px; font-weight: 700; }
+.danger-button:hover { background: #963d37; }
 
 /* Model provider settings */
 .model-settings-backdrop { background: rgba(24, 24, 22, .42); }

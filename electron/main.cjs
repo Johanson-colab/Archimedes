@@ -431,6 +431,11 @@ app.whenReady().then(() => {
     return store.archiveResearchProject(input.id, input.archived !== false);
   });
 
+  ipcMain.handle("research-project:delete", (_event, input = {}) => {
+    if (typeof input.id !== "string") throw new Error("A research project ID is required.");
+    return store.deleteResearchProject(input.id);
+  });
+
   ipcMain.handle("research-thread:archive", (_event, input = {}) => {
     if (typeof input.id !== "string") throw new Error("A research thread ID is required.");
     return store.archiveResearchThread(input.id, input.archived !== false);

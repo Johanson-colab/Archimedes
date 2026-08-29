@@ -27,7 +27,7 @@ import vsCodeLight from "react-syntax-highlighter/dist/esm/styles/prism/vs";
 import LibraryView from "./LibraryView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
-import ProjectSidebar, { NewProjectModal } from "./ProjectSidebar";
+import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
 import TerminalPanel from "./TerminalPanel";
 import { previewLibraryBridge } from "./library-preview";
@@ -144,6 +144,7 @@ const previewPtySessions = new Map<string, { cwd: string; line: string; ready: b
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
 const previewTasks: SavedTask[] = [];
 const previewProjects: ResearchProject[] = [{ id: "preview-general", name: "General", description: "Default research project", chat_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, last_chat_at: null }];
+const previewArchivedProjects: ResearchProject[] = [];
 const previewThreads: ResearchThreadDetail[] = [];
 const previewArchivedThreads: ResearchThreadDetail[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
@@ -173,6 +174,7 @@ function previewSnapshot(): WorkspaceSnapshot {
     workspace: previewWorkspace,
     tasks: [...previewTasks].reverse(),
     projects: structuredClone(previewProjects),
+    archivedProjects: structuredClone(previewArchivedProjects),
     threads: previewThreads.map(({ turns: _turns, messages: _messages, ...thread }) => thread),
     archivedThreads: previewArchivedThreads.map(({ turns: _turns, messages: _messages, ...thread }) => thread),
     commands: [...previewCommands].reverse(),
@@ -247,7 +249,37 @@ const previewBridge = {
     project.updated_at = new Date().toISOString();
     return structuredClone(project);
   },
-  archiveResearchProject: async (id: string, archived = true) => ({ archived: Boolean(id && archived) }),
+  archiveResearchProject: async (id: string, archived = true) => {
+    const source = archived ? previewProjects : previewArchivedProjects;
+    const target = archived ? previewArchivedProjects : previewProjects;
+    const index = source.findIndex((project) => project.id === id);
+    if (index < 0) throw new Error("Research project not found.");
+    const [project] = source.splice(index, 1);
+    project.archived_at = archived ? new Date().toISOString() : null;
+    project.updated_at = new Date().toISOString();
+    target.unshift(project);
+    const threadSource = archived ? previewThreads : previewArchivedThreads;
+    const threadTarget = archived ? previewArchivedThreads : previewThreads;
+    for (let index = threadSource.length - 1; index >= 0; index -= 1) {
+      if (threadSource[index].project_id !== id) continue;
+      const [thread] = threadSource.splice(index, 1);
+      thread.archived_at = project.archived_at;
+      threadTarget.unshift(thread);
+    }
+    return { archived };
+  },
+  deleteResearchProject: async (id: string) => {
+    for (const collection of [previewProjects, previewArchivedProjects]) {
+      const index = collection.findIndex((project) => project.id === id);
+      if (index >= 0) collection.splice(index, 1);
+    }
+    for (const collection of [previewThreads, previewArchivedThreads]) {
+      for (let index = collection.length - 1; index >= 0; index -= 1) {
+        if (collection[index].project_id === id) collection.splice(index, 1);
+      }
+    }
+    return { deleted: true };
+  },
   archiveResearchThread: async (id: string, archived = true) => {
     const source = archived ? previewThreads : previewArchivedThreads;
     const target = archived ? previewArchivedThreads : previewThreads;
@@ -417,6 +449,7 @@ function App() {
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
+  const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
   const [threads, setThreads] = useState<ResearchThread[]>([]);
   const [archivedThreads, setArchivedThreads] = useState<ResearchThread[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -443,6 +476,7 @@ function App() {
   const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [projectToRemove, setProjectToRemove] = useState<ResearchProject | null>(null);
   const [artifactName, setArtifactName] = useState("");
   const [evidenceTitle, setEvidenceTitle] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
@@ -547,6 +581,7 @@ function App() {
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
     setWorkspace(snapshot.workspace);
     setProjects(snapshot.projects ?? []);
+    setArchivedProjects(snapshot.archivedProjects ?? []);
     setThreads(snapshot.threads);
     setArchivedThreads(snapshot.archivedThreads ?? []);
     const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace);
@@ -672,11 +707,55 @@ function App() {
     await desktopBridge.archiveResearchThread(thread.id, archived);
     const snapshot = await desktopBridge.openWorkspace(workspace);
     setProjects(snapshot.projects);
+    setArchivedProjects(snapshot.archivedProjects ?? []);
     setThreads(snapshot.threads);
     setArchivedThreads(snapshot.archivedThreads);
     if (archived && activeThreadId === thread.id) {
       const next = snapshot.threads.find((candidate) => candidate.project_id === thread.project_id);
       if (next) await openResearchThread(next); else startNewTask(thread.project_id);
+    }
+  }
+
+  async function archiveProject(project: ResearchProject, archived: boolean) {
+    if (agentBusy) return;
+    await desktopBridge.archiveResearchProject(project.id, archived);
+    const snapshot = await desktopBridge.openWorkspace(workspace);
+    setProjects(snapshot.projects);
+    setArchivedProjects(snapshot.archivedProjects ?? []);
+    setThreads(snapshot.threads);
+    setArchivedThreads(snapshot.archivedThreads);
+    if (archived && activeProjectId === project.id) {
+      const nextThread = snapshot.threads[0];
+      if (nextThread) await openResearchThread(nextThread);
+      else {
+        activeThreadIdRef.current = null;
+        setActiveThreadId(null);
+        setActiveProjectId(snapshot.projects[0]?.id ?? null);
+        setMessages(initialMessages);
+        setChangeSets([]);
+      }
+    }
+  }
+
+  async function removeProject(project: ResearchProject) {
+    if (agentBusy) return;
+    await desktopBridge.deleteResearchProject(project.id);
+    setProjectToRemove(null);
+    const snapshot = await desktopBridge.openWorkspace(workspace);
+    setProjects(snapshot.projects);
+    setArchivedProjects(snapshot.archivedProjects ?? []);
+    setThreads(snapshot.threads);
+    setArchivedThreads(snapshot.archivedThreads);
+    if (activeProjectId === project.id) {
+      const nextThread = snapshot.threads[0];
+      if (nextThread) await openResearchThread(nextThread);
+      else {
+        activeThreadIdRef.current = null;
+        setActiveThreadId(null);
+        setActiveProjectId(snapshot.projects[0]?.id ?? null);
+        setMessages(initialMessages);
+        setChangeSets([]);
+      }
     }
   }
 
@@ -866,6 +945,7 @@ function App() {
 
         <ProjectSidebar
           projects={projects}
+          archivedProjects={archivedProjects}
           threads={threads}
           archivedThreads={archivedThreads}
           activeProjectId={activeProjectId}
@@ -874,6 +954,8 @@ function App() {
           onNewProject={() => setNewProjectOpen(true)}
           onNewChat={(projectId) => startNewTask(projectId)}
           onRenameProject={(projectId, name) => renameProject(projectId, name)}
+          onArchiveProject={(project, archived) => void archiveProject(project, archived)}
+          onRemoveProject={setProjectToRemove}
           onOpenThread={(thread) => void openResearchThread(thread)}
           onArchiveThread={(thread, archived) => void archiveThread(thread, archived)}
         />
@@ -951,6 +1033,7 @@ function App() {
       />
       <ModelSettingsModal bridge={desktopBridge} open={modelSettingsOpen} onClose={() => setModelSettingsOpen(false)} onSaved={setActiveModelConfig} />
       <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />
+      <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
     </main>
   );
 }

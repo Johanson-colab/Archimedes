@@ -220,6 +220,7 @@ function getSnapshot() {
     workspace: activeWorkspace,
     tasks: db.prepare("SELECT id, prompt, response, status, created_at FROM task_runs ORDER BY created_at DESC LIMIT 24").all(),
     projects: listResearchProjects(),
+    archivedProjects: listResearchProjects({ archived: true }),
     threads: listResearchThreads(),
     archivedThreads: listResearchThreads({ archived: true }),
     commands: db.prepare("SELECT id, command, cwd, status, output, exit_code, created_at, completed_at FROM command_runs ORDER BY created_at DESC LIMIT 24").all(),
@@ -457,14 +458,14 @@ function listResearchProjects({ archived = false } = {}) {
   const db = requireDatabase();
   return db.prepare(`
     SELECT research_projects.*,
-      COUNT(CASE WHEN research_threads.id IS NOT NULL AND research_threads.archived_at IS NULL THEN 1 END) AS chat_count,
+      COUNT(CASE WHEN research_threads.id IS NOT NULL AND (CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END) THEN 1 END) AS chat_count,
       MAX(research_threads.updated_at) AS last_chat_at
     FROM research_projects
     LEFT JOIN research_threads ON research_threads.project_id = research_projects.id
     WHERE CASE WHEN ? = 1 THEN research_projects.archived_at IS NOT NULL ELSE research_projects.archived_at IS NULL END
     GROUP BY research_projects.id
     ORDER BY COALESCE(MAX(research_threads.updated_at), research_projects.updated_at) DESC
-  `).all(archived ? 1 : 0);
+  `).all(archived ? 1 : 0, archived ? 1 : 0);
 }
 
 function createResearchProject({ name, description = "" }) {
@@ -505,6 +506,33 @@ function archiveResearchProject(id, archived = true) {
     throw error;
   }
   return { archived };
+}
+
+function deleteResearchProject(id) {
+  const db = requireDatabase();
+  const project = db.prepare("SELECT id FROM research_projects WHERE id = ?").get(id);
+  if (!project) throw new Error("Research project not found.");
+  const runningThread = db.prepare("SELECT id FROM research_threads WHERE project_id = ? AND status = 'running' LIMIT 1").get(id);
+  if (runningThread) throw new Error("Stop the running research turn before removing this project.");
+
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      DELETE FROM task_runs
+      WHERE id IN (
+        SELECT task_id FROM research_turns
+        WHERE thread_id IN (SELECT id FROM research_threads WHERE project_id = ?)
+          AND task_id IS NOT NULL
+      )
+    `).run(id);
+    db.prepare("DELETE FROM research_threads WHERE project_id = ?").run(id);
+    db.prepare("DELETE FROM research_projects WHERE id = ?").run(id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return { deleted: true };
 }
 
 function listResearchThreads({ archived = false, projectId = null } = {}) {
@@ -795,6 +823,7 @@ module.exports = {
   getResearchThreadContext,
   getSnapshot,
   archiveResearchProject,
+  deleteResearchProject,
   archiveResearchThread,
   listLibraries,
   listPapers,
