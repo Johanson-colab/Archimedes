@@ -271,6 +271,7 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
   const [adding, setAdding] = useState<string | null>(null);
   const [error, setError] = useState("");
   const feedRequestId = useRef(0);
+  const responseRef = useRef<DailyDiscoveryResponse | null>(null);
   useEffect(() => { if (!targetLibraryId && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
   const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
   const categoryKey = categories.join(",");
@@ -278,15 +279,16 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
     const requestId = ++feedRequestId.current;
     setLoading(true);
     setError("");
-    if (!forceRefresh) setResponse(null);
     try {
       const nextResponse = await bridge.discoverDailyPapers({ mode, range, categories, query: submittedQuery, limit: 60, forceRefresh });
       if (requestId !== feedRequestId.current) return;
+      responseRef.current = nextResponse;
       setResponse(nextResponse);
       if (nextResponse.warning) setError(nextResponse.warning);
     } catch (discoverError) {
       if (requestId !== feedRequestId.current) return;
-      setError(readableError(discoverError, "The daily paper feed could not be refreshed."));
+      const message = readableError(discoverError, "The daily paper feed could not be refreshed.");
+      setError(responseRef.current ? `${message} Showing the previous results.` : message);
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
@@ -341,7 +343,7 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
     {mode === "latest" && <div className="daily-category-filter"><span>arXiv fields</span>{["cs.AI", "cs.LG", "cs.CL", "cs.CV", "cs.RO", "cs.SE"].map((category) => <label key={category} className={categories.includes(category) ? "selected" : ""}><input type="checkbox" checked={categories.includes(category)} onChange={() => toggleCategory(category)} />{category}</label>)}</div>}
     <div className="daily-search-row"><div className="external-search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /><button className="primary-button" disabled={loading} onClick={submitSearch}>{loading ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div><span>{visiblePapers.length} papers{submittedQuery ? ` · “${submittedQuery}”` : ""}{response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}</span></div>
     {error && <div className="library-error" role="alert">{error}</div>}
-    {loading && !response ? <LoadingState /> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try a broader keyword, expand the date range, or select more arXiv fields.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    {loading && !response ? <LoadingState /> : error && !response ? <div className="daily-empty daily-feed-failed"><RefreshCw size={28} /><strong>Could not load the live feed</strong><span>arXiv may be responding slowly. Your library is unaffected.</span><button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button></div> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try a broader keyword, expand the date range, or select more arXiv fields.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;

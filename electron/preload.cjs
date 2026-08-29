@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   writeWorkspaceFile: (workspace, filePath, content) => ipcRenderer.invoke("workspace:write-file", { workspace, path: filePath, content }),
   getResearchThread: (threadId, workspace) => ipcRenderer.invoke("research-thread:get", { threadId, workspace }),
   createResearchProject: (input) => ipcRenderer.invoke("research-project:create", input),
+  renameResearchProject: (id, name) => ipcRenderer.invoke("research-project:rename", { id, name }),
   archiveResearchProject: (id, archived = true) => ipcRenderer.invoke("research-project:archive", { id, archived }),
   archiveResearchThread: (id, archived = true) => ipcRenderer.invoke("research-thread:archive", { id, archived }),
   getModelConfig: () => ipcRenderer.invoke("model-config:get"),

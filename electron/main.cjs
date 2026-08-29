@@ -421,6 +421,11 @@ app.whenReady().then(() => {
     return store.createResearchProject(input);
   });
 
+  ipcMain.handle("research-project:rename", (_event, input = {}) => {
+    if (typeof input.id !== "string") throw new Error("A research project ID is required.");
+    return store.renameResearchProject(input.id, input.name);
+  });
+
   ipcMain.handle("research-project:archive", (_event, input = {}) => {
     if (typeof input.id !== "string") throw new Error("A research project ID is required.");
     return store.archiveResearchProject(input.id, input.archived !== false);

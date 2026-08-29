@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Folder, FolderPlus, MessageSquarePlus, Plus } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Folder, FolderPlus, MessageSquarePlus, Pencil, Plus } from "lucide-react";
 
-export default function ProjectSidebar({ projects, threads, archivedThreads, activeProjectId, activeThreadId, disabled, onNewProject, onNewChat, onOpenThread, onArchiveThread }: {
+export default function ProjectSidebar({ projects, threads, archivedThreads, activeProjectId, activeThreadId, disabled, onNewProject, onNewChat, onRenameProject, onOpenThread, onArchiveThread }: {
   projects: ResearchProject[];
   threads: ResearchThread[];
   archivedThreads: ResearchThread[];
@@ -10,11 +10,15 @@ export default function ProjectSidebar({ projects, threads, archivedThreads, act
   disabled: boolean;
   onNewProject: () => void;
   onNewChat: (projectId: string) => void;
+  onRenameProject: (projectId: string, name: string) => Promise<void>;
   onOpenThread: (thread: ResearchThread) => void;
   onArchiveThread: (thread: ResearchThread, archived: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [projectNameDraft, setProjectNameDraft] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     if (!projects.length) return;
@@ -34,6 +38,25 @@ export default function ProjectSidebar({ projects, threads, archivedThreads, act
     });
   }
 
+  function beginRename(project: ResearchProject) {
+    if (disabled) return;
+    setProjectNameDraft(project.name);
+    setEditingProjectId(project.id);
+  }
+
+  async function finishRename(project: ResearchProject) {
+    if (editingProjectId !== project.id || renaming) return;
+    const name = projectNameDraft.replace(/\s+/g, " ").trim();
+    setEditingProjectId(null);
+    if (!name || name === project.name) return;
+    setRenaming(true);
+    try {
+      await onRenameProject(project.id, name);
+    } finally {
+      setRenaming(false);
+    }
+  }
+
   return <section className="sidebar-group projects-group">
     <div className="projects-heading"><span>Projects</span><button onClick={onNewProject} title="New project" disabled={disabled}><FolderPlus size={14} /></button></div>
     <div className="project-tree">
@@ -43,9 +66,15 @@ export default function ProjectSidebar({ projects, threads, archivedThreads, act
         return <div className="project-node" key={project.id}>
           <div className={activeProjectId === project.id ? "project-tree-row active" : "project-tree-row"}>
             <button className="project-toggle" onClick={() => toggleProject(project.id)} title={isExpanded ? "Collapse project" : "Expand project"}>{isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</button>
-            <button className="project-select" onClick={() => onNewChat(project.id)} title={project.name} disabled={disabled}><Folder size={14} /><span>{project.name}</span><small>{projectThreads.length}</small></button>
+            {editingProjectId === project.id
+              ? <span className="project-rename-field"><Folder size={14} /><input autoFocus value={projectNameDraft} aria-label="Project name" maxLength={100} disabled={renaming} onChange={(event) => setProjectNameDraft(event.target.value)} onBlur={() => void finishRename(project)} onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") setEditingProjectId(null);
+              }} /></span>
+              : <button className="project-select" onClick={() => onNewChat(project.id)} title={project.name} disabled={disabled}><Folder size={14} /><span>{project.name}</span><small>{projectThreads.length}</small></button>}
             <span className="project-row-actions">
               <button onClick={() => onNewChat(project.id)} title={`New chat in ${project.name}`} disabled={disabled}><MessageSquarePlus size={13} /></button>
+              <button onClick={() => beginRename(project)} title={`Rename ${project.name}`} disabled={disabled}><Pencil size={12} /></button>
             </span>
           </div>
           {isExpanded && <div className="project-chat-list">

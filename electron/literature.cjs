@@ -9,6 +9,36 @@ const HF_DAILY_PAPERS_URLS = [
 ];
 const DAILY_CATEGORIES = new Set(["cs.AI", "cs.LG", "cs.CL", "cs.CV", "cs.RO", "cs.SE"]);
 const DAILY_RANGES = new Set(["1d", "3d", "7d"]);
+const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function fetchWithRetry(url, init = {}, options = {}) {
+  const attempts = Math.max(1, Number(options.attempts) || 2);
+  const timeoutMs = Math.max(1, Number(options.timeoutMs) || 20_000);
+  const retryDelayMs = Math.max(0, Number(options.retryDelayMs ?? 400));
+  const provider = options.provider || "The literature provider";
+  const fetchImpl = options.fetchImpl || fetch;
+  let lastError;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetchImpl(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      if (!RETRYABLE_HTTP_STATUSES.has(response.status) || attempt === attempts - 1) return response;
+      lastError = new Error(`${provider} returned ${response.status}.`);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) break;
+    }
+    await delay(retryDelayMs * (attempt + 1));
+  }
+
+  const timedOut = lastError?.name === "TimeoutError" || /timeout|aborted/i.test(lastError?.message || "");
+  if (timedOut) throw new Error(`${provider} took too long to respond after ${attempts} attempts. Please retry in a moment.`);
+  throw new Error(`${provider} is temporarily unavailable. ${lastError?.message || "Please retry in a moment."}`);
+}
 
 function sanitizeLimit(value) {
   const parsed = Number(value);
@@ -123,10 +153,9 @@ async function discoverArxivPapers(options) {
     sortBy: "submittedDate",
     sortOrder: "descending",
   });
-  const response = await fetch(`${ARXIV_API_URL}?${params}`, {
+  const response = await fetchWithRetry(`${ARXIV_API_URL}?${params}`, {
     headers: { Accept: "application/atom+xml", "User-Agent": "Archimedes-Research/0.1" },
-    signal: AbortSignal.timeout(20_000),
-  });
+  }, { provider: "arXiv", attempts: 2, timeoutMs: 25_000 });
   if (!response.ok) throw new Error(`arXiv daily feed returned ${response.status}.`);
 
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
@@ -306,4 +335,4 @@ async function searchAcademicPapers(query, requestedLimit) {
   throw new Error(`No paper metadata could be retrieved. ${errors.join(" ")}`);
 }
 
-module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers };
+module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, fetchWithRetry };

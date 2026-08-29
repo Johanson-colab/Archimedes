@@ -14,6 +14,7 @@ interface ResearchDeskBridge {
     writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     createResearchProject: (input: { name: string; description?: string }) => Promise<ResearchProject>;
+    renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
     getModelConfig: () => Promise<PublicModelConfig>;

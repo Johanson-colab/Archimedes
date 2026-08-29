@@ -238,6 +238,15 @@ const previewBridge = {
     previewProjects.unshift(project);
     return structuredClone(project);
   },
+  renameResearchProject: async (id: string, name: string) => {
+    const normalizedName = name.replace(/\s+/g, " ").trim();
+    if (!normalizedName || normalizedName.length > 100) throw new Error("A project name of at most 100 characters is required.");
+    const project = previewProjects.find((candidate) => candidate.id === id);
+    if (!project) throw new Error("Research project not found.");
+    project.name = normalizedName;
+    project.updated_at = new Date().toISOString();
+    return structuredClone(project);
+  },
   archiveResearchProject: async (id: string, archived = true) => ({ archived: Boolean(id && archived) }),
   archiveResearchThread: async (id: string, archived = true) => {
     const source = archived ? previewThreads : previewArchivedThreads;
@@ -651,6 +660,12 @@ function App() {
     startNewTask(project.id);
   }
 
+  async function renameProject(projectId: string, name: string) {
+    if (agentBusy) return;
+    const project = await desktopBridge.renameResearchProject(projectId, name);
+    setProjects((current) => current.map((candidate) => candidate.id === project.id ? project : candidate));
+  }
+
   async function archiveThread(thread: ResearchThread, archived: boolean) {
     if (agentBusy) return;
     await desktopBridge.archiveResearchThread(thread.id, archived);
@@ -857,6 +872,7 @@ function App() {
           disabled={agentBusy}
           onNewProject={() => setNewProjectOpen(true)}
           onNewChat={(projectId) => startNewTask(projectId)}
+          onRenameProject={(projectId, name) => renameProject(projectId, name)}
           onOpenThread={(thread) => void openResearchThread(thread)}
           onArchiveThread={(thread, archived) => void archiveThread(thread, archived)}
         />

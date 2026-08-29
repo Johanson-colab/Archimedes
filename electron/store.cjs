@@ -480,6 +480,16 @@ function createResearchProject({ name, description = "" }) {
   return project;
 }
 
+function renameResearchProject(id, name) {
+  const db = requireDatabase();
+  const normalizedName = String(name || "").replace(/\s+/g, " ").trim();
+  if (!normalizedName || normalizedName.length > 100) throw new Error("A project name of at most 100 characters is required.");
+  const now = timestamp();
+  const result = db.prepare("UPDATE research_projects SET name = ?, updated_at = ? WHERE id = ?").run(normalizedName, now, id);
+  if (!result.changes) throw new Error("Research project not found.");
+  return listResearchProjects().find((project) => project.id === id);
+}
+
 function archiveResearchProject(id, archived = true) {
   const db = requireDatabase();
   const project = db.prepare("SELECT id FROM research_projects WHERE id = ?").get(id);
@@ -772,6 +782,7 @@ module.exports = {
   createLibrary,
   createAction,
   createResearchProject,
+  renameResearchProject,
   createResearchThread,
   deleteLibrary,
   finishCommand,
