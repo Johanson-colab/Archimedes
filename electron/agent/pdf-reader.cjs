@@ -34,9 +34,8 @@ function pageText(items) {
   return output.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-async function extractPdfText(filePath, options = {}) {
-  const stats = fs.statSync(filePath);
-  if (stats.size > MAX_PDF_BYTES) {
+async function extractPdfTextData(data, name, options = {}) {
+  if (data.byteLength > MAX_PDF_BYTES) {
     throw new Error(`The attached PDF is larger than ${Math.round(MAX_PDF_BYTES / 1024 / 1024)} MB.`);
   }
 
@@ -44,7 +43,7 @@ async function extractPdfText(filePath, options = {}) {
   const packageRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
   const standardFontDataUrl = pathToFileURL(`${path.join(packageRoot, "standard_fonts")}${path.sep}`).href;
   const loadingTask = getDocument({
-    data: new Uint8Array(fs.readFileSync(filePath)),
+    data: new Uint8Array(data),
     disableWorker: true,
     standardFontDataUrl,
     useSystemFonts: true,
@@ -77,8 +76,8 @@ async function extractPdfText(filePath, options = {}) {
     const hasExtractedText = pages.some((page) => page.text.trim());
     return {
       kind: "pdf",
-      name: path.basename(filePath),
-      size_bytes: stats.size,
+      name,
+      size_bytes: data.byteLength,
       page_count: document.numPages,
       start_page: range.start,
       end_page: lastPage,
@@ -97,4 +96,9 @@ async function extractPdfText(filePath, options = {}) {
   }
 }
 
-module.exports = { extractPdfText, normalizePageRange, pageText };
+async function extractPdfText(filePath, options = {}) {
+  const stats = fs.statSync(filePath);
+  return extractPdfTextData(fs.readFileSync(filePath), path.basename(filePath), options);
+}
+
+module.exports = { extractPdfText, extractPdfTextData, normalizePageRange, pageText };

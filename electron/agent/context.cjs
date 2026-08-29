@@ -27,6 +27,7 @@ function baseInstructions(mode) {
     "For broad topics, literature surveys, prior work, or paper discovery, search academic papers before browsing workspace files.",
     "Only inspect workspace paths when the request refers to local code, data, drafts, or when a clearly relevant path is known. Do not explore unrelated directories just because they exist.",
     "Only call attachment tools when the attached context manifest contains an attachment, and always use its exact attachment ID.",
+    "For a user-attached paper record with a pdf_url, call read_attached_paper_pdf before answering a request to read, summarize, review, or extract technical details from that paper. Do not treat its abstract as full-text evidence.",
     "For an attached PDF, use read_attached_file to extract page-numbered text. Follow next_page when the answer depends on later sections, and do not claim to have read pages that were not returned by the tool.",
     "Use tools economically. Once you have enough evidence to answer, stop calling tools and synthesize the result.",
     "Do not propose writing an artifact or running a command unless the user explicitly asks to save, create, edit, implement, or execute something.",

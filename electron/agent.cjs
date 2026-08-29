@@ -1,17 +1,20 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const dns = require("node:dns").promises;
+const net = require("node:net");
 const store = require("./store.cjs");
 const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { resolveApproval, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
-const { extractPdfText } = require("./agent/pdf-reader.cjs");
+const { extractPdfText, extractPdfTextData } = require("./agent/pdf-reader.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
 
 const MAX_TOOL_ROUNDS = 8;
 const MAX_ACADEMIC_SEARCHES = 4;
 const MAX_FILE_BYTES = 64_000;
+const MAX_REMOTE_PDF_BYTES = 100 * 1024 * 1024;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
 
@@ -28,6 +31,23 @@ const tools = [
           limit: { type: "integer", description: "Number of results to return, from 1 to 12." },
         },
         required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_attached_paper_pdf",
+      description: "Download and extract page-numbered text from the public PDF URL of a paper explicitly attached by the user. Use this before summarizing, reviewing, or citing details from an attached paper; the paper manifest alone contains metadata and an abstract, not full text.",
+      parameters: {
+        type: "object",
+        properties: {
+          attachment_id: { type: "string", description: "The exact paper attachment ID from the attached context manifest." },
+          start_page: { type: "integer", description: "First PDF page to extract. Defaults to page 1." },
+          end_page: { type: "integer", description: "Last PDF page to extract. At most 24 pages are returned per call." },
+        },
+        required: ["attachment_id"],
         additionalProperties: false,
       },
     },
@@ -174,6 +194,84 @@ function attachedItem(items, id) {
   return item;
 }
 
+function attachedPaper(items, id) {
+  const item = items.find((candidate) => candidate.id === id && candidate.type === "paper" && candidate.paper);
+  if (!item) throw new Error("The requested paper attachment is not available.");
+  return item;
+}
+
+function isPrivateAddress(address) {
+  if (net.isIP(address) === 4) {
+    const [first, second] = address.split(".").map(Number);
+    return first === 10 || first === 127 || first === 0 || first >= 224 || (first === 169 && second === 254) || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+  }
+  const normalized = String(address || "").toLowerCase();
+  return normalized === "::1" || normalized === "::" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:");
+}
+
+async function assertPublicHttpsUrl(value) {
+  let parsed;
+  try { parsed = new URL(value); }
+  catch { throw new Error("The attached paper does not provide a valid PDF URL."); }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || ["localhost", "localhost.localdomain"].includes(parsed.hostname.toLowerCase())) {
+    throw new Error("Paper PDF URLs must use public HTTPS addresses.");
+  }
+  if (net.isIP(parsed.hostname)) {
+    if (isPrivateAddress(parsed.hostname)) throw new Error("Paper PDF URLs cannot point to a private network.");
+    return parsed;
+  }
+  const addresses = await dns.lookup(parsed.hostname, { all: true });
+  if (!addresses.length || addresses.some((entry) => isPrivateAddress(entry.address))) {
+    throw new Error("Paper PDF URLs cannot point to a private network.");
+  }
+  return parsed;
+}
+
+async function fetchPublicPdf(value) {
+  let url = await assertPublicHttpsUrl(value);
+  for (let redirectCount = 0; redirectCount <= 4; redirectCount += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const response = await fetch(url, { redirect: "manual", signal: controller.signal, headers: { Accept: "application/pdf" } });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        if (!location) throw new Error("The PDF server returned a redirect without a destination.");
+        url = await assertPublicHttpsUrl(new URL(location, url).href);
+        continue;
+      }
+      if (!response.ok) throw new Error(`PDF download failed (${response.status}).`);
+      const declaredSize = Number(response.headers.get("content-length") || 0);
+      if (declaredSize > MAX_REMOTE_PDF_BYTES) throw new Error(`The paper PDF is larger than ${Math.round(MAX_REMOTE_PDF_BYTES / 1024 / 1024)} MB.`);
+      const chunks = [];
+      let size = 0;
+      for await (const chunk of response.body || []) {
+        size += chunk.length;
+        if (size > MAX_REMOTE_PDF_BYTES) throw new Error(`The paper PDF is larger than ${Math.round(MAX_REMOTE_PDF_BYTES / 1024 / 1024)} MB.`);
+        chunks.push(chunk);
+      }
+      const data = Buffer.concat(chunks);
+      if (data.subarray(0, 4).toString("ascii") !== "%PDF") throw new Error("The paper URL did not return a PDF document.");
+      return { data, url: url.href };
+    } catch (error) {
+      if (error?.name === "AbortError") throw new Error("PDF download timed out after 30 seconds.");
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error("The paper PDF redirected too many times.");
+}
+
+function paperPdfUrl(paper) {
+  const pdfUrl = String(paper.pdfUrl || "").trim();
+  if (pdfUrl) return pdfUrl;
+  const paperUrl = String(paper.url || "").trim();
+  const match = paperUrl.match(/^https:\/\/(?:export\.)?arxiv\.org\/abs\/([^?#/]+)/i);
+  if (match) return `https://arxiv.org/pdf/${match[1]}`;
+  throw new Error("This attached paper has no PDF URL. Add a PDF URL to its literature record or attach the local PDF file.");
+}
+
 function attachedPath(item, requested = "") {
   const root = fs.realpathSync(item.path);
   if (fs.statSync(root).isFile()) {
@@ -222,7 +320,7 @@ function attachedContextManifest(items) {
   if (!items.length) return "";
   const sections = items.map((item) => {
     if (item.type === "paper") {
-      return JSON.stringify({ id: item.id, type: item.type, title: item.paper.title, authors: item.paper.authors, year: item.paper.year, abstract: item.paper.abstract, url: item.paper.url, pdf_url: item.paper.pdfUrl });
+      return `${JSON.stringify({ id: item.id, type: item.type, title: item.paper.title, authors: item.paper.authors, year: item.paper.year, abstract: item.paper.abstract, url: item.paper.url, pdf_url: item.paper.pdfUrl })}\nThis is a paper record containing metadata and an abstract. For full-text reading, use read_attached_paper_pdf with this attachment ID.`;
     }
     const base = { id: item.id, type: item.type, name: item.name, detail: item.detail };
     if (item.type === "skill") {
@@ -293,6 +391,12 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   if (name === "read_attached_file") {
     const result = await readAttachedFile(contextItems, args.attachment_id, args.path, { startPage: args.start_page, endPage: args.end_page });
     return { content: JSON.stringify({ attachment_id: args.attachment_id, path: args.path || "", ...result }) };
+  }
+  if (name === "read_attached_paper_pdf") {
+    const paper = attachedPaper(contextItems, args.attachment_id);
+    const { data, url } = await fetchPublicPdf(paperPdfUrl(paper.paper));
+    const result = await extractPdfTextData(data, `${paper.paper.title || "paper"}.pdf`, { startPage: args.start_page, endPage: args.end_page });
+    return { content: JSON.stringify({ attachment_id: args.attachment_id, source_url: url, ...result }) };
   }
 
   if (name === "write_artifact") {
@@ -503,4 +607,4 @@ function interruptAgent(threadId) {
   return true;
 }
 
-module.exports = { interruptAgent, resolveApproval, runAgent };
+module.exports = { interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent };
