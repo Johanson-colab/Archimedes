@@ -54,6 +54,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
   const selected = useMemo(() => providers.find((item) => item.id === provider) ?? providers.at(-1)!, [provider]);
   const availableModels = useMemo(() => [...new Set([...selected.models, ...catalogModels, model].filter(Boolean))], [catalogModels, model, selected.models]);
 
@@ -71,6 +72,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
       setCatalogModels([]);
       setCatalogError("");
       setModelMenuOpen(false);
+      setModelSearch("");
     }).catch((error) => setFeedback({ kind: "error", text: String(error) })).finally(() => setLoading(false));
   }, [bridge, open]);
 
@@ -86,18 +88,23 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
     setCatalogModels([]);
     setCatalogError("");
     setModelMenuOpen(false);
+    setModelSearch("");
     setFeedback({ kind: "idle", text: "" });
   }
 
-  async function refreshModelCatalog() {
+  async function refreshModelCatalog({ quiet = false } = {}) {
     if (catalogLoading || !baseUrl.trim()) return;
+    if (!apiKey.trim() && !hasApiKey && provider !== "openrouter") {
+      if (!quiet) setCatalogError("Add this provider's API key, then refresh to load the live catalog.");
+      return;
+    }
     setCatalogLoading(true);
     setCatalogError("");
     try {
       const result = await bridge.listProviderModels({ provider, baseUrl, apiKey });
       setCatalogModels(result.models);
     } catch (error) {
-      setCatalogError(String(error).replace(/^Error:\s*/, ""));
+      setCatalogError(String(error).replace(/^Error invoking remote method '[^']+': Error:\s*|^Error:\s*/, ""));
     } finally {
       setCatalogLoading(false);
     }
@@ -106,7 +113,10 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
   function toggleModelMenu() {
     const next = !modelMenuOpen;
     setModelMenuOpen(next);
-    if (next) void refreshModelCatalog();
+    if (next) {
+      setModelSearch("");
+      void refreshModelCatalog({ quiet: true });
+    }
   }
 
   async function testConnection() {
@@ -165,14 +175,14 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
             <label><span><Server size={14} />Base URL</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
             <label><span><KeyRound size={14} />API key</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? "Saved securely · enter a new key to replace" : "Enter API key"} autoComplete="off" spellCheck={false} /></label>
             <label><span><BrainCircuit size={14} />Model</span><div className="model-combobox">
-              <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model identifier" spellCheck={false} aria-expanded={modelMenuOpen} aria-controls="model-catalog" />
+              <input value={model} onChange={(event) => { setModel(event.target.value); setModelSearch(event.target.value); setModelMenuOpen(true); }} placeholder="Model identifier" spellCheck={false} aria-expanded={modelMenuOpen} aria-controls="model-catalog" />
               <button type="button" className="model-catalog-toggle" onClick={toggleModelMenu} title="Show available models" aria-label="Show available models"><ChevronDown size={16} /></button>
               {modelMenuOpen && <div className="model-catalog" id="model-catalog">
                 <div className="model-catalog-header"><span>{catalogModels.length ? `${catalogModels.length} live models` : "Official recommended models"}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title="Refresh live catalog">{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}Refresh</button></div>
                 {catalogError && <p className="model-catalog-note">{catalogError} Showing the recommended list below.</p>}
                 <div className="model-catalog-list">
-                  {availableModels.filter((name) => name.toLowerCase().includes(model.toLowerCase())).map((name) => <button type="button" key={name} className={name === model ? "active" : ""} onClick={() => { setModel(name); setModelMenuOpen(false); }}><span>{name}</span>{name === model && <Check size={13} />}</button>)}
-                  {!availableModels.filter((name) => name.toLowerCase().includes(model.toLowerCase())).length && <p className="model-catalog-empty">No matching model. Keep typing to use a custom identifier.</p>}
+                  {availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())).map((name) => <button type="button" key={name} className={name === model ? "active" : ""} onClick={() => { setModel(name); setModelSearch(""); setModelMenuOpen(false); }}><span>{name}</span>{name === model && <Check size={13} />}</button>)}
+                  {!availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())).length && <p className="model-catalog-empty">No matching model. Keep typing to use a custom identifier.</p>}
                 </div>
               </div>}
             </div></label>
