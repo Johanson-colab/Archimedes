@@ -413,7 +413,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .main-view { min-width: 0; min-height: 0; overflow: hidden; }
 .conversation-layout { display: grid; height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; }
 
-.conversation-scroll { min-height: 0; overflow: auto; scroll-behavior: smooth; }
+.conversation-scroll-area { position: relative; min-height: 0; }
+.conversation-scroll { height: 100%; min-height: 0; overflow: auto; }
+.conversation-jump-latest { position: absolute; z-index: 2; right: max(20px, calc((100% - 760px) / 2)); bottom: 16px; display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; color: #315f4d; background: rgba(255, 255, 255, .96); border: 1px solid #d5dfd8; border-radius: 6px; box-shadow: 0 4px 14px rgba(26, 39, 30, .13); font-size: 10px; font-weight: 700; }
+.conversation-jump-latest:hover { color: #173f31; background: #f3f7f4; border-color: #b9ccc0; }
 .conversation-thread { width: min(100%, 820px); min-height: 100%; margin: 0 auto; padding: 52px 30px 34px; }
 .conversation-message { display: flex; gap: 13px; margin-bottom: 31px; }
 .conversation-message.user { justify-content: flex-end; }

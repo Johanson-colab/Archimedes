@@ -35,6 +35,7 @@ import {
   BookOpen,
   Bot,
   Blocks,
+  ArrowDown,
   CalendarDays,
   Check,
   ChevronDown,
@@ -482,7 +483,6 @@ function App() {
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("retrieval budget reasoning");
   const [selectedSource, setSelectedSource] = useState("");
-  const conversationEndRef = useRef<HTMLDivElement>(null);
   const activeThreadIdRef = useRef<string | null>(null);
   const threadOpenRequestRef = useRef(0);
   const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
@@ -565,10 +565,6 @@ function App() {
       unsubscribeOpenFolder();
     };
   }, [activeProjectId, agentBusy]);
-
-  useEffect(() => {
-    conversationEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, agentBusy, pendingAction, changeSets]);
 
   async function chooseWorkspace() {
     if (agentBusy) return;
@@ -990,7 +986,6 @@ function App() {
               agentBusy={agentBusy}
               pendingAction={pendingAction}
               changeSets={changeSets}
-              conversationEndRef={conversationEndRef}
               onPrompt={setPrompt}
               onSubmit={() => void submitPrompt()}
               onInterrupt={() => void interruptResearchTurn()}
@@ -1038,7 +1033,7 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, prompt, workspace, agentBusy, canInterrupt, pendingAction, changeSets, conversationEndRef, researchMode, contextItems, onPrompt, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onSourceOpen, onApprove, onReject, onOpenFile }: {
+function ConversationView({ messages, events, prompt, workspace, agentBusy, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onPrompt, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onSourceOpen, onApprove, onReject, onOpenFile }: {
   messages: Message[];
   events: TimelineEvent[];
   prompt: string;
@@ -1047,7 +1042,6 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   canInterrupt: boolean;
   pendingAction: PendingAction | null;
   changeSets: WorkspaceChangeSet[];
-  conversationEndRef: React.RefObject<HTMLDivElement | null>;
   researchMode: ResearchMode;
   contextItems: ContextAttachment[];
   onPrompt: (value: string) => void;
@@ -1065,6 +1059,31 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const followOutputRef = useRef(true);
+  const [followingOutput, setFollowingOutput] = useState(true);
+
+  const scrollToLatest = () => {
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
+  };
+
+  const updateFollowState = () => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 56;
+    if (followOutputRef.current !== isNearBottom) {
+      followOutputRef.current = isNearBottom;
+      setFollowingOutput(isNearBottom);
+    }
+  };
+
+  useEffect(() => {
+    if (!followOutputRef.current) return;
+    const frame = requestAnimationFrame(scrollToLatest);
+    return () => cancelAnimationFrame(frame);
+  }, [messages, agentBusy, pendingAction, changeSets]);
 
   useEffect(() => {
     if (!modeMenuOpen) return;
@@ -1076,7 +1095,8 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   }, [modeMenuOpen]);
 
   return <div className="conversation-layout">
-    <div className="conversation-scroll">
+    <div className="conversation-scroll-area">
+    <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
       <div className="conversation-thread">
         {messages.map((message) => (
           <article className={`conversation-message ${message.role}`} key={message.id}>
@@ -1109,8 +1129,16 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
             </div>
           </section>
         )}
-        <div ref={conversationEndRef} />
       </div>
+    </div>
+    {!followingOutput && <button className="conversation-jump-latest" onClick={() => {
+      followOutputRef.current = true;
+      setFollowingOutput(true);
+      scrollToLatest();
+    }} title="Jump to latest message">
+      <ArrowDown size={15} />
+      <span>Latest</span>
+    </button>}
     </div>
 
     <div className="conversation-composer-wrap">
