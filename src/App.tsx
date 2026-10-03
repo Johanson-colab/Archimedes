@@ -27,6 +27,7 @@ import vsCodeLight from "react-syntax-highlighter/dist/esm/styles/prism/vs";
 import LibraryView from "./LibraryView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
+import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
 import TerminalPanel from "./TerminalPanel";
@@ -47,6 +48,7 @@ import {
   Folder,
   FolderOpen,
   FlaskConical,
+  Globe2,
   Lightbulb,
   MessageCircle,
   PanelBottom,
@@ -79,7 +81,7 @@ type Message = {
   id: string;
   role: "user" | "assistant";
   text: string;
-  sources?: string[];
+  sources?: ResearchSource[];
 };
 
 type TimelineEvent = {
@@ -90,7 +92,7 @@ type TimelineEvent = {
 
 type PendingAction = AgentAction & { source: "agent" | "manual" };
 type Modal = "artifact" | "evidence" | "search" | "source" | null;
-type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
+type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 
 const researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [
   { id: "free-chat", label: "Free chat", description: "Talk with AI without a predefined workflow", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },
@@ -98,6 +100,7 @@ const researchModes: Array<{ id: ResearchMode; label: string; description: strin
   { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
   { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
   { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <ScanSearch size={15} />, placeholder: "What paper or draft would you like to review?" },
+  { id: "deep-research", label: "Deep research", description: "Investigate several sources and cite findings", icon: <Globe2 size={15} />, placeholder: "What question should I investigate across sources?" },
 ];
 
 const initialPapers = [
@@ -295,6 +298,8 @@ const previewBridge = {
   listProviderModels: async () => ({ models: [], source: "live" as const }),
   saveModelConfig: async ({ provider, baseUrl, model }: ModelConfigInput) => ({ provider, baseUrl, model, hasApiKey: true, source: "saved" as const }),
   testModelConfig: async ({ model }: ModelConfigInput) => ({ ok: true, latencyMs: 184, resolvedModel: model }),
+  getWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: false }),
+  saveWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: true }),
   runAgent: async ({ prompt, threadId, projectId, mode, contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
@@ -474,6 +479,7 @@ function App() {
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
+  const [webSearchSettingsOpen, setWebSearchSettingsOpen] = useState(false);
   const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -970,6 +976,7 @@ function App() {
           <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
           <div className="main-toolbar-actions">
             {mainSection === "chat" && <button className="model-provider-button" onClick={() => setModelSettingsOpen(true)} title={`Model providers${activeModelConfig?.model ? ` · ${activeModelConfig.model}` : ""}`}><Bot size={16} /><span>{activeModelConfig?.model || "Choose model"}</span></button>}
+            {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setWebSearchSettingsOpen(true)} title="Web search settings" aria-label="Web search settings"><Globe2 size={17} /></button>}
             <button className={terminalOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => setTerminalOpen((open) => !open)} title={terminalOpen ? "Hide bottom panel" : "Show bottom panel"} aria-pressed={terminalOpen}>
               <PanelBottom size={18} />
             </button>
@@ -995,7 +1002,6 @@ function App() {
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
               onRemoveContext={(id) => setContextItems((current) => current.filter((item) => item.id !== id))}
-              onSourceOpen={setSelectedSource}
               onApprove={() => void approvePendingAction()}
               onReject={() => void rejectPendingAction()}
               onOpenFile={(filePath) => void openArtifact(filePath)}
@@ -1027,13 +1033,14 @@ function App() {
         onAddEvidence={addEvidence}
       />
       <ModelSettingsModal bridge={desktopBridge} open={modelSettingsOpen} onClose={() => setModelSettingsOpen(false)} onSaved={setActiveModelConfig} />
+      <WebSearchSettingsModal bridge={desktopBridge} open={webSearchSettingsOpen} onClose={() => setWebSearchSettingsOpen(false)} />
       <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
     </main>
   );
 }
 
-function ConversationView({ messages, events, prompt, workspace, agentBusy, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onPrompt, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onSourceOpen, onApprove, onReject, onOpenFile }: {
+function ConversationView({ messages, events, prompt, workspace, agentBusy, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onPrompt, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile }: {
   messages: Message[];
   events: TimelineEvent[];
   prompt: string;
@@ -1050,7 +1057,6 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   onResearchMode: (mode: ResearchMode) => void;
   onAddContext: (items: ContextAttachment[]) => void;
   onRemoveContext: (id: string) => void;
-  onSourceOpen: (source: string) => void;
   onApprove: () => void;
   onReject: () => void;
   onOpenFile: (filePath: string) => void;
@@ -1104,7 +1110,11 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
             <div className="conversation-message-copy">
               <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
               {message.role === "assistant" ? <MarkdownMessage content={message.text} /> : <p>{message.text}</p>}
-              {message.sources && <div className="source-chips">{message.sources.map((source) => <button key={source} onClick={() => onSourceOpen(source)}>{source}</button>)}</div>}
+              {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
+                {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={`${source.title}\n${source.url}`}>
+                  <FileText size={12} /><span>{source.startPage ? `${new URL(source.url).hostname} · pp. ${source.startPage}${source.endPage !== source.startPage ? `-${source.endPage}` : ""}` : source.title}</span>
+                </a>)}
+              </div>}
             </div>
           </article>
         ))}

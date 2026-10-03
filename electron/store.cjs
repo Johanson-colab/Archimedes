@@ -599,6 +599,31 @@ function getResearchThread(id) {
     ...turn,
     assistant_message: presentStoredAssistantMessage(turn.assistant_message),
   }));
+  const sourcesByTurn = new Map();
+  const sourceEvents = db.prepare(`
+    SELECT turn_id, payload_json FROM research_events
+    WHERE thread_id = ? AND type = 'tool_result' ORDER BY created_at ASC, sequence ASC
+  `).all(id);
+  for (const event of sourceEvents) {
+    try {
+      const payload = JSON.parse(event.payload_json);
+      if (!["read_found_paper_pdf", "read_attached_paper_pdf", "open_web_page"].includes(payload.name)) continue;
+      const result = JSON.parse(payload.content);
+      const url = result.source_url || result.url;
+      if (!url || !result.pages?.length && !result.text) continue;
+      const sources = sourcesByTurn.get(event.turn_id) || [];
+      const source = {
+        url,
+        title: result.title || result.name || new URL(url).hostname,
+        startPage: result.pages?.length ? result.start_page : null,
+        endPage: result.pages?.length ? result.end_page : null,
+      };
+      if (!sources.some((item) => item.url === source.url && item.startPage === source.startPage && item.endPage === source.endPage)) {
+        sources.push(source);
+        sourcesByTurn.set(event.turn_id, sources);
+      }
+    } catch { /* Tool errors and older event formats do not contain source records. */ }
+  }
   const changeSets = db.prepare(`
     SELECT agent_actions.id, agent_actions.task_id, agent_actions.kind, agent_actions.payload_json,
       agent_actions.status, agent_actions.created_at, agent_actions.resolved_at, research_turns.id AS turn_id
@@ -631,7 +656,7 @@ function getResearchThread(id) {
     messages: turns.flatMap((turn) => {
       const items = [{ id: `${turn.id}:user`, turn_id: turn.id, role: "user", text: turn.user_message, created_at: turn.created_at }];
       if (turn.assistant_message) {
-        items.push({ id: `${turn.id}:assistant`, turn_id: turn.id, role: "assistant", text: turn.assistant_message, created_at: turn.completed_at || turn.created_at });
+        items.push({ id: `${turn.id}:assistant`, turn_id: turn.id, role: "assistant", text: turn.assistant_message, created_at: turn.completed_at || turn.created_at, sources: sourcesByTurn.get(turn.id) || [] });
       }
       return items;
     }),

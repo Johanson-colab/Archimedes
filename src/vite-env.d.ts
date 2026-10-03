@@ -22,6 +22,8 @@ interface ResearchDeskBridge {
     listProviderModels: (input: ModelCatalogInput) => Promise<ModelCatalogResponse>;
     saveModelConfig: (input: ModelConfigInput) => Promise<PublicModelConfig>;
     testModelConfig: (input: ModelConfigInput) => Promise<ModelConnectionResult>;
+    getWebSearchConfig: () => Promise<{ provider: "brave"; hasApiKey: boolean }>;
+    saveWebSearchConfig: (input: { apiKey: string }) => Promise<{ provider: "brave"; hasApiKey: boolean }>;
     listLibraries: () => Promise<ResearchLibrary[]>;
     createLibrary: (input: { name: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
     updateLibrary: (id: string, patch: { name?: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
@@ -132,7 +134,14 @@ interface Window {
 }
 
 type ReadingStatus = "unread" | "reading" | "read";
-type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review";
+type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
+
+interface ResearchSource {
+  url: string;
+  title: string;
+  startPage: number | null;
+  endPage: number | null;
+}
 type ContextAttachmentType = "file" | "folder" | "paper" | "plugin" | "skill";
 
 interface ContextPaperMetadata {
@@ -313,6 +322,7 @@ interface ResearchThreadMessage {
   turn_id: string;
   role: "user" | "assistant";
   text: string;
+  sources?: ResearchSource[];
   created_at: string;
 }
 

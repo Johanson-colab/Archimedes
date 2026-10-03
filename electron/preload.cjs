@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listProviderModels: (input) => ipcRenderer.invoke("model-config:list-models", input),
   saveModelConfig: (input) => ipcRenderer.invoke("model-config:save", input),
   testModelConfig: (input) => ipcRenderer.invoke("model-config:test", input),
+  getWebSearchConfig: () => ipcRenderer.invoke("web-search:get-config"),
+  saveWebSearchConfig: (input) => ipcRenderer.invoke("web-search:save-config", input),
   listLibraries: () => ipcRenderer.invoke("library:list"),
   createLibrary: (input) => ipcRenderer.invoke("library:create", input),
   updateLibrary: (id, patch) => ipcRenderer.invoke("library:update", { id, patch }),

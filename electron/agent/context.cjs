@@ -9,6 +9,7 @@ const modeInstructions = {
   "experiment-setup": "Operate in Experiment setup mode. Turn the request into an executable experimental plan covering hypotheses, datasets, baselines, controls, metrics, ablations, compute assumptions, reproducibility, and failure criteria. Inspect existing code and configs before proposing changes.",
   "paper-generation": "Operate in Paper writing mode. Build an evidence-grounded argument and publication-ready structure. Track claims to sources, expose missing evidence, preserve citation placeholders, and propose file writes for drafts rather than claiming they were written.",
   "paper-review": "Operate in Paper review mode. Review the work critically and constructively. Check novelty, correctness, methodology, experimental support, statistics, reproducibility, writing, and claim-evidence alignment. Prioritize findings by severity and recommend concrete revisions.",
+  "deep-research": "Operate in Deep research mode. Break the question into focused subquestions, search academic sources or the general web as appropriate, open several independent primary sources, follow useful leads, and synthesize a structured report with direct source links and PDF page numbers. Separate what sources establish from inference and unresolved gaps. Do not equate snippets or abstracts with full documents.",
 };
 
 function clip(value, limit = MAX_MESSAGE_CHARS) {
@@ -25,6 +26,9 @@ function baseInstructions(mode) {
     "Cite workspace-relative paths and identify attached papers or files when relying on them.",
     "Read and list files automatically when useful. Writing files and running commands require user approval.",
     "For broad topics, literature surveys, prior work, or paper discovery, search academic papers before browsing workspace files.",
+    "When a paper is discovered by title and the user asks about its methods, experiments, benchmarks, or full text, use the exact paper_id from search_academic_papers with read_found_paper_pdf. Read relevant later pages using next_page or a page range. Never claim to have read the whole paper if only some pages were returned.",
+    "For news, websites, blogs, and other non-academic topics, use web_search (type news when appropriate), then open_web_page for the relevant results. Search snippets are leads, not verified page content. If web search is unconfigured, say so clearly; do not invent sources.",
+    "Cite the actual source URL for online claims and include PDF page numbers when available. Recheck source text before asserting that a detail is absent.",
     "Only inspect workspace paths when the request refers to local code, data, drafts, or when a clearly relevant path is known. Do not explore unrelated directories just because they exist.",
     "Only call attachment tools when the attached context manifest contains an attachment, and always use its exact attachment ID.",
     "For a user-attached paper record with a pdf_url, call read_attached_paper_pdf before answering a request to read, summarize, review, or extract technical details from that paper. Do not treat its abstract as full-text evidence.",

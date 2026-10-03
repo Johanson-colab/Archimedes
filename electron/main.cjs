@@ -9,6 +9,7 @@ const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const modelConfig = require("./model-config.cjs");
+const webSearch = require("./web-search.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const store = require("./store.cjs");
@@ -321,6 +322,7 @@ function sanitizeAgentContext(items) {
 app.whenReady().then(() => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
+  webSearch.initializeWebSearch(app.getPath("userData"));
   installApplicationMenu();
   protocol.handle("archimedes-file", (request) => {
     try {
@@ -449,6 +451,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("model-config:test", (_event, input = {}) => modelConfig.testModelConfig(input));
 
+  ipcMain.handle("web-search:get-config", () => webSearch.getPublicWebSearchConfig());
+
+  ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));
+
   ipcMain.handle("library:list", () => store.listLibraries());
 
   ipcMain.handle("library:create", (_event, input) => {
@@ -538,7 +544,7 @@ app.whenReady().then(() => {
     if (!input || typeof input.prompt !== "string" || !input.prompt.trim() || input.prompt.length > 20_000) {
       throw new Error("An Agent task requires a prompt of at most 20000 characters.");
     }
-    const researchModes = new Set(["free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review"]);
+    const researchModes = new Set(["free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review", "deep-research"]);
     const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
     const workspace = resolveWorkspace(input.workspace);
     store.openWorkspace(workspace);

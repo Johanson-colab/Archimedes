@@ -9,6 +9,8 @@ The current implementation includes:
 - approval-gated workspace writes and shell commands;
 - persistent literature libraries with search, import, reading state, and notes;
 - daily arXiv paper discovery and keyword search;
+- title-to-full-text reading of public papers with page-numbered PDF evidence;
+- optional general web and news search, page reading, and a Deep research mode;
 - local files, folders, papers, plugins, and skills as selectable Agent context;
 - an interactive terminal connected to the active research workspace.
 
@@ -39,6 +41,8 @@ ARCHIMEDES_LLM_MODEL=gpt-4.1-mini
 ```
 
 Model credentials stay in the Electron main process and are never exposed to the React renderer. Archimedes can read approved context automatically, while workspace writes and commands pause the Agent until the user approves or rejects them.
+
+General web and news search uses a separate Brave Search API key. Save it from the globe button in Research Chat or set `ARCHIMEDES_WEB_SEARCH_API_KEY` in `.env.local`. The model API key does not provide web search. The Agent can open public HTTPS pages and publicly available PDFs; paywalled pages and scanned PDFs without extractable text may require other access or OCR.
 
 ## Validation
 

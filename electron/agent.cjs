@@ -1,20 +1,20 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const dns = require("node:dns").promises;
-const net = require("node:net");
 const store = require("./store.cjs");
 const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
+const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { resolveApproval, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { extractPdfText, extractPdfTextData } = require("./agent/pdf-reader.cjs");
+const { fetchPublicPdf, isPrivateAddress, openPublicPage } = require("./agent/remote-content.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
 
 const MAX_TOOL_ROUNDS = 8;
 const MAX_ACADEMIC_SEARCHES = 4;
+const MAX_WEB_SEARCHES = 8;
 const MAX_FILE_BYTES = 64_000;
-const MAX_REMOTE_PDF_BYTES = 100 * 1024 * 1024;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
 
@@ -49,6 +49,54 @@ const tools = [
         },
         required: ["attachment_id"],
         additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_found_paper_pdf",
+      description: "Read page-numbered full text of a public PDF found by search_academic_papers in this turn. Use the paper_id from the search result. Search results and abstracts alone are not full-text evidence.",
+      parameters: {
+        type: "object",
+        properties: {
+          paper_id: { type: "string", description: "Exact paper_id returned by search_academic_papers." },
+          start_page: { type: "integer", description: "First PDF page to read, defaults to 1." },
+          end_page: { type: "integer", description: "Last PDF page to read, at most 24 pages per call." },
+        },
+        required: ["paper_id"], additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description: "Search the general web or current news. Use for news, blogs, project sites, technical information, and corroborating research. Results are snippets; open relevant URLs to read their content.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Focused search query." },
+          type: { type: "string", enum: ["web", "news"], description: "Use news for recent reporting; web otherwise." },
+          freshness: { type: "string", enum: ["pd", "pw", "pm", "py"], description: "Optional: past day, week, month, or year." },
+          limit: { type: "integer", description: "Maximum results, 1 to 10." },
+        },
+        required: ["query"], additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "open_web_page",
+      description: "Open a public HTTPS article or web page and return readable text with its source URL. Use after web_search; a search snippet is not full-page evidence. Supports later content with start_char.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Public HTTPS page URL." },
+          start_char: { type: "integer", description: "Optional character offset to continue reading." },
+        },
+        required: ["url"], additionalProperties: false,
       },
     },
   },
@@ -200,76 +248,35 @@ function attachedPaper(items, id) {
   return item;
 }
 
-function isPrivateAddress(address) {
-  if (net.isIP(address) === 4) {
-    const [first, second] = address.split(".").map(Number);
-    return first === 10 || first === 127 || first === 0 || first >= 224 || (first === 169 && second === 254) || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
-  }
-  const normalized = String(address || "").toLowerCase();
-  return normalized === "::1" || normalized === "::" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:");
-}
-
-async function assertPublicHttpsUrl(value) {
-  let parsed;
-  try { parsed = new URL(value); }
-  catch { throw new Error("The attached paper does not provide a valid PDF URL."); }
-  if (parsed.protocol !== "https:" || parsed.username || parsed.password || ["localhost", "localhost.localdomain"].includes(parsed.hostname.toLowerCase())) {
-    throw new Error("Paper PDF URLs must use public HTTPS addresses.");
-  }
-  if (net.isIP(parsed.hostname)) {
-    if (isPrivateAddress(parsed.hostname)) throw new Error("Paper PDF URLs cannot point to a private network.");
-    return parsed;
-  }
-  const addresses = await dns.lookup(parsed.hostname, { all: true });
-  if (!addresses.length || addresses.some((entry) => isPrivateAddress(entry.address))) {
-    throw new Error("Paper PDF URLs cannot point to a private network.");
-  }
-  return parsed;
-}
-
-async function fetchPublicPdf(value) {
-  let url = await assertPublicHttpsUrl(value);
-  for (let redirectCount = 0; redirectCount <= 4; redirectCount += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000);
-    try {
-      const response = await fetch(url, { redirect: "manual", signal: controller.signal, headers: { Accept: "application/pdf" } });
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        const location = response.headers.get("location");
-        if (!location) throw new Error("The PDF server returned a redirect without a destination.");
-        url = await assertPublicHttpsUrl(new URL(location, url).href);
-        continue;
-      }
-      if (!response.ok) throw new Error(`PDF download failed (${response.status}).`);
-      const declaredSize = Number(response.headers.get("content-length") || 0);
-      if (declaredSize > MAX_REMOTE_PDF_BYTES) throw new Error(`The paper PDF is larger than ${Math.round(MAX_REMOTE_PDF_BYTES / 1024 / 1024)} MB.`);
-      const chunks = [];
-      let size = 0;
-      for await (const chunk of response.body || []) {
-        size += chunk.length;
-        if (size > MAX_REMOTE_PDF_BYTES) throw new Error(`The paper PDF is larger than ${Math.round(MAX_REMOTE_PDF_BYTES / 1024 / 1024)} MB.`);
-        chunks.push(chunk);
-      }
-      const data = Buffer.concat(chunks);
-      if (data.subarray(0, 4).toString("ascii") !== "%PDF") throw new Error("The paper URL did not return a PDF document.");
-      return { data, url: url.href };
-    } catch (error) {
-      if (error?.name === "AbortError") throw new Error("PDF download timed out after 30 seconds.");
-      throw error;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  throw new Error("The paper PDF redirected too many times.");
-}
-
 function paperPdfUrl(paper) {
-  const pdfUrl = String(paper.pdfUrl || "").trim();
+  const pdfUrl = String(paper.pdfUrl || paper.pdf_url || "").trim();
   if (pdfUrl) return pdfUrl;
   const paperUrl = String(paper.url || "").trim();
   const match = paperUrl.match(/^https:\/\/(?:export\.)?arxiv\.org\/abs\/([^?#/]+)/i);
   if (match) return `https://arxiv.org/pdf/${match[1]}`;
+  if (/^\d{4}\.\d{4,5}(?:v\d+)?$/.test(String(paper.arxiv_id || ""))) return `https://arxiv.org/pdf/${paper.arxiv_id}`;
   throw new Error("This attached paper has no PDF URL. Add a PDF URL to its literature record or attach the local PDF file.");
+}
+
+async function downloadPaperPdf(paper, cache, signal) {
+  const primary = paperPdfUrl(paper);
+  const arxivId = String(paper.arxiv_id || "").trim();
+  const candidates = [primary];
+  if (/^\d{4}\.\d{4,5}(?:v\d+)?$/.test(arxivId)) {
+    const fallback = `https://arxiv.org/pdf/${arxivId}`;
+    if (!candidates.includes(fallback)) candidates.push(fallback);
+  }
+  let lastError;
+  for (const url of candidates) {
+    try {
+      if (!cache.has(url)) cache.set(url, await fetchPublicPdf(url, signal));
+      return cache.get(url);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 function attachedPath(item, requested = "") {
@@ -353,14 +360,14 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, signal, allowWorkspaceActions }) {
+async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, allowWorkspaceActions }) {
   const args = parseArguments(call.function.arguments);
   const name = call.function.name;
   store.appendResearchEvent({ threadId, turnId, type: "tool_call", payload: { call_id: call.id, name, arguments: args } });
   emit({
     type: "tool",
     title: name.replaceAll("_", " "),
-    detail: name === "search_academic_papers" ? "Searching scholarly metadata" : "Working in the research workspace",
+    detail: name === "search_academic_papers" ? "Searching scholarly metadata" : name === "web_search" ? "Searching the web" : "Reading research sources",
   });
 
   if (name === "search_academic_papers") {
@@ -369,7 +376,11 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     return {
       content: JSON.stringify({
         query: args.query,
-        papers: papers.slice(0, 6).map((paper) => ({
+        papers: papers.slice(0, 6).map((paper, index) => {
+          const paperId = `${index + 1}:${paper.external_id || paper.arxiv_id || paper.doi || paper.url || paper.title}`;
+          foundPapers.set(paperId, paper);
+          return {
+          paper_id: paperId,
           title: paper.title,
           authors: paper.authors,
           year: paper.year,
@@ -381,10 +392,13 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
           doi: paper.doi,
           citation_count: paper.citation_count,
           source: paper.source,
-        })),
+          };
+        }),
       }),
     };
   }
+  if (name === "web_search") return { content: JSON.stringify(await searchWeb(args, { signal })) };
+  if (name === "open_web_page") return { content: JSON.stringify(await openPublicPage(args.url, { startChar: args.start_char, signal })) };
   if (name === "list_workspace_files") return { content: JSON.stringify({ entries: listFiles(root, args.directory) }) };
   if (name === "read_workspace_file") return { content: JSON.stringify({ path: args.path, content: readFile(root, args.path) }) };
   if (name === "list_attached_files") return { content: JSON.stringify({ attachment_id: args.attachment_id, entries: listAttachedFiles(contextItems, args.attachment_id, args.directory) }) };
@@ -394,9 +408,16 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   }
   if (name === "read_attached_paper_pdf") {
     const paper = attachedPaper(contextItems, args.attachment_id);
-    const { data, url } = await fetchPublicPdf(paperPdfUrl(paper.paper));
+    const { data, url } = await downloadPaperPdf(paper.paper, pdfCache, signal);
     const result = await extractPdfTextData(data, `${paper.paper.title || "paper"}.pdf`, { startPage: args.start_page, endPage: args.end_page });
     return { content: JSON.stringify({ attachment_id: args.attachment_id, source_url: url, ...result }) };
+  }
+  if (name === "read_found_paper_pdf") {
+    const paper = foundPapers.get(String(args.paper_id || ""));
+    if (!paper) throw new Error("Select a paper_id returned by search_academic_papers in this turn.");
+    const { data, url } = await downloadPaperPdf(paper, pdfCache, signal);
+    const result = await extractPdfTextData(data, `${paper.title || "paper"}.pdf`, { startPage: args.start_page, endPage: args.end_page });
+    return { content: JSON.stringify({ paper_id: args.paper_id, title: paper.title, source_url: url, ...result }) };
   }
 
   if (name === "write_artifact") {
@@ -532,13 +553,17 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
     }
     const messages = context.messages;
     let academicSearches = 0;
+    let webSearches = 0;
+    const foundPapers = new Map();
+    const pdfCache = new Map();
+    const maxToolRounds = mode === "deep-research" ? 20 : MAX_TOOL_ROUNDS;
     const allowWorkspaceActions = workspaceActionRequested(prompt);
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model}` });
 
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-      const availableTools = academicSearches >= MAX_ACADEMIC_SEARCHES
-        ? tools.filter((tool) => tool.function.name !== "search_academic_papers")
-        : tools;
+    for (let round = 0; round < maxToolRounds; round += 1) {
+      const availableTools = tools.filter((tool) =>
+        !(tool.function.name === "search_academic_papers" && academicSearches >= (mode === "deep-research" ? 6 : MAX_ACADEMIC_SEARCHES)) &&
+        !(tool.function.name === "web_search" && webSearches >= (mode === "deep-research" ? MAX_WEB_SEARCHES : 3)));
       const message = await complete(config, messages, {
         signal: controller.signal,
         availableTools,
@@ -555,7 +580,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
       for (const call of message.tool_calls) {
         try {
           if (call.function.name === "search_academic_papers") {
-            if (academicSearches >= MAX_ACADEMIC_SEARCHES) {
+            if (academicSearches >= (mode === "deep-research" ? 6 : MAX_ACADEMIC_SEARCHES)) {
               const content = JSON.stringify({ error: "The academic search budget is exhausted. Synthesize the findings already collected." });
               messages.push({ role: "tool", tool_call_id: call.id, content });
               store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
@@ -563,7 +588,16 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
             }
             academicSearches += 1;
           }
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, signal: controller.signal, allowWorkspaceActions });
+          if (call.function.name === "web_search") {
+            if (webSearches >= (mode === "deep-research" ? MAX_WEB_SEARCHES : 3)) {
+              const content = JSON.stringify({ error: "The web search budget is exhausted. Synthesize from the sources already opened." });
+              messages.push({ role: "tool", tool_call_id: call.id, content });
+              store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
+              continue;
+            }
+            webSearches += 1;
+          }
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, allowWorkspaceActions });
           if (result.action) actions.push(result.action);
           messages.push({ role: "tool", tool_call_id: call.id, content: result.content });
           store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content: result.content } });
