@@ -601,17 +601,32 @@ function getResearchThread(id) {
   }));
   const sourcesByTurn = new Map();
   const sourceEvents = db.prepare(`
-    SELECT turn_id, payload_json FROM research_events
-    WHERE thread_id = ? AND type = 'tool_result' ORDER BY created_at ASC, sequence ASC
+    SELECT turn_id, type, payload_json FROM research_events
+    WHERE thread_id = ? AND type IN ('source_evidence', 'tool_result')
+    ORDER BY CASE WHEN type = 'source_evidence' THEN 0 ELSE 1 END, created_at ASC, sequence ASC
   `).all(id);
   for (const event of sourceEvents) {
     try {
       const payload = JSON.parse(event.payload_json);
+      if (event.type === "source_evidence") {
+        if (payload.kind !== "read" || !payload.url) continue;
+        const sources = sourcesByTurn.get(event.turn_id) || [];
+        const previous = sources.find((item) => item.url === payload.url && item.endPage !== null && item.endPage + 1 === payload.page);
+        if (previous) previous.endPage = payload.page;
+        else if (!sources.some((item) => item.url === payload.url && item.startPage === (payload.page || null))) {
+          sources.push({ url: payload.url, title: payload.title || new URL(payload.url).hostname,
+            startPage: payload.page || null, endPage: payload.page || null,
+            excerpt: payload.excerpt || "", query: payload.query || "", retrievedAt: payload.retrieved_at || "" });
+        }
+        sourcesByTurn.set(event.turn_id, sources);
+        continue;
+      }
       if (!["read_found_paper_pdf", "read_attached_paper_pdf", "open_web_page"].includes(payload.name)) continue;
       const result = JSON.parse(payload.content);
       const url = result.source_url || result.url;
       if (!url || !result.pages?.length && !result.text) continue;
       const sources = sourcesByTurn.get(event.turn_id) || [];
+      if (sources.some((item) => item.url === url && item.retrievedAt)) continue;
       const source = {
         url,
         title: result.title || result.name || new URL(url).hostname,

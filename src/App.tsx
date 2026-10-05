@@ -1111,7 +1111,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
               <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
               {message.role === "assistant" ? <MarkdownMessage content={message.text} /> : <p>{message.text}</p>}
               {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
-                {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={`${source.title}\n${source.url}`}>
+                {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
                   <FileText size={12} /><span>{source.startPage ? `${new URL(source.url).hostname} · pp. ${source.startPage}${source.endPage !== source.startPage ? `-${source.endPage}` : ""}` : source.title}</span>
                 </a>)}
               </div>}

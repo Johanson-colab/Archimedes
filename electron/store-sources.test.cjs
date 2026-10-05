@@ -31,3 +31,24 @@ test("shows only successfully opened PDF pages and web pages as reply sources", 
     fs.rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test("persists excerpts and page numbers while keeping search hits as leads", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-evidence-"));
+  try {
+    store.openWorkspace(workspace);
+    const thread = store.createResearchThread({ prompt: "Find the benchmarks", mode: "deep-research" });
+    const turn = store.startResearchTurn({ threadId: thread.id, taskId: null, prompt: "Find the benchmarks", mode: "deep-research" });
+    const base = { url: "https://arxiv.org/pdf/2609.14857", title: "Paper", retrieved_at: "2026-10-05T00:00:00Z" };
+    store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "source_evidence", payload: { ...base, kind: "discovery", excerpt: "abstract" } });
+    store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "source_evidence", payload: { ...base, kind: "read", excerpt: "Method text", page: 3 } });
+    store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "source_evidence", payload: { ...base, kind: "read", excerpt: "Experiment text", page: 4 } });
+    store.finishResearchTurn(turn.id, { response: "Methods are on page 3." });
+    assert.deepEqual(store.getResearchThread(thread.id).messages.at(-1).sources, [{
+      url: base.url, title: "Paper", startPage: 3, endPage: 4,
+      excerpt: "Method text", query: "", retrievedAt: base.retrieved_at,
+    }]);
+  } finally {
+    store.openWorkspace(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-evidence-close-")));
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});

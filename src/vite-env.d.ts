@@ -141,6 +141,9 @@ interface ResearchSource {
   title: string;
   startPage: number | null;
   endPage: number | null;
+  excerpt?: string;
+  query?: string;
+  retrievedAt?: string;
 }
 type ContextAttachmentType = "file" | "folder" | "paper" | "plugin" | "skill";
 

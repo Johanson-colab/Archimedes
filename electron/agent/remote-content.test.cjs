@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { isPrivateAddress, pageTextFromHtml, publicHttpsUrl } = require("./remote-content.cjs");
+const { findInText, isPrivateAddress, pageTextFromHtml, publicHttpsUrl } = require("./remote-content.cjs");
 
 test("blocks local and non-HTTPS page destinations", () => {
   assert.throws(() => publicHttpsUrl("http://example.org"), /public HTTPS/);
@@ -17,4 +17,18 @@ test("extracts readable article text without page boilerplate", () => {
   assert.match(article.text, /Research update/);
   assert.match(article.text, /second paragraph/);
   assert.doesNotMatch(article.text, /Menu/);
+});
+
+test("finds page passages with offsets for follow-up reading", () => {
+  const text = "Methods include one benchmark. Results compare another benchmark.";
+  const result = findInText(text, "BENCHMARK", { contextChars: 4 });
+  assert.equal(result.match_count, 2);
+  assert.equal(result.matches[0].start_char, 20);
+  assert.match(text.slice(result.matches[1].start_char), /^benchmark/);
+});
+
+test("extracts documentation text when article detection fails", () => {
+  const result = pageTextFromHtml("<html><head><title>Docs</title></head><body><nav>Skip</nav><main><h1>API</h1><p>Use the search endpoint.</p></main></body></html>", "https://example.org/docs");
+  assert.match(result.text, /search endpoint/);
+  assert.doesNotMatch(result.text, /Skip/);
 });

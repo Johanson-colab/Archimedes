@@ -7,6 +7,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
+const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const modelConfig = require("./model-config.cjs");
 const webSearch = require("./web-search.cjs");
@@ -556,6 +557,7 @@ app.whenReady().then(() => {
       projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
       mode,
       contextItems,
+      browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => event.sender.send("agent:event", payload),
     });
   });

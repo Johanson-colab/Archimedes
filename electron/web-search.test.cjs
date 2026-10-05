@@ -35,3 +35,24 @@ test("rejects missing keys and malformed result rows", async () => {
   assert.deepEqual(normalizeSearchResults({ web: { results: [{ title: "No URL" }] } }, "web"), []);
   await assert.rejects(searchWeb({ query: "test" }, { apiKey: "", fetchImpl: async () => {} }), /Brave Search API key/);
 });
+
+test("runs several filtered web queries and merges duplicate URLs", async () => {
+  const requests = [];
+  const result = await searchWeb({ queries: ["agent memory", "memory benchmark"], domains: ["arxiv.org"], freshness: "2026-09-01to2026-10-01" }, {
+    apiKey: "test-key",
+    fetchImpl: async (url) => {
+      requests.push(url);
+      return { ok: true, json: async () => ({ web: { results: [
+        { title: "Paper", url: "https://arxiv.org/abs/1234.5678", description: "Methods" },
+        { title: "Unrelated", url: "https://example.org/page" },
+      ] } }) };
+    },
+  });
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].searchParams.get("freshness"), "2026-09-01to2026-10-01");
+  assert.match(requests[0].searchParams.get("q"), /site:arxiv\.org/);
+  assert.equal(result.searches.length, 2);
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].url, "https://arxiv.org/abs/1234.5678");
+  await assert.rejects(searchWeb({ query: "test", domains: ["https://example.org/path"] }, { apiKey: "test-key" }), /hostnames/);
+});

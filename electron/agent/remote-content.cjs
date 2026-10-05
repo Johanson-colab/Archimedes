@@ -35,6 +35,8 @@ function publicHttpsUrl(value) {
 
 function requestOnce(url, maxBytes, signal) {
   return new Promise((resolve, reject) => {
+    let abortListener;
+    const cleanup = () => { if (signal && abortListener) signal.removeEventListener("abort", abortListener); };
     const request = https.request(url, {
       method: "GET",
       headers: { Accept: "text/html,application/pdf;q=0.9" },
@@ -52,11 +54,13 @@ function requestOnce(url, maxBytes, signal) {
       const location = response.headers.location;
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && location) {
         response.resume();
+        cleanup();
         resolve({ redirect: new URL(location, url).href });
         return;
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         response.resume();
+        cleanup();
         reject(new Error(`Page download failed (${response.statusCode}).`));
         return;
       }
@@ -72,14 +76,15 @@ function requestOnce(url, maxBytes, signal) {
         if (size > maxBytes) response.destroy(new Error("The remote document is too large."));
         else chunks.push(chunk);
       });
-      response.on("end", () => resolve({ data: Buffer.concat(chunks), contentType: String(response.headers["content-type"] || "") }));
-      response.on("error", reject);
+      response.on("end", () => { cleanup(); resolve({ data: Buffer.concat(chunks), contentType: String(response.headers["content-type"] || "") }); });
+      response.on("error", (error) => { cleanup(); reject(error); });
     });
     request.on("timeout", () => request.destroy(new Error("Remote document download timed out after 30 seconds.")));
-    request.on("error", reject);
+    request.on("error", (error) => { cleanup(); reject(error); });
     if (signal) {
       if (signal.aborted) { request.destroy(new Error("Request interrupted.")); return; }
-      signal.addEventListener("abort", () => request.destroy(new Error("Request interrupted.")), { once: true });
+      abortListener = () => request.destroy(new Error("Request interrupted."));
+      signal.addEventListener("abort", abortListener, { once: true });
     }
     request.end();
   });
@@ -104,13 +109,18 @@ async function fetchPublicPdf(value, signal) {
 function pageTextFromHtml(html, url) {
   const document = new JSDOM(html, { url }).window.document;
   const article = new Readability(document).parse();
-  if (!article?.content) throw new Error("No readable article text was found on this page.");
-  const content = new JSDOM(article.content, { url }).window.document;
-  const blocks = [...content.querySelectorAll("h1,h2,h3,h4,p,li,blockquote,pre")]
+  const content = article?.content
+    ? new JSDOM(article.content, { url }).window.document
+    : new JSDOM(html, { url }).window.document;
+  if (!article?.content) content.querySelectorAll("script,style,nav,header,footer,aside,form,svg").forEach((node) => node.remove());
+  const root = article?.content ? content : content.querySelector("main,article") || content.body;
+  const blocks = [...root.querySelectorAll("h1,h2,h3,h4,p,li,blockquote,pre")]
     .filter((node) => !node.parentElement?.closest("li,blockquote,pre") || ["LI", "BLOCKQUOTE", "PRE"].includes(node.tagName))
     .map((node) => node.textContent?.replace(/\s+/g, " ").trim() || "")
     .filter(Boolean);
-  return { title: article.title || document.title || url, text: blocks.join("\n\n") || article.textContent.trim() };
+  const text = blocks.join("\n\n") || (root.textContent || "").replace(/\s+/g, " ").trim();
+  if (!text) throw new Error("No readable text was found on this page.");
+  return { title: article?.title || content.title || url, text };
 }
 
 async function openPublicPage(value, options = {}) {
@@ -121,7 +131,37 @@ async function openPublicPage(value, options = {}) {
   const article = pageTextFromHtml(result.data.toString("utf8"), result.url);
   const start = Math.max(0, Math.min(Number(options.startChar) || 0, article.text.length));
   const end = Math.min(article.text.length, start + 12_000);
-  return { url: result.url, title: article.title, start_char: start, end_char: end, next_char: end < article.text.length ? end : null, text: article.text.slice(start, end) };
+  return { url: result.url, title: article.title, start_char: start, end_char: end, next_char: end < article.text.length ? end : null, text: article.text.slice(start, end), retrieved_at: new Date().toISOString() };
+}
+
+function findInText(text, query, { maxMatches = 8, contextChars = 180 } = {}) {
+  const needle = String(query || "").trim();
+  if (!needle || needle.length > 200) throw new Error("Find requires text of at most 200 characters.");
+  const matches = [];
+  const lowerText = text.toLocaleLowerCase();
+  const lowerNeedle = needle.toLocaleLowerCase();
+  let cursor = 0;
+  let total = 0;
+  while (cursor < text.length) {
+    const position = lowerText.indexOf(lowerNeedle, cursor);
+    if (position < 0) break;
+    total += 1;
+    if (matches.length < maxMatches) matches.push({
+      start_char: position,
+      excerpt: text.slice(Math.max(0, position - contextChars), Math.min(text.length, position + needle.length + contextChars)),
+    });
+    cursor = position + Math.max(needle.length, 1);
+  }
+  return { query: needle, match_count: total, matches };
+}
+
+async function findPublicPage(value, query, options = {}) {
+  const result = await fetchPublicDocument(value, { signal: options.signal });
+  if (!/html|xml/i.test(result.contentType) && !/^\s*(?:<!doctype html|<html)/i.test(result.data.toString("utf8", 0, 100))) {
+    throw new Error("The URL did not return a readable HTML page.");
+  }
+  const article = pageTextFromHtml(result.data.toString("utf8"), result.url);
+  return { url: result.url, title: article.title, retrieved_at: new Date().toISOString(), ...findInText(article.text, query) };
 }
 
 async function readPublicPdf(value, options = {}) {
@@ -130,4 +170,4 @@ async function readPublicPdf(value, options = {}) {
   return { source_url: url, ...result };
 }
 
-module.exports = { fetchPublicPdf, isPrivateAddress, openPublicPage, pageTextFromHtml, publicHttpsUrl, readPublicPdf };
+module.exports = { fetchPublicPdf, findInText, findPublicPage, isPrivateAddress, openPublicPage, pageTextFromHtml, publicHttpsUrl, readPublicPdf };
