@@ -495,7 +495,7 @@ function createPaperHighlight(paperId, input) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, paperId, pageNumber, quote, Number.isInteger(input.start_offset) ? input.start_offset : null,
       Number.isInteger(input.end_offset) ? input.end_offset : null, String(input.note || "").slice(0, 5_000),
-      ["green", "yellow", "blue", "pink"].includes(input.color) ? input.color : "green", now, now);
+      ["green", "yellow", "blue", "pink", "red"].includes(input.color) ? input.color : "green", now, now);
   return db.prepare("SELECT * FROM paper_highlights WHERE id = ?").get(id);
 }
 

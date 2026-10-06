@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent as ReactWheelEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import {
   AlignLeft,
   ArrowLeft,
@@ -212,6 +216,12 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
 type SelectionAnchor = { x: number; y: number };
+const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: string }> = [
+  { value: "yellow", label: "Yellow" },
+  { value: "red", label: "Red" },
+  { value: "blue", label: "Blue" },
+  { value: "green", label: "Green" },
+];
 
 function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, onAgentRun }: {
   paper: LibraryPaper; library: ResearchLibrary; onBack: () => void;
@@ -226,6 +236,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [passages, setPassages] = useState<PaperPassage[]>([]);
   const [selection, setSelection] = useState("");
   const [selectionAnchor, setSelectionAnchor] = useState<SelectionAnchor | null>(null);
+  const [highlightPickerOpen, setHighlightPickerOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
@@ -246,12 +257,16 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   }, [bridge, paper.id, workspace]);
   useEffect(() => { void loadReader(); }, [loadReader]);
 
-  function closeSelection() { setSelection(""); setSelectionAnchor(null); setCommentOpen(false); setComment(""); }
+  const selectedHighlight = reader?.highlights.find((highlight) => highlight.page_number === pageNumber &&
+    (highlight.quote === selection || highlight.quote.includes(selection) || selection.includes(highlight.quote))) ?? null;
+
+  function closeSelection() { setSelection(""); setSelectionAnchor(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
   function receiveSelection(text: string, anchor: SelectionAnchor) {
     const next = text.replace(/\s+/g, " ").trim();
     if (!next) return;
     setSelection(next.slice(0, 5000));
     setSelectionAnchor(anchor);
+    setHighlightPickerOpen(false);
     setCommentOpen(false);
   }
   async function prepare(kind: "remote" | "local") {
@@ -286,6 +301,14 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       setReader((current) => current ? { ...current, highlights: [...current.highlights, item] } : current);
       closeSelection();
     } catch (highlightError) { setError(readableError(highlightError, "Could not save this highlight.")); }
+  }
+  async function deleteSelectedHighlight() {
+    if (!selectedHighlight) return;
+    try {
+      await bridge.deleteLibraryPaperHighlight(selectedHighlight.id, workspace);
+      setReader((current) => current ? { ...current, highlights: current.highlights.filter((highlight) => highlight.id !== selectedHighlight.id) } : current);
+      closeSelection();
+    } catch (deleteError) { setError(readableError(deleteError, "Could not remove this highlight.")); }
   }
   async function askAI(question: string) {
     const prompt = question.trim();
@@ -337,7 +360,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             <span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span>
           </div>
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} onSelection={receiveSelection} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} onSelection={receiveSelection} onClearSelection={closeSelection} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -346,21 +369,23 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </main>
       {chatOpen && <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2></div><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></header>
-        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span><p>{message.text}</p></article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>Ask about this paper</strong><p>Select any passage, then ask for an explanation, a translation, or a critical reading.</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />Archimedes is reading…</div>}</div>
+        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{message.text}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>Ask about this paper</strong><p>Select any passage, then ask for an explanation, a translation, or a critical reading.</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />Archimedes is reading…</div>}</div>
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         <div className="paper-ai-compose"><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder="Ask about the paper…" rows={3} /><button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button></div>
       </aside>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
-      <button onClick={() => void saveHighlight()}><Highlighter size={15} />高亮</button><button onClick={translateSelection}><Languages size={15} />翻译</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />评论</button><button onClick={openAskForSelection}><Bot size={15} />向 AI 提问</button>
+      <button onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />高亮</button><button onClick={translateSelection}><Languages size={15} />翻译</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />评论</button><button onClick={openAskForSelection}><Bot size={15} />向 AI 提问</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />删除高亮</button>}
+      {highlightPickerOpen && <div className="paper-highlight-picker" role="menu" aria-label="Highlight color">{HIGHLIGHT_COLORS.map((color) => <button key={color.value} className={`highlight-color ${color.value}`} title={color.label} onClick={() => void saveHighlight("", color.value)}><span /></button>)}</div>}
       {commentOpen && <form className="paper-comment-composer" onSubmit={(event) => { event.preventDefault(); void saveHighlight(comment, "blue"); }}><textarea autoFocus value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment…" rows={3} /><div><button type="button" onClick={closeSelection}>Cancel</button><button type="submit" disabled={!comment.trim()}>Save</button></div></form>}
     </div>}
   </section>;
 }
 
-function PdfPaperCanvas({ url, pageNumber, onSelection }: { url: string; pageNumber: number; onSelection: (text: string, anchor: SelectionAnchor) => void }) {
+function PdfPaperCanvas({ url, pageNumber, highlights, onSelection, onClearSelection }: { url: string; pageNumber: number; highlights: PaperHighlight[]; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(880);
+  const [zoom, setZoom] = useState(1);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   useEffect(() => {
@@ -388,7 +413,8 @@ function PdfPaperCanvas({ url, pageNumber, onSelection }: { url: string; pageNum
         const pdfDocument = await loadingTask.promise;
         const pdfPage = await pdfDocument.getPage(pageNumber);
         const baseViewport = pdfPage.getViewport({ scale: 1 });
-        const scale = Math.min(1.65, Math.max(.7, (width - 72) / baseViewport.width));
+        const fitScale = Math.min(1.65, Math.max(.7, (width - 72) / baseViewport.width));
+        const scale = fitScale * zoom;
         const viewport = pdfPage.getViewport({ scale });
         const page = window.document.createElement("div");
         page.className = "arch-pdf-page";
@@ -410,21 +436,51 @@ function PdfPaperCanvas({ url, pageNumber, onSelection }: { url: string; pageNum
         const textContent = await pdfPage.getTextContent();
         const layer = new pdfjs.TextLayer({ textContentSource: textContent, container: textLayer, viewport });
         await layer.render();
+        applyPdfHighlights(textLayer, highlights.filter((highlight) => highlight.page_number === pageNumber));
         if (!cancelled) setState("ready");
         pdfPage.cleanup(); pdfDocument.cleanup();
       } catch (renderError) { if (!cancelled) { setState("error"); setError(readableError(renderError, "The PDF page could not be rendered.")); } }
     }
     void render();
     return () => { cancelled = true; destroyLoadingTask?.(); };
-  }, [pageNumber, url, width]);
+  }, [highlights, pageNumber, url, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
     const selection = window.getSelection();
-    if (!selection?.rangeCount || !selection.toString().trim() || !target.contains(selection.anchorNode)) return;
+    if (!selection?.rangeCount || !selection.toString().trim() || !target.contains(selection.anchorNode)) { onClearSelection(); return; }
     const rect = selection.getRangeAt(0).getBoundingClientRect();
     onSelection(selection.toString(), { x: rect.left + rect.width / 2, y: rect.top });
   }
-  return <div className="arch-pdf-stage" onMouseUp={selected}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}</div>;
+  function zoomWithTrackpad(event: ReactWheelEvent<HTMLDivElement>) {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    setZoom((current) => Math.min(3.2, Math.max(.55, current * (event.deltaY < 0 ? 1.12 : .89))));
+  }
+  return <div className="arch-pdf-stage" onMouseDown={onClearSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
+}
+
+function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighlight[]) {
+  if (!highlights.length) return;
+  const spans = Array.from(textLayer.querySelectorAll("span"));
+  const compact = (value: string) => value.replace(/\s+/g, "").toLocaleLowerCase();
+  const spanRanges: Array<{ element: HTMLSpanElement; start: number; end: number }> = [];
+  let cursor = 0;
+  for (const element of spans) {
+    const length = compact(element.textContent || "").length;
+    spanRanges.push({ element, start: cursor, end: cursor + length });
+    cursor += length;
+  }
+  const source = compact(spans.map((span) => span.textContent || "").join(""));
+  for (const highlight of highlights) {
+    const quote = compact(highlight.quote);
+    if (!quote) continue;
+    const start = source.indexOf(quote);
+    if (start < 0) continue;
+    const end = start + quote.length;
+    for (const range of spanRanges) if (range.start < end && range.end > start) {
+      range.element.classList.add("arch-pdf-highlight", `arch-pdf-highlight-${highlight.color}`);
+    }
+  }
 }
 
 function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | "new" | null; onClose: () => void; onSave: (input: { name: string; description: string; color: string }) => Promise<void> }) {

@@ -264,7 +264,7 @@ interface PaperHighlight {
   start_offset: number | null;
   end_offset: number | null;
   note: string;
-  color: "green" | "yellow" | "blue" | "pink";
+  color: "green" | "yellow" | "blue" | "pink" | "red";
   created_at: string;
   updated_at: string;
 }
@@ -274,7 +274,7 @@ interface PaperHighlightInput {
   start_offset?: number;
   end_offset?: number;
   note?: string;
-  color?: "green" | "yellow" | "blue" | "pink";
+  color?: "green" | "yellow" | "blue" | "pink" | "red";
 }
 interface PaperPassage { page_number: number; start_offset: number; end_offset: number; excerpt: string; }
 interface PaperReaderState { asset: PaperReaderAsset | null; pages: PaperReaderPage[]; highlights: PaperHighlight[]; }
