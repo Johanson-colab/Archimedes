@@ -384,6 +384,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
 
 function PdfPaperCanvas({ url, pageNumber, highlights, onSelection, onClearSelection }: { url: string; pageNumber: number; highlights: PaperHighlight[]; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const highlightsRef = useRef(highlights);
   const [width, setWidth] = useState(880);
   const [zoom, setZoom] = useState(1);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -396,13 +397,20 @@ function PdfPaperCanvas({ url, pageNumber, highlights, onSelection, onClearSelec
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
+    highlightsRef.current = highlights;
+    const textLayer = hostRef.current?.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
+    if (textLayer) applyPdfHighlights(textLayer, highlights.filter((highlight) => highlight.page_number === pageNumber));
+  }, [highlights, pageNumber]);
+  useEffect(() => {
     let cancelled = false;
     let destroyLoadingTask: (() => void) | undefined;
     const host = hostRef.current;
     if (!host || !url) return;
     const renderHost = host;
     async function render() {
-      setState("loading"); setError(""); renderHost.replaceChildren();
+      const hasVisiblePage = Boolean(renderHost.querySelector(".arch-pdf-page"));
+      if (!hasVisiblePage) setState("loading");
+      setError("");
       try {
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
@@ -428,7 +436,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, onSelection, onClearSelec
         const textLayer = window.document.createElement("div");
         textLayer.className = "arch-pdf-text-layer";
         textLayer.style.setProperty("--total-scale-factor", String(scale));
-        page.append(textLayer); renderHost.append(page);
+        page.append(textLayer);
         const context = canvas.getContext("2d");
         if (!context) throw new Error("Canvas rendering is unavailable.");
         context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -436,14 +444,14 @@ function PdfPaperCanvas({ url, pageNumber, highlights, onSelection, onClearSelec
         const textContent = await pdfPage.getTextContent();
         const layer = new pdfjs.TextLayer({ textContentSource: textContent, container: textLayer, viewport });
         await layer.render();
-        applyPdfHighlights(textLayer, highlights.filter((highlight) => highlight.page_number === pageNumber));
-        if (!cancelled) setState("ready");
+        applyPdfHighlights(textLayer, highlightsRef.current.filter((highlight) => highlight.page_number === pageNumber));
+        if (!cancelled) { renderHost.replaceChildren(page); setState("ready"); }
         pdfPage.cleanup(); pdfDocument.cleanup();
       } catch (renderError) { if (!cancelled) { setState("error"); setError(readableError(renderError, "The PDF page could not be rendered.")); } }
     }
     void render();
     return () => { cancelled = true; destroyLoadingTask?.(); };
-  }, [highlights, pageNumber, url, width, zoom]);
+  }, [pageNumber, url, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
     const selection = window.getSelection();
@@ -460,8 +468,9 @@ function PdfPaperCanvas({ url, pageNumber, highlights, onSelection, onClearSelec
 }
 
 function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighlight[]) {
-  if (!highlights.length) return;
   const spans = Array.from(textLayer.querySelectorAll("span"));
+  for (const span of spans) span.classList.remove("arch-pdf-highlight", "arch-pdf-highlight-yellow", "arch-pdf-highlight-red", "arch-pdf-highlight-blue", "arch-pdf-highlight-green", "arch-pdf-highlight-pink");
+  if (!highlights.length) return;
   const compact = (value: string) => value.replace(/\s+/g, "").toLocaleLowerCase();
   const spanRanges: Array<{ element: HTMLSpanElement; start: number; end: number }> = [];
   let cursor = 0;
@@ -471,14 +480,16 @@ function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighligh
     cursor += length;
   }
   const source = compact(spans.map((span) => span.textContent || "").join(""));
+  const painted = new Set<HTMLSpanElement>();
   for (const highlight of highlights) {
     const quote = compact(highlight.quote);
     if (!quote) continue;
     const start = source.indexOf(quote);
     if (start < 0) continue;
     const end = start + quote.length;
-    for (const range of spanRanges) if (range.start < end && range.end > start) {
+    for (const range of spanRanges) if (range.start < end && range.end > start && !painted.has(range.element)) {
       range.element.classList.add("arch-pdf-highlight", `arch-pdf-highlight-${highlight.color}`);
+      painted.add(range.element);
     }
   }
 }
