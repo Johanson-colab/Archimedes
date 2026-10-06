@@ -926,3 +926,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .paper-ai-markdown blockquote { padding-left: 8px; color: #63756a; border-left: 2px solid #9ec6ab; }
 .paper-ai-markdown a { color: #217258; text-decoration: underline; }
 .paper-ai-markdown .katex-display { overflow-x: auto; overflow-y: hidden; }
+.paper-ai-header-actions { display: flex; gap: 3px; }
+.paper-ai-header-actions .reader-icon-button:disabled { cursor: wait; opacity: .45; }
+.paper-ai-suggestions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.paper-ai-suggestions button { padding: 5px 7px; color: #39745b; background: #fbfdfb; border: 1px solid #cfe1d4; border-radius: 12px; font-size: 9px; font-weight: 700; }
+.paper-ai-suggestions button:hover { color: #205c45; background: #e8f3eb; border-color: #a7cdb2; }

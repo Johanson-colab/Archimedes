@@ -216,6 +216,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
 type SelectionAnchor = { x: number; y: number };
+const PAPER_BRIEFING_REQUEST = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise Chinese Markdown with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
 const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: string }> = [
   { value: "yellow", label: "Yellow" },
   { value: "red", label: "Red" },
@@ -244,6 +245,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [chatBusy, setChatBusy] = useState(false);
   const [chatThreadId, setChatThreadId] = useState<string | undefined>();
   const [chatMessages, setChatMessages] = useState<PaperChatMessage[]>([]);
+  const [briefingVersion, setBriefingVersion] = useState(0);
+  const briefingStartedRef = useRef(false);
   const ready = reader?.asset?.status === "ready" && reader.pages.length > 0 && Boolean(reader.asset.preview_url);
   const currentPage = reader?.pages.find((page) => page.page_number === pageNumber) ?? reader?.pages[0] ?? null;
   const lastPage = reader?.asset?.page_count ?? reader?.pages.at(-1)?.page_number ?? 1;
@@ -256,6 +259,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     } catch (loadError) { setError(readableError(loadError, "Could not load the paper reader.")); }
   }, [bridge, paper.id, workspace]);
   useEffect(() => { void loadReader(); }, [loadReader]);
+  useEffect(() => {
+    briefingStartedRef.current = false;
+    setChatThreadId(undefined);
+    setChatMessages([]);
+  }, [paper.id]);
 
   const selectedHighlight = reader?.highlights.find((highlight) => highlight.page_number === pageNumber &&
     (highlight.quote === selection || highlight.quote.includes(selection) || selection.includes(highlight.quote))) ?? null;
@@ -310,15 +318,18 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       closeSelection();
     } catch (deleteError) { setError(readableError(deleteError, "Could not remove this highlight.")); }
   }
-  async function askAI(question: string) {
+  const paperContext: ContextAttachment[] = [{ id: `paper:${paper.id}`, type: "paper", name: paper.title, detail: `${paper.year ?? "n.d."} · ${paper.venue || "Paper"}`, paper: { title: paper.title, authors: paper.authors, year: paper.year, abstract: paper.abstract, url: paper.url, pdfUrl: paper.pdf_url } }];
+  async function askAI(question: string, options: { initialBriefing?: boolean } = {}) {
     const prompt = question.trim();
     if (!prompt || chatBusy) return;
     if (!workspace) { setError("Choose a workspace before starting a paper conversation."); return; }
-    const quotedPassage = selection ? `\n\nSelected passage from page ${pageNumber}:\n> ${selection}` : "";
-    const instruction = `You are helping a researcher read the paper \"${paper.title}\". ${prompt}${quotedPassage}\n\nGround your answer in the selected passage and the attached paper. State when the passage alone is insufficient, and cite page numbers when available.`;
+    const quotedPassage = options.initialBriefing || !selection ? "" : `\n\nSelected passage from page ${pageNumber}:\n> ${selection}`;
+    const instruction = options.initialBriefing
+      ? `You are preparing a durable research reading guide for the paper \"${paper.title}\" (${lastPage} PDF pages available). ${prompt}`
+      : `You are helping a researcher read the paper \"${paper.title}\". ${prompt}${quotedPassage}\n\nUse the existing full-paper briefing as continuity, but read attached PDF pages again when the answer depends on details absent from it. Ground your answer in the selected passage and the attached paper. State when the passage alone is insufficient, and cite page numbers when available.`;
     setChatOpen(true);
     setChatDraft("");
-    setChatMessages((current) => [...current, { role: "user", text: prompt }]);
+    if (!options.initialBriefing) setChatMessages((current) => [...current, { role: "user", text: prompt }]);
     setChatBusy(true);
     try {
       const result = await bridge.runAgent({
@@ -326,8 +337,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         workspace,
         threadId: chatThreadId,
         projectId: projectId || undefined,
-        mode: "free-chat",
-        contextItems: [{ id: `paper:${paper.id}`, type: "paper", name: paper.title, detail: `${paper.year ?? "n.d."} · ${paper.venue || "Paper"}`, paper: { title: paper.title, authors: paper.authors, year: paper.year, abstract: paper.abstract, url: paper.url, pdfUrl: paper.pdf_url } }],
+        mode: options.initialBriefing ? "deep-research" : "free-chat",
+        contextItems: paperContext,
       });
       setChatThreadId(result.threadId);
       setChatMessages((current) => [...current, { role: "assistant", text: result.response }]);
@@ -336,8 +347,20 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       setChatMessages((current) => [...current, { role: "assistant", text: `I could not answer that yet: ${readableError(askError, "Agent request failed.")}` }]);
     } finally { setChatBusy(false); }
   }
+  useEffect(() => {
+    if (!chatOpen || !ready || chatBusy || briefingStartedRef.current) return;
+    briefingStartedRef.current = true;
+    void askAI(PAPER_BRIEFING_REQUEST, { initialBriefing: true });
+  }, [briefingVersion, chatBusy, chatOpen, ready]);
   function translateSelection() { void askAI(`Translate this passage into natural Chinese. Preserve technical terms and then add one concise sentence explaining its role in the paper.`); }
   function openAskForSelection() { setChatOpen(true); setChatDraft(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
+  function restartBriefing() {
+    if (chatBusy) return;
+    briefingStartedRef.current = false;
+    setChatThreadId(undefined);
+    setChatMessages([]);
+    setBriefingVersion((current) => current + 1);
+  }
 
   return <section className={chatOpen ? "paper-workbench-page paper-chat-open" : "paper-workbench-page"}>
     <header className="paper-workbench-header paper-reader-header">
@@ -368,8 +391,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         {(error || reader?.asset?.error) && <div className="reader-runtime-error">{error || reader?.asset?.error}</div>}
       </main>
       {chatOpen && <aside className="paper-ai-panel">
-        <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2></div><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></header>
-        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{message.text}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>Ask about this paper</strong><p>Select any passage, then ask for an explanation, a translation, or a critical reading.</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />Archimedes is reading…</div>}</div>
+        <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
+        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{message.text}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>Reading the full paper</strong><p>Archimedes is building a page-grounded guide before taking detailed questions.</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI("这篇论文最核心的贡献是什么？请结合全文说明。")}>核心贡献</button><button onClick={() => void askAI("请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>讲解方法</button><button onClick={() => void askAI("实验设置、数据集、基线、指标和主要结果分别是什么？")}>查看实验</button><button onClick={() => void askAI("论文有哪些局限、威胁或尚未验证的主张？")}>分析局限</button></div>}</div>
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         <div className="paper-ai-compose"><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder="Ask about the paper…" rows={3} /><button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button></div>
       </aside>}
