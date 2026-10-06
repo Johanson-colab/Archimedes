@@ -5,6 +5,8 @@ const { pathToFileURL } = require("node:url");
 const MAX_PDF_BYTES = 100 * 1024 * 1024;
 const MAX_PAGES_PER_READ = 24;
 const MAX_TEXT_CHARS = 40_000;
+const MAX_LIBRARY_PAGES = 300;
+const MAX_LIBRARY_TEXT_CHARS = 2_000_000;
 
 function positiveInteger(value, fallback) {
   const parsed = Number(value);
@@ -99,6 +101,43 @@ async function extractPdfTextData(data, name, options = {}) {
   }
 }
 
+// Library ingestion keeps individual pages so highlights and later Agent citations can
+// point back to a stable page number instead of a transient chunk of prompt text.
+async function extractPdfPagesData(data, name, options = {}) {
+  if (!Buffer.isBuffer(data)) data = Buffer.from(data);
+  if (data.length > MAX_PDF_BYTES) throw new Error("The PDF is larger than the 100 MB library limit.");
+  const loadingTask = await loadPdf(data);
+  let document;
+  try {
+    document = await loadingTask.promise;
+    const pageCount = document.numPages;
+    const maxPages = Math.max(1, Math.min(Number(options.maxPages) || MAX_LIBRARY_PAGES, MAX_LIBRARY_PAGES));
+    const maxChars = Math.max(10_000, Math.min(Number(options.maxChars) || MAX_LIBRARY_TEXT_CHARS, MAX_LIBRARY_TEXT_CHARS));
+    const pageLimit = Math.min(pageCount, maxPages);
+    const pages = [];
+    let usedChars = 0;
+    for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+      if (options.signal?.aborted) throw new Error("PDF indexing was interrupted.");
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const text = pageText(content.items).slice(0, Math.max(0, maxChars - usedChars));
+      page.cleanup();
+      pages.push({ page_number: pageNumber, text });
+      usedChars += text.length;
+      if (usedChars >= maxChars) break;
+    }
+    const truncated = pages.length < pageCount;
+    return { kind: "pdf_index", name: name || "paper.pdf", size_bytes: data.length, page_count: pageCount, pages, truncated,
+      warning: truncated ? `Indexed ${pages.length} of ${pageCount} pages within the library safety limit.` : "" };
+  } catch (error) {
+    if (error?.name === "PasswordException") throw new Error("This PDF is password protected and cannot be indexed.");
+    throw new Error(`PDF indexing failed: ${error?.message || "unsupported document"}`);
+  } finally {
+    if (document) await document.destroy();
+    else await loadingTask.destroy();
+  }
+}
+
 async function findPdfTextData(data, name, query, options = {}) {
   const needle = String(query || "").trim();
   if (!needle || needle.length > 200) throw new Error("PDF find requires text of at most 200 characters.");
@@ -169,4 +208,4 @@ async function extractPdfText(filePath, options = {}) {
   return extractPdfTextData(fs.readFileSync(filePath), path.basename(filePath), options);
 }
 
-module.exports = { extractPdfText, extractPdfTextData, findPdfTextData, normalizePageRange, pageText, renderPdfPageData };
+module.exports = { extractPdfText, extractPdfTextData, extractPdfPagesData, findPdfTextData, normalizePageRange, pageText, renderPdfPageData };

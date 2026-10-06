@@ -15,6 +15,7 @@ const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = req
 const skillCatalog = require("./skill-catalog.cjs");
 const store = require("./store.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
+const { preparePaperReader } = require("./library-reader.cjs");
 
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
@@ -27,7 +28,7 @@ const allowedContextPaths = new Set();
 app.setName("Archimedes");
 protocol.registerSchemesAsPrivileged([{
   scheme: "archimedes-file",
-  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
 }]);
 
 function cleanTerminalEnvironment() {
@@ -166,6 +167,19 @@ function focusedWindow() {
 
 function workspaceForWindow(browserWindow) {
   return browserWindow ? windowWorkspaces.get(browserWindow.webContents.id) : undefined;
+}
+
+function readerStateForWindow(senderId, workspace, paperId) {
+  const reader = store.getPaperReader(paperId);
+  if (!reader.asset?.relative_path || reader.asset.status !== "ready") return reader;
+  try {
+    const target = workspaceFiles.workspacePath(workspace, reader.asset.relative_path);
+    if (!fs.statSync(target).isFile()) return { ...reader, asset: { ...reader.asset, status: "missing", error: "The cached PDF is no longer available." } };
+    const token = setWindowWorkspace(senderId, workspace);
+    return { ...reader, asset: { ...reader.asset, preview_url: `archimedes-file://${token}/${encodeURIComponent(reader.asset.relative_path)}` } };
+  } catch {
+    return { ...reader, asset: { ...reader.asset, status: "missing", error: "The cached PDF is no longer available." } };
+  }
 }
 
 async function chooseFolderForWindow(browserWindow, title = "Open Folder") {
@@ -529,6 +543,68 @@ app.whenReady().then(() => {
   ipcMain.handle("library:remove-paper", (_event, { libraryId, paperId }) => {
     if (typeof libraryId !== "string" || typeof paperId !== "string") throw new Error("A library and paper are required.");
     return store.removePaper(libraryId, paperId);
+  });
+
+  ipcMain.handle("library:get-reader", (event, { paperId, workspace } = {}) => {
+    if (typeof paperId !== "string") throw new Error("A paper is required.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(resolvedWorkspace);
+    return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
+  });
+
+  ipcMain.handle("library:prepare-reader", async (event, { paperId, workspace } = {}) => {
+    if (typeof paperId !== "string") throw new Error("A paper is required.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(resolvedWorkspace);
+    const paper = store.getPaper(paperId);
+    if (!paper) throw new Error("Paper not found.");
+    try {
+      const asset = await preparePaperReader({ workspace: resolvedWorkspace, paper });
+      store.replacePaperReaderAsset(paperId, asset);
+      return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
+    } catch (error) {
+      store.setPaperReaderFailed(paperId, error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  });
+
+  ipcMain.handle("library:attach-reader-pdf", async (event, { paperId, workspace } = {}) => {
+    if (typeof paperId !== "string") throw new Error("A paper is required.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(resolvedWorkspace);
+    const paper = store.getPaper(paperId);
+    if (!paper) throw new Error("Paper not found.");
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    const result = browserWindow
+      ? await dialog.showOpenDialog(browserWindow, { title: "Attach paper PDF", properties: ["openFile"], filters: [{ name: "PDF", extensions: ["pdf"] }] })
+      : await dialog.showOpenDialog({ title: "Attach paper PDF", properties: ["openFile"], filters: [{ name: "PDF", extensions: ["pdf"] }] });
+    if (result.canceled || !result.filePaths[0]) return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
+    try {
+      const asset = await preparePaperReader({ workspace: resolvedWorkspace, paper, localPath: result.filePaths[0] });
+      store.replacePaperReaderAsset(paperId, asset);
+      return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
+    } catch (error) {
+      store.setPaperReaderFailed(paperId, error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  });
+
+  ipcMain.handle("library:find-passages", (_event, { paperId, query, workspace } = {}) => {
+    if (typeof paperId !== "string" || typeof query !== "string") throw new Error("A paper and search phrase are required.");
+    store.openWorkspace(resolveWorkspace(workspace));
+    return store.findPaperPassages(paperId, query);
+  });
+
+  ipcMain.handle("library:create-highlight", (_event, { paperId, input, workspace } = {}) => {
+    if (typeof paperId !== "string" || !input || typeof input !== "object") throw new Error("A paper and text selection are required.");
+    store.openWorkspace(resolveWorkspace(workspace));
+    return store.createPaperHighlight(paperId, input);
+  });
+
+  ipcMain.handle("library:delete-highlight", (_event, { id, workspace } = {}) => {
+    if (typeof id !== "string") throw new Error("A highlight is required.");
+    store.openWorkspace(resolveWorkspace(workspace));
+    return store.deletePaperHighlight(id);
   });
 
   ipcMain.handle("task:save", (_event, task) => {

@@ -34,6 +34,12 @@ interface ResearchDeskBridge {
     addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
+    getLibraryPaperReader: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
+    prepareLibraryPaperReader: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
+    attachLibraryPaperPdf: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
+    findLibraryPaperPassages: (paperId: string, query: string, workspace?: string) => Promise<PaperPassage[]>;
+    createLibraryPaperHighlight: (paperId: string, input: PaperHighlightInput, workspace?: string) => Promise<PaperHighlight>;
+    deleteLibraryPaperHighlight: (id: string, workspace?: string) => Promise<{ deleted: boolean }>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
@@ -232,6 +238,46 @@ interface LibraryPaper extends AcademicSearchResult {
   created_at: string;
   updated_at: string;
 }
+
+interface PaperReaderAsset {
+  paper_id: string;
+  source_url: string;
+  relative_path: string;
+  sha256: string;
+  status: "ready" | "failed" | "missing";
+  error: string;
+  size_bytes: number;
+  page_count: number;
+  truncated: boolean;
+  warning: string;
+  indexed_at: string;
+  updated_at: string;
+  preview_url?: string;
+}
+
+interface PaperReaderPage { page_number: number; text: string; }
+interface PaperHighlight {
+  id: string;
+  paper_id: string;
+  page_number: number;
+  quote: string;
+  start_offset: number | null;
+  end_offset: number | null;
+  note: string;
+  color: "green" | "yellow" | "blue" | "pink";
+  created_at: string;
+  updated_at: string;
+}
+interface PaperHighlightInput {
+  page_number: number;
+  quote: string;
+  start_offset?: number;
+  end_offset?: number;
+  note?: string;
+  color?: "green" | "yellow" | "blue" | "pink";
+}
+interface PaperPassage { page_number: number; start_offset: number; end_offset: number; excerpt: string; }
+interface PaperReaderState { asset: PaperReaderAsset | null; pages: PaperReaderPage[]; highlights: PaperHighlight[]; }
 
 interface SavedTask {
   id: string;

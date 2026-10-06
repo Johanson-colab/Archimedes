@@ -136,6 +136,41 @@ function schema(db) {
       PRIMARY KEY (library_id, paper_id)
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS paper_reader_assets (
+      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      source_url TEXT NOT NULL DEFAULT '',
+      relative_path TEXT NOT NULL DEFAULT '',
+      sha256 TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'ready',
+      error TEXT NOT NULL DEFAULT '',
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      page_count INTEGER NOT NULL DEFAULT 0,
+      truncated INTEGER NOT NULL DEFAULT 0,
+      warning TEXT NOT NULL DEFAULT '',
+      indexed_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS paper_reader_pages (
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      page_number INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      PRIMARY KEY (paper_id, page_number)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS paper_highlights (
+      id TEXT PRIMARY KEY NOT NULL,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      page_number INTEGER NOT NULL,
+      quote TEXT NOT NULL,
+      start_offset INTEGER,
+      end_offset INTEGER,
+      note TEXT NOT NULL DEFAULT '',
+      color TEXT NOT NULL DEFAULT 'green',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
       cache_key TEXT PRIMARY KEY NOT NULL,
       response_json TEXT NOT NULL,
@@ -144,6 +179,8 @@ function schema(db) {
 
     CREATE INDEX IF NOT EXISTS idx_library_papers_library ON library_papers(library_id, added_at DESC);
     CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title);
+    CREATE INDEX IF NOT EXISTS idx_paper_reader_pages_paper ON paper_reader_pages(paper_id, page_number);
+    CREATE INDEX IF NOT EXISTS idx_paper_highlights_paper ON paper_highlights(paper_id, page_number, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
@@ -381,6 +418,90 @@ function listPapers(libraryId, query = "") {
       AND (? = '' OR papers.title LIKE ? OR papers.abstract LIKE ? OR papers.authors_json LIKE ? OR papers.venue LIKE ?)
     ORDER BY papers.starred DESC, papers.year DESC, library_papers.added_at DESC
   `).all(libraryId, query.trim(), pattern, pattern, pattern, pattern).map(hydratePaper);
+}
+
+function getPaper(id) {
+  const db = requireDatabase();
+  const paper = db.prepare("SELECT * FROM papers WHERE id = ?").get(id);
+  return paper ? hydratePaper(paper) : null;
+}
+
+function getPaperReader(paperId) {
+  const db = requireDatabase();
+  const asset = db.prepare("SELECT * FROM paper_reader_assets WHERE paper_id = ?").get(paperId);
+  const pages = db.prepare("SELECT page_number, text FROM paper_reader_pages WHERE paper_id = ? ORDER BY page_number ASC").all(paperId);
+  const highlights = db.prepare("SELECT * FROM paper_highlights WHERE paper_id = ? ORDER BY page_number ASC, created_at DESC").all(paperId);
+  return { asset: asset ? { ...asset, truncated: Boolean(asset.truncated) } : null, pages, highlights };
+}
+
+function replacePaperReaderAsset(paperId, asset) {
+  const db = requireDatabase();
+  if (!db.prepare("SELECT 1 FROM papers WHERE id = ?").get(paperId)) throw new Error("Paper not found.");
+  const now = timestamp();
+  const insertPage = db.prepare("INSERT INTO paper_reader_pages (paper_id, page_number, text) VALUES (?, ?, ?)");
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM paper_reader_pages WHERE paper_id = ?").run(paperId);
+    for (const page of asset.pages || []) insertPage.run(paperId, page.page_number, page.text || "");
+    db.prepare(`
+      INSERT INTO paper_reader_assets (paper_id, source_url, relative_path, sha256, status, error, size_bytes, page_count, truncated, warning, indexed_at, updated_at)
+      VALUES (?, ?, ?, ?, 'ready', '', ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(paper_id) DO UPDATE SET source_url = excluded.source_url, relative_path = excluded.relative_path,
+        sha256 = excluded.sha256, status = excluded.status, error = excluded.error, size_bytes = excluded.size_bytes,
+        page_count = excluded.page_count, truncated = excluded.truncated, warning = excluded.warning,
+        indexed_at = excluded.indexed_at, updated_at = excluded.updated_at
+    `).run(paperId, asset.source_url || "", asset.relative_path, asset.sha256, asset.size_bytes, asset.page_count,
+      Number(Boolean(asset.truncated)), asset.warning || "", now, now);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getPaperReader(paperId);
+}
+
+function setPaperReaderFailed(paperId, error) {
+  const db = requireDatabase();
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO paper_reader_assets (paper_id, status, error, indexed_at, updated_at)
+    VALUES (?, 'failed', ?, ?, ?)
+    ON CONFLICT(paper_id) DO UPDATE SET status = 'failed', error = excluded.error, updated_at = excluded.updated_at
+  `).run(paperId, String(error || "Unable to prepare the PDF."), now, now);
+}
+
+function findPaperPassages(paperId, query) {
+  const db = requireDatabase();
+  const needle = String(query || "").trim();
+  if (!needle || needle.length > 200) throw new Error("Enter a search phrase of at most 200 characters.");
+  const rows = db.prepare("SELECT page_number, text FROM paper_reader_pages WHERE paper_id = ? AND lower(text) LIKE ? ORDER BY page_number ASC LIMIT 24")
+    .all(paperId, `%${needle.toLowerCase()}%`);
+  return rows.map((row) => {
+    const index = row.text.toLowerCase().indexOf(needle.toLowerCase());
+    return { page_number: row.page_number, start_offset: index, end_offset: index + needle.length,
+      excerpt: row.text.slice(Math.max(0, index - 180), Math.min(row.text.length, index + needle.length + 220)).replace(/\s+/g, " ") };
+  });
+}
+
+function createPaperHighlight(paperId, input) {
+  const db = requireDatabase();
+  const pageNumber = Number(input?.page_number);
+  const quote = String(input?.quote || "").trim();
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || !quote || quote.length > 5_000) throw new Error("Choose a valid page and a short text selection.");
+  if (!db.prepare("SELECT 1 FROM paper_reader_pages WHERE paper_id = ? AND page_number = ?").get(paperId, pageNumber)) throw new Error("That page has not been indexed yet.");
+  const now = timestamp();
+  const id = randomUUID();
+  db.prepare(`INSERT INTO paper_highlights (id, paper_id, page_number, quote, start_offset, end_offset, note, color, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, paperId, pageNumber, quote, Number.isInteger(input.start_offset) ? input.start_offset : null,
+      Number.isInteger(input.end_offset) ? input.end_offset : null, String(input.note || "").slice(0, 5_000),
+      ["green", "yellow", "blue", "pink"].includes(input.color) ? input.color : "green", now, now);
+  return db.prepare("SELECT * FROM paper_highlights WHERE id = ?").get(id);
+}
+
+function deletePaperHighlight(id) {
+  const db = requireDatabase();
+  return { deleted: db.prepare("DELETE FROM paper_highlights WHERE id = ?").run(id).changes > 0 };
 }
 
 function addPaper(libraryId, paper) {
@@ -856,7 +977,12 @@ module.exports = {
   finishCommand,
   finishResearchTurn,
   finishTask,
+  findPaperPassages,
+  createPaperHighlight,
+  deletePaperHighlight,
   getDailyFeedCache,
+  getPaper,
+  getPaperReader,
   getAction,
   getResearchThread,
   getResearchThreadIdForTask,
@@ -872,7 +998,9 @@ module.exports = {
   openWorkspace,
   removePaper,
   resolveAction,
+  replacePaperReaderAsset,
   saveTask,
+  setPaperReaderFailed,
   setDailyFeedCache,
   startCommand,
   startResearchTurn,

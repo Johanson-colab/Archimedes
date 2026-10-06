@@ -40,7 +40,7 @@ const tools = [
     type: "function",
     function: {
       name: "read_attached_paper_pdf",
-      description: "Download and extract page-numbered text from the public PDF URL of a paper explicitly attached by the user. Use this before summarizing, reviewing, or citing details from an attached paper; the paper manifest alone contains metadata and an abstract, not full text.",
+      description: "Read page-numbered full text for a paper explicitly attached by the user. Prefer the local Literature Library index when it exists; otherwise download the public PDF URL. Use this before summarizing, reviewing, or citing details from an attached paper; the paper manifest alone contains metadata and an abstract, not full text.",
       parameters: {
         type: "object",
         properties: {
@@ -509,6 +509,18 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   }
   if (name === "read_attached_paper_pdf") {
     const paper = attachedPaper(contextItems, args.attachment_id);
+    const libraryPaperId = String(args.attachment_id || "").startsWith("paper:") ? String(args.attachment_id).slice("paper:".length) : "";
+    if (libraryPaperId) {
+      const cached = store.getPaperReader(libraryPaperId);
+      if (cached.asset?.status === "ready" && cached.pages.length) {
+        const start = Math.max(1, Number(args.start_page) || 1);
+        const end = Math.min(cached.pages.at(-1)?.page_number || start, Math.max(start, Number(args.end_page) || start + 23));
+        const pages = cached.pages.filter((entry) => entry.page_number >= start && entry.page_number <= end);
+        return { content: JSON.stringify({ attachment_id: args.attachment_id, source_url: cached.asset.source_url || "local-library-cache",
+          kind: "pdf_text", name: `${paper.paper.title || "paper"}.pdf`, page_count: cached.asset.page_count, pages,
+          next_page: end < (cached.pages.at(-1)?.page_number || 0) ? end + 1 : null, method: "local_library_index" }) };
+      }
+    }
     const { data, url } = await downloadPaperPdf(paper.paper, pdfCache, signal);
     const result = await extractPdfTextData(data, `${paper.paper.title || "paper"}.pdf`, { startPage: args.start_page, endPage: args.end_page, signal });
     return { content: JSON.stringify({ attachment_id: args.attachment_id, source_url: url, ...result }) };
