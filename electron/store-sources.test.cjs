@@ -66,6 +66,8 @@ test("restores the research thread linked to a paper", () => {
     const restored = store.getPaperChatThread(paper.id);
     assert.equal(restored.id, thread.id);
     assert.equal(restored.messages.at(-1).text, "## 三行摘要\n1. A durable guide.");
+    assert.equal(store.listResearchThreads().some((candidate) => candidate.id === thread.id), false);
+    assert.equal(store.listResearchProjects().find((project) => project.id === thread.project_id).chat_count, 0);
   } finally {
     store.openWorkspace(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-chat-close-")));
     fs.rmSync(workspace, { recursive: true, force: true });

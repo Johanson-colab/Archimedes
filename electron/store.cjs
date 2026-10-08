@@ -531,6 +531,8 @@ function setPaperChatThread(paperId, threadId) {
   db.prepare(`INSERT INTO paper_chat_threads (paper_id, thread_id, created_at, updated_at)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(paper_id) DO UPDATE SET thread_id = excluded.thread_id, updated_at = excluded.updated_at`).run(paperId, threadId, now, now);
+  // Paper-reader chats are private to their paper and should not crowd the project sidebar.
+  db.prepare("UPDATE research_threads SET project_id = NULL, updated_at = ? WHERE id = ?").run(now, threadId);
   return getPaperChatThread(paperId);
 }
 
@@ -609,10 +611,14 @@ function listResearchProjects({ archived = false } = {}) {
   const db = requireDatabase();
   return db.prepare(`
     SELECT research_projects.*,
-      COUNT(CASE WHEN research_threads.id IS NOT NULL AND (CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END) THEN 1 END) AS chat_count,
-      MAX(research_threads.updated_at) AS last_chat_at
+      COUNT(CASE WHEN research_threads.id IS NOT NULL
+        AND paper_chat_threads.thread_id IS NULL
+        AND (CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END)
+        THEN 1 END) AS chat_count,
+      MAX(CASE WHEN paper_chat_threads.thread_id IS NULL THEN research_threads.updated_at END) AS last_chat_at
     FROM research_projects
     LEFT JOIN research_threads ON research_threads.project_id = research_projects.id
+    LEFT JOIN paper_chat_threads ON paper_chat_threads.thread_id = research_threads.id
     WHERE CASE WHEN ? = 1 THEN research_projects.archived_at IS NOT NULL ELSE research_projects.archived_at IS NULL END
     GROUP BY research_projects.id
     ORDER BY COALESCE(MAX(research_threads.updated_at), research_projects.updated_at) DESC
@@ -694,8 +700,10 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
       COALESCE(MAX(research_turns.created_at), research_threads.created_at) AS last_turn_at
     FROM research_threads
     LEFT JOIN research_turns ON research_turns.thread_id = research_threads.id
+    LEFT JOIN paper_chat_threads ON paper_chat_threads.thread_id = research_threads.id
     WHERE CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END
       AND (? IS NULL OR research_threads.project_id = ?)
+      AND paper_chat_threads.thread_id IS NULL
     GROUP BY research_threads.id
     ORDER BY research_threads.updated_at DESC
     LIMIT 120
