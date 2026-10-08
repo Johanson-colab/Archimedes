@@ -11,6 +11,7 @@ import {
   Bot,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -25,6 +26,7 @@ import {
   ListTree,
   LoaderCircle,
   MessageSquareText,
+  Minus,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
@@ -234,6 +236,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [busy, setBusy] = useState<"remote" | "local" | null>(null);
   const [error, setError] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
+  const [pdfZoom, setPdfZoom] = useState(1);
   const [query, setQuery] = useState("");
   const [passages, setPassages] = useState<PaperPassage[]>([]);
   const [selection, setSelection] = useState("");
@@ -422,12 +425,19 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <main className="original-paper-reader">
         {ready ? <>
           <div className="paper-reader-toolbar">
-            <div className="paper-page-controls"><button onClick={() => setPageNumber((value) => Math.max(1, value - 1))} disabled={pageNumber <= 1} title="Previous page"><ChevronLeft size={17} /></button><strong>{pageNumber} / {lastPage}</strong><button onClick={() => setPageNumber((value) => Math.min(lastPage, value + 1))} disabled={pageNumber >= lastPage} title="Next page"><ChevronRight size={17} /></button></div>
+            <div className="paper-reader-navigation">
+              <div className="paper-page-controls"><button onClick={() => setPageNumber((value) => Math.max(1, value - 1))} disabled={pageNumber <= 1} title="Previous page"><ChevronLeft size={17} /></button><strong>{pageNumber} / {lastPage}</strong><button onClick={() => setPageNumber((value) => Math.min(lastPage, value + 1))} disabled={pageNumber >= lastPage} title="Next page"><ChevronRight size={17} /></button></div>
+              <div className="paper-zoom-control" aria-label="PDF zoom">
+                <button onClick={() => setPdfZoom((value) => Math.max(.55, Math.round((value - .1) * 100) / 100))} disabled={pdfZoom <= .55} title="Zoom out 10%"><Minus size={16} /></button>
+                <button className="paper-zoom-readout" onClick={() => setPdfZoom(1)} title="Reset zoom to 100%"><span>{Math.round(pdfZoom * 100)}%</span><ChevronDown size={14} /></button>
+                <button onClick={() => setPdfZoom((value) => Math.min(3.2, Math.round((value + .1) * 100) / 100))} disabled={pdfZoom >= 3.2} title="Zoom in 10%"><Plus size={16} /></button>
+              </div>
+            </div>
             <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" /><button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
             <span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span>
           </div>
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} onSelection={receiveSelection} onClearSelection={clearSelection} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -454,11 +464,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   </section>;
 }
 
-function PdfPaperCanvas({ url, pageNumber, highlights, onSelection, onClearSelection }: { url: string; pageNumber: number; highlights: PaperHighlight[]; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void }) {
+function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
   const [width, setWidth] = useState(880);
-  const [zoom, setZoom] = useState(1);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   useEffect(() => {
@@ -534,7 +543,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, onSelection, onClearSelec
   function zoomWithTrackpad(event: ReactWheelEvent<HTMLDivElement>) {
     if (!event.ctrlKey) return;
     event.preventDefault();
-    setZoom((current) => Math.min(3.2, Math.max(.55, current * (event.deltaY < 0 ? 1.12 : .89))));
+    onZoomChange((current) => Math.min(3.2, Math.max(.55, current * (event.deltaY < 0 ? 1.12 : .89))));
   }
   return <div className="arch-pdf-stage" onMouseDown={onClearSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
 }
