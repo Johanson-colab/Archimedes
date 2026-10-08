@@ -35,6 +35,8 @@ interface ResearchDeskBridge {
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     getLibraryPaperReader: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
+    getLibraryPaperChatThread: (paperId: string, workspace?: string) => Promise<ResearchThreadDetail | null>;
+    setLibraryPaperChatThread: (paperId: string, threadId: string, workspace?: string) => Promise<ResearchThreadDetail | null>;
     prepareLibraryPaperReader: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
     attachLibraryPaperPdf: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
     findLibraryPaperPassages: (paperId: string, query: string, workspace?: string) => Promise<PaperPassage[]>;

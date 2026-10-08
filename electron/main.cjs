@@ -552,6 +552,18 @@ app.whenReady().then(() => {
     return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
   });
 
+  ipcMain.handle("library:get-paper-chat-thread", (_event, { paperId, workspace } = {}) => {
+    if (typeof paperId !== "string") throw new Error("A paper is required.");
+    store.openWorkspace(resolveWorkspace(workspace));
+    return store.getPaperChatThread(paperId);
+  });
+
+  ipcMain.handle("library:set-paper-chat-thread", (_event, { paperId, threadId, workspace } = {}) => {
+    if (typeof paperId !== "string" || typeof threadId !== "string") throw new Error("A paper and research thread are required.");
+    store.openWorkspace(resolveWorkspace(workspace));
+    return store.setPaperChatThread(paperId, threadId);
+  });
+
   ipcMain.handle("library:prepare-reader", async (event, { paperId, workspace } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));

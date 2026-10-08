@@ -245,6 +245,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [chatBusy, setChatBusy] = useState(false);
   const [chatThreadId, setChatThreadId] = useState<string | undefined>();
   const [chatMessages, setChatMessages] = useState<PaperChatMessage[]>([]);
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
   const [briefingVersion, setBriefingVersion] = useState(0);
   const briefingStartedRef = useRef(false);
   const ready = reader?.asset?.status === "ready" && reader.pages.length > 0 && Boolean(reader.asset.preview_url);
@@ -260,10 +261,28 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   }, [bridge, paper.id, workspace]);
   useEffect(() => { void loadReader(); }, [loadReader]);
   useEffect(() => {
+    let active = true;
     briefingStartedRef.current = false;
+    setChatHistoryLoaded(false);
     setChatThreadId(undefined);
     setChatMessages([]);
-  }, [paper.id]);
+    void bridge.getLibraryPaperChatThread(paper.id, workspace).then((thread) => {
+      if (!active) return;
+      if (thread) {
+        const messages = thread.messages
+          .filter((message) => !(message.role === "user" && message.text === PAPER_BRIEFING_REQUEST))
+          .map((message) => ({ role: message.role, text: message.text }));
+        setChatThreadId(thread.id);
+        setChatMessages(messages);
+        briefingStartedRef.current = messages.some((message) => message.role === "assistant");
+      }
+    }).catch((loadError) => {
+      if (active) setError(readableError(loadError, "Could not restore the paper conversation."));
+    }).finally(() => {
+      if (active) setChatHistoryLoaded(true);
+    });
+    return () => { active = false; };
+  }, [bridge, paper.id, workspace]);
 
   const selectedHighlight = reader?.highlights.find((highlight) => highlight.page_number === pageNumber &&
     (highlight.quote === selection || highlight.quote.includes(selection) || selection.includes(highlight.quote))) ?? null;
@@ -342,16 +361,18 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       });
       setChatThreadId(result.threadId);
       setChatMessages((current) => [...current, { role: "assistant", text: result.response }]);
+      try { await bridge.setLibraryPaperChatThread(paper.id, result.threadId, workspace); }
+      catch (saveError) { setError(readableError(saveError, "The paper conversation completed but could not be saved.")); }
       onAgentRun?.(result);
     } catch (askError) {
       setChatMessages((current) => [...current, { role: "assistant", text: `I could not answer that yet: ${readableError(askError, "Agent request failed.")}` }]);
     } finally { setChatBusy(false); }
   }
   useEffect(() => {
-    if (!chatOpen || !ready || chatBusy || briefingStartedRef.current) return;
+    if (!chatOpen || !ready || !chatHistoryLoaded || chatBusy || briefingStartedRef.current) return;
     briefingStartedRef.current = true;
     void askAI(PAPER_BRIEFING_REQUEST, { initialBriefing: true });
-  }, [briefingVersion, chatBusy, chatOpen, ready]);
+  }, [briefingVersion, chatBusy, chatHistoryLoaded, chatOpen, ready]);
   function translateSelection() { void askAI(`Translate this passage into natural Chinese. Preserve technical terms and then add one concise sentence explaining its role in the paper.`); }
   function openAskForSelection() { setChatOpen(true); setChatDraft(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
   function restartBriefing() {
@@ -394,7 +415,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
         <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(message.text)}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>Reading the full paper</strong><p>Archimedes is building a page-grounded guide before taking detailed questions.</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI("这篇论文最核心的贡献是什么？请结合全文说明。")}>核心贡献</button><button onClick={() => void askAI("请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>讲解方法</button><button onClick={() => void askAI("实验设置、数据集、基线、指标和主要结果分别是什么？")}>查看实验</button><button onClick={() => void askAI("论文有哪些局限、威胁或尚未验证的主张？")}>分析局限</button></div>}</div>
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-        <div className="paper-ai-compose"><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder="Ask about the paper…" rows={3} /><button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button></div>
+        <div className="paper-ai-compose"><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder="Ask about the paper…" rows={1} /><button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button></div>
       </aside>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>

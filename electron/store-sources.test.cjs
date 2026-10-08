@@ -52,3 +52,22 @@ test("persists excerpts and page numbers while keeping search hits as leads", ()
     fs.rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test("restores the research thread linked to a paper", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-chat-"));
+  try {
+    store.openWorkspace(workspace);
+    const library = store.createLibrary({ name: "Reading" });
+    const paper = store.addPaper(library.id, { title: "Persistent Paper Chat", authors: [], source: "manual" });
+    const thread = store.createResearchThread({ prompt: "Build a paper guide", mode: "deep-research" });
+    const turn = store.startResearchTurn({ threadId: thread.id, taskId: null, prompt: "Build a paper guide", mode: "deep-research" });
+    store.finishResearchTurn(turn.id, { response: "## 三行摘要\n1. A durable guide." });
+    store.setPaperChatThread(paper.id, thread.id);
+    const restored = store.getPaperChatThread(paper.id);
+    assert.equal(restored.id, thread.id);
+    assert.equal(restored.messages.at(-1).text, "## 三行摘要\n1. A durable guide.");
+  } finally {
+    store.openWorkspace(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-chat-close-")));
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
