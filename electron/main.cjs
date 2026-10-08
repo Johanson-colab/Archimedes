@@ -619,6 +619,13 @@ app.whenReady().then(() => {
     return store.deletePaperHighlight(id);
   });
 
+  ipcMain.handle("library:translate-selection", async (_event, { text } = {}) => {
+    if (typeof text !== "string" || !text.trim() || text.length > 12_000) {
+      throw new Error("Select between 1 and 12,000 characters to translate.");
+    }
+    return agent.translatePaperSelection({ text });
+  });
+
   ipcMain.handle("task:save", (_event, task) => {
     if (!task || typeof task.prompt !== "string" || typeof task.response !== "string") {
       throw new Error("A task requires prompt and response text.");

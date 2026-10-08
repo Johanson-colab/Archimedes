@@ -629,6 +629,26 @@ async function complete(config, messages, { signal, onTextDelta, allowTools = tr
   return normalized;
 }
 
+async function translatePaperSelection({ text, targetLanguage = "Simplified Chinese" }) {
+  const passage = String(text || "").trim();
+  if (!passage) throw new Error("Select text before translating it.");
+  if (passage.length > 12_000) throw new Error("Select no more than 12,000 characters to translate at once.");
+
+  const config = getActiveModelConfig();
+  if (!config.apiKey) throw new Error("Archimedes needs a model configuration before it can translate text.");
+
+  const message = await complete(config, [
+    {
+      role: "system",
+      content: `You are a precise academic translator. Translate the user's passage into ${targetLanguage}. Preserve technical terms, citations, equations, symbols, and paragraph structure. Return only the translation; do not add commentary, a preface, Markdown headings, or an explanation.`,
+    },
+    { role: "user", content: passage },
+  ], { allowTools: false, onTextDelta: () => {} });
+  const translation = String(message.content || "").trim();
+  if (!translation) throw new Error("The model did not return a translation.");
+  return { translation };
+}
+
 async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", contextItems = [], emit = () => {}, browser }) {
   const thread = threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId });
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
@@ -760,4 +780,4 @@ function interruptAgent(threadId) {
   return true;
 }
 
-module.exports = { interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent };
+module.exports = { interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, translatePaperSelection };

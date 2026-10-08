@@ -216,6 +216,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
 type SelectionAnchor = { x: number; y: number };
+type TranslationPopover = { source: string; translation: string; anchor: SelectionAnchor };
 const PAPER_BRIEFING_REQUEST = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise Chinese Markdown with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
 const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: string }> = [
   { value: "yellow", label: "Yellow" },
@@ -237,6 +238,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [passages, setPassages] = useState<PaperPassage[]>([]);
   const [selection, setSelection] = useState("");
   const [selectionAnchor, setSelectionAnchor] = useState<SelectionAnchor | null>(null);
+  const [translationPopover, setTranslationPopover] = useState<TranslationPopover | null>(null);
+  const [translating, setTranslating] = useState(false);
   const [highlightPickerOpen, setHighlightPickerOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [comment, setComment] = useState("");
@@ -287,12 +290,13 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const selectedHighlight = reader?.highlights.find((highlight) => highlight.page_number === pageNumber &&
     (highlight.quote === selection || highlight.quote.includes(selection) || selection.includes(highlight.quote))) ?? null;
 
-  function closeSelection() { setSelection(""); setSelectionAnchor(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
+  function closeSelection() { setSelection(""); setSelectionAnchor(null); setTranslationPopover(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
   function receiveSelection(text: string, anchor: SelectionAnchor) {
     const next = text.replace(/\s+/g, " ").trim();
     if (!next) return;
     setSelection(next.slice(0, 5000));
     setSelectionAnchor(anchor);
+    setTranslationPopover(null);
     setHighlightPickerOpen(false);
     setCommentOpen(false);
   }
@@ -373,7 +377,25 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     briefingStartedRef.current = true;
     void askAI(PAPER_BRIEFING_REQUEST, { initialBriefing: true });
   }, [briefingVersion, chatBusy, chatHistoryLoaded, chatOpen, ready]);
-  function translateSelection() { void askAI(`Translate this passage into natural Chinese. Preserve technical terms and then add one concise sentence explaining its role in the paper.`); }
+  async function translateSelection() {
+    if (!selection || !selectionAnchor || translating) return;
+    const source = selection;
+    const anchor = selectionAnchor;
+    setTranslating(true);
+    setError("");
+    setTranslationPopover({ source, translation: "", anchor });
+    setSelection("");
+    setSelectionAnchor(null);
+    setHighlightPickerOpen(false);
+    setCommentOpen(false);
+    try {
+      const result = await bridge.translateLibraryPaperSelection(source);
+      setTranslationPopover((current) => current?.source === source ? { ...current, translation: result.translation } : current);
+    } catch (translateError) {
+      setTranslationPopover(null);
+      setError(readableError(translateError, "Could not translate the selected passage."));
+    } finally { setTranslating(false); }
+  }
   function openAskForSelection() { setChatOpen(true); setChatDraft(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
   function restartBriefing() {
     if (chatBusy) return;
@@ -423,6 +445,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       {highlightPickerOpen && <div className="paper-highlight-picker" role="menu" aria-label="Highlight color">{HIGHLIGHT_COLORS.map((color) => <button key={color.value} className={`highlight-color ${color.value}`} title={color.label} onClick={() => void saveHighlight("", color.value)}><span /></button>)}</div>}
       {commentOpen && <form className="paper-comment-composer" onSubmit={(event) => { event.preventDefault(); void saveHighlight(comment, "blue"); }}><textarea autoFocus value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment…" rows={3} /><div><button type="button" onClick={closeSelection}>Cancel</button><button type="submit" disabled={!comment.trim()}>Save</button></div></form>}
     </div>}
+    {translationPopover && <aside className="paper-translation-popover" style={{ left: Math.min(window.innerWidth - 404, Math.max(12, translationPopover.anchor.x - 150)), top: Math.min(window.innerHeight - 278, Math.max(12, translationPopover.anchor.y + 18)) }} onMouseDown={(event) => event.preventDefault()}>
+      <header><span><Languages size={14} />译文</span><button onClick={() => setTranslationPopover(null)} title="Close translation"><X size={14} /></button></header>
+      <p className="paper-translation-source">{translationPopover.source}</p>
+      <div className="paper-translation-result">{translating ? <><LoaderCircle className="spin" size={14} />正在翻译…</> : translationPopover.translation}</div>
+    </aside>}
   </section>;
 }
 

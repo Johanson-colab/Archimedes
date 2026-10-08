@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   findLibraryPaperPassages: (paperId, query, workspace) => ipcRenderer.invoke("library:find-passages", { paperId, query, workspace }),
   createLibraryPaperHighlight: (paperId, input, workspace) => ipcRenderer.invoke("library:create-highlight", { paperId, input, workspace }),
   deleteLibraryPaperHighlight: (id, workspace) => ipcRenderer.invoke("library:delete-highlight", { id, workspace }),
+  translateLibraryPaperSelection: (text) => ipcRenderer.invoke("library:translate-selection", { text }),
   saveTask: (task) => ipcRenderer.invoke("task:save", task),
   runAgent: (input) => ipcRenderer.invoke("agent:run", input),
   interruptAgent: (threadId) => ipcRenderer.invoke("agent:interrupt", threadId),
