@@ -392,7 +392,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </main>
       {chatOpen && <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
-        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{message.text}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>Reading the full paper</strong><p>Archimedes is building a page-grounded guide before taking detailed questions.</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI("这篇论文最核心的贡献是什么？请结合全文说明。")}>核心贡献</button><button onClick={() => void askAI("请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>讲解方法</button><button onClick={() => void askAI("实验设置、数据集、基线、指标和主要结果分别是什么？")}>查看实验</button><button onClick={() => void askAI("论文有哪些局限、威胁或尚未验证的主张？")}>分析局限</button></div>}</div>
+        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(message.text)}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>Reading the full paper</strong><p>Archimedes is building a page-grounded guide before taking detailed questions.</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI("这篇论文最核心的贡献是什么？请结合全文说明。")}>核心贡献</button><button onClick={() => void askAI("请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>讲解方法</button><button onClick={() => void askAI("实验设置、数据集、基线、指标和主要结果分别是什么？")}>查看实验</button><button onClick={() => void askAI("论文有哪些局限、威胁或尚未验证的主张？")}>分析局限</button></div>}</div>
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         <div className="paper-ai-compose"><textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder="Ask about the paper…" rows={3} /><button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button></div>
       </aside>}
@@ -515,6 +515,44 @@ function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighligh
       painted.add(range.element);
     }
   }
+}
+
+function normalizePaperMathDelimiters(content: string) {
+  let activeFence = "";
+  return content.split("\n").map((line) => {
+    const fence = /^\s*(`{3,}|~{3,})/.exec(line)?.[1] || "";
+    if (fence) {
+      if (!activeFence) activeFence = fence[0];
+      else if (fence[0] === activeFence) activeFence = "";
+      return line;
+    }
+    if (activeFence) return line;
+    const normalized = normalizePaperMathLine(line);
+    // Some providers omit delimiters for a standalone LaTex equation.
+    if (!normalized.includes("$") && /^\s*[A-Za-z][^。；;]*=[^。；;]*(\\[a-zA-Z]+|[_^][{(])/.test(normalized)) return `$$${normalized.trim()}$$`;
+    return normalized;
+  }).join("\n");
+}
+
+function normalizePaperMathLine(line: string) {
+  let result = "";
+  let index = 0;
+  while (index < line.length) {
+    if (line[index] === "`") {
+      const tickCount = /^`+/.exec(line.slice(index))?.[0].length || 1;
+      const closingIndex = line.indexOf("`".repeat(tickCount), index + tickCount);
+      if (closingIndex < 0) return result + line.slice(index);
+      result += line.slice(index, closingIndex + tickCount);
+      index = closingIndex + tickCount;
+      continue;
+    }
+    const delimiter = line.slice(index, index + 2);
+    if (delimiter === "\\[" || delimiter === "\\]") { result += "$$"; index += 2; continue; }
+    if (delimiter === "\\(" || delimiter === "\\)") { result += "$"; index += 2; continue; }
+    result += line[index];
+    index += 1;
+  }
+  return result;
 }
 
 function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | "new" | null; onClose: () => void; onSave: (input: { name: string; description: string; color: string }) => Promise<void> }) {
