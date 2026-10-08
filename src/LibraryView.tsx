@@ -216,7 +216,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
 type SelectionAnchor = { x: number; y: number };
-type TranslationPopover = { source: string; translation: string; anchor: SelectionAnchor };
+type TranslationPopover = { source: string; translation: string; anchor: SelectionAnchor; error?: string };
 const PAPER_BRIEFING_REQUEST = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise Chinese Markdown with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
 const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: string }> = [
   { value: "yellow", label: "Yellow" },
@@ -290,7 +290,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const selectedHighlight = reader?.highlights.find((highlight) => highlight.page_number === pageNumber &&
     (highlight.quote === selection || highlight.quote.includes(selection) || selection.includes(highlight.quote))) ?? null;
 
-  function closeSelection() { setSelection(""); setSelectionAnchor(null); setTranslationPopover(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
+  function clearSelection() { setSelection(""); setSelectionAnchor(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
+  function closeSelection() { clearSelection(); setTranslationPopover(null); }
   function receiveSelection(text: string, anchor: SelectionAnchor) {
     const next = text.replace(/\s+/g, " ").trim();
     if (!next) return;
@@ -392,8 +393,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       const result = await bridge.translateLibraryPaperSelection(source);
       setTranslationPopover((current) => current?.source === source ? { ...current, translation: result.translation } : current);
     } catch (translateError) {
-      setTranslationPopover(null);
-      setError(readableError(translateError, "Could not translate the selected passage."));
+      const message = readableError(translateError, "Could not translate the selected passage.");
+      setTranslationPopover((current) => current?.source === source ? { ...current, error: message } : current);
     } finally { setTranslating(false); }
   }
   function openAskForSelection() { setChatOpen(true); setChatDraft(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
@@ -426,7 +427,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             <span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span>
           </div>
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} onSelection={receiveSelection} onClearSelection={closeSelection} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} onSelection={receiveSelection} onClearSelection={clearSelection} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -448,7 +449,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     {translationPopover && <aside className="paper-translation-popover" style={{ left: Math.min(window.innerWidth - 404, Math.max(12, translationPopover.anchor.x - 150)), top: Math.min(window.innerHeight - 278, Math.max(12, translationPopover.anchor.y + 18)) }} onMouseDown={(event) => event.preventDefault()}>
       <header><span><Languages size={14} />译文</span><button onClick={() => setTranslationPopover(null)} title="Close translation"><X size={14} /></button></header>
       <p className="paper-translation-source">{translationPopover.source}</p>
-      <div className="paper-translation-result">{translating ? <><LoaderCircle className="spin" size={14} />正在翻译…</> : translationPopover.translation}</div>
+      <div className={translationPopover.error ? "paper-translation-result error" : "paper-translation-result"}>{translating ? <><LoaderCircle className="spin" size={14} />正在翻译…</> : translationPopover.error || translationPopover.translation}</div>
     </aside>}
   </section>;
 }
