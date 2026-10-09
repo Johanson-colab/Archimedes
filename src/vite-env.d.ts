@@ -201,11 +201,13 @@ interface AcademicSearchResult {
 }
 
 type DailyDiscoveryMode = "latest" | "trending";
-type DailyDiscoveryRange = "1d" | "3d" | "7d";
+type DailyDiscoveryRange = "7d" | "30d" | "90d";
+type DailyDiscoveryTopic = "all" | "agents" | "multi_agent" | "coding" | "reasoning" | "rag" | "multimodal" | "vision" | "embodied" | "computer_use" | "safety" | "science" | "rl";
 
 interface DailyDiscoveryOptions {
   mode?: DailyDiscoveryMode;
   range?: DailyDiscoveryRange;
+  topic?: DailyDiscoveryTopic;
   categories?: string[];
   query?: string;
   limit?: number;

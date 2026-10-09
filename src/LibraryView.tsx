@@ -43,6 +43,21 @@ import {
 } from "lucide-react";
 
 const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
+const DAILY_TOPICS: Array<{ id: DailyDiscoveryTopic; label: string; categories: string[]; description: string }> = [
+  { id: "all", label: "All", categories: ["cs.AI", "cs.LG", "cs.CL"], description: "The original broad AI, ML, and language-model feed" },
+  { id: "agents", label: "Agents & RSI", categories: ["cs.AI", "cs.LG", "cs.CL"], description: "Agentic systems and self-improvement" },
+  { id: "multi_agent", label: "Multi-agent", categories: ["cs.AI", "cs.LG", "cs.MA"], description: "Coordination, collaboration, and agent societies" },
+  { id: "coding", label: "Coding & SWE", categories: ["cs.AI", "cs.SE", "cs.LG"], description: "Code generation and software engineering agents" },
+  { id: "reasoning", label: "Reasoning", categories: ["cs.AI", "cs.LG", "cs.CL"], description: "Reasoning, test-time scaling, and deliberation" },
+  { id: "rag", label: "RAG & Long Context", categories: ["cs.IR", "cs.CL", "cs.AI", "cs.LG"], description: "Retrieval, memory, and long-context models" },
+  { id: "multimodal", label: "Multimodal", categories: ["cs.CV", "cs.CL", "cs.AI"], description: "Vision-language and multimodal models" },
+  { id: "vision", label: "Vision", categories: ["cs.CV", "cs.AI", "cs.LG"], description: "Image and video understanding or generation" },
+  { id: "embodied", label: "Embodied & Robotics", categories: ["cs.RO", "cs.AI", "cs.LG"], description: "Robotics, VLA, and embodied intelligence" },
+  { id: "computer_use", label: "Tool & Computer Use", categories: ["cs.AI", "cs.HC", "cs.SE"], description: "GUI, browser, and tool-using agents" },
+  { id: "safety", label: "AI Safety", categories: ["cs.AI", "cs.LG", "cs.CY"], description: "Alignment, robustness, and red teaming" },
+  { id: "science", label: "AI for Science", categories: ["cs.AI", "cs.LG", "stat.ML"], description: "Scientific discovery and research automation" },
+  { id: "rl", label: "RL & Decision Making", categories: ["cs.AI", "cs.LG", "cs.RO"], description: "Reinforcement learning and policy optimization" },
+];
 
 type LibraryViewProps = {
   bridge: ResearchDeskBridge;
@@ -698,8 +713,8 @@ function readableError(error: unknown, fallback: string) {
 
 function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
   const [mode, setMode] = useState<DailyDiscoveryMode>("latest");
-  const [range, setRange] = useState<DailyDiscoveryRange>("3d");
-  const [categories, setCategories] = useState(["cs.AI", "cs.LG", "cs.CL"]);
+  const [range, setRange] = useState<DailyDiscoveryRange>("7d");
+  const [topic, setTopic] = useState<DailyDiscoveryTopic>("all");
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [targetLibraryId, setTargetLibraryId] = useState("");
@@ -712,13 +727,13 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
   const responseRef = useRef<DailyDiscoveryResponse | null>(null);
   useEffect(() => { if (!targetLibraryId && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
   const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
-  const categoryKey = categories.join(",");
+  const activeTopic = DAILY_TOPICS.find((item) => item.id === topic) ?? DAILY_TOPICS[0];
   const loadFeed = useCallback(async (forceRefresh = false) => {
     const requestId = ++feedRequestId.current;
     setLoading(true);
     setError("");
     try {
-      const nextResponse = await bridge.discoverDailyPapers({ mode, range, categories, query: submittedQuery, limit: 60, forceRefresh });
+      const nextResponse = await bridge.discoverDailyPapers({ mode, range, topic, categories: activeTopic.categories, query: submittedQuery, limit: 60, forceRefresh });
       if (requestId !== feedRequestId.current) return;
       responseRef.current = nextResponse;
       setResponse(nextResponse);
@@ -730,7 +745,7 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
-  }, [bridge, categoryKey, mode, range, submittedQuery]);
+  }, [activeTopic.categories, bridge, mode, range, submittedQuery, topic]);
 
   useEffect(() => {
     void loadFeed(false);
@@ -743,12 +758,6 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
     const nextQuery = query.trim();
     if (nextQuery === submittedQuery) void loadFeed(true);
     else setSubmittedQuery(nextQuery);
-  }
-
-  function toggleCategory(category: string) {
-    setCategories((current) => current.includes(category)
-      ? current.length === 1 ? current : current.filter((item) => item !== category)
-      : [...current, category]);
   }
 
   async function add(paper: DailyPaper) {
@@ -774,14 +783,14 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
         <button className={mode === "latest" ? "active" : ""} role="tab" aria-selected={mode === "latest"} onClick={() => setMode("latest")}><Clock3 size={14} />Latest</button>
         <button className={mode === "trending" ? "active" : ""} role="tab" aria-selected={mode === "trending"} onClick={() => setMode("trending")}><Flame size={14} />Trending</button>
       </div>
-      <div className="daily-range-control" aria-label="Publication range">{(["1d", "3d", "7d"] as DailyDiscoveryRange[]).map((item) => <button key={item} className={range === item ? "active" : ""} onClick={() => setRange(item)}>{item === "1d" ? "24h" : item === "3d" ? "3 days" : "7 days"}</button>)}</div>
+      <div className="daily-range-control" aria-label="Publication range">{(["7d", "30d", "90d"] as DailyDiscoveryRange[]).map((item) => <button key={item} className={range === item ? "active" : ""} onClick={() => setRange(item)}>{item === "7d" ? "7 days" : item === "30d" ? "30 days" : "90 days"}</button>)}</div>
       <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
     </div>
-    {mode === "latest" && <div className="daily-category-filter"><span>arXiv fields</span>{["cs.AI", "cs.LG", "cs.CL", "cs.CV", "cs.RO", "cs.SE"].map((category) => <label key={category} className={categories.includes(category) ? "selected" : ""}><input type="checkbox" checked={categories.includes(category)} onChange={() => toggleCategory(category)} />{category}</label>)}</div>}
+    <div className="daily-topic-filter" role="tablist" aria-label="AI research topic">{DAILY_TOPICS.map((item) => <button key={item.id} role="tab" aria-selected={topic === item.id} className={topic === item.id ? "active" : ""} title={item.description} onClick={() => setTopic(item.id)}>{item.label}</button>)}</div>
     <div className="daily-search-row"><div className="external-search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /><button className="primary-button" disabled={loading} onClick={submitSearch}>{loading ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div><span>{visiblePapers.length} papers{submittedQuery ? ` · “${submittedQuery}”` : ""}{response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}</span></div>
     {error && <div className="library-error" role="alert">{error}</div>}
-    {loading && !response ? <LoadingState /> : error && !response ? <div className="daily-empty daily-feed-failed"><RefreshCw size={28} /><strong>Could not load the live feed</strong><span>arXiv may be responding slowly. Your library is unaffected.</span><button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button></div> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try a broader keyword, expand the date range, or select more arXiv fields.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    {loading && !response ? <LoadingState /> : error && !response ? <div className="daily-empty daily-feed-failed"><RefreshCw size={28} /><strong>Could not load the live feed</strong><span>arXiv may be responding slowly. Your library is unaffected.</span><button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button></div> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try another topic, expand the date range, or use a broader keyword.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;

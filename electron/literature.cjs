@@ -7,8 +7,24 @@ const HF_DAILY_PAPERS_URLS = [
   "https://hf-mirror.com/api/daily_papers",
   "https://huggingface.co/api/daily_papers",
 ];
-const DAILY_CATEGORIES = new Set(["cs.AI", "cs.LG", "cs.CL", "cs.CV", "cs.RO", "cs.SE"]);
-const DAILY_RANGES = new Set(["1d", "3d", "7d"]);
+const DEFAULT_DAILY_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"];
+const DAILY_CATEGORIES = new Set([...DEFAULT_DAILY_CATEGORIES, "cs.CV", "cs.RO", "cs.SE", "cs.IR", "cs.HC", "cs.MA", "cs.NE", "cs.CY", "stat.ML"]);
+const DAILY_RANGES = new Set(["7d", "30d", "90d"]);
+const DAILY_TOPICS = {
+  all: { categories: DEFAULT_DAILY_CATEGORIES, terms: [] },
+  agents: { categories: ["cs.AI", "cs.LG", "cs.CL"], terms: ["agent", "agentic", "autonomous"] },
+  multi_agent: { categories: ["cs.AI", "cs.LG", "cs.MA"], terms: ["multi-agent", "multi agent", "agent collaboration"] },
+  coding: { categories: ["cs.AI", "cs.SE", "cs.LG"], terms: ["code", "coding", "software engineering", "SWE"] },
+  reasoning: { categories: ["cs.AI", "cs.LG", "cs.CL"], terms: ["reasoning", "chain of thought", "test-time"] },
+  rag: { categories: ["cs.IR", "cs.CL", "cs.AI", "cs.LG"], terms: ["retrieval", "RAG", "long context"] },
+  multimodal: { categories: ["cs.CV", "cs.CL", "cs.AI"], terms: ["multimodal", "vision-language", "VLM"] },
+  vision: { categories: ["cs.CV", "cs.AI", "cs.LG"], terms: ["vision", "image", "video"] },
+  embodied: { categories: ["cs.RO", "cs.AI", "cs.LG"], terms: ["robot", "robotics", "embodied", "vision-language-action"] },
+  computer_use: { categories: ["cs.AI", "cs.HC", "cs.SE"], terms: ["computer use", "GUI", "tool use", "web agent"] },
+  safety: { categories: ["cs.AI", "cs.LG", "cs.CY"], terms: ["safety", "alignment", "red teaming", "jailbreak"] },
+  science: { categories: ["cs.AI", "cs.LG", "stat.ML"], terms: ["AI for science", "scientific discovery", "scientific research"] },
+  rl: { categories: ["cs.AI", "cs.LG", "cs.RO"], terms: ["reinforcement learning", "decision making", "policy optimization"] },
+};
 const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 function delay(milliseconds) {
@@ -108,13 +124,15 @@ async function searchArxiv(arxivId) {
 
 function normalizeDailyOptions(input = {}) {
   const mode = input.mode === "trending" ? "trending" : "latest";
-  const range = DAILY_RANGES.has(input.range) ? input.range : "3d";
+  const range = DAILY_RANGES.has(input.range) ? input.range : "7d";
+  const topic = typeof input.topic === "string" && DAILY_TOPICS[input.topic] ? input.topic : "all";
   const requestedCategories = Array.isArray(input.categories) ? input.categories : [];
-  const categories = [...new Set(requestedCategories.filter((category) => DAILY_CATEGORIES.has(category)))];
+  const requested = [...new Set(requestedCategories.filter((category) => DAILY_CATEGORIES.has(category)))];
+  const categories = topic === "all" && requested.length ? requested : DAILY_TOPICS[topic].categories;
   const query = typeof input.query === "string" ? input.query.trim().slice(0, 160) : "";
   const parsedLimit = Number(input.limit);
   const limit = Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, Math.trunc(parsedLimit))) : 40;
-  return { mode, range, categories: categories.length ? categories : ["cs.AI", "cs.LG", "cs.CL"], query, limit };
+  return { mode, range, topic, categories, query, limit };
 }
 
 function rangeStart(range) {
@@ -141,11 +159,17 @@ function buildArxivKeywordQuery(query) {
   return terms.map((term) => `all:"${term}"`).join(" AND ");
 }
 
+function buildTopicQuery(topic) {
+  const terms = DAILY_TOPICS[topic]?.terms || [];
+  return terms.map((term) => `all:"${term}"`).join(" OR ");
+}
+
 async function discoverArxivPapers(options) {
   const categoryQuery = options.categories.map((category) => `cat:${category}`).join(" OR ");
   const submittedRange = `submittedDate:[${formatArxivDate(rangeStart(options.range))} TO ${formatArxivDate(new Date())}]`;
+  const topicQuery = buildTopicQuery(options.topic);
   const keywordQuery = buildArxivKeywordQuery(options.query);
-  const searchQuery = [`(${categoryQuery})`, submittedRange, keywordQuery ? `(${keywordQuery})` : ""].filter(Boolean).join(" AND ");
+  const searchQuery = [`(${categoryQuery})`, submittedRange, topicQuery ? `(${topicQuery})` : "", keywordQuery ? `(${keywordQuery})` : ""].filter(Boolean).join(" AND ");
   const params = new URLSearchParams({
     search_query: searchQuery,
     start: "0",
@@ -195,6 +219,13 @@ function normalizeHuggingFacePaper(item) {
   };
 }
 
+function matchesDailyTopic(paper, topic) {
+  const terms = DAILY_TOPICS[topic]?.terms || [];
+  if (!terms.length) return true;
+  const haystack = `${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")}`.toLowerCase();
+  return terms.some((term) => haystack.includes(term.toLowerCase()));
+}
+
 async function discoverHuggingFacePapers(options) {
   const params = new URLSearchParams({ sort: "trending", limit: "100" });
   let response;
@@ -219,6 +250,7 @@ async function discoverHuggingFacePapers(options) {
   return asArray(payload)
     .map(normalizeHuggingFacePaper)
     .filter((paper) => !paper.discovered_at || new Date(paper.discovered_at).getTime() >= cutoff)
+    .filter((paper) => matchesDailyTopic(paper, options.topic))
     .filter((paper) => matchesDailyQuery(paper, options.query))
     .sort((left, right) => right.upvotes - left.upvotes || right.github_stars - left.github_stars)
     .slice(0, options.limit);

@@ -32,3 +32,10 @@ test("bounds daily discovery options", () => {
   assert.equal(options.limit, 100);
   assert.equal(options.query, "agent memory");
 });
+
+test("uses topic defaults and longer daily discovery ranges", () => {
+  const options = normalizeDailyOptions({ topic: "coding", range: "30d" });
+  assert.equal(options.topic, "coding");
+  assert.equal(options.range, "30d");
+  assert.deepEqual(options.categories, ["cs.AI", "cs.SE", "cs.LG"]);
+});
