@@ -43,20 +43,21 @@ import {
 } from "lucide-react";
 
 const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
-const DAILY_TOPICS: Array<{ id: DailyDiscoveryTopic; label: string; categories: string[]; description: string }> = [
-  { id: "all", label: "All", categories: ["cs.AI", "cs.LG", "cs.CL"], description: "The original broad AI, ML, and language-model feed" },
-  { id: "agents", label: "Agents & RSI", categories: ["cs.AI", "cs.LG", "cs.CL"], description: "Agentic systems and self-improvement" },
-  { id: "multi_agent", label: "Multi-agent", categories: ["cs.AI", "cs.LG", "cs.MA"], description: "Coordination, collaboration, and agent societies" },
-  { id: "coding", label: "Coding & SWE", categories: ["cs.AI", "cs.SE", "cs.LG"], description: "Code generation and software engineering agents" },
-  { id: "reasoning", label: "Reasoning", categories: ["cs.AI", "cs.LG", "cs.CL"], description: "Reasoning, test-time scaling, and deliberation" },
-  { id: "rag", label: "RAG & Long Context", categories: ["cs.IR", "cs.CL", "cs.AI", "cs.LG"], description: "Retrieval, memory, and long-context models" },
-  { id: "multimodal", label: "Multimodal", categories: ["cs.CV", "cs.CL", "cs.AI"], description: "Vision-language and multimodal models" },
-  { id: "vision", label: "Vision", categories: ["cs.CV", "cs.AI", "cs.LG"], description: "Image and video understanding or generation" },
-  { id: "embodied", label: "Embodied & Robotics", categories: ["cs.RO", "cs.AI", "cs.LG"], description: "Robotics, VLA, and embodied intelligence" },
-  { id: "computer_use", label: "Tool & Computer Use", categories: ["cs.AI", "cs.HC", "cs.SE"], description: "GUI, browser, and tool-using agents" },
-  { id: "safety", label: "AI Safety", categories: ["cs.AI", "cs.LG", "cs.CY"], description: "Alignment, robustness, and red teaming" },
-  { id: "science", label: "AI for Science", categories: ["cs.AI", "cs.LG", "stat.ML"], description: "Scientific discovery and research automation" },
-  { id: "rl", label: "RL & Decision Making", categories: ["cs.AI", "cs.LG", "cs.RO"], description: "Reinforcement learning and policy optimization" },
+const DAILY_TOPICS: Array<{ id: DailyDiscoveryTopic; label: string; description: string }> = [
+  { id: "all", label: "All", description: "Recent AI, machine learning, and language-model papers" },
+  { id: "ai4ai_rsi", label: "AI4AI/RSI", description: "AI systems improving AI and recursive self-improvement" },
+  { id: "gui_compute_use", label: "GUI/Compute Use", description: "Agents operating graphical and computer interfaces" },
+  { id: "coding_agents", label: "Coding Agents", description: "Agentic coding and software engineering" },
+  { id: "reinforcement_learning", label: "Reinforcement Learning", description: "Learning policies through interaction and feedback" },
+  { id: "on_policy_distillation", label: "On-Policy Distillation", description: "Distilling policies from on-policy or online trajectories" },
+  { id: "robotics_vla", label: "Robotics/VLA", description: "Robotics and vision-language-action models" },
+  { id: "world_models", label: "World Models", description: "Learned environment dynamics and simulation" },
+  { id: "reasoning_test_time", label: "Reasoning / Test-Time Scaling", description: "Reasoning and inference-time computation" },
+  { id: "interpretability", label: "Interpretability", description: "Understanding and explaining model behavior" },
+  { id: "rag", label: "RAG & Long Context", description: "Retrieval, memory, and long-context models" },
+  { id: "multimodal", label: "Multimodal", description: "Vision-language and multimodal models" },
+  { id: "safety", label: "AI Safety", description: "Alignment, robustness, and red teaming" },
+  { id: "science", label: "AI for Science", description: "Scientific discovery and research automation" },
 ];
 
 type LibraryViewProps = {
@@ -727,13 +728,12 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
   const responseRef = useRef<DailyDiscoveryResponse | null>(null);
   useEffect(() => { if (!targetLibraryId && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
   const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
-  const activeTopic = DAILY_TOPICS.find((item) => item.id === topic) ?? DAILY_TOPICS[0];
   const loadFeed = useCallback(async (forceRefresh = false) => {
     const requestId = ++feedRequestId.current;
     setLoading(true);
     setError("");
     try {
-      const nextResponse = await bridge.discoverDailyPapers({ mode, range, topic, categories: activeTopic.categories, query: submittedQuery, limit: 60, forceRefresh });
+      const nextResponse = await bridge.discoverDailyPapers({ mode, range, topic, query: submittedQuery, limit: 60, forceRefresh });
       if (requestId !== feedRequestId.current) return;
       responseRef.current = nextResponse;
       setResponse(nextResponse);
@@ -745,7 +745,7 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
-  }, [activeTopic.categories, bridge, mode, range, submittedQuery, topic]);
+  }, [bridge, mode, range, submittedQuery, topic]);
 
   useEffect(() => {
     void loadFeed(false);

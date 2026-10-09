@@ -202,7 +202,7 @@ interface AcademicSearchResult {
 
 type DailyDiscoveryMode = "latest" | "trending";
 type DailyDiscoveryRange = "7d" | "30d" | "90d";
-type DailyDiscoveryTopic = "all" | "agents" | "multi_agent" | "coding" | "reasoning" | "rag" | "multimodal" | "vision" | "embodied" | "computer_use" | "safety" | "science" | "rl";
+type DailyDiscoveryTopic = "all" | "ai4ai_rsi" | "gui_compute_use" | "coding_agents" | "reinforcement_learning" | "on_policy_distillation" | "robotics_vla" | "world_models" | "reasoning_test_time" | "interpretability" | "rag" | "multimodal" | "safety" | "science";
 
 interface DailyDiscoveryOptions {
   mode?: DailyDiscoveryMode;

@@ -12,18 +12,19 @@ const DAILY_CATEGORIES = new Set([...DEFAULT_DAILY_CATEGORIES, "cs.CV", "cs.RO",
 const DAILY_RANGES = new Set(["7d", "30d", "90d"]);
 const DAILY_TOPICS = {
   all: { categories: DEFAULT_DAILY_CATEGORIES, terms: [] },
-  agents: { categories: ["cs.AI", "cs.LG", "cs.CL"], terms: ["agent", "agentic", "autonomous"] },
-  multi_agent: { categories: ["cs.AI", "cs.LG", "cs.MA"], terms: ["multi-agent", "multi agent", "agent collaboration"] },
-  coding: { categories: ["cs.AI", "cs.SE", "cs.LG"], terms: ["code", "coding", "software engineering", "SWE"] },
-  reasoning: { categories: ["cs.AI", "cs.LG", "cs.CL"], terms: ["reasoning", "chain of thought", "test-time"] },
+  ai4ai_rsi: { categories: ["cs.AI", "cs.LG", "cs.SE"], terms: ["AI4AI", "AI for AI", "recursive self-improvement", "self-improving agent", "self-evolving agent", "automated AI research"] },
+  gui_compute_use: { categories: ["cs.AI", "cs.HC", "cs.SE"], terms: ["computer use", "computer-use", "GUI agent", "desktop agent", "web agent", "graphical user interface"] },
+  coding_agents: { categories: ["cs.AI", "cs.SE", "cs.LG"], terms: ["coding agent", "code agent", "software engineering agent", "SWE-agent", "agentic coding", "repository-level agent"] },
+  reinforcement_learning: { categories: ["cs.AI", "cs.LG", "cs.RO"], terms: ["reinforcement learning", "policy optimization", "actor-critic", "offline RL"] },
+  on_policy_distillation: { categories: ["cs.AI", "cs.LG", "stat.ML"], terms: ["on-policy distillation", "on policy distillation", "online policy distillation", "policy distillation"] },
+  robotics_vla: { categories: ["cs.RO", "cs.AI", "cs.CV", "cs.LG"], terms: ["robotics", "robotic manipulation", "vision-language-action", "VLA", "embodied agent"] },
+  world_models: { categories: ["cs.AI", "cs.LG", "cs.CV", "cs.RO"], terms: ["world model", "world-model", "world simulation", "latent dynamics"] },
+  reasoning_test_time: { categories: ["cs.AI", "cs.LG", "cs.CL"], terms: ["reasoning", "chain of thought", "test-time scaling", "test-time compute", "inference-time compute"] },
+  interpretability: { categories: ["cs.AI", "cs.LG", "cs.CL", "stat.ML"], terms: ["interpretability", "interpretable", "explainable AI", "mechanistic interpretability", "feature attribution"] },
   rag: { categories: ["cs.IR", "cs.CL", "cs.AI", "cs.LG"], terms: ["retrieval", "RAG", "long context"] },
   multimodal: { categories: ["cs.CV", "cs.CL", "cs.AI"], terms: ["multimodal", "vision-language", "VLM"] },
-  vision: { categories: ["cs.CV", "cs.AI", "cs.LG"], terms: ["vision", "image", "video"] },
-  embodied: { categories: ["cs.RO", "cs.AI", "cs.LG"], terms: ["robot", "robotics", "embodied", "vision-language-action"] },
-  computer_use: { categories: ["cs.AI", "cs.HC", "cs.SE"], terms: ["computer use", "GUI", "tool use", "web agent"] },
   safety: { categories: ["cs.AI", "cs.LG", "cs.CY"], terms: ["safety", "alignment", "red teaming", "jailbreak"] },
   science: { categories: ["cs.AI", "cs.LG", "stat.ML"], terms: ["AI for science", "scientific discovery", "scientific research"] },
-  rl: { categories: ["cs.AI", "cs.LG", "cs.RO"], terms: ["reinforcement learning", "decision making", "policy optimization"] },
 };
 const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 

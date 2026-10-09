@@ -34,8 +34,14 @@ test("bounds daily discovery options", () => {
 });
 
 test("uses topic defaults and longer daily discovery ranges", () => {
-  const options = normalizeDailyOptions({ topic: "coding", range: "30d" });
-  assert.equal(options.topic, "coding");
+  const options = normalizeDailyOptions({ topic: "coding_agents", range: "30d" });
+  assert.equal(options.topic, "coding_agents");
   assert.equal(options.range, "30d");
   assert.deepEqual(options.categories, ["cs.AI", "cs.SE", "cs.LG"]);
+});
+
+test("maps focused research topics and discards retired filters", () => {
+  assert.deepEqual(normalizeDailyOptions({ topic: "on_policy_distillation" }).categories, ["cs.AI", "cs.LG", "stat.ML"]);
+  assert.deepEqual(normalizeDailyOptions({ topic: "robotics_vla" }).categories, ["cs.RO", "cs.AI", "cs.CV", "cs.LG"]);
+  assert.equal(normalizeDailyOptions({ topic: "multi_agent" }).topic, "all");
 });
