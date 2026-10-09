@@ -24,6 +24,7 @@ const windowPreviewTokens = new Map();
 const previewTokenWorkspaces = new Map();
 const workspaceWatchers = new Map();
 const allowedContextPaths = new Set();
+const WORKSPACE_STATE_FILE = "last-workspace.json";
 
 app.setName("Archimedes");
 protocol.registerSchemesAsPrivileged([{
@@ -92,6 +93,40 @@ function setWindowWorkspace(senderId, workspace) {
   }
   previewTokenWorkspaces.set(token, workspace);
   return token;
+}
+
+function workspaceStatePath() {
+  return path.join(app.getPath("userData"), WORKSPACE_STATE_FILE);
+}
+
+function validWorkspace(value) {
+  return typeof value === "string" && value.trim() && fs.existsSync(value) && fs.statSync(value).isDirectory();
+}
+
+function rememberWorkspace(workspace) {
+  if (!validWorkspace(workspace)) return;
+  try {
+    fs.writeFileSync(workspaceStatePath(), JSON.stringify({ workspace, updatedAt: new Date().toISOString() }, null, 2));
+  } catch {
+    // The active window still works if user-data storage is temporarily unavailable.
+  }
+}
+
+function lastWorkspace() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(workspaceStatePath(), "utf8"));
+    return validWorkspace(saved?.workspace) ? saved.workspace : null;
+  } catch {
+    return null;
+  }
+}
+
+function startupWorkspace() {
+  const saved = lastWorkspace();
+  if (saved) return saved;
+  // During local development, the application lives inside its default research workspace.
+  const developmentWorkspace = process.env.VITE_DEV_SERVER_URL ? path.dirname(app.getAppPath()) : null;
+  return validWorkspace(developmentWorkspace) ? developmentWorkspace : null;
 }
 
 function watchWorkspace(sender, workspace) {
@@ -200,6 +235,7 @@ async function openFolderFromMenu() {
   const workspace = await chooseFolderForWindow(browserWindow);
   if (!workspace || browserWindow.isDestroyed()) return;
   setWindowWorkspace(browserWindow.webContents.id, workspace);
+  rememberWorkspace(workspace);
   browserWindow.webContents.send("menu:open-folder", workspace);
 }
 
@@ -400,6 +436,7 @@ app.whenReady().then(() => {
   ipcMain.handle("workspace:open", (event, requestedWorkspace) => {
     const workspace = resolveWorkspace(requestedWorkspace);
     setWindowWorkspace(event.sender.id, workspace);
+    rememberWorkspace(workspace);
     watchWorkspace(event.sender, workspace);
     return store.openWorkspace(workspace);
   });
@@ -811,7 +848,7 @@ app.whenReady().then(() => {
     closeInteractiveTerminal(sessionId);
   });
 
-  createWindow();
+  createWindow(startupWorkspace());
 });
 
 app.on("window-all-closed", () => {
@@ -819,7 +856,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
 });
 
 app.on("before-quit", closeAllTerminals);
