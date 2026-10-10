@@ -1,0 +1,11 @@
+[
+  { "id": "icml", "label": "ICML", "host": "https://icml.cc", "type": "virtual" },
+  { "id": "iclr", "label": "ICLR", "host": "https://iclr.cc", "type": "virtual" },
+  { "id": "neurips", "label": "NeurIPS", "host": "https://neurips.cc", "type": "virtual" },
+  { "id": "cvpr", "label": "CVPR", "host": "https://cvpr.thecvf.com", "type": "virtual" },
+  { "id": "iccv", "label": "ICCV", "host": "https://iccv.thecvf.com", "type": "virtual", "parity": 1 },
+  { "id": "eccv", "label": "ECCV", "host": "https://eccv.ecva.net", "type": "virtual", "parity": 0 },
+  { "id": "acl", "label": "ACL", "host": "https://aclanthology.org", "type": "anthology" },
+  { "id": "emnlp", "label": "EMNLP", "host": "https://aclanthology.org", "type": "anthology" },
+  { "id": "aaai", "label": "AAAI", "host": "https://ojs.aaai.org", "type": "aaai" }
+]

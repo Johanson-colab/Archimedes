@@ -43,6 +43,9 @@ function refreshCount(libraryId: string) {
 }
 
 export const previewLibraryBridge = {
+  searchConferencePapers: async (_input: ConferenceSearchOptions): Promise<ConferenceSearchResponse> => {
+    throw new Error("请在 Archimedes 桌面端检索官方会议论文；浏览器预览没有会议数据服务。");
+  },
   listLibraries: async () => previewLibraries.map((library) => ({ ...library })),
   createLibrary: async ({ name, description = "", color = "#3973c8" }: { name: string; description?: string; color?: string }) => {
     const library: ResearchLibrary = { id: crypto.randomUUID(), name, description, color, paper_count: 0, created_at: now, updated_at: now };

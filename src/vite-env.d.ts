@@ -31,6 +31,7 @@ interface ResearchDeskBridge {
     listLibraryPapers: (libraryId: string, query?: string) => Promise<LibraryPaper[]>;
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
+    searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
     addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
@@ -198,6 +199,44 @@ interface AcademicSearchResult {
   pdf_url: string;
   citation_count: number;
   source: string;
+  conference?: ConferenceMetadata;
+}
+
+type ConferenceId = "icml" | "iclr" | "neurips" | "cvpr" | "iccv" | "eccv" | "acl" | "emnlp" | "aaai";
+type ConferencePresentation = "oral" | "spotlight" | "poster" | "unknown";
+interface ConferenceMetadata {
+  id: ConferenceId;
+  year: number;
+  presentation: ConferencePresentation;
+  decision: string;
+  track: string;
+  source_url: string;
+  presentation_source_url: string;
+  retrieved_at: string;
+}
+interface ConferenceSearchOptions {
+  conference: ConferenceId;
+  year: number;
+  presentation?: ConferencePresentation | "all";
+  query?: string;
+  topic?: DailyDiscoveryTopic;
+  offset?: number;
+  limit?: number;
+  forceRefresh?: boolean;
+}
+interface ConferenceSearchResponse {
+  papers: DailyPaper[];
+  total: number;
+  catalog_total: number;
+  presentation_counts: Record<ConferencePresentation, number>;
+  options: ConferenceSearchOptions;
+  sources: string[];
+  status: "available" | "partial" | "not_published" | "not_held";
+  warnings: string[];
+  fetched_at: string;
+  cached: boolean;
+  stale: boolean;
+  has_more: boolean;
 }
 
 type DailyDiscoveryMode = "latest" | "trending";

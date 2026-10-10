@@ -9,6 +9,7 @@ The current implementation includes:
 - approval-gated workspace writes and shell commands;
 - persistent literature libraries with search, import, reading state, and notes;
 - daily arXiv paper discovery and keyword search;
+- official conference paper search for ICML, ICLR, NeurIPS, CVPR, ICCV, ECCV, ACL, EMNLP, and AAAI (2023–2026), with presentation filters and durable source provenance;
 - title-to-full-text reading of public papers with page-numbered PDF evidence, phrase lookup across up to 120 PDF pages, and optional vision inspection of individual PDF pages;
 - optional general web and news search with batched queries, date and domain filters, page reading, in-page find, and a Deep research mode;
 - a separate visible browser for dynamic pages and sites where the user needs to sign in;
@@ -52,7 +53,16 @@ When an HTML page needs JavaScript or a user login, the Agent can open it in a s
 ```bash
 npm run lint
 npm run build
+npm test
 ```
+
+## Conference discovery
+
+Open **Daily papers → 顶会检索**, choose a conference and year, and filter by title, author, topic, or presentation format. Day-range controls are disabled in conference mode. Results are paginated after filtering the entire downloaded catalog. Refresh rechecks the official source; normal searches reuse a six-hour workspace cache. Saved records keep their conference, presentation, source URLs, and retrieval time.
+
+The catalog uses each conference's official virtual site, [CVF Open Access](https://openaccess.thecvf.com/), [ACL Anthology](https://aclanthology.org/), and [AAAI Press](https://ojs.aaai.org/index.php/AAAI/issue/archive). It excludes identifiable workshops, rejected/withdrawn entries, retractions, proceedings front matter, and duplicate presentation sessions. Presentation labels come from official decisions or schedules, never from model predictions. These labels describe conference presentation formats, not a universal ranking across conferences.
+
+Unavailable editions and missing public data are shown explicitly. ICCV runs in odd years and ECCV in even years. On October 10, 2026, the EMNLP 2026 main Anthology volume was not yet public. ACL/EMNLP Anthology and AAAI Press do not supply per-paper Oral/Poster distinctions; those records remain **未标注**. CVPR's paginated export may deny public access to later pages; the adapter supplements it with official proceedings and schedules, reporting any remaining unclassified records. Source access failures are reported separately from empty search results; stale results disclose their cached status.
 
 ## Current boundary
 

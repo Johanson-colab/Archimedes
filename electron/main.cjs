@@ -12,6 +12,7 @@ const { loadLocalAgentEnvironment } = require("./config.cjs");
 const modelConfig = require("./model-config.cjs");
 const webSearch = require("./web-search.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
+const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const store = require("./store.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
@@ -534,6 +535,17 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("library:search-external", (_event, { query, limit }) => searchAcademicPapers(query, limit));
+
+  ipcMain.handle("library:search-conferences", async (event, input = {}) => {
+    if (!input || typeof input !== "object") throw new Error("Conference search options are required.");
+    const workspace = resolveWorkspace(windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(workspace);
+    return searchConferencePapers(input, {
+      scope: workspace,
+      readCache: (key, age) => { store.openWorkspace(workspace); return store.getDailyFeedCache(key, age); },
+      writeCache: (key, value) => { store.openWorkspace(workspace); return store.setDailyFeedCache(key, value); },
+    });
+  });
 
   ipcMain.handle("library:discover-daily", async (_event, input = {}) => {
     if (!input || typeof input !== "object") throw new Error("Daily discovery options are required.");

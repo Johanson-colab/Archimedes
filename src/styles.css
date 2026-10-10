@@ -939,3 +939,40 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .paper-ai-compose { align-items: end; padding: 8px 10px; }
 .paper-ai-compose textarea { min-height: 34px; max-height: 132px; padding: 7px 8px; resize: none; overflow-y: hidden; font: 9px/1.5 inherit; }
 .paper-ai-compose .primary-button { min-height: 34px; }
+
+.daily-conference-toolbar { display: flex; flex-wrap: wrap; align-items: end; }
+.daily-live-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-right: 10px; border-right: 1px solid #dbe3dd; }
+.daily-range-control button:disabled { cursor: not-allowed; color: #a3aaa5; opacity: .6; }
+.conference-mode-button { min-height: 38px; }
+.conference-mode-button.active { color: #fff; background: #2d7358; border-color: #2d7358; }
+.daily-conference-toolbar .daily-save-target { margin-left: auto; }
+.conference-filter-row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 0 5px; }
+.conference-filter-row > label { display: grid; gap: 5px; color: #65746b; font-size: 10px; font-weight: 700; }
+.conference-filter-row select { min-width: 98px; min-height: 33px; padding: 5px 26px 5px 8px; color: #30423a; background: #fff; border: 1px solid #d3ddd6; border-radius: 4px; font-size: 11px; }
+.conference-presentation-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.conference-presentation-tabs button { display: inline-flex; min-height: 33px; align-items: center; gap: 6px; padding: 6px 10px; color: #617268; background: #fff; border: 1px solid #d8e0da; border-radius: 4px; font-size: 10px; }
+.conference-presentation-tabs button.active { color: #24573f; background: #e8f2eb; border-color: #a8cbb6; font-weight: 700; }
+.conference-presentation-tabs small { color: #84958b; font-size: 9px; font-weight: 400; }
+.conference-refresh { min-height: 33px; margin-left: auto; }
+.conference-catalog-status { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 10px; padding: 10px 0; color: #607b6d; font-size: 10px; }
+.conference-catalog-status > span { display: inline-flex; align-items: center; gap: 6px; }
+.conference-catalog-status summary { cursor: pointer; }
+.conference-catalog-status details { max-width: 100%; }
+.conference-catalog-status time, .conference-catalog-status details a { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: #587368; font-size: 9px; }
+.conference-notice { padding: 8px 10px; margin-bottom: 8px; color: #806b40; background: #fff8e8; border-left: 2px solid #d1b479; font-size: 10px; line-height: 1.55; overflow-wrap: anywhere; }
+.daily-paper-signals .conference-badge { font-weight: 700; }
+.conference-paper-row h2 .katex { font-size: 1em; }
+.daily-paper-signals .conference-badge.oral { color: #9b3851; background: #f8e9ee; }
+.daily-paper-signals .conference-badge.spotlight { color: #80601f; background: #fff2ce; }
+.daily-paper-signals .conference-badge.poster { color: #315f91; background: #edf3f9; }
+.daily-paper-signals .conference-badge.unknown { color: #7d827e; background: #eff0ee; }
+.conference-pagination { display: flex; justify-content: center; align-items: center; gap: 14px; padding: 18px 0; color: #617268; font-size: 10px; }
+.conference-pagination button { width: 32px; min-height: 30px; padding: 0; }
+.conference-saved-metadata { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; color: #517665; font-size: 10px; }
+@media (max-width: 620px) {
+  .daily-live-controls { padding-right: 0; border-right: 0; gap: 6px; }
+  .daily-conference-toolbar .daily-save-target { width: 100%; margin-left: 0; }
+  .daily-conference-toolbar .daily-save-target select { width: 100%; }
+  .conference-presentation-tabs { width: 100%; order: 2; }
+  .conference-presentation-tabs button { padding-inline: 8px; }
+}

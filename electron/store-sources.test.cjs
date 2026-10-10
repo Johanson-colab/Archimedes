@@ -5,6 +5,26 @@ const path = require("node:path");
 const test = require("node:test");
 const store = require("./store.cjs");
 
+test("retains official conference provenance and presentation when saving and reopening a library", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-conference-save-"));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-conference-close-"));
+  try {
+    store.openWorkspace(workspace);
+    const library = store.createLibrary({ name: "Conference papers" });
+    const conference = { id: "iclr", year: 2026, presentation: "oral", decision: "Accept (Oral)", track: "Main conference", source_url: "https://iclr.cc/static/virtual/data/iclr-2026-orals-posters.json", presentation_source_url: "https://iclr.cc/virtual/2026/oral/1", retrieved_at: "2026-10-10T00:00:00Z" };
+    const paper = { title: "A persisted conference record", authors: [], year: 2026, venue: "ICLR 2026", conference, source: "official-conference" };
+    store.addPaper(library.id, paper);
+    store.addPaper(library.id, paper);
+    assert.equal(store.listLibraries().find((item) => item.id === library.id).paper_count, 1);
+    store.openWorkspace(other);
+    store.openWorkspace(workspace);
+    assert.deepEqual(store.listPapers(library.id)[0].conference, conference);
+  } finally {
+    store.openWorkspace(other);
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test("shows only successfully opened PDF pages and web pages as reply sources", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-sources-"));
   try {

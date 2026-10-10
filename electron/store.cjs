@@ -196,6 +196,7 @@ function schema(db) {
 
   ensureColumn(db, "research_threads", "project_id", "TEXT");
   ensureColumn(db, "research_threads", "archived_at", "TEXT");
+  ensureColumn(db, "papers", "conference_json", "TEXT NOT NULL DEFAULT 'null'");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_research_projects_updated ON research_projects(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
@@ -369,6 +370,7 @@ function hydratePaper(row) {
     ...row,
     authors: JSON.parse(row.authors_json || "[]"),
     tags: JSON.parse(row.tags_json || "[]"),
+    conference: JSON.parse(row.conference_json || "null") || undefined,
     starred: Boolean(row.starred),
   };
 }
@@ -540,6 +542,8 @@ function addPaper(libraryId, paper) {
   const db = requireDatabase();
   const library = db.prepare("SELECT id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Choose a valid library before importing a paper.");
+  const conferenceJson = paper.conference && typeof paper.conference === "object" ? JSON.stringify(paper.conference) : null;
+  if (conferenceJson && conferenceJson.length > 10000) throw new Error("Conference metadata is too large.");
   const now = timestamp();
   const key = canonicalPaperKey(paper);
   const existing = db.prepare("SELECT id FROM papers WHERE canonical_key = ?").get(key);
@@ -556,6 +560,11 @@ function addPaper(libraryId, paper) {
       paper.venue || "", paper.abstract || "", paper.url || "", paper.pdf_url || "", paper.doi || "",
       paper.arxiv_id || "", paper.s2_id || "", paper.source || "manual", paper.citation_count || 0, now, now,
     );
+  }
+  if (conferenceJson) {
+    db.prepare(`UPDATE papers SET conference_json = ?, venue = ?, year = ?,
+      pdf_url = CASE WHEN pdf_url = '' THEN ? ELSE pdf_url END, updated_at = ? WHERE id = ?`)
+      .run(conferenceJson, paper.venue || "", paper.year || null, paper.pdf_url || "", now, paperId);
   }
   db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, paperId, now);
   db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(now, libraryId);

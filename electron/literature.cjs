@@ -368,4 +368,4 @@ async function searchAcademicPapers(query, requestedLimit) {
   throw new Error(`No paper metadata could be retrieved. ${errors.join(" ")}`);
 }
 
-module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, fetchWithRetry };
+module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, fetchWithRetry, matchesDailyTopic };
