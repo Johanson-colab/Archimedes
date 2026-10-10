@@ -25,6 +25,7 @@ import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typesc
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import vsCodeLight from "react-syntax-highlighter/dist/esm/styles/prism/vs";
 import LibraryView from "./LibraryView";
+import GalleryView from "./GalleryView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
@@ -49,6 +50,7 @@ import {
   FolderOpen,
   FlaskConical,
   Globe2,
+  Images,
   Lightbulb,
   MessageCircle,
   PanelBottom,
@@ -445,10 +447,11 @@ const previewBridge = {
 
 const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
 
-type MainSection = "chat" | "skills" | "library" | "daily" | "artifacts";
+type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifacts";
 
 function App() {
   const [mainSection, setMainSection] = useState<MainSection>("chat");
+  const [galleryOpened, setGalleryOpened] = useState(false);
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
@@ -906,7 +909,7 @@ function App() {
   }
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
-  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : "Artifacts";
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "gallery" ? "Gallery" : "Artifacts";
 
   return (
     <main className="codex-shell">
@@ -940,6 +943,9 @@ function App() {
           </button>
           <button className={mainSection === "daily" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("daily")} title="Daily papers">
             <CalendarDays size={16} /><span>Daily papers</span>
+          </button>
+          <button className={mainSection === "gallery" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setGalleryOpened(true); setMainSection("gallery"); }} title="Gallery">
+            <Images size={16} /><span>Gallery</span>
           </button>
           <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
             <Folder size={16} /><span>Artifacts</span>
@@ -1012,6 +1018,7 @@ function App() {
             {workspaceReady && <LibraryView key={workspace} bridge={desktopBridge} mode="library" workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
           </div>
           {mainSection === "daily" && workspaceReady && <LibraryView bridge={desktopBridge} mode="daily" workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
+          {galleryOpened && <div className={mainSection === "gallery" ? "gallery-view-cache" : "gallery-view-cache hidden"} aria-hidden={mainSection !== "gallery"}><GalleryView active={mainSection === "gallery"} /></div>}
           {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (
             <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
