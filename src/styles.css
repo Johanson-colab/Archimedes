@@ -935,7 +935,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .paper-ai-suggestions button { padding: 5px 7px; color: #39745b; background: #fbfdfb; border: 1px solid #cfe1d4; border-radius: 12px; font-size: 9px; font-weight: 700; }
 .paper-ai-suggestions button:hover { color: #205c45; background: #e8f3eb; border-color: #a7cdb2; }
 
-/* Keep the paper follow-up composer compact until the researcher needs more room. */
+/* Keep the paper follow-up composer compact while allowing longer questions to grow naturally. */
 .paper-ai-compose { align-items: end; padding: 8px 10px; }
-.paper-ai-compose textarea { min-height: 34px; max-height: 88px; padding: 7px 8px; resize: vertical; }
+.paper-ai-compose textarea { min-height: 34px; max-height: 132px; padding: 7px 8px; resize: none; overflow-y: hidden; font: 9px/1.5 inherit; }
 .paper-ai-compose .primary-button { min-height: 34px; }
