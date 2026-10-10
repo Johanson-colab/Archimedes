@@ -7,7 +7,7 @@ import conferenceCatalog from "../shared/conferences.json";
 
 const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }> = [
   { id: "all", label: "All" }, { id: "oral", label: "Oral" }, { id: "spotlight", label: "Spotlight" },
-  { id: "poster", label: "Poster" }, { id: "unknown", label: "未标注" },
+  { id: "poster", label: "Poster" }, { id: "unknown", label: "Unclassified" },
 ];
 const PAGE_SIZE = 40;
 function errorMessage(error: unknown) {
@@ -60,10 +60,10 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
   }
   return <div className="conference-discovery">
     <div className="conference-filter-row">
-      <label>会议<select aria-label="Conference" value={conference} onChange={(event) => { setConference(event.target.value as ConferenceId); setOffset(0); }}>
+      <label>Conference<select aria-label="Conference" value={conference} onChange={(event) => { setConference(event.target.value as ConferenceId); setOffset(0); }}>
         {conferenceCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
       </select></label>
-      <label>年份<select aria-label="Conference year" value={year} onChange={(event) => { setYear(Number(event.target.value)); setOffset(0); }}>
+      <label>Year<select aria-label="Conference year" value={year} onChange={(event) => { setYear(Number(event.target.value)); setOffset(0); }}>
         {[2026, 2025, 2024, 2023].map((item) => <option key={item} value={item}>{item}</option>)}
       </select></label>
       <div className="conference-presentation-tabs" role="tablist" aria-label="Presentation format">
@@ -74,23 +74,23 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
       <button className="secondary-button conference-refresh" title="Refresh official catalog" disabled={loading} onClick={() => void load(true)}><RefreshCw size={14} />Refresh</button>
     </div>
     <div className="daily-search-row">
-      <div className="external-search-box"><Search size={16} /><input aria-label="Search conference papers" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && search()} placeholder="搜索论文标题、作者、摘要或关键词" /><button className="primary-button" disabled={loading} onClick={search}><Search size={14} />Search</button></div>
+      <div className="external-search-box"><Search size={16} /><input aria-label="Search conference papers" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && search()} placeholder="Search by title, author, abstract, or keyword" /><button className="primary-button" disabled={loading} onClick={search}><Search size={14} />Search</button></div>
       <span>{response ? `${response.total.toLocaleString()} papers` : `${selected.label} ${year}`}</span>
     </div>
     {error && <div className="library-error" role="alert">{error}</div>}
     {response && <div className="conference-catalog-status">
-      <span><GraduationCap size={14} />{selected.label} {year} · {response.catalog_total.toLocaleString()} 篇 · {response.status === "not_held" ? "无该届会议" : response.status === "not_published" ? "等待官方发布" : response.stale ? "缓存（待更新）" : response.cached ? "已缓存" : "官方目录"}</span>
-      <details><summary>来源与更新时间</summary><time>{new Date(response.fetched_at).toLocaleString()}</time>{response.sources.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{new URL(url).hostname}<ExternalLink size={11} /></a>)}</details>
+      <span><GraduationCap size={14} />{selected.label} {year} · {response.catalog_total.toLocaleString()} papers · {response.status === "not_held" ? "No edition" : response.status === "not_published" ? "Awaiting official publication" : response.stale ? "Cached, refresh pending" : response.cached ? "Cached" : "Official catalog"}</span>
+      <details><summary>Sources and updated time</summary><time>{new Date(response.fetched_at).toLocaleString()}</time>{response.sources.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{new URL(url).hostname}<ExternalLink size={11} /></a>)}</details>
     </div>}
     {response?.warnings.map((warning) => <div className="conference-notice" key={warning}>{warning}</div>)}
-    {loading ? <div className="library-loading"><LoaderCircle className="spin" size={18} />正在获取 {selected.label} {year} 官方论文目录…</div>
-      : !response ? <div className="daily-empty"><RefreshCw size={24} /><strong>官方目录暂时无法访问</strong><button className="secondary-button" onClick={() => void load(true)}>重试</button></div>
-      : !response.papers.length ? <div className="daily-empty"><BookOpen size={24} /><strong>{response.status === "not_held" ? "该年份没有这届会议" : response.status === "not_published" ? "官方论文目录尚未公开" : "没有符合筛选条件的论文"}</strong><span>{response.status === "not_published" ? `${selected.label} ${year} 的官方录用目录暂不可用，可选择其他年份或稍后刷新。` : "请选择其他会议、年份或展示形式。"}</span></div>
+    {loading ? <div className="library-loading"><LoaderCircle className="spin" size={18} />Loading the official {selected.label} {year} catalog…</div>
+      : !response ? <div className="daily-empty"><RefreshCw size={24} /><strong>The official catalog is temporarily unavailable</strong><button className="secondary-button" onClick={() => void load(true)}>Retry</button></div>
+      : !response.papers.length ? <div className="daily-empty"><BookOpen size={24} /><strong>{response.status === "not_held" ? "No edition was held that year" : response.status === "not_published" ? "The official paper catalog is not public yet" : "No papers match these filters"}</strong><span>{response.status === "not_published" ? `The official ${selected.label} ${year} accepted-paper catalog is not available yet. Choose another year or try again later.` : "Try another conference, year, or presentation format."}</span></div>
       : <div className="daily-paper-list">{response.papers.map((paper) => {
         const metadata = paper.conference!;
         const key = `${targetLibraryId}:${paper.external_id}`;
         const saved = added.has(key);
-        const presentationLabel = PRESENTATIONS.find((item) => item.id === metadata.presentation)?.label || "未标注";
+        const presentationLabel = PRESENTATIONS.find((item) => item.id === metadata.presentation)?.label || "Unclassified";
         return <article className="daily-paper-row conference-paper-row" key={paper.external_id}>
           <div className="daily-paper-date"><strong>{selected.label}</strong><span>{year}</span></div>
           <div className="daily-paper-content">
@@ -98,7 +98,7 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
             <p>{paper.authors.slice(0, 5).join(", ")}{paper.authors.length > 5 ? " et al." : ""}</p>
             {paper.abstract && <small>{paper.abstract}</small>}
             <div className="daily-paper-signals"><a className={`conference-badge ${metadata.presentation}`} href={metadata.presentation_source_url || metadata.source_url} title={metadata.decision} target="_blank" rel="noreferrer">{presentationLabel}</a><span>{metadata.track}</span>
-              <a href={metadata.source_url} target="_blank" rel="noreferrer"><Check size={11} />官方来源</a>
+              <a href={metadata.source_url} target="_blank" rel="noreferrer"><Check size={11} />Official catalog</a>
               {paper.pdf_url && <a href={paper.pdf_url} target="_blank" rel="noreferrer"><FileText size={11} />PDF</a>}
             </div>
           </div>

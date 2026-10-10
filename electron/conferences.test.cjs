@@ -28,7 +28,8 @@ test("only accepted main conference records are imported and presentation does n
   ], { 1: "Official abstract" }, meta, source);
   assert.equal(rows.length, 2);
   assert.equal(rows[0].abstract, "Official abstract");
-  assert.equal(rows[0].pdf_url, "https://openreview.net/pdf?id=Abcd123456");
+  assert.equal(rows[0].url, "https://iclr.cc/virtual/2026/poster/1");
+  assert.equal(rows[0].pdf_url, "");
   assert.equal(rows[1].conference.presentation, "unknown");
 });
 
@@ -40,7 +41,7 @@ test("oral and poster sessions deduplicate with official oral evidence retained"
   assert.equal(result[0].conference.presentation_source_url, "https://iclr.cc/virtual/2026/oral/2");
 });
 
-test("invalid OpenReview placeholders fall back to the official paper page", () => {
+test("OpenReview forum links always fall back to the public official paper page", () => {
   const [paper] = normalizeVirtualRows([event({ paper_url: "https://openreview.net/forum?id=2026-Oral--placeholder" })], {}, meta, source);
   assert.equal(paper.url, "https://iclr.cc/virtual/2026/poster/1");
   assert.equal(paper.pdf_url, "");
@@ -69,7 +70,7 @@ test("source failures are distinct from unpublished catalogs and stale data is d
   const stale = await searchConferencePapers({ conference: "iclr", year: 2026, forceRefresh: true }, {
     fetchImpl: async () => { throw new Error("network unavailable"); }, readCache: () => ({ papers: [], sources: [source], status: "available" }),
   });
-  assert.equal(stale.stale, true); assert.ok(stale.warnings.some((text) => text.includes("刷新失败")));
+  assert.equal(stale.stale, true); assert.ok(stale.warnings.some((text) => text.includes("Refresh failed")));
 });
 
 test("anthology parser excludes proceedings front matter and Findings", () => {

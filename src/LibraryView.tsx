@@ -62,6 +62,10 @@ const DAILY_TOPICS: Array<{ id: DailyDiscoveryTopic; label: string; description:
   { id: "science", label: "AI for Science", description: "Scientific discovery and research automation" },
 ];
 
+function publicPaperRecordUrl(paper: Pick<LibraryPaper, "url" | "conference">) {
+  return paper.conference?.presentation_source_url || paper.url;
+}
+
 type LibraryViewProps = {
   bridge: ResearchDeskBridge;
   mode: "library" | "daily";
@@ -231,9 +235,9 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
     <div className="paper-inspector-kicker"><span>{paper.venue || "Research paper"}</span><span>{paper.year ?? "Year unknown"}</span></div>
     <div className="paper-inspector-title"><h2>{paper.title}</h2><button className={paper.starred ? "icon-button starred" : "icon-button"} onClick={() => void onUpdate({ starred: !paper.starred })} title={paper.starred ? "Unstar" : "Star"}><Star size={17} fill={paper.starred ? "currentColor" : "none"} /></button></div>
     <p className="paper-authors">{paper.authors.join(", ") || "Authors unavailable"}</p>
-    {paper.conference && <div className="conference-saved-metadata"><span>{paper.conference.presentation === "unknown" ? "展示形式未标注" : paper.conference.presentation === "oral" ? "Oral" : paper.conference.presentation === "spotlight" ? "Spotlight" : "Poster"}</span><a href={paper.conference.presentation_source_url || paper.conference.source_url} target="_blank" rel="noreferrer">官方录用来源</a></div>}
+    {paper.conference && <div className="conference-saved-metadata"><span>{paper.conference.presentation === "unknown" ? "Unclassified" : paper.conference.presentation === "oral" ? "Oral" : paper.conference.presentation === "spotlight" ? "Spotlight" : "Poster"}</span><a href={paper.conference.presentation_source_url || paper.conference.source_url} target="_blank" rel="noreferrer">Official conference record</a></div>}
     <p className="paper-abstract">{paper.abstract || "No abstract was returned by the metadata provider."}</p>
-    <div className="paper-record-row"><label>Reading status<select value={paper.reading_status} onChange={(event) => void onUpdate({ reading_status: event.target.value as ReadingStatus })}><option value="unread">Unread</option><option value="reading">Reading</option><option value="read">Read</option></select></label>{paper.url && <a className="outline-button" href={paper.url} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open source</a>}</div>
+    <div className="paper-record-row"><label>Reading status<select value={paper.reading_status} onChange={(event) => void onUpdate({ reading_status: event.target.value as ReadingStatus })}><option value="unread">Unread</option><option value="reading">Reading</option><option value="read">Read</option></select></label>{publicPaperRecordUrl(paper) && <a className="outline-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open source</a>}</div>
     <button className="paper-reader-launch" onClick={onRead}><BookOpen size={15} /><span><strong>Open reading workspace</strong><small>Notes, evidence, and paper structure</small></span><ChevronRight size={16} /></button>
     <label className="paper-notes">My notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={6} placeholder="Why is this paper useful? What should you verify?" /></label>
     <div className="paper-inspector-actions"><button className="secondary-button danger-text" onClick={() => void onRemove()}><Trash2 size={14} />Remove</button><button className="primary-button" onClick={() => void onUpdate({ notes })}><Save size={14} />Save notes</button></div>
@@ -448,7 +452,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <span className="reader-header-divider" />
       <div className="reader-title"><span>{library.name}</span><strong title={paper.title}>{paper.title}</strong></div>
       <div className="reader-header-actions">
-        {paper.url && <a className="reader-icon-button" href={paper.url} target="_blank" rel="noreferrer" title="Open source"><ExternalLink size={16} /></a>}
+        {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title="Open source"><ExternalLink size={16} /></a>}
         <button className="reader-icon-button" title={paper.starred ? "Unstar paper" : "Star paper"} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={16} fill={paper.starred ? "currentColor" : "none"} /></button>
         <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title="Ask Archimedes" onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>Ask AI</span></button>
       </div>
@@ -834,7 +838,7 @@ function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { b
       </div>
       <div className="daily-range-control" aria-label="Publication range">{(["7d", "30d", "90d"] as DailyDiscoveryRange[]).map((item) => <button key={item} disabled={mode === "conference"} className={range === item && mode !== "conference" ? "active" : ""} onClick={() => setRange(item)}>{item === "7d" ? "7 days" : item === "30d" ? "30 days" : "90 days"}</button>)}</div>
       </div>
-      <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} onClick={() => setMode("conference")}><GraduationCap size={16} />顶会检索</button>
+      <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} onClick={() => setMode("conference")}><GraduationCap size={16} />Top conference search</button>
       {mode !== "conference" && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
     </div>

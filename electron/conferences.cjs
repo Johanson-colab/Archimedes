@@ -110,14 +110,15 @@ function normalizeVirtualRows(rows, abstracts, meta, sourceUrl) {
     if (decisionPresentation === null) return [];
     const eventPresentation = presentationOf(row.event_type || row.eventtype) || "unknown";
     const presentation = RANK[eventPresentation] > RANK[decisionPresentation] ? eventPresentation : decisionPresentation;
-    let paperUrl = publicUrl(row.paper_url, meta.host);
-    if (paperUrl && new URL(paperUrl).hostname === "openreview.net" && !pdfFromLink(paperUrl)) paperUrl = "";
     const paperPdfLink = publicUrl(row.paper_pdf_url, meta.host);
     const categories = [...(row.keywords || []).map(clean), clean(row.topic)].filter(Boolean);
     return [paperRecord(meta, {
       title, authors: (row.authors || []).map((author) => clean(author.fullname)).filter(Boolean),
-      url: paperUrl || (paperPdfLink && !pdfFromLink(paperPdfLink) ? paperPdfLink : virtualUrl),
-      pdf_url: pdfFromLink(paperPdfLink) || pdfFromLink(paperUrl),
+      // OpenReview forum and PDF links in current conference exports can stay
+      // access-controlled after the public schedule is live. The official
+      // virtual entry is the stable, reader-facing record for this paper.
+      url: virtualUrl,
+      pdf_url: new URL(paperPdfLink || virtualUrl).hostname === "openreview.net" ? "" : pdfFromLink(paperPdfLink),
       abstract: clean(row.abstract || abstracts?.[String(row.id)]), categories,
       presentation, decision: decision || row.event_type || "Accepted", source_url: sourceUrl,
       presentation_source_url: virtualUrl,
@@ -178,7 +179,7 @@ async function loadVirtual(meta, context) {
       if (!Array.isArray(payload.results)) throw new Error("Invalid catalog page.");
       rows.push(...payload.results);
     } catch (error) {
-      warnings.push("官方展示信息目录暂时无法完整加载。");
+      warnings.push("The official presentation catalog could not be loaded completely.");
       break;
     }
     if (visited.size > 100) throw new Error("Conference pagination exceeded its limit.");
@@ -200,7 +201,7 @@ async function loadVirtual(meta, context) {
       } catch { /* Proceedings remain verifiable even if a presentation schedule cannot be read. */ }
     }
     const unknown = papers.filter((paper) => paper.conference.presentation === "unknown").length;
-    warnings[0] = unknown ? `官方论文集已补充收录；其中 ${unknown} 篇论文的展示形式尚未在可访问的官方日程中匹配到，标记为“未标注”。` : "";
+    warnings[0] = unknown ? `The official proceedings filled the catalog. ${unknown} papers could not be matched to an accessible presentation schedule and are marked Unclassified.` : "";
   }
   return { papers: deduplicate(papers), status: warnings.some(Boolean) ? "partial" : "available", sources, warnings: warnings.filter(Boolean) };
 }
@@ -235,7 +236,7 @@ async function loadAnthology(meta, context) {
   const papers = deduplicate(pages.flatMap((html, index) => html ? parseAnthology(html, meta, sources[index]) : []));
   if (pages.some(Boolean) && !papers.length) throw new Error("The official proceedings layout has changed; no verifiable paper records were extracted.");
   return { papers, status: papers.length ? "available" : "not_published", sources,
-    warnings: papers.length ? ["ACL Anthology 不提供逐篇 Oral/Poster 信息；未公布的展示形式标记为“未标注”。"] : [] };
+    warnings: papers.length ? ["ACL Anthology does not publish per-paper Oral/Poster labels; unavailable presentation formats are marked Unclassified."] : [] };
 }
 
 function parseAaaiIssue(html, meta, sourceUrl) {
@@ -292,7 +293,7 @@ async function loadAaai(meta, context) {
   }));
   if (!papers.length) throw new Error(errors.join(" "));
   return { papers: deduplicate(papers), status: errors.length ? "partial" : "available", sources: [archiveUrl, ...issues],
-    warnings: ["AAAI Press 论文集没有逐篇展示分级；未标注项不会推定为 Poster。", ...(errors.length ? [`${errors.length} 个官方分卷暂时未能加载，当前目录不完整。`] : [])] };
+    warnings: ["AAAI Press does not publish per-paper presentation labels; unclassified papers are not assumed to be Posters.", ...(errors.length ? [`${errors.length} official volumes could not be loaded, so this catalog is incomplete.`] : [])] };
 }
 
 async function searchConferencePapers(input, options = {}) {
@@ -300,13 +301,14 @@ async function searchConferencePapers(input, options = {}) {
   const config = conferences.find((entry) => entry.id === query.conference);
   const meta = { ...config, year: query.year, retrieved_at: new Date().toISOString() };
   const context = { fetchImpl: options.fetchImpl || fetch };
-  const cacheKey = `conference-v1:${meta.id}:${meta.year}`;
+  // v2 stops surfacing access-controlled OpenReview forum links as paper records.
+  const cacheKey = `conference-v2:${meta.id}:${meta.year}`;
   let catalog = !input.forceRefresh ? options.readCache?.(cacheKey, TTL) : null;
   let cached = Boolean(catalog);
   let stale = false;
   if (meta.parity !== undefined && query.year % 2 !== meta.parity) {
     catalog = { papers: [], status: "not_held", sources: [meta.host], fetched_at: meta.retrieved_at,
-      warnings: [`${meta.label} ${query.year} 无该届会议；${meta.label} 按${meta.parity ? "奇数" : "偶数"}年举办。`] };
+      warnings: [`${meta.label} ${query.year} is not held. ${meta.label} runs in ${meta.parity ? "odd" : "even"}-numbered years.`] };
   }
   if (!catalog) {
     const lockKey = `${options.scope || "default"}:${cacheKey}`;
@@ -323,7 +325,7 @@ async function searchConferencePapers(input, options = {}) {
       catalog = options.readCache?.(cacheKey);
       if (!catalog) throw error;
       cached = true; stale = true;
-      catalog = { ...catalog, warnings: [...(catalog.warnings || []), `刷新失败，显示已缓存的官方记录。${error.message}`] };
+      catalog = { ...catalog, warnings: [...(catalog.warnings || []), `Refresh failed; showing cached official records. ${error.message}`] };
     } finally { pending.delete(lockKey); }
   }
   const terms = query.query.match(/"[^"]+"|\S+/g)?.map((term) => term.replace(/^"|"$/g, "").toLowerCase()) || [];

@@ -44,7 +44,7 @@ function refreshCount(libraryId: string) {
 
 export const previewLibraryBridge = {
   searchConferencePapers: async (_input: ConferenceSearchOptions): Promise<ConferenceSearchResponse> => {
-    throw new Error("请在 Archimedes 桌面端检索官方会议论文；浏览器预览没有会议数据服务。");
+    throw new Error("Search official conference papers in the Archimedes desktop app. Browser preview does not provide the conference data service.");
   },
   listLibraries: async () => previewLibraries.map((library) => ({ ...library })),
   createLibrary: async ({ name, description = "", color = "#3973c8" }: { name: string; description?: string; color?: string }) => {
