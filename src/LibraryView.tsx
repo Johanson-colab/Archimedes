@@ -593,19 +593,49 @@ function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighligh
 
 function normalizePaperMathDelimiters(content: string) {
   let activeFence = "";
-  return content.split("\n").map((line) => {
+  let displayMathOpen = false;
+  const normalizedLines: string[] = [];
+  for (const line of content.replace(/\r\n?/g, "\n").split("\n")) {
     const fence = /^\s*(`{3,}|~{3,})/.exec(line)?.[1] || "";
     if (fence) {
       if (!activeFence) activeFence = fence[0];
       else if (fence[0] === activeFence) activeFence = "";
-      return line;
+      normalizedLines.push(line);
+      continue;
     }
-    if (activeFence) return line;
+    if (activeFence) {
+      normalizedLines.push(line);
+      continue;
+    }
     const normalized = normalizePaperMathLine(line);
-    // Some providers omit delimiters for a standalone LaTex equation.
-    if (!normalized.includes("$") && /^\s*[A-Za-z][^。；;]*=[^。；;]*(\\[a-zA-Z]+|[_^][{(])/.test(normalized)) return `$$${normalized.trim()}$$`;
-    return normalized;
-  }).join("\n");
+    if (normalized.trim() === "$$") {
+      displayMathOpen = !displayMathOpen;
+      normalizedLines.push(normalized);
+      continue;
+    }
+    const standaloneDisplay = /^\s*\$\$([\s\S]*?)\$\$\s*$/.exec(normalized);
+    if (standaloneDisplay) {
+      normalizedLines.push("$$", standaloneDisplay[1].trim(), "$$");
+      continue;
+    }
+    // Providers sometimes emit a bare equation or leave one display delimiter unmatched.
+    if (!displayMathOpen && !normalized.includes("$") && looksLikePaperEquation(normalized)) {
+      const equation = normalized.trim().replace(/^\$+|\$+$/g, "").replace(/(^|[^\\])\$/g, "$1").trim();
+      normalizedLines.push("$$", equation, "$$");
+      continue;
+    }
+    normalizedLines.push(normalized);
+  }
+  return normalizedLines.join("\n");
+}
+
+function looksLikePaperEquation(line: string) {
+  const trimmed = line.trim();
+  if (!trimmed || /^(#{1,6}|[-*+]\s|\d+\.\s|>|<)/.test(trimmed)) return false;
+  const equation = trimmed.replace(/^\$+|\$+$/g, "");
+  return equation.includes("=")
+    && /(?:\\[a-zA-Z]+|[_^][{(]|[A-Za-z]\s*[_^])/.test(equation)
+    && !/[。；;]$/.test(equation);
 }
 
 function normalizePaperMathLine(line: string) {
