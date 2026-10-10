@@ -69,6 +69,7 @@ function publicPaperRecordUrl(paper: Pick<LibraryPaper, "url" | "conference">) {
 type LibraryViewProps = {
   bridge: ResearchDeskBridge;
   mode: "library" | "daily";
+  initialDailyMode?: DailyDiscoveryMode | "conference";
   workspace?: string;
   projectId?: string | null;
   libraryRefreshVersion?: number;
@@ -76,7 +77,7 @@ type LibraryViewProps = {
   onAgentRun?: (result: AgentRunResult) => void;
 };
 
-export default function LibraryView({ bridge, mode, workspace = "", projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun }: LibraryViewProps) {
+export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun }: LibraryViewProps) {
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -161,7 +162,7 @@ export default function LibraryView({ bridge, mode, workspace = "", projectId, l
   }
 
   if (mode === "daily") {
-    return <DailyDiscovery bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => {
+    return <DailyDiscovery initialMode={initialDailyMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => {
       await loadLibraries();
       onLibraryImported?.();
     }} />;
@@ -763,8 +764,8 @@ function readableError(error: unknown, fallback: string) {
     .trim() || fallback;
 }
 
-function DailyDiscovery({ bridge, libraries, loadingLibraries, onImported }: { bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
-  const [mode, setMode] = useState<DailyDiscoveryMode | "conference">("latest");
+function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
+  const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
   const [range, setRange] = useState<DailyDiscoveryRange>("7d");
   const [topic, setTopic] = useState<DailyDiscoveryTopic>("all");
   const [query, setQuery] = useState("");

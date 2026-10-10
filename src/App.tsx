@@ -452,6 +452,7 @@ type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifa
 function App() {
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [galleryOpened, setGalleryOpened] = useState(false);
+  const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
@@ -941,7 +942,7 @@ function App() {
           <button className={mainSection === "library" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("library")} title="Literature library">
             <BookOpen size={16} /><span>Literature library</span>
           </button>
-          <button className={mainSection === "daily" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("daily")} title="Daily papers">
+          <button className={mainSection === "daily" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setDailyStartMode("latest"); setMainSection("daily"); }} title="Daily papers">
             <CalendarDays size={16} /><span>Daily papers</span>
           </button>
           <button className={mainSection === "gallery" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setGalleryOpened(true); setMainSection("gallery"); }} title="Gallery">
@@ -1017,8 +1018,8 @@ function App() {
           <div className={mainSection === "library" ? "library-view-cache" : "library-view-cache hidden"} aria-hidden={mainSection !== "library"}>
             {workspaceReady && <LibraryView key={workspace} bridge={desktopBridge} mode="library" workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
           </div>
-          {mainSection === "daily" && workspaceReady && <LibraryView bridge={desktopBridge} mode="daily" workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
-          {galleryOpened && <div className={mainSection === "gallery" ? "gallery-view-cache" : "gallery-view-cache hidden"} aria-hidden={mainSection !== "gallery"}><GalleryView active={mainSection === "gallery"} /></div>}
+          {mainSection === "daily" && workspaceReady && <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
+          {galleryOpened && <div className={mainSection === "gallery" ? "gallery-view-cache" : "gallery-view-cache hidden"} aria-hidden={mainSection !== "gallery"}><GalleryView active={mainSection === "gallery"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} /></div>}
           {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (
             <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
