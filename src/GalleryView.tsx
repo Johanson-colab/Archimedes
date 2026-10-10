@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ExternalLink, GraduationCap, ImageOff, Images, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { GALLERY_SUPPLEMENTS } from "./gallery-supplements";
 
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
 const PAGE_SIZE = 48;
-const VENUES = ["ICLR", "ICML", "NeurIPS", "CVPR", "ACL", "AAAI"] as const;
+const VENUES = ["ICLR", "ICML", "NeurIPS", "CVPR", "ICCV", "ECCV", "ACL", "EMNLP", "AAAI"] as const;
 const YEARS = [2026, 2025, 2024, 2023] as const;
 const PATTERNS = [
   ["conceptual", "Concept"], ["framework", "Framework"], ["pipeline", "Pipeline"],
@@ -24,6 +25,7 @@ type Figure = {
   paper: string;
   tier?: "oral" | "spotlight";
   award?: string;
+  source?: "official-proceedings";
   w?: number;
   h?: number;
 };
@@ -49,7 +51,7 @@ function loadCatalog(refresh = false) {
       if (!Array.isArray(payload)) throw new Error("The gallery catalog format has changed.");
       const figures = payload.filter(isFigure);
       if (!figures.length) throw new Error("No valid figures were found in the gallery catalog.");
-      return figures;
+      return [...figures, ...GALLERY_SUPPLEMENTS];
     }).catch((error: unknown) => {
       catalogPromise = null;
       throw error;
@@ -58,7 +60,7 @@ function loadCatalog(refresh = false) {
   return catalogPromise;
 }
 
-function imageUrl(figure: Figure) { return `${GALLERY_ROOT}${figure.image}`; }
+function imageUrl(figure: Figure) { return figure.image.startsWith("images/") ? `${GALLERY_ROOT}${figure.image}` : figure.image; }
 function paperUrl(figure: Figure) {
   try { const url = new URL(figure.paper); return url.protocol === "https:" ? url.href : ""; }
   catch { return ""; }
@@ -104,7 +106,7 @@ function FigureCard({ figure, onOpen }: { figure: Figure; onOpen: () => void }) 
       <span className="gallery-image-open">View figure</span>
     </button>
     <div className="gallery-card-body">
-      <div className="gallery-card-meta"><span className={`gallery-venue gallery-venue-${figure.venue}`}>{figure.venue.toUpperCase()}</span><span>{figure.year}</span><span>{PATTERNS.find(([id]) => id === figure.pattern)?.[1] || figure.pattern}</span>{tierName(figure) && <span className="gallery-tier">{tierName(figure)}</span>}</div>
+      <div className="gallery-card-meta"><span className={`gallery-venue gallery-venue-${figure.venue}`}>{figure.venue.toUpperCase()}</span><span>{figure.year}</span><span>{PATTERNS.find(([id]) => id === figure.pattern)?.[1] || figure.pattern}</span>{figure.source === "official-proceedings" && <span className="gallery-source">Official proceedings</span>}{tierName(figure) && <span className="gallery-tier">{tierName(figure)}</span>}</div>
       <h2>{figure.title}</h2>
       <p>{figure.authors.slice(0, 4).join(", ")}{figure.authors.length > 4 ? " et al." : ""}</p>
       {source && <a href={source} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Open paper <ExternalLink size={13} /></a>}
@@ -149,7 +151,10 @@ export default function GalleryView({ active, onBrowseProceedings }: { active: b
   async function refresh(force = false) {
     setLoading(true); setError("");
     try { setFigures(await loadCatalog(force)); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); }
+    catch (failure) {
+      setFigures(GALLERY_SUPPLEMENTS);
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
     finally { setLoading(false); }
   }
   useEffect(() => { void refresh(); }, []);
@@ -177,12 +182,13 @@ export default function GalleryView({ active, onBrowseProceedings }: { active: b
       <Facet label="Presentation" value={filters.tier} onChange={(value) => updateFilter("tier", value)} options={[{ value: "all", label: "All" }, { value: "best", label: "Awarded" }, { value: "oral", label: "Oral" }, { value: "spotlight", label: "Spotlight" }]} />
       <Facet label="Figure type" value={filters.pattern} onChange={(value) => updateFilter("pattern", value)} options={[{ value: "all", label: "All" }, ...PATTERNS.map(([value, label]) => ({ value, label }))]} />
     </div>
-    <div className="gallery-results-bar"><strong>{result.length.toLocaleString()}</strong><span>figures{figures.length && result.length !== figures.length ? ` of ${figures.length.toLocaleString()}` : ""}</span><a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Curated by Top-Conf Figure Gallery <ExternalLink size={13} /></a></div>
+    <div className="gallery-results-bar"><strong>{result.length.toLocaleString()}</strong><span>figures{figures.length && result.length !== figures.length ? ` of ${figures.length.toLocaleString()}` : ""}</span><a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf catalogue + official proceedings <ExternalLink size={13} /></a></div>
+    {error && figures.length > 0 && <div className="gallery-notice">The Top-Conf catalogue is temporarily unavailable. Showing verified official-proceedings additions.</div>}
     {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading figures…</strong></div>
       : error && !figures.length ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load the gallery</strong><p>{error}</p><button type="button" onClick={() => void refresh(true)}>Retry</button></div>
         : !result.length ? <div className="gallery-state"><Search size={25} /><strong>No figures match these filters</strong><button type="button" onClick={() => { setQuery(""); setFilters(INITIAL_FILTERS); }}>Clear filters</button></div>
           : <><div className="gallery-grid">{shown.map((figure) => <FigureCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>{visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}</>}
-    <p className="gallery-credit">Figures belong to their paper authors and publishers. Metadata and hosted images: <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>. Check each paper's license before reuse.</p>
+    <p className="gallery-credit">Figures belong to their paper authors and publishers. The base catalogue is from <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>; ICCV, ECCV, and EMNLP additions are reviewed crops from the linked official proceedings. Check each paper's license before reuse.</p>
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
   </main>;
 }

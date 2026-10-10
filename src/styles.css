@@ -958,8 +958,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .gallery-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: #89928a; font-size: 10px; font-weight: 700; }
 .gallery-card-meta > span { padding: 3px 5px; background: #f0f2ef; border-radius: 3px; }
 .gallery-card-meta .gallery-venue { color: #fff; background: #47617d; }
-.gallery-card-meta .gallery-venue-iclr { background: #47778e; }.gallery-card-meta .gallery-venue-icml { background: #31765c; }.gallery-card-meta .gallery-venue-neurips { background: #665d93; }.gallery-card-meta .gallery-venue-cvpr { background: #a0654b; }.gallery-card-meta .gallery-venue-acl { background: #5e7681; }.gallery-card-meta .gallery-venue-aaai { background: #8a6748; }
+.gallery-card-meta .gallery-venue-iclr { background: #47778e; }.gallery-card-meta .gallery-venue-icml { background: #31765c; }.gallery-card-meta .gallery-venue-neurips { background: #665d93; }.gallery-card-meta .gallery-venue-cvpr { background: #a0654b; }.gallery-card-meta .gallery-venue-iccv { background: #8a4a63; }.gallery-card-meta .gallery-venue-eccv { background: #586b9f; }.gallery-card-meta .gallery-venue-acl { background: #5e7681; }.gallery-card-meta .gallery-venue-emnlp { background: #8c6941; }.gallery-card-meta .gallery-venue-aaai { background: #8a6748; }
 .gallery-card-meta .gallery-tier { color: #8d5d26; background: #fbf0dd; }
+.gallery-card-meta .gallery-source { color: #47715d; background: #e7f1e9; }
+.gallery-notice { padding: 8px 10px; margin: 4px 0 2px; color: #7c683b; background: #fff8e8; border-left: 2px solid #d1b479; font-size: 10px; line-height: 1.45; }
 .gallery-card-body h2 { display: -webkit-box; margin: 8px 0 5px; overflow: hidden; color: #27352c; font-size: 14px; line-height: 1.4; font-weight: 710; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .gallery-card-body p { margin: 0; overflow: hidden; color: #89948a; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .gallery-card-body a { display: inline-flex; align-items: center; gap: 4px; margin-top: 9px; color: #336b52; font-size: 11px; font-weight: 700; text-decoration: none; }
