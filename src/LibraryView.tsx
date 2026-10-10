@@ -65,10 +65,12 @@ type LibraryViewProps = {
   mode: "library" | "daily";
   workspace?: string;
   projectId?: string | null;
+  libraryRefreshVersion?: number;
+  onLibraryImported?: () => void;
   onAgentRun?: (result: AgentRunResult) => void;
 };
 
-export default function LibraryView({ bridge, mode, workspace = "", projectId, onAgentRun }: LibraryViewProps) {
+export default function LibraryView({ bridge, mode, workspace = "", projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun }: LibraryViewProps) {
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -107,13 +109,13 @@ export default function LibraryView({ bridge, mode, workspace = "", projectId, o
     }
   }, [bridge]);
 
-  useEffect(() => { void loadLibraries(); }, [loadLibraries]);
+  useEffect(() => { void loadLibraries(); }, [libraryRefreshVersion, loadLibraries]);
 
   useEffect(() => {
     if (!selectedLibraryId) return;
     const timeout = window.setTimeout(() => void loadPapers(selectedLibraryId, localQuery), 160);
     return () => window.clearTimeout(timeout);
-  }, [loadPapers, localQuery, selectedLibraryId]);
+  }, [libraryRefreshVersion, loadPapers, localQuery, selectedLibraryId]);
 
   const selectedLibrary = libraries.find((library) => library.id === selectedLibraryId) ?? null;
   const selectedPaper = papers.find((paper) => paper.id === selectedPaperId) ?? null;
@@ -153,7 +155,10 @@ export default function LibraryView({ bridge, mode, workspace = "", projectId, o
   }
 
   if (mode === "daily") {
-    return <DailyDiscovery bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={loadLibraries} />;
+    return <DailyDiscovery bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => {
+      await loadLibraries();
+      onLibraryImported?.();
+    }} />;
   }
 
   if (!selectedLibrary) {

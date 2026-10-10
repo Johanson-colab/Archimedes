@@ -449,6 +449,7 @@ type MainSection = "chat" | "skills" | "library" | "daily" | "artifacts";
 
 function App() {
   const [mainSection, setMainSection] = useState<MainSection>("chat");
+  const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
   const [prompt, setPrompt] = useState("");
@@ -1008,9 +1009,9 @@ function App() {
             />
           )}
           <div className={mainSection === "library" ? "library-view-cache" : "library-view-cache hidden"} aria-hidden={mainSection !== "library"}>
-            {workspaceReady && <LibraryView key={workspace} bridge={desktopBridge} mode="library" workspace={workspace} projectId={activeProjectId} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
+            {workspaceReady && <LibraryView key={workspace} bridge={desktopBridge} mode="library" workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
           </div>
-          {mainSection === "daily" && workspaceReady && <LibraryView bridge={desktopBridge} mode="daily" workspace={workspace} projectId={activeProjectId} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
+          {mainSection === "daily" && workspaceReady && <LibraryView bridge={desktopBridge} mode="daily" workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
           {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (
             <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
