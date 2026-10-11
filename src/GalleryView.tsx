@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ExternalLink, GraduationCap, ImageOff, Images, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
-import { GALLERY_SUPPLEMENTS } from "./gallery-supplements";
+import { GALLERY_SUPPLEMENTS, GALLERY_SUPPLEMENT_VERSION } from "./gallery-supplements";
 
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
@@ -32,6 +32,7 @@ type Figure = {
 type Filters = { venue: string; year: number | "all"; tier: string; pattern: string };
 const INITIAL_FILTERS: Filters = { venue: "all", year: "all", tier: "all", pattern: "all" };
 let catalogPromise: Promise<Figure[]> | null = null;
+let catalogVersion = GALLERY_SUPPLEMENT_VERSION;
 
 function isFigure(value: unknown): value is Figure {
   if (!value || typeof value !== "object") return false;
@@ -43,6 +44,10 @@ function isFigure(value: unknown): value is Figure {
 }
 
 function loadCatalog(refresh = false) {
+  if (catalogVersion !== GALLERY_SUPPLEMENT_VERSION) {
+    catalogPromise = null;
+    catalogVersion = GALLERY_SUPPLEMENT_VERSION;
+  }
   if (refresh) catalogPromise = null;
   if (!catalogPromise) {
     catalogPromise = fetch(CATALOG_URL).then(async (response) => {
@@ -60,7 +65,11 @@ function loadCatalog(refresh = false) {
   return catalogPromise;
 }
 
-function imageUrl(figure: Figure) { return figure.image.startsWith("images/") ? `${GALLERY_ROOT}${figure.image}` : figure.image; }
+function imageUrl(figure: Figure) {
+  if (figure.image.startsWith("images/")) return `${GALLERY_ROOT}${figure.image}`;
+  if (/^https?:/.test(figure.image) || figure.image.startsWith("data:")) return figure.image;
+  return new URL(figure.image, document.baseURI).href;
+}
 function paperUrl(figure: Figure) {
   try { const url = new URL(figure.paper); return url.protocol === "https:" ? url.href : ""; }
   catch { return ""; }
@@ -157,7 +166,7 @@ export default function GalleryView({ active, onBrowseProceedings }: { active: b
     }
     finally { setLoading(false); }
   }
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void refresh(); }, [GALLERY_SUPPLEMENT_VERSION]);
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [filters, query, sort]);
 
@@ -188,7 +197,7 @@ export default function GalleryView({ active, onBrowseProceedings }: { active: b
       : error && !figures.length ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load the gallery</strong><p>{error}</p><button type="button" onClick={() => void refresh(true)}>Retry</button></div>
         : !result.length ? <div className="gallery-state"><Search size={25} /><strong>No figures match these filters</strong><button type="button" onClick={() => { setQuery(""); setFilters(INITIAL_FILTERS); }}>Clear filters</button></div>
           : <><div className="gallery-grid">{shown.map((figure) => <FigureCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>{visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}</>}
-    <p className="gallery-credit">Figures belong to their paper authors and publishers. The base catalogue is from <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>; ICCV, ECCV, and EMNLP additions are reviewed crops from the linked official proceedings. Check each paper's license before reuse.</p>
+    <p className="gallery-credit">Figures belong to their paper authors and publishers. The base catalogue is from <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>; ICCV, ECCV, and EMNLP additions are validated Figure 1 crops from the linked official proceedings. Check each paper's license before reuse.</p>
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
   </main>;
 }

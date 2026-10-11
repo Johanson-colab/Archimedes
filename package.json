@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
     "test": "node --test electron/*.test.cjs electron/agent/*.test.cjs",
+    "gallery:build": "python3 scripts/build-gallery-supplements.py",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "postinstall": "npm run rebuild:native"
   },

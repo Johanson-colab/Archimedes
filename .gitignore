@@ -5,3 +5,4 @@ dist/
 .archimedes/
 .[a]xiom/
 .env.local
+/scripts/.gallery-cache/

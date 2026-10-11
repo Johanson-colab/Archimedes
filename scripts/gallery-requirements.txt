@@ -1,0 +1,4 @@
+beautifulsoup4>=4.12
+pillow>=11.0
+pymupdf>=1.25
+requests>=2.32
