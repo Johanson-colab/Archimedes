@@ -15,7 +15,11 @@
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
     "test": "node --test electron/*.test.cjs electron/agent/*.test.cjs",
-    "gallery:build": "python3 scripts/build-gallery-supplements.py",
+    "gallery:build": "python3 scripts/gallery-pipeline.py build",
+    "gallery:pool": "python3 scripts/gallery-pipeline.py pool",
+    "gallery:extract": "python3 scripts/gallery-pipeline.py extract",
+    "gallery:select": "python3 scripts/gallery-pipeline.py select",
+    "gallery:sheets": "python3 scripts/gallery-pipeline.py sheets",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "postinstall": "npm run rebuild:native"
   },

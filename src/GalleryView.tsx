@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ExternalLink, GraduationCap, ImageOff, Images, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
-import { GALLERY_SUPPLEMENTS, GALLERY_SUPPLEMENT_VERSION } from "./gallery-supplements";
+import { GALLERY_CATALOG_ADDITIONS, GALLERY_CATALOG_VERSION, GALLERY_COVERAGE } from "./gallery-catalog";
 
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
@@ -32,7 +32,7 @@ type Figure = {
 type Filters = { venue: string; year: number | "all"; tier: string; pattern: string };
 const INITIAL_FILTERS: Filters = { venue: "all", year: "all", tier: "all", pattern: "all" };
 let catalogPromise: Promise<Figure[]> | null = null;
-let catalogVersion = GALLERY_SUPPLEMENT_VERSION;
+let catalogVersion = GALLERY_CATALOG_VERSION;
 
 function isFigure(value: unknown): value is Figure {
   if (!value || typeof value !== "object") return false;
@@ -44,9 +44,9 @@ function isFigure(value: unknown): value is Figure {
 }
 
 function loadCatalog(refresh = false) {
-  if (catalogVersion !== GALLERY_SUPPLEMENT_VERSION) {
+  if (catalogVersion !== GALLERY_CATALOG_VERSION) {
     catalogPromise = null;
-    catalogVersion = GALLERY_SUPPLEMENT_VERSION;
+    catalogVersion = GALLERY_CATALOG_VERSION;
   }
   if (refresh) catalogPromise = null;
   if (!catalogPromise) {
@@ -56,7 +56,7 @@ function loadCatalog(refresh = false) {
       if (!Array.isArray(payload)) throw new Error("The gallery catalog format has changed.");
       const figures = payload.filter(isFigure);
       if (!figures.length) throw new Error("No valid figures were found in the gallery catalog.");
-      return [...figures, ...GALLERY_SUPPLEMENTS];
+      return [...figures, ...GALLERY_CATALOG_ADDITIONS];
     }).catch((error: unknown) => {
       catalogPromise = null;
       throw error;
@@ -161,12 +161,12 @@ export default function GalleryView({ active, onBrowseProceedings }: { active: b
     setLoading(true); setError("");
     try { setFigures(await loadCatalog(force)); }
     catch (failure) {
-      setFigures(GALLERY_SUPPLEMENTS);
+      setFigures(GALLERY_CATALOG_ADDITIONS);
       setError(failure instanceof Error ? failure.message : String(failure));
     }
     finally { setLoading(false); }
   }
-  useEffect(() => { void refresh(); }, [GALLERY_SUPPLEMENT_VERSION]);
+  useEffect(() => { void refresh(); }, [GALLERY_CATALOG_VERSION]);
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [filters, query, sort]);
 
@@ -181,6 +181,7 @@ export default function GalleryView({ active, onBrowseProceedings }: { active: b
   const shown = result.slice(0, visibleCount);
   const updateFilter = (key: keyof Filters, value: string | number) => setFilters((current) => ({ ...current, [key]: value }));
   const step = (direction: number) => { if (selectedIndex >= 0) setSelectedId(result[(selectedIndex + direction + result.length) % result.length].id); };
+  const emnlp2026 = GALLERY_COVERAGE.find((row) => row.venue === "emnlp" && row.year === 2026);
 
   return <main className="gallery-page">
     <header className="gallery-header"><div><span className="eyebrow">Visual research index</span><h1>Gallery</h1><p>Curated figures from peer-reviewed AI conference papers.</p></div><div className="gallery-header-actions"><button type="button" className="gallery-proceedings-link" onClick={onBrowseProceedings}><GraduationCap size={15} />Browse full proceedings</button><span className="gallery-header-icon"><Images size={23} /></span></div></header>
@@ -191,6 +192,8 @@ export default function GalleryView({ active, onBrowseProceedings }: { active: b
       <Facet label="Presentation" value={filters.tier} onChange={(value) => updateFilter("tier", value)} options={[{ value: "all", label: "All" }, { value: "best", label: "Awarded" }, { value: "oral", label: "Oral" }, { value: "spotlight", label: "Spotlight" }]} />
       <Facet label="Figure type" value={filters.pattern} onChange={(value) => updateFilter("pattern", value)} options={[{ value: "all", label: "All" }, ...PATTERNS.map(([value, label]) => ({ value, label }))]} />
     </div>
+    {filters.venue === "EMNLP" && (filters.year === "all" || filters.year === 2026) &&
+      <p className="gallery-availability-note">All {emnlp2026?.accepted.toLocaleString() ?? "2,710"} EMNLP 2026 accepted papers are indexed. Figure cards will appear when ACL Anthology publishes the official proceedings.</p>}
     <div className="gallery-results-bar"><strong>{result.length.toLocaleString()}</strong><span>figures{figures.length && result.length !== figures.length ? ` of ${figures.length.toLocaleString()}` : ""}</span><a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf catalogue + official proceedings <ExternalLink size={13} /></a></div>
     {error && figures.length > 0 && <div className="gallery-notice">The Top-Conf catalogue is temporarily unavailable. Showing verified official-proceedings additions.</div>}
     {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading figures…</strong></div>

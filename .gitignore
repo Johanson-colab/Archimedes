@@ -6,3 +6,4 @@ dist/
 .[a]xiom/
 .env.local
 /scripts/.gallery-cache/
+/scripts/.gallery-work/
