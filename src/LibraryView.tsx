@@ -276,6 +276,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [commentOpen, setCommentOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
   const [chatDraft, setChatDraft] = useState("");
   const chatDraftRef = useRef<HTMLTextAreaElement>(null);
@@ -288,6 +289,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const ready = reader?.asset?.status === "ready" && reader.pages.length > 0 && Boolean(reader.asset.preview_url);
   const currentPage = reader?.pages.find((page) => page.page_number === pageNumber) ?? reader?.pages[0] ?? null;
   const lastPage = reader?.asset?.page_count ?? reader?.pages.at(-1)?.page_number ?? 1;
+  const projectUrl = paper.github_url || detectedProjectUrl;
   const resizeChatDraft = useCallback((textarea = chatDraftRef.current) => {
     if (!textarea) return;
     const maxHeight = 132;
@@ -388,6 +390,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     ? [...paperContext, { id: `repository:${repository.url}`, type: "repository", name: `${repository.owner}/${repository.repo}`, detail: `GitHub · ${repository.files.length} evidence files · ${repository.data_paths.length} data or benchmark paths`, repository }]
     : paperContext;
   const openProject = useCallback(async (url: string) => {
+    setDetectedProjectUrl(url);
     if (typeof bridge.openLibraryGithubProject !== "function") {
       setError("The Project view was updated. Restart Archimedes once to load it, then retry.");
       return;
@@ -481,7 +484,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title="Ask Archimedes" onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>Ask AI</span></button>
       </div>
     </header>
-    <div className="paper-reader-tabs" role="tablist"><button className="active" role="tab" aria-selected="true"><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{paper.github_url && <button className="paper-project-tab" role="tab" aria-selected="false" title="Open this paper's GitHub project" onClick={() => void openProject(paper.github_url)}><Code2 size={16} />Project</button>}</div>
+    <div className="paper-reader-tabs" role="tablist"><button className="active" role="tab" aria-selected="true"><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className="paper-project-tab" role="tab" aria-selected="false" title="Open this paper's GitHub project" onClick={() => void openProject(projectUrl)}><Code2 size={16} />Project</button>}</div>
     <div className="paper-reader-layout">
       <main className="original-paper-reader">
         {ready ? <>
@@ -498,7 +501,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             <span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span>
           </div>
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onRepositoryLink={openProject} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onRepositoryLink={openProject} onRepositoryDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -525,7 +528,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   </section>;
 }
 
-function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection, onRepositoryLink }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onRepositoryLink: (url: string) => void }) {
+function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection, onRepositoryLink, onRepositoryDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onRepositoryLink: (url: string) => void; onRepositoryDetected: (url: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
   const [width, setWidth] = useState(880);
@@ -601,7 +604,10 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSel
           link.style.width = `${Math.abs(secondX - firstX)}px`;
           link.style.height = `${Math.abs(secondY - firstY)}px`;
           link.title = /github\.com\//i.test(targetUrl) ? "Open repository alongside this paper" : "Open link";
-          if (/^https:\/\/github\.com\/[^/]+\/[^/]+/i.test(targetUrl)) link.addEventListener("click", (event) => { event.preventDefault(); onRepositoryLink(targetUrl); });
+          if (/^https:\/\/github\.com\/[^/]+\/[^/]+/i.test(targetUrl)) {
+            onRepositoryDetected(targetUrl);
+            link.addEventListener("click", (event) => { event.preventDefault(); onRepositoryLink(targetUrl); });
+          }
           page.append(link);
         }
         applyPdfHighlights(textLayer, highlightsRef.current.filter((highlight) => highlight.page_number === pageNumber));
@@ -611,7 +617,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSel
     }
     void render();
     return () => { cancelled = true; destroyLoadingTask?.(); };
-  }, [onRepositoryLink, pageNumber, url, width, zoom]);
+  }, [onRepositoryDetected, onRepositoryLink, pageNumber, url, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
     const selection = window.getSelection();
