@@ -1,6 +1,6 @@
-const MAX_CONTEXT_CHARS = 96_000;
-const MAX_MESSAGE_CHARS = 40_000;
-const MAX_SUMMARY_CHARS = 20_000;
+const MAX_CONTEXT_CHARS = 160_000;
+const MAX_MESSAGE_CHARS = 64_000;
+const MAX_SUMMARY_CHARS = 32_000;
 const MIN_RECENT_TURNS = 4;
 
 const modeInstructions = {
@@ -51,7 +51,7 @@ function turnCharacters(turn) {
 
 function compactTurns(turns, previousSummary) {
   const lines = [];
-  if (previousSummary) lines.push(clip(previousSummary, 8_000));
+  if (previousSummary) lines.push(clip(previousSummary, 12_000));
   for (const turn of turns) {
     lines.push(`User: ${clip(turn.user_message, 1_200)}`);
     if (turn.assistant_message) lines.push(`Assistant: ${clip(turn.assistant_message, 2_000)}`);
