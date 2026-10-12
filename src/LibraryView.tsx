@@ -544,6 +544,7 @@ function LinkedProjectView({ url }: { url: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -556,29 +557,39 @@ function LinkedProjectView({ url }: { url: string }) {
     view.setAttribute("partition", "linked-project");
     view.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes, nodeIntegration=no");
     view.setAttribute("aria-label", linkedProjectLabel(url));
-    const loaded = () => setState("ready");
+    const loadTimeout = window.setTimeout(() => {
+      setState("error");
+      setError("The project page did not finish loading. Check your connection, then retry.");
+    }, 15_000);
+    const loaded = () => {
+      window.clearTimeout(loadTimeout);
+      setState("ready");
+    };
     const failed = (event: Event) => {
-      const code = Number((event as CustomEvent<{ errorCode?: number }>).detail?.errorCode);
+      window.clearTimeout(loadTimeout);
+      const detail = event as Event & { errorCode?: number; errorDescription?: string; detail?: { errorCode?: number; errorDescription?: string } };
+      const code = Number(detail.errorCode ?? detail.detail?.errorCode);
       if (code === -3) return;
       setState("error");
-      setError("This project page could not be loaded in the paper workspace.");
+      setError(detail.errorDescription ?? detail.detail?.errorDescription ?? "This project page could not be loaded in the paper workspace.");
     };
     view.addEventListener("did-finish-load", loaded);
     view.addEventListener("did-fail-load", failed);
     host.replaceChildren(view);
 
     return () => {
+      window.clearTimeout(loadTimeout);
       view.removeEventListener("did-finish-load", loaded);
       view.removeEventListener("did-fail-load", failed);
       view.remove();
     };
-  }, [url]);
+  }, [url, reloadKey]);
 
   return <div className="github-project-workspace">
     <div className="github-project-toolbar"><span><Code2 size={15} />{linkedProjectLabel(url)}</span><span>{linkedProjectHost(url)}</span></div>
     <div className="github-project-frame" ref={hostRef} />
     {state === "loading" && <div className="github-project-status"><LoaderCircle className="spin" size={17} />Loading project...</div>}
-    {state === "error" && <div className="github-project-status error"><strong>Project unavailable</strong><span>{error}</span></div>}
+    {state === "error" && <div className="github-project-status error"><strong>Project unavailable</strong><span>{error}</span><button className="secondary-button" onClick={() => setReloadKey((current) => current + 1)}>Retry</button></div>}
   </div>;
 }
 
