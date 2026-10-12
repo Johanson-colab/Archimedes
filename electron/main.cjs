@@ -17,6 +17,7 @@ const skillCatalog = require("./skill-catalog.cjs");
 const store = require("./store.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
+const { loadGithubRepository } = require("./github-repository.cjs");
 
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
@@ -361,6 +362,23 @@ function sanitizeAgentContext(items) {
         },
       }];
     }
+    if (item.type === "repository") {
+      const repository = item.repository;
+      if (!repository || typeof repository.url !== "string" || !Array.isArray(repository.files)) return [];
+      const cleanFiles = repository.files.slice(0, 12).flatMap((file) => {
+        if (!file || typeof file.path !== "string" || typeof file.content !== "string") return [];
+        return [{ path: file.path.slice(0, 800), size: Math.max(0, Number(file.size) || 0), language: String(file.language || "Text").slice(0, 80), content: file.content.slice(0, 48_000) }];
+      });
+      return [{
+        id: item.id.slice(0, 500), type: "repository", name: item.name.slice(0, 1000), detail: String(item.detail || "").slice(0, 2000),
+        repository: {
+          url: repository.url.slice(0, 3_000), branch: String(repository.branch || "").slice(0, 160), description: String(repository.description || "").slice(0, 4_000),
+          language: String(repository.language || "").slice(0, 160), stars: Math.max(0, Number(repository.stars) || 0),
+          data_paths: Array.isArray(repository.data_paths) ? repository.data_paths.slice(0, 100).map((entry) => String(entry).slice(0, 800)) : [],
+          readme: String(repository.readme || "").slice(0, 20_000), files: cleanFiles,
+        },
+      }];
+    }
     if (!["file", "folder", "plugin", "skill"].includes(item.type) || typeof item.path !== "string") return [];
     const resolved = path.resolve(item.path);
     if (!allowedContextPaths.has(resolved) || !fs.existsSync(resolved)) return [];
@@ -673,6 +691,11 @@ app.whenReady().then(() => {
       throw new Error("Select between 1 and 12,000 characters to translate.");
     }
     return agent.translatePaperSelection({ text });
+  });
+
+  ipcMain.handle("library:load-github-repository", async (_event, { url } = {}) => {
+    if (typeof url !== "string" || url.length > 3_000) throw new Error("A public GitHub repository URL is required.");
+    return loadGithubRepository(url);
   });
 
   ipcMain.handle("task:save", (_event, task) => {

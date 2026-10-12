@@ -121,6 +121,8 @@ function schema(db) {
       s2_id TEXT NOT NULL DEFAULT '',
       source TEXT NOT NULL DEFAULT 'manual',
       citation_count INTEGER NOT NULL DEFAULT 0,
+      github_url TEXT NOT NULL DEFAULT '',
+      github_stars INTEGER NOT NULL DEFAULT 0,
       reading_status TEXT NOT NULL DEFAULT 'unread',
       starred INTEGER NOT NULL DEFAULT 0,
       notes TEXT NOT NULL DEFAULT '',
@@ -197,6 +199,8 @@ function schema(db) {
   ensureColumn(db, "research_threads", "project_id", "TEXT");
   ensureColumn(db, "research_threads", "archived_at", "TEXT");
   ensureColumn(db, "papers", "conference_json", "TEXT NOT NULL DEFAULT 'null'");
+  ensureColumn(db, "papers", "github_url", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "papers", "github_stars", "INTEGER NOT NULL DEFAULT 0");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_research_projects_updated ON research_projects(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
@@ -553,13 +557,18 @@ function addPaper(libraryId, paper) {
     db.prepare(`
       INSERT INTO papers (
         id, canonical_key, title, authors_json, year, venue, abstract, url, pdf_url, doi, arxiv_id, s2_id,
-        source, citation_count, reading_status, starred, notes, tags_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', 0, '', '[]', ?, ?)
+        source, citation_count, github_url, github_stars, reading_status, starred, notes, tags_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', 0, '', '[]', ?, ?)
     `).run(
       paperId, key, paper.title.trim(), JSON.stringify(paper.authors || []), paper.year || null,
       paper.venue || "", paper.abstract || "", paper.url || "", paper.pdf_url || "", paper.doi || "",
-      paper.arxiv_id || "", paper.s2_id || "", paper.source || "manual", paper.citation_count || 0, now, now,
+      paper.arxiv_id || "", paper.s2_id || "", paper.source || "manual", paper.citation_count || 0,
+      paper.github_url || "", Number(paper.github_stars) || 0, now, now,
     );
+  }
+  if (paper.github_url) {
+    db.prepare("UPDATE papers SET github_url = CASE WHEN github_url = '' THEN ? ELSE github_url END, github_stars = MAX(github_stars, ?), updated_at = ? WHERE id = ?")
+      .run(paper.github_url, Number(paper.github_stars) || 0, now, paperId);
   }
   if (conferenceJson) {
     db.prepare(`UPDATE papers SET conference_json = ?, venue = ?, year = ?,

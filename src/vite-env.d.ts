@@ -44,6 +44,7 @@ interface ResearchDeskBridge {
     createLibraryPaperHighlight: (paperId: string, input: PaperHighlightInput, workspace?: string) => Promise<PaperHighlight>;
     deleteLibraryPaperHighlight: (id: string, workspace?: string) => Promise<{ deleted: boolean }>;
     translateLibraryPaperSelection: (text: string) => Promise<{ translation: string }>;
+    loadLibraryGithubRepository: (url: string) => Promise<PaperRepositorySnapshot>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
@@ -155,7 +156,7 @@ interface ResearchSource {
   query?: string;
   retrievedAt?: string;
 }
-type ContextAttachmentType = "file" | "folder" | "paper" | "plugin" | "skill";
+type ContextAttachmentType = "file" | "folder" | "paper" | "repository" | "plugin" | "skill";
 
 interface ContextPaperMetadata {
   title: string;
@@ -166,6 +167,31 @@ interface ContextPaperMetadata {
   pdfUrl: string;
 }
 
+interface PaperRepositoryFile {
+  path: string;
+  size: number;
+  language: string;
+  content: string;
+}
+
+interface PaperRepositorySnapshot {
+  url: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  description: string;
+  homepage: string;
+  language: string;
+  stars: number;
+  license: string;
+  updated_at: string;
+  retrieved_at: string;
+  tree: Array<{ path: string; size: number }>;
+  data_paths: string[];
+  readme: string;
+  files: PaperRepositoryFile[];
+}
+
 interface ContextAttachment {
   id: string;
   type: ContextAttachmentType;
@@ -173,6 +199,7 @@ interface ContextAttachment {
   path?: string;
   detail?: string;
   paper?: ContextPaperMetadata;
+  repository?: PaperRepositorySnapshot;
 }
 
 interface ResearchLibrary {
@@ -281,6 +308,8 @@ interface LibraryPaper extends AcademicSearchResult {
   tags: string[];
   created_at: string;
   updated_at: string;
+  github_url: string;
+  github_stars: number;
 }
 
 interface PaperReaderAsset {
