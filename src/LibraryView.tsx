@@ -396,6 +396,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setChatOpen(false);
     setRepositoryError("");
     if (repository?.url === url) return;
+    if (typeof bridge.loadLibraryGithubRepository !== "function") {
+      setRepositoryError("The code workspace was updated. Restart Archimedes once to load the desktop bridge, then retry.");
+      return;
+    }
     setRepositoryBusy(true);
     try {
       const snapshot = await bridge.loadLibraryGithubRepository(url);
