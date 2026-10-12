@@ -18,7 +18,6 @@ import {
   Clock3,
   Code2,
   ExternalLink,
-  FileSearch,
   FileText,
   Flame,
   GraduationCap,
@@ -277,10 +276,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [commentOpen, setCommentOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(false);
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
-  const [repositoryBusy, setRepositoryBusy] = useState(false);
-  const [repositoryError, setRepositoryError] = useState("");
   const [chatDraft, setChatDraft] = useState("");
   const chatDraftRef = useRef<HTMLTextAreaElement>(null);
   const [chatBusy, setChatBusy] = useState(false);
@@ -391,24 +387,21 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const researchContext: ContextAttachment[] = repository
     ? [...paperContext, { id: `repository:${repository.url}`, type: "repository", name: `${repository.owner}/${repository.repo}`, detail: `GitHub · ${repository.files.length} evidence files · ${repository.data_paths.length} data or benchmark paths`, repository }]
     : paperContext;
-  const openRepository = useCallback(async (url: string) => {
-    setCodeOpen(true);
-    setChatOpen(false);
-    setRepositoryError("");
-    if (repository?.url === url) return;
-    if (typeof bridge.loadLibraryGithubRepository !== "function") {
-      setRepositoryError("The code workspace was updated. Restart Archimedes once to load the desktop bridge, then retry.");
+  const openProject = useCallback(async (url: string) => {
+    if (typeof bridge.openLibraryGithubProject !== "function") {
+      setError("The Project view was updated. Restart Archimedes once to load it, then retry.");
       return;
     }
-    setRepositoryBusy(true);
     try {
-      const snapshot = await bridge.loadLibraryGithubRepository(url);
-      setRepository(snapshot);
-    } catch (loadError) {
-      setRepositoryError(readableError(loadError, "Could not load the public GitHub repository."));
-    } finally {
-      setRepositoryBusy(false);
+      await bridge.openLibraryGithubProject(url);
+    } catch (openError) {
+      setError(readableError(openError, "Could not open the public GitHub project."));
+      return;
     }
+    if (repository?.url === url || typeof bridge.loadLibraryGithubRepository !== "function") return;
+    void bridge.loadLibraryGithubRepository(url).then(setRepository).catch(() => {
+      // The GitHub window remains useful even if the compact AI evidence snapshot is unavailable.
+    });
   }, [bridge, repository?.url]);
   async function askAI(question: string, options: { initialBriefing?: boolean } = {}) {
     const prompt = question.trim();
@@ -477,7 +470,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setBriefingVersion((current) => current + 1);
   }
 
-  return <section className={chatOpen || codeOpen ? "paper-workbench-page paper-chat-open" : "paper-workbench-page"}>
+  return <section className={chatOpen ? "paper-workbench-page paper-chat-open" : "paper-workbench-page"}>
     <header className="paper-workbench-header paper-reader-header">
       <button className="reader-back-button" onClick={onBack}><ChevronLeft size={16} />Library</button>
       <span className="reader-header-divider" />
@@ -485,11 +478,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <div className="reader-header-actions">
         {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title="Open source"><ExternalLink size={16} /></a>}
         <button className="reader-icon-button" title={paper.starred ? "Unstar paper" : "Star paper"} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={16} fill={paper.starred ? "currentColor" : "none"} /></button>
-        {paper.github_url && <button className={codeOpen ? "reader-code-button active" : "reader-code-button"} title="Open linked GitHub repository" onClick={() => void openRepository(paper.github_url)}><Code2 size={16} /><span>Code</span></button>}
-        <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title="Ask Archimedes" onClick={() => { setChatOpen((value) => !value); setCodeOpen(false); }}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>Ask AI</span></button>
+        <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title="Ask Archimedes" onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>Ask AI</span></button>
       </div>
     </header>
-    <div className="paper-reader-tabs" role="tablist"><button className="active" role="tab" aria-selected="true"><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button></div>
+    <div className="paper-reader-tabs" role="tablist"><button className="active" role="tab" aria-selected="true"><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{paper.github_url && <button className="paper-project-tab" role="tab" aria-selected="false" title="Open this paper's GitHub project" onClick={() => void openProject(paper.github_url)}><Code2 size={16} />Project</button>}</div>
     <div className="paper-reader-layout">
       <main className="original-paper-reader">
         {ready ? <>
@@ -506,7 +498,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             <span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span>
           </div>
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onRepositoryLink={openRepository} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onRepositoryLink={openProject} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -519,7 +511,6 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         <div className="paper-ai-compose"><textarea ref={chatDraftRef} value={chatDraft} onChange={(event) => { setChatDraft(event.target.value); resizeChatDraft(event.currentTarget); }} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder="Ask about the paper…" rows={1} /><button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button></div>
       </aside>}
-      {codeOpen && <PaperCodePanel repository={repository} busy={repositoryBusy} error={repositoryError} fallbackUrl={paper.github_url} onClose={() => setCodeOpen(false)} onAskAI={() => { setCodeOpen(false); setChatOpen(true); }} onRetry={() => paper.github_url && void openRepository(paper.github_url)} />}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
       <button onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />高亮</button><button onClick={translateSelection}><Languages size={15} />翻译</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />评论</button><button onClick={openAskForSelection}><Bot size={15} />向 AI 提问</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />删除高亮</button>}
@@ -532,36 +523,6 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <div className={translationPopover.error ? "paper-translation-result error" : "paper-translation-result"}>{translating ? <><LoaderCircle className="spin" size={14} />正在翻译…</> : translationPopover.error || translationPopover.translation}</div>
     </aside>}
   </section>;
-}
-
-function PaperCodePanel({ repository, busy, error, fallbackUrl, onClose, onAskAI, onRetry }: { repository: PaperRepositorySnapshot | null; busy: boolean; error: string; fallbackUrl: string; onClose: () => void; onAskAI: () => void; onRetry: () => void }) {
-  const [selectedPath, setSelectedPath] = useState("");
-  const [view, setView] = useState<"overview" | "files">("overview");
-  const selectedFile = repository?.files.find((file) => file.path === selectedPath) ?? null;
-  useEffect(() => {
-    setSelectedPath(repository?.files[0]?.path ?? "");
-    setView("overview");
-  }, [repository?.url]);
-
-  return <aside className="paper-code-panel">
-    <header>
-      <div><span className="eyebrow">GitHub repository</span><h2>{repository ? `${repository.owner}/${repository.repo}` : "Linked code"}</h2></div>
-      <div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={onAskAI} title="Ask AI with paper and code"><Bot size={15} /></button><button className="reader-icon-button" onClick={onClose} title="Close code panel"><X size={16} /></button></div>
-    </header>
-    {busy && <div className="paper-code-loading"><LoaderCircle className="spin" size={17} /><strong>Indexing public repository…</strong><span>Reading README, implementation files, configuration, and data references.</span></div>}
-    {error && <div className="paper-code-error"><strong>Repository unavailable</strong><span>{error}</span><button className="secondary-button" onClick={onRetry}>Retry</button>{fallbackUrl && <a href={fallbackUrl} target="_blank" rel="noreferrer">Open on GitHub <ExternalLink size={12} /></a>}</div>}
-    {repository && !busy && !error && <>
-      <div className="paper-code-repository-meta"><div><Code2 size={15} /><span>{repository.language || "Repository"}</span>{repository.stars > 0 && <span>{repository.stars.toLocaleString()} stars</span>}</div><a href={repository.url} target="_blank" rel="noreferrer">Open on GitHub <ExternalLink size={12} /></a></div>
-      <div className="paper-code-tabs"><button className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}>Overview</button><button className={view === "files" ? "active" : ""} onClick={() => setView("files")}>Evidence files <small>{repository.files.length}</small></button></div>
-      {view === "overview" ? <div className="paper-code-overview">
-        {repository.description && <p className="paper-code-description">{repository.description}</p>}
-        <section><div className="paper-code-section-heading"><Code2 size={14} /><strong>Implementation evidence</strong><span>{repository.files.length} cached files</span></div><div className="paper-code-file-chips">{repository.files.map((file) => <button key={file.path} onClick={() => { setSelectedPath(file.path); setView("files"); }}>{file.path}</button>)}</div></section>
-        <section><div className="paper-code-section-heading"><FileSearch size={14} /><strong>Data & evaluation references</strong><span>{repository.data_paths.length}</span></div>{repository.data_paths.length ? <ul className="paper-code-data-paths">{repository.data_paths.slice(0, 16).map((filePath) => <li key={filePath}>{filePath}</li>)}</ul> : <p className="paper-code-muted">No data or benchmark path was detected in the repository tree.</p>}</section>
-        {repository.readme && <section><div className="paper-code-section-heading"><BookOpen size={14} /><strong>README</strong></div><pre className="paper-code-readme">{repository.readme}</pre></section>}
-      </div> : <div className="paper-code-files"><nav>{repository.files.map((file) => <button key={file.path} className={selectedFile?.path === file.path ? "active" : ""} onClick={() => setSelectedPath(file.path)}><span>{file.path}</span><small>{file.language}</small></button>)}</nav><div className="paper-code-file-content">{selectedFile ? <><header><span>{selectedFile.path}</span><small>{selectedFile.language} · {selectedFile.size.toLocaleString()} bytes</small></header><pre>{selectedFile.content}</pre></> : <div className="paper-code-muted">Choose a cached implementation file.</div>}</div></div>}
-      <footer><span>AI uses this repository snapshot together with the paper. It will label differences between reported claims and visible implementation evidence.</span><button className="secondary-button" onClick={onAskAI}><Bot size={13} />Ask AI about paper + code</button></footer>
-    </>}
-  </aside>;
 }
 
 function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection, onRepositoryLink }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onRepositoryLink: (url: string) => void }) {
