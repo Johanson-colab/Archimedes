@@ -277,6 +277,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [comment, setComment] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
+  const [readerView, setReaderView] = useState<"paper" | "project">("paper");
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
   const [chatDraft, setChatDraft] = useState("");
   const chatDraftRef = useRef<HTMLTextAreaElement>(null);
@@ -389,21 +390,12 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const researchContext: ContextAttachment[] = repository
     ? [...paperContext, { id: `repository:${repository.url}`, type: "repository", name: `${repository.owner}/${repository.repo}`, detail: `GitHub · ${repository.files.length} evidence files · ${repository.data_paths.length} data or benchmark paths`, repository }]
     : paperContext;
-  const openProject = useCallback(async (url: string) => {
+  const openProject = useCallback((url: string) => {
     setDetectedProjectUrl(url);
-    if (typeof bridge.openLibraryGithubProject !== "function") {
-      setError("The Project view was updated. Restart Archimedes once to load it, then retry.");
-      return;
-    }
-    try {
-      await bridge.openLibraryGithubProject(url);
-    } catch (openError) {
-      setError(readableError(openError, "Could not open the public GitHub project."));
-      return;
-    }
+    setReaderView("project");
     if (repository?.url === url || typeof bridge.loadLibraryGithubRepository !== "function") return;
     void bridge.loadLibraryGithubRepository(url).then(setRepository).catch(() => {
-      // The GitHub window remains useful even if the compact AI evidence snapshot is unavailable.
+      // Reading remains available even if the compact AI evidence snapshot cannot be loaded.
     });
   }, [bridge, repository?.url]);
   async function askAI(question: string, options: { initialBriefing?: boolean } = {}) {
@@ -484,9 +476,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title="Ask Archimedes" onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>Ask AI</span></button>
       </div>
     </header>
-    <div className="paper-reader-tabs" role="tablist"><button className="active" role="tab" aria-selected="true"><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className="paper-project-tab" role="tab" aria-selected="false" title="Open this paper's GitHub project" onClick={() => void openProject(projectUrl)}><Code2 size={16} />Project</button>}</div>
+    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title="Open this paper's GitHub project" onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}</div>
     <div className="paper-reader-layout">
-      <main className="original-paper-reader">
+      <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
+        {readerView === "project" && projectUrl ? <GithubProjectView url={projectUrl} /> : <>
         {ready ? <>
           <div className="paper-reader-toolbar">
             <div className="paper-reader-navigation">
@@ -507,6 +500,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
         </div>}
         {(error || reader?.asset?.error) && <div className="reader-runtime-error">{error || reader?.asset?.error}</div>}
+        </>}
       </main>
       {chatOpen && <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2>{repository && <small className="paper-ai-evidence-scope"><Code2 size={11} />Paper + code + data context</small>}</div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
@@ -526,6 +520,48 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <div className={translationPopover.error ? "paper-translation-result error" : "paper-translation-result"}>{translating ? <><LoaderCircle className="spin" size={14} />正在翻译…</> : translationPopover.error || translationPopover.translation}</div>
     </aside>}
   </section>;
+}
+
+function GithubProjectView({ url }: { url: string }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    setState("loading");
+    setError("");
+
+    const view = document.createElement("webview");
+    view.setAttribute("src", url);
+    view.setAttribute("partition", "github-project");
+    view.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes, nodeIntegration=no");
+    view.setAttribute("aria-label", "GitHub project");
+    const loaded = () => setState("ready");
+    const failed = (event: Event) => {
+      const code = Number((event as CustomEvent<{ errorCode?: number }>).detail?.errorCode);
+      if (code === -3) return;
+      setState("error");
+      setError("GitHub could not be loaded in this project view.");
+    };
+    view.addEventListener("did-finish-load", loaded);
+    view.addEventListener("did-fail-load", failed);
+    host.replaceChildren(view);
+
+    return () => {
+      view.removeEventListener("did-finish-load", loaded);
+      view.removeEventListener("did-fail-load", failed);
+      view.remove();
+    };
+  }, [url]);
+
+  return <div className="github-project-workspace">
+    <div className="github-project-toolbar"><span><Code2 size={15} />GitHub project</span><span>Linked repository</span></div>
+    <div className="github-project-frame" ref={hostRef} />
+    {state === "loading" && <div className="github-project-status"><LoaderCircle className="spin" size={17} />Loading project...</div>}
+    {state === "error" && <div className="github-project-status error"><strong>Repository unavailable</strong><span>{error}</span></div>}
+  </div>;
 }
 
 function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection, onRepositoryLink, onRepositoryDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onRepositoryLink: (url: string) => void; onRepositoryDetected: (url: string) => void }) {

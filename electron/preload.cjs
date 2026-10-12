@@ -45,7 +45,6 @@ contextBridge.exposeInMainWorld("researchDesk", {
   deleteLibraryPaperHighlight: (id, workspace) => ipcRenderer.invoke("library:delete-highlight", { id, workspace }),
   translateLibraryPaperSelection: (text) => ipcRenderer.invoke("library:translate-selection", { text }),
   loadLibraryGithubRepository: (url) => ipcRenderer.invoke("library:load-github-repository", { url }),
-  openLibraryGithubProject: (url) => ipcRenderer.invoke("library:open-github-project", { url }),
   saveTask: (task) => ipcRenderer.invoke("task:save", task),
   runAgent: (input) => ipcRenderer.invoke("agent:run", input),
   interruptAgent: (threadId) => ipcRenderer.invoke("agent:interrupt", threadId),

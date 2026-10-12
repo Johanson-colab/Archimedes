@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -25,7 +25,6 @@ const windowWorkspaces = new Map();
 const windowPreviewTokens = new Map();
 const previewTokenWorkspaces = new Map();
 const workspaceWatchers = new Map();
-const githubProjectWindows = new Map();
 const allowedContextPaths = new Set();
 const WORKSPACE_STATE_FILE = "last-workspace.json";
 
@@ -164,10 +163,33 @@ function createWindow(workspace) {
       nodeIntegration: false,
       sandbox: true,
       plugins: true,
+      webviewTag: true,
     },
   });
 
   const senderId = browserWindow.webContents.id;
+  browserWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
+    try {
+      const repository = normalizeGithubRepositoryUrl(params.src);
+      params.src = repository.url;
+    } catch {
+      event.preventDefault();
+      return;
+    }
+    delete webPreferences.preload;
+    webPreferences.contextIsolation = true;
+    webPreferences.nodeIntegration = false;
+    webPreferences.sandbox = true;
+  });
+  browserWindow.webContents.on("did-attach-webview", (_event, guestContents) => {
+    guestContents.setWindowOpenHandler(({ url }) => {
+      if (isGithubPage(url)) void guestContents.loadURL(url);
+      return { action: "deny" };
+    });
+    guestContents.on("will-navigate", (event, url) => {
+      if (!isGithubPage(url)) event.preventDefault();
+    });
+  });
   if (workspace) setWindowWorkspace(senderId, resolveWorkspace(workspace));
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -210,49 +232,6 @@ function isGithubPage(value) {
   } catch {
     return false;
   }
-}
-
-function openGithubProjectWindow(parent, value) {
-  const repository = normalizeGithubRepositoryUrl(value);
-  const existing = githubProjectWindows.get(repository.url);
-  if (existing && !existing.isDestroyed()) {
-    existing.show();
-    existing.focus();
-    return repository;
-  }
-
-  const projectWindow = new BrowserWindow({
-    width: 1320,
-    height: 920,
-    minWidth: 880,
-    minHeight: 640,
-    parent: parent && !parent.isDestroyed() ? parent : undefined,
-    title: `GitHub - ${repository.owner}/${repository.repo}`,
-    autoHideMenuBar: true,
-    backgroundColor: "#ffffff",
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  const openNavigation = (target) => {
-    if (isGithubPage(target)) projectWindow.loadURL(target);
-    else void shell.openExternal(target);
-  };
-  projectWindow.webContents.setWindowOpenHandler(({ url }) => {
-    openNavigation(url);
-    return { action: "deny" };
-  });
-  projectWindow.webContents.on("will-navigate", (event, url) => {
-    if (isGithubPage(url)) return;
-    event.preventDefault();
-    void shell.openExternal(url);
-  });
-  projectWindow.on("closed", () => githubProjectWindows.delete(repository.url));
-  githubProjectWindows.set(repository.url, projectWindow);
-  void projectWindow.loadURL(repository.url);
-  return repository;
 }
 
 function workspaceForWindow(browserWindow) {
@@ -749,11 +728,6 @@ app.whenReady().then(() => {
   ipcMain.handle("library:load-github-repository", async (_event, { url } = {}) => {
     if (typeof url !== "string" || url.length > 3_000) throw new Error("A public GitHub repository URL is required.");
     return loadGithubRepository(url);
-  });
-
-  ipcMain.handle("library:open-github-project", (event, { url } = {}) => {
-    if (typeof url !== "string" || url.length > 3_000) throw new Error("A public GitHub repository URL is required.");
-    return openGithubProjectWindow(BrowserWindow.fromWebContents(event.sender), url);
   });
 
   ipcMain.handle("task:save", (_event, task) => {

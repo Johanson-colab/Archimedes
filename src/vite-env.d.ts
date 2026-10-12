@@ -45,7 +45,6 @@ interface ResearchDeskBridge {
     deleteLibraryPaperHighlight: (id: string, workspace?: string) => Promise<{ deleted: boolean }>;
     translateLibraryPaperSelection: (text: string) => Promise<{ translation: string }>;
     loadLibraryGithubRepository: (url: string) => Promise<PaperRepositorySnapshot>;
-    openLibraryGithubProject: (url: string) => Promise<{ owner: string; repo: string; url: string }>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
