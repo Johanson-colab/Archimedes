@@ -159,12 +159,6 @@ function estimateAttachmentContextCharacters(item: ContextAttachment) {
   return JSON.stringify({ id: item.id, type: item.type, name: item.name, path: item.path, detail: item.detail }).length + 80;
 }
 
-function formatContextCharacters(characters: number) {
-  if (characters < 1_000) return `${characters}`;
-  if (characters < 100_000) return `${(characters / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
-  return `${Math.round(characters / 1_000)}k`;
-}
-
 function upsertChangeSet(current: WorkspaceChangeSet[], incoming: WorkspaceChangeSet) {
   return [...current.filter((changeSet) => changeSet.id !== incoming.id), incoming]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
@@ -1253,6 +1247,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const contextUsage = estimatedContextCharacters / CONTEXT_CHAR_LIMIT;
   const contextUsageState = contextUsage >= 0.9 ? "critical" : contextUsage >= 0.7 ? "warning" : "normal";
   const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${CONTEXT_CHAR_LIMIT.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
+  const contextUsageLabel = `${(estimatedContextCharacters / 1_000).toFixed(1).replace(/\.0$/, "")}k / 160k chars`;
 
   const scrollToLatest = () => {
     const container = scrollRef.current;
@@ -1450,15 +1445,15 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
           <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
           <div
             className={`context-usage ${contextUsageState}`}
-            title={contextUsageTitle}
+            data-context-usage={contextUsageLabel}
             aria-label={contextUsageTitle}
+            role="img"
           >
             <span
               className="context-usage-ring"
               style={{ "--context-usage-progress": `${Math.round(contextUsage * 360)}deg` } as React.CSSProperties}
               aria-hidden="true"
             />
-            <span className="context-usage-label">{formatContextCharacters(estimatedContextCharacters)} / 160k chars</span>
           </div>
           <button className="conversation-send" onClick={agentBusy ? onInterrupt : submitCurrentPrompt} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? interrupting ? "Stopping task" : "Stop" : "Send"}>
             {agentBusy ? <Square size={14} fill="currentColor" /> : <SendHorizontal size={16} />}
