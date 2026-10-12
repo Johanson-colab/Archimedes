@@ -666,7 +666,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .research-mode-option > svg { color: #2c7359; }
 .composer-context { display: flex; min-width: 0; align-items: center; gap: 5px; color: #969690; font-size: 9px; }
 .composer-context span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.context-usage { --context-usage-color: #4d7765; position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; cursor: help; }
+.context-usage { --context-usage-color: #4d7765; position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; margin-left: 7px; cursor: help; }
 .context-usage.warning { --context-usage-color: #a87732; color: #8d7147; }
 .context-usage.critical { --context-usage-color: #ad5148; color: #985650; }
 .context-usage::after { position: absolute; z-index: 45; right: -5px; bottom: calc(100% + 8px); padding: 6px 8px; content: attr(data-context-usage); color: #f9faf8; background: #343a36; border-radius: 4px; box-shadow: 0 4px 12px rgba(25, 31, 27, .18); font-size: 9px; line-height: 1; opacity: 0; pointer-events: none; transform: translateY(2px); transition: opacity .12s ease, transform .12s ease; white-space: nowrap; }
