@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -127,6 +127,43 @@ const initialMessages: Message[] = [
 
 const INITIAL_VISIBLE_MESSAGE_COUNT = 60;
 const HISTORY_MESSAGE_PAGE_SIZE = 40;
+const CONTEXT_CHAR_LIMIT = 160_000;
+const CONTEXT_INSTRUCTION_OVERHEAD_CHARS = 4_800;
+
+function estimateAttachmentContextCharacters(item: ContextAttachment) {
+  if (item.type === "paper" && item.paper) {
+    return JSON.stringify({ id: item.id, type: item.type, ...item.paper }).length + 180;
+  }
+
+  if (item.type === "repository" && item.repository) {
+    const repository = item.repository;
+    const manifest = {
+      id: item.id,
+      type: item.type,
+      url: repository.url,
+      branch: repository.branch,
+      description: repository.description,
+      language: repository.language,
+      stars: repository.stars,
+      data_paths: repository.data_paths.slice(0, 80),
+      cached_files: repository.files.map((file) => ({ path: file.path, language: file.language, size: file.size })),
+    };
+    return JSON.stringify(manifest).length + repository.readme.slice(0, 16_000).length + 320;
+  }
+
+  if (item.type === "image" && item.image) {
+    const { mimeType, sizeBytes, width, height } = item.image;
+    return JSON.stringify({ id: item.id, type: item.type, name: item.name, mimeType, sizeBytes, width, height }).length + 160;
+  }
+
+  return JSON.stringify({ id: item.id, type: item.type, name: item.name, path: item.path, detail: item.detail }).length + 80;
+}
+
+function formatContextCharacters(characters: number) {
+  if (characters < 1_000) return `${characters}`;
+  if (characters < 100_000) return `${(characters / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return `${Math.round(characters / 1_000)}k`;
+}
 
 function upsertChangeSet(current: WorkspaceChangeSet[], incoming: WorkspaceChangeSet) {
   return [...current.filter((changeSet) => changeSet.id !== incoming.id), incoming]
@@ -1201,6 +1238,21 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const [followingOutput, setFollowingOutput] = useState(true);
   const visibleMessages = messages.slice(historyStart);
   const hiddenMessageCount = historyStart;
+  const messageContextCharacters = useMemo(
+    () => messages.reduce((total, message) => total + message.text.length, 0),
+    [messages],
+  );
+  const attachedContextCharacters = useMemo(
+    () => contextItems.reduce((total, item) => total + estimateAttachmentContextCharacters(item), 0),
+    [contextItems],
+  );
+  const estimatedContextCharacters = Math.min(
+    CONTEXT_CHAR_LIMIT,
+    CONTEXT_INSTRUCTION_OVERHEAD_CHARS + messageContextCharacters + attachedContextCharacters + prompt.length,
+  );
+  const contextUsage = estimatedContextCharacters / CONTEXT_CHAR_LIMIT;
+  const contextUsageState = contextUsage >= 0.9 ? "critical" : contextUsage >= 0.7 ? "warning" : "normal";
+  const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${CONTEXT_CHAR_LIMIT.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
 
   const scrollToLatest = () => {
     const container = scrollRef.current;
@@ -1396,6 +1448,18 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
             </div>}
           </div>
           <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
+          <div
+            className={`context-usage ${contextUsageState}`}
+            title={contextUsageTitle}
+            aria-label={contextUsageTitle}
+          >
+            <span
+              className="context-usage-ring"
+              style={{ "--context-usage-progress": `${Math.round(contextUsage * 360)}deg` } as React.CSSProperties}
+              aria-hidden="true"
+            />
+            <span className="context-usage-label">{formatContextCharacters(estimatedContextCharacters)} / 160k chars</span>
+          </div>
           <button className="conversation-send" onClick={agentBusy ? onInterrupt : submitCurrentPrompt} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? interrupting ? "Stopping task" : "Stop" : "Send"}>
             {agentBusy ? <Square size={14} fill="currentColor" /> : <SendHorizontal size={16} />}
           </button>
