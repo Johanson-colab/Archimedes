@@ -45,6 +45,9 @@ interface ResearchDeskBridge {
     deleteLibraryPaperHighlight: (id: string, workspace?: string) => Promise<{ deleted: boolean }>;
     translateLibraryPaperSelection: (text: string) => Promise<{ translation: string }>;
     loadLibraryGithubRepository: (url: string) => Promise<PaperRepositorySnapshot>;
+    readClipboardText: () => Promise<string>;
+    writeClipboardText: (text: string) => Promise<void>;
+    readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
@@ -156,7 +159,15 @@ interface ResearchSource {
   query?: string;
   retrievedAt?: string;
 }
-type ContextAttachmentType = "file" | "folder" | "paper" | "repository" | "plugin" | "skill";
+type ContextAttachmentType = "file" | "folder" | "paper" | "repository" | "plugin" | "skill" | "image";
+
+interface ContextImage {
+  dataUrl: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+}
 
 interface ContextPaperMetadata {
   title: string;
@@ -200,6 +211,7 @@ interface ContextAttachment {
   detail?: string;
   paper?: ContextPaperMetadata;
   repository?: PaperRepositorySnapshot;
+  image?: ContextImage;
 }
 
 interface ResearchLibrary {

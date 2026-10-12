@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol, clipboard } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -27,6 +27,7 @@ const previewTokenWorkspaces = new Map();
 const workspaceWatchers = new Map();
 const allowedContextPaths = new Set();
 const WORKSPACE_STATE_FILE = "last-workspace.json";
+const MAX_CLIPBOARD_IMAGE_BYTES = 6 * 1024 * 1024;
 
 app.setName("Archimedes");
 protocol.registerSchemesAsPrivileged([{
@@ -411,6 +412,24 @@ function sanitizeAgentContext(items) {
         },
       }];
     }
+    if (item.type === "image") {
+      const image = item.image;
+      const match = typeof image?.dataUrl === "string" && image.dataUrl.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+      if (!match) return [];
+      const bytes = Buffer.from(match[2], "base64");
+      if (!bytes.length || bytes.length > MAX_CLIPBOARD_IMAGE_BYTES) return [];
+      const mimeType = match[1];
+      return [{
+        id: item.id.slice(0, 500), type: "image", name: item.name.slice(0, 1000), detail: String(item.detail || "").slice(0, 2000),
+        image: {
+          dataUrl: `data:${mimeType};base64,${bytes.toString("base64")}`,
+          mimeType,
+          sizeBytes: bytes.length,
+          width: Number.isInteger(image.width) ? Math.max(1, Math.min(image.width, 20_000)) : undefined,
+          height: Number.isInteger(image.height) ? Math.max(1, Math.min(image.height, 20_000)) : undefined,
+        },
+      }];
+    }
     if (!["file", "folder", "plugin", "skill"].includes(item.type) || typeof item.path !== "string") return [];
     const resolved = path.resolve(item.path);
     if (!allowedContextPaths.has(resolved) || !fs.existsSync(resolved)) return [];
@@ -728,6 +747,30 @@ app.whenReady().then(() => {
   ipcMain.handle("library:load-github-repository", async (_event, { url } = {}) => {
     if (typeof url !== "string" || url.length > 3_000) throw new Error("A public GitHub repository URL is required.");
     return loadGithubRepository(url);
+  });
+
+  ipcMain.handle("clipboard:read-text", () => clipboard.readText().slice(0, 100_000));
+
+  ipcMain.handle("clipboard:write-text", (_event, { text } = {}) => {
+    if (typeof text !== "string") throw new Error("Clipboard text must be a string.");
+    clipboard.writeText(text.slice(0, 100_000));
+  });
+
+  ipcMain.handle("clipboard:read-image", () => {
+    const image = clipboard.readImage();
+    if (image.isEmpty()) return null;
+    const png = image.toPNG();
+    if (!png.length || png.length > MAX_CLIPBOARD_IMAGE_BYTES) {
+      throw new Error("The pasted image must be 6 MB or smaller.");
+    }
+    const size = image.getSize();
+    return {
+      dataUrl: `data:image/png;base64,${png.toString("base64")}`,
+      mimeType: "image/png",
+      sizeBytes: png.length,
+      width: size.width,
+      height: size.height,
+    };
   });
 
   ipcMain.handle("task:save", (_event, task) => {

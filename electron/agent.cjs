@@ -438,6 +438,10 @@ function attachedContextManifest(items) {
       const readme = String(repository.readme || "").slice(0, 16_000);
       return `${JSON.stringify(manifest)}\nThis is a public repository snapshot attached as evidence alongside a paper. Use list_attached_repository_files and read_attached_repository_file to inspect its cached implementation and configuration. Compare implementation evidence with paper claims; do not assume the repository exactly reproduces every paper result.\n<repository_readme>\n${readme}\n</repository_readme>`;
     }
+    if (item.type === "image") {
+      const image = item.image || {};
+      return `${JSON.stringify({ id: item.id, type: item.type, name: item.name, mime_type: image.mimeType, size_bytes: image.sizeBytes, width: image.width, height: image.height })}\nThis image is included directly in the current user message. Inspect it visually before making image-dependent claims.`;
+    }
     const base = { id: item.id, type: item.type, name: item.name, detail: item.detail };
     if (item.type === "skill") {
       try { return `${JSON.stringify(base)}\n<skill_instructions>\n${readAttachedTextFile(items, item.id, "SKILL.md").slice(0, 48_000)}\n</skill_instructions>`; }
@@ -746,6 +750,14 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
       store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "context_compacted", payload: { omitted_turn_count: context.omittedTurnCount } });
     }
     const messages = context.messages;
+    const images = contextItems.filter((item) => item.type === "image" && item.image?.dataUrl).slice(0, 4);
+    const currentMessage = messages.at(-1);
+    if (images.length && currentMessage?.role === "user") {
+      currentMessage.content = [
+        { type: "text", text: String(currentMessage.content || "") },
+        ...images.map((item) => ({ type: "image_url", image_url: { url: item.image.dataUrl, detail: "high" } })),
+      ];
+    }
     let academicSearches = 0;
     let webSearches = 0;
     const foundPapers = new Map();

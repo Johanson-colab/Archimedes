@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -302,6 +302,9 @@ const previewBridge = {
   testModelConfig: async ({ model }: ModelConfigInput) => ({ ok: true, latencyMs: 184, resolvedModel: model }),
   getWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: false }),
   saveWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: true }),
+  readClipboardText: async () => "",
+  writeClipboardText: async () => undefined,
+  readClipboardImage: async () => null,
   runAgent: async ({ prompt, threadId, projectId, mode, contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
@@ -446,6 +449,52 @@ const previewBridge = {
 };
 
 const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
+const MAX_PASTED_IMAGE_BYTES = 6 * 1024 * 1024;
+const PASTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("The pasted image could not be read."));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function imageDimensions(dataUrl: string) {
+  return new Promise<{ width?: number; height?: number }>((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth || undefined, height: image.naturalHeight || undefined });
+    image.onerror = () => resolve({});
+    image.src = dataUrl;
+  });
+}
+
+async function contextImageFromBlob(blob: Blob): Promise<ContextAttachment> {
+  if (!PASTED_IMAGE_TYPES.has(blob.type)) throw new Error("Paste a PNG, JPEG, WebP, or GIF image.");
+  if (!blob.size || blob.size > MAX_PASTED_IMAGE_BYTES) throw new Error("The pasted image must be 6 MB or smaller.");
+  const dataUrl = await readDataUrl(blob);
+  const dimensions = await imageDimensions(dataUrl);
+  return contextImageFromData({ dataUrl, mimeType: blob.type as ContextImage["mimeType"], sizeBytes: blob.size, ...dimensions });
+}
+
+function contextImageFromData(image: ContextImage): ContextAttachment {
+  if (!PASTED_IMAGE_TYPES.has(image.mimeType)) throw new Error("Paste a PNG, JPEG, WebP, or GIF image.");
+  if (!image.sizeBytes || image.sizeBytes > MAX_PASTED_IMAGE_BYTES) throw new Error("The pasted image must be 6 MB or smaller.");
+  return {
+    id: `image:${crypto.randomUUID()}`,
+    type: "image",
+    name: "Pasted image",
+    detail: `${image.mimeType.replace("image/", "").toUpperCase()} · ${formatBytes(image.sizeBytes)}${image.width && image.height ? ` · ${image.width} x ${image.height}` : ""}`,
+    image,
+  };
+}
 
 type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifacts";
 
@@ -768,20 +817,22 @@ function App() {
 
   async function submitPrompt() {
     const question = prompt.trim();
-    if (!question || agentBusy) return;
+    const hasPastedImage = contextItems.some((item) => item.type === "image");
+    if ((!question && !hasPastedImage) || agentBusy) return;
+    const requestPrompt = question || "Please analyze the attached image.";
     const submittedContext = contextItems;
     const submittedThreadId = activeThreadIdRef.current;
 
     setPrompt("");
     setAgentBusy(true);
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: question }]);
+    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt }]);
     setEvents((current) => [
       ...current.filter((event) => event.title !== "Evidence synthesis"),
       { title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" },
     ]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: question, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: researchMode, contextItems: submittedContext });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: researchMode, contextItems: submittedContext });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
@@ -1076,7 +1127,10 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   const latestEvent = events.at(-1);
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
+  const [composerError, setComposerError] = useState("");
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
   const [followingOutput, setFollowingOutput] = useState(true);
@@ -1111,6 +1165,86 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
     document.addEventListener("click", closeMenu);
     return () => document.removeEventListener("click", closeMenu);
   }, [modeMenuOpen]);
+
+  useEffect(() => {
+    const closeMenu = () => setComposerMenu(null);
+    document.addEventListener("click", closeMenu);
+    return () => document.removeEventListener("click", closeMenu);
+  }, []);
+
+  async function attachPastedImage(blob: Blob) {
+    if (contextItems.filter((item) => item.type === "image").length >= 4) {
+      setComposerError("You can attach up to four pasted images in one message.");
+      return;
+    }
+    try {
+      const image = await contextImageFromBlob(blob);
+      onAddContext([image]);
+      setComposerError("");
+    } catch (error) {
+      setComposerError(error instanceof Error ? error.message : "The pasted image could not be attached.");
+    }
+  }
+
+  function insertClipboardText(text: string) {
+    const textarea = composerRef.current;
+    if (!textarea || !text) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    onPrompt(`${prompt.slice(0, start)}${text}${prompt.slice(end)}`);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + text.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }
+
+  async function pasteFromSystemClipboard() {
+    setComposerMenu(null);
+    try {
+      const image = await desktopBridge.readClipboardImage();
+      if (image) {
+        if (contextItems.filter((item) => item.type === "image").length >= 4) {
+          setComposerError("You can attach up to four pasted images in one message.");
+          return;
+        }
+        onAddContext([contextImageFromData(image)]);
+        setComposerError("");
+        return;
+      }
+      insertClipboardText(await desktopBridge.readClipboardText());
+      setComposerError("");
+    } catch (error) {
+      setComposerError(error instanceof Error ? error.message : "Nothing compatible was found on the clipboard.");
+    }
+  }
+
+  async function copySelection(cut = false) {
+    const textarea = composerRef.current;
+    if (!textarea || textarea.selectionStart === textarea.selectionEnd) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    try {
+      await desktopBridge.writeClipboardText(prompt.slice(start, end));
+      if (cut) {
+        onPrompt(`${prompt.slice(0, start)}${prompt.slice(end)}`);
+        requestAnimationFrame(() => { textarea.focus(); textarea.setSelectionRange(start, start); });
+      }
+      setComposerError("");
+    } catch (error) {
+      setComposerError(error instanceof Error ? error.message : "The selected text could not be copied.");
+    } finally {
+      setComposerMenu(null);
+    }
+  }
+
+  function handleComposerPaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    const item = Array.from(event.clipboardData.items).find((candidate) => candidate.type.startsWith("image/"));
+    const image = item?.getAsFile();
+    if (!image) return;
+    event.preventDefault();
+    void attachPastedImage(image);
+  }
 
   return <div className="conversation-layout">
     <div className="conversation-scroll-area">
@@ -1165,13 +1299,19 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
 
     <div className="conversation-composer-wrap">
       <div className="conversation-composer">
-        <textarea value={prompt} onChange={(event) => onPrompt(event.target.value)} onKeyDown={(event) => {
+        <textarea ref={composerRef} value={prompt} onChange={(event) => onPrompt(event.target.value)} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             onSubmit();
           }
         }} placeholder={activeMode.placeholder} rows={3} />
         <ContextChips items={contextItems} onRemove={onRemoveContext} />
+        {composerMenu && <div className="composer-context-menu" role="menu" style={{ left: composerMenu.x, top: composerMenu.y }} onClick={(event) => event.stopPropagation()}>
+          <button role="menuitem" onClick={() => void copySelection(true)} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd}>Cut</button>
+          <button role="menuitem" onClick={() => void copySelection()} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd}>Copy</button>
+          <button role="menuitem" onClick={() => void pasteFromSystemClipboard()}>Paste</button>
+        </div>}
+        {composerError && <div className="composer-attachment-error" role="alert">{composerError}</div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} items={contextItems} onAdd={onAddContext} />
           <div className="research-mode-picker" ref={modeMenuRef}>
@@ -1188,7 +1328,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
             </div>}
           </div>
           <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
-          <button className="conversation-send" onClick={agentBusy ? onInterrupt : onSubmit} disabled={agentBusy ? !canInterrupt : !prompt.trim()} title={agentBusy ? "Stop" : "Send"}>
+          <button className="conversation-send" onClick={agentBusy ? onInterrupt : onSubmit} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? "Stop" : "Send"}>
             {agentBusy ? <Square size={14} fill="currentColor" /> : <SendHorizontal size={16} />}
           </button>
         </div>

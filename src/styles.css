@@ -623,6 +623,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .attached-context-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attached-context-chip > button { display: grid; width: 19px; height: 19px; flex: 0 0 auto; place-items: center; color: #89938c; background: transparent; border-radius: 3px; }
 .attached-context-chip > button:hover { color: #333b36; background: #dfe7e1; }
+.attached-context-chip.image { color: #355b4b; background: #eef6f0; border-color: #cde1d2; }
+.attached-context-chip.image img { width: 19px; height: 19px; object-fit: cover; border-radius: 3px; }
+.composer-context-menu { position: fixed; z-index: 40; display: grid; min-width: 122px; padding: 4px; background: #fff; border: 1px solid #d7d7d1; border-radius: 6px; box-shadow: 0 10px 24px rgba(29, 29, 26, .18); }
+.composer-context-menu button { padding: 7px 9px; color: #353532; background: transparent; border-radius: 4px; font-size: 10px; text-align: left; }
+.composer-context-menu button:hover:not(:disabled) { background: #f0f1ed; }
+.composer-context-menu button:disabled { color: #aaa9a2; cursor: default; }
+.composer-attachment-error { margin: 0 12px 6px; color: #a34d46; font-size: 9px; line-height: 1.4; }
 .spin { animation: context-spin .8s linear infinite; }
 @keyframes context-spin { to { transform: rotate(360deg); } }
 .composer-tool { display: inline-flex; height: 29px; align-items: center; gap: 6px; padding: 0 8px; color: #686862; background: transparent; border-radius: 5px; font-size: 10px; }

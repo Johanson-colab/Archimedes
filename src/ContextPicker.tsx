@@ -4,6 +4,7 @@ import {
   BookMarked,
   Check,
   FilePlus2,
+  FileImage,
   FolderPlus,
   LoaderCircle,
   Plug,
@@ -195,7 +196,7 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
 export function ContextChips({ items, onRemove }: { items: ContextAttachment[]; onRemove: (id: string) => void }) {
   if (!items.length) return null;
   return <div className="attached-contexts" aria-label="Attached context">
-    {items.map((item) => <span className="attached-context-chip" key={item.id} title={item.detail || item.path || item.name}><ContextTypeIcon type={item.type} /><span>{item.name}</span><button onClick={() => onRemove(item.id)} title={`Remove ${item.name}`}><X size={12} /></button></span>)}
+    {items.map((item) => <span className={item.type === "image" ? "attached-context-chip image" : "attached-context-chip"} key={item.id} title={item.detail || item.path || item.name}>{item.type === "image" && item.image ? <img src={item.image.dataUrl} alt="" /> : <ContextTypeIcon type={item.type} />}<span>{item.name}</span><button onClick={() => onRemove(item.id)} title={`Remove ${item.name}`}><X size={12} /></button></span>)}
   </div>;
 }
 
@@ -207,6 +208,7 @@ function ContextTypeIcon({ type }: { type: ContextAttachmentType }) {
   if (type === "file") return <FilePlus2 size={12} />;
   if (type === "folder") return <FolderPlus size={12} />;
   if (type === "paper") return <BookMarked size={12} />;
+  if (type === "image") return <FileImage size={12} />;
   if (type === "plugin") return <Plug size={12} />;
   return <Sparkles size={12} />;
 }
