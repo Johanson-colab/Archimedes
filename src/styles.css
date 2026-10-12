@@ -481,6 +481,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .conversation-jump-latest { position: absolute; z-index: 2; right: max(20px, calc((100% - 760px) / 2)); bottom: 16px; display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; color: #315f4d; background: rgba(255, 255, 255, .96); border: 1px solid #d5dfd8; border-radius: 6px; box-shadow: 0 4px 14px rgba(26, 39, 30, .13); font-size: 10px; font-weight: 700; }
 .conversation-jump-latest:hover { color: #173f31; background: #f3f7f4; border-color: #b9ccc0; }
 .conversation-thread { width: min(100%, 820px); min-height: 100%; margin: 0 auto; padding: 52px 30px 34px; }
+.conversation-load-history { display: flex; min-height: 31px; align-items: center; justify-content: center; margin: 0 auto 26px; padding: 0 11px; color: #47695a; background: #f5f8f5; border: 1px solid #d5e1d8; border-radius: 5px; font-size: 10px; font-weight: 700; }
+.conversation-load-history:hover { color: #234b3b; background: #eaf2ec; border-color: #bcd1c2; }
 .conversation-message { display: flex; gap: 13px; margin-bottom: 31px; }
 .conversation-message.user { justify-content: flex-end; }
 .assistant-mark { width: 27px; height: 27px; flex: 0 0 auto; margin-top: 1px; border-radius: 7px; }
@@ -492,6 +494,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .conversation-message p { margin: 0; color: #343430; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .conversation-message.user p { color: #30302d; }
 .message-markdown { min-width: 0; color: #343430; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.streaming-markdown { contain: content; }
 .message-markdown > :first-child { margin-top: 0; }
 .message-markdown > :last-child { margin-bottom: 0; }
 .conversation-message .message-markdown p { margin: .7em 0; white-space: normal; }

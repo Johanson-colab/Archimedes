@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
+import { memo, useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -124,6 +124,9 @@ const initialMessages: Message[] = [
     text: "What would you like to research? I can search your knowledge base, compare papers, plan experiments, and prepare workspace changes for your approval.",
   },
 ];
+
+const INITIAL_VISIBLE_MESSAGE_COUNT = 60;
+const HISTORY_MESSAGE_PAGE_SIZE = 40;
 
 function upsertChangeSet(current: WorkspaceChangeSet[], incoming: WorkspaceChangeSet) {
   return [...current.filter((changeSet) => changeSet.id !== incoming.id), incoming]
@@ -505,7 +508,6 @@ function App() {
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
-  const [prompt, setPrompt] = useState("");
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
@@ -520,6 +522,8 @@ function App() {
   const [terminalHeight, setTerminalHeight] = useState(260);
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [interrupting, setInterrupting] = useState(false);
+  const [chatViewNonce, setChatViewNonce] = useState(0);
   const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
   const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
   const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
@@ -546,6 +550,50 @@ function App() {
   const activeThreadIdRef = useRef<string | null>(null);
   const threadOpenRequestRef = useRef(0);
   const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
+  const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
+  const assistantDeltaFrameRef = useRef<number | null>(null);
+
+  function clearPendingAssistantDeltas() {
+    pendingAssistantDeltasRef.current.clear();
+    if (assistantDeltaFrameRef.current !== null) {
+      cancelAnimationFrame(assistantDeltaFrameRef.current);
+      assistantDeltaFrameRef.current = null;
+    }
+  }
+
+  function flushAssistantDeltas() {
+    assistantDeltaFrameRef.current = null;
+    const pending = [...pendingAssistantDeltasRef.current.entries()];
+    pendingAssistantDeltasRef.current.clear();
+    if (!pending.length) return;
+    setMessages((current) => {
+      let next = current;
+      for (const [streamId, update] of pending) {
+        const index = next.findIndex((message) => message.id === streamId);
+        if (index < 0) {
+          if (next === current) next = [...current];
+          next.push({ id: streamId, role: "assistant", text: update.delta });
+          continue;
+        }
+        if (next === current) next = [...current];
+        next[index] = { ...next[index], text: `${next[index].text}${update.delta}` };
+      }
+      return next;
+    });
+  }
+
+  function queueAssistantDelta(event: AgentEvent) {
+    if (!event.turnId || !event.delta) return;
+    const streamId = `${event.turnId}:stream`;
+    const existing = pendingAssistantDeltasRef.current.get(streamId);
+    pendingAssistantDeltasRef.current.set(streamId, {
+      delta: `${existing?.delta ?? ""}${event.delta}`,
+      threadId: event.threadId,
+    });
+    if (assistantDeltaFrameRef.current === null) {
+      assistantDeltaFrameRef.current = requestAnimationFrame(flushAssistantDeltas);
+    }
+  }
 
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
@@ -554,6 +602,8 @@ function App() {
   useEffect(() => {
     openFilesRef.current = openFiles;
   }, [openFiles]);
+
+  useEffect(() => () => clearPendingAssistantDeltas(), []);
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onTerminalData(({ sessionId, data }) => {
@@ -576,14 +626,12 @@ function App() {
       }
       if (event.type === "assistant_delta" && event.turnId && event.delta) {
         if (event.threadId && activeThreadIdRef.current !== event.threadId) return;
-        const streamId = `${event.turnId}:stream`;
-        setMessages((current) => {
-          const existing = current.find((message) => message.id === streamId);
-          return existing
-            ? current.map((message) => message.id === streamId ? { ...message, text: `${message.text}${event.delta}` } : message)
-            : [...current, { id: streamId, role: "assistant", text: event.delta || "" }];
-        });
+        queueAssistantDelta(event);
         return;
+      }
+      if (event.type === "complete" || event.type === "failed" || event.type === "interrupted") {
+        flushAssistantDeltas();
+        setInterrupting(false);
       }
       if (event.type === "approval" && event.action && (!event.threadId || activeThreadIdRef.current === event.threadId)) {
         setPendingAction({ ...event.action, source: "agent" });
@@ -633,6 +681,7 @@ function App() {
   }
 
   async function loadWorkspace(workspacePath: string) {
+    clearPendingAssistantDeltas();
     setWorkspaceReady(false);
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
     setWorkspace(snapshot.workspace);
@@ -708,17 +757,19 @@ function App() {
   function startNewTask(projectId = activeProjectId) {
     if (agentBusy) return;
     setMainSection("chat");
+    clearPendingAssistantDeltas();
+    setChatViewNonce((current) => current + 1);
     if (projectId) setActiveProjectId(projectId);
     activeThreadIdRef.current = null;
     setActiveThreadId(null);
     setMessages(initialMessages);
-    setPrompt("");
     setPendingAction(null);
     setContextItems([]);
     setChangeSets([]);
   }
 
   async function openResearchThread(threadSummary: ResearchThread) {
+    clearPendingAssistantDeltas();
     setMainSection("chat");
     activeThreadIdRef.current = threadSummary.id;
     setActiveThreadId(threadSummary.id);
@@ -815,16 +866,17 @@ function App() {
     }
   }
 
-  async function submitPrompt() {
-    const question = prompt.trim();
+  async function submitPrompt(draft: string) {
+    const question = draft.trim();
     const hasPastedImage = contextItems.some((item) => item.type === "image");
     if ((!question && !hasPastedImage) || agentBusy) return;
     const requestPrompt = question || "Please analyze the attached image.";
     const submittedContext = contextItems;
     const submittedThreadId = activeThreadIdRef.current;
 
-    setPrompt("");
+    clearPendingAssistantDeltas();
     setAgentBusy(true);
+    setInterrupting(false);
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt }]);
     setEvents((current) => [
       ...current.filter((event) => event.title !== "Evidence synthesis"),
@@ -837,6 +889,7 @@ function App() {
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
       if (stillViewingSubmittedThread) {
+        clearPendingAssistantDeltas();
         activeThreadIdRef.current = result.threadId;
         setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
         setActiveThreadId(result.threadId);
@@ -852,12 +905,23 @@ function App() {
     } finally {
       setAgentBusy(false);
       setRunningThreadId(null);
+      setInterrupting(false);
     }
   }
 
   async function interruptResearchTurn() {
-    if (!runningThreadId) return;
-    await desktopBridge.interruptAgent(runningThreadId);
+    if (!runningThreadId || interrupting) return;
+    setInterrupting(true);
+    setEvents((current) => [
+      ...current.filter((event) => event.title !== "Cancelling task"),
+      { title: "Cancelling task", detail: "Stopping the active research turn", state: "active" },
+    ]);
+    try {
+      await desktopBridge.interruptAgent(runningThreadId);
+    } catch (error) {
+      setInterrupting(false);
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Archimedes could not interrupt this task: ${String(error)}` }]);
+    }
   }
 
   async function runCommand(command: string, actionId?: string) {
@@ -1045,17 +1109,17 @@ function App() {
         <div className={mainSection === "chat" ? "main-view chat-main" : "main-view knowledge-main"}>
           {mainSection === "chat" && (
             <ConversationView
+              key={activeThreadId ?? `new:${chatViewNonce}`}
               messages={messages}
               events={events}
-              prompt={prompt}
               workspace={workspace}
               agentBusy={agentBusy}
+              interrupting={interrupting}
               pendingAction={pendingAction}
               changeSets={changeSets}
-              onPrompt={setPrompt}
-              onSubmit={() => void submitPrompt()}
+              onSubmit={(draft) => void submitPrompt(draft)}
               onInterrupt={() => void interruptResearchTurn()}
-              canInterrupt={Boolean(runningThreadId)}
+              canInterrupt={Boolean(runningThreadId) && !interrupting}
               researchMode={researchMode}
               onResearchMode={setResearchMode}
               contextItems={contextItems}
@@ -1103,19 +1167,18 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, prompt, workspace, agentBusy, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onPrompt, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile }: {
+function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile }: {
   messages: Message[];
   events: TimelineEvent[];
-  prompt: string;
   workspace: string;
   agentBusy: boolean;
+  interrupting: boolean;
   canInterrupt: boolean;
   pendingAction: PendingAction | null;
   changeSets: WorkspaceChangeSet[];
   researchMode: ResearchMode;
   contextItems: ContextAttachment[];
-  onPrompt: (value: string) => void;
-  onSubmit: () => void;
+  onSubmit: (draft: string) => void;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
   onAddContext: (items: ContextAttachment[]) => void;
@@ -1129,11 +1192,15 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [composerError, setComposerError] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
   const [followingOutput, setFollowingOutput] = useState(true);
+  const visibleMessages = messages.slice(historyStart);
+  const hiddenMessageCount = historyStart;
 
   const scrollToLatest = () => {
     const container = scrollRef.current;
@@ -1156,6 +1223,10 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
     const frame = requestAnimationFrame(scrollToLatest);
     return () => cancelAnimationFrame(frame);
   }, [messages, agentBusy, pendingAction, changeSets]);
+
+  useEffect(() => {
+    setHistoryStart((current) => Math.min(current, Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT)));
+  }, [messages.length]);
 
   useEffect(() => {
     if (!modeMenuOpen) return;
@@ -1191,7 +1262,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
     if (!textarea || !text) return;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    onPrompt(`${prompt.slice(0, start)}${text}${prompt.slice(end)}`);
+    setPrompt(`${prompt.slice(0, start)}${text}${prompt.slice(end)}`);
     requestAnimationFrame(() => {
       textarea.focus();
       const cursor = start + text.length;
@@ -1227,7 +1298,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
     try {
       await desktopBridge.writeClipboardText(prompt.slice(start, end));
       if (cut) {
-        onPrompt(`${prompt.slice(0, start)}${prompt.slice(end)}`);
+        setPrompt(`${prompt.slice(0, start)}${prompt.slice(end)}`);
         requestAnimationFrame(() => { textarea.focus(); textarea.setSelectionRange(start, start); });
       }
       setComposerError("");
@@ -1246,28 +1317,25 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
     void attachPastedImage(image);
   }
 
+  function submitCurrentPrompt() {
+    if (agentBusy || (!prompt.trim() && !contextItems.some((item) => item.type === "image"))) return;
+    const draft = prompt;
+    setPrompt("");
+    onSubmit(draft);
+  }
+
   return <div className="conversation-layout">
     <div className="conversation-scroll-area">
     <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
       <div className="conversation-thread">
-        {messages.map((message) => (
-          <article className={`conversation-message ${message.role}`} key={message.id}>
-            {message.role === "assistant" && <span className="assistant-mark"><Sparkles size={15} /></span>}
-            <div className="conversation-message-copy">
-              <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
-              {message.role === "assistant" ? <MarkdownMessage content={message.text} /> : <p>{message.text}</p>}
-              {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
-                {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
-                  <FileText size={12} /><span>{source.startPage ? `${new URL(source.url).hostname} · pp. ${source.startPage}${source.endPage !== source.startPage ? `-${source.endPage}` : ""}` : source.title}</span>
-                </a>)}
-              </div>}
-            </div>
-          </article>
-        ))}
+        {hiddenMessageCount > 0 && <button className="conversation-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - HISTORY_MESSAGE_PAGE_SIZE))}>
+          Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount) === 1 ? "message" : "messages"}
+        </button>}
+        {visibleMessages.map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
 
         {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
 
-        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Sparkles size={15} /></span><div><strong>{latestEvent?.title ?? "Archimedes is working"}</strong><small>{latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
+        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Sparkles size={15} /></span><div><strong>{interrupting ? "Stopping task" : latestEvent?.title ?? "Archimedes is working"}</strong><small>{interrupting ? "Waiting for the active task to stop" : latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
 
         {pendingAction && (
           <section className="conversation-approval">
@@ -1299,10 +1367,10 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
 
     <div className="conversation-composer-wrap">
       <div className="conversation-composer">
-        <textarea ref={composerRef} value={prompt} onChange={(event) => onPrompt(event.target.value)} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
+        <textarea ref={composerRef} value={prompt} onChange={(event) => setPrompt(event.target.value)} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
-            onSubmit();
+            submitCurrentPrompt();
           }
         }} placeholder={activeMode.placeholder} rows={3} />
         <ContextChips items={contextItems} onRemove={onRemoveContext} />
@@ -1328,7 +1396,7 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
             </div>}
           </div>
           <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
-          <button className="conversation-send" onClick={agentBusy ? onInterrupt : onSubmit} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? "Stop" : "Send"}>
+          <button className="conversation-send" onClick={agentBusy ? onInterrupt : submitCurrentPrompt} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? interrupting ? "Stopping task" : "Stop" : "Send"}>
             {agentBusy ? <Square size={14} fill="currentColor" /> : <SendHorizontal size={16} />}
           </button>
         </div>
@@ -1338,27 +1406,79 @@ function ConversationView({ messages, events, prompt, workspace, agentBusy, canI
   </div>;
 }
 
-function MarkdownMessage({ content }: { content: string }) {
+const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
+  return <article className={`conversation-message ${message.role}`}>
+    {message.role === "assistant" && <span className="assistant-mark"><Sparkles size={15} /></span>}
+    <div className="conversation-message-copy">
+      <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
+      {message.role === "assistant"
+        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : <MarkdownMessage content={message.text} />
+        : <p>{message.text}</p>}
+      {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
+        {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
+          <FileText size={12} /><span>{source.startPage ? `${new URL(source.url).hostname} · pp. ${source.startPage}${source.endPage !== source.startPage ? `-${source.endPage}` : ""}` : source.title}</span>
+        </a>)}
+      </div>}
+    </div>
+  </article>;
+});
+
+const MarkdownContent = memo(function MarkdownContent({ content }: { content: string }) {
+  return <ReactMarkdown
+    remarkPlugins={[remarkGfm, remarkMath]}
+    rehypePlugins={[rehypeKatex]}
+    components={{
+      a: ({ children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
+      code: ({ className, children, ...props }) => {
+        const language = /language-([\w-]+)/.exec(className || "")?.[1];
+        if (!language) return <code className={className} {...props}>{children}</code>;
+        return <SyntaxHighlighter
+          language={language}
+          style={vsCodeLight}
+          PreTag="div"
+          customStyle={{ margin: 0, padding: "13px 15px", background: "#f4f4f1", fontSize: "11px", lineHeight: 1.65 }}
+          codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
+        >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>;
+      },
+    }}
+  >{normalizeMathDelimiters(content)}</ReactMarkdown>;
+});
+
+const MarkdownMessage = memo(function MarkdownMessage({ content }: { content: string }) {
   return <div className="message-markdown">
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
-      components={{
-        a: ({ children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
-        code: ({ className, children, ...props }) => {
-          const language = /language-([\w-]+)/.exec(className || "")?.[1];
-          if (!language) return <code className={className} {...props}>{children}</code>;
-          return <SyntaxHighlighter
-            language={language}
-            style={vsCodeLight}
-            PreTag="div"
-            customStyle={{ margin: 0, padding: "13px 15px", background: "#f4f4f1", fontSize: "11px", lineHeight: 1.65 }}
-            codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
-          >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>;
-        },
-      }}
-    >{normalizeMathDelimiters(content)}</ReactMarkdown>
+    <MarkdownContent content={content} />
   </div>;
+});
+
+const StreamingMarkdownMessage = memo(function StreamingMarkdownMessage({ content }: { content: string }) {
+  const blocks = splitStreamingMarkdownBlocks(content);
+  return <div className="message-markdown streaming-markdown">
+    {blocks.map((block, index) => <MarkdownContent key={index} content={block} />)}
+  </div>;
+});
+
+function splitStreamingMarkdownBlocks(content: string) {
+  const blocks: string[] = [];
+  let current: string[] = [];
+  let activeFence = "";
+  let inDisplayMath = false;
+
+  for (const line of content.split("\n")) {
+    current.push(line);
+    const fence = /^\s*(`{3,}|~{3,})/.exec(line)?.[1] || "";
+    if (fence) {
+      if (!activeFence) activeFence = fence[0];
+      else if (activeFence === fence[0]) activeFence = "";
+      continue;
+    }
+    if (!activeFence && (line.match(/\$\$/g)?.length ?? 0) % 2 === 1) inDisplayMath = !inDisplayMath;
+    if (!activeFence && !inDisplayMath && !line.trim() && current.some((item) => item.trim())) {
+      blocks.push(current.join("\n"));
+      current = [];
+    }
+  }
+  if (current.length) blocks.push(current.join("\n"));
+  return blocks;
 }
 
 function normalizeMathDelimiters(markdownContent: string) {
@@ -1404,7 +1524,7 @@ function normalizeMathDelimitersInLine(line: string) {
   return result;
 }
 
-function WorkspaceChangesCard({ changeSet, onOpenFile }: { changeSet: WorkspaceChangeSet; onOpenFile: (filePath: string) => void }) {
+const WorkspaceChangesCard = memo(function WorkspaceChangesCard({ changeSet, onOpenFile }: { changeSet: WorkspaceChangeSet; onOpenFile: (filePath: string) => void }) {
   const [expanded, setExpanded] = useState(changeSet.changes.length <= 4);
   const visible = expanded ? changeSet.changes : changeSet.changes.slice(0, 3);
   const additions = changeSet.changes.reduce((total, change) => total + change.additions, 0);
@@ -1423,7 +1543,7 @@ function WorkspaceChangesCard({ changeSet, onOpenFile }: { changeSet: WorkspaceC
     </div>
     {changeSet.changes.length > 3 && <button className="change-card-expand" onClick={() => setExpanded((current) => !current)}>{expanded ? "Show less" : `Show ${changeSet.changes.length - 3} more`}<ChevronDown size={14} /></button>}
   </section>;
-}
+});
 
 function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind">) {
   if (entry.type === "directory") return <Folder size={14} />;
