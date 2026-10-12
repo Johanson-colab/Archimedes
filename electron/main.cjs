@@ -170,12 +170,18 @@ function createWindow(workspace) {
 
   const senderId = browserWindow.webContents.id;
   browserWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
-    try {
-      const repository = normalizeGithubRepositoryUrl(params.src);
-      params.src = repository.url;
-    } catch {
+    if (!isEmbeddableProjectPage(params.src)) {
       event.preventDefault();
       return;
+    }
+    if (isGithubPage(params.src)) {
+      try {
+        const repository = normalizeGithubRepositoryUrl(params.src);
+        params.src = repository.url;
+      } catch {
+        event.preventDefault();
+        return;
+      }
     }
     delete webPreferences.preload;
     webPreferences.contextIsolation = true;
@@ -184,11 +190,11 @@ function createWindow(workspace) {
   });
   browserWindow.webContents.on("did-attach-webview", (_event, guestContents) => {
     guestContents.setWindowOpenHandler(({ url }) => {
-      if (isGithubPage(url)) void guestContents.loadURL(url);
+      if (isEmbeddableProjectPage(url)) void guestContents.loadURL(url);
       return { action: "deny" };
     });
     guestContents.on("will-navigate", (event, url) => {
-      if (!isGithubPage(url)) event.preventDefault();
+      if (!isEmbeddableProjectPage(url)) event.preventDefault();
     });
   });
   if (workspace) setWindowWorkspace(senderId, resolveWorkspace(workspace));
@@ -230,6 +236,14 @@ function isGithubPage(value) {
   try {
     const url = new URL(value);
     return url.protocol === "https:" && (url.hostname === "github.com" || url.hostname.endsWith(".github.com"));
+  } catch {
+    return false;
+  }
+}
+
+function isEmbeddableProjectPage(value) {
+  try {
+    return new URL(value).protocol === "https:";
   } catch {
     return false;
   }

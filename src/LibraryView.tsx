@@ -65,6 +65,24 @@ function publicPaperRecordUrl(paper: Pick<LibraryPaper, "url" | "conference">) {
   return paper.conference?.presentation_source_url || paper.url;
 }
 
+function isGithubRepositoryLink(value: string) {
+  return /^https:\/\/github\.com\/[^/]+\/[^/]+/i.test(value);
+}
+
+function linkedProjectLabel(value: string) {
+  try {
+    const host = new URL(value).hostname.replace(/^www\./, "");
+    return host === "github.com" ? "GitHub project" : "Project website";
+  } catch {
+    return "Linked project";
+  }
+}
+
+function linkedProjectHost(value: string) {
+  try { return new URL(value).hostname.replace(/^www\./, ""); }
+  catch { return "Linked project"; }
+}
+
 type LibraryViewProps = {
   bridge: ResearchDeskBridge;
   mode: "library" | "daily";
@@ -393,7 +411,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const openProject = useCallback((url: string) => {
     setDetectedProjectUrl(url);
     setReaderView("project");
-    if (repository?.url === url || typeof bridge.loadLibraryGithubRepository !== "function") return;
+    if (!isGithubRepositoryLink(url) || repository?.url === url || typeof bridge.loadLibraryGithubRepository !== "function") return;
     void bridge.loadLibraryGithubRepository(url).then(setRepository).catch(() => {
       // Reading remains available even if the compact AI evidence snapshot cannot be loaded.
     });
@@ -476,10 +494,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title="Ask Archimedes" onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>Ask AI</span></button>
       </div>
     </header>
-    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title="Open this paper's GitHub project" onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}</div>
+    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title="Open this paper's linked project" onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}</div>
     <div className="paper-reader-layout">
       <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
-        {readerView === "project" && projectUrl ? <GithubProjectView url={projectUrl} /> : <>
+        {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
         {ready ? <>
           <div className="paper-reader-toolbar">
             <div className="paper-reader-navigation">
@@ -494,7 +512,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             <span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span>
           </div>
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onRepositoryLink={openProject} onRepositoryDetected={setDetectedProjectUrl} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -522,7 +540,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   </section>;
 }
 
-function GithubProjectView({ url }: { url: string }) {
+function LinkedProjectView({ url }: { url: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
@@ -535,15 +553,15 @@ function GithubProjectView({ url }: { url: string }) {
 
     const view = document.createElement("webview");
     view.setAttribute("src", url);
-    view.setAttribute("partition", "github-project");
+    view.setAttribute("partition", "linked-project");
     view.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes, nodeIntegration=no");
-    view.setAttribute("aria-label", "GitHub project");
+    view.setAttribute("aria-label", linkedProjectLabel(url));
     const loaded = () => setState("ready");
     const failed = (event: Event) => {
       const code = Number((event as CustomEvent<{ errorCode?: number }>).detail?.errorCode);
       if (code === -3) return;
       setState("error");
-      setError("GitHub could not be loaded in this project view.");
+      setError("This project page could not be loaded in the paper workspace.");
     };
     view.addEventListener("did-finish-load", loaded);
     view.addEventListener("did-fail-load", failed);
@@ -557,14 +575,14 @@ function GithubProjectView({ url }: { url: string }) {
   }, [url]);
 
   return <div className="github-project-workspace">
-    <div className="github-project-toolbar"><span><Code2 size={15} />GitHub project</span><span>Linked repository</span></div>
+    <div className="github-project-toolbar"><span><Code2 size={15} />{linkedProjectLabel(url)}</span><span>{linkedProjectHost(url)}</span></div>
     <div className="github-project-frame" ref={hostRef} />
     {state === "loading" && <div className="github-project-status"><LoaderCircle className="spin" size={17} />Loading project...</div>}
-    {state === "error" && <div className="github-project-status error"><strong>Repository unavailable</strong><span>{error}</span></div>}
+    {state === "error" && <div className="github-project-status error"><strong>Project unavailable</strong><span>{error}</span></div>}
   </div>;
 }
 
-function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection, onRepositoryLink, onRepositoryDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onRepositoryLink: (url: string) => void; onRepositoryDetected: (url: string) => void }) {
+function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
   const [width, setWidth] = useState(880);
@@ -633,16 +651,17 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSel
           const link = window.document.createElement("a");
           link.className = "arch-pdf-link";
           link.href = targetUrl;
-          link.target = "_blank";
+          const isProjectLink = /^https:\/\//i.test(targetUrl) && (/^https:\/\/github\.com\/[^/]+\/[^/]+/i.test(targetUrl) || /\.github\.io(?:\/|$)/i.test(targetUrl));
+          link.target = isProjectLink ? "_self" : "_blank";
           link.rel = "noreferrer";
           link.style.left = `${Math.min(firstX, secondX)}px`;
           link.style.top = `${Math.min(firstY, secondY)}px`;
           link.style.width = `${Math.abs(secondX - firstX)}px`;
           link.style.height = `${Math.abs(secondY - firstY)}px`;
-          link.title = /github\.com\//i.test(targetUrl) ? "Open repository alongside this paper" : "Open link";
-          if (/^https:\/\/github\.com\/[^/]+\/[^/]+/i.test(targetUrl)) {
-            onRepositoryDetected(targetUrl);
-            link.addEventListener("click", (event) => { event.preventDefault(); onRepositoryLink(targetUrl); });
+          link.title = isProjectLink ? "Open linked project alongside this paper" : "Open link";
+          if (isProjectLink) {
+            onProjectDetected(targetUrl);
+            link.addEventListener("click", (event) => { event.preventDefault(); onProjectLink(targetUrl); });
           }
           page.append(link);
         }
@@ -653,7 +672,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSel
     }
     void render();
     return () => { cancelled = true; destroyLoadingTask?.(); };
-  }, [onRepositoryDetected, onRepositoryLink, pageNumber, url, width, zoom]);
+  }, [onProjectDetected, onProjectLink, pageNumber, url, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
     const selection = window.getSelection();
