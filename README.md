@@ -8,6 +8,16 @@ Archimedes is building the research equivalent of an agent suite: one workspace 
 
 It runs as an Electron desktop application. Research data stays in the selected workspace by default, while model and search providers remain configurable rather than locked to one vendor.
 
+## Preview
+
+| Daily paper discovery | Evidence-grounded paper reading |
+| --- | --- |
+| ![Daily papers with discovery modes, time ranges, topic filters, and saved-paper controls](docs/assets/daily-papers-preview.png) | ![Literature reader showing a paper, its project tab, and source-grounded AI discussion](docs/assets/literature-reader-preview.png) |
+
+**Visual research index**
+
+![Gallery for searching and filtering figures from peer-reviewed conference papers](docs/assets/gallery-preview.png)
+
 ## The Research Loop
 
 Research rarely happens in a straight line. A useful system needs to support the handoffs between discovery, reading, implementation, experimentation, and writing without losing the source trail.
