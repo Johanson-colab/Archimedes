@@ -62,17 +62,61 @@ SQLite   Agent     Workspace / terminal / PDF / repository adapters
 - Each opened workspace receives a local SQLite database at `.archimedes/archimedes.db` for projects, threads, turns, library records, approvals, and command history.
 - Source adapters retrieve public papers, conference catalogs, repository snapshots, and optional web search results. Their provenance is retained with the records that use them.
 
-## Run Locally
+## Quick Start for a New Contributor
+
+### 1. Install prerequisites
+
+Install [Git](https://git-scm.com/downloads) and a current Node.js LTS release (Node 20 or newer is recommended). `npm` is installed together with Node.js. No Python service, database server, or global Electron installation is required.
+
+### 2. Clone and install
 
 ```bash
 git clone https://github.com/Johanson-colab/Archimedes.git
 cd Archimedes
 npm install
+```
+
+`npm install` also rebuilds the native terminal dependency for Electron. Let it finish before starting the app.
+
+### 3. Add a model key
+
+Create your local configuration file:
+
+```bash
+# macOS / Linux
 cp .env.example .env.local
+```
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env.local
+```
+
+Open `.env.local` in a text editor and set the three model values described below. An OpenAI-compatible API endpoint is required for AI chat. The application can still open without a model key, but chat and agent actions will not run.
+
+### 4. Start Archimedes
+
+```bash
 npm run dev
 ```
 
-The Vite renderer is available at `http://127.0.0.1:5173` during development. The complete application, including SQLite, workspace access, approvals, terminal integration, and model credentials, runs in Electron rather than in the browser tab alone.
+Keep that terminal open. Vite starts first, then Electron opens the Archimedes desktop window automatically. The development renderer is also served at `http://127.0.0.1:5173`, but full SQLite, filesystem, terminal, approval, and model capabilities are available only in the Electron window.
+
+### 5. Start researching
+
+1. Choose or open a local folder as the research workspace when prompted.
+2. Create a project in the sidebar and start a new task.
+3. Use **Daily papers**, **Literature library**, or **Gallery** to collect sources.
+4. Attach papers, files, folders, code repositories, or pasted images to the conversation before asking the agent to analyze them.
+
+### First-run troubleshooting
+
+| Symptom | What to do |
+| --- | --- |
+| `npm install` or the terminal feature reports a native-module error | Run `npm run rebuild:native`, then start again with `npm run dev`. |
+| The app opens but AI chat cannot answer | Check that `ARCHIMEDES_LLM_API_KEY`, `ARCHIMEDES_LLM_BASE_URL`, and `ARCHIMEDES_LLM_MODEL` are set in `.env.local`, then restart `npm run dev`. |
+| Web or news search is unavailable | Add `ARCHIMEDES_WEB_SEARCH_API_KEY`; it is optional and separate from the model key. |
+| Electron does not open after Vite starts | Read the terminal output, stop the process with `Ctrl+C`, then run `npm run dev` again. A local port conflict is usually reported there. |
 
 ## Configure Models and Search
 
