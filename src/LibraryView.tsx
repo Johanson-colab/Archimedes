@@ -3,6 +3,26 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
+import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
+import c from "react-syntax-highlighter/dist/esm/languages/prism/c";
+import cpp from "react-syntax-highlighter/dist/esm/languages/prism/cpp";
+import css from "react-syntax-highlighter/dist/esm/languages/prism/css";
+import go from "react-syntax-highlighter/dist/esm/languages/prism/go";
+import java from "react-syntax-highlighter/dist/esm/languages/prism/java";
+import javascript from "react-syntax-highlighter/dist/esm/languages/prism/javascript";
+import json from "react-syntax-highlighter/dist/esm/languages/prism/json";
+import jsx from "react-syntax-highlighter/dist/esm/languages/prism/jsx";
+import latex from "react-syntax-highlighter/dist/esm/languages/prism/latex";
+import markdown from "react-syntax-highlighter/dist/esm/languages/prism/markdown";
+import markup from "react-syntax-highlighter/dist/esm/languages/prism/markup";
+import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
+import rust from "react-syntax-highlighter/dist/esm/languages/prism/rust";
+import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
+import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
+import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
+import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
+import vsCodeLight from "react-syntax-highlighter/dist/esm/styles/prism/vs";
 import ConferenceDiscovery from "./ConferenceDiscovery";
 import {
   AlignLeft,
@@ -49,6 +69,22 @@ import {
 } from "lucide-react";
 
 const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
+for (const [name, grammar] of Object.entries({ bash, c, cpp, css, go, java, javascript, json, jsx, latex, markdown, markup, python, rust, sql, tsx, typescript, yaml })) {
+  SyntaxHighlighter.registerLanguage(name, grammar);
+}
+
+function codebaseLanguage(filePath: string) {
+  const fileName = filePath.split("/").at(-1)?.toLowerCase() || "";
+  if (["dockerfile", "makefile"].includes(fileName)) return "bash";
+  const extension = fileName.split(".").at(-1) || "";
+  return ({
+    bash: "bash", c: "c", cc: "cpp", cjs: "javascript", cpp: "cpp", css: "css", go: "go",
+    h: "c", hpp: "cpp", htm: "markup", html: "markup", java: "java", js: "javascript",
+    json: "json", jsonl: "json", jsx: "jsx", md: "markdown", mdx: "markdown", mjs: "javascript",
+    py: "python", rs: "rust", sh: "bash", sql: "sql", tex: "latex", toml: "yaml",
+    ts: "typescript", tsx: "tsx", xml: "markup", yaml: "yaml", yml: "yaml", zsh: "bash",
+  } as Record<string, string>)[extension];
+}
 const DAILY_TOPICS: Array<{ id: DailyDiscoveryTopic; label: string; description: string }> = [
   { id: "all", label: "All", description: "Recent AI, machine learning, and language-model papers" },
   { id: "ai4ai_rsi", label: "AI4AI/RSI", description: "AI systems improving AI and recursive self-improvement" },
@@ -702,13 +738,23 @@ function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, err
     } catch (loadError) { setBrowserError(readableError(loadError, "Could not open this repository file.")); }
     finally { setFileLoading(false); }
   }
-  function captureSelection() {
+  function captureSelection(event: ReactMouseEvent<HTMLElement>) {
     if (!activeFile) return;
-    const text = window.getSelection()?.toString().trim() || "";
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (!event.currentTarget.contains(range.startContainer) || !event.currentTarget.contains(range.endContainer)) return;
+    const text = selection.toString().trim();
     if (!text) { setSnippet(""); return; }
-    const offset = activeFile.content.indexOf(text);
+    const startElement = range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? range.startContainer as Element
+      : range.startContainer.parentElement;
+    const line = startElement?.closest<HTMLElement>("[data-code-line]")?.dataset.codeLine;
+    const before = range.cloneRange();
+    before.selectNodeContents(event.currentTarget);
+    before.setEnd(range.startContainer, range.startOffset);
     setSnippet(text.slice(0, 12_000));
-    setSnippetLine(offset >= 0 ? activeFile.content.slice(0, offset).split("\n").length : 1);
+    setSnippetLine(line ? Number(line) : before.toString().split("\n").length);
   }
   function renderEntries(directory = "", depth = 0) {
     return (tree[directory] || []).flatMap((entry) => {
@@ -729,7 +775,19 @@ function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, err
       <section className="codebase-editor">
         {activeFile ? <>
           <header><span><FileCode2 size={14} />{activeFile.path}</span><small>{activeFile.line_count.toLocaleString()} lines</small></header>
-          <pre onMouseUp={captureSelection}><code>{activeFile.content}</code></pre>
+          {activeFile.content.length <= 300_000 ? <SyntaxHighlighter
+            className="codebase-source"
+            language={codebaseLanguage(activeFile.path)}
+            style={vsCodeLight}
+            showLineNumbers
+            wrapLines
+            wrapLongLines={false}
+            lineProps={(lineNumber: number) => ({ className: "syntax-line", "data-code-line": lineNumber })}
+            lineNumberStyle={{ minWidth: "38px", paddingRight: "12px", color: "#98a39a", textAlign: "right", userSelect: "none" }}
+            customStyle={{ minWidth: 0, minHeight: 0, margin: 0, padding: "15px 18px 56px 0", border: 0, background: "#fdfefd", fontSize: "11px", lineHeight: 1.65, overflow: "auto" }}
+            codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace' } }}
+            onMouseUp={captureSelection}
+          >{activeFile.content || " "}</SyntaxHighlighter> : <pre onMouseUp={captureSelection}><code>{activeFile.content}</code></pre>}
           {snippet ? <div className="codebase-selection"><span>{activeFile.path} line {snippetLine}</span><button className="secondary-button" onMouseDown={(event) => event.preventDefault()} onClick={() => onAddToChat(activeFile, snippet, snippetLine)}><MessageSquareText size={13} />Add to chat</button><button className="reader-icon-button" onClick={() => setSnippet("")} title="Discard code selection"><X size={13} /></button></div> : null}
         </> : <div className="codebase-editor-empty">{fileLoading ? <><LoaderCircle className="spin" size={18} />Opening file…</> : <><FileCode2 size={24} /><strong>Select a source file</strong><span>Choose a file in the explorer, then select code to add it to the evidence conversation.</span></>}</div>}
       </section>
