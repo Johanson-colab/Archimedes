@@ -304,6 +304,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 }
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
+type CodeChatAttachment = { path: string; startLine: number; endLine: number; snippet: string };
 type PaperAiMode = "brief" | "audit";
 type SelectionAnchor = { x: number; y: number };
 type TranslationPopover = { source: string; translation: string; anchor: SelectionAnchor; error?: string };
@@ -344,6 +345,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [checkoutError, setCheckoutError] = useState("");
   const [aiMode, setAiMode] = useState<PaperAiMode>("brief");
   const [chatDraft, setChatDraft] = useState("");
+  const [codeAttachments, setCodeAttachments] = useState<CodeChatAttachment[]>([]);
   const chatDraftRef = useRef<HTMLTextAreaElement>(null);
   const [chatBusy, setChatBusy] = useState(false);
   const [chatThreadId, setChatThreadId] = useState<string | undefined>();
@@ -497,10 +499,15 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     finally { setCheckoutLoading(false); }
   }
   async function askAI(question: string, options: { initialBriefing?: boolean } = {}) {
-    const prompt = question.trim();
-    if (!prompt || chatBusy) return;
+    const userPrompt = question.trim();
+    if (!userPrompt || chatBusy) return;
     if (!workspace) { setError("Choose a workspace before starting a paper conversation."); return; }
     const quotedPassage = options.initialBriefing || !selection ? "" : `\n\nSelected passage from page ${pageNumber}:\n> ${selection}`;
+    const attachedCode = options.initialBriefing ? "" : codeAttachments.map((attachment) =>
+      "\n\nSelected code from " + attachment.path + ":" + attachment.startLine + "-" + attachment.endLine +
+      ":\n```\n" + attachment.snippet + "\n```"
+    ).join("");
+    const prompt = userPrompt + attachedCode;
     const repositoryInstruction = repositoryForContext
       ? checkout && aiMode === "audit"
         ? ` A full local Git checkout is attached for a strict code audit at commit ${checkout.commit.slice(0, 12)}. Before making an implementation claim, search the checkout, then read the exact source file. Build an explicit evidence chain with Paper: p. N and Code: path:L-N. Separate confirmed implementation, paper-only claim, and inference. Do not infer implementation details from a README or file name.`
@@ -513,7 +520,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         : `You are helping a researcher read the paper \"${paper.title}\". ${prompt}${quotedPassage}\n\nUse the existing full-paper briefing as continuity, but read attached PDF pages again when the answer depends on details absent from it. Ground your answer in the selected passage and the attached paper. State when the passage alone is insufficient, and cite page numbers when available.${repositoryInstruction}`;
     setChatOpen(true);
     setChatDraft("");
-    if (!options.initialBriefing) setChatMessages((current) => [...current, { role: "user", text: prompt }]);
+    if (!options.initialBriefing) {
+      setCodeAttachments([]);
+      setChatMessages((current) => [...current, { role: "user", text: userPrompt }]);
+    }
     setChatBusy(true);
     try {
       const result = await bridge.runAgent({
@@ -560,11 +570,17 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   }
   function openAskForSelection() { setChatOpen(true); setChatDraft(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
   function addCodeSelectionToChat(file: RepositoryCheckoutFile, snippet: string, startLine: number) {
-    const cleanSnippet = snippet.trim().slice(0, 12_000);
-    if (!cleanSnippet) return;
+    const cleanSnippet = snippet.slice(0, 12_000);
+    if (!cleanSnippet.trim()) return;
     setAiMode("audit");
     setChatOpen(true);
-    setChatDraft(`请审阅这段代码与论文方法的关系。请建立 Paper -> Code 的证据链，指出它实现了什么、缺失什么，以及需要进一步核验的部分。\n\nCode: ${file.path}:${startLine}\n\`\`\`\n${cleanSnippet}\n\`\`\``);
+    setCodeAttachments((current) => [...current, {
+      path: file.path,
+      startLine,
+      endLine: startLine + (cleanSnippet.match(/\n/g)?.length ?? 0) - (cleanSnippet.endsWith("\n") ? 1 : 0),
+      snippet: cleanSnippet,
+    }]);
+    requestAnimationFrame(() => chatDraftRef.current?.focus());
   }
   function restartBriefing() {
     if (chatBusy) return;
@@ -615,7 +631,19 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div>{checkout ? <small className="paper-ai-evidence-scope"><ShieldCheck size={11} />Paper + full codebase · {checkout.commit.slice(0, 8)}</small> : repository && <small className="paper-ai-evidence-scope"><Code2 size={11} />Paper + curated repository snapshot</small>}</div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
         <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(message.text)}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI(aiMode === "audit" ? "请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。" : "这篇论文最核心的贡献是什么？请结合全文说明。")}>{aiMode === "audit" ? "核验方法" : "核心贡献"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请检查训练与评估配置是否支持论文中的实验主张。" : "请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>{aiMode === "audit" ? "核验实验" : "讲解方法"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请列出论文中的哪些关键主张在代码中无法确认或尚未实现。" : "实验设置、数据集、基线、指标和主要结果分别是什么？")}>{aiMode === "audit" ? "缺口分析" : "查看实验"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请给出最短的复现实验路径：入口、配置、数据和评估步骤。" : "论文有哪些局限、威胁或尚未验证的主张？")}>{aiMode === "audit" ? "复现路径" : "分析局限"}</button></div>}</div>
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-        <div className="paper-ai-compose"><textarea ref={chatDraftRef} value={chatDraft} onChange={(event) => { setChatDraft(event.target.value); resizeChatDraft(event.currentTarget); }} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder="Ask about the paper…" rows={1} /><button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button></div>
+        <div className="paper-ai-compose">
+          <div className="paper-ai-compose-input">
+            {codeAttachments.length > 0 && <div className="paper-ai-code-attachments">
+              {codeAttachments.map((attachment, index) => <div className="paper-ai-code-attachment" key={attachment.path + ":" + attachment.startLine + ":" + index} title={attachment.path + ":" + attachment.startLine + "-" + attachment.endLine}>
+                <FileCode2 size={13} />
+                <span>{attachment.path}:{attachment.startLine}{attachment.endLine !== attachment.startLine ? "-" + attachment.endLine : ""}</span>
+                <button type="button" onClick={() => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} title="Remove code attachment" aria-label={"Remove " + attachment.path + " code attachment"}><X size={12} /></button>
+              </div>)}
+            </div>}
+            <textarea ref={chatDraftRef} value={chatDraft} onChange={(event) => { setChatDraft(event.target.value); resizeChatDraft(event.currentTarget); }} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder={codeAttachments.length ? "Ask about the selected code…" : "Ask about the paper…"} rows={1} />
+          </div>
+          <button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button>
+        </div>
       </aside>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
@@ -744,8 +772,8 @@ function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, err
     if (!selection?.rangeCount) return;
     const range = selection.getRangeAt(0);
     if (!event.currentTarget.contains(range.startContainer) || !event.currentTarget.contains(range.endContainer)) return;
-    const text = selection.toString().trim();
-    if (!text) { setSnippet(""); return; }
+    const text = selection.toString();
+    if (!text.trim()) { setSnippet(""); return; }
     const startElement = range.startContainer.nodeType === Node.ELEMENT_NODE
       ? range.startContainer as Element
       : range.startContainer.parentElement;
@@ -788,7 +816,7 @@ function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, err
             codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace' } }}
             onMouseUp={captureSelection}
           >{activeFile.content || " "}</SyntaxHighlighter> : <pre onMouseUp={captureSelection}><code>{activeFile.content}</code></pre>}
-          {snippet ? <div className="codebase-selection"><span>{activeFile.path} line {snippetLine}</span><button className="secondary-button" onMouseDown={(event) => event.preventDefault()} onClick={() => onAddToChat(activeFile, snippet, snippetLine)}><MessageSquareText size={13} />Add to chat</button><button className="reader-icon-button" onClick={() => setSnippet("")} title="Discard code selection"><X size={13} /></button></div> : null}
+          {snippet ? <div className="codebase-selection"><span>{activeFile.path} line {snippetLine}</span><button className="secondary-button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onAddToChat(activeFile, snippet, snippetLine); setSnippet(""); window.getSelection()?.removeAllRanges(); }}><MessageSquareText size={13} />Add to chat</button><button className="reader-icon-button" onClick={() => setSnippet("")} title="Discard code selection"><X size={13} /></button></div> : null}
         </> : <div className="codebase-editor-empty">{fileLoading ? <><LoaderCircle className="spin" size={18} />Opening file…</> : <><FileCode2 size={24} /><strong>Select a source file</strong><span>Choose a file in the explorer, then select code to add it to the evidence conversation.</span></>}</div>}
       </section>
     </div>
