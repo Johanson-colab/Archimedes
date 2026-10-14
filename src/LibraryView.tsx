@@ -18,7 +18,11 @@ import {
   Clock3,
   Code2,
   ExternalLink,
+  FileCode2,
   FileText,
+  Folder,
+  FolderOpen,
+  GitBranch,
   Flame,
   GraduationCap,
   Highlighter,
@@ -36,6 +40,7 @@ import {
   Save,
   Search,
   Send,
+  ShieldCheck,
   Sparkles,
   Star,
   StickyNote,
@@ -263,6 +268,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 }
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
+type PaperAiMode = "brief" | "audit";
 type SelectionAnchor = { x: number; y: number };
 type TranslationPopover = { source: string; translation: string; anchor: SelectionAnchor; error?: string };
 type ReaderLibraryPaper = LibraryPaper & { github_url?: string; github_stars?: number };
@@ -295,8 +301,12 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [comment, setComment] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
-  const [readerView, setReaderView] = useState<"paper" | "project">("paper");
+  const [readerView, setReaderView] = useState<"paper" | "project" | "codebase">("paper");
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
+  const [checkout, setCheckout] = useState<RepositoryCheckout | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [aiMode, setAiMode] = useState<PaperAiMode>("brief");
   const [chatDraft, setChatDraft] = useState("");
   const chatDraftRef = useRef<HTMLTextAreaElement>(null);
   const [chatBusy, setChatBusy] = useState(false);
@@ -405,28 +415,66 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     } catch (deleteError) { setError(readableError(deleteError, "Could not remove this highlight.")); }
   }
   const paperContext: ContextAttachment[] = [{ id: `paper:${paper.id}`, type: "paper", name: paper.title, detail: `${paper.year ?? "n.d."} · ${paper.venue || "Paper"}`, paper: { title: paper.title, authors: paper.authors, year: paper.year, abstract: paper.abstract, url: paper.url, pdfUrl: paper.pdf_url } }];
-  const researchContext: ContextAttachment[] = repository
-    ? [...paperContext, { id: `repository:${repository.url}`, type: "repository", name: `${repository.owner}/${repository.repo}`, detail: `GitHub · ${repository.files.length} evidence files · ${repository.data_paths.length} data or benchmark paths`, repository }]
+  const repositoryForContext: PaperRepositorySnapshot | null = repository || (checkout ? {
+    url: checkout.url, owner: checkout.owner, repo: checkout.repo, branch: checkout.branch, description: "", homepage: "", language: "", stars: 0, license: "", updated_at: "", retrieved_at: "", tree: [], data_paths: [], readme: "", files: [], audit: true,
+  } : null);
+  const researchContext: ContextAttachment[] = repositoryForContext
+    ? [...paperContext, { id: `repository:${repositoryForContext.url}`, type: "repository", name: `${repositoryForContext.owner}/${repositoryForContext.repo}`, detail: checkout ? `Git checkout · ${checkout.file_count} files · ${checkout.commit.slice(0, 8)}` : `GitHub · ${repositoryForContext.files.length} evidence files · ${repositoryForContext.data_paths.length} data or benchmark paths`, repository: checkout ? { ...repositoryForContext, audit: true } : repositoryForContext }]
     : paperContext;
+  const ensureRepositorySnapshot = useCallback((url: string) => {
+    if (!isGithubRepositoryLink(url) || repository?.url === url || typeof bridge.loadLibraryGithubRepository !== "function") return;
+    void bridge.loadLibraryGithubRepository(url).then(setRepository).catch(() => {
+      // A project may still be opened in the embedded browser if GitHub's API is unavailable.
+    });
+  }, [bridge, repository?.url]);
   const openProject = useCallback((url: string) => {
     setDetectedProjectUrl(url);
     setReaderView("project");
-    if (!isGithubRepositoryLink(url) || repository?.url === url || typeof bridge.loadLibraryGithubRepository !== "function") return;
-    void bridge.loadLibraryGithubRepository(url).then(setRepository).catch(() => {
-      // Reading remains available even if the compact AI evidence snapshot cannot be loaded.
+    ensureRepositorySnapshot(url);
+  }, [ensureRepositorySnapshot]);
+  const openCodebase = useCallback((url: string) => {
+    setDetectedProjectUrl(url);
+    setReaderView("codebase");
+    ensureRepositorySnapshot(url);
+  }, [ensureRepositorySnapshot]);
+  useEffect(() => {
+    if (!projectUrl || !isGithubRepositoryLink(projectUrl) || !workspace) { setCheckout(null); return; }
+    let active = true;
+    void bridge.getLibraryGithubRepositoryCheckout(projectUrl, workspace).then((next) => {
+      if (active) setCheckout(next);
+    }).catch(() => {
+      if (active) setCheckout(null);
     });
-  }, [bridge, repository?.url]);
+    return () => { active = false; };
+  }, [bridge, projectUrl, workspace]);
+  async function cloneForAudit() {
+    if (!projectUrl || !workspace || checkoutLoading) return;
+    setCheckoutLoading(true);
+    setCheckoutError("");
+    try {
+      const next = await bridge.cloneLibraryGithubRepository(projectUrl, workspace);
+      setCheckout(next);
+      setAiMode("audit");
+      setChatOpen(true);
+      ensureRepositorySnapshot(projectUrl);
+    } catch (cloneError) { setCheckoutError(readableError(cloneError, "Could not clone this repository for code audit.")); }
+    finally { setCheckoutLoading(false); }
+  }
   async function askAI(question: string, options: { initialBriefing?: boolean } = {}) {
     const prompt = question.trim();
     if (!prompt || chatBusy) return;
     if (!workspace) { setError("Choose a workspace before starting a paper conversation."); return; }
     const quotedPassage = options.initialBriefing || !selection ? "" : `\n\nSelected passage from page ${pageNumber}:\n> ${selection}`;
-    const repositoryInstruction = repository
-      ? ` A public GitHub snapshot is attached alongside the paper. Inspect its README, selected source/configuration files, and listed data or benchmark paths when relevant. Clearly distinguish paper claims from repository evidence and from your inference; a listed data path does not prove the data itself was read.`
+    const repositoryInstruction = repositoryForContext
+      ? checkout && aiMode === "audit"
+        ? ` A full local Git checkout is attached for a strict code audit at commit ${checkout.commit.slice(0, 12)}. Before making an implementation claim, search the checkout, then read the exact source file. Build an explicit evidence chain with Paper: p. N and Code: path:L-N. Separate confirmed implementation, paper-only claim, and inference. Do not infer implementation details from a README or file name.`
+        : ` A public GitHub snapshot is attached alongside the paper. Inspect its README, selected source/configuration files, and listed data or benchmark paths when relevant. Clearly distinguish paper claims from repository evidence and from your inference; a listed data path does not prove the data itself was read.`
       : "";
     const instruction = options.initialBriefing
       ? `You are preparing a durable research reading guide for the paper \"${paper.title}\" (${lastPage} PDF pages available). ${prompt}${repositoryInstruction}`
-      : `You are helping a researcher read the paper \"${paper.title}\". ${prompt}${quotedPassage}\n\nUse the existing full-paper briefing as continuity, but read attached PDF pages again when the answer depends on details absent from it. Ground your answer in the selected passage and the attached paper. State when the passage alone is insufficient, and cite page numbers when available.${repositoryInstruction}`;
+      : aiMode === "audit" && checkout
+        ? `You are conducting a strict paper-to-code audit for \"${paper.title}\". ${prompt}${quotedPassage}\n\nRead relevant PDF pages and the cloned repository before answering. Report an evidence chain in this order when applicable: paper claim and page, code path and line range, then conclusion. Mark each conclusion as confirmed, contradicted, incomplete, or not implemented. Do not fill gaps with speculation.${repositoryInstruction}`
+        : `You are helping a researcher read the paper \"${paper.title}\". ${prompt}${quotedPassage}\n\nUse the existing full-paper briefing as continuity, but read attached PDF pages again when the answer depends on details absent from it. Ground your answer in the selected passage and the attached paper. State when the passage alone is insufficient, and cite page numbers when available.${repositoryInstruction}`;
     setChatOpen(true);
     setChatDraft("");
     if (!options.initialBriefing) setChatMessages((current) => [...current, { role: "user", text: prompt }]);
@@ -437,7 +485,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         workspace,
         threadId: chatThreadId,
         projectId: projectId || undefined,
-        mode: options.initialBriefing ? "deep-research" : "free-chat",
+        mode: options.initialBriefing || aiMode === "audit" ? "deep-research" : "free-chat",
         contextItems: researchContext,
       });
       setChatThreadId(result.threadId);
@@ -450,7 +498,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     } finally { setChatBusy(false); }
   }
   useEffect(() => {
-    if (!chatOpen || !ready || !chatHistoryLoaded || chatBusy || briefingStartedRef.current) return;
+    if (aiMode !== "brief" || !chatOpen || !ready || !chatHistoryLoaded || chatBusy || briefingStartedRef.current) return;
     briefingStartedRef.current = true;
     void askAI(PAPER_BRIEFING_REQUEST, { initialBriefing: true });
   }, [briefingVersion, chatBusy, chatHistoryLoaded, chatOpen, ready]);
@@ -475,6 +523,13 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     } finally { setTranslating(false); }
   }
   function openAskForSelection() { setChatOpen(true); setChatDraft(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
+  function addCodeSelectionToChat(file: RepositoryCheckoutFile, snippet: string, startLine: number) {
+    const cleanSnippet = snippet.trim().slice(0, 12_000);
+    if (!cleanSnippet) return;
+    setAiMode("audit");
+    setChatOpen(true);
+    setChatDraft(`请审阅这段代码与论文方法的关系。请建立 Paper -> Code 的证据链，指出它实现了什么、缺失什么，以及需要进一步核验的部分。\n\nCode: ${file.path}:${startLine}\n\`\`\`\n${cleanSnippet}\n\`\`\``);
+  }
   function restartBriefing() {
     if (chatBusy) return;
     briefingStartedRef.current = false;
@@ -494,10 +549,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title="Ask Archimedes" onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>Ask AI</span></button>
       </div>
     </header>
-    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title="Open this paper's linked project" onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}</div>
+    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title="Open this paper's linked project" onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title="Open the local code audit workspace" onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
     <div className="paper-reader-layout">
-      <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
-        {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
+      <main className={readerView === "project" ? "project-browser-reader" : readerView === "codebase" ? "codebase-reader" : "original-paper-reader"}>
+        {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : readerView === "codebase" && projectUrl ? <RepositoryCodebaseView bridge={bridge} url={projectUrl} workspace={workspace} checkout={checkout} loading={checkoutLoading} error={checkoutError} onClone={() => void cloneForAudit()} onAddToChat={addCodeSelectionToChat} /> : <>
         {ready ? <>
           <div className="paper-reader-toolbar">
             <div className="paper-reader-navigation">
@@ -521,8 +576,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         </>}
       </main>
       {chatOpen && <aside className="paper-ai-panel">
-        <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2>{repository && <small className="paper-ai-evidence-scope"><Code2 size={11} />Paper + code + data context</small>}</div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
-        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(message.text)}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>Reading the full paper</strong><p>Archimedes is building a page-grounded guide before taking detailed questions.</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI("这篇论文最核心的贡献是什么？请结合全文说明。")}>核心贡献</button><button onClick={() => void askAI("请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>讲解方法</button><button onClick={() => void askAI("实验设置、数据集、基线、指标和主要结果分别是什么？")}>查看实验</button><button onClick={() => void askAI("论文有哪些局限、威胁或尚未验证的主张？")}>分析局限</button></div>}</div>
+        <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div>{checkout ? <small className="paper-ai-evidence-scope"><ShieldCheck size={11} />Paper + full codebase · {checkout.commit.slice(0, 8)}</small> : repository && <small className="paper-ai-evidence-scope"><Code2 size={11} />Paper + curated repository snapshot</small>}</div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
+        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(message.text)}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI(aiMode === "audit" ? "请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。" : "这篇论文最核心的贡献是什么？请结合全文说明。")}>{aiMode === "audit" ? "核验方法" : "核心贡献"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请检查训练与评估配置是否支持论文中的实验主张。" : "请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>{aiMode === "audit" ? "核验实验" : "讲解方法"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请列出论文中的哪些关键主张在代码中无法确认或尚未实现。" : "实验设置、数据集、基线、指标和主要结果分别是什么？")}>{aiMode === "audit" ? "缺口分析" : "查看实验"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请给出最短的复现实验路径：入口、配置、数据和评估步骤。" : "论文有哪些局限、威胁或尚未验证的主张？")}>{aiMode === "audit" ? "复现路径" : "分析局限"}</button></div>}</div>
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         <div className="paper-ai-compose"><textarea ref={chatDraftRef} value={chatDraft} onChange={(event) => { setChatDraft(event.target.value); resizeChatDraft(event.currentTarget); }} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder="Ask about the paper…" rows={1} /><button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button></div>
       </aside>}
@@ -590,6 +645,96 @@ function LinkedProjectView({ url }: { url: string }) {
     <div className="github-project-frame" ref={hostRef} />
     {state === "loading" && <div className="github-project-status"><LoaderCircle className="spin" size={17} />Loading project...</div>}
     {state === "error" && <div className="github-project-status error"><strong>Project unavailable</strong><span>{error}</span><button className="secondary-button" onClick={() => setReloadKey((current) => current + 1)}>Retry</button></div>}
+  </div>;
+}
+
+function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, error, onClone, onAddToChat }: {
+  bridge: ResearchDeskBridge;
+  url: string;
+  workspace: string;
+  checkout: RepositoryCheckout | null;
+  loading: boolean;
+  error: string;
+  onClone: () => void;
+  onAddToChat: (file: RepositoryCheckoutFile, snippet: string, startLine: number) => void;
+}) {
+  const [tree, setTree] = useState<Record<string, RepositoryCheckoutEntry[]>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set([""]));
+  const [activeFile, setActiveFile] = useState<RepositoryCheckoutFile | null>(null);
+  const [browserError, setBrowserError] = useState("");
+  const [fileLoading, setFileLoading] = useState(false);
+  const [snippet, setSnippet] = useState("");
+  const [snippetLine, setSnippetLine] = useState(1);
+
+  const loadDirectory = useCallback(async (directory = "") => {
+    if (!checkout) return;
+    try {
+      const listing = await bridge.listLibraryGithubRepositoryCheckout(url, workspace, directory);
+      setTree((current) => ({ ...current, [directory]: listing.entries }));
+      setBrowserError("");
+    } catch (loadError) { setBrowserError(readableError(loadError, "Could not list this checkout directory.")); }
+  }, [bridge, checkout, url, workspace]);
+
+  useEffect(() => {
+    setTree({});
+    setExpanded(new Set([""]));
+    setActiveFile(null);
+    setSnippet("");
+    if (checkout) void loadDirectory("");
+  }, [checkout?.commit, loadDirectory]);
+
+  async function toggleDirectory(directory: string) {
+    const next = new Set(expanded);
+    if (next.has(directory)) next.delete(directory);
+    else {
+      next.add(directory);
+      if (!tree[directory]) await loadDirectory(directory);
+    }
+    setExpanded(next);
+  }
+  async function openFile(entry: RepositoryCheckoutEntry) {
+    setFileLoading(true);
+    setSnippet("");
+    try {
+      const file = await bridge.readLibraryGithubRepositoryCheckoutFile(url, workspace, entry.path);
+      setActiveFile(file);
+      setBrowserError("");
+    } catch (loadError) { setBrowserError(readableError(loadError, "Could not open this repository file.")); }
+    finally { setFileLoading(false); }
+  }
+  function captureSelection() {
+    if (!activeFile) return;
+    const text = window.getSelection()?.toString().trim() || "";
+    if (!text) { setSnippet(""); return; }
+    const offset = activeFile.content.indexOf(text);
+    setSnippet(text.slice(0, 12_000));
+    setSnippetLine(offset >= 0 ? activeFile.content.slice(0, offset).split("\n").length : 1);
+  }
+  function renderEntries(directory = "", depth = 0) {
+    return (tree[directory] || []).flatMap((entry) => {
+      if (entry.type === "directory") {
+        const open = expanded.has(entry.path);
+        return [<div key={entry.path}><button className={open ? "codebase-tree-node open" : "codebase-tree-node"} style={{ paddingLeft: 12 + depth * 14 }} onClick={() => void toggleDirectory(entry.path)}>{open ? <FolderOpen size={14} /> : <Folder size={14} />}<span>{entry.name}</span></button>{open ? renderEntries(entry.path, depth + 1) : []}</div>];
+      }
+      return [<button className={activeFile?.path === entry.path ? "codebase-tree-node active" : "codebase-tree-node"} key={entry.path} style={{ paddingLeft: 12 + depth * 14 }} onClick={() => void openFile(entry)}><FileCode2 size={13} /><span>{entry.name}</span></button>];
+    });
+  }
+
+  if (!checkout) return <div className="codebase-empty"><span className="paper-reader-empty-icon"><ShieldCheck size={24} /></span><h2>Start a strict code audit</h2><p>Clone this public repository locally to inspect the full file tree, select code, and verify paper claims against the implementation. The checkout is read-only here and no repository code is executed.</p>{error && <div className="reader-runtime-error">{error}</div>}<button className="primary-button" disabled={loading || !workspace} onClick={onClone}>{loading ? <LoaderCircle className="spin" size={15} /> : <GitBranch size={15} />}{loading ? "Cloning repository…" : "Clone for code audit"}</button>{!workspace && <small>Choose a workspace before cloning a repository.</small>}</div>;
+
+  return <div className="codebase-workspace">
+    <header className="codebase-toolbar"><span><GitBranch size={14} />{checkout.owner}/{checkout.repo}</span><span>{checkout.branch} · {checkout.commit.slice(0, 8)} · {checkout.file_count.toLocaleString()} files</span></header>
+    <div className="codebase-layout">
+      <aside className="codebase-explorer"><header><span>Explorer</span><button className="reader-icon-button" title="Reload file tree" onClick={() => void loadDirectory("")}><RefreshCw size={13} /></button></header><div className="codebase-tree">{renderEntries()}</div></aside>
+      <section className="codebase-editor">
+        {activeFile ? <>
+          <header><span><FileCode2 size={14} />{activeFile.path}</span><small>{activeFile.line_count.toLocaleString()} lines</small></header>
+          <pre onMouseUp={captureSelection}><code>{activeFile.content}</code></pre>
+          {snippet ? <div className="codebase-selection"><span>{activeFile.path} line {snippetLine}</span><button className="secondary-button" onMouseDown={(event) => event.preventDefault()} onClick={() => onAddToChat(activeFile, snippet, snippetLine)}><MessageSquareText size={13} />Add to chat</button><button className="reader-icon-button" onClick={() => setSnippet("")} title="Discard code selection"><X size={13} /></button></div> : null}
+        </> : <div className="codebase-editor-empty">{fileLoading ? <><LoaderCircle className="spin" size={18} />Opening file…</> : <><FileCode2 size={24} /><strong>Select a source file</strong><span>Choose a file in the explorer, then select code to add it to the evidence conversation.</span></>}</div>}
+      </section>
+    </div>
+    {browserError && <div className="reader-runtime-error">{browserError}</div>}
   </div>;
 }
 

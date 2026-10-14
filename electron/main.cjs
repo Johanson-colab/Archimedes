@@ -18,6 +18,7 @@ const store = require("./store.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
 const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");
+const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile } = require("./repository-checkout.cjs");
 
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
@@ -392,14 +393,15 @@ function installedPlugins() {
   return results.sort((left, right) => left.name.localeCompare(right.name)).slice(0, 80);
 }
 
-function sanitizeAgentContext(items) {
+async function sanitizeAgentContext(items, workspace) {
   if (!Array.isArray(items)) return [];
-  return items.slice(0, 12).flatMap((item) => {
-    if (!item || typeof item !== "object" || typeof item.id !== "string" || typeof item.name !== "string") return [];
+  const sanitized = [];
+  for (const item of items.slice(0, 12)) {
+    if (!item || typeof item !== "object" || typeof item.id !== "string" || typeof item.name !== "string") continue;
     if (item.type === "paper") {
       const paper = item.paper;
-      if (!paper || typeof paper.title !== "string") return [];
-      return [{
+      if (!paper || typeof paper.title !== "string") continue;
+      sanitized.push({
         id: item.id.slice(0, 500), type: "paper", name: item.name.slice(0, 1000),
         detail: String(item.detail || "").slice(0, 2000),
         paper: {
@@ -407,33 +409,41 @@ function sanitizeAgentContext(items) {
           year: Number.isInteger(paper.year) ? paper.year : null, abstract: String(paper.abstract || "").slice(0, 100_000),
           url: String(paper.url || "").slice(0, 3000), pdfUrl: String(paper.pdfUrl || "").slice(0, 3000),
         },
-      }];
+      });
+      continue;
     }
     if (item.type === "repository") {
       const repository = item.repository;
-      if (!repository || typeof repository.url !== "string" || !Array.isArray(repository.files)) return [];
+      if (!repository || typeof repository.url !== "string" || !Array.isArray(repository.files)) continue;
       const cleanFiles = repository.files.slice(0, 12).flatMap((file) => {
         if (!file || typeof file.path !== "string" || typeof file.content !== "string") return [];
         return [{ path: file.path.slice(0, 800), size: Math.max(0, Number(file.size) || 0), language: String(file.language || "Text").slice(0, 80), content: file.content.slice(0, 48_000) }];
       });
-      return [{
+      let checkout = null;
+      if (repository.audit === true) {
+        try { checkout = await getRepositoryCheckout(workspace, repository.url); }
+        catch { checkout = null; }
+      }
+      sanitized.push({
         id: item.id.slice(0, 500), type: "repository", name: item.name.slice(0, 1000), detail: String(item.detail || "").slice(0, 2000),
         repository: {
           url: repository.url.slice(0, 3_000), branch: String(repository.branch || "").slice(0, 160), description: String(repository.description || "").slice(0, 4_000),
           language: String(repository.language || "").slice(0, 160), stars: Math.max(0, Number(repository.stars) || 0),
           data_paths: Array.isArray(repository.data_paths) ? repository.data_paths.slice(0, 100).map((entry) => String(entry).slice(0, 800)) : [],
           readme: String(repository.readme || "").slice(0, 20_000), files: cleanFiles,
+          checkout: checkout ? { branch: checkout.branch, commit: checkout.commit, file_count: checkout.file_count } : null,
         },
-      }];
+      });
+      continue;
     }
     if (item.type === "image") {
       const image = item.image;
       const match = typeof image?.dataUrl === "string" && image.dataUrl.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
-      if (!match) return [];
+      if (!match) continue;
       const bytes = Buffer.from(match[2], "base64");
-      if (!bytes.length || bytes.length > MAX_CLIPBOARD_IMAGE_BYTES) return [];
+      if (!bytes.length || bytes.length > MAX_CLIPBOARD_IMAGE_BYTES) continue;
       const mimeType = match[1];
-      return [{
+      sanitized.push({
         id: item.id.slice(0, 500), type: "image", name: item.name.slice(0, 1000), detail: String(item.detail || "").slice(0, 2000),
         image: {
           dataUrl: `data:${mimeType};base64,${bytes.toString("base64")}`,
@@ -442,16 +452,18 @@ function sanitizeAgentContext(items) {
           width: Number.isInteger(image.width) ? Math.max(1, Math.min(image.width, 20_000)) : undefined,
           height: Number.isInteger(image.height) ? Math.max(1, Math.min(image.height, 20_000)) : undefined,
         },
-      }];
+      });
+      continue;
     }
-    if (!["file", "folder", "plugin", "skill"].includes(item.type) || typeof item.path !== "string") return [];
+    if (!["file", "folder", "plugin", "skill"].includes(item.type) || typeof item.path !== "string") continue;
     const resolved = path.resolve(item.path);
-    if (!allowedContextPaths.has(resolved) || !fs.existsSync(resolved)) return [];
+    if (!allowedContextPaths.has(resolved) || !fs.existsSync(resolved)) continue;
     const stats = fs.statSync(resolved);
-    if (item.type === "file" && !stats.isFile()) return [];
-    if (item.type !== "file" && !stats.isDirectory()) return [];
-    return [{ id: `${item.type}:${resolved}`, type: item.type, name: path.basename(resolved), path: resolved, detail: String(item.detail || "").slice(0, 2000) }];
-  });
+    if (item.type === "file" && !stats.isFile()) continue;
+    if (item.type !== "file" && !stats.isDirectory()) continue;
+    sanitized.push({ id: `${item.type}:${resolved}`, type: item.type, name: path.basename(resolved), path: resolved, detail: String(item.detail || "").slice(0, 2000) });
+  }
+  return sanitized;
 }
 
 app.whenReady().then(() => {
@@ -763,6 +775,30 @@ app.whenReady().then(() => {
     return loadGithubRepository(url);
   });
 
+  ipcMain.handle("library:get-github-repository-checkout", async (event, { url, workspace } = {}) => {
+    if (typeof url !== "string" || url.length > 3_000) throw new Error("A public GitHub repository URL is required.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(resolvedWorkspace);
+    return getRepositoryCheckout(resolvedWorkspace, url);
+  });
+
+  ipcMain.handle("library:clone-github-repository", async (event, { url, workspace } = {}) => {
+    if (typeof url !== "string" || url.length > 3_000) throw new Error("A public GitHub repository URL is required.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(resolvedWorkspace);
+    return cloneRepositoryCheckout(resolvedWorkspace, url);
+  });
+
+  ipcMain.handle("library:list-github-repository-checkout", async (event, { url, workspace, directory } = {}) => {
+    if (typeof url !== "string" || typeof directory !== "string" || url.length > 3_000 || directory.length > 2_000) throw new Error("A repository URL and valid directory are required.");
+    return listRepositoryCheckoutDirectory(resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id)), url, directory);
+  });
+
+  ipcMain.handle("library:read-github-repository-checkout-file", async (event, { url, workspace, path: filePath } = {}) => {
+    if (typeof url !== "string" || typeof filePath !== "string" || url.length > 3_000 || filePath.length > 2_000) throw new Error("A repository URL and valid file path are required.");
+    return readRepositoryCheckoutFile(resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id)), url, filePath);
+  });
+
   ipcMain.handle("clipboard:read-text", () => clipboard.readText().slice(0, 100_000));
 
   ipcMain.handle("clipboard:write-text", (_event, { text } = {}) => {
@@ -805,7 +841,7 @@ app.whenReady().then(() => {
     const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
     const workspace = resolveWorkspace(input.workspace);
     store.openWorkspace(workspace);
-    const contextItems = sanitizeAgentContext(input.contextItems);
+    const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
     return agent.runAgent({
       prompt: input.prompt.trim(),
       workspace,

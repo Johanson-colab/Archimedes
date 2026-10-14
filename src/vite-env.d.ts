@@ -45,6 +45,10 @@ interface ResearchDeskBridge {
     deleteLibraryPaperHighlight: (id: string, workspace?: string) => Promise<{ deleted: boolean }>;
     translateLibraryPaperSelection: (text: string) => Promise<{ translation: string }>;
     loadLibraryGithubRepository: (url: string) => Promise<PaperRepositorySnapshot>;
+    getLibraryGithubRepositoryCheckout: (url: string, workspace?: string) => Promise<RepositoryCheckout | null>;
+    cloneLibraryGithubRepository: (url: string, workspace?: string) => Promise<RepositoryCheckout>;
+    listLibraryGithubRepositoryCheckout: (url: string, workspace: string, directory?: string) => Promise<RepositoryCheckoutDirectory>;
+    readLibraryGithubRepositoryCheckoutFile: (url: string, workspace: string, path: string) => Promise<RepositoryCheckoutFile>;
     readClipboardText: () => Promise<string>;
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;
@@ -201,6 +205,42 @@ interface PaperRepositorySnapshot {
   data_paths: string[];
   readme: string;
   files: PaperRepositoryFile[];
+  audit?: boolean;
+}
+
+interface RepositoryCheckout {
+  url: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  commit: string;
+  file_count: number;
+  cloned_at: string;
+}
+
+interface RepositoryCheckoutEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  kind?: "text" | "markdown" | "binary";
+  size?: number;
+  modified_at?: string;
+}
+
+interface RepositoryCheckoutDirectory {
+  directory: string;
+  entries: RepositoryCheckoutEntry[];
+  truncated: boolean;
+}
+
+interface RepositoryCheckoutFile {
+  path: string;
+  name: string;
+  kind: "text" | "markdown" | "binary";
+  size: number;
+  modified_at: string;
+  line_count: number;
+  content: string;
 }
 
 interface ContextAttachment {
