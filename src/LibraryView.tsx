@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent as ReactWheelEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent as ReactWheelEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -339,6 +339,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [chatOpen, setChatOpen] = useState(false);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
   const [readerView, setReaderView] = useState<"paper" | "project" | "codebase">("paper");
+  const [codebaseVisited, setCodebaseVisited] = useState(false);
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
   const [checkout, setCheckout] = useState<RepositoryCheckout | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -472,6 +473,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   }, [ensureRepositorySnapshot]);
   const openCodebase = useCallback((url: string) => {
     setDetectedProjectUrl(url);
+    setCodebaseVisited(true);
     setReaderView("codebase");
     ensureRepositorySnapshot(url);
   }, [ensureRepositorySnapshot]);
@@ -485,7 +487,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     });
     return () => { active = false; };
   }, [bridge, projectUrl, workspace]);
-  async function cloneForAudit() {
+  const cloneForAudit = useCallback(async () => {
     if (!projectUrl || !workspace || checkoutLoading) return;
     setCheckoutLoading(true);
     setCheckoutError("");
@@ -497,7 +499,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       ensureRepositorySnapshot(projectUrl);
     } catch (cloneError) { setCheckoutError(readableError(cloneError, "Could not clone this repository for code audit.")); }
     finally { setCheckoutLoading(false); }
-  }
+  }, [bridge, checkoutLoading, ensureRepositorySnapshot, projectUrl, workspace]);
   async function askAI(question: string, options: { initialBriefing?: boolean } = {}) {
     const userPrompt = question.trim();
     if (!userPrompt || chatBusy) return;
@@ -569,7 +571,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     } finally { setTranslating(false); }
   }
   function openAskForSelection() { setChatOpen(true); setChatDraft(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
-  function addCodeSelectionToChat(file: RepositoryCheckoutFile, snippet: string, startLine: number) {
+  const addCodeSelectionToChat = useCallback((file: RepositoryCheckoutFile, snippet: string, startLine: number) => {
     const cleanSnippet = snippet.slice(0, 12_000);
     if (!cleanSnippet.trim()) return;
     setAiMode("audit");
@@ -581,7 +583,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       snippet: cleanSnippet,
     }]);
     requestAnimationFrame(() => chatDraftRef.current?.focus());
-  }
+  }, []);
   function restartBriefing() {
     if (chatBusy) return;
     briefingStartedRef.current = false;
@@ -603,8 +605,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     </header>
     <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title="Open this paper's linked project" onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title="Open the local code audit workspace" onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
     <div className="paper-reader-layout">
-      <main className={readerView === "project" ? "project-browser-reader" : readerView === "codebase" ? "codebase-reader" : "original-paper-reader"}>
-        {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : readerView === "codebase" && projectUrl ? <RepositoryCodebaseView bridge={bridge} url={projectUrl} workspace={workspace} checkout={checkout} loading={checkoutLoading} error={checkoutError} onClone={() => void cloneForAudit()} onAddToChat={addCodeSelectionToChat} /> : <>
+      {readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
+        {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
         {ready ? <>
           <div className="paper-reader-toolbar">
             <div className="paper-reader-navigation">
@@ -626,7 +628,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         </div>}
         {(error || reader?.asset?.error) && <div className="reader-runtime-error">{error || reader?.asset?.error}</div>}
         </>}
-      </main>
+      </main>}
+      {codebaseVisited && projectUrl && isGithubRepositoryLink(projectUrl) && <main key={projectUrl} className={readerView === "codebase" ? "codebase-reader" : "codebase-reader codebase-reader-inactive"} aria-hidden={readerView !== "codebase"}>
+        <RepositoryCodebaseView bridge={bridge} url={projectUrl} workspace={workspace} checkout={checkout} loading={checkoutLoading} error={checkoutError} onClone={cloneForAudit} onAddToChat={addCodeSelectionToChat} />
+      </main>}
       {chatOpen && <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div>{checkout ? <small className="paper-ai-evidence-scope"><ShieldCheck size={11} />Paper + full codebase · {checkout.commit.slice(0, 8)}</small> : repository && <small className="paper-ai-evidence-scope"><Code2 size={11} />Paper + curated repository snapshot</small>}</div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
         <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(message.text)}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI(aiMode === "audit" ? "请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。" : "这篇论文最核心的贡献是什么？请结合全文说明。")}>{aiMode === "audit" ? "核验方法" : "核心贡献"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请检查训练与评估配置是否支持论文中的实验主张。" : "请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>{aiMode === "audit" ? "核验实验" : "讲解方法"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请列出论文中的哪些关键主张在代码中无法确认或尚未实现。" : "实验设置、数据集、基线、指标和主要结果分别是什么？")}>{aiMode === "audit" ? "缺口分析" : "查看实验"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请给出最短的复现实验路径：入口、配置、数据和评估步骤。" : "论文有哪些局限、威胁或尚未验证的主张？")}>{aiMode === "audit" ? "复现路径" : "分析局限"}</button></div>}</div>
@@ -712,7 +717,7 @@ function LinkedProjectView({ url }: { url: string }) {
   </div>;
 }
 
-function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, error, onClone, onAddToChat }: {
+const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, error, onClone, onAddToChat }: {
   bridge: ResearchDeskBridge;
   url: string;
   workspace: string;
@@ -822,7 +827,7 @@ function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, err
     </div>
     {browserError && <div className="reader-runtime-error">{browserError}</div>}
   </div>;
-}
+});
 
 function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
