@@ -858,8 +858,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSel
       if (!hasVisiblePage) setState("loading");
       setError("");
       try {
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+        const { pdfjs } = await import("./pdf-runtime");
         const response = await fetch(url);
         if (!response.ok) throw new Error(`PDF request failed (${response.status}).`);
         const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await response.arrayBuffer()) });
