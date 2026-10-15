@@ -23,7 +23,7 @@ import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
 import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
-import vsCodeLight from "react-syntax-highlighter/dist/esm/styles/prism/vs";
+import coldarkDark from "react-syntax-highlighter/dist/esm/styles/prism/coldark-dark";
 import LibraryView from "./LibraryView";
 import GalleryView from "./GalleryView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
@@ -54,6 +54,7 @@ import {
   Images,
   Lightbulb,
   MessageCircle,
+  Orbit,
   PanelBottom,
   FilePenLine,
   PenLine,
@@ -64,7 +65,6 @@ import {
   SendHorizontal,
   ShieldCheck,
   ScanSearch,
-  Sparkles,
   Square,
   SquareTerminal,
   X,
@@ -1086,7 +1086,7 @@ function App() {
     <main className="codex-shell">
       <aside className="codex-sidebar" aria-label="Archimedes navigation">
         <div className="codex-brand">
-          <span className="codex-brand-mark"><Sparkles size={16} /></span>
+          <span className="codex-brand-mark"><Orbit size={17} /></span>
           <strong>Archimedes</strong>
         </div>
 
@@ -1410,7 +1410,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
 
         {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
 
-        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Sparkles size={15} /></span><div><strong>{interrupting ? "Stopping task" : latestEvent?.title ?? "Archimedes is working"}</strong><small>{interrupting ? "Waiting for the active task to stop" : latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
+        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Orbit size={15} /></span><div><strong>{interrupting ? "Stopping task" : latestEvent?.title ?? "Archimedes is working"}</strong><small>{interrupting ? "Waiting for the active task to stop" : latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
 
         {pendingAction && (
           <section className="conversation-approval">
@@ -1495,7 +1495,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
   return <article className={`conversation-message ${message.role}`}>
-    {message.role === "assistant" && <span className="assistant-mark"><Sparkles size={15} /></span>}
+    {message.role === "assistant" && <span className="assistant-mark"><Orbit size={15} /></span>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
@@ -1521,9 +1521,9 @@ const MarkdownContent = memo(function MarkdownContent({ content }: { content: st
         if (!language) return <code className={className} {...props}>{children}</code>;
         return <SyntaxHighlighter
           language={language}
-          style={vsCodeLight}
+          style={coldarkDark}
           PreTag="div"
-          customStyle={{ margin: 0, padding: "13px 15px", background: "#f4f4f1", fontSize: "11px", lineHeight: 1.65 }}
+          customStyle={{ margin: 0, padding: "13px 15px", background: "#0d0f17", fontSize: "11px", lineHeight: 1.65 }}
           codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
         >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>;
       },
@@ -1708,13 +1708,13 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
   return <div className="code-preview">
     <SyntaxHighlighter
       language={languageForFile(filePath)}
-      style={vsCodeLight}
+      style={coldarkDark}
       showLineNumbers
       wrapLines
       wrapLongLines={false}
-      lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", color: "#aaa9a3", textAlign: "right", userSelect: "none" }}
+      lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", color: "#5f6475", textAlign: "right", userSelect: "none" }}
       lineProps={{ className: "syntax-line" }}
-      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", background: "#fbfbfa", fontSize: "11px", lineHeight: 1.65, tabSize: 2 }}
+      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", background: "#0c0e15", fontSize: "11px", lineHeight: 1.65, tabSize: 2 }}
       codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
     >{content || " "}</SyntaxHighlighter>
   </div>;
