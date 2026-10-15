@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { fetchWithRetry, normalizeDailyOptions } = require("./literature.cjs");
+const { fetchWithRetry, normalizeDailyOptions, searchAcademicPaperSources } = require("./literature.cjs");
 
 test("retries a timed-out literature request", async () => {
   let attempts = 0;
@@ -44,4 +44,17 @@ test("maps focused research topics and discards retired filters", () => {
   assert.deepEqual(normalizeDailyOptions({ topic: "on_policy_distillation" }).categories, ["cs.AI", "cs.LG", "stat.ML"]);
   assert.deepEqual(normalizeDailyOptions({ topic: "robotics_vla" }).categories, ["cs.RO", "cs.AI", "cs.CV", "cs.LG"]);
   assert.equal(normalizeDailyOptions({ topic: "multi_agent" }).topic, "all");
+});
+
+test("deep-search retrieval combines Semantic Scholar and OpenAlex", async () => {
+  const requested = [];
+  const result = await searchAcademicPaperSources("agent evaluation", 8, async (url) => {
+    requested.push(url);
+    if (url.includes("export.arxiv.org")) return { ok: true, status: 200, text: async () => `<?xml version="1.0"?><feed><entry><id>https://arxiv.org/abs/2601.00001v1</id><published>2026-01-01T00:00:00Z</published><title>arXiv result</title><summary>Agent evaluation</summary><author><name>Researcher</name></author><category term="cs.AI"/></entry></feed>` };
+    if (url.includes("semanticscholar")) return { ok: true, json: async () => ({ data: [{ paperId: "s2-1", title: "Semantic result", authors: [], year: 2025, abstract: "Agent evaluation", externalIds: {} }] }) };
+    return { ok: true, json: async () => ({ results: [{ id: "https://openalex.org/W1", display_name: "OpenAlex result", publication_year: 2024, authorships: [], abstract_inverted_index: { Agent: [0], evaluation: [1] } }] }) };
+  });
+  assert.equal(requested.length, 3);
+  assert.deepEqual(result.providers, ["arXiv", "Semantic Scholar", "OpenAlex"]);
+  assert.deepEqual(result.papers.map((paper) => paper.title), ["arXiv result", "Semantic result", "OpenAlex result"]);
 });

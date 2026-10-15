@@ -31,6 +31,7 @@ interface ResearchDeskBridge {
     listLibraryPapers: (libraryId: string, query?: string) => Promise<LibraryPaper[]>;
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
+    deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
     addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
@@ -348,6 +349,40 @@ interface DailyDiscoveryResponse {
   fetched_at: string;
   cached: boolean;
   stale: boolean;
+  warning?: string;
+}
+
+interface DeepPaperSearchInput {
+  prompt: string;
+  topic?: DailyDiscoveryTopic;
+  limit?: number;
+}
+
+interface DeepPaperSearchPlan {
+  research_problem: string;
+  domains: string[];
+  methods: string[];
+  tasks: string[];
+  must_include: string[];
+  preferred: string[];
+  exclude: string[];
+  year_range: { start: number | null; end: number | null } | null;
+  synonyms: string[];
+  queries: string[];
+}
+
+interface DeepPaperSearchResult {
+  paper: AcademicSearchResult;
+  relevance: "strong" | "related" | "background";
+  reason: string;
+  matched_terms: string[];
+}
+
+interface DeepPaperSearchResponse {
+  plan: DeepPaperSearchPlan;
+  results: DeepPaperSearchResult[];
+  providers: string[];
+  fetched_at: string;
   warning?: string;
 }
 

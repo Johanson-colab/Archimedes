@@ -1117,8 +1117,10 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
   const [range, setRange] = useState<DailyDiscoveryRange>("7d");
   const [topic, setTopic] = useState<DailyDiscoveryTopic>("all");
+  const [searchKind, setSearchKind] = useState<"quick" | "deep">("quick");
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
+  const [deepResponse, setDeepResponse] = useState<DeepPaperSearchResponse | null>(null);
   const [targetLibraryId, setTargetLibraryId] = useState("");
   const [response, setResponse] = useState<DailyDiscoveryResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1126,16 +1128,18 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   const [adding, setAdding] = useState<string | null>(null);
   const [error, setError] = useState("");
   const feedRequestId = useRef(0);
+  const deepRequestId = useRef(0);
   const responseRef = useRef<DailyDiscoveryResponse | null>(null);
   useEffect(() => { if (!targetLibraryId && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
   const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
+  const searchActive = Boolean(submittedQuery);
   const loadFeed = useCallback(async (forceRefresh = false) => {
-    if (mode === "conference") return;
+    if (mode === "conference" || (searchKind === "deep" && submittedQuery)) return;
     const requestId = ++feedRequestId.current;
     setLoading(true);
     setError("");
     try {
-      const nextResponse = await bridge.discoverDailyPapers({ mode, range, topic, query: submittedQuery, limit: 60, forceRefresh });
+      const nextResponse = await bridge.discoverDailyPapers({ mode, range, topic, query: searchKind === "quick" ? submittedQuery : "", limit: 60, forceRefresh });
       if (requestId !== feedRequestId.current) return;
       responseRef.current = nextResponse;
       setResponse(nextResponse);
@@ -1147,7 +1151,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
-  }, [bridge, mode, range, submittedQuery, topic]);
+  }, [bridge, mode, range, searchKind, submittedQuery, topic]);
 
   useEffect(() => {
     void loadFeed(false);
@@ -1156,13 +1160,58 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
 
   const visiblePapers = response?.papers ?? [];
 
-  function submitSearch() {
+  async function submitSearch() {
     const nextQuery = query.trim();
-    if (nextQuery === submittedQuery) void loadFeed(true);
-    else setSubmittedQuery(nextQuery);
+    if (!nextQuery) {
+      clearSearch();
+      return;
+    }
+    if (searchKind === "quick") {
+      setDeepResponse(null);
+      if (nextQuery === submittedQuery) void loadFeed(true);
+      else setSubmittedQuery(nextQuery);
+      return;
+    }
+    const requestId = ++deepRequestId.current;
+    setSubmittedQuery(nextQuery);
+    setDeepResponse(null);
+    setLoading(true);
+    setError("");
+    try {
+      const next = await bridge.deepSearchPapers({ prompt: nextQuery, topic, limit: 18 });
+      if (requestId !== deepRequestId.current) return;
+      setDeepResponse(next);
+      if (next.warning) setError(next.warning);
+    } catch (searchError) {
+      if (requestId !== deepRequestId.current) return;
+      setError(readableError(searchError, "Deep paper search failed."));
+    } finally {
+      if (requestId === deepRequestId.current) setLoading(false);
+    }
   }
 
-  async function add(paper: DailyPaper) {
+  function clearSearch() {
+    feedRequestId.current += 1;
+    deepRequestId.current += 1;
+    setQuery("");
+    setSubmittedQuery("");
+    setDeepResponse(null);
+    setError("");
+    setLoading(false);
+  }
+
+  function changeSearchKind(next: "quick" | "deep") {
+    if (next === searchKind) return;
+    feedRequestId.current += 1;
+    deepRequestId.current += 1;
+    setSearchKind(next);
+    setSubmittedQuery("");
+    setDeepResponse(null);
+    setError("");
+    setLoading(false);
+  }
+
+  async function add(paper: DailyPaper | AcademicSearchResult) {
     if (!targetLibraryId) return;
     const key = paper.external_id || paper.title;
     setAdding(key);
@@ -1183,20 +1232,27 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     <div className="daily-feed-toolbar daily-conference-toolbar">
       <div className="daily-live-controls">
       <div className="daily-mode-tabs" role="tablist" aria-label="Paper feed mode">
-        <button className={mode === "latest" ? "active" : ""} role="tab" aria-selected={mode === "latest"} onClick={() => setMode("latest")}><Clock3 size={14} />Latest</button>
-        <button className={mode === "trending" ? "active" : ""} role="tab" aria-selected={mode === "trending"} onClick={() => setMode("trending")}><Flame size={14} />Trending</button>
+        <button className={mode === "latest" && !searchActive ? "active" : ""} role="tab" aria-selected={mode === "latest" && !searchActive} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Newest arXiv submissions"} onClick={() => setMode("latest")}><Clock3 size={14} />Latest</button>
+        <button className={mode === "trending" && !searchActive ? "active" : ""} role="tab" aria-selected={mode === "trending" && !searchActive} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Trending community papers"} onClick={() => setMode("trending")}><Flame size={14} />Trending</button>
       </div>
-      <div className="daily-range-control" aria-label="Publication range">{(["7d", "30d", "90d"] as DailyDiscoveryRange[]).map((item) => <button key={item} disabled={mode === "conference"} className={range === item && mode !== "conference" ? "active" : ""} onClick={() => setRange(item)}>{item === "7d" ? "7 days" : item === "30d" ? "30 days" : "90 days"}</button>)}</div>
+      <div className="daily-range-control" aria-label="Publication range">{(["7d", "30d", "90d"] as DailyDiscoveryRange[]).map((item) => <button key={item} disabled={mode === "conference" || (searchActive && searchKind === "deep")} className={range === item && mode !== "conference" && !(searchActive && searchKind === "deep") ? "active" : ""} title={searchActive && searchKind === "deep" ? "Deep search uses the time range inferred from your request" : ""} onClick={() => setRange(item)}>{item === "7d" ? "7 days" : item === "30d" ? "30 days" : "90 days"}</button>)}</div>
       </div>
-      <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} onClick={() => setMode("conference")}><GraduationCap size={16} />Top conference search</button>
-      {mode !== "conference" && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
+      <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} disabled={searchActive} title={searchActive ? "Clear search before switching discovery modes" : "Search official conference catalogs"} onClick={() => setMode("conference")}><GraduationCap size={16} />Top conference search</button>
+      {mode !== "conference" && !searchActive && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
     </div>
-    <div className="daily-topic-filter" role="tablist" aria-label="AI research topic">{DAILY_TOPICS.map((item) => <button key={item.id} role="tab" aria-selected={topic === item.id} className={topic === item.id ? "active" : ""} title={item.description} onClick={() => setTopic(item.id)}>{item.label}</button>)}</div>
+    <div className="daily-topic-filter" role="tablist" aria-label="AI research topic">{DAILY_TOPICS.map((item) => <button key={item.id} role="tab" aria-selected={topic === item.id} disabled={searchActive && searchKind === "deep"} className={topic === item.id ? "active" : ""} title={searchActive && searchKind === "deep" ? "Clear deep search to change its topic constraint" : item.description} onClick={() => setTopic(item.id)}>{item.label}</button>)}</div>
     {mode === "conference" ? <ConferenceDiscovery bridge={bridge} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /> : <>
-    <div className="daily-search-row"><div className="external-search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /><button className="primary-button" disabled={loading} onClick={submitSearch}>{loading ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div><span>{visiblePapers.length} papers{submittedQuery ? ` · “${submittedQuery}”` : ""}{response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}</span></div>
-    {error && <div className="library-error" role="alert">{error}</div>}
-    {loading && !response ? <LoadingState /> : error && !response ? <div className="daily-empty daily-feed-failed"><RefreshCw size={28} /><strong>Could not load the live feed</strong><span>arXiv may be responding slowly. Your library is unaffected.</span><button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button></div> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try another topic, expand the date range, or use a broader keyword.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    <div className={searchKind === "deep" ? "daily-search-panel deep" : "daily-search-panel"}>
+      <div className="daily-search-kind" role="tablist" aria-label="Paper search type"><button className={searchKind === "quick" ? "active" : ""} role="tab" aria-selected={searchKind === "quick"} onClick={() => changeSearchKind("quick")}><Search size={13} />Quick search</button><button className={searchKind === "deep" ? "active" : ""} role="tab" aria-selected={searchKind === "deep"} onClick={() => changeSearchKind("deep")}><Sparkles size={13} />Deep search</button></div>
+      <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
+        <button className="primary-button" disabled={loading || !query.trim()} onClick={() => void submitSearch()}>{loading ? <LoaderCircle className="spin" size={14} /> : searchKind === "deep" ? <Sparkles size={14} /> : <Search size={14} />}{searchKind === "deep" ? "Deep search" : "Search"}</button>
+      </div>
+      {searchKind === "deep" && <p className="daily-deep-hint">Try: field + research problem + preferred methods + dataset or setting + date range + exclusions. Press ⌘/Ctrl + Enter to search.</p>}
+      <div className="daily-search-meta"><span>{searchKind === "deep" && !searchActive ? "Describe a research request to search beyond the daily feed" : `${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}</span>{searchActive && <button className="daily-clear-search" onClick={clearSearch}><X size={12} />Clear search</button>}</div>
+    </div>
+    {error && <div className={deepResponse ? "daily-search-warning" : "library-error"} role="alert">{error}</div>}
+    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <div className="daily-empty daily-feed-failed"><RefreshCw size={28} /><strong>Could not load the live feed</strong><span>arXiv may be responding slowly. Your library is unaffected.</span><button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button></div> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try another topic, expand the date range, or use a broader keyword.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;
@@ -1208,6 +1264,39 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     })}</div>}
     </>}
   </section>;
+}
+
+function DeepSearchResults({ response, loading, error, targetLibrary, added, adding, onSave }: {
+  response: DeepPaperSearchResponse | null;
+  loading: boolean;
+  error: string;
+  targetLibrary: ResearchLibrary | undefined;
+  added: Set<string>;
+  adding: string | null;
+  onSave: (paper: AcademicSearchResult) => Promise<void>;
+}) {
+  if (loading && !response) return <div className="daily-deep-progress"><LoaderCircle className="spin" size={22} /><strong>Expanding and matching your research request</strong><span>Understanding methods and domains, searching multiple scholarly indexes, deduplicating, then reranking titles and abstracts.</span></div>;
+  if (error && !response) return <div className="daily-empty daily-feed-failed"><Search size={28} /><strong>Deep search could not finish</strong><span>Check the model configuration or try a shorter, more specific research request.</span></div>;
+  if (!response?.results.length) return <div className="daily-empty"><Search size={28} /><strong>No deep-search results yet</strong><span>Describe the research problem, preferred methods, and evaluation setting, then start a deep search.</span></div>;
+  const planTags = [
+    ...response.plan.domains.map((value) => ({ kind: "Domain", value })),
+    ...response.plan.methods.map((value) => ({ kind: "Method", value })),
+    ...response.plan.tasks.map((value) => ({ kind: "Task", value })),
+  ].slice(0, 12);
+  return <>
+    <section className="daily-search-plan"><div><span className="eyebrow">Search interpretation</span><strong>{response.plan.research_problem}</strong><p>Matches are based on titles and abstracts. Full-paper claims have not been verified.</p></div><div className="daily-search-plan-tags">{planTags.map((tag) => <span key={`${tag.kind}:${tag.value}`}><small>{tag.kind}</small>{tag.value}</span>)}{response.plan.year_range && <span><small>Years</small>{response.plan.year_range.start ?? "Any"}–{response.plan.year_range.end ?? "Any"}</span>}</div><details><summary>{response.plan.queries.length} expanded queries</summary><ul>{response.plan.queries.map((item) => <li key={item}>{item}</li>)}</ul></details></section>
+    <div className="daily-paper-list deep-paper-list">{response.results.map((result) => {
+      const paper = result.paper;
+      const key = paper.external_id || paper.title;
+      const isAdded = added.has(key);
+      const isAdding = adding === key;
+      return <article className="daily-paper-row" key={key}>
+        <div className="daily-paper-date"><strong>{paper.year || "—"}</strong><span>{paper.source?.split(",").join(" + ") || "Index"}</span></div>
+        <div className="daily-paper-content"><div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}</div><p>{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}{paper.venue ? ` · ${paper.venue}` : ""}</p><div className={`deep-match-reason ${result.relevance}`}><strong>{result.relevance === "strong" ? "Strong match" : result.relevance === "related" ? "Related method" : "Background"}</strong><span>{result.reason}</span></div><small>{paper.abstract || "No abstract available."}</small><div className="daily-paper-signals">{result.matched_terms.map((term) => <span key={term}>{term}</span>)}{paper.citation_count > 0 && <span>{paper.citation_count.toLocaleString()} citations</span>}{paper.pdf_url && <a href={paper.pdf_url} target="_blank" rel="noreferrer"><FileText size={11} />PDF</a>}</div></div>
+        <button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void onSave(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button>
+      </article>;
+    })}</div>
+  </>;
 }
 
 function formatPaperDate(value: string) {

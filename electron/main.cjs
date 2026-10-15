@@ -12,6 +12,7 @@ const { loadLocalAgentEnvironment } = require("./config.cjs");
 const modelConfig = require("./model-config.cjs");
 const webSearch = require("./web-search.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
+const { deepSearchPapers } = require("./deep-paper-search.cjs");
 const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const store = require("./store.cjs");
@@ -669,6 +670,11 @@ app.whenReady().then(() => {
       }
       throw error;
     }
+  });
+
+  ipcMain.handle("library:deep-search", async (_event, input = {}) => {
+    if (!input || typeof input !== "object") throw new Error("Deep-search input is required.");
+    return deepSearchPapers(input, { modelConfig: modelConfig.getActiveModelConfig() });
   });
 
   ipcMain.handle("library:add-paper", (_event, { libraryId, paper }) => {

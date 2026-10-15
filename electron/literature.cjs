@@ -283,13 +283,13 @@ function normalizeS2Paper(paper) {
   };
 }
 
-async function searchSemanticScholar(query, limit) {
+async function searchSemanticScholar(query, limit, fetchImpl = fetch) {
   const fields = "title,authors,year,venue,abstract,url,externalIds,openAccessPdf,citationCount";
   const detectedId = detectPaperId(query);
   const url = detectedId
     ? `${S2_BASE_URL}/paper/${encodeURIComponent(detectedId)}?fields=${fields}`
     : `${S2_BASE_URL}/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=${fields}`;
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
     signal: AbortSignal.timeout(15_000),
   });
@@ -327,17 +327,36 @@ function normalizeOpenAlexWork(work) {
   };
 }
 
-async function searchOpenAlex(query, limit) {
+async function searchOpenAlex(query, limit, fetchImpl = fetch) {
   const detectedId = detectPaperId(query);
   const searchQuery = detectedId?.startsWith("ARXIV:") ? detectedId.slice(6) : query;
   const url = `${OPENALEX_BASE_URL}/works?search=${encodeURIComponent(searchQuery)}&per-page=${limit}`;
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`OpenAlex search returned ${response.status}.`);
   const payload = await response.json();
   return (payload.results || []).map(normalizeOpenAlexWork);
+}
+
+async function searchArxivKeywords(query, limit, fetchImpl = fetch) {
+  const searchQuery = buildArxivKeywordQuery(query);
+  if (!searchQuery) return [];
+  const params = new URLSearchParams({
+    search_query: searchQuery,
+    start: "0",
+    max_results: String(limit),
+    sortBy: "relevance",
+    sortOrder: "descending",
+  });
+  const response = await fetchWithRetry(`${ARXIV_API_URL}?${params}`, {
+    headers: { Accept: "application/atom+xml", "User-Agent": "Archimedes-Research/0.1" },
+  }, { provider: "arXiv", attempts: 2, timeoutMs: 25_000, fetchImpl });
+  if (!response.ok) throw new Error(`arXiv search returned ${response.status}.`);
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
+  const payload = parser.parse(await response.text());
+  return asArray(payload.feed?.entry).map((entry) => normalizeArxivEntry(entry, "")).slice(0, limit);
 }
 
 async function searchAcademicPapers(query, requestedLimit) {
@@ -368,4 +387,31 @@ async function searchAcademicPapers(query, requestedLimit) {
   throw new Error(`No paper metadata could be retrieved. ${errors.join(" ")}`);
 }
 
-module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, fetchWithRetry, matchesDailyTopic };
+async function searchAcademicPaperSources(query, requestedLimit, fetchImpl = fetch) {
+  const trimmedQuery = typeof query === "string" ? query.trim() : "";
+  if (!trimmedQuery || trimmedQuery.length > 300) throw new Error("Enter a research query of at most 300 characters.");
+  const limit = sanitizeLimit(requestedLimit);
+  const providers = [
+    ["arXiv", () => searchArxivKeywords(trimmedQuery, limit, fetchImpl)],
+    ["Semantic Scholar", () => searchSemanticScholar(trimmedQuery, limit, fetchImpl)],
+    ["OpenAlex", () => searchOpenAlex(trimmedQuery, limit, fetchImpl)],
+  ];
+  const settled = await Promise.allSettled(providers.map(([, search]) => search()));
+  const papers = [];
+  const usedProviders = [];
+  const warnings = [];
+  for (let index = 0; index < settled.length; index += 1) {
+    const result = settled[index];
+    const provider = providers[index][0];
+    if (result.status === "fulfilled") {
+      if (result.value.length) usedProviders.push(provider);
+      papers.push(...result.value);
+    } else {
+      warnings.push(`${provider}: ${result.reason instanceof Error ? result.reason.message : "search failed"}`);
+    }
+  }
+  if (!papers.length) throw new Error(`No paper metadata could be retrieved. ${warnings.join(" ")}`);
+  return { papers, providers: usedProviders, warnings };
+}
+
+module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, matchesDailyTopic };

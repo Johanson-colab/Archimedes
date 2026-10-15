@@ -28,6 +28,8 @@ for (const library of seedData.libraries) {
       starred: false,
       notes: "",
       tags: [],
+      github_url: "",
+      github_stars: 0,
       created_at: now,
       updated_at: now,
     });
@@ -110,6 +112,33 @@ export const previewLibraryBridge = {
       stale: false,
     };
   },
+  deepSearchPapers: async (input: DeepPaperSearchInput): Promise<DeepPaperSearchResponse> => {
+    const terms = input.prompt.toLowerCase().match(/[a-z0-9+#.-]{3,}/g) ?? [];
+    const catalog = [...previewPapers.values()];
+    const scored = catalog.map((paper) => {
+      const title = paper.title.toLowerCase();
+      const abstract = paper.abstract.toLowerCase();
+      const matched = [...new Set(terms.filter((term) => title.includes(term) || abstract.includes(term)))];
+      return { paper, matched, score: matched.filter((term) => title.includes(term)).length * 3 + matched.length };
+    }).sort((left, right) => right.score - left.score).slice(0, input.limit ?? 18);
+    return {
+      plan: {
+        research_problem: input.prompt.trim(),
+        domains: input.topic && input.topic !== "all" ? [input.topic] : [],
+        methods: terms.slice(0, 3),
+        tasks: [], must_include: [], preferred: [], exclude: [], year_range: null, synonyms: [],
+        queries: [input.prompt.trim(), `${input.prompt.trim()} methods`, `${input.prompt.trim()} evaluation`],
+      },
+      results: scored.map(({ paper, matched }, index) => ({
+        paper,
+        relevance: index < 4 ? "strong" : index < 10 ? "related" : "background",
+        reason: matched.length ? `Matches ${matched.slice(0, 4).join(", ")} in the title or abstract.` : "Potentially adjacent work from the preview catalog.",
+        matched_terms: matched.slice(0, 6),
+      })),
+      providers: ["browser-preview"],
+      fetched_at: new Date().toISOString(),
+    };
+  },
   addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult) => {
     const existing = [...previewPapers.values()].find((candidate) => candidate.arxiv_id && candidate.arxiv_id === paper.arxiv_id)
       ?? [...previewPapers.values()].find((candidate) => candidate.title === paper.title);
@@ -123,6 +152,8 @@ export const previewLibraryBridge = {
         starred: false,
         notes: "",
         tags: [],
+        github_url: "",
+        github_stars: 0,
         created_at: now,
         updated_at: now,
       });
