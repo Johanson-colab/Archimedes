@@ -32,7 +32,6 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
 import TerminalPanel from "./TerminalPanel";
-import ExperimentContractsView from "./ExperimentContractsView";
 import { previewLibraryBridge } from "./library-preview";
 import {
   BookOpen,
@@ -531,7 +530,7 @@ function contextImageFromData(image: ContextImage): ContextAttachment {
   };
 }
 
-type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifacts" | "experiments";
+type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifacts";
 
 function App() {
   const [mainSection, setMainSection] = useState<MainSection>("chat");
@@ -1098,9 +1097,6 @@ function App() {
           <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
             <Folder size={16} /><span>Artifacts</span>
           </button>
-          <button className={mainSection === "experiments" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("experiments")} title="Experiment contracts">
-            <FlaskConical size={16} /><span>Experiments</span>
-          </button>
         </section>
 
         <ProjectSidebar
@@ -1174,7 +1170,6 @@ function App() {
           {mainSection === "artifacts" && (
             <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
           )}
-          {mainSection === "experiments" && <ExperimentContractsView bridge={desktopBridge} projectId={activeProjectId} projectName={projects.find((project) => project.id === activeProjectId)?.name} />}
         </div>
 
         <TerminalPanel bridge={desktopBridge} open={terminalOpen} workspace={workspace} height={terminalHeight} onHeightChange={setTerminalHeight} onClose={() => setTerminalOpen(false)} />
