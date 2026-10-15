@@ -81,7 +81,7 @@ export default function ExperimentContractsView({ bridge, projectId, projectName
 
   async function saveDraft() {
     if (!draft || saving) return;
-    if (["ready", "running", "completed"].includes(draft.status) && missing.length) {
+    if (draft.status !== "draft" && missing.length) {
       setError(`Complete the required fields before moving this contract to ${draft.status}.`);
       return;
     }
