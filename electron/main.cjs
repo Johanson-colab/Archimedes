@@ -17,6 +17,7 @@ const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const store = require("./store.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
+const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
 const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");
 const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile } = require("./repository-checkout.cjs");
@@ -458,7 +459,9 @@ async function sanitizeAgentContext(items, workspace) {
     }
     if (!["file", "folder", "plugin", "skill"].includes(item.type) || typeof item.path !== "string") continue;
     const resolved = path.resolve(item.path);
-    if (!allowedContextPaths.has(resolved) || !fs.existsSync(resolved)) continue;
+    const resolvedWorkspace = path.resolve(workspace);
+    const belongsToWorkspace = resolved === resolvedWorkspace || resolved.startsWith(`${resolvedWorkspace}${path.sep}`);
+    if ((!allowedContextPaths.has(resolved) && !belongsToWorkspace) || !fs.existsSync(resolved)) continue;
     const stats = fs.statSync(resolved);
     if (item.type === "file" && !stats.isFile()) continue;
     if (item.type !== "file" && !stats.isDirectory()) continue;
@@ -559,6 +562,26 @@ app.whenReady().then(() => {
     const file = workspaceFiles.writeWorkspaceTextFile(workspace, input.path, input.content);
     if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
     return file;
+  });
+
+  ipcMain.handle("paper:list-projects", (_event, input = {}) => {
+    return latexWorkspace.listLatexProjects(resolveWorkspace(input.workspace));
+  });
+
+  ipcMain.handle("paper:create-project", (event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    const file = latexWorkspace.createLatexProject(workspace, input.directory);
+    if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
+    return file;
+  });
+
+  ipcMain.handle("paper:compile", async (event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    const result = await latexWorkspace.compileLatexDocument(workspace, input.path);
+    if (!result.pdf_path) return result;
+    const token = setWindowWorkspace(event.sender.id, workspace);
+    const encodedPath = result.pdf_path.split("/").map(encodeURIComponent).join("/");
+    return { ...result, preview_url: `archimedes-file://${token}/${encodedPath}?v=${Date.now()}` };
   });
 
   ipcMain.handle("research-thread:get", (_event, input = {}) => {

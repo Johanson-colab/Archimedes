@@ -12,6 +12,9 @@ interface ResearchDeskBridge {
     listWorkspaceFiles: (workspace: string, directory?: string) => Promise<WorkspaceFileTree>;
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
     writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
+    listLatexProjects: (workspace: string) => Promise<LatexProjectSummary[]>;
+    createLatexProject: (workspace: string, directory?: string) => Promise<WorkspaceFilePreview>;
+    compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     createResearchProject: (input: { name: string; description?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
@@ -121,6 +124,28 @@ interface WorkspaceFilePreview {
   modifiedAt: string;
   content?: string;
   previewUrl?: string;
+}
+
+interface LatexProjectSummary {
+  path: string;
+  title: string;
+  main: boolean;
+}
+
+interface LatexCompileDiagnostic {
+  line: number | null;
+  message: string;
+}
+
+interface LatexCompileResult {
+  ok: boolean;
+  engine: string;
+  source_path: string;
+  pdf_path: string;
+  preview_url?: string;
+  duration_ms: number;
+  diagnostics: LatexCompileDiagnostic[];
+  log: string;
 }
 
 interface WorkspaceFileChange {

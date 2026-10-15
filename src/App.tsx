@@ -32,6 +32,7 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
 import TerminalPanel from "./TerminalPanel";
+import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { previewLibraryBridge } from "./library-preview";
 import {
   BookOpen,
@@ -249,7 +250,9 @@ const previewBridge = {
       ? [{ name: "research-brief.md", path: "notes/research-brief.md", type: "file" as const, kind: "markdown" as const, size: 92, modifiedAt: now }]
       : directory === "src"
         ? [{ name: "experiment.py", path: "src/experiment.py", type: "file" as const, kind: "text" as const, size: 54, modifiedAt: now }]
-        : [{ name: "notes", path: "notes", type: "directory" as const }, { name: "src", path: "src", type: "directory" as const }];
+        : directory === "paper"
+          ? [{ name: "main.tex", path: "paper/main.tex", type: "file" as const, kind: "text" as const, size: 410, modifiedAt: now }]
+          : [{ name: "notes", path: "notes", type: "directory" as const }, { name: "paper", path: "paper", type: "directory" as const }, { name: "src", path: "src", type: "directory" as const }];
     return { directory, count: entries.length, truncated: false, entries };
   },
   readWorkspaceFile: async (_workspace: string, filePath: string) => ({
@@ -258,12 +261,15 @@ const previewBridge = {
     kind: filePath.endsWith(".md") ? "markdown" as const : "text" as const,
     size: 92,
     modifiedAt: new Date().toISOString(),
-    content: filePath.endsWith(".md") ? "# Research brief\n\nBrowser preview of the active workspace." : "def run_experiment():\n    return {\"status\": \"ready\"}\n",
+    content: filePath.endsWith(".md") ? "# Research brief\n\nBrowser preview of the active workspace." : filePath.endsWith(".tex") ? "\\documentclass{article}\n\\usepackage{amsmath}\n\\title{Archimedes Paper}\n\\author{}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\nWrite the paper here and the PDF preview updates automatically.\n\\end{document}\n" : "def run_experiment():\n    return {\"status\": \"ready\"}\n",
   }),
   writeWorkspaceFile: async (_workspace: string, filePath: string, content: string) => {
     for (const listener of previewWorkspaceListeners) listener({ path: filePath });
     return { name: filePath.split("/").at(-1) || filePath, path: filePath, kind: filePath.endsWith(".md") ? "markdown" as const : "text" as const, size: content.length, modifiedAt: new Date().toISOString(), content };
   },
+  listLatexProjects: async () => [{ path: "paper/main.tex", title: "Archimedes Paper", main: true }],
+  createLatexProject: async () => ({ name: "main.tex", path: "paper/main.tex", kind: "text" as const, size: 210, modifiedAt: new Date().toISOString(), content: "\\documentclass{article}\n\\title{Untitled Research Paper}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\n\\end{document}\n" }),
+  compileLatexDocument: async (_workspace: string, path: string) => ({ ok: true, engine: "latexmk", source_path: path, pdf_path: ".archimedes/latex-build/preview/main.pdf", duration_ms: 438, diagnostics: [], log: "Browser preview build succeeded." }),
   getResearchThread: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) throw new Error("Research thread not found.");
@@ -530,7 +536,7 @@ function contextImageFromData(image: ContextImage): ContextAttachment {
   };
 }
 
-type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifacts";
+type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifacts" | "writing";
 
 function App() {
   const [mainSection, setMainSection] = useState<MainSection>("chat");
@@ -564,6 +570,7 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<WorkspaceFilePreview | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [paperOpenRequest, setPaperOpenRequest] = useState<PaperOpenRequest>(null);
   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
@@ -991,6 +998,23 @@ function App() {
     }
   }
 
+  function openChangedFile(filePath: string) {
+    if (/\.(?:tex|bib|bst|cls|sty|cfg)$/i.test(filePath)) {
+      setPaperOpenRequest({ path: filePath, token: Date.now() });
+      setMainSection("writing");
+      return;
+    }
+    void openArtifact(filePath);
+  }
+
+  function askAIAboutPaper(filePath: string) {
+    const absolutePath = `${workspace.replace(/[\\/]$/, "")}/${filePath.replace(/^\/+/, "")}`;
+    const attachment: ContextAttachment = { id: `file:${absolutePath}`, type: "file", name: filePath.split("/").at(-1) || filePath, path: absolutePath, detail: `LaTeX paper source · ${filePath}` };
+    setContextItems((current) => current.some((item) => item.id === attachment.id) ? current : [...current, attachment].slice(0, 12));
+    setResearchMode("paper-generation");
+    setMainSection("chat");
+  }
+
   function selectOpenArtifact(file: WorkspaceFilePreview) {
     setMainSection("artifacts");
     setSelectedFilePath(file.path);
@@ -1056,7 +1080,7 @@ function App() {
   }
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
-  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "gallery" ? "Gallery" : "Artifacts";
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "gallery" ? "Gallery" : mainSection === "writing" ? "Paper writing" : "Artifacts";
 
   return (
     <main className="codex-shell">
@@ -1096,6 +1120,9 @@ function App() {
           </button>
           <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
             <Folder size={16} /><span>Artifacts</span>
+          </button>
+          <button className={mainSection === "writing" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("writing")} title="Paper writing">
+            <FilePenLine size={16} /><span>Paper writing</span>
           </button>
         </section>
 
@@ -1158,7 +1185,7 @@ function App() {
               onRemoveContext={(id) => setContextItems((current) => current.filter((item) => item.id !== id))}
               onApprove={() => void approvePendingAction()}
               onReject={() => void rejectPendingAction()}
-              onOpenFile={(filePath) => void openArtifact(filePath)}
+              onOpenFile={openChangedFile}
             />
           )}
           <div className={mainSection === "library" ? "library-view-cache" : "library-view-cache hidden"} aria-hidden={mainSection !== "library"}>
@@ -1170,6 +1197,7 @@ function App() {
           {mainSection === "artifacts" && (
             <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
           )}
+          {mainSection === "writing" && workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} tree={fileTree} loadingDirectories={loadingDirectories} openRequest={paperOpenRequest} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
         </div>
 
         <TerminalPanel bridge={desktopBridge} open={terminalOpen} workspace={workspace} height={terminalHeight} onHeightChange={setTerminalHeight} onClose={() => setTerminalOpen(false)} />
