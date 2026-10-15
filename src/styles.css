@@ -1,23 +1,23 @@
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  color: #f2f1f7;
-  background: #07080d;
+  color: #f4f4f4;
+  background: #111;
   color-scheme: dark;
   font-synthesis: none;
-  --night-ground: #07080d;
-  --night-sidebar: #0b0c12;
-  --night-panel: #0f1119;
-  --night-panel-raised: #151722;
-  --night-panel-soft: #191b27;
-  --night-line: #292b3a;
-  --night-line-soft: #20222f;
-  --night-ink: #f2f1f7;
-  --night-ink-soft: #c0c0cc;
-  --night-muted: #8d8f9f;
-  --night-faint: #656877;
-  --night-accent: #776cf3;
-  --night-accent-strong: #8f83ff;
-  --night-blue: #5978ee;
+  --night-ground: #111;
+  --night-sidebar: #1b1b1b;
+  --night-panel: #181818;
+  --night-panel-raised: #202020;
+  --night-panel-soft: #262626;
+  --night-line: #343434;
+  --night-line-soft: #292929;
+  --night-ink: #f4f4f4;
+  --night-ink-soft: #c2c2c2;
+  --night-muted: #929292;
+  --night-faint: #696969;
+  --night-accent: #a6a6a6;
+  --night-accent-strong: #d6d6d6;
+  --night-blue: #c2c2c2;
   --night-success: #65b894;
   --night-warning: #d4a95c;
   --night-danger: #dc7c83;
@@ -1160,12 +1160,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
    Product surfaces stay flat, quiet, and legible. */
 html, body, #root { background: var(--night-ground); }
 body { color: var(--night-ink); background: var(--night-ground); }
-::selection { color: #fff; background: rgba(119, 108, 243, .72); }
+::selection { color: #111; background: rgba(214, 214, 214, .82); }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible {
   outline: 2px solid var(--night-accent-strong);
   outline-offset: 2px;
 }
-* { scrollbar-color: #3a3d50 transparent; }
+* { scrollbar-color: #454545 transparent; }
 
 .codex-shell { color: var(--night-ink); background: var(--night-ground); }
 .codex-sidebar {
@@ -1176,52 +1176,52 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .codex-brand { height: 42px; padding-inline: 8px; font-size: 14px; letter-spacing: -.02em; }
 .codex-brand strong { color: #f7f6fb; font-weight: 690; }
-.codex-brand-mark, .assistant-mark { color: #dcd8ff; background: #1a1b28; border: 1px solid #37364f; }
+.codex-brand-mark, .assistant-mark { color: #e7e7e7; background: #252525; border: 1px solid #3a3a3a; }
 .codex-brand-mark { width: 28px; height: 28px; border-radius: 7px; }
 .codex-brand-mark svg { stroke-width: 1.7; }
 .new-task-button {
   min-height: 38px;
   margin: 5px 0 10px;
   color: #f4f2fb;
-  background: #1a1b23;
-  border-color: #30313d;
+  background: #292929;
+  border-color: #3a3a3a;
   border-radius: 6px;
   box-shadow: none;
 }
-.new-task-button:hover { color: #fff; background: #22232e; border-color: #414354; }
+.new-task-button:hover { color: #fff; background: #343434; border-color: #4a4a4a; }
 .sidebar-nav, .knowledge-group, .sidebar-workspace { border-color: var(--night-line-soft); }
 .sidebar-group { padding-top: 13px; }
 .codex-sidebar-label { color: var(--night-faint); font-size: 9px; font-weight: 650; letter-spacing: .02em; }
 .codex-nav-item, .recent-task { color: #9b9dac; border-radius: 5px; }
-.codex-nav-item > svg { color: #707384; stroke-width: 1.75; }
-.codex-nav-item:hover, .recent-task:hover { color: #ecebf4; background: #151720; }
+.codex-nav-item > svg { color: #858585; stroke-width: 1.75; }
+.codex-nav-item:hover, .recent-task:hover { color: #f0f0f0; background: #292929; }
 .codex-nav-item.active, .recent-task.active {
   color: #f8f7fb;
-  background: #20212c;
+  background: #373737;
   font-weight: 620;
   box-shadow: inset 3px 0 var(--night-accent);
 }
-.codex-nav-item.active > svg { color: #a69eff; }
+.codex-nav-item.active > svg { color: #f0f0f0; }
 .nav-count, .recent-empty { color: var(--night-faint); }
 .workspace-button { color: var(--night-ink-soft); border-radius: 5px; }
-.workspace-button:hover { background: #161820; }
-.workspace-icon { color: #9b98c8; background: #171821; border-color: #2d2f3d; border-radius: 5px; }
+.workspace-button:hover { background: #292929; }
+.workspace-icon { color: #bdbdbd; background: #242424; border-color: #373737; border-radius: 5px; }
 .workspace-copy strong { color: #dedde6; }.workspace-copy small { color: var(--night-faint); }
 
 .codex-main { background: var(--night-ground); }
-.main-toolbar { background: #0a0b11; border-color: var(--night-line-soft); }
+.main-toolbar { background: #141414; border-color: var(--night-line-soft); }
 .conversation-title strong { color: #e6e5ed; font-weight: 620; }
 .conversation-title span { color: var(--night-faint); }
 .quiet-icon-button, .model-provider-button { color: #888b9c; border-radius: 5px; }
-.quiet-icon-button:hover, .model-provider-button:hover { color: #f0eff7; background: #181a23; }
-.quiet-icon-button.active { color: #c8c2ff; background: #242438; }
+.quiet-icon-button:hover, .model-provider-button:hover { color: #f0f0f0; background: #292929; }
+.quiet-icon-button.active { color: #fff; background: #343434; }
 .main-view { background: var(--night-ground); }
 .chat-main::before {
   position: absolute;
   inset: 0;
-  background: #08090e url("./assets/archimedes-night-sky-v2.jpg") center / cover no-repeat;
+  background: var(--night-ground);
   content: "";
-  opacity: .22;
+  opacity: 1;
   pointer-events: none;
 }
 .conversation-layout { position: relative; z-index: 1; }
@@ -1233,33 +1233,33 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .conversation-message.user .conversation-message-copy { color: #e4e2ec; background: #1b1c24; border-radius: 7px; }
 .conversation-message.user p { color: #e8e7ee; }
 .message-markdown h1, .message-markdown h2, .message-markdown h3, .message-markdown h4 { color: #f3f1f8; }
-.message-markdown blockquote { color: #adafbd; border-color: #6e68b7; }
-.message-markdown :not(pre) > code { color: #cbc6ff; background: #1b1c27; }
+.message-markdown blockquote { color: #b5b5b5; border-color: #5b5b5b; }
+.message-markdown :not(pre) > code { color: #e2e2e2; background: #202020; }
 .message-markdown pre { background: #0d0f17; border-color: #272a38; border-radius: 6px; }
-.message-markdown a { color: #a9b8ff; text-decoration-color: #555f98; }
-.message-markdown a:hover { color: #d7ddff; }
+.message-markdown a { color: #d0d0d0; text-decoration-color: #666; }
+.message-markdown a:hover { color: #fff; }
 .message-markdown th, .message-markdown td { border-color: #303240; }
 .message-markdown th { background: #171923; }.message-markdown hr { background: #2a2c39; }
-.conversation-sources a { color: #b9b3ff; background: #181827; border-color: #34324c; }
-.conversation-sources a:hover { color: #e0dcff; background: #202035; border-color: #56517a; }
+.conversation-sources a { color: #d0d0d0; background: #202020; border-color: #3a3a3a; }
+.conversation-sources a:hover { color: #fff; background: #292929; border-color: #555; }
 .conversation-running { color: #d0cfda; }.conversation-running small { color: var(--night-muted); }
 .conversation-running .agent-typing span { background: var(--night-accent-strong); }
-.conversation-jump-latest { color: #cbc6ff; background: #181922; border-color: #343645; box-shadow: 0 8px 28px rgba(0, 0, 0, .32); }
-.conversation-jump-latest:hover { color: #fff; background: #222432; border-color: #4b4d61; }
+.conversation-jump-latest { color: #ddd; background: #202020; border-color: #3b3b3b; box-shadow: 0 8px 28px rgba(0, 0, 0, .32); }
+.conversation-jump-latest:hover { color: #fff; background: #2b2b2b; border-color: #555; }
 
 .conversation-composer-wrap { width: min(100%, 860px); padding-bottom: 16px; }
-.conversation-composer { background: #15161e; border-color: #333543; border-radius: 8px; box-shadow: 0 14px 45px rgba(0, 0, 0, .28); }
-.conversation-composer:focus-within { border-color: #5f5b8f; box-shadow: 0 14px 45px rgba(0, 0, 0, .33); }
+.conversation-composer { background: #232323; border-color: #414141; border-radius: 8px; box-shadow: 0 14px 45px rgba(0, 0, 0, .28); }
+.conversation-composer:focus-within { border-color: #666; box-shadow: 0 14px 45px rgba(0, 0, 0, .33); }
 .conversation-composer textarea { min-height: 76px; color: #efedf5; }
 .conversation-composer textarea::placeholder { color: #6e7180; }
 .conversation-composer-footer { color: var(--night-muted); }
 .composer-add-button, .composer-tool { color: #9092a2; border-radius: 5px; }
-.composer-add-button:hover, .composer-add-button.active, .composer-tool:hover, .composer-tool.active { color: #f0eff8; background: #242632; }
+.composer-add-button:hover, .composer-add-button.active, .composer-tool:hover, .composer-tool.active { color: #f3f3f3; background: #343434; }
 .mode-trigger svg:last-child { color: #747788; }
 .composer-context { color: #6f7282; }
-.context-usage-ring::after { background: #15161e; }
-.conversation-send { color: #fff; background: var(--night-accent); border-radius: 5px; }
-.conversation-send:hover { background: var(--night-accent-strong); }
+.context-usage-ring::after { background: #232323; }
+.conversation-send { color: #111; background: var(--night-accent); border-radius: 5px; }
+.conversation-send:hover { color: #111; background: var(--night-accent-strong); }
 .conversation-send:disabled { color: #666978; background: #292b35; }
 .composer-note { color: #595c6a; }
 
@@ -1510,3 +1510,194 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .workspace-copy small, .composer-note { color: #7d7f8e; }
 .conversation-title span, .composer-context { color: #9092a1; }
 .project-chat-empty, .archived-project-row, .archived-chat-row, .archived-toggle { color: #858797; }
+
+/* Monochrome graphite pass: neutral surfaces, neutral emphasis, no colour cast. */
+:root {
+  --mono-canvas: #111;
+  --mono-sidebar: #1b1b1b;
+  --mono-surface: #181818;
+  --mono-surface-raised: #202020;
+  --mono-control: #262626;
+  --mono-control-active: #363636;
+  --mono-border: #353535;
+  --mono-border-strong: #4a4a4a;
+  --mono-text: #f4f4f4;
+  --mono-text-soft: #c4c4c4;
+  --mono-text-muted: #929292;
+}
+
+.codex-shell, .codex-main, .main-view, .chat-main,
+.knowledge-main, .knowledge-main .library-content-pane, .knowledge-main .library-page,
+.skills-page, .artifacts-page, .paper-writing-page, .gallery-page {
+  background: var(--mono-canvas);
+}
+
+.codex-sidebar { background: var(--mono-sidebar); }
+.main-toolbar { background: #141414; }
+.chat-main::before { background: var(--mono-canvas); }
+
+.codex-brand-mark, .assistant-mark, .workspace-icon,
+.context-source-icon, .research-mode-icon, .change-card-icon,
+.gallery-header-icon, .daily-mark,
+.skill-collection-icon.green, .skill-collection-icon.gold, .skill-collection-icon.blue,
+.skill-collection-icon.teal, .skill-collection-icon.coral, .skill-collection-icon.graphite {
+  color: #ddd;
+  background: var(--mono-control);
+  border-color: var(--mono-border);
+}
+
+.new-task-button, .conversation-composer,
+.context-picker-menu, .research-mode-menu, .composer-context-menu,
+.workspace-modal, .model-settings-modal, .web-search-modal,
+.provider-config, .model-catalog, .gallery-dialog, .gallery-dialog-content {
+  background: #232323;
+  border-color: var(--mono-border-strong);
+}
+
+.codex-nav-item:hover, .recent-task:hover, .workspace-button:hover,
+.project-tree-row:hover, .project-tree-row.active,
+.project-chat-row:hover, .project-chat-row.active,
+.archived-toggle:hover, .archived-toggle.active,
+.context-picker-action:hover, .context-list-row:hover:not(:disabled),
+.research-mode-option:hover, .research-mode-option.selected,
+.composer-add-button:hover, .composer-add-button.active,
+.composer-tool:hover, .composer-tool.active,
+.outline-button:hover, .secondary-button:hover, .icon-button:hover,
+.provider-option:hover, .model-catalog-list button:hover,
+.model-catalog-list button.active, .change-file-list > button:hover:not(:disabled) {
+  color: var(--mono-text);
+  background: #303030;
+}
+
+.codex-nav-item.active, .recent-task.active,
+.provider-option.active, .daily-mode-tabs button.active,
+.daily-range-control button.active, .daily-search-kind button.active,
+.daily-search-panel.deep .daily-search-kind button.active,
+.daily-topic-filter button.active, .conference-mode-button.active,
+.conference-presentation-tabs button.active, .gallery-facet-options button.selected {
+  color: #fff;
+  background: var(--mono-control-active);
+  border-color: #565656;
+}
+
+.codex-nav-item.active > svg, .quiet-icon-button.active,
+.research-mode-option > svg, .context-list-row > svg,
+.research-mode-option.selected .research-mode-icon,
+.eyebrow, .page-kicker, .panel-kicker, .gallery-header .eyebrow,
+.daily-paper-title a, .daily-paper-signals a,
+.gallery-results-bar strong, .gallery-results-bar a, .gallery-credit a,
+.paper-reader-tabs button.active, .paper-ai-suggestions button,
+.gallery-proceedings-link, .paper-reader-launch {
+  color: #e0e0e0;
+}
+
+.context-picker-header, .model-settings-header, .model-settings-footer,
+.library-toolbar, .skills-search, .gallery-search, .gallery-sort,
+.external-search-box, .daily-mode-tabs, .daily-range-control,
+.daily-search-kind, .paper-pane-toolbar, .artifact-tabs,
+.skill-preview-header, .codebase-toolbar, .codebase-explorer,
+.codebase-editor > header, .model-catalog-header,
+.model-catalog-list button, .workspace-change-card,
+.workspace-change-card > header, .change-card-expand {
+  background: var(--mono-surface-raised);
+  border-color: var(--mono-border);
+}
+
+.library-card, .library-split, .skill-collection-card, .skills-explorer,
+.artifacts-workspace, .paper-writing-workspace, .gallery-card,
+.paper-workbench-page, .knowledge-main .paper-workbench-page,
+.original-paper-reader, .paper-reader-toolbar, .paper-reader-tabs,
+.paper-ai-panel, .paper-ai-compose, .project-browser-reader,
+.github-project-workspace, .codebase-reader, .codebase-editor,
+.smart-terminal, .smart-terminal-tabs, .terminal-surfaces {
+  background: var(--mono-surface);
+  border-color: var(--mono-border);
+}
+
+.library-paper-list, .paper-inspector, .skills-index, .artifact-browser,
+.paper-source-browser, .artifact-preview-surface, .artifact-editor,
+.markdown-preview, .code-preview, .image-preview, .latex-editor-body,
+.codebase-editor pre, .gallery-card-image, .provider-list {
+  background: #141414;
+  border-color: var(--mono-border);
+}
+
+.library-card:hover, .skill-collection-card:hover,
+.knowledge-main .library-card:hover, .library-paper-row:hover,
+.skill-index-row:hover, .workspace-tree-row:hover, .paper-tree-row:hover,
+.codebase-tree-node:hover, .artifact-tab:hover,
+.daily-topic-filter button:hover, .conference-presentation-tabs button:hover {
+  background: var(--mono-surface-raised);
+  border-color: var(--mono-border-strong);
+}
+
+.library-paper-row.active, .skill-index-row.active,
+.workspace-tree-row.active, .paper-tree-row.active,
+.codebase-tree-node.active, .artifact-tab.active,
+.paper-ai-thread article.user, .paper-ai-thread article.assistant {
+  color: #eee;
+  background: #2a2a2a;
+  border-color: #454545;
+}
+
+.daily-search-panel, .daily-search-panel.deep,
+.daily-search-input-row input, .daily-search-input-row textarea,
+.daily-save-target select, .conference-filter-row select,
+.paper-search-control, .paper-ai-compose-input, .paper-ai-compose textarea,
+.workspace-modal input, .provider-config input, .web-search-modal-body input,
+.paper-notes textarea, .paper-record-row select, .paper-main-document select,
+.context-search, .attached-context-chip {
+  color: #eee;
+  background: #202020;
+  border-color: #444;
+}
+
+.daily-search-plan, .deep-match-reason, .daily-paper-signals span,
+.daily-paper-signals a, .skill-collection-count, .gallery-card-meta > span,
+.paper-reader-tabs small, .paper-ai-suggestions button,
+.markdown-preview pre, .markdown-preview :not(pre) > code,
+.skill-markdown pre, .skill-markdown :not(pre) > code {
+  color: var(--mono-text-soft);
+  background: #242424;
+  border-color: #414141;
+}
+
+.artifact-tab, .daily-topic-filter button, .conference-presentation-tabs button,
+.gallery-facet-options button, .outline-button, .secondary-button,
+.gallery-proceedings-link, .paper-reader-launch {
+  color: #bdbdbd;
+  background: var(--mono-control);
+  border-color: var(--mono-border);
+}
+
+.artifact-tab.active, .terminal-tab.active,
+.provider-option.active, .codex-nav-item.active, .recent-task.active {
+  box-shadow: none;
+}
+
+.codex-nav-item.active, .recent-task.active,
+.provider-option.active { border-left-color: #a6a6a6; }
+.artifact-tab.active { border-top-color: #a6a6a6; }
+.terminal-tab.active { border-bottom-color: #a6a6a6; }
+
+.conversation-send, .primary-button {
+  color: #111;
+  background: #c8c8c8;
+}
+.conversation-send:hover, .primary-button:hover {
+  color: #111;
+  background: #eee;
+}
+.conversation-send:disabled, .primary-button:disabled {
+  color: #777;
+  background: #303030;
+}
+.conversation-running .agent-typing span { background: #c8c8c8; }
+.paper-auto-compile input { accent-color: #bdbdbd; }
+
+.message-markdown blockquote, .markdown-preview blockquote { border-color: #666; }
+.latex-editor-body textarea { color: #ddd; background: #141414; caret-color: #fff; }
+.latex-editor-body textarea:focus { background: #181818; box-shadow: inset 0 0 0 1px #595959; }
+.latex-line-numbers { color: #606060; background: #101010; border-color: #303030; }
+.paper-pdf-pane, .arch-pdf-stage { background: #202020; }
+.modal-backdrop, .gallery-dialog-backdrop { background: rgba(0, 0, 0, .88); }
