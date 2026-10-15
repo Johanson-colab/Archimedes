@@ -17,9 +17,6 @@ interface ResearchDeskBridge {
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
-    listExperimentContracts: (projectId: string) => Promise<ExperimentContract[]>;
-    createExperimentContract: (input: ExperimentContractCreateInput) => Promise<ExperimentContract>;
-    updateExperimentContract: (id: string, patch: ExperimentContractPatch) => Promise<ExperimentContract>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
     getModelConfig: () => Promise<PublicModelConfig>;
     listProviderModels: (input: ModelCatalogInput) => Promise<ModelCatalogResponse>;
@@ -445,36 +442,6 @@ interface ResearchProject {
   archived_at: string | null;
   last_chat_at: string | null;
 }
-
-type ExperimentContractStatus = "draft" | "ready" | "running" | "completed" | "blocked";
-
-interface ExperimentContractFields {
-  title: string;
-  status: ExperimentContractStatus;
-  hypothesis: string;
-  alternative_hypothesis: string;
-  dataset_plan: string;
-  baseline_plan: string;
-  metrics_plan: string;
-  ablation_plan: string;
-  decision_rule: string;
-  failure_criteria: string;
-  evidence_notes: string;
-}
-
-interface ExperimentContract extends ExperimentContractFields {
-  id: string;
-  project_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface ExperimentContractCreateInput extends Partial<ExperimentContractFields> {
-  project_id: string;
-  title: string;
-}
-
-type ExperimentContractPatch = Partial<ExperimentContractFields>;
 
 interface ResearchThread {
   id: string;
