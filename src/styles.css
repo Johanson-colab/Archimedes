@@ -1622,6 +1622,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-color: var(--mono-border);
 }
 
+.library-paper-row {
+  color: #bdbdbd;
+  background: #181818;
+  border-bottom-color: #303030;
+}
+.library-paper-row strong { color: #e3e3e3; }
+.library-paper-row small, .library-paper-row .paper-row-year { color: #8f8f8f; }
+.library-paper-row:hover {
+  color: #eee;
+  background: #222;
+}
+.library-paper-row.selected {
+  color: #f4f4f4;
+  background: #2a2a2a;
+  box-shadow: inset 3px 0 #aaa;
+}
+.library-paper-row.selected strong { color: #fff; }
+
 .library-card:hover, .skill-collection-card:hover,
 .knowledge-main .library-card:hover, .library-paper-row:hover,
 .skill-index-row:hover, .workspace-tree-row:hover, .paper-tree-row:hover,
