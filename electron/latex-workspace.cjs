@@ -6,6 +6,9 @@ const workspaceFiles = require("./workspace-files.cjs");
 
 const PAPER_EXTENSIONS = new Set([".tex", ".bib", ".bst", ".cls", ".sty", ".cfg"]);
 const SKIPPED_DIRECTORIES = new Set([".archimedes", ".git", "node_modules", "dist", "build", ".next"]);
+const SKIPPED_IMPORT_FILES = new Set([".DS_Store"]);
+const MAX_IMPORT_FILES = 10_000;
+const MAX_IMPORT_BYTES = 500 * 1024 * 1024;
 const DEFAULT_DOCUMENT = String.raw`\documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb,booktabs,graphicx,hyperref}
@@ -49,6 +52,7 @@ function normalizePaperPath(value) {
 
 function listLatexProjects(root, { maxFiles = 4_000, maxDepth = 10 } = {}) {
   const documents = [];
+  const workspace = workspaceFiles.workspacePath(root);
   let visited = 0;
   function visit(directory, depth) {
     if (depth > maxDepth || visited >= maxFiles) return;
@@ -68,12 +72,12 @@ function listLatexProjects(root, { maxFiles = 4_000, maxDepth = 10 } = {}) {
         const stats = fs.statSync(target);
         if (stats.size <= 2_000_000) content = fs.readFileSync(target, "utf8");
       } catch { /* Ignore unreadable candidates. */ }
-      const relativePath = path.relative(root, target).split(path.sep).join("/");
+      const relativePath = path.relative(workspace, target).split(path.sep).join("/");
       const title = /\\title\s*\{([^{}]{1,240})\}/s.exec(content)?.[1]?.replace(/\s+/g, " ").trim() || path.basename(entry.name, ".tex");
       documents.push({ path: relativePath, title, main: /\\documentclass(?:\[[^\]]*\])?\s*\{/s.test(content) });
     }
   }
-  visit(workspaceFiles.workspacePath(root), 0);
+  visit(workspace, 0);
   return documents.sort((left, right) => Number(right.main) - Number(left.main) || left.path.localeCompare(right.path));
 }
 
@@ -84,6 +88,88 @@ function createLatexProject(root, requestedDirectory = "paper") {
   while (fs.existsSync(workspaceFiles.workspacePath(root, directory, { mustExist: false }))) directory = `${base}-${index++}`;
   const mainPath = `${directory}/main.tex`;
   return workspaceFiles.writeWorkspaceTextFile(root, mainPath, DEFAULT_DOCUMENT);
+}
+
+function normalizeWorkspaceEntryPath(value, label) {
+  const normalized = String(value || "").trim().replaceAll("\\", "/").replace(/^\/+|\/+$/g, "").replace(/\/+/g, "/");
+  if (!normalized || normalized === "." || normalized.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error(`Enter a workspace-relative ${label}.`);
+  }
+  return normalized;
+}
+
+function createLatexFile(root, requestedPath) {
+  let relative = normalizeWorkspaceEntryPath(requestedPath, "file name");
+  if (!path.posix.extname(relative)) relative = `${relative}.tex`;
+  if (!PAPER_EXTENSIONS.has(path.posix.extname(relative).toLowerCase())) {
+    throw new Error("LaTeX workspace files must use .tex, .bib, .bst, .cls, .sty, or .cfg.");
+  }
+  const target = workspaceFiles.workspacePath(root, relative, { mustExist: false });
+  if (fs.existsSync(target)) throw new Error("A file or folder with that name already exists.");
+  const content = path.posix.extname(relative).toLowerCase() === ".tex" ? "% New LaTeX source\n" : "";
+  return workspaceFiles.writeWorkspaceTextFile(root, relative, content);
+}
+
+function createLatexDirectory(root, requestedPath) {
+  const relative = normalizeWorkspaceEntryPath(requestedPath, "folder name");
+  const target = workspaceFiles.workspacePath(root, relative, { mustExist: false });
+  if (fs.existsSync(target)) throw new Error("A file or folder with that name already exists.");
+  fs.mkdirSync(target, { recursive: true });
+  return { name: path.basename(target), path: relative, type: "directory" };
+}
+
+function importLatexProject(root, sourceDirectory) {
+  const workspace = fs.realpathSync(workspaceFiles.workspacePath(root));
+  const source = fs.realpathSync(path.resolve(String(sourceDirectory || "")));
+  if (!fs.statSync(source).isDirectory()) throw new Error("Choose a folder containing a LaTeX project.");
+  if (source === workspace || source.startsWith(`${workspace}${path.sep}`) || workspace.startsWith(`${source}${path.sep}`)) {
+    throw new Error("Choose a project folder outside the active workspace.");
+  }
+
+  const directories = [""];
+  const files = [];
+  let totalBytes = 0;
+  function scan(directory, relative = "") {
+    const entries = fs.readdirSync(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isSymbolicLink() || SKIPPED_IMPORT_FILES.has(entry.name)) continue;
+      if (entry.isDirectory() && SKIPPED_DIRECTORIES.has(entry.name)) continue;
+      const target = path.join(directory, entry.name);
+      const nextRelative = relative ? path.join(relative, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        directories.push(nextRelative);
+        scan(target, nextRelative);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const size = fs.statSync(target).size;
+      totalBytes += size;
+      files.push({ source: target, relative: nextRelative, size });
+      if (files.length > MAX_IMPORT_FILES) throw new Error(`LaTeX folder imports are limited to ${MAX_IMPORT_FILES.toLocaleString()} files.`);
+      if (totalBytes > MAX_IMPORT_BYTES) throw new Error("LaTeX folder imports are limited to 500 MB.");
+    }
+  }
+  scan(source);
+
+  const rawName = path.basename(source).replace(/[^\p{L}\p{N}._-]+/gu, "-").replace(/^\.+$/, "") || "paper";
+  let directory = rawName;
+  let index = 2;
+  while (fs.existsSync(workspaceFiles.workspacePath(root, directory, { mustExist: false }))) directory = `${rawName}-${index++}`;
+  const destination = workspaceFiles.workspacePath(root, directory, { mustExist: false });
+  try {
+    for (const relative of directories) fs.mkdirSync(path.join(destination, relative), { recursive: true });
+    for (const file of files) {
+      const target = path.join(destination, file.relative);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(file.source, target);
+    }
+  } catch (error) {
+    fs.rmSync(destination, { recursive: true, force: true });
+    throw error;
+  }
+  const projects = listLatexProjects(root).filter((project) => project.path === directory || project.path.startsWith(`${directory}/`));
+  const mainPath = projects.find((project) => project.main)?.path || projects[0]?.path || "";
+  return { name: path.basename(destination), directory, file_count: files.length, total_bytes: totalBytes, main_path: mainPath };
 }
 
 function findExecutable(names, env = process.env) {
@@ -195,8 +281,11 @@ module.exports = {
   DEFAULT_DOCUMENT,
   PAPER_EXTENSIONS,
   compileLatexDocument,
+  createLatexDirectory,
+  createLatexFile,
   createLatexProject,
   findExecutable,
+  importLatexProject,
   listLatexProjects,
   normalizePaperPath,
   parseLatexDiagnostics,

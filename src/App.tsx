@@ -269,6 +269,12 @@ const previewBridge = {
   },
   listLatexProjects: async () => [{ path: "paper/main.tex", title: "Archimedes Paper", main: true }],
   createLatexProject: async () => ({ name: "main.tex", path: "paper/main.tex", kind: "text" as const, size: 210, modifiedAt: new Date().toISOString(), content: "\\documentclass{article}\n\\title{Untitled Research Paper}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\n\\end{document}\n" }),
+  createLatexFile: async (_workspace: string, filePath: string) => {
+    const normalizedPath = filePath.endsWith(".tex") ? filePath : `${filePath}.tex`;
+    return { name: normalizedPath.split("/").at(-1) || normalizedPath, path: normalizedPath, kind: "text" as const, size: 19, modifiedAt: new Date().toISOString(), content: "% New LaTeX source\n" };
+  },
+  createLatexDirectory: async (_workspace: string, directoryPath: string) => ({ name: directoryPath.split("/").at(-1) || directoryPath, path: directoryPath, type: "directory" as const }),
+  importLatexFolder: async () => { throw new Error("Folder import is available in the Archimedes desktop app."); },
   compileLatexDocument: async (_workspace: string, path: string) => ({ ok: true, engine: "latexmk", source_path: path, pdf_path: ".archimedes/latex-build/preview/main.pdf", duration_ms: 438, diagnostics: [], log: "Browser preview build succeeded." }),
   getResearchThread: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);

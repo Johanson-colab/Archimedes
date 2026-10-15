@@ -3,7 +3,15 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { createLatexProject, listLatexProjects, normalizePaperPath, parseLatexDiagnostics } = require("./latex-workspace.cjs");
+const {
+  createLatexDirectory,
+  createLatexFile,
+  createLatexProject,
+  importLatexProject,
+  listLatexProjects,
+  normalizePaperPath,
+  parseLatexDiagnostics,
+} = require("./latex-workspace.cjs");
 
 test("normalizes only workspace-relative TeX compile targets", () => {
   assert.equal(normalizePaperPath("papers/main.tex"), "papers/main.tex");
@@ -23,6 +31,45 @@ test("creates a collision-safe paper template and discovers main documents", () 
     assert.ok(projects.every((project) => project.main));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("creates LaTeX files and folders without overwriting workspace entries", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-entries-"));
+  try {
+    const directory = createLatexDirectory(root, "paper/sections");
+    const file = createLatexFile(root, "paper/sections/related-work");
+    assert.equal(directory.path, "paper/sections");
+    assert.equal(file.path, "paper/sections/related-work.tex");
+    assert.match(fs.readFileSync(path.join(root, file.path), "utf8"), /New LaTeX source/);
+    assert.throws(() => createLatexFile(root, file.path), /already exists/);
+    assert.throws(() => createLatexDirectory(root, "../outside"), /workspace-relative/);
+    assert.throws(() => createLatexFile(root, "paper/data.csv"), /LaTeX workspace files/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("imports a complete LaTeX folder and selects its main document", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-workspace-"));
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "conference-paper-"));
+  try {
+    fs.mkdirSync(path.join(source, "fig"));
+    fs.mkdirSync(path.join(source, ".git"));
+    fs.writeFileSync(path.join(source, "main.tex"), "\\documentclass{article}\n\\title{Imported paper}\n\\begin{document}Ready\\end{document}\n");
+    fs.writeFileSync(path.join(source, "references.bib"), "@article{test, title={Test}}\n");
+    fs.writeFileSync(path.join(source, "fig", "plot.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    fs.writeFileSync(path.join(source, ".git", "config"), "ignored");
+    const imported = importLatexProject(root, source);
+    assert.equal(imported.file_count, 3);
+    assert.equal(imported.main_path, `${imported.directory}/main.tex`);
+    assert.equal(fs.existsSync(path.join(root, imported.directory, "fig", "plot.png")), true);
+    assert.equal(fs.existsSync(path.join(root, imported.directory, ".git")), false);
+    const second = importLatexProject(root, source);
+    assert.notEqual(second.directory, imported.directory);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
   }
 });
 

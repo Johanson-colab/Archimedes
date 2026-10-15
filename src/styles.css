@@ -914,6 +914,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .paper-source-browser { display: grid; min-width: 0; min-height: 0; grid-template-rows: 36px auto minmax(0, 1fr); background: #f2f3f0; border-right: 1px solid #d9dad5; }
 .paper-browser-title { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 0 10px; color: #4f5751; border-bottom: 1px solid #dedfda; }
 .paper-browser-title strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.paper-browser-actions { display: flex; margin-left: auto; align-items: center; gap: 2px; }
+.paper-browser-actions button { display: grid; width: 25px; height: 25px; place-items: center; color: #727a74; background: transparent; border-radius: 4px; }
+.paper-browser-actions button:hover { color: #2a4236; background: #e1e7e2; }
 .paper-main-document { display: grid; gap: 4px; padding: 9px 9px 8px; color: #85877f; border-bottom: 1px solid #dedfda; font-size: 8px; font-weight: 720; text-transform: uppercase; }
 .paper-main-document select { width: 100%; min-width: 0; height: 29px; padding: 0 25px 0 7px; color: #414640; background: #fff; border: 1px solid #d4d6d0; border-radius: 4px; font-size: 9px; text-transform: none; }
 .paper-tree-scroll { min-height: 0; padding: 7px 5px 16px; overflow: auto; }
@@ -951,6 +954,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .paper-writing-empty { display: grid; min-width: 0; min-height: 0; align-content: center; justify-items: center; gap: 7px; padding: 28px; color: #8b918c; text-align: center; }
 .paper-writing-empty > svg { color: #73877b; }
 .paper-writing-empty strong { color: #555c56; font-size: 11px; }.paper-writing-empty span { max-width: 340px; font-size: 9px; line-height: 1.5; }.paper-writing-empty button { margin-top: 5px; }
+.paper-create-backdrop { position: fixed; z-index: 70; inset: 0; display: grid; padding: 24px; place-items: center; background: rgba(0, 0, 0, .72); }
+.paper-create-dialog { width: min(390px, 100%); padding: 22px; color: #343934; background: #fff; border: 1px solid #d8ddd8; border-radius: 7px; box-shadow: 0 24px 70px rgba(0, 0, 0, .26); }
+.paper-create-dialog h2 { margin: 5px 0 0; font-size: 18px; }.paper-create-dialog p { margin: 7px 0 18px; color: #7a817b; font-size: 10px; }.paper-create-dialog p strong { color: #4c554e; }
+.paper-create-dialog label { display: grid; gap: 6px; color: #626a64; font-size: 10px; font-weight: 700; }.paper-create-dialog input { width: 100%; height: 36px; padding: 0 10px; color: #303630; background: #f8f9f7; border: 1px solid #d0d8d1; border-radius: 5px; outline: 0; font: 11px inherit; }.paper-create-dialog input:focus { border-color: #789b87; box-shadow: 0 0 0 3px rgba(47, 119, 92, .11); }
+.paper-create-dialog > div { display: flex; justify-content: flex-end; gap: 7px; margin-top: 18px; }
 
 @media (max-width: 860px) {
   .model-provider-button { width: 31px; padding: 0; justify-content: center; }
@@ -1712,6 +1720,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .conversation-running .agent-typing span { background: #c8c8c8; }
 .paper-auto-compile input { accent-color: #bdbdbd; }
+.paper-browser-actions button { color: #9b9b9b; }
+.paper-browser-actions button:hover { color: #fff; background: #303030; }
+.paper-create-dialog { color: #e8e8e8; background: #202020; border-color: #444; box-shadow: 0 24px 70px rgba(0, 0, 0, .58); }
+.paper-create-dialog p { color: #999; }.paper-create-dialog p strong { color: #d6d6d6; }
+.paper-create-dialog label { color: #bdbdbd; }.paper-create-dialog input { color: #eee; background: #161616; border-color: #444; }.paper-create-dialog input:focus { border-color: #777; box-shadow: 0 0 0 3px rgba(255, 255, 255, .08); }
 
 .message-markdown blockquote, .markdown-preview blockquote { border-color: #666; }
 .latex-editor-body textarea { color: #ddd; background: #141414; caret-color: #fff; }

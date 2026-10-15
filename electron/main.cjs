@@ -575,6 +575,33 @@ app.whenReady().then(() => {
     return file;
   });
 
+  ipcMain.handle("paper:create-file", (event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    const file = latexWorkspace.createLatexFile(workspace, input.path);
+    if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
+    return file;
+  });
+
+  ipcMain.handle("paper:create-directory", (event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    const directory = latexWorkspace.createLatexDirectory(workspace, input.path);
+    if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: directory.path });
+    return directory;
+  });
+
+  ipcMain.handle("paper:import-folder", async (event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    const options = { title: "Import a LaTeX project folder", properties: ["openDirectory"] };
+    const selection = browserWindow
+      ? await dialog.showOpenDialog(browserWindow, options)
+      : await dialog.showOpenDialog(options);
+    if (selection.canceled || !selection.filePaths[0]) return { canceled: true };
+    const imported = latexWorkspace.importLatexProject(workspace, selection.filePaths[0]);
+    if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: imported.directory });
+    return { canceled: false, ...imported };
+  });
+
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
     const result = await latexWorkspace.compileLatexDocument(workspace, input.path);
