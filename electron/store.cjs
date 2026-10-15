@@ -41,6 +41,24 @@ function schema(db) {
       archived_at TEXT
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS experiment_contracts (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'ready', 'running', 'completed', 'blocked')),
+      hypothesis TEXT NOT NULL DEFAULT '',
+      alternative_hypothesis TEXT NOT NULL DEFAULT '',
+      dataset_plan TEXT NOT NULL DEFAULT '',
+      baseline_plan TEXT NOT NULL DEFAULT '',
+      metrics_plan TEXT NOT NULL DEFAULT '',
+      ablation_plan TEXT NOT NULL DEFAULT '',
+      decision_rule TEXT NOT NULL DEFAULT '',
+      failure_criteria TEXT NOT NULL DEFAULT '',
+      evidence_notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS research_threads (
       id TEXT PRIMARY KEY NOT NULL,
       project_id TEXT REFERENCES research_projects(id) ON DELETE SET NULL,
@@ -194,6 +212,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
+    CREATE INDEX IF NOT EXISTS idx_experiment_contracts_project_updated ON experiment_contracts(project_id, updated_at DESC);
   `);
 
   ensureColumn(db, "research_threads", "project_id", "TEXT");
@@ -710,6 +729,136 @@ function deleteResearchProject(id) {
   return { deleted: true };
 }
 
+const EXPERIMENT_CONTRACT_STATUSES = new Set(["draft", "ready", "running", "completed", "blocked"]);
+const EXPERIMENT_CONTRACT_TEXT_FIELDS = [
+  "hypothesis",
+  "alternative_hypothesis",
+  "dataset_plan",
+  "baseline_plan",
+  "metrics_plan",
+  "ablation_plan",
+  "decision_rule",
+  "failure_criteria",
+  "evidence_notes",
+];
+const EXPERIMENT_CONTRACT_FIELDS = new Set(["title", "status", ...EXPERIMENT_CONTRACT_TEXT_FIELDS]);
+const MAX_EXPERIMENT_CONTRACT_TITLE_LENGTH = 200;
+const MAX_EXPERIMENT_CONTRACT_TEXT_LENGTH = 12_000;
+
+function requireResearchProject(db, projectId) {
+  const normalizedId = typeof projectId === "string" ? projectId.trim() : "";
+  if (!normalizedId) throw new Error("A research project ID is required.");
+  const project = db.prepare("SELECT id FROM research_projects WHERE id = ?").get(normalizedId);
+  if (!project) throw new Error("Research project not found.");
+  return project;
+}
+
+function normalizeExperimentContractTitle(value) {
+  if (typeof value !== "string") throw new Error("An experiment contract title is required.");
+  const title = value.replace(/\s+/g, " ").trim();
+  if (!title || title.length > MAX_EXPERIMENT_CONTRACT_TITLE_LENGTH) {
+    throw new Error(`An experiment contract title of at most ${MAX_EXPERIMENT_CONTRACT_TITLE_LENGTH} characters is required.`);
+  }
+  return title;
+}
+
+function normalizeExperimentContractText(field, value) {
+  if (typeof value !== "string") throw new Error(`${field} must be text.`);
+  if (value.length > MAX_EXPERIMENT_CONTRACT_TEXT_LENGTH) {
+    throw new Error(`${field} must be at most ${MAX_EXPERIMENT_CONTRACT_TEXT_LENGTH} characters.`);
+  }
+  return value.trim();
+}
+
+function normalizeExperimentContractStatus(value) {
+  if (typeof value !== "string" || !EXPERIMENT_CONTRACT_STATUSES.has(value)) {
+    throw new Error("Experiment contract status must be draft, ready, running, completed, or blocked.");
+  }
+  return value;
+}
+
+function normalizeExperimentContractPatch(input, { creating = false } = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Experiment contract data is required.");
+  const patch = {};
+  for (const key of Object.keys(input)) {
+    if (!EXPERIMENT_CONTRACT_FIELDS.has(key)) throw new Error(`Unsupported experiment contract field: ${key}.`);
+  }
+  if (creating || Object.hasOwn(input, "title")) patch.title = normalizeExperimentContractTitle(input.title);
+  if (Object.hasOwn(input, "status")) patch.status = normalizeExperimentContractStatus(input.status);
+  for (const field of EXPERIMENT_CONTRACT_TEXT_FIELDS) {
+    if (Object.hasOwn(input, field)) patch[field] = normalizeExperimentContractText(field, input[field]);
+  }
+  if (!creating && Object.keys(patch).length === 0) throw new Error("Provide at least one experiment contract field to update.");
+  return patch;
+}
+
+function listExperimentContracts(projectId) {
+  const db = requireDatabase();
+  const project = requireResearchProject(db, projectId);
+  return db.prepare(`
+    SELECT id, project_id, title, status, hypothesis, alternative_hypothesis, dataset_plan, baseline_plan,
+      metrics_plan, ablation_plan, decision_rule, failure_criteria, evidence_notes, created_at, updated_at
+    FROM experiment_contracts
+    WHERE project_id = ?
+    ORDER BY updated_at DESC, created_at DESC
+  `).all(project.id);
+}
+
+function createExperimentContract(input) {
+  const db = requireDatabase();
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Experiment contract data is required.");
+  const project = requireResearchProject(db, input?.project_id);
+  const { project_id: _projectId, ...contractInput } = input;
+  const fields = normalizeExperimentContractPatch(contractInput, { creating: true });
+  const now = timestamp();
+  const contract = {
+    id: randomUUID(),
+    project_id: project.id,
+    title: fields.title,
+    status: fields.status || "draft",
+    ...Object.fromEntries(EXPERIMENT_CONTRACT_TEXT_FIELDS.map((field) => [field, fields[field] || ""])),
+    created_at: now,
+    updated_at: now,
+  };
+  db.prepare(`
+    INSERT INTO experiment_contracts (
+      id, project_id, title, status, hypothesis, alternative_hypothesis, dataset_plan, baseline_plan,
+      metrics_plan, ablation_plan, decision_rule, failure_criteria, evidence_notes, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    contract.id, contract.project_id, contract.title, contract.status, contract.hypothesis,
+    contract.alternative_hypothesis, contract.dataset_plan, contract.baseline_plan, contract.metrics_plan,
+    contract.ablation_plan, contract.decision_rule, contract.failure_criteria, contract.evidence_notes,
+    contract.created_at, contract.updated_at,
+  );
+  return contract;
+}
+
+function updateExperimentContract(id, patch) {
+  const db = requireDatabase();
+  const normalizedId = typeof id === "string" ? id.trim() : "";
+  if (!normalizedId) throw new Error("An experiment contract ID is required.");
+  const current = db.prepare("SELECT * FROM experiment_contracts WHERE id = ?").get(normalizedId);
+  if (!current) throw new Error("Experiment contract not found.");
+  const fields = normalizeExperimentContractPatch(patch);
+  const next = { ...current, ...fields, updated_at: timestamp() };
+  db.prepare(`
+    UPDATE experiment_contracts
+    SET title = ?, status = ?, hypothesis = ?, alternative_hypothesis = ?, dataset_plan = ?, baseline_plan = ?,
+      metrics_plan = ?, ablation_plan = ?, decision_rule = ?, failure_criteria = ?, evidence_notes = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    next.title, next.status, next.hypothesis, next.alternative_hypothesis, next.dataset_plan, next.baseline_plan,
+    next.metrics_plan, next.ablation_plan, next.decision_rule, next.failure_criteria, next.evidence_notes,
+    next.updated_at, normalizedId,
+  );
+  return db.prepare(`
+    SELECT id, project_id, title, status, hypothesis, alternative_hypothesis, dataset_plan, baseline_plan,
+      metrics_plan, ablation_plan, decision_rule, failure_criteria, evidence_notes, created_at, updated_at
+    FROM experiment_contracts WHERE id = ?
+  `).get(normalizedId);
+}
+
 function listResearchThreads({ archived = false, projectId = null } = {}) {
   const db = requireDatabase();
   return db.prepare(`
@@ -1026,6 +1175,7 @@ module.exports = {
   approveAction,
   createLibrary,
   createAction,
+  createExperimentContract,
   createResearchProject,
   renameResearchProject,
   createResearchThread,
@@ -1049,6 +1199,7 @@ module.exports = {
   deleteResearchProject,
   archiveResearchThread,
   listLibraries,
+  listExperimentContracts,
   listPapers,
   listResearchProjects,
   listResearchThreads,
@@ -1064,6 +1215,7 @@ module.exports = {
   startResearchTurn,
   startTask,
   updateLibrary,
+  updateExperimentContract,
   updatePaper,
   updateActionPayload,
   updateResearchThreadSummary,

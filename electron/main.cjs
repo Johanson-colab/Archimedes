@@ -586,6 +586,20 @@ app.whenReady().then(() => {
     return store.deleteResearchProject(input.id);
   });
 
+  ipcMain.handle("experiment-contract:list", (_event, input = {}) => {
+    if (typeof input.projectId !== "string") throw new Error("A research project ID is required.");
+    return store.listExperimentContracts(input.projectId);
+  });
+
+  ipcMain.handle("experiment-contract:create", (_event, input = {}) => {
+    return store.createExperimentContract(input);
+  });
+
+  ipcMain.handle("experiment-contract:update", (_event, input = {}) => {
+    if (typeof input.id !== "string") throw new Error("An experiment contract ID is required.");
+    return store.updateExperimentContract(input.id, input.patch);
+  });
+
   ipcMain.handle("research-thread:archive", (_event, input = {}) => {
     if (typeof input.id !== "string") throw new Error("A research thread ID is required.");
     return store.archiveResearchThread(input.id, input.archived !== false);
