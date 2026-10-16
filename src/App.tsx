@@ -1485,7 +1485,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
           >
             <span
               className="context-usage-ring"
-              style={{ "--context-usage-progress": `${Math.round(contextUsage * 360)}deg` } as React.CSSProperties}
+              style={{ "--context-usage-progress": `${Math.round(contextUsage * 1_000) / 10}%` } as React.CSSProperties}
               aria-hidden="true"
             />
           </div>

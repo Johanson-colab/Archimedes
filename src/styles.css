@@ -697,7 +697,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .context-usage.critical { --context-usage-color: #ad5148; color: #985650; }
 .context-usage::after { position: absolute; z-index: 45; right: -5px; bottom: calc(100% + 8px); padding: 6px 8px; content: attr(data-context-usage); color: #f9faf8; background: #343a36; border-radius: 4px; box-shadow: 0 4px 12px rgba(25, 31, 27, .18); font-size: 9px; line-height: 1; opacity: 0; pointer-events: none; transform: translateY(2px); transition: opacity .12s ease, transform .12s ease; white-space: nowrap; }
 .context-usage:hover::after { opacity: 1; transform: translateY(0); }
-.context-usage-ring { position: relative; display: block; width: 14px; height: 14px; flex: 0 0 auto; background: conic-gradient(var(--context-usage-color) var(--context-usage-progress), #e2e6e1 0); border-radius: 50%; }
+.context-usage-ring { position: relative; display: block; width: 14px; height: 14px; flex: 0 0 auto; background: conic-gradient(from -90deg, var(--context-usage-color) 0 var(--context-usage-progress), #e2e6e1 var(--context-usage-progress) 100%); border-radius: 50%; }
 .context-usage-ring::after { position: absolute; inset: 2.5px; content: ""; background: #fff; border-radius: inherit; }
 .conversation-send { display: grid; width: 29px; height: 29px; flex: 0 0 auto; margin-left: auto; place-items: center; color: #fff; background: #242421; border-radius: 6px; }
 .conversation-send:hover { background: #080807; }
@@ -1732,6 +1732,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .latex-line-numbers { color: #606060; background: #101010; border-color: #303030; }
 .paper-pdf-pane, .arch-pdf-stage { background: #202020; }
 .modal-backdrop, .gallery-dialog-backdrop { background: rgba(0, 0, 0, .88); }
+
+/* Context usage: a true occupied fraction in the neutral graphite palette. */
+.context-usage { --context-usage-color: #c6c6c6; }
+.context-usage.warning { --context-usage-color: #d9d9d9; color: #c7c7c7; }
+.context-usage.critical { --context-usage-color: #f1f1f1; color: #e1e1e1; }
+.context-usage::after { color: #f4f4f4; background: #303030; box-shadow: 0 4px 12px rgba(0, 0, 0, .28); }
+.context-usage-ring { background: conic-gradient(from -90deg, var(--context-usage-color) 0 var(--context-usage-progress), #4a4a4a var(--context-usage-progress) 100%); }
 
 /* Reading workspace: remove the legacy green accent from navigation and chat copy. */
 .paper-project-tab {
