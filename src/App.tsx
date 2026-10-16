@@ -54,6 +54,7 @@ import {
   Images,
   Lightbulb,
   MessageCircle,
+  Moon,
   Orbit,
   PanelBottom,
   FilePenLine,
@@ -66,6 +67,7 @@ import {
   ScanSearch,
   Square,
   SquareTerminal,
+  Sun,
   X,
 } from "lucide-react";
 
@@ -542,8 +544,13 @@ function contextImageFromData(image: ContextImage): ContextAttachment {
 }
 
 type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifacts" | "writing";
+type AppTheme = "charcoal" | "paper";
 
 function App() {
+  const [theme, setTheme] = useState<AppTheme>(() => {
+    if (typeof window === "undefined") return "charcoal";
+    return window.localStorage.getItem("archimedes-theme") === "paper" ? "paper" : "charcoal";
+  });
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [galleryOpened, setGalleryOpened] = useState(false);
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
@@ -595,6 +602,11 @@ function App() {
   const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
   const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("archimedes-theme", theme);
+  }, [theme]);
 
   function clearPendingAssistantDeltas() {
     pendingAssistantDeltasRef.current.clear();
@@ -1088,7 +1100,7 @@ function App() {
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "gallery" ? "Gallery" : mainSection === "writing" ? "Paper writing" : "Artifacts";
 
   return (
-    <main className="codex-shell">
+    <main className={`codex-shell theme-${theme}`}>
       <aside className="codex-sidebar" aria-label="Archimedes navigation">
         <div className="codex-brand">
           <span className="codex-brand-mark"><Orbit size={17} /></span>
@@ -1146,6 +1158,10 @@ function App() {
         />
 
         <div className="sidebar-workspace">
+          <div className="theme-switcher" role="group" aria-label="Appearance">
+            <button className={theme === "charcoal" ? "active" : ""} onClick={() => setTheme("charcoal")} title="Use charcoal theme" aria-label="Use charcoal theme" aria-pressed={theme === "charcoal"}><Moon size={14} /></button>
+            <button className={theme === "paper" ? "active" : ""} onClick={() => setTheme("paper")} title="Use paper theme" aria-label="Use paper theme" aria-pressed={theme === "paper"}><Sun size={14} /></button>
+          </div>
           <button className="workspace-button" onClick={chooseWorkspace} title="Choose workspace" disabled={agentBusy}>
             <span className="workspace-icon"><FolderOpen size={15} /></span>
             <span className="workspace-copy"><strong>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "Choose workspace"}</strong><small>{workspaceReady ? `${threads.length} research chats` : "Opening workspace"}</small></span>

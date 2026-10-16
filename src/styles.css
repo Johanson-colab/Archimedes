@@ -1803,3 +1803,164 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-left-color: #666;
 }
 .paper-ai-markdown a { color: #d5d5d5; }
+
+/* Two deliberate palettes: the existing charcoal instrument and a quiet paper workspace. */
+.theme-switcher { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; margin: 0 4px 8px; padding: 3px; background: #242424; border: 1px solid #363636; border-radius: 6px; }
+.theme-switcher button { display: grid; height: 25px; place-items: center; color: #8e8e8e; background: transparent; border-radius: 4px; }
+.theme-switcher button:hover { color: #e6e6e6; background: #303030; }
+.theme-switcher button.active { color: #fff; background: #3b3b3b; box-shadow: 0 1px 2px rgba(0, 0, 0, .28); }
+
+:root[data-theme="paper"] {
+  color: #252422;
+  background: #fbfaf8;
+  color-scheme: light;
+  --night-ground: #fbfaf8;
+  --night-sidebar: #f6f4f1;
+  --night-panel: #fffefd;
+  --night-panel-raised: #f5f3f0;
+  --night-panel-soft: #efede9;
+  --night-line: #e5e1db;
+  --night-line-soft: #ece9e4;
+  --night-ink: #252422;
+  --night-ink-soft: #5f5c57;
+  --night-muted: #918d86;
+  --night-faint: #aaa59e;
+  --night-accent: #57534e;
+  --night-accent-strong: #24211e;
+}
+
+html[data-theme="paper"], html[data-theme="paper"] body, html[data-theme="paper"] #root { background: #fbfaf8; }
+html[data-theme="paper"] body { color: #252422; }
+html[data-theme="paper"] ::selection { color: #252422; background: #dfdbd4; }
+html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
+
+.theme-paper.codex-shell, .theme-paper .codex-main, .theme-paper .main-view,
+.theme-paper .chat-main, .theme-paper .knowledge-main,
+.theme-paper .knowledge-main .library-content-pane, .theme-paper .knowledge-main .library-page,
+.theme-paper .skills-page, .theme-paper .artifacts-page, .theme-paper .paper-writing-page,
+.theme-paper .gallery-page { color: #252422; background: #fbfaf8; }
+.theme-paper .chat-main::before { background: #fbfaf8; }
+.theme-paper .codex-sidebar { color: #625f59; background: #f6f4f1; border-color: #e8e4de; }
+.theme-paper .codex-brand strong, .theme-paper .conversation-title strong { color: #252422; }
+.theme-paper .codex-brand-mark, .theme-paper .assistant-mark, .theme-paper .workspace-icon,
+.theme-paper .context-source-icon, .theme-paper .research-mode-icon, .theme-paper .change-card-icon,
+.theme-paper .gallery-header-icon, .theme-paper .daily-mark,
+.theme-paper .skill-collection-icon.green, .theme-paper .skill-collection-icon.gold,
+.theme-paper .skill-collection-icon.blue, .theme-paper .skill-collection-icon.teal,
+.theme-paper .skill-collection-icon.coral, .theme-paper .skill-collection-icon.graphite {
+  color: #5c5851; background: #eeece8; border-color: #dfdbd4;
+}
+.theme-paper .new-task-button, .theme-paper .conversation-composer,
+.theme-paper .context-picker-menu, .theme-paper .research-mode-menu, .theme-paper .composer-context-menu,
+.theme-paper .workspace-modal, .theme-paper .model-settings-modal, .theme-paper .web-search-modal,
+.theme-paper .provider-config, .theme-paper .model-catalog, .theme-paper .gallery-dialog,
+.theme-paper .gallery-dialog-content { color: #252422; background: #fffefd; border-color: #e2ded7; }
+.theme-paper .new-task-button { color: #282622; background: #eeece8; border-color: #e1ddd6; }
+.theme-paper .new-task-button:hover { color: #171614; background: #e5e1da; border-color: #d3cec6; }
+.theme-paper .main-toolbar { background: rgba(255, 254, 253, .92); border-color: #ece8e2; }
+.theme-paper .sidebar-nav, .theme-paper .knowledge-group, .theme-paper .sidebar-workspace { border-color: #e8e4de; }
+.theme-paper .codex-sidebar-label, .theme-paper .projects-heading, .theme-paper .conversation-title span,
+.theme-paper .workspace-copy small, .theme-paper .composer-note, .theme-paper .composer-context { color: #98938c; }
+.theme-paper .codex-nav-item, .theme-paper .recent-task, .theme-paper .project-tree-row { color: #625f59; }
+.theme-paper .codex-nav-item > svg, .theme-paper .project-select > svg { color: #77726b; }
+.theme-paper .codex-nav-item:hover, .theme-paper .recent-task:hover, .theme-paper .workspace-button:hover,
+.theme-paper .project-tree-row:hover, .theme-paper .project-tree-row.active,
+.theme-paper .project-chat-row:hover, .theme-paper .project-chat-row.active,
+.theme-paper .archived-toggle:hover, .theme-paper .archived-toggle.active {
+  color: #252422; background: #ece9e4;
+}
+.theme-paper .codex-nav-item.active, .theme-paper .recent-task.active { color: #252422; background: #e8e4de; border-left-color: #716c64; }
+.theme-paper .project-select, .theme-paper .workspace-button { color: #494641; }
+.theme-paper .main-toolbar .quiet-icon-button, .theme-paper .main-toolbar .model-provider-button { color: #6f6a63; }
+.theme-paper .quiet-icon-button:hover, .theme-paper .model-provider-button:hover { color: #252422; background: #efede9; }
+
+.theme-paper .conversation-message-role, .theme-paper .conversation-running,
+.theme-paper .conversation-running small { color: #8d8881; }
+.theme-paper .conversation-message p, .theme-paper .message-markdown { color: #37342f; }
+.theme-paper .conversation-message.user .conversation-message-copy { color: #302d28; background: #f0eeea; }
+.theme-paper .conversation-message.user p, .theme-paper .message-markdown h1,
+.theme-paper .message-markdown h2, .theme-paper .message-markdown h3, .theme-paper .message-markdown h4 { color: #252422; }
+.theme-paper .message-markdown blockquote { color: #69645d; border-color: #cbc5bd; }
+.theme-paper .message-markdown :not(pre) > code { color: #49453f; background: #f0eeea; }
+.theme-paper .message-markdown pre { color: #3a3732; background: #f5f3ef; border-color: #e2ddd6; }
+.theme-paper .message-markdown a, .theme-paper .conversation-sources a { color: #4f4a43; text-decoration-color: #aaa39a; }
+.theme-paper .conversation-sources a { background: #f3f1ed; border-color: #e2ddd6; }
+.theme-paper .conversation-composer { background: #fffefd; border-color: #e1ddd6; }
+.theme-paper .conversation-composer:focus-within { border-color: #bdb7ae; }
+.theme-paper .conversation-composer textarea, .theme-paper .paper-ai-compose textarea { color: #292722; }
+.theme-paper .conversation-composer textarea::placeholder { color: #aaa49c; }
+.theme-paper .composer-add-button, .theme-paper .composer-tool { color: #7f7971; }
+.theme-paper .composer-add-button:hover, .theme-paper .composer-add-button.active,
+.theme-paper .composer-tool:hover, .theme-paper .composer-tool.active { color: #252422; background: #efede9; }
+.theme-paper .context-usage-ring::after { background: #fffefd; }
+.theme-paper .conversation-send, .theme-paper .primary-button { color: #fffefd; background: #34312d; }
+.theme-paper .conversation-send:hover, .theme-paper .primary-button:hover { color: #fff; background: #171614; }
+.theme-paper .conversation-send:disabled, .theme-paper .primary-button:disabled { color: #aaa49c; background: #e9e5df; }
+
+.theme-paper .library-card, .theme-paper .library-split, .theme-paper .skill-collection-card,
+.theme-paper .skills-explorer, .theme-paper .artifacts-workspace, .theme-paper .paper-writing-workspace,
+.theme-paper .gallery-card, .theme-paper .paper-workbench-page, .theme-paper .knowledge-main .paper-workbench-page,
+.theme-paper .original-paper-reader, .theme-paper .paper-reader-toolbar, .theme-paper .paper-reader-tabs,
+.theme-paper .paper-ai-panel, .theme-paper .paper-ai-compose, .theme-paper .project-browser-reader,
+.theme-paper .github-project-workspace, .theme-paper .codebase-reader, .theme-paper .codebase-editor,
+.theme-paper .smart-terminal, .theme-paper .smart-terminal-tabs, .theme-paper .terminal-surfaces {
+  color: #37342f; background: #fffefd; border-color: #e5e1db;
+}
+.theme-paper .library-card:hover, .theme-paper .skill-collection-card:hover,
+.theme-paper .knowledge-main .library-card:hover, .theme-paper .library-paper-row:hover,
+.theme-paper .skill-index-row:hover, .theme-paper .workspace-tree-row:hover,
+.theme-paper .paper-tree-row:hover, .theme-paper .codebase-tree-node:hover,
+.theme-paper .artifact-tab:hover { background: #f2efeb; border-color: #ddd8d1; }
+.theme-paper .library-paper-list, .theme-paper .paper-inspector, .theme-paper .skills-index,
+.theme-paper .artifact-browser, .theme-paper .paper-source-browser, .theme-paper .artifact-preview-surface,
+.theme-paper .artifact-editor, .theme-paper .markdown-preview, .theme-paper .code-preview,
+.theme-paper .image-preview, .theme-paper .latex-editor-body, .theme-paper .codebase-editor pre,
+.theme-paper .gallery-card-image, .theme-paper .provider-list { color: #3a3732; background: #fbfaf8; border-color: #e8e4de; }
+.theme-paper .library-paper-row { color: #5d5952; background: #fffefd; border-bottom-color: #ebe7e1; }
+.theme-paper .library-paper-row strong, .theme-paper .library-card-copy strong,
+.theme-paper .skill-collection-copy strong, .theme-paper .gallery-card-body h2,
+.theme-paper .library-page-header h1, .theme-paper .library-detail-header h1,
+.theme-paper .skills-page-header h1, .theme-paper .skills-detail-header h1,
+.theme-paper .artifacts-header h1, .theme-paper .paper-writing-header h1, .theme-paper .gallery-header h1 { color: #252422; }
+.theme-paper .library-paper-row small, .theme-paper .library-paper-row .paper-row-year,
+.theme-paper .library-card-copy small, .theme-paper .skill-collection-copy small,
+.theme-paper .gallery-card-body p, .theme-paper .library-page-header p, .theme-paper .skills-page-header p,
+.theme-paper .skills-detail-header p, .theme-paper .artifacts-header p, .theme-paper .paper-writing-header p,
+.theme-paper .gallery-header p { color: #8d8881; }
+.theme-paper .library-paper-row.selected, .theme-paper .library-paper-row.active,
+.theme-paper .skill-index-row.active, .theme-paper .workspace-tree-row.active,
+.theme-paper .paper-tree-row.active, .theme-paper .codebase-tree-node.active,
+.theme-paper .artifact-tab.active { color: #252422; background: #eeebe6; box-shadow: inset 3px 0 #8b857d; }
+.theme-paper .library-toolbar, .theme-paper .skills-search, .theme-paper .gallery-search,
+.theme-paper .gallery-sort, .theme-paper .external-search-box, .theme-paper .artifact-tabs,
+.theme-paper .paper-pane-toolbar, .theme-paper .codebase-toolbar, .theme-paper .codebase-explorer,
+.theme-paper .codebase-editor > header, .theme-paper .model-catalog-header,
+.theme-paper .model-catalog-list button, .theme-paper .workspace-change-card,
+.theme-paper .workspace-change-card > header, .theme-paper .change-card-expand { color: #5d5952; background: #f6f4f1; border-color: #e5e1db; }
+.theme-paper .artifact-tab, .theme-paper .secondary-button, .theme-paper .outline-button,
+.theme-paper .gallery-proceedings-link, .theme-paper .paper-reader-launch { color: #514c45; background: #f3f1ed; border-color: #e2ddd6; }
+.theme-paper .artifact-tab.active { border-top-color: #8b857d; }
+.theme-paper .daily-search-panel, .theme-paper .daily-search-panel.deep,
+.theme-paper .daily-search-input-row input, .theme-paper .daily-search-input-row textarea,
+.theme-paper .daily-save-target select, .theme-paper .conference-filter-row select,
+.theme-paper .paper-search-control, .theme-paper .paper-ai-compose-input,
+.theme-paper .paper-ai-compose textarea, .theme-paper .workspace-modal input,
+.theme-paper .provider-config input, .theme-paper .web-search-modal-body input,
+.theme-paper .paper-notes textarea, .theme-paper .paper-record-row select,
+.theme-paper .paper-main-document select, .theme-paper .context-search, .theme-paper .attached-context-chip {
+  color: #322f2b; background: #fffefd; border-color: #dfdad2;
+}
+.theme-paper .codebase-editor pre, .theme-paper .latex-editor-body textarea { color: #37342f; background: #fbfaf8; caret-color: #282521; }
+.theme-paper .latex-line-numbers { color: #aaa49c; background: #f2f0ec; border-color: #e4e0da; }
+.theme-paper .paper-pdf-pane, .theme-paper .arch-pdf-stage { background: #ebe8e3; }
+.theme-paper .paper-ai-thread article.user, .theme-paper .paper-ai-thread article.assistant { color: #37342f; background: #f2f0ec; border-color: #e0dcd5; }
+.theme-paper .paper-ai-markdown, .theme-paper .paper-ai-panel h2,
+.theme-paper .paper-ai-markdown h1, .theme-paper .paper-ai-markdown h2,
+.theme-paper .paper-ai-markdown h3 { color: #302d28; }
+.theme-paper .paper-ai-markdown code, .theme-paper .paper-ai-markdown pre { color: #48433d; background: #f1efeb; border-color: #dfdad2; }
+.theme-paper .paper-ai-markdown a { color: #4d4841; }
+
+.theme-paper .theme-switcher { background: #efede9; border-color: #dfdad2; }
+.theme-paper .theme-switcher button { color: #908a82; }
+.theme-paper .theme-switcher button:hover { color: #34312d; background: #e5e1da; }
+.theme-paper .theme-switcher button.active { color: #25221f; background: #fffefd; box-shadow: 0 1px 2px rgba(46, 41, 35, .12); }
