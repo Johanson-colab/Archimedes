@@ -21,6 +21,7 @@ const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
 const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");
 const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile } = require("./repository-checkout.cjs");
+const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");
 
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
@@ -726,6 +727,8 @@ app.whenReady().then(() => {
     if (!input || typeof input !== "object") throw new Error("Deep-search input is required.");
     return deepSearchPapers(input, { modelConfig: modelConfig.getActiveModelConfig() });
   });
+
+  ipcMain.handle("benchmark-radar:get-data", () => getBenchmarkRadarData());
 
   ipcMain.handle("library:add-paper", (_event, { libraryId, paper }) => {
     if (typeof libraryId !== "string" || !paper || typeof paper.title !== "string" || !paper.title.trim()) {

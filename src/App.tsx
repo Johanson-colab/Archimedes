@@ -26,6 +26,7 @@ import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import coldarkDark from "react-syntax-highlighter/dist/esm/styles/prism/coldark-dark";
 import LibraryView from "./LibraryView";
 import GalleryView from "./GalleryView";
+import BenchmarkRadarView from "./BenchmarkRadarView";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
@@ -61,6 +62,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Radar,
   Search,
   SendHorizontal,
   ShieldCheck,
@@ -543,7 +545,7 @@ function contextImageFromData(image: ContextImage): ContextAttachment {
   };
 }
 
-type MainSection = "chat" | "skills" | "library" | "daily" | "gallery" | "artifacts" | "writing";
+type MainSection = "chat" | "skills" | "library" | "daily" | "benchmark-radar" | "gallery" | "artifacts" | "writing";
 type AppTheme = "charcoal" | "paper";
 
 function App() {
@@ -1097,7 +1099,7 @@ function App() {
   }
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
-  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "gallery" ? "Gallery" : mainSection === "writing" ? "Paper writing" : "Artifacts";
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "benchmark-radar" ? "Benchmark Radar" : mainSection === "gallery" ? "Gallery" : mainSection === "writing" ? "Paper writing" : "Artifacts";
 
   return (
     <main className={`codex-shell theme-${theme}`}>
@@ -1128,6 +1130,9 @@ function App() {
           </button>
           <button className={mainSection === "daily" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setDailyStartMode("latest"); setMainSection("daily"); }} title="Daily papers">
             <CalendarDays size={16} /><span>Daily papers</span>
+          </button>
+          <button className={mainSection === "benchmark-radar" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("benchmark-radar")} title="Benchmark Radar">
+            <Radar size={16} /><span>Benchmark Radar</span>
           </button>
           <button className={mainSection === "gallery" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setGalleryOpened(true); setMainSection("gallery"); }} title="Gallery">
             <Images size={16} /><span>Gallery</span>
@@ -1210,6 +1215,7 @@ function App() {
             {workspaceReady && <LibraryView key={workspace} bridge={desktopBridge} mode="library" workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
           </div>
           {mainSection === "daily" && workspaceReady && <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} />}
+          {mainSection === "benchmark-radar" && <BenchmarkRadarView />}
           {galleryOpened && <div className={mainSection === "gallery" ? "gallery-view-cache" : "gallery-view-cache hidden"} aria-hidden={mainSection !== "gallery"}><GalleryView active={mainSection === "gallery"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} /></div>}
           {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (

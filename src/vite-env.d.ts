@@ -38,6 +38,7 @@ interface ResearchDeskBridge {
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
+    getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
     addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
@@ -624,4 +625,42 @@ interface AgentEvent {
   turnId?: string;
   delta?: string;
   action?: AgentAction;
+}
+
+interface BenchmarkRadarRecord {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  oneLine: string;
+  releasedAt: string;
+  readiness: string;
+  area: string;
+  primaryDomain: string;
+  topics: string[];
+  capabilities: string[];
+  capabilityGroups: string[];
+  directions: string[];
+  authors: string[];
+  publication: { status: string; venue: string };
+  links: Record<string, string>;
+  attention: { githubStars: number | null; hfPaperUpvotes: number | null; datasetDownloads: number | null };
+  attentionScore: number | null;
+  attentionRank: number | null;
+  forecast: number | null;
+}
+
+interface BenchmarkRadarDirection {
+  id: string;
+  name: string;
+  section: string;
+  count: number;
+}
+
+interface BenchmarkRadarData {
+  sourceRoot: string;
+  updatedAt: string;
+  radar: BenchmarkRadarRecord[];
+  library: BenchmarkRadarRecord[];
+  directions: BenchmarkRadarDirection[];
 }
