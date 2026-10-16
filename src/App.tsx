@@ -1215,7 +1215,7 @@ function App() {
           {mainSection === "artifacts" && (
             <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
           )}
-          {mainSection === "writing" && workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} tree={fileTree} loadingDirectories={loadingDirectories} openRequest={paperOpenRequest} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
+          {mainSection === "writing" && workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
         </div>
 
         <TerminalPanel bridge={desktopBridge} open={terminalOpen} workspace={workspace} height={terminalHeight} onHeightChange={setTerminalHeight} onClose={() => setTerminalOpen(false)} />
