@@ -1732,3 +1732,67 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .latex-line-numbers { color: #606060; background: #101010; border-color: #303030; }
 .paper-pdf-pane, .arch-pdf-stage { background: #202020; }
 .modal-backdrop, .gallery-dialog-backdrop { background: rgba(0, 0, 0, .88); }
+
+/* Reading workspace: remove the legacy green accent from navigation and chat copy. */
+.paper-project-tab {
+  color: var(--mono-text-soft) !important;
+}
+.paper-project-tab:hover {
+  color: var(--mono-text) !important;
+  background: #242424 !important;
+  border-bottom-color: #777 !important;
+}
+.paper-project-tab.active {
+  color: #fff !important;
+  background: #2a2a2a !important;
+  border-bottom-color: #bdbdbd !important;
+}
+
+.paper-ai-panel,
+.paper-ai-thread article.user,
+.paper-ai-thread article.assistant,
+.paper-ai-markdown {
+  color: #dedede;
+}
+.paper-ai-panel h2,
+.paper-ai-empty strong,
+.paper-ai-markdown h1,
+.paper-ai-markdown h2,
+.paper-ai-markdown h3 {
+  color: var(--mono-text);
+}
+.paper-ai-thread article > span,
+.paper-ai-thread article.assistant > span,
+.paper-ai-evidence-scope,
+.paper-ai-working,
+.paper-ai-empty,
+.paper-ai-context span,
+.paper-ai-context p {
+  color: var(--mono-text-muted);
+}
+.paper-ai-empty > svg { color: var(--mono-text-soft); }
+.paper-ai-mode-toggle {
+  background: #202020;
+  border-color: #3d3d3d;
+}
+.paper-ai-mode-toggle button { color: #aaa; }
+.paper-ai-mode-toggle button.active {
+  color: #f2f2f2;
+  background: #343434;
+  box-shadow: none;
+}
+.paper-ai-markdown code {
+  color: #e2e2e2;
+  background: #303030;
+}
+.paper-ai-markdown pre {
+  color: #dedede;
+  background: #202020;
+  border: 1px solid #3d3d3d;
+}
+.paper-ai-markdown pre code { background: transparent; }
+.paper-ai-markdown blockquote {
+  color: #b5b5b5;
+  border-left-color: #666;
+}
+.paper-ai-markdown a { color: #d5d5d5; }
