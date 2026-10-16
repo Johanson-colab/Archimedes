@@ -12,7 +12,7 @@ function radarRoots() {
 }
 
 function resolveRadarRoot() {
-  const root = radarRoots().find((candidate) => fs.existsSync(path.join(candidate, "data", "benchmarks.json"))
+  const root = radarRoots().find((candidate) => fs.existsSync(path.join(candidate, "data", "benchmarks_index.json"))
     && fs.existsSync(path.join(candidate, "data", "library_index.json")));
   if (!root) {
     throw new Error("Benchmark Radar data was not found. Keep the benchmark-radar project next to ResearchDesk, or set BENCHMARK_RADAR_ROOT.");
@@ -77,7 +77,10 @@ function normalizeRecord(record) {
 function getBenchmarkRadarData() {
   if (cachedPayload) return cachedPayload;
   const root = resolveRadarRoot();
-  const radarSource = readJson(path.join(root, "data", "benchmarks.json"));
+  // Benchmark Radar's public Radar surface consumes this generated index, not
+  // the internal canonical snapshot.  Keeping that contract here preserves its
+  // filtering and display eligibility rules inside Archimedes as well.
+  const radarSource = readJson(path.join(root, "data", "benchmarks_index.json"));
   const librarySource = readJson(path.join(root, "data", "library_index.json"));
   const radar = Array.isArray(radarSource.records) ? radarSource.records.filter((record) => record && record.displayEligible !== false).map(normalizeRecord) : [];
   const library = Array.isArray(librarySource.records) ? librarySource.records.filter((record) => record && record.displayEligible !== false).map(normalizeRecord) : [];
