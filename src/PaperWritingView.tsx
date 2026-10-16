@@ -73,7 +73,9 @@ export type PaperOpenRequest = { path: string; token: number } | null;
 export default function PaperWritingView({ bridge, workspace, openRequest, onRefresh, onAskAI }: {
   bridge: ResearchDeskBridge; workspace: string; openRequest: PaperOpenRequest; onRefresh: () => Promise<void> | void; onAskAI: (path: string) => void;
 }) {
-  const [projects, setProjects] = useState<LatexProjectSummary[]>([]);
+  // Project discovery deliberately stays out of the entry dialog: selecting a
+  // project should always mean creating one or importing an explicit folder.
+  const projects: LatexProjectSummary[] = [];
   const [activeProject, setActiveProject] = useState("");
   const [tree, setTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
   const [loading, setLoading] = useState<Set<string>>(new Set());
@@ -102,12 +104,6 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
   const savedRef = useRef("");
   const saveSequence = useRef(0);
   const compileSequence = useRef(0);
-
-  const refreshProjects = useCallback(async () => {
-    const next = await bridge.listLatexProjects(workspace);
-    setProjects(next);
-    return next;
-  }, [bridge, workspace]);
 
   const loadDirectory = useCallback(async (directory: string, root = false) => {
     setLoading((current) => new Set(current).add(directory));
@@ -160,7 +156,6 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
     }
   }, [bridge, mainPath, workspace]);
 
-  useEffect(() => { void refreshProjects().catch((nextError) => setError(nextError instanceof Error ? nextError.message : String(nextError))); }, [refreshProjects]);
   useEffect(() => { if (openRequest?.path) void activateProject(openRequest.path); }, [activateProject, openRequest?.path, openRequest?.token]);
   useEffect(() => {
     if (!file || draft === savedDraft) return;
@@ -181,7 +176,7 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
   async function createProject() {
     try {
       const created = await bridge.createLatexProject(workspace, projectName.trim() || "paper");
-      await onRefresh(); await refreshProjects(); await activateProject(created.path); void compile(created.path);
+      await onRefresh(); await activateProject(created.path); void compile(created.path);
     } catch (nextError) { setError(nextError instanceof Error ? nextError.message : String(nextError)); }
   }
   async function importFolder() {
@@ -189,7 +184,7 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
     try {
       const imported = await bridge.importLatexFolder(workspace);
       if (imported.canceled) return;
-      await onRefresh(); await refreshProjects();
+      await onRefresh();
       if (imported.main_path) await activateProject(imported.main_path);
       else setError("The imported folder has no .tex document. Add one, then open the project again.");
     } catch (nextError) { setError(nextError instanceof Error ? nextError.message : String(nextError)); } finally { setImporting(false); }
@@ -228,13 +223,12 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
 
   const lines = useMemo(() => draft.split("\n"), [draft]);
   const problemLines = useMemo(() => new Set(compileResult?.diagnostics.flatMap((item) => item.line ? [item.line] : []) ?? []), [compileResult]);
-  const projectDocuments = projects.filter((project) => projectRoot(project.path) === activeProject);
   const projectLabel = activeProject.split("/").at(-1) || "New project";
 
   return <div className="paper-writing-page">
     <header className="paper-writing-header"><div><span className="page-kicker">LaTeX workspace</span><h1>Paper writing</h1><p>Create a paper project, edit its source, and preview the compiled PDF in one place.</p></div><div className="paper-writing-actions">{file && <button className="secondary-button" onClick={() => onAskAI(file.path)}><MessageCircle size={14} />Ask AI</button>}<button className="secondary-button" onClick={() => setChooserOpen(true)}><FolderOpen size={14} />Projects</button>{activeProject && <><button className="secondary-button" disabled={importing} onClick={() => void importFolder()}>{importing ? <LoaderCircle className="spin" size={14} /> : <FolderUp size={14} />}{importing ? "Importing…" : "Import folder"}</button><button className="primary-button" disabled={!mainPath || compileState === "compiling"} onClick={() => void compile()}>{compileState === "compiling" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}{compileState === "compiling" ? "Compiling…" : "Recompile"}</button></>}</div></header>
     <div className="paper-writing-workspace">
-      <aside className="paper-source-browser"><div className="paper-browser-title"><FolderOpen size={14} /><strong>{projectLabel}</strong>{activeProject && <div className="paper-browser-actions"><button onClick={() => { setCreateKind("file"); setCreateName("section.tex"); }} aria-label="New LaTeX file"><FilePlus2 size={14} /></button><button onClick={() => { setCreateKind("folder"); setCreateName("figures"); }} aria-label="New folder"><FolderPlus size={14} /></button></div>}</div><label className="paper-main-document">Main document<select value={mainPath} disabled={!activeProject} onChange={(event) => { setMainPath(event.target.value); void openFile(event.target.value); }}>{!activeProject && <option value="">Choose a project first</option>}{projectDocuments.map((project) => <option key={project.path} value={project.path}>{project.title}</option>)}</select></label><div className="paper-tree-scroll">{activeProject ? tree.entries.map((entry) => <TreeNode key={entry.path} entry={entry} depth={0} selected={file?.path || ""} activeDirectory={activeDirectory} expanded={expanded} loading={loading} onToggle={toggleDirectory} onLoad={(path) => void loadDirectory(path)} onOpen={(path) => void openFile(path)} />) : <div className="paper-project-placeholder"><FolderOpen size={20} /><strong>No project selected</strong><span>Start a blank paper or import an existing LaTeX folder.</span></div>}</div></aside>
+      <aside className="paper-source-browser"><div className="paper-browser-title"><FolderOpen size={14} /><strong>{projectLabel}</strong>{activeProject && <div className="paper-browser-actions"><button onClick={() => { setCreateKind("file"); setCreateName("section.tex"); }} aria-label="New LaTeX file"><FilePlus2 size={14} /></button><button onClick={() => { setCreateKind("folder"); setCreateName("figures"); }} aria-label="New folder"><FolderPlus size={14} /></button></div>}</div><label className="paper-main-document">Main document<select value={mainPath} disabled={!activeProject} onChange={(event) => { setMainPath(event.target.value); void openFile(event.target.value); }}>{!activeProject && <option value="">Choose a project first</option>}{mainPath && <option value={mainPath}>{mainPath.split("/").at(-1)}</option>}</select></label><div className="paper-tree-scroll">{activeProject ? tree.entries.map((entry) => <TreeNode key={entry.path} entry={entry} depth={0} selected={file?.path || ""} activeDirectory={activeDirectory} expanded={expanded} loading={loading} onToggle={toggleDirectory} onLoad={(path) => void loadDirectory(path)} onOpen={(path) => void openFile(path)} />) : <div className="paper-project-placeholder"><FolderOpen size={20} /><strong>No project selected</strong><span>Start a blank paper or import an existing LaTeX folder.</span></div>}</div></aside>
       <section className="latex-editor-pane"><div className="paper-pane-toolbar"><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><span className={`paper-save-state ${saveState}`}>{saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span></div>{file ? <div className="latex-editor-body"><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} onChange={(event) => { draftRef.current = event.target.value; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; draftRef.current = next; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div> : <div className="paper-writing-empty"><FileText size={25} /><strong>No LaTeX project open</strong><span>Choose a blank project or import a complete folder to start writing.</span><button className="primary-button" onClick={() => setChooserOpen(true)}><FolderOpen size={14} />Open project</button></div>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{error}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{diagnostic.message}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}</section>
       <section className="paper-pdf-pane"><div className="paper-pane-toolbar"><FileText size={14} /><strong>PDF preview</strong><label className="paper-auto-compile"><input type="checkbox" checked={autoCompile} onChange={(event) => setAutoCompile(event.target.checked)} />Auto compile</label><span className={`paper-compile-state ${compileState}`}>{compileState === "compiling" ? <LoaderCircle className="spin" size={11} /> : compileState === "success" ? <Check size={11} /> : compileState === "error" ? <AlertTriangle size={11} /> : null}{compileState === "success" ? `${compileResult?.duration_ms ?? 0} ms` : compileState === "error" ? "Build failed" : compileState === "compiling" ? "Building" : "Not built"}</span></div>{compileResult?.preview_url ? <iframe key={compileResult.preview_url} src={compileResult.preview_url} title="Compiled paper PDF" /> : <div className="paper-writing-empty"><FileText size={27} /><strong>Compile to preview</strong><span>The generated PDF appears here. Any build problem is listed beside the source with its line number.</span>{mainPath && <button className="primary-button" disabled={compileState === "compiling"} onClick={() => void compile()}><Play size={14} />Compile paper</button>}</div>}</section>
     </div>
