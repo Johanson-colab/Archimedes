@@ -57,7 +57,6 @@ import {
   Orbit,
   PanelBottom,
   FilePenLine,
-  PenLine,
   Play,
   Plus,
   RefreshCw,
@@ -1096,15 +1095,12 @@ function App() {
           <strong>Archimedes</strong>
         </div>
 
-        <button className="new-task-button" onClick={() => startNewTask()} title="New task" disabled={agentBusy}>
-          <PenLine size={16} />
-          <span>New task</span>
+        <button className="new-task-button" onClick={() => startNewTask()} title="New research task" disabled={agentBusy}>
+          <Plus size={17} />
+          <span>New</span>
         </button>
 
         <nav className="sidebar-nav" aria-label="Primary">
-          <button className={mainSection === "chat" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("chat")} title="Research chat">
-            <Bot size={16} /><span>Research chat</span>
-          </button>
           <button className="codex-nav-item" onClick={() => setModal("search")} title="Search knowledge">
             <Search size={16} /><span>Search</span>
           </button>
