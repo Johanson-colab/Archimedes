@@ -247,8 +247,11 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   const pdflatex = latexmk ? "" : findExecutable(["pdflatex", "pdflatex.exe", "/Library/TeX/texbin/pdflatex"], compilerEnv);
   const executable = latexmk || pdflatex;
   if (!executable) throw new Error("No LaTeX compiler was found. Install latexmk or pdflatex, then try again.");
+  // A manual compile is expected to reflect changes outside the .tex source
+  // as well (for example, a TeX package that was just installed).  latexmk's
+  // dependency cache otherwise preserves an earlier failed build indefinitely.
   const args = latexmk
-    ? ["-pdf", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-outdir=${buildDirectory}`, path.basename(absoluteSource)]
+    ? ["-g", "-pdf", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-outdir=${buildDirectory}`, path.basename(absoluteSource)]
     : ["-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-output-directory=${buildDirectory}`, path.basename(absoluteSource)];
   const startedAt = Date.now();
   let run = await runCompiler(executable, args, { ...options, cwd: sourceDirectory, env: compilerEnv });
