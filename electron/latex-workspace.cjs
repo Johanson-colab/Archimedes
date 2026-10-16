@@ -167,8 +167,13 @@ function importLatexProject(root, sourceDirectory) {
     fs.rmSync(destination, { recursive: true, force: true });
     throw error;
   }
-  const projects = listLatexProjects(root).filter((project) => project.path === directory || project.path.startsWith(`${directory}/`));
-  const mainPath = projects.find((project) => project.main)?.path || projects[0]?.path || "";
+  // Search the imported directory itself.  Looking through the whole
+  // workspace can hit the discovery cap before reaching a newly imported
+  // folder in a large research checkout, which used to produce a false
+  // "no .tex document" result.
+  const projects = listLatexProjects(destination);
+  const selected = projects.find((project) => project.main) || projects[0];
+  const mainPath = selected ? `${directory}/${selected.path}` : "";
   return { name: path.basename(destination), directory, file_count: files.length, total_bytes: totalBytes, main_path: mainPath };
 }
 

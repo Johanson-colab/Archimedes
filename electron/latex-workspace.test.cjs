@@ -73,6 +73,20 @@ test("imports a complete LaTeX folder and selects its main document", () => {
   }
 });
 
+test("finds the imported main document even when the workspace discovery cap is exhausted", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-large-workspace-"));
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "conference-paper-"));
+  try {
+    for (let index = 0; index < 4_100; index += 1) fs.writeFileSync(path.join(root, `old-${index}.tex`), "% archived\n");
+    fs.writeFileSync(path.join(source, "main.tex"), "\\documentclass{article}\n\\begin{document}Ready\\end{document}\n");
+    const imported = importLatexProject(root, source);
+    assert.equal(imported.main_path, `${imported.directory}/main.tex`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
 test("extracts line-oriented LaTeX diagnostics", () => {
   const diagnostics = parseLatexDiagnostics("main.tex:17: Undefined control sequence.\n! Missing $ inserted.\nl.23 bad input");
   assert.deepEqual(diagnostics, [
