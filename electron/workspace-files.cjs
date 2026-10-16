@@ -8,7 +8,7 @@ const TEXT_EXTENSIONS = new Set([
   "", ".c", ".cc", ".cjs", ".cpp", ".css", ".csv", ".env", ".go", ".h", ".hpp", ".html",
   ".ini", ".java", ".js", ".json", ".jsonl", ".jsx", ".kt", ".latex", ".log", ".lua", ".m",
   ".md", ".mdx", ".mjs", ".php", ".pl", ".properties", ".py", ".r", ".rb", ".rs", ".rst",
-  ".scss", ".sh", ".sql", ".swift", ".tex", ".toml", ".ts", ".tsx", ".txt", ".vue", ".xml",
+  ".bib", ".bst", ".cfg", ".cls", ".scss", ".sh", ".sql", ".sty", ".swift", ".tex", ".toml", ".ts", ".tsx", ".txt", ".vue", ".xml",
   ".yaml", ".yml",
 ]);
 const IMAGE_EXTENSIONS = new Set([".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"]);

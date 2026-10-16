@@ -39,6 +39,10 @@ test("reads and writes text without allowing workspace escapes", () => {
   assert.match(file.content, /answer/);
   writeWorkspaceTextFile(root, "notes/result.md", "# Result\n");
   assert.equal(readWorkspaceFile(root, "notes/result.md").kind, "markdown");
+  fs.writeFileSync(path.join(root, "references.bib"), "@article{archimedes, title={Paper}}\n");
+  fs.writeFileSync(path.join(root, "paper.sty"), "\\ProvidesPackage{paper}\n");
+  assert.match(readWorkspaceFile(root, "references.bib").content, /@article/);
+  assert.equal(readWorkspaceFile(root, "paper.sty").kind, "text");
   fs.writeFileSync(path.join(root, "paper.pdf"), "%PDF-1.7\n");
   assert.equal(readWorkspaceFile(root, "paper.pdf").kind, "pdf");
   assert.throws(() => workspacePath(root, "../outside.txt", { mustExist: false }), /outside/);

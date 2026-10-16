@@ -2317,6 +2317,15 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .latex-diagnostics button,
 .theme-paper .latex-diagnostics details { color: #75592f; }
 
+/* The Paper theme's general textarea rule is intentionally overwritten here:
+   the textarea is the editable/caret layer, while the visible source lives in
+   the synchronized syntax-highlight layer underneath it. */
+.theme-paper .latex-highlight { color: #39352f; background: #fbfaf8; }
+.theme-paper .latex-editor-body .latex-editor-textarea,
+.theme-paper .latex-editor-body .latex-editor-textarea:focus { color: transparent; background: transparent; caret-color: #282521; }
+.theme-paper .latex-editor-body .latex-editor-textarea:focus { box-shadow: inset 0 0 0 1px #aaa197; }
+.theme-paper .latex-token-command { color: #315fa4; }.theme-paper .latex-token-comment { color: #4a8967; }.theme-paper .latex-token-math { color: #9a632b; }.theme-paper .latex-token-punctuation { color: #7754a2; }.theme-paper .latex-token-number { color: #a14869; }
+
 .theme-paper .gallery-filters,
 .theme-paper .gallery-credit { border-color: #e3ded7; }
 .theme-paper .gallery-facet-label,
