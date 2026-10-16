@@ -812,6 +812,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
             className="codebase-source"
             language={codebaseLanguage(activeFile.path)}
             style={coldarkDark}
+            useInlineStyles={false}
             showLineNumbers
             wrapLines
             wrapLongLines={false}

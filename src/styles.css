@@ -1991,12 +1991,53 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .code-preview > pre *,
 .theme-paper .codebase-source code *,
 .theme-paper .codebase-source > span {
-  color: inherit !important;
+  color: #39352f !important;
   background: transparent !important;
   text-shadow: none !important;
 }
 .theme-paper .code-preview .linenumber,
 .theme-paper .codebase-source .linenumber { color: #a09a91 !important; }
+
+/* Keep code legible on paper without flattening its syntax into one colour. */
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.comment,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.prolog,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.doctype,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.cdata {
+  color: #8a8278 !important;
+}
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.keyword,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.atrule,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.selector,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.important {
+  color: #7b4e75 !important;
+}
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.function,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.class-name,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.builtin {
+  color: #356d72 !important;
+}
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.string,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.char,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.attr-value,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.regex {
+  color: #8a6331 !important;
+}
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.number,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.boolean,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.constant,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.symbol,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.property,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.variable {
+  color: #765e90 !important;
+}
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.operator,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.entity,
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.url {
+  color: #625d56 !important;
+}
+.theme-paper :is(.message-code-block, .code-preview, .codebase-source) .token.punctuation {
+  color: #777169 !important;
+}
 
 .theme-paper .paper-project-tab { color: #655f57 !important; }
 .theme-paper .paper-project-tab:hover {

@@ -1541,6 +1541,7 @@ const MarkdownContent = memo(function MarkdownContent({ content }: { content: st
           className="message-code-block"
           language={language}
           style={coldarkDark}
+          useInlineStyles={false}
           PreTag="div"
           customStyle={{ margin: 0, padding: "13px 15px", background: "#0d0f17", fontSize: "11px", lineHeight: 1.65 }}
           codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
@@ -1728,6 +1729,7 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
     <SyntaxHighlighter
       language={languageForFile(filePath)}
       style={coldarkDark}
+      useInlineStyles={false}
       showLineNumbers
       wrapLines
       wrapLongLines={false}
