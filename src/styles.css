@@ -1904,8 +1904,8 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .composer-add-button:hover, .theme-paper .composer-add-button.active,
 .theme-paper .composer-tool:hover, .theme-paper .composer-tool.active { color: #252422; background: #efede9; }
 .theme-paper .context-usage-ring::after { background: #fffefd; }
-.theme-paper .conversation-send, .theme-paper .primary-button { color: #fffefd; background: #34312d; }
-.theme-paper .conversation-send:hover, .theme-paper .primary-button:hover { color: #fff; background: #171614; }
+.theme-paper .conversation-send, .theme-paper .primary-button { color: #292620; background: #ded8d0; border-color: #cbc3b9; }
+.theme-paper .conversation-send:hover, .theme-paper .primary-button:hover { color: #1f1c19; background: #cfc7bd; border-color: #bdb4a9; }
 .theme-paper .conversation-send:disabled, .theme-paper .primary-button:disabled { color: #aaa49c; background: #e9e5df; }
 
 .theme-paper .library-card, .theme-paper .library-split, .theme-paper .skill-collection-card,
