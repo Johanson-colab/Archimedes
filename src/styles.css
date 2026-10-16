@@ -905,7 +905,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .artifact-editor-pane > .artifact-empty { grid-row: 2; }
 .artifact-empty strong { color: #666660; font-size: 11px; }.artifact-empty span { max-width: 440px; line-height: 1.5; }.artifact-empty.error { color: #9b4a44; }
 
-.knowledge-main:has(.paper-writing-page) { overflow: hidden; }
+/* Paper Writing stays mounted while navigating so its editor state survives.
+   Only the visible writing workspace should claim the shell's scroll area;
+   an off-screen cached page must not disable Library/Gallery scrolling. */
+.knowledge-main:has(.paper-writing-view-cache:not(.hidden) .paper-writing-page) { overflow: hidden; }
 .paper-writing-page { display: grid; width: 100%; height: 100%; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); padding: 15px 18px 18px; background: #f7f7f5; }
 .paper-writing-header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 0 2px 12px; border-bottom: 1px solid #deded9; }
 .paper-writing-header h1 { margin: 3px 0 0; color: #292926; font-size: 20px; }
