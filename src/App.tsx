@@ -1538,6 +1538,7 @@ const MarkdownContent = memo(function MarkdownContent({ content }: { content: st
         const language = /language-([\w-]+)/.exec(className || "")?.[1];
         if (!language) return <code className={className} {...props}>{children}</code>;
         return <SyntaxHighlighter
+          className="message-code-block"
           language={language}
           style={coldarkDark}
           PreTag="div"

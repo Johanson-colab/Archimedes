@@ -1964,3 +1964,125 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .theme-switcher button { color: #908a82; }
 .theme-paper .theme-switcher button:hover { color: #34312d; background: #e5e1da; }
 .theme-paper .theme-switcher button.active { color: #25221f; background: #fffefd; box-shadow: 0 1px 2px rgba(46, 41, 35, .12); }
+
+/* Complete the warm-paper surface: no charcoal or legacy green should leak through. */
+.theme-paper .message-code-block,
+.theme-paper .message-code-block > code,
+.theme-paper .code-preview > pre,
+.theme-paper .codebase-source,
+.theme-paper .codebase-source > code {
+  color: #39352f !important;
+  background: #f4f1ec !important;
+  border-color: #e0dad2 !important;
+  text-shadow: none !important;
+}
+.theme-paper .message-code-block *,
+.theme-paper .code-preview > pre *,
+.theme-paper .codebase-source code *,
+.theme-paper .codebase-source > span {
+  color: inherit !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+.theme-paper .code-preview .linenumber,
+.theme-paper .codebase-source .linenumber { color: #a09a91 !important; }
+
+.theme-paper .paper-project-tab { color: #655f57 !important; }
+.theme-paper .paper-project-tab:hover {
+  color: #2c2925 !important;
+  background: #f1eeea !important;
+  border-bottom-color: #a19a91 !important;
+}
+.theme-paper .paper-project-tab.active {
+  color: #292620 !important;
+  background: #ebe7e1 !important;
+  border-bottom-color: #716a61 !important;
+}
+.theme-paper .paper-reader-tabs button.active {
+  color: #292620;
+  background: #f7f4f0;
+  border-bottom-color: #716a61;
+}
+
+.theme-paper .paper-inspector { color: #4e4942; }
+.theme-paper .paper-inspector-kicker,
+.theme-paper .paper-authors,
+.theme-paper .paper-abstract,
+.theme-paper .library-description { color: #746e66; }
+.theme-paper .paper-inspector-title h2,
+.theme-paper .paper-inspector label { color: #292620; }
+.theme-paper .paper-record-row { border-color: #e2ddd6; }
+.theme-paper .paper-record-row label,
+.theme-paper .paper-notes { color: #625c54; }
+.theme-paper .paper-notes textarea::placeholder { color: #9b958d; }
+.theme-paper .paper-reader-launch strong { color: #38332d; }
+.theme-paper .paper-reader-launch small { color: #817a72; }
+
+.theme-paper .daily-mode-tabs,
+.theme-paper .daily-range-control,
+.theme-paper .daily-search-kind { background: #f0ede8; border-color: #e0dbd4; }
+.theme-paper .daily-mode-tabs button,
+.theme-paper .daily-range-control button,
+.theme-paper .daily-search-kind button { color: #706a62; }
+.theme-paper .daily-mode-tabs button.active,
+.theme-paper .daily-range-control button.active,
+.theme-paper .daily-search-kind button.active,
+.theme-paper .daily-search-panel.deep .daily-search-kind button.active {
+  color: #292620;
+  background: #fffefd;
+  border-color: #d8d1c9;
+  box-shadow: 0 1px 3px rgba(44, 39, 33, .08);
+}
+.theme-paper .daily-topic-filter button,
+.theme-paper .conference-presentation-tabs button {
+  color: #5f5951;
+  background: #f5f2ee;
+  border-color: #e1dcd5;
+}
+.theme-paper .daily-topic-filter button:hover,
+.theme-paper .conference-presentation-tabs button:hover {
+  color: #302c27;
+  background: #ece8e2;
+  border-color: #d4cdc5;
+}
+.theme-paper .daily-topic-filter button.active,
+.theme-paper .conference-presentation-tabs button.active {
+  color: #292620;
+  background: #e6e1da;
+  border-color: #d0c9c1;
+  box-shadow: none;
+}
+.theme-paper .daily-search-panel,
+.theme-paper .daily-search-panel.deep { background: #fffefd; border-color: #e1dcd5; }
+.theme-paper .daily-search-input-row input,
+.theme-paper .daily-search-input-row textarea { color: #302d28; background: #fffefd; border-color: #ddd7cf; }
+.theme-paper .daily-search-input-row input:focus,
+.theme-paper .daily-search-input-row textarea:focus { border-color: #aaa197; box-shadow: 0 0 0 2px rgba(94, 87, 78, .1); }
+.theme-paper .daily-search-meta,
+.theme-paper .daily-search-row > span,
+.theme-paper .daily-save-target { color: #8b857d; }
+.theme-paper .daily-clear-search { color: #6c665f; }
+.theme-paper .daily-clear-search:hover { color: #302c27; background: #eeeae4; }
+.theme-paper .daily-paper-list { border-color: #e5e0d9; }
+.theme-paper .daily-paper-row { background: #fffefd; border-color: #ebe6df; }
+.theme-paper .daily-paper-row:hover { background: #f7f4f0; }
+.theme-paper .daily-paper-date { color: #706961; }
+.theme-paper .daily-paper-date span { color: #9a948c; }
+.theme-paper .daily-paper-title h2 { color: #2b2823; }
+.theme-paper .daily-paper-title a { color: #655f57; }
+.theme-paper .daily-paper-row p { color: #837d75; }
+.theme-paper .daily-paper-row small { color: #686159; }
+.theme-paper .daily-paper-signals span,
+.theme-paper .daily-paper-signals a { color: #5d574f; background: #efebe5; border-color: #dfd9d2; }
+.theme-paper .daily-search-plan { color: #5c564e; background: #f6f3ef; border-color: #e1dbd4; }
+.theme-paper .daily-search-plan > div:first-child > strong { color: #322e29; }
+.theme-paper .daily-search-plan p { color: #827b73; }
+.theme-paper .daily-search-plan-tags > span { color: #5e574f; background: #fffefd; border-color: #e0dad2; }
+.theme-paper .daily-search-plan-tags small { color: #8d867e; }
+.theme-paper .daily-search-plan details { color: #655f57; }
+.theme-paper .deep-match-reason,
+.theme-paper .deep-match-reason.related,
+.theme-paper .deep-match-reason.background { color: #605950; background: #f5f2ee; border-color: #aaa197; }
+.theme-paper .deep-match-reason strong,
+.theme-paper .deep-match-reason.related strong,
+.theme-paper .deep-match-reason.background strong { color: #3e3933; }
