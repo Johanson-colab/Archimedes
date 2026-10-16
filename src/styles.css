@@ -2412,3 +2412,15 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .daily-search-warning,
 .theme-paper .conference-notice { color: #745b35; background: #fbf3e5; border-color: #dfc99f; }
 .theme-paper .conference-mode-button.active { color: #292620; background: #e4dfd8; border-color: #cbc3b9; }
+
+/* PDF.js draws the original glyphs on canvas.  Its text layer exists only to
+   support selecting/copying text, so it must never paint a fallback browser
+   font over the canvas while a selection is active. */
+.arch-pdf-text-layer,
+.arch-pdf-text-layer :is(span, br) { color: transparent !important; }
+html[data-theme="paper"] .arch-pdf-text-layer ::selection,
+.arch-pdf-text-layer ::selection {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background: rgba(100, 115, 140, .30);
+}
