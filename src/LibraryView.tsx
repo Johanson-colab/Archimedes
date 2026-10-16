@@ -888,6 +888,10 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSel
         context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
         await pdfPage.render({ canvas, canvasContext: context, viewport }).promise;
         const textContent = await pdfPage.getTextContent();
+        // PDF.js registers each embedded font under the text item's font name. Its
+        // text-content styles otherwise fall back to generic sans/mono families,
+        // which only becomes visible when the selectable text layer is selected.
+        for (const [fontName, style] of Object.entries(textContent.styles)) style.fontFamily = fontName;
         const layer = new pdfjs.TextLayer({ textContentSource: textContent, container: textLayer, viewport });
         await layer.render();
         const annotations = await pdfPage.getAnnotations();
