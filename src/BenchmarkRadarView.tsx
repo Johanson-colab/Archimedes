@@ -3,7 +3,8 @@ import { Bookmark, BookmarkCheck, ExternalLink, LibraryBig, LoaderCircle, Radar,
 
 type RadarTab = "radar" | "library";
 type TimeWindow = "latest" | "30d" | "90d";
-type Sort = "attention" | "newest" | "growing";
+type RadarSort = "attention" | "newest";
+type LibrarySort = RadarSort | "stars";
 
 const SAVED_KEY = "archimedes:benchmark-radar:saved";
 
@@ -69,7 +70,8 @@ export default function BenchmarkRadarView() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RadarTab>("radar");
   const [windowName, setWindowName] = useState<TimeWindow>("latest");
-  const [sort, setSort] = useState<Sort>("attention");
+  const [radarSort, setRadarSort] = useState<RadarSort>("attention");
+  const [librarySort, setLibrarySort] = useState<LibrarySort>("attention");
   const [query, setQuery] = useState("");
   const [direction, setDirection] = useState("");
   const [saved, setSaved] = useState<Set<string>>(loadSaved);
@@ -98,10 +100,12 @@ export default function BenchmarkRadarView() {
   const radarRecords = useMemo(() => {
     if (!data) return [];
     const newestDate = data.radar.reduce((latest, record) => dateValue(record.releasedAt) > dateValue(latest) ? record.releasedAt : latest, "");
-    const cutoff = dateValue(data.updatedAt) - (windowName === "30d" ? 30 : windowName === "90d" ? 90 : 0) * 86_400_000;
+    const dataAsOf = dateValue(data.updatedAt);
+    const cutoffAnchor = dataAsOf || dateValue(newestDate);
+    const cutoff = cutoffAnchor - (windowName === "30d" ? 30 : windowName === "90d" ? 90 : 0) * 86_400_000;
     return data.radar.filter((record) => windowName === "latest" ? record.releasedAt === newestDate : dateValue(record.releasedAt) >= cutoff)
-      .sort((a, b) => sort === "newest" ? dateValue(b.releasedAt) - dateValue(a.releasedAt) || a.name.localeCompare(b.name) : attentionValue(b) - attentionValue(a) || dateValue(b.releasedAt) - dateValue(a.releasedAt));
-  }, [data, sort, windowName]);
+      .sort((a, b) => radarSort === "newest" ? dateValue(b.releasedAt) - dateValue(a.releasedAt) || a.name.localeCompare(b.name) : attentionValue(b) - attentionValue(a) || dateValue(b.releasedAt) - dateValue(a.releasedAt));
+  }, [data, radarSort, windowName]);
 
   const libraryRecords = useMemo(() => {
     if (!data) return [];
@@ -110,8 +114,8 @@ export default function BenchmarkRadarView() {
       if (direction && !record.directions.includes(direction)) return false;
       if (!term) return true;
       return [record.name, record.title, record.description, record.area, ...record.topics, ...record.directions].join(" ").toLocaleLowerCase().includes(term);
-    }).sort((a, b) => sort === "newest" ? dateValue(b.releasedAt) - dateValue(a.releasedAt) : sort === "growing" ? (b.attention.githubStars ?? 0) - (a.attention.githubStars ?? 0) : attentionValue(b) - attentionValue(a));
-  }, [data, direction, query, sort]);
+    }).sort((a, b) => librarySort === "newest" ? dateValue(b.releasedAt) - dateValue(a.releasedAt) : librarySort === "stars" ? (b.attention.githubStars ?? 0) - (a.attention.githubStars ?? 0) : attentionValue(b) - attentionValue(a));
+  }, [data, direction, librarySort, query]);
 
   const directionsBySection = useMemo(() => {
     const groups = new Map<string, BenchmarkRadarDirection[]>();
@@ -136,12 +140,12 @@ export default function BenchmarkRadarView() {
 
     {tab === "radar" ? <section className="benchmark-radar-content">
       <div className="benchmark-intro"><div><h2>Emerging AI benchmarks</h2><p>New public evaluations from the latest Benchmark Radar release feed, ranked by observable attention where signals are available.</p></div><strong>{radarRecords.length}<small> latest releases</small></strong></div>
-      <div className="benchmark-controls"><div><span>Time window</span><div className="benchmark-segmented">{(["latest", "30d", "90d"] as TimeWindow[]).map((item) => <button key={item} className={windowName === item ? "active" : ""} onClick={() => setWindowName(item)}>{item === "latest" ? "Latest" : item.replace("d", " days")}</button>)}</div></div><div><span>Sort by</span><div className="benchmark-segmented">{(["attention", "newest"] as Sort[]).map((item) => <button key={item} className={sort === item ? "active" : ""} onClick={() => setSort(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></div></div>
+      <div className="benchmark-controls"><div><span>Time window</span><div className="benchmark-segmented">{(["latest", "30d", "90d"] as TimeWindow[]).map((item) => <button key={item} className={windowName === item ? "active" : ""} onClick={() => setWindowName(item)}>{item === "latest" ? "Latest" : item.replace("d", " days")}</button>)}</div></div><div><span>Sort by</span><div className="benchmark-segmented">{(["attention", "newest"] as RadarSort[]).map((item) => <button key={item} className={radarSort === item ? "active" : ""} onClick={() => setRadarSort(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></div></div>
       <div className="benchmark-results-heading"><h2>Rising benchmarks <small>{radarRecords.length} results</small></h2></div>
-      <div className="benchmark-list">{radarRecords.map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} radar />)}</div>
+      <div className="benchmark-list">{radarRecords.length ? radarRecords.map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} radar />) : <p className="benchmark-empty">No releases match this time window.</p>}</div>
     </section> : <section className="benchmark-library-layout">
       <aside className="benchmark-directions"><div className="benchmark-direction-head"><span>Research directions</span><p>Browse the Benchmark Radar taxonomy or search every public benchmark.</p></div><button className={!direction ? "active" : ""} onClick={() => setDirection("")}>All benchmarks <small>{data.library.length.toLocaleString()}</small></button>{directionsBySection.map(([section, items]) => <section key={section}><h2>{section}</h2>{items.map((item) => <button key={item.id} className={direction === item.id ? "active" : ""} onClick={() => setDirection(item.id)}><span>{item.name}</span><small>{item.count.toLocaleString()}</small></button>)}</section>)}</aside>
-      <div className="benchmark-library-content"><div className="benchmark-library-toolbar"><label><span>Search</span><div><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search benchmarks, tasks, or research directions" /></div></label><label><span>Sort by</span><div className="benchmark-segmented">{(["newest", "attention", "growing"] as Sort[]).map((item) => <button key={item} className={sort === item ? "active" : ""} onClick={() => setSort(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></label></div><div className="benchmark-results-heading"><h2>{direction ? data.directions.find((item) => item.id === direction)?.name || "Benchmarks" : "All benchmarks"} <small>{libraryRecords.length.toLocaleString()} entries · public attention</small></h2></div><div className="benchmark-list">{libraryRecords.slice(0, 150).map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} />)}{libraryRecords.length > 150 && <p className="benchmark-limit">Showing the first 150 matching benchmarks. Refine the search or choose a research direction.</p>}</div></div>
+      <div className="benchmark-library-content"><div className="benchmark-library-toolbar"><label><span>Search</span><div><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search benchmarks, tasks, or research directions" /></div></label><label><span>Sort by</span><div className="benchmark-segmented">{(["newest", "attention", "stars"] as LibrarySort[]).map((item) => <button key={item} className={librarySort === item ? "active" : ""} onClick={() => setLibrarySort(item)}>{item === "stars" ? "GitHub stars" : item[0].toUpperCase() + item.slice(1)}</button>)}</div></label></div><div className="benchmark-results-heading"><h2>{direction ? data.directions.find((item) => item.id === direction)?.name || "Benchmarks" : "All benchmarks"} <small>{libraryRecords.length.toLocaleString()} entries · public attention</small></h2></div><div className="benchmark-list">{libraryRecords.length ? libraryRecords.slice(0, 150).map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} />) : <p className="benchmark-empty">No public benchmarks match this search. Clear the search or choose another research direction.</p>}{libraryRecords.length > 150 && <p className="benchmark-limit">Showing the first 150 matching benchmarks. Refine the search or choose a research direction.</p>}</div></div>
     </section>}
   </main>;
 }

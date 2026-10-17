@@ -4,11 +4,13 @@ const path = require("node:path");
 let cachedPayload = null;
 
 function radarRoots() {
+  // An explicit path is a deployment contract, not a hint. Falling back to a
+  // neighboring checkout would silently show unrelated/stale data instead.
+  if (process.env.BENCHMARK_RADAR_ROOT) return [process.env.BENCHMARK_RADAR_ROOT];
   return [
-    process.env.BENCHMARK_RADAR_ROOT,
     path.resolve(__dirname, "..", "..", "benchmark-radar"),
     path.resolve(process.cwd(), "..", "benchmark-radar"),
-  ].filter(Boolean);
+  ];
 }
 
 function resolveRadarRoot() {
