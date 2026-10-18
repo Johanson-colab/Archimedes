@@ -1,6 +1,9 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { normalizeSearchResults, searchWeb } = require("./web-search.cjs");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { getPublicWebSearchConfig, initializeWebSearch, normalizeSearchResults, saveWebSearchConfig, searchWeb } = require("./web-search.cjs");
 
 test("searches general web results through Brave and returns links", async () => {
   let requested;
@@ -55,4 +58,50 @@ test("runs several filtered web queries and merges duplicate URLs", async () => 
   assert.equal(result.results.length, 1);
   assert.equal(result.results[0].url, "https://arxiv.org/abs/1234.5678");
   await assert.rejects(searchWeb({ query: "test", domains: ["https://example.org/path"] }, { apiKey: "test-key" }), /hostnames/);
+});
+
+test("migrates a saved Brave key and keeps provider keys separate", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-search-"));
+  try {
+    fs.writeFileSync(path.join(directory, "web-search-config.json"), JSON.stringify({ apiKey: "brave-key" }));
+    initializeWebSearch(directory);
+    assert.deepEqual(getPublicWebSearchConfig(), { provider: "brave", hasApiKey: true, configuredProviders: ["brave"] });
+    saveWebSearchConfig({ provider: "tavily", apiKey: "tavily-key" });
+    assert.deepEqual(getPublicWebSearchConfig(), { provider: "tavily", hasApiKey: true, configuredProviders: ["brave", "tavily"] });
+    assert.throws(() => saveWebSearchConfig({ provider: "exa", apiKey: "" }), /exa API key/);
+    saveWebSearchConfig({ provider: "brave", apiKey: "" });
+    assert.equal(getPublicWebSearchConfig().provider, "brave");
+  } finally {
+    initializeWebSearch("");
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("routes Tavily, Exa, and Firecrawl through their own API and normalizes results", async () => {
+  const cases = [
+    { provider: "tavily", url: "api.tavily.com/search", response: { results: [{ title: "T", url: "https://example.org/t", content: "Tavily extract" }] }, header: "Authorization", value: "Bearer test-key" },
+    { provider: "exa", url: "api.exa.ai/search", response: { results: [{ title: "E", url: "https://example.org/e", highlights: ["Exa highlight"] }] }, header: "x-api-key", value: "test-key" },
+    { provider: "firecrawl", url: "api.firecrawl.dev/v2/search", response: { data: { web: [{ title: "F", url: "https://example.org/f", description: "Firecrawl snippet" }] } }, header: "Authorization", value: "Bearer test-key" },
+  ];
+  for (const item of cases) {
+    let called;
+    const result = await searchWeb({ query: "research", type: "web" }, {
+      provider: item.provider, apiKey: "test-key", fetchImpl: async (url, request) => { called = { url, request }; return { ok: true, json: async () => item.response }; },
+    });
+    assert.match(called.url, new RegExp(item.url.replaceAll(".", "\\.")));
+    assert.equal(called.request.headers[item.header], item.value);
+    assert.equal(result.results.length, 1);
+    assert.ok(result.results[0].snippet);
+  }
+});
+
+test("Firecrawl news results use the news response group", async () => {
+  const result = await searchWeb({ query: "AI regulation", type: "news" }, {
+    provider: "firecrawl", apiKey: "test-key",
+    fetchImpl: async (_url, request) => {
+      assert.deepEqual(JSON.parse(request.body).sources, ["news"]);
+      return { ok: true, json: async () => ({ data: { news: [{ title: "Update", url: "https://example.org/news", description: "Announcement" }] } }) };
+    },
+  });
+  assert.equal(result.results[0].source, "news");
 });

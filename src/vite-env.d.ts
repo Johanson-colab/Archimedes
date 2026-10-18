@@ -28,8 +28,8 @@ interface ResearchDeskBridge {
     listProviderModels: (input: ModelCatalogInput) => Promise<ModelCatalogResponse>;
     saveModelConfig: (input: ModelConfigInput) => Promise<PublicModelConfig>;
     testModelConfig: (input: ModelConfigInput) => Promise<ModelConnectionResult>;
-    getWebSearchConfig: () => Promise<{ provider: "brave"; hasApiKey: boolean }>;
-    saveWebSearchConfig: (input: { apiKey: string }) => Promise<{ provider: "brave"; hasApiKey: boolean }>;
+    getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
+    saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: () => Promise<ResearchLibrary[]>;
     createLibrary: (input: { name: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
     updateLibrary: (id: string, patch: { name?: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
@@ -536,7 +536,9 @@ interface ResearchThread {
   archived_at: string | null;
 }
 
-type ModelProviderId = "openai" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "custom";
+type ModelProviderId = "openai" | "anthropic" | "gemini" | "glm" | "minimax" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "custom";
+type WebSearchProviderId = "brave" | "tavily" | "exa" | "firecrawl";
+interface PublicWebSearchConfig { provider: WebSearchProviderId; hasApiKey: boolean; configuredProviders: WebSearchProviderId[] }
 
 interface ModelConfigInput {
   provider: ModelProviderId;

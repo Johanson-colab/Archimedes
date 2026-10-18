@@ -61,6 +61,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Square,
   Sparkles,
   Star,
   StickyNote,
@@ -306,9 +307,12 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
 type CodeChatAttachment = { path: string; startLine: number; endLine: number; snippet: string };
 type PaperAiMode = "brief" | "audit";
+type PaperChatComposerCommand = { id: number; draft?: string };
 type SelectionAnchor = { x: number; y: number };
 type TranslationPopover = { source: string; translation: string; anchor: SelectionAnchor; error?: string };
 type ReaderLibraryPaper = LibraryPaper & { github_url?: string; github_stars?: number };
+const PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT = 60;
+const PAPER_CHAT_HISTORY_PAGE_SIZE = 40;
 const PAPER_BRIEFING_REQUEST = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise Chinese Markdown with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
 const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: string }> = [
   { value: "yellow", label: "Yellow" },
@@ -316,6 +320,94 @@ const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: stri
   { value: "blue", label: "Blue" },
   { value: "green", label: "Green" },
 ];
+
+const PaperChatMarkdown = memo(function PaperChatMarkdown({ text }: { text: string }) {
+  return <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(text)}</ReactMarkdown></div>;
+});
+
+const PaperChatMessageRow = memo(function PaperChatMessageRow({ message }: { message: PaperChatMessage }) {
+  return <article className={message.role}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <PaperChatMarkdown text={message.text} /> : <p>{message.text}</p>}</article>;
+});
+
+const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, onAsk }: {
+  messages: PaperChatMessage[]; busy: boolean; aiMode: PaperAiMode; onAsk: (prompt: string) => void;
+}) {
+  const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT));
+  const historyInitializedRef = useRef(messages.length > 0);
+  const visibleMessages = messages.slice(historyStart);
+  const hiddenMessageCount = historyStart;
+  const hasAssistantMessage = useMemo(() => messages.some((message) => message.role === "assistant"), [messages]);
+  useEffect(() => {
+    if (!messages.length) {
+      historyInitializedRef.current = false;
+      setHistoryStart(0);
+      return;
+    }
+    if (!historyInitializedRef.current) {
+      historyInitializedRef.current = true;
+      setHistoryStart(Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT));
+      return;
+    }
+    setHistoryStart((current) => Math.min(current, Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT)));
+  }, [messages.length]);
+  const prompt = (audit: string, brief: string) => () => onAsk(aiMode === "audit" ? audit : brief);
+
+  return <div className="paper-ai-thread">
+    {messages.length ? <>
+      {hiddenMessageCount > 0 && <button className="paper-ai-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - PAPER_CHAT_HISTORY_PAGE_SIZE))}>Show {Math.min(PAPER_CHAT_HISTORY_PAGE_SIZE, hiddenMessageCount)} earlier messages</button>}
+      {visibleMessages.map((message, index) => <PaperChatMessageRow key={`${message.role}-${index + historyStart}`} message={message} />)}
+    </> : <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}
+    {busy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{messages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}
+    {hasAssistantMessage && !busy && <div className="paper-ai-suggestions">
+      <button onClick={prompt("请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。", "这篇论文最核心的贡献是什么？请结合全文说明。")}>{aiMode === "audit" ? "核验方法" : "核心贡献"}</button>
+      <button onClick={prompt("请检查训练与评估配置是否支持论文中的实验主张。", "请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>{aiMode === "audit" ? "核验实验" : "讲解方法"}</button>
+      <button onClick={prompt("请列出论文中的哪些关键主张在代码中无法确认或尚未实现。", "实验设置、数据集、基线、指标和主要结果分别是什么？")}>{aiMode === "audit" ? "缺口分析" : "查看实验"}</button>
+      <button onClick={prompt("请给出最短的复现实验路径：入口、配置、数据和评估步骤。", "论文有哪些局限、威胁或尚未验证的主张？")}>{aiMode === "audit" ? "复现路径" : "分析局限"}</button>
+    </div>}
+  </div>;
+});
+
+const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, canInterrupt, attachments, command, onAsk, onInterrupt, onRemoveAttachment }: {
+  busy: boolean; cancelling: boolean; canInterrupt: boolean; attachments: CodeChatAttachment[]; command: PaperChatComposerCommand;
+  onAsk: (prompt: string) => boolean; onInterrupt: () => void; onRemoveAttachment: (index: number) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const resizeFrameRef = useRef<number | null>(null);
+  const resize = useCallback(() => {
+    if (resizeFrameRef.current !== null) return;
+    resizeFrameRef.current = requestAnimationFrame(() => {
+      resizeFrameRef.current = null;
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.style.height = "0px";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 132)}px`;
+      textarea.style.overflowY = textarea.scrollHeight > 132 ? "auto" : "hidden";
+    });
+  }, []);
+  useEffect(() => () => { if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current); }, []);
+  useEffect(() => { resize(); }, [draft, resize]);
+  useEffect(() => {
+    if (!command.id) return;
+    if (command.draft !== undefined) setDraft(command.draft);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [command]);
+  function submit() {
+    if (!draft.trim() || busy) return;
+    if (onAsk(draft)) setDraft("");
+  }
+  return <div className="paper-ai-compose">
+    <div className="paper-ai-compose-input">
+      {attachments.length > 0 && <div className="paper-ai-code-attachments">
+        {attachments.map((attachment, index) => <div className="paper-ai-code-attachment" key={attachment.path + ":" + attachment.startLine + ":" + index} title={attachment.path + ":" + attachment.startLine + "-" + attachment.endLine}>
+          <FileCode2 size={13} /><span>{attachment.path}:{attachment.startLine}{attachment.endLine !== attachment.startLine ? "-" + attachment.endLine : ""}</span><button type="button" onClick={() => onRemoveAttachment(index)} title="Remove code attachment" aria-label={"Remove " + attachment.path + " code attachment"}><X size={12} /></button>
+        </div>)}
+      </div>}
+      <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? "Ask about the selected code…" : "Ask about the paper…"} rows={1} />
+    </div>
+    <button className="primary-button" disabled={busy ? !canInterrupt || cancelling : !draft.trim()} onClick={busy ? onInterrupt : submit}>{busy ? <><Square size={13} fill="currentColor" />{cancelling ? "Stopping" : "Stop"}</> : <><Send size={14} />Send</>}</button>
+  </div>;
+});
 
 function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, onAgentRun }: {
   paper: ReaderLibraryPaper; library: ResearchLibrary; onBack: () => void;
@@ -345,10 +437,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [aiMode, setAiMode] = useState<PaperAiMode>("brief");
-  const [chatDraft, setChatDraft] = useState("");
   const [codeAttachments, setCodeAttachments] = useState<CodeChatAttachment[]>([]);
-  const chatDraftRef = useRef<HTMLTextAreaElement>(null);
+  const [composerCommand, setComposerCommand] = useState<PaperChatComposerCommand>({ id: 0 });
   const [chatBusy, setChatBusy] = useState(false);
+  const [chatCancelling, setChatCancelling] = useState(false);
   const [chatThreadId, setChatThreadId] = useState<string | undefined>();
   const [chatMessages, setChatMessages] = useState<PaperChatMessage[]>([]);
   const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
@@ -358,13 +450,6 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const currentPage = reader?.pages.find((page) => page.page_number === pageNumber) ?? reader?.pages[0] ?? null;
   const lastPage = reader?.asset?.page_count ?? reader?.pages.at(-1)?.page_number ?? 1;
   const projectUrl = paper.github_url || detectedProjectUrl;
-  const resizeChatDraft = useCallback((textarea = chatDraftRef.current) => {
-    if (!textarea) return;
-    const maxHeight = 132;
-    textarea.style.height = "0px";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
-  }, []);
 
   const loadReader = useCallback(async () => {
     try {
@@ -521,12 +606,12 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         ? `You are conducting a strict paper-to-code audit for \"${paper.title}\". ${prompt}${quotedPassage}\n\nRead relevant PDF pages and the cloned repository before answering. Report an evidence chain in this order when applicable: paper claim and page, code path and line range, then conclusion. Mark each conclusion as confirmed, contradicted, incomplete, or not implemented. Do not fill gaps with speculation.${repositoryInstruction}`
         : `You are helping a researcher read the paper \"${paper.title}\". ${prompt}${quotedPassage}\n\nUse the existing full-paper briefing as continuity, but read attached PDF pages again when the answer depends on details absent from it. Ground your answer in the selected passage and the attached paper. State when the passage alone is insufficient, and cite page numbers when available.${repositoryInstruction}`;
     setChatOpen(true);
-    setChatDraft("");
     if (!options.initialBriefing) {
       setCodeAttachments([]);
       setChatMessages((current) => [...current, { role: "user", text: userPrompt }]);
     }
     setChatBusy(true);
+    setChatCancelling(false);
     try {
       const result = await bridge.runAgent({
         prompt: instruction,
@@ -543,14 +628,13 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       onAgentRun?.(result);
     } catch (askError) {
       setChatMessages((current) => [...current, { role: "assistant", text: `I could not answer that yet: ${readableError(askError, "Agent request failed.")}` }]);
-    } finally { setChatBusy(false); }
+    } finally { setChatBusy(false); setChatCancelling(false); }
   }
   useEffect(() => {
     if (aiMode !== "brief" || !chatOpen || !ready || !chatHistoryLoaded || chatBusy || briefingStartedRef.current) return;
     briefingStartedRef.current = true;
     void askAI(PAPER_BRIEFING_REQUEST, { initialBriefing: true });
   }, [briefingVersion, chatBusy, chatHistoryLoaded, chatOpen, ready]);
-  useEffect(() => { resizeChatDraft(); }, [chatDraft, chatOpen, resizeChatDraft]);
   async function translateSelection() {
     if (!selection || !selectionAnchor || translating) return;
     const source = selection;
@@ -570,7 +654,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       setTranslationPopover((current) => current?.source === source ? { ...current, error: message } : current);
     } finally { setTranslating(false); }
   }
-  function openAskForSelection() { setChatOpen(true); setChatDraft(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
+  function commandComposer(draft?: string) {
+    setComposerCommand((current) => ({ id: current.id + 1, ...(draft === undefined ? {} : { draft }) }));
+  }
+  function openAskForSelection() { setChatOpen(true); commandComposer(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
   const addCodeSelectionToChat = useCallback((file: RepositoryCheckoutFile, snippet: string, startLine: number) => {
     const cleanSnippet = snippet.slice(0, 12_000);
     if (!cleanSnippet.trim()) return;
@@ -582,8 +669,27 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       endLine: startLine + (cleanSnippet.match(/\n/g)?.length ?? 0) - (cleanSnippet.endsWith("\n") ? 1 : 0),
       snippet: cleanSnippet,
     }]);
-    requestAnimationFrame(() => chatDraftRef.current?.focus());
+    commandComposer();
   }, []);
+  function submitPaperChat(draft: string) {
+    if (chatBusy || !workspace || !draft.trim()) return false;
+    void askAI(draft);
+    return true;
+  }
+  async function interruptPaperChat() {
+    if (!chatThreadId || chatCancelling) return;
+    setChatCancelling(true);
+    try {
+      const result = await bridge.interruptAgent(chatThreadId);
+      if (!result.interrupted) {
+        setChatCancelling(false);
+        setError("This paper conversation no longer has an active task to stop.");
+      }
+    } catch (interruptError) {
+      setChatCancelling(false);
+      setError(readableError(interruptError, "Could not stop the paper conversation."));
+    }
+  }
   function restartBriefing() {
     if (chatBusy) return;
     briefingStartedRef.current = false;
@@ -634,21 +740,9 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </main>}
       {chatOpen && <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div>{checkout ? <small className="paper-ai-evidence-scope"><ShieldCheck size={11} />Paper + full codebase · {checkout.commit.slice(0, 8)}</small> : repository && <small className="paper-ai-evidence-scope"><Code2 size={11} />Paper + curated repository snapshot</small>}</div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
-        <div className="paper-ai-thread">{chatMessages.length ? chatMessages.map((message, index) => <article className={message.role} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(message.text)}</ReactMarkdown></div> : <p>{message.text}</p>}</article>) : <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}{chatBusy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{chatMessages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}{chatMessages.some((message) => message.role === "assistant") && !chatBusy && <div className="paper-ai-suggestions"><button onClick={() => void askAI(aiMode === "audit" ? "请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。" : "这篇论文最核心的贡献是什么？请结合全文说明。")}>{aiMode === "audit" ? "核验方法" : "核心贡献"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请检查训练与评估配置是否支持论文中的实验主张。" : "请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>{aiMode === "audit" ? "核验实验" : "讲解方法"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请列出论文中的哪些关键主张在代码中无法确认或尚未实现。" : "实验设置、数据集、基线、指标和主要结果分别是什么？")}>{aiMode === "audit" ? "缺口分析" : "查看实验"}</button><button onClick={() => void askAI(aiMode === "audit" ? "请给出最短的复现实验路径：入口、配置、数据和评估步骤。" : "论文有哪些局限、威胁或尚未验证的主张？")}>{aiMode === "audit" ? "复现路径" : "分析局限"}</button></div>}</div>
+        <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} onAsk={(prompt) => void askAI(prompt)} />
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-        <div className="paper-ai-compose">
-          <div className="paper-ai-compose-input">
-            {codeAttachments.length > 0 && <div className="paper-ai-code-attachments">
-              {codeAttachments.map((attachment, index) => <div className="paper-ai-code-attachment" key={attachment.path + ":" + attachment.startLine + ":" + index} title={attachment.path + ":" + attachment.startLine + "-" + attachment.endLine}>
-                <FileCode2 size={13} />
-                <span>{attachment.path}:{attachment.startLine}{attachment.endLine !== attachment.startLine ? "-" + attachment.endLine : ""}</span>
-                <button type="button" onClick={() => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} title="Remove code attachment" aria-label={"Remove " + attachment.path + " code attachment"}><X size={12} /></button>
-              </div>)}
-            </div>}
-            <textarea ref={chatDraftRef} value={chatDraft} onChange={(event) => { setChatDraft(event.target.value); resizeChatDraft(event.currentTarget); }} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAI(chatDraft); } }} placeholder={codeAttachments.length ? "Ask about the selected code…" : "Ask about the paper…"} rows={1} />
-          </div>
-          <button className="primary-button" disabled={chatBusy || !chatDraft.trim()} onClick={() => void askAI(chatDraft)}><Send size={14} />Send</button>
-        </div>
+        <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
       </aside>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>

@@ -36,7 +36,7 @@ The long-term goal is an integrated research environment in the spirit of an all
 | Area | Current capabilities |
 | --- | --- |
 | **Research Chat** | Persistent, project-scoped multi-turn conversations; streamed answers; visible tool events; resumable threads; research modes for free chat, idea generation, experiment setup, paper writing, paper review, and deep research. |
-| **Context and long conversations** | Files, folders, papers, GitHub repositories, skills, plugins, and pasted images can be attached as context. Conversation assembly is bounded at 160,000 characters, with a compact composer indicator and prioritization of recent turns. |
+| **Context and long conversations** | Files, folders, papers, GitHub repositories, skills, plugins, and pasted images can be attached as context. Conversation assembly is bounded at 300,000 characters, with a compact composer indicator and prioritization of recent turns. |
 | **Evidence-aware discovery** | General web and news search, batched queries, domain and date filters, page reading, in-page lookup, public-PDF phrase search, and a deep-research workflow that distinguishes opened evidence from search leads. |
 | **Literature workspace** | Local libraries, paper import, saved reading state, notes, highlights, full-paper PDF reading, page navigation, text selection, phrase lookup, page-level evidence, translation, and math rendering. |
 | **Paper plus project** | Linked GitHub repositories and project websites open in a dedicated **Project** tab beside the paper. Repository snapshots can be attached to paper discussions so the agent can reason over paper, code, and available data references together. |
@@ -130,7 +130,7 @@ Keep that terminal open. Vite starts first, then Electron opens the Archimedes d
 
 ## Configure Models and Search
 
-Archimedes accepts any OpenAI-compatible Chat Completions endpoint. Add the following to `.env.local`:
+Archimedes accepts OpenAI-compatible Chat Completions endpoints and Anthropic's native Messages API. Configure a model in the in-app Model providers dialog, or add an OpenAI-compatible endpoint to `.env.local`:
 
 ```bash
 ARCHIMEDES_LLM_API_KEY=your-api-key
@@ -138,7 +138,7 @@ ARCHIMEDES_LLM_BASE_URL=https://api.openai.com/v1
 ARCHIMEDES_LLM_MODEL=gpt-4.1-mini
 ```
 
-For general web and news search, configure a separate Brave Search API key:
+For general web and news search, choose Brave Search, Tavily, Exa, or Firecrawl in the in-app Web data dialog and enter your own API key. Brave can also be configured via `.env.local`:
 
 ```bash
 ARCHIMEDES_WEB_SEARCH_API_KEY=your-brave-search-key
@@ -152,7 +152,7 @@ Open a paper from a library or from Daily papers to use the reader. The reader s
 
 When the paper has a linked public GitHub repository, Archimedes can fetch a bounded snapshot of relevant repository files. That snapshot is attached with the paper context for discussions about implementation evidence. It is a reading aid, not proof that every experiment can be reproduced without the full environment, data, credentials, or compute setup.
 
-The chat composer accepts pasted images alongside text. Context usage is shown as a small circular indicator; hover to see the current character estimate. The assembled conversation currently has a 160,000-character budget. Character accounting keeps the application provider-neutral, since token counts differ across model tokenizers.
+The chat composer accepts pasted images alongside text. Context usage is shown as a small circular indicator; hover to see the current percentage. The assembled conversation currently has a 300,000-character budget. Character accounting keeps the application provider-neutral, since token counts differ across model tokenizers.
 
 ## Conference Discovery
 

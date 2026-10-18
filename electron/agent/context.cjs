@@ -1,4 +1,6 @@
-const MAX_CONTEXT_CHARS = 160_000;
+// Leave substantial room for provider/system prompts, tool output, and the model's
+// response while retaining more of a long research conversation.
+const MAX_CONTEXT_CHARS = 300_000;
 const MAX_MESSAGE_CHARS = 64_000;
 const MAX_SUMMARY_CHARS = 32_000;
 const MIN_RECENT_TURNS = 4;

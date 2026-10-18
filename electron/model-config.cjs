@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const PROVIDERS = new Set(["openai", "deepseek", "qwen", "moonshot", "openrouter", "custom"]);
+const PROVIDERS = new Set(["openai", "anthropic", "gemini", "glm", "minimax", "deepseek", "qwen", "moonshot", "openrouter", "custom"]);
 let configPath = "";
 
 function environmentConfig() {
@@ -97,7 +97,12 @@ async function listProviderModels(input = {}) {
   const timer = setTimeout(() => controller.abort(), 15_000);
   try {
     const headers = { Accept: "application/json" };
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    if (provider === "anthropic") {
+      headers["x-api-key"] = apiKey;
+      headers["anthropic-version"] = "2023-06-01";
+    } else if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
     const response = await fetch(modelListUrl(provider, baseUrl), { headers, signal: controller.signal });
     if (!response.ok) throw new Error(`Model catalog request failed (${response.status}).`);
     const models = extractModelIds(await response.json());
@@ -128,7 +133,7 @@ function saveModelConfig(input = {}) {
   const provider = PROVIDERS.has(input.provider) ? input.provider : "custom";
   const baseUrl = normalizeBaseUrl(input.baseUrl);
   const model = validateModelId(baseUrl, input.model);
-  const apiKey = String(input.apiKey || "").trim() || previous.apiKey;
+  const apiKey = String(input.apiKey || "").trim() || (previous.provider === provider && previous.baseUrl === baseUrl ? previous.apiKey : "");
   if (!apiKey || apiKey.length > 2_000) throw new Error("Enter a valid API key.");
   const config = { provider, baseUrl, model, apiKey };
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -143,7 +148,7 @@ async function testModelConfig(input = null) {
     provider: PROVIDERS.has(input.provider) ? input.provider : "custom",
     baseUrl: normalizeBaseUrl(input.baseUrl || current.baseUrl),
     model: validateModelId(input.baseUrl || current.baseUrl, input.model || current.model),
-    apiKey: String(input.apiKey || "").trim() || current.apiKey,
+    apiKey: String(input.apiKey || "").trim() || (current.provider === input.provider && current.baseUrl === normalizeBaseUrl(input.baseUrl || current.baseUrl) ? current.apiKey : ""),
   } : current;
   if (!candidate.apiKey) throw new Error("Add an API key before testing the connection.");
   if (!candidate.model) throw new Error("Add a model name before testing the connection.");
@@ -152,14 +157,13 @@ async function testModelConfig(input = null) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25_000);
   try {
-    const response = await fetch(`${candidate.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+    const anthropic = candidate.provider === "anthropic";
+    const response = await fetch(`${candidate.baseUrl.replace(/\/+$/, "")}/${anthropic ? "messages" : "chat/completions"}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${candidate.apiKey}` },
-      body: JSON.stringify({
-        model: candidate.model,
-        messages: [{ role: "user", content: "Reply with OK." }],
-        stream: false,
-      }),
+      headers: anthropic
+        ? { "Content-Type": "application/json", "x-api-key": candidate.apiKey, "anthropic-version": "2023-06-01" }
+        : { "Content-Type": "application/json", Authorization: `Bearer ${candidate.apiKey}` },
+      body: JSON.stringify({ model: candidate.model, messages: [{ role: "user", content: "Reply with OK." }], stream: false, ...(anthropic ? { max_tokens: 32 } : {}) }),
       signal: controller.signal,
     });
     if (!response.ok) {
@@ -167,7 +171,7 @@ async function testModelConfig(input = null) {
       throw new Error(`Connection failed (${response.status}): ${detail}`);
     }
     const body = await response.json();
-    if (!body?.choices?.[0]?.message) throw new Error("The endpoint responded, but did not return an OpenAI-compatible message.");
+    if (anthropic ? !Array.isArray(body?.content) : !body?.choices?.[0]?.message) throw new Error("The endpoint responded, but did not return a compatible message.");
     return {
       ok: true,
       latencyMs: Date.now() - startedAt,

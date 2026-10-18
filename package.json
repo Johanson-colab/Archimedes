@@ -24,6 +24,7 @@
     "postinstall": "npm run rebuild:native"
   },
   "dependencies": {
+    "@lobehub/icons-static-svg": "^1.95.1",
     "@mozilla/readability": "^0.6.0",
     "@napi-rs/canvas": "^0.1.100",
     "@vitejs/plugin-react": "latest",

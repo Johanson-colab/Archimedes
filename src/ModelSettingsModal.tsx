@@ -12,6 +12,10 @@ import {
   Server,
   X,
 } from "lucide-react";
+import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg";
+import geminiLogo from "@lobehub/icons-static-svg/icons/gemini-color.svg";
+import minimaxLogo from "@lobehub/icons-static-svg/icons/minimax-color.svg";
+import zaiLogo from "@lobehub/icons-static-svg/icons/zai.svg";
 import deepseekLogo from "./assets/providers/deepseek.png";
 import moonshotLogo from "./assets/providers/moonshot.jpg";
 import openaiLogo from "./assets/providers/openai.png";
@@ -19,8 +23,9 @@ import qwenLogo from "./assets/providers/qwen.png";
 
 type ProviderId = ModelProviderId;
 
-function brandIcon(src: string) {
-  return <img className="provider-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
+function brandIcon(src: string, variant = "") {
+  const logo = <img className="provider-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
+  return variant ? <span className={`provider-brand-tile ${variant}`}>{logo}</span> : logo;
 }
 
 const providers: Array<{
@@ -32,6 +37,10 @@ const providers: Array<{
   icon: React.ReactNode;
 }> = [
   { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5-codex", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3", "o4-mini", "o3-deep-research", "o4-mini-deep-research"], icon: brandIcon(openaiLogo) },
+  { id: "anthropic", name: "Anthropic", caption: "Claude · native Messages API", baseUrl: "https://api.anthropic.com/v1", models: ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5-20251101", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"], icon: brandIcon(anthropicLogo) },
+  { id: "gemini", name: "Google Gemini", caption: "Gemini OpenAI-compatible API", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", models: ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemma-4-31b-it", "gemma-4-26b-a4b-it"], icon: brandIcon(geminiLogo) },
+  { id: "glm", name: "Z.AI / GLM", caption: "GLM chat, reasoning, and vision models", baseUrl: "https://api.z.ai/api/paas/v4", models: ["glm-5.3", "glm-5.3-flashx", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flashx", "glm-4.7-flash", "glm-4.6", "glm-4.6v", "glm-4.6v-flashx", "glm-4.6v-flash", "glm-4.5", "glm-4.5-x", "glm-4.5-air", "glm-4.5-airx", "glm-4.5-flash", "glm-4.5v", "glm-4-32b-0414-128k"], icon: brandIcon(zaiLogo, "zai") },
+  { id: "minimax", name: "MiniMax", caption: "MiniMax OpenAI-compatible API", baseUrl: "https://api.minimax.io/v1", models: ["MiniMax-M3.1-Flash-Preview", "MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"], icon: brandIcon(minimaxLogo) },
   { id: "deepseek", name: "DeepSeek", caption: "Chat and reasoning models", baseUrl: "https://api.deepseek.com", models: ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp", "deepseek-chat", "deepseek-reasoner"], icon: brandIcon(deepseekLogo) },
   { id: "qwen", name: "Qwen", caption: "DashScope compatible API", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", models: ["qwen3.8-max", "qwen3.7-max", "qwen3.7-plus", "qwen3.7-flash", "qwen3-max", "qwen-max", "qwen-plus", "qwen-flash", "qwen-turbo", "qwen3-coder-next", "qwen3-coder-plus", "qwen3-coder-flash", "qwen-coder-plus", "qwen-coder-turbo", "qwq-plus", "qwen-long", "qwen-math-plus", "qwen-math-turbo"], icon: brandIcon(qwenLogo) },
   { id: "moonshot", name: "Moonshot", caption: "Kimi OpenAI-compatible API", baseUrl: "https://api.moonshot.cn/v1", models: ["kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-turbo", "kimi-k2.6", "kimi-k2.5", "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"], icon: brandIcon(moonshotLogo) },
@@ -44,8 +53,8 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [hasApiKey, setHasApiKey] = useState(false);
   const [savedConfig, setSavedConfig] = useState<PublicModelConfig | null>(null);
+  const hasApiKey = Boolean(savedConfig?.hasApiKey && savedConfig.provider === provider && savedConfig.baseUrl === baseUrl);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -67,7 +76,6 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
       setBaseUrl(config.baseUrl);
       setModel(config.model);
       setSavedConfig(config);
-      setHasApiKey(config.hasApiKey);
       setApiKey("");
       setCatalogModels([]);
       setCatalogError("");
@@ -78,6 +86,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
 
   function chooseProvider(next: typeof providers[number]) {
     setProvider(next.id);
+    setApiKey("");
     if (next.id === "custom") {
       setBaseUrl(savedConfig?.provider === "custom" ? savedConfig.baseUrl : "");
       setModel(savedConfig?.provider === "custom" ? savedConfig.model : "");
@@ -141,7 +150,6 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
       setBaseUrl(config.baseUrl);
       setModel(config.model);
       setSavedConfig(config);
-      setHasApiKey(config.hasApiKey);
       setApiKey("");
       onSaved(config);
       setFeedback({ kind: "success", text: `Saved ${config.model}. New Agent turns will use this model.` });
@@ -178,7 +186,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
               <input value={model} onChange={(event) => { setModel(event.target.value); setModelSearch(event.target.value); setModelMenuOpen(true); }} placeholder="Model identifier" spellCheck={false} aria-expanded={modelMenuOpen} aria-controls="model-catalog" />
               <button type="button" className="model-catalog-toggle" onClick={toggleModelMenu} title="Show available models" aria-label="Show available models"><ChevronDown size={16} /></button>
               {modelMenuOpen && <div className="model-catalog" id="model-catalog">
-                <div className="model-catalog-header"><span>{catalogModels.length ? `${catalogModels.length} live models` : "Official recommended models"}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title="Refresh live catalog">{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}Refresh</button></div>
+                <div className="model-catalog-header"><span>{catalogModels.length ? `${availableModels.length} models · live catalog merged` : `${availableModels.length} supported models`}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title="Refresh live catalog">{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}Refresh</button></div>
                 {catalogError && <p className="model-catalog-note">{catalogError} Showing the recommended list below.</p>}
                 <div className="model-catalog-list">
                   {availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())).map((name) => <button type="button" key={name} className={name === model ? "active" : ""} onClick={() => { setModel(name); setModelSearch(""); setModelMenuOpen(false); }}><span>{name}</span>{name === model && <Check size={13} />}</button>)}

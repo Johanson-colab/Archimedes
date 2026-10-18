@@ -7,6 +7,7 @@ const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { resolveApproval, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
+const { completeAnthropic } = require("./agent/anthropic.cjs");
 const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData } = require("./agent/pdf-reader.cjs");
 const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = require("./agent/remote-content.cjs");
 const { evidenceForTool } = require("./agent/evidence.cjs");
@@ -687,6 +688,7 @@ function applyDelta(accumulator, delta, onTextDelta) {
 }
 
 async function complete(config, messages, { signal, onTextDelta, allowTools = true, availableTools = tools }) {
+  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools });
   const request = { model: config.model, messages, stream: true };
   if (allowTools && availableTools.length) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
   const response = await fetch(`${config.baseUrl}/chat/completions`, {

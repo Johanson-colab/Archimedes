@@ -27,6 +27,7 @@ import coldarkDark from "react-syntax-highlighter/dist/esm/styles/prism/coldark-
 import LibraryView from "./LibraryView";
 import GalleryView from "./GalleryView";
 import BenchmarkRadarView from "./BenchmarkRadarView";
+import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
@@ -37,7 +38,6 @@ import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { previewLibraryBridge } from "./library-preview";
 import {
   BookOpen,
-  Bot,
   Blocks,
   ArrowDown,
   CalendarDays,
@@ -131,7 +131,7 @@ const initialMessages: Message[] = [
 
 const INITIAL_VISIBLE_MESSAGE_COUNT = 60;
 const HISTORY_MESSAGE_PAGE_SIZE = 40;
-const CONTEXT_CHAR_LIMIT = 160_000;
+const CONTEXT_CHAR_LIMIT = 300_000;
 const CONTEXT_INSTRUCTION_OVERHEAD_CHARS = 4_800;
 
 function estimateAttachmentContextCharacters(item: ContextAttachment) {
@@ -1098,12 +1098,30 @@ function App() {
     setPendingAction(null);
   }
 
+  function openWelcomeWorkflow(action: ResearchWelcomeAction) {
+    if (action === "idea") {
+      setResearchMode("idea-spark");
+      return;
+    }
+    if (action === "replication") {
+      setResearchMode("experiment-setup");
+      return;
+    }
+    if (action === "literature") {
+      setDailyStartMode("latest");
+      setMainSection("daily");
+      return;
+    }
+    setGalleryOpened(true);
+    setMainSection("gallery");
+  }
+
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "benchmark-radar" ? "Benchmark Radar" : mainSection === "gallery" ? "Gallery" : mainSection === "writing" ? "Paper writing" : "Artifacts";
 
   return (
     <main className={`codex-shell theme-${theme}`}>
-      <aside className="codex-sidebar" aria-label="Archimedes navigation">
+      <aside className="codex-sidebar" aria-label="Archimedes navigation" data-ui="application-navigation">
         <div className="codex-brand">
           <span className="codex-brand-mark"><Orbit size={17} /></span>
           <strong>Archimedes</strong>
@@ -1176,10 +1194,10 @@ function App() {
       </aside>
 
       <section className={terminalOpen ? "codex-main panel-open" : "codex-main"} style={{ "--terminal-height": `${terminalHeight}px` } as React.CSSProperties}>
-        <header className="main-toolbar">
+        <header className="main-toolbar" data-ui="application-toolbar">
           <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
           <div className="main-toolbar-actions">
-            {mainSection === "chat" && <button className="model-provider-button" onClick={() => setModelSettingsOpen(true)} title={`Model providers${activeModelConfig?.model ? ` · ${activeModelConfig.model}` : ""}`}><Bot size={16} /><span>{activeModelConfig?.model || "Choose model"}</span></button>}
+            {mainSection === "chat" && <button className="model-provider-button" onClick={() => setModelSettingsOpen(true)} title={`Model providers${activeModelConfig?.model ? ` · ${activeModelConfig.model}` : ""}`}><Orbit size={17} strokeWidth={1.8} /><span>{activeModelConfig?.model || "Choose model"}</span></button>}
             {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setWebSearchSettingsOpen(true)} title="Web search settings" aria-label="Web search settings"><Globe2 size={17} /></button>}
             <button className={terminalOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => setTerminalOpen((open) => !open)} title={terminalOpen ? "Hide bottom panel" : "Show bottom panel"} aria-pressed={terminalOpen}>
               <PanelBottom size={18} />
@@ -1209,6 +1227,8 @@ function App() {
               onApprove={() => void approvePendingAction()}
               onReject={() => void rejectPendingAction()}
               onOpenFile={openChangedFile}
+              showWelcome={activeThreadId === null && messages.length === 1 && messages[0]?.id === "welcome" && !agentBusy}
+              onWelcomeAction={openWelcomeWorkflow}
             />
           )}
           <div className={mainSection === "library" ? "library-view-cache" : "library-view-cache hidden"} aria-hidden={mainSection !== "library"}>
@@ -1252,7 +1272,7 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile }: {
+function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction }: {
   messages: Message[];
   events: TimelineEvent[];
   workspace: string;
@@ -1271,6 +1291,8 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   onApprove: () => void;
   onReject: () => void;
   onOpenFile: (filePath: string) => void;
+  showWelcome: boolean;
+  onWelcomeAction: (action: ResearchWelcomeAction) => void;
 }) {
   const latestEvent = events.at(-1);
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
@@ -1284,6 +1306,8 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const scrollRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
   const [followingOutput, setFollowingOutput] = useState(true);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const welcomeVisible = showWelcome && !welcomeDismissed;
   const visibleMessages = messages.slice(historyStart);
   const hiddenMessageCount = historyStart;
   const messageContextCharacters = useMemo(
@@ -1301,7 +1325,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const contextUsage = estimatedContextCharacters / CONTEXT_CHAR_LIMIT;
   const contextUsageState = contextUsage >= 0.9 ? "critical" : contextUsage >= 0.7 ? "warning" : "normal";
   const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${CONTEXT_CHAR_LIMIT.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
-  const contextUsageLabel = `${(estimatedContextCharacters / 1_000).toFixed(1).replace(/\.0$/, "")}k / 160k chars`;
+  const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
 
   const scrollToLatest = () => {
     const container = scrollRef.current;
@@ -1320,10 +1344,16 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   };
 
   useEffect(() => {
+    if (welcomeVisible) {
+      followOutputRef.current = true;
+      setFollowingOutput(true);
+      const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 0, behavior: "auto" }));
+      return () => cancelAnimationFrame(frame);
+    }
     if (!followOutputRef.current) return;
     const frame = requestAnimationFrame(scrollToLatest);
     return () => cancelAnimationFrame(frame);
-  }, [messages, agentBusy, pendingAction, changeSets]);
+  }, [messages, agentBusy, pendingAction, changeSets, welcomeVisible]);
 
   useEffect(() => {
     setHistoryStart((current) => Math.min(current, Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT)));
@@ -1425,10 +1455,18 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
     onSubmit(draft);
   }
 
-  return <div className="conversation-layout">
+  function selectWelcomeWorkflow(action: ResearchWelcomeAction) {
+    onWelcomeAction(action);
+    if (action === "idea" || action === "replication") {
+      setWelcomeDismissed(true);
+      requestAnimationFrame(() => composerRef.current?.focus());
+    }
+  }
+
+  return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
     <div className="conversation-scroll-area">
     <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
-      <div className="conversation-thread">
+      {welcomeVisible ? <ResearchWelcome onSelect={selectWelcomeWorkflow} /> : <div className="conversation-thread">
         {hiddenMessageCount > 0 && <button className="conversation-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - HISTORY_MESSAGE_PAGE_SIZE))}>
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount) === 1 ? "message" : "messages"}
         </button>}
@@ -1454,7 +1492,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
             </div>
           </section>
         )}
-      </div>
+      </div>}
     </div>
     {!followingOutput && <button className="conversation-jump-latest" onClick={() => {
       followOutputRef.current = true;
@@ -1466,7 +1504,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
     </button>}
     </div>
 
-    <div className="conversation-composer-wrap">
+    <div className="conversation-composer-wrap" data-ui="research-composer">
       <div className="conversation-composer">
         <textarea ref={composerRef} value={prompt} onChange={(event) => setPrompt(event.target.value)} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
