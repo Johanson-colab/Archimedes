@@ -106,7 +106,6 @@ const researchModes: Array<{ id: ResearchMode; label: string; description: strin
   { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
   { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
   { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <ScanSearch size={15} />, placeholder: "What paper or draft would you like to review?" },
-  { id: "deep-research", label: "Deep research", description: "Investigate several sources and cite findings", icon: <Globe2 size={15} />, placeholder: "What question should I investigate across sources?" },
 ];
 
 const initialPapers = [
