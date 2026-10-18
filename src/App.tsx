@@ -1103,7 +1103,7 @@ function App() {
       return;
     }
     if (action === "replication") {
-      setResearchMode("paper-generation");
+      setMainSection("writing");
       return;
     }
     if (action === "literature") {
@@ -1453,7 +1453,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
 
   function selectWelcomeWorkflow(action: ResearchWelcomeAction) {
     onWelcomeAction(action);
-    if (action === "idea" || action === "replication") {
+    if (action === "idea") {
       setWelcomeDismissed(true);
       requestAnimationFrame(() => composerRef.current?.focus());
     }
