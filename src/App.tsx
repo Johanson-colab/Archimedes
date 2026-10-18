@@ -1132,8 +1132,8 @@ function App() {
         </button>
 
         <nav className="sidebar-nav" aria-label="Primary">
-          <button className="codex-nav-item" onClick={() => setModal("search")} title="Search knowledge">
-            <Search size={16} /><span>Search</span>
+          <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
+            <Folder size={16} /><span>Artifacts</span>
           </button>
           <button className={mainSection === "skills" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("skills")} title="Browse skills">
             <Blocks size={16} /><span>Skills</span>
@@ -1153,9 +1153,6 @@ function App() {
           </button>
           <button className={mainSection === "gallery" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setGalleryOpened(true); setMainSection("gallery"); }} title="Gallery">
             <Images size={16} /><span>Gallery</span>
-          </button>
-          <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
-            <Folder size={16} /><span>Artifacts</span>
           </button>
           <button className={mainSection === "writing" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("writing")} title="Paper writing">
             <FilePenLine size={16} /><span>Paper writing</span>
