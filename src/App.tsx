@@ -1103,7 +1103,7 @@ function App() {
       return;
     }
     if (action === "replication") {
-      setResearchMode("experiment-setup");
+      setResearchMode("paper-generation");
       return;
     }
     if (action === "literature") {
