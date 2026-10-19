@@ -1276,7 +1276,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .conversation-title span { color: var(--night-faint); }
 .quiet-icon-button, .model-provider-button { color: #888b9c; border-radius: 5px; }
 .quiet-icon-button:hover, .model-provider-button:hover { color: #f0f0f0; background: #292929; }
-.quiet-icon-button.active { color: #fff; background: #343434; }
+html:not([data-theme="paper"]) .quiet-icon-button.active { color: #fff; background: #343434; }
 .main-view { background: var(--night-ground); }
 .chat-main::before {
   position: absolute;
@@ -1963,6 +1963,7 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .project-select, .theme-paper .workspace-button { color: #494641; }
 .theme-paper .main-toolbar .quiet-icon-button, .theme-paper .main-toolbar .model-provider-button { color: #6f6a63; }
 .theme-paper .quiet-icon-button:hover, .theme-paper .model-provider-button:hover { color: #252422; background: #efede9; }
+.theme-paper .quiet-icon-button.active { color: #245e4b; background: #e5ece8; }
 
 .theme-paper .conversation-message-role, .theme-paper .conversation-running,
 .theme-paper .conversation-running small { color: #8d8881; }
