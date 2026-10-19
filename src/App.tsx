@@ -1555,7 +1555,6 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
   return <article className={`conversation-message ${message.role}`}>
-    {message.role === "assistant" && <span className="assistant-mark"><Orbit size={15} /></span>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
