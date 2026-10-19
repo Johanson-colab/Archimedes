@@ -58,6 +58,8 @@ import {
   Moon,
   Orbit,
   PanelBottom,
+  PanelLeftClose,
+  PanelLeftOpen,
   FilePenLine,
   Play,
   Plus,
@@ -547,11 +549,33 @@ function contextImageFromData(image: ContextImage): ContextAttachment {
 type MainSection = "chat" | "skills" | "library" | "daily" | "benchmark-radar" | "gallery" | "artifacts" | "writing";
 type AppTheme = "charcoal" | "paper";
 
+const SIDEBAR_DEFAULT_WIDTH = 252;
+const SIDEBAR_MIN_WIDTH = 200;
+const SIDEBAR_MAX_WIDTH = 420;
+
+function clampSidebarWidth(value: number) {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(value)));
+}
+
+function readSidebarWidth() {
+  if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
+  const stored = Number(window.localStorage.getItem("archimedes-sidebar-width"));
+  return Number.isFinite(stored) && stored > 0 ? clampSidebarWidth(stored) : SIDEBAR_DEFAULT_WIDTH;
+}
+
+function readSidebarHidden() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem("archimedes-sidebar-hidden") === "true";
+}
+
 function App() {
   const [theme, setTheme] = useState<AppTheme>(() => {
     if (typeof window === "undefined") return "charcoal";
     return window.localStorage.getItem("archimedes-theme") === "paper" ? "paper" : "charcoal";
   });
+  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
+  const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
+  const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [galleryOpened, setGalleryOpened] = useState(false);
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
@@ -608,6 +632,53 @@ function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("archimedes-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-sidebar-width", String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-sidebar-hidden", String(sidebarHidden));
+  }, [sidebarHidden]);
+
+  useEffect(() => () => document.body.classList.remove("sidebar-resizing"), []);
+
+  function beginSidebarResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    sidebarDragRef.current = { startX: event.clientX, startWidth: sidebarWidth };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.classList.add("sidebar-resizing");
+  }
+
+  function moveSidebarResize(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = sidebarDragRef.current;
+    if (!drag) return;
+    setSidebarWidth(clampSidebarWidth(drag.startWidth + event.clientX - drag.startX));
+  }
+
+  function endSidebarResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (!sidebarDragRef.current) return;
+    sidebarDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    document.body.classList.remove("sidebar-resizing");
+  }
+
+  function handleSidebarResizeKey(event: React.KeyboardEvent<HTMLDivElement>) {
+    const step = event.key === "ArrowLeft" ? -8 : event.key === "ArrowRight" ? 8 : 0;
+    if (step) {
+      event.preventDefault();
+      setSidebarWidth((width) => clampSidebarWidth(width + step));
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      setSidebarWidth(SIDEBAR_MIN_WIDTH);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setSidebarWidth(SIDEBAR_MAX_WIDTH);
+    }
+  }
 
   function clearPendingAssistantDeltas() {
     pendingAssistantDeltasRef.current.clear();
@@ -1119,11 +1190,12 @@ function App() {
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "benchmark-radar" ? "Benchmark Radar" : mainSection === "gallery" ? "Gallery" : mainSection === "writing" ? "Paper writing" : "Artifacts";
 
   return (
-    <main className={`codex-shell theme-${theme}`}>
+    <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
       <aside className="codex-sidebar" aria-label="Archimedes navigation" data-ui="application-navigation">
         <div className="codex-brand">
           <span className="codex-brand-mark"><Orbit size={17} /></span>
           <strong>Archimedes</strong>
+          <button className="sidebar-collapse-button" onClick={() => setSidebarHidden(true)} title="Hide sidebar" aria-label="Hide sidebar"><PanelLeftClose size={16} /></button>
         </div>
 
         <button className="new-task-button" onClick={() => startNewTask()} title="New research task" disabled={agentBusy}>
@@ -1187,10 +1259,12 @@ function App() {
             <ChevronDown size={14} />
           </button>
         </div>
+        <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>
 
       <section className={terminalOpen ? "codex-main panel-open" : "codex-main"} style={{ "--terminal-height": `${terminalHeight}px` } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
+          {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title="Show sidebar" aria-label="Show sidebar" aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
           <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
           <div className="main-toolbar-actions">
             {mainSection === "chat" && <button className="model-provider-button" onClick={() => setModelSettingsOpen(true)} title={`Model providers${activeModelConfig?.model ? ` · ${activeModelConfig.model}` : ""}`}><Orbit size={17} strokeWidth={1.8} /><span>{activeModelConfig?.model || "Choose model"}</span></button>}
