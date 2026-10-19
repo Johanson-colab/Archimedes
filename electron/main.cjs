@@ -34,6 +34,7 @@ const WORKSPACE_STATE_FILE = "last-workspace.json";
 const MAX_CLIPBOARD_IMAGE_BYTES = 6 * 1024 * 1024;
 
 app.setName("Archimedes");
+app.setAppUserModelId("com.archimedes.research");
 protocol.registerSchemesAsPrivileged([{
   scheme: "archimedes-file",
   privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
@@ -162,6 +163,7 @@ function createWindow(workspace) {
     minHeight: 720,
     backgroundColor: "#f6f7f5",
     titleBarStyle: "hiddenInset",
+    icon: path.join(__dirname, "assets", "app-icon-256.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

@@ -18,6 +18,13 @@ It runs as an Electron desktop application. Research data stays in the selected 
 
 ![Gallery for searching and filtering figures from peer-reviewed conference papers](docs/assets/gallery-preview.png)
 
+## Brand
+
+The wordmark and A monogram live in `src/brand/`. Runtime icons are in
+`electron/assets/` and `public/favicon.svg`; the one-page identity sheet is at
+`docs/assets/archimedes-brand-sheet.png`. The design sources, fonts, and build
+scripts are kept outside this repository.
+
 ## The Research Loop
 
 Research rarely happens in a straight line. A useful system needs to support the handoffs between discovery, reading, implementation, experimentation, and writing without losing the source trail.
