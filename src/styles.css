@@ -2322,6 +2322,22 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .research-mode-option.selected .research-mode-icon { color: #5e5850; background: #e4dfd8; }
 .theme-paper .paper-create-dialog input { color: #302c27; background: #fffefd; border-color: #dcd6ce; }
 
+/* Paper project chooser follows the light theme instead of staying dark. */
+.theme-paper .paper-project-dialog { color: #39352f; background: #fffefd; border-color: #ddd7cf; box-shadow: 0 24px 64px rgba(59, 53, 46, .16); }
+.theme-paper .paper-project-dialog p { color: #817a72; }
+.theme-paper .paper-project-options form,
+.theme-paper .paper-project-import { background: #f7f4f0; border-color: #e0dad2; }
+.theme-paper .paper-project-options > * > svg { color: #6f6860; }
+.theme-paper .paper-project-options span { color: #817a72; }
+.theme-paper .paper-project-options label { color: #6b645c; }
+.theme-paper .paper-project-options input { color: #302c27; background: #fffefd; border-color: #dcd6ce; }
+.theme-paper .paper-project-options input:focus { border-color: #a89f95; box-shadow: 0 0 0 3px rgba(90, 80, 70, .08); }
+.theme-paper .paper-existing-projects { border-top-color: #e3ded7; }
+.theme-paper .paper-existing-projects h3 { color: #6b645c; }
+.theme-paper .paper-existing-projects button { color: #3b3732; }
+.theme-paper .paper-existing-projects button:hover { background: #f0ece6; }
+.theme-paper .paper-existing-projects button small { color: #8a8278; }
+
 .theme-paper .outline-button,
 .theme-paper .secondary-button,
 .theme-paper .icon-button,
