@@ -30,7 +30,10 @@ import {
   BookOpen,
   Bookmark,
   Bot,
+  Boxes,
+  Brain,
   CalendarDays,
+  Database,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -67,6 +70,7 @@ import {
   StickyNote,
   Trash2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 
 const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
@@ -123,6 +127,18 @@ function linkedProjectLabel(value: string) {
 function linkedProjectHost(value: string) {
   try { return new URL(value).hostname.replace(/^www\./, ""); }
   catch { return "Linked project"; }
+}
+
+const LIBRARY_GLYPHS: Array<[RegExp, LucideIcon]> = [
+  [/\bagent|tool use|workflow\b/i, Bot],
+  [/\breason|test-time|scaling|deliberat\b/i, Brain],
+  [/\brag\b|retriev|long context|context/i, Database],
+  [/\bembodied|vla|robot|vision-language\b/i, Boxes],
+];
+
+function LibraryGlyph({ name, size = 20 }: { name: string; size?: number }) {
+  const Icon = LIBRARY_GLYPHS.find(([pattern]) => pattern.test(name))?.[1] ?? Library;
+  return <span className="library-glyph" aria-hidden="true"><Icon size={size} strokeWidth={1.8} /></span>;
 }
 
 type LibraryViewProps = {
@@ -236,8 +252,11 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
       {error && <div className="library-error">{error}</div>}
       {loading && !libraries.length ? <LoadingState /> : <div className="library-card-grid">
         {libraries.map((library) => <button className="library-card" key={library.id} onClick={() => setSelectedLibraryId(library.id)}>
-          <span className="library-color" style={{ background: library.color }}><Library size={18} /></span>
-          <span className="library-card-copy"><strong>{library.name}</strong><small>{library.description}</small></span>
+          <LibraryGlyph name={library.name} />
+          <span className="library-card-copy">
+            <span className="library-card-title"><strong>{library.name}</strong><span className="library-color-dot" style={{ background: library.color }} aria-hidden="true" /></span>
+            <small>{library.description}</small>
+          </span>
           <span className="library-card-meta"><b>{library.paper_count}</b> papers<ExternalLink size={13} /></span>
         </button>)}
       </div>}
@@ -261,8 +280,8 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   return <section className="library-page library-detail-page">
     <header className="library-detail-header">
       <button className="icon-button" onClick={() => setSelectedLibraryId(null)} title="All libraries"><ArrowLeft size={17} /></button>
-      <span className="library-color small" style={{ background: selectedLibrary.color }}><Library size={15} /></span>
-      <div><span className="eyebrow">Literature library</span><h1>{selectedLibrary.name}</h1></div>
+      <LibraryGlyph name={selectedLibrary.name} size={19} />
+      <div><span className="eyebrow">Literature library</span><h1 className="library-detail-title"><span>{selectedLibrary.name}</span><span className="library-color-dot" style={{ background: selectedLibrary.color }} aria-hidden="true" /></h1></div>
       <div className="library-header-actions">
         <button className="icon-button" onClick={() => setLibraryEditor(selectedLibrary)} title="Edit library"><Pencil size={15} /></button>
         <button className="icon-button danger" onClick={() => void deleteLibrary()} title="Delete library"><Trash2 size={15} /></button>
