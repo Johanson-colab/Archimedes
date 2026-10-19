@@ -2495,11 +2495,35 @@ html[data-theme="paper"] .arch-pdf-text-layer ::selection,
 @media (max-width: 620px) { .benchmark-header, .benchmark-intro { display: grid; }.benchmark-source { width: max-content; }.benchmark-controls { display: grid; gap: 12px; }.benchmark-row, .benchmark-row.radar { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }.benchmark-row.radar .benchmark-date { grid-column: 1 / -1; grid-row: auto; display: flex; gap: 7px; align-items: center; }.benchmark-row.radar .benchmark-row-main { grid-column: 1; }.benchmark-row.radar .benchmark-save { grid-column: 2; }.benchmark-row-heading { display: block; }.benchmark-row-heading span { display: block; margin-top: 4px; }.benchmark-header h1 { font-size: 25px; } }
 
 /* New-task research cabinet: Archimedes' instruments become four workflow entrances. */
-.conversation-layout.has-welcome { --welcome-ground: #fff; --welcome-paper: #fff; --welcome-stone: #fff; --welcome-ink: #292929; --welcome-muted: #52524f; --welcome-bronze: #4d4d49; background: var(--welcome-ground); }
+.conversation-layout.has-welcome {
+  --welcome-ground: #0f0f0f;
+  --welcome-paper: #171716;
+  --welcome-stone: #1d1c1a;
+  --welcome-hover: #1c1b19;
+  --welcome-ink: #f2f0ea;
+  --welcome-muted: #a8a49b;
+  --welcome-bronze: #c9a87c;
+  --welcome-line: #2a2926;
+  --welcome-send-ink: #171716;
+  --welcome-hero-scrim: linear-gradient(90deg, rgba(15, 15, 15, .94) 0%, rgba(15, 15, 15, .62) 45%, rgba(15, 15, 15, .12) 100%);
+  background: var(--welcome-ground);
+}
+html[data-theme="paper"] .conversation-layout.has-welcome {
+  --welcome-ground: #fff;
+  --welcome-paper: #fff;
+  --welcome-stone: #fff;
+  --welcome-hover: #f7f7f5;
+  --welcome-ink: #292929;
+  --welcome-muted: #52524f;
+  --welcome-bronze: #4d4d49;
+  --welcome-line: #e5e5e1;
+  --welcome-send-ink: #fff;
+  --welcome-hero-scrim: rgba(255, 255, 255, .05);
+}
 .has-welcome .conversation-scroll-area { background: var(--welcome-ground); }
 .research-welcome { width: min(100%, 1280px); min-height: 100%; margin: 0 auto; padding: clamp(20px, 3vh, 34px) clamp(20px, 3vw, 44px) 28px; color: var(--welcome-ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
 .research-welcome-hero { position: relative; min-height: clamp(180px, 25vh, 250px); overflow: hidden; background: var(--welcome-paper); }
-.research-welcome-hero::after { position: absolute; inset: 0; background: rgba(255, 255, 255, .05); content: ""; pointer-events: none; }
+.research-welcome-hero::after { position: absolute; inset: 0; background: var(--welcome-hero-scrim); content: ""; pointer-events: none; }
 .research-welcome-hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; animation: welcome-shutter 1.05s cubic-bezier(.22, .78, .2, 1) both, welcome-drift 18s 1.05s ease-in-out infinite alternate; }
 .research-welcome-copy { position: relative; z-index: 1; width: min(54%, 610px); padding: clamp(25px, 4vh, 46px) clamp(24px, 3.2vw, 48px); }
 .research-welcome-copy h1 { max-width: 9ch; margin: 0; color: var(--welcome-ink); font: 500 clamp(48px, 5.2vw, 72px)/.94 Georgia, "Times New Roman", serif; letter-spacing: -.045em; text-wrap: balance; animation: welcome-rise .62s .14s cubic-bezier(.22, .78, .2, 1) both; }
@@ -2507,12 +2531,15 @@ html[data-theme="paper"] .arch-pdf-text-layer ::selection,
 .research-workflow-board { display: grid; height: clamp(330px, 43vh, 430px); margin-top: 12px; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .research-workflow { position: relative; display: grid; min-width: 0; min-height: 0; overflow: hidden; color: var(--welcome-ink); background: var(--welcome-paper); border: 0; border-radius: 0; text-align: left; transform: translateY(18px); animation: welcome-rise .58s cubic-bezier(.22, .78, .2, 1) forwards; opacity: 0; }
 .research-workflow:nth-child(1) { animation-delay: .16s; }.research-workflow:nth-child(2) { animation-delay: .24s; }.research-workflow:nth-child(3) { animation-delay: .32s; }.research-workflow:nth-child(4) { animation-delay: .40s; }
-.research-workflow:hover { background: #f7f7f5; }.research-workflow:focus-visible { outline: 3px solid #a8a8a2; outline-offset: -3px; }
+.research-workflow:hover { background: var(--welcome-hover); }.research-workflow:focus-visible { outline: 3px solid #a8a8a2; outline-offset: -3px; }
 .research-workflow-image { display: block; min-width: 0; min-height: 0; overflow: hidden; }
 .research-workflow-image img { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(.82) contrast(.96); transition: transform .55s cubic-bezier(.2, .7, .2, 1), filter .35s ease; }
 .research-workflow-image img { animation: welcome-image-settle .9s .24s cubic-bezier(.22, .78, .2, 1) both; }
 .research-workflow:nth-child(2) .research-workflow-image img { animation-delay: .32s; }.research-workflow:nth-child(3) .research-workflow-image img { animation-delay: .40s; }.research-workflow:nth-child(4) .research-workflow-image img { animation-delay: .48s; }
 .research-workflow:hover .research-workflow-image img { filter: saturate(.95) contrast(1); transform: scale(1.035); }
+html:not([data-theme="paper"]) .research-welcome-hero > img,
+html:not([data-theme="paper"]) .research-workflow-image img { filter: saturate(.72) brightness(.70) contrast(1.06); }
+html:not([data-theme="paper"]) .research-workflow:hover .research-workflow-image img { filter: saturate(.82) brightness(.78) contrast(1.06); }
 .research-workflow-copy { position: relative; display: grid; align-content: start; padding: clamp(14px, 1.5vw, 21px); }
 .research-workflow-copy strong { color: var(--welcome-ink); font: 500 clamp(20px, 1.7vw, 27px)/1.05 Georgia, "Times New Roman", serif; letter-spacing: -.025em; }
 .research-workflow-copy > span { max-width: 31ch; margin-top: 8px; color: var(--welcome-muted); font-size: 16px; line-height: 1.45; }
@@ -2529,17 +2556,17 @@ html[data-theme="paper"] .arch-pdf-text-layer ::selection,
 .research-workflow-replication .research-workflow-image, .research-workflow-illustration .research-workflow-image { min-height: 84px; }
 .research-workflow-replication .research-workflow-copy > span, .research-workflow-illustration .research-workflow-copy > span { padding-right: 22px; }
 .has-welcome .conversation-composer-wrap { background: var(--welcome-ground); }
-.has-welcome .conversation-composer, .theme-paper .has-welcome .conversation-composer { color: var(--welcome-ink); background: #fff; border: 1px solid #e5e5e1; border-radius: 0; box-shadow: none; }
-.has-welcome .conversation-composer:focus-within, .theme-paper .has-welcome .conversation-composer:focus-within { border-color: #e5e5e1; box-shadow: none; outline: none; }
+.has-welcome .conversation-composer, .theme-paper .has-welcome .conversation-composer { color: var(--welcome-ink); background: var(--welcome-paper); border: 1px solid var(--welcome-line); border-radius: 0; box-shadow: none; }
+.has-welcome .conversation-composer:focus-within, .theme-paper .has-welcome .conversation-composer:focus-within { border-color: var(--welcome-line); box-shadow: none; outline: none; }
 .has-welcome .conversation-composer textarea, .theme-paper .has-welcome .conversation-composer textarea { color: var(--welcome-ink); }
 .has-welcome .conversation-composer textarea:focus-visible { outline: none; }
-.has-welcome .conversation-composer textarea::placeholder, .theme-paper .has-welcome .conversation-composer textarea::placeholder { color: #9a9a96; }
+.has-welcome .conversation-composer textarea::placeholder, .theme-paper .has-welcome .conversation-composer textarea::placeholder { color: var(--welcome-muted); }
 .has-welcome .composer-add-button, .has-welcome .composer-tool, .has-welcome .composer-context { color: var(--welcome-muted); }
-.has-welcome .context-usage { --context-usage-color: #777771; color: #777771; }
-.has-welcome .context-usage-ring { background: conic-gradient(from -90deg, var(--context-usage-color) 0 var(--context-usage-progress), #deded9 var(--context-usage-progress) 100%); }
+.has-welcome .context-usage { --context-usage-color: var(--welcome-muted); color: var(--welcome-muted); }
+.has-welcome .context-usage-ring { background: conic-gradient(from -90deg, var(--context-usage-color) 0 var(--context-usage-progress), var(--welcome-line) var(--context-usage-progress) 100%); }
 .has-welcome .context-usage-ring::after { background: var(--welcome-paper); }
-.has-welcome .conversation-send { color: #fff; background: var(--welcome-bronze); }
-.has-welcome .composer-note { color: #6e6e6a; }
+.has-welcome .conversation-send { color: var(--welcome-send-ink); background: var(--welcome-bronze); }
+.has-welcome .composer-note { color: var(--welcome-muted); }
 .codex-shell:has(.has-welcome) .theme-switcher button.active { box-shadow: none; }
 .codex-shell:has(.has-welcome) :is(.codex-sidebar-label, .projects-heading, .project-chat-empty, .archived-toggle, .workspace-copy small, .conversation-title strong, .conversation-title span, .composer-note) { font-size: 13px; }
 .codex-shell:has(.has-welcome) .workspace-copy small { color: #a7a9b6; }
