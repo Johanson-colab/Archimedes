@@ -75,10 +75,10 @@
 .project-tree-row:hover, .project-tree-row.active { background: #eaeae6; }
 .project-tree-row.active { color: #272724; }
 .project-toggle { width: 23px; height: 29px; }
-.project-select { display: flex; min-width: 0; height: 29px; flex: 1; align-items: center; gap: 7px; padding: 0; overflow: hidden; color: #53534e; background: transparent; text-align: left; }
+.project-select { display: flex; min-width: 0; height: 29px; flex: 1; align-items: center; gap: 7px; padding: 0 7px 0 0; overflow: hidden; color: #53534e; background: transparent; text-align: left; }
 .project-select > svg { flex: 0 0 auto; color: #6e6e68; }
 .project-select span { min-width: 0; flex: 1; overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.project-select small { color: #999993; font-size: 9px; font-variant-numeric: tabular-nums; }
+.project-select small { flex: 0 0 auto; min-width: 1.2em; color: #999993; font-size: 9px; font-variant-numeric: tabular-nums; text-align: right; }
 .project-rename-field { display: flex; min-width: 0; height: 29px; flex: 1; align-items: center; gap: 7px; color: #6e6e68; }
 .project-rename-field > svg { flex: 0 0 auto; }
 .project-rename-field input { width: 100%; min-width: 0; height: 23px; padding: 0 5px; color: #272724; background: #fff; border: 1px solid #80a898; border-radius: 4px; outline: none; font: inherit; font-size: 11px; font-weight: 650; }
