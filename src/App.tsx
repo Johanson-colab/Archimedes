@@ -36,6 +36,8 @@ import SkillsView from "./SkillsView";
 import TerminalPanel from "./TerminalPanel";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { previewLibraryBridge } from "./library-preview";
+import ArchimedesMark from "./brand/ArchimedesMark";
+import ArchimedesWordmark from "./brand/ArchimedesWordmark";
 import {
   BookOpen,
   Blocks,
@@ -1193,8 +1195,8 @@ function App() {
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
       <aside className="codex-sidebar" aria-label="Archimedes navigation" data-ui="application-navigation">
         <div className="codex-brand">
-          <span className="codex-brand-mark"><Orbit size={17} /></span>
-          <strong>Archimedes</strong>
+          <ArchimedesMark className="codex-brand-symbol" size={24} variant="small" />
+          <ArchimedesWordmark className="codex-brand-wordmark" />
           <button className="sidebar-collapse-button" onClick={() => setSidebarHidden(true)} title="Hide sidebar" aria-label="Hide sidebar"><PanelLeftClose size={16} /></button>
         </div>
 
@@ -1544,7 +1546,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
 
         {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
 
-        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><Orbit size={15} /></span><div><strong>{interrupting ? "Stopping task" : latestEvent?.title ?? "Archimedes is working"}</strong><small>{interrupting ? "Waiting for the active task to stop" : latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
+        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><ArchimedesMark size={14} variant="small" /></span><div><strong>{interrupting ? "Stopping task" : latestEvent?.title ?? "Archimedes is working"}</strong><small>{interrupting ? "Waiting for the active task to stop" : latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
 
         {pendingAction && (
           <section className="conversation-approval">
