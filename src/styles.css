@@ -377,10 +377,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
   overflow: hidden;
   color: #242421;
   background: #fff;
+  transition: grid-template-columns .18s cubic-bezier(.22, .8, .28, 1);
 }
 
+/* Keep the sidebar mounted so the track can animate to zero; dragging must
+   stay immediate, so the resize guard below removes the transition. */
 .codex-shell.sidebar-hidden { grid-template-columns: 0 minmax(0, 1fr); }
-.codex-shell.sidebar-hidden .codex-sidebar { display: none; }
+.codex-shell.sidebar-hidden .codex-sidebar { border-right-width: 0; opacity: 0; pointer-events: none; }
+body.sidebar-resizing .codex-shell { transition: none; }
 .codex-sidebar { grid-column: 1; }
 .codex-main { grid-column: 2; }
 
@@ -396,7 +400,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
   color: #373733;
   background: #f4f4f1;
   border-right: 1px solid #e4e4df;
+  transition: opacity .14s ease, border-right-width .18s ease;
 }
+
+/* Freeze the inner layout at the expanded width while collapsing so labels
+   are clipped by the shell instead of rewrapping during the animation. */
+.codex-sidebar > :not(.sidebar-resizer) { min-width: calc(var(--sidebar-width, 252px) - 21px); }
 
 .sidebar-resizer { position: absolute; z-index: 6; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; background: transparent; }
 .sidebar-resizer::after { position: absolute; inset: 0 0 0 auto; width: 1px; background: transparent; content: ""; transition: background .15s ease; }
@@ -1550,6 +1559,7 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
 
 @media (prefers-reduced-motion: reduce) {
   .main-view > :not(.hidden) { animation: none; }
+  .codex-shell, .codex-sidebar { transition: none; }
   .codex-nav-item, .new-task-button, .quiet-icon-button, .model-provider-button,
   .primary-button, .secondary-button, .outline-button, .conversation-send,
   .library-card, .skill-collection-card, .gallery-card { transition: none; }
