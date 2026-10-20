@@ -36,6 +36,8 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
     });
   }, [activeProjectId, projects]);
 
+  // The project row mirrors the chevron so browsing does not lose the
+  // current chat; starting a new chat is reserved for the + action.
   function toggleProject(id: string) {
     setExpanded((current) => {
       const next = new Set(current);
@@ -90,7 +92,7 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                   setEditingProjectId(null);
                 }
               }} /></span>
-              : <button className="project-select" onClick={() => onNewChat(project.id)} title={project.name} disabled={disabled}><Folder size={14} /><span>{project.name}</span><small>{projectThreads.length}</small></button>}
+              : <button className="project-select" onClick={() => toggleProject(project.id)} title={project.name} aria-expanded={isExpanded}><Folder size={14} /><span>{project.name}</span><small>{projectThreads.length}</small></button>}
             <span className="project-row-actions">
               <button onClick={() => onNewChat(project.id)} title={`New chat in ${project.name}`} disabled={disabled}><MessageSquarePlus size={13} /></button>
               <button onClick={() => beginRename(project)} title={`Rename ${project.name}`} disabled={disabled}><Pencil size={12} /></button>
