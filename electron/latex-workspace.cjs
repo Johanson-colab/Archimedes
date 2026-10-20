@@ -3,44 +3,14 @@ const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const workspaceFiles = require("./workspace-files.cjs");
+const latexTemplates = require("../shared/latex-templates.json");
 
 const PAPER_EXTENSIONS = new Set([".tex", ".bib", ".bst", ".cls", ".sty", ".cfg"]);
 const SKIPPED_DIRECTORIES = new Set([".archimedes", ".git", "node_modules", "dist", "build", ".next"]);
 const SKIPPED_IMPORT_FILES = new Set([".DS_Store"]);
 const MAX_IMPORT_FILES = 10_000;
 const MAX_IMPORT_BYTES = 500 * 1024 * 1024;
-const DEFAULT_DOCUMENT = String.raw`\documentclass[11pt]{article}
-\usepackage[margin=1in]{geometry}
-\usepackage{amsmath,amssymb,booktabs,graphicx,hyperref}
-
-\title{Untitled Research Paper}
-\author{}
-\date{\today}
-
-\begin{document}
-\maketitle
-
-\begin{abstract}
-Write a concise summary of the problem, method, and main evidence.
-\end{abstract}
-
-\section{Introduction}
-Describe the problem and the paper's contribution.
-
-\section{Related Work}
-Position the work against the most relevant literature.
-
-\section{Method}
-Present the method with enough detail to reproduce it.
-
-\section{Experiments}
-Describe datasets, baselines, metrics, and results.
-
-\section{Conclusion}
-Summarize the findings and limitations.
-
-\end{document}
-`;
+const DEFAULT_TEMPLATE_ID = "archimedes";
 
 function normalizePaperPath(value) {
   const normalized = String(value || "").replaceAll("\\", "/").replace(/^\/+/, "").replace(/\/+/g, "/");
@@ -81,13 +51,28 @@ function listLatexProjects(root, { maxFiles = 4_000, maxDepth = 10 } = {}) {
   return documents.sort((left, right) => Number(right.main) - Number(left.main) || left.path.localeCompare(right.path));
 }
 
-function createLatexProject(root, requestedDirectory = "paper") {
+function findLatexTemplate(templateId = DEFAULT_TEMPLATE_ID) {
+  const id = String(templateId || DEFAULT_TEMPLATE_ID);
+  const template = latexTemplates.find((candidate) => candidate.id === id);
+  if (!template) {
+    throw new Error(`Unknown LaTeX template "${id}". Choose one of: ${latexTemplates.map((candidate) => candidate.id).join(", ")}.`);
+  }
+  return template;
+}
+
+function createLatexProject(root, requestedDirectory = "paper", templateId = DEFAULT_TEMPLATE_ID) {
+  const template = findLatexTemplate(templateId);
   const base = String(requestedDirectory || "paper").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "").replace(/[^\p{L}\p{N}._/-]+/gu, "-") || "paper";
   let directory = base;
   let index = 2;
   while (fs.existsSync(workspaceFiles.workspacePath(root, directory, { mustExist: false }))) directory = `${base}-${index++}`;
-  const mainPath = `${directory}/main.tex`;
-  return workspaceFiles.writeWorkspaceTextFile(root, mainPath, DEFAULT_DOCUMENT);
+  let mainFile = null;
+  for (const [name, content] of Object.entries(template.files)) {
+    const file = workspaceFiles.writeWorkspaceTextFile(root, `${directory}/${name}`, content);
+    if (name === "main.tex") mainFile = file;
+  }
+  if (!mainFile) throw new Error(`LaTeX template "${template.id}" does not define main.tex.`);
+  return mainFile;
 }
 
 function normalizeWorkspaceEntryPath(value, label) {
@@ -237,6 +222,13 @@ function runCompiler(command, args, options = {}) {
   });
 }
 
+function compilerKind(executable) {
+  const name = path.basename(String(executable || "")).toLowerCase();
+  if (name.startsWith("tectonic")) return "tectonic";
+  if (name.startsWith("latexmk")) return "latexmk";
+  return "pdflatex";
+}
+
 async function compileLatexDocument(root, requestedPath, options = {}) {
   const sourcePath = normalizePaperPath(requestedPath);
   const absoluteSource = workspaceFiles.workspacePath(root, sourcePath);
@@ -248,20 +240,27 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   fs.mkdirSync(buildDirectory, { recursive: true });
 
   const compilerEnv = { ...process.env, ...(options.env || {}), LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
-  const latexmk = options.executable || findExecutable(["latexmk", "latexmk.exe", "/Library/TeX/texbin/latexmk"], compilerEnv);
-  const pdflatex = latexmk ? "" : findExecutable(["pdflatex", "pdflatex.exe", "/Library/TeX/texbin/pdflatex"], compilerEnv);
-  const executable = latexmk || pdflatex;
-  if (!executable) throw new Error("No LaTeX compiler was found. Install latexmk or pdflatex, then try again.");
+  const latexmk = options.executable || findExecutable(["latexmk", "latexmk.exe", "/Library/TeX/texbin/latexmk", "/opt/homebrew/bin/latexmk", "/usr/local/bin/latexmk"], compilerEnv);
+  const pdflatex = latexmk ? "" : findExecutable(["pdflatex", "pdflatex.exe", "/Library/TeX/texbin/pdflatex", "/opt/homebrew/bin/pdflatex", "/usr/local/bin/pdflatex"], compilerEnv);
+  const tectonic = latexmk || pdflatex ? "" : findExecutable(["tectonic", "tectonic.exe", "/opt/homebrew/bin/tectonic", "/usr/local/bin/tectonic"], compilerEnv);
+  const executable = latexmk || pdflatex || tectonic;
+  if (!executable) throw new Error("No LaTeX compiler was found. Install a TeX distribution (latexmk or pdflatex) or Tectonic, then try again.");
+  const engineKind = compilerKind(executable);
   // A manual compile is expected to reflect changes outside the .tex source
   // as well (for example, a TeX package that was just installed).  latexmk's
   // dependency cache otherwise preserves an earlier failed build indefinitely.
-  const args = latexmk
+  const args = engineKind === "latexmk"
     ? ["-g", "-pdf", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-outdir=${buildDirectory}`, path.basename(absoluteSource)]
-    : ["-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-output-directory=${buildDirectory}`, path.basename(absoluteSource)];
+    : engineKind === "tectonic"
+      ? ["--outdir", buildDirectory, "--keep-logs", "--chatter", "minimal", path.basename(absoluteSource)]
+      : ["-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-output-directory=${buildDirectory}`, path.basename(absoluteSource)];
   const startedAt = Date.now();
-  let run = await runCompiler(executable, args, { ...options, cwd: sourceDirectory, env: compilerEnv });
-  if (!latexmk && run.code === 0) {
-    const secondPass = await runCompiler(executable, args, { ...options, cwd: sourceDirectory, env: compilerEnv });
+  // Tectonic may download its package bundle on the first run, which can take
+  // longer than a local TeX distribution's compile.
+  const runOptions = engineKind === "tectonic" && !options.timeoutMs ? { ...options, timeoutMs: 180_000 } : options;
+  let run = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
+  if (engineKind === "pdflatex" && run.code === 0) {
+    const secondPass = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
     run = { ...secondPass, output: `${run.output}\n${secondPass.output}` };
   }
   const absolutePdf = path.join(buildDirectory, `${documentName}.pdf`);
@@ -286,9 +285,10 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
 }
 
 module.exports = {
-  DEFAULT_DOCUMENT,
+  DEFAULT_TEMPLATE_ID,
   PAPER_EXTENSIONS,
   compileLatexDocument,
+  compilerKind,
   createLatexDirectory,
   createLatexFile,
   createLatexProject,

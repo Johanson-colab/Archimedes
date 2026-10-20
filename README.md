@@ -161,6 +161,12 @@ When the paper has a linked public GitHub repository, Archimedes can fetch a bou
 
 The chat composer accepts pasted images alongside text. Context usage is shown as a small circular indicator; hover to see the current percentage. The assembled conversation currently has a 300,000-character budget. Character accounting keeps the application provider-neutral, since token counts differ across model tokenizers.
 
+## Paper Writing
+
+Paper writing keeps each manuscript in its own workspace folder. A new project is scaffolded from a built-in template (`main.tex` plus `references.bib`): the default Archimedes article, two-column and single-column conference layouts, a two-column journal layout, and an arXiv-style preprint. The built-in templates only use standard packages that ship with TeX Live/MacTeX and Tectonic's bundle; use **Import folder** when a venue's official class file is required.
+
+Compilation prefers `latexmk`, then `pdflatex` with a second pass for references, and finally [Tectonic](https://tectonic-typesetting.github.io/), which downloads and caches its package bundle on first use. Build output stays under `.archimedes/latex-build` and is never mixed into the paper folder.
+
 ## Conference Discovery
 
 Open **Daily papers** and select **Top conference search** to switch from rolling paper discovery to proceedings search. Day-range controls do not apply in conference mode. Search results are paginated after filtering the downloaded catalog, and records preserve their conference, source URLs, retrieval time, and available presentation metadata.

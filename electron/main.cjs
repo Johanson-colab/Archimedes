@@ -573,7 +573,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("paper:create-project", (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
-    const file = latexWorkspace.createLatexProject(workspace, input.directory);
+    const file = latexWorkspace.createLatexProject(workspace, input.directory, input.template);
     if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
     return file;
   });

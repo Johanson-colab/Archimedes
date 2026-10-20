@@ -13,7 +13,7 @@ interface ResearchDeskBridge {
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
     writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
     listLatexProjects: (workspace: string) => Promise<LatexProjectSummary[]>;
-    createLatexProject: (workspace: string, directory?: string) => Promise<WorkspaceFilePreview>;
+    createLatexProject: (workspace: string, directory?: string, template?: string) => Promise<WorkspaceFilePreview>;
     createLatexFile: (workspace: string, path: string) => Promise<WorkspaceFilePreview>;
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
@@ -134,6 +134,13 @@ interface LatexProjectSummary {
   path: string;
   title: string;
   main: boolean;
+}
+
+interface LatexTemplateSummary {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
 }
 
 interface LatexDirectoryResult {

@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   readWorkspaceFile: (workspace, filePath) => ipcRenderer.invoke("workspace:read-file", { workspace, path: filePath }),
   writeWorkspaceFile: (workspace, filePath, content) => ipcRenderer.invoke("workspace:write-file", { workspace, path: filePath, content }),
   listLatexProjects: (workspace) => ipcRenderer.invoke("paper:list-projects", { workspace }),
-  createLatexProject: (workspace, directory = "paper") => ipcRenderer.invoke("paper:create-project", { workspace, directory }),
+  createLatexProject: (workspace, directory = "paper", template = "archimedes") => ipcRenderer.invoke("paper:create-project", { workspace, directory, template }),
   createLatexFile: (workspace, path) => ipcRenderer.invoke("paper:create-file", { workspace, path }),
   createLatexDirectory: (workspace, path) => ipcRenderer.invoke("paper:create-directory", { workspace, path }),
   importLatexFolder: (workspace) => ipcRenderer.invoke("paper:import-folder", { workspace }),
