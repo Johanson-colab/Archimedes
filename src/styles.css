@@ -1518,6 +1518,10 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
 .smart-terminal, .smart-terminal-tabs, .terminal-surfaces { color: #babac5; background: #0b0d13; border-color: #292b37; }
 .terminal-tab { border-color: #292b37; }.terminal-tab.active { background: #151720; box-shadow: inset 0 -2px var(--night-accent); }
 .terminal-tab-select { color: #898b9b; }.terminal-tab.active .terminal-tab-select { color: #e8e7ee; }
+.terminal-tab-close, .new-terminal-button, .close-terminal-panel { color: #898b9b; }
+.terminal-tab-close:hover, .new-terminal-button:hover, .close-terminal-panel:hover { color: #f0f0f4; background: #20222c; }
+.terminal-workspace-label { color: var(--night-muted); }
+.terminal-surface .xterm-viewport { scrollbar-color: #3a3d4c transparent; }
 
 .modal-backdrop, .gallery-dialog-backdrop { background: rgba(3, 4, 8, .84); }
 .modal-header { border-color: #30323f; }

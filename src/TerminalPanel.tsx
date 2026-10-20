@@ -1,8 +1,62 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import { Plus, SquareTerminal, X } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
+
+type TerminalThemeName = "charcoal" | "paper";
+
+const PAPER_TERMINAL_THEME: ITheme = {
+  background: "#f8f8f6",
+  foreground: "#30302d",
+  cursor: "#24755a",
+  cursorAccent: "#f8f8f6",
+  selectionBackground: "#cfe2da",
+  black: "#343430",
+  red: "#b84d4d",
+  green: "#267357",
+  yellow: "#977025",
+  blue: "#356fa3",
+  magenta: "#8055a6",
+  cyan: "#267885",
+  white: "#d9d9d4",
+  brightBlack: "#7a7a74",
+  brightRed: "#d05a56",
+  brightGreen: "#318b68",
+  brightYellow: "#b8872d",
+  brightBlue: "#4786bd",
+  brightMagenta: "#9869bd",
+  brightCyan: "#3594a0",
+  brightWhite: "#ffffff",
+};
+
+const CHARCOAL_TERMINAL_THEME: ITheme = {
+  background: "#0b0d13",
+  foreground: "#c7c8d2",
+  cursor: "#d6d6d6",
+  cursorAccent: "#0b0d13",
+  selectionBackground: "#353849",
+  black: "#2b2d38",
+  red: "#dc7c83",
+  green: "#65b894",
+  yellow: "#d4a95c",
+  blue: "#8fb4dd",
+  magenta: "#b9a0cf",
+  cyan: "#78bfc4",
+  white: "#c7c8d2",
+  brightBlack: "#6e7183",
+  brightRed: "#eb949a",
+  brightGreen: "#7fd0a9",
+  brightYellow: "#e5c179",
+  brightBlue: "#a6c6ea",
+  brightMagenta: "#cdb6dd",
+  brightCyan: "#93d3d7",
+  brightWhite: "#f2f1f7",
+};
+
+function terminalTheme(theme: TerminalThemeName) {
+  return theme === "paper" ? PAPER_TERMINAL_THEME : CHARCOAL_TERMINAL_THEME;
+}
 
 type TerminalTab = TerminalSessionInfo & {
   title: string;
@@ -12,13 +66,14 @@ type TerminalTab = TerminalSessionInfo & {
 type TerminalPanelProps = {
   bridge: ResearchDeskBridge;
   open: boolean;
+  theme: TerminalThemeName;
   workspace: string;
   height: number;
   onHeightChange: (height: number) => void;
   onClose: () => void;
 };
 
-export default function TerminalPanel({ bridge, open, workspace, height, onHeightChange, onClose }: TerminalPanelProps) {
+export default function TerminalPanel({ bridge, open, theme, workspace, height, onHeightChange, onClose }: TerminalPanelProps) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const creatingRef = useRef(false);
@@ -104,6 +159,7 @@ export default function TerminalPanel({ bridge, open, workspace, height, onHeigh
         session={tab}
         active={tab.sessionId === activeSessionId}
         panelOpen={open}
+        theme={theme}
         onTitle={(title) => setTabs((current) => current.map((candidate) => candidate.sessionId === tab.sessionId ? { ...candidate, title } : candidate))}
         onExit={() => setTabs((current) => current.map((candidate) => candidate.sessionId === tab.sessionId ? { ...candidate, status: "exited" } : candidate))}
       />)}
@@ -111,11 +167,12 @@ export default function TerminalPanel({ bridge, open, workspace, height, onHeigh
   </section>;
 }
 
-function TerminalSurface({ bridge, session, active, panelOpen, onTitle, onExit }: {
+function TerminalSurface({ bridge, session, active, panelOpen, theme, onTitle, onExit }: {
   bridge: ResearchDeskBridge;
   session: TerminalTab;
   active: boolean;
   panelOpen: boolean;
+  theme: TerminalThemeName;
   onTitle: (title: string) => void;
   onExit: () => void;
 }) {
@@ -124,11 +181,16 @@ function TerminalSurface({ bridge, session, active, panelOpen, onTitle, onExit }
   const fitAddonRef = useRef<FitAddon | null>(null);
   const activeRef = useRef(active);
   const panelOpenRef = useRef(panelOpen);
+  const themeRef = useRef(theme);
   const onTitleRef = useRef(onTitle);
   const onExitRef = useRef(onExit);
 
   useEffect(() => { activeRef.current = active; }, [active]);
   useEffect(() => { panelOpenRef.current = panelOpen; }, [panelOpen]);
+  useEffect(() => {
+    themeRef.current = theme;
+    if (terminalRef.current) terminalRef.current.options.theme = terminalTheme(theme);
+  }, [theme]);
   useEffect(() => { onTitleRef.current = onTitle; }, [onTitle]);
   useEffect(() => { onExitRef.current = onExit; }, [onExit]);
 
@@ -146,29 +208,7 @@ function TerminalSurface({ bridge, session, active, panelOpen, onTitle, onExit }
       lineHeight: 1.22,
       macOptionIsMeta: true,
       scrollback: 5000,
-      theme: {
-        background: "#f8f8f6",
-        foreground: "#30302d",
-        cursor: "#24755a",
-        cursorAccent: "#f8f8f6",
-        selectionBackground: "#cfe2da",
-        black: "#343430",
-        red: "#b84d4d",
-        green: "#267357",
-        yellow: "#977025",
-        blue: "#356fa3",
-        magenta: "#8055a6",
-        cyan: "#267885",
-        white: "#d9d9d4",
-        brightBlack: "#7a7a74",
-        brightRed: "#d05a56",
-        brightGreen: "#318b68",
-        brightYellow: "#b8872d",
-        brightBlue: "#4786bd",
-        brightMagenta: "#9869bd",
-        brightCyan: "#3594a0",
-        brightWhite: "#ffffff",
-      },
+      theme: terminalTheme(themeRef.current),
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);

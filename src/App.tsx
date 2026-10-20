@@ -1318,7 +1318,7 @@ function App() {
           </div>
         </div>
 
-        <TerminalPanel bridge={desktopBridge} open={terminalOpen} workspace={workspace} height={terminalHeight} onHeightChange={setTerminalHeight} onClose={() => setTerminalOpen(false)} />
+        <TerminalPanel bridge={desktopBridge} open={terminalOpen} theme={theme} workspace={workspace} height={terminalHeight} onHeightChange={setTerminalHeight} onClose={() => setTerminalOpen(false)} />
       </section>
 
       <WorkspaceModal
