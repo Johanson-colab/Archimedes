@@ -57,6 +57,7 @@ import {
   Images,
   Lightbulb,
   MessageCircle,
+  Monitor,
   Moon,
   Orbit,
   PanelBottom,
@@ -550,6 +551,7 @@ function contextImageFromData(image: ContextImage): ContextAttachment {
 
 type MainSection = "chat" | "skills" | "library" | "daily" | "benchmark-radar" | "gallery" | "artifacts" | "writing";
 type AppTheme = "charcoal" | "paper";
+type ThemePreference = AppTheme | "system";
 
 const SIDEBAR_DEFAULT_WIDTH = 252;
 const SIDEBAR_MIN_WIDTH = 200;
@@ -570,11 +572,21 @@ function readSidebarHidden() {
   return window.localStorage.getItem("archimedes-sidebar-hidden") === "true";
 }
 
+function systemTheme(): AppTheme {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "charcoal";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "charcoal" : "paper";
+}
+
+function readThemePreference(): ThemePreference {
+  if (typeof window === "undefined") return "system";
+  const stored = window.localStorage.getItem("archimedes-theme");
+  return stored === "charcoal" || stored === "paper" || stored === "system" ? stored : "system";
+}
+
 function App() {
-  const [theme, setTheme] = useState<AppTheme>(() => {
-    if (typeof window === "undefined") return "charcoal";
-    return window.localStorage.getItem("archimedes-theme") === "paper" ? "paper" : "charcoal";
-  });
+  const [themePreference, setThemePreference] = useState<ThemePreference>(readThemePreference);
+  const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
+  const theme: AppTheme = themePreference === "system" ? systemAppearance : themePreference;
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -632,8 +644,21 @@ function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("archimedes-theme", theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "paper" ? "#fbfaf8" : "#20211F");
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-theme", themePreference);
+  }, [themePreference]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setSystemAppearance(query.matches ? "charcoal" : "paper");
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem("archimedes-sidebar-width", String(sidebarWidth));
@@ -1252,8 +1277,9 @@ function App() {
 
         <div className="sidebar-workspace">
           <div className="theme-switcher" role="group" aria-label="Appearance">
-            <button className={theme === "charcoal" ? "active" : ""} onClick={() => setTheme("charcoal")} title="Use charcoal theme" aria-label="Use charcoal theme" aria-pressed={theme === "charcoal"}><Moon size={14} /></button>
-            <button className={theme === "paper" ? "active" : ""} onClick={() => setTheme("paper")} title="Use paper theme" aria-label="Use paper theme" aria-pressed={theme === "paper"}><Sun size={14} /></button>
+            <button className={themePreference === "charcoal" ? "active" : ""} onClick={() => setThemePreference("charcoal")} title="Use charcoal theme" aria-label="Use charcoal theme" aria-pressed={themePreference === "charcoal"}><Moon size={14} /></button>
+            <button className={themePreference === "system" ? "active" : ""} onClick={() => setThemePreference("system")} title={`Follow system appearance (currently ${systemAppearance === "charcoal" ? "dark" : "light"})`} aria-label="Follow system appearance" aria-pressed={themePreference === "system"}><Monitor size={14} /></button>
+            <button className={themePreference === "paper" ? "active" : ""} onClick={() => setThemePreference("paper")} title="Use paper theme" aria-label="Use paper theme" aria-pressed={themePreference === "paper"}><Sun size={14} /></button>
           </div>
           <button className="workspace-button" onClick={chooseWorkspace} title="Choose workspace" disabled={agentBusy}>
             <span className="workspace-icon"><FolderOpen size={15} /></span>

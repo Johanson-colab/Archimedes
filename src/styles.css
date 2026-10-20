@@ -1941,7 +1941,7 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
 .paper-ai-markdown a { color: #d5d5d5; }
 
 /* Two deliberate palettes: the existing charcoal instrument and a quiet paper workspace. */
-.theme-switcher { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; margin: 0 4px 8px; padding: 3px; background: #242424; border: 1px solid #363636; border-radius: 6px; }
+.theme-switcher { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 0 4px 8px; padding: 3px; background: #242424; border: 1px solid #363636; border-radius: 6px; }
 .theme-switcher button { display: grid; height: 25px; place-items: center; color: #8e8e8e; background: transparent; border-radius: 4px; }
 .theme-switcher button:hover { color: #e6e6e6; background: #303030; }
 .theme-switcher button.active { color: #fff; background: #3b3b3b; box-shadow: 0 1px 2px rgba(0, 0, 0, .28); }
