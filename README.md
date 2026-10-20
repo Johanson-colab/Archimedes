@@ -165,7 +165,7 @@ The chat composer accepts pasted images alongside text. Context usage is shown a
 
 Paper writing keeps each manuscript in its own workspace folder. A new project is scaffolded from a built-in template (`main.tex` plus `references.bib`): the default Archimedes article, two-column and single-column conference layouts, a two-column journal layout, and an arXiv-style preprint. The built-in templates only use standard packages that ship with TeX Live/MacTeX and Tectonic's bundle; use **Import folder** when a venue's official class file is required.
 
-Compilation prefers `latexmk`, then `pdflatex` with a second pass for references, and finally [Tectonic](https://tectonic-typesetting.github.io/), which downloads and caches its package bundle on first use. Build output stays under `.archimedes/latex-build` and is never mixed into the paper folder.
+Compilation prefers `latexmk`, then `pdflatex` with a second pass for references, and finally [Tectonic](https://tectonic-typesetting.github.io/), which downloads and caches its package bundle on first use. Build output stays under `.archimedes/latex-build` and is never mixed into the paper folder. Drag the dividers between the file browser, source editor, and PDF preview to resize them; double-click a divider to reset it, or hide the browser to give the preview the full width.
 
 ## Conference Discovery
 
