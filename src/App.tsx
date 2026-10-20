@@ -1193,7 +1193,7 @@ function App() {
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
-      <aside className="codex-sidebar" aria-label="Archimedes navigation" data-ui="application-navigation">
+      <aside className="codex-sidebar" aria-label="Archimedes navigation" data-ui="application-navigation" inert={sidebarHidden}>
         <div className="codex-brand">
           <ArchimedesMark className="codex-brand-symbol" size={24} variant="small" />
           <ArchimedesWordmark className="codex-brand-wordmark" />
