@@ -1,9 +1,12 @@
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const {
+  compileLatexDocument,
+  compilerKind,
   createLatexDirectory,
   createLatexFile,
   createLatexProject,
@@ -48,6 +51,66 @@ test("creates LaTeX files and folders without overwriting workspace entries", ()
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("creates projects from built-in templates with a bibliography", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-templates-"));
+  try {
+    const fallback = createLatexProject(root, "paper");
+    assert.equal(fallback.path, "paper/main.tex");
+    assert.match(fs.readFileSync(path.join(root, fallback.path), "utf8"), /\\bibliography\{references\}/);
+    assert.equal(fs.existsSync(path.join(root, "paper", "references.bib")), true);
+
+    const conference = createLatexProject(root, "cvpr", "conference-two-column");
+    const source = fs.readFileSync(path.join(root, conference.path), "utf8");
+    assert.match(source, /\\documentclass\[10pt,twocolumn\]\{article\}/);
+    assert.match(source, /\\twocolumn\[/);
+
+    assert.throws(() => createLatexProject(root, "unknown", "does-not-exist"), /Unknown LaTeX template/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("falls back to tectonic and passes its CLI arguments", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-tectonic-"));
+  const spawnCalls = [];
+  try {
+    createLatexProject(root, "paper");
+    const result = await compileLatexDocument(root, "paper/main.tex", {
+      executable: "/opt/homebrew/bin/tectonic",
+      spawnImpl: (command, args) => {
+        spawnCalls.push({ command, args });
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.kill = () => {};
+        process.nextTick(() => {
+          const outdir = args[args.indexOf("--outdir") + 1];
+          fs.writeFileSync(path.join(outdir, "main.pdf"), "%PDF-1.4\n");
+          fs.writeFileSync(path.join(outdir, "main.log"), "This is XeTeX\n");
+          child.emit("close", 0, null);
+        });
+        return child;
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.engine, "tectonic");
+    assert.match(result.pdf_path, /main\.pdf$/);
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, "/opt/homebrew/bin/tectonic");
+    assert.deepEqual(spawnCalls[0].args.slice(0, 5), ["--outdir", spawnCalls[0].args[1], "--keep-logs", "--chatter", "minimal"]);
+    assert.equal(spawnCalls[0].args.includes("main.tex"), true);
+    assert.equal(spawnCalls[0].args.includes("-interaction=nonstopmode"), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("classifies known LaTeX compilers", () => {
+  assert.equal(compilerKind("/opt/homebrew/bin/tectonic"), "tectonic");
+  assert.equal(compilerKind("/Library/TeX/texbin/latexmk"), "latexmk");
+  assert.equal(compilerKind("pdflatex.exe"), "pdflatex");
 });
 
 test("imports a complete LaTeX folder and selects its main document", () => {

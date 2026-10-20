@@ -1,0 +1,52 @@
+[
+  {
+    "id": "archimedes",
+    "name": "Archimedes",
+    "category": "Default",
+    "description": "Single-column article with abstract, sections, and BibTeX wiring. Compiles out of the box.",
+    "files": {
+      "main.tex": "% Archimedes default template: a clean single-column research article.\n% Every package below ships with a standard TeX distribution and Tectonic.\n\\documentclass[11pt]{article}\n\\usepackage[letterpaper,margin=1in]{geometry}\n\\usepackage{amsmath,amssymb,booktabs,graphicx}\n\\usepackage[hidelinks]{hyperref}\n\n\\title{Untitled Research Paper}\n\\author{}\n\\date{\\today}\n\n\\begin{document}\n\\maketitle\n\n\\begin{abstract}\nWrite a concise summary of the problem, method, and main evidence.\n\\end{abstract}\n\n\\section{Introduction}\nDescribe the problem and the paper's contribution.\n\n\\section{Related Work}\nPosition the work against the most relevant literature.\n\n\\section{Method}\nPresent the method with enough detail to reproduce it.\n\n\\section{Experiments}\nDescribe datasets, baselines, metrics, and results.\n\n\\section{Conclusion}\nSummarize the findings and limitations.\n\n\\bibliographystyle{plain}\n\\bibliography{references}\n\n\\end{document}\n",
+      "references.bib": "% Add BibTeX entries here. latexmk, pdflatex + bibtex, and Tectonic all\n% resolve \\bibliography{references} from this file.\n%\n% @inproceedings{example,\n%   author    = {Ada Lovelace and Alan Turing},\n%   title     = {An Example Reference},\n%   booktitle = {Proceedings of the Example Conference},\n%   year      = {2026},\n%   pages     = {1--10}\n% }\n"
+    }
+  },
+  {
+    "id": "conference-two-column",
+    "name": "Conference — two-column",
+    "category": "Conference",
+    "description": "CVPR / ICCV-style two-column layout using standard packages. Swap in the official class file for camera-ready submission.",
+    "files": {
+      "main.tex": "% Conference template: two-column layout in the spirit of CVPR / ICCV.\n% It uses standard packages only. For a camera-ready submission, import the\n% official venue template folder or swap this preamble for the venue class.\n\\documentclass[10pt,twocolumn]{article}\n\\usepackage[letterpaper,margin=1in]{geometry}\n\\usepackage{times}\n\\usepackage{amsmath,amssymb,booktabs,graphicx}\n\\usepackage[hidelinks]{hyperref}\n\\setlength{\\columnsep}{0.25in}\n\n\\begin{document}\n\n\\twocolumn[{\n  \\begin{center}\n    {\\LARGE\\bfseries Untitled Conference Paper\\par}\n    \\vspace{0.8em}\n    {\\large Author Name\\par}\n    \\vspace{0.3em}\n    {\\small Affiliation\\\\\\texttt{email@example.com}}\n  \\end{center}\n  \\vspace{1em}\n}]\n\n\\begin{abstract}\nWrite a concise summary of the problem, method, and main evidence.\n\\end{abstract}\n\n\\section{Introduction}\nDescribe the problem and the paper's contribution.\n\n\\section{Related Work}\nPosition the work against the most relevant literature.\n\n\\section{Method}\nPresent the method with enough detail to reproduce it.\n\n\\section{Experiments}\nDescribe datasets, baselines, metrics, and results.\n\n\\section{Conclusion}\nSummarize the findings and limitations.\n\n\\bibliographystyle{plain}\n\\bibliography{references}\n\n\\end{document}\n",
+      "references.bib": "% Add BibTeX entries here. latexmk, pdflatex + bibtex, and Tectonic all\n% resolve \\bibliography{references} from this file.\n%\n% @inproceedings{example,\n%   author    = {Ada Lovelace and Alan Turing},\n%   title     = {An Example Reference},\n%   booktitle = {Proceedings of the Example Conference},\n%   year      = {2026},\n%   pages     = {1--10}\n% }\n"
+    }
+  },
+  {
+    "id": "conference-single-column",
+    "name": "Conference — single-column",
+    "category": "Conference",
+    "description": "NeurIPS / ICML-style single-column layout using standard packages. Swap in the official class file for camera-ready submission.",
+    "files": {
+      "main.tex": "% Conference template: single-column layout in the spirit of NeurIPS / ICML.\n% It uses standard packages only. For a camera-ready submission, import the\n% official venue template folder or swap this preamble for the venue class.\n\\documentclass[10pt]{article}\n\\usepackage[letterpaper,margin=1in]{geometry}\n\\usepackage{times}\n\\usepackage{amsmath,amssymb,booktabs,graphicx}\n\\usepackage[hidelinks]{hyperref}\n\n\\title{Untitled Conference Paper}\n\\author{Author Name\\\\Affiliation\\\\\\texttt{email@example.com}}\n\\date{}\n\n\\begin{document}\n\\maketitle\n\n\\begin{abstract}\nWrite a concise summary of the problem, method, and main evidence.\n\\end{abstract}\n\n\\section{Introduction}\nDescribe the problem and the paper's contribution.\n\n\\section{Related Work}\nPosition the work against the most relevant literature.\n\n\\section{Method}\nPresent the method with enough detail to reproduce it.\n\n\\section{Experiments}\nDescribe datasets, baselines, metrics, and results.\n\n\\section{Conclusion}\nSummarize the findings and limitations.\n\n\\bibliographystyle{plain}\n\\bibliography{references}\n\n\\end{document}\n",
+      "references.bib": "% Add BibTeX entries here. latexmk, pdflatex + bibtex, and Tectonic all\n% resolve \\bibliography{references} from this file.\n%\n% @inproceedings{example,\n%   author    = {Ada Lovelace and Alan Turing},\n%   title     = {An Example Reference},\n%   booktitle = {Proceedings of the Example Conference},\n%   year      = {2026},\n%   pages     = {1--10}\n% }\n"
+    }
+  },
+  {
+    "id": "journal-two-column",
+    "name": "Journal — two-column",
+    "category": "Journal",
+    "description": "IEEE / ACM-style two-column journal layout using standard packages. Import the publisher template for submission.",
+    "files": {
+      "main.tex": "% Journal template: two-column layout in the spirit of IEEE / ACM journals.\n% It uses standard packages only. For submission, import the publisher's\n% official template folder or replace this preamble with its class file.\n\\documentclass[10pt,twocolumn]{article}\n\\usepackage[letterpaper,margin=0.75in]{geometry}\n\\usepackage{times}\n\\usepackage{amsmath,amssymb,booktabs,graphicx}\n\\usepackage{titlesec}\n\\usepackage[hidelinks]{hyperref}\n\n\\titleformat{\\section}{\\normalfont\\scshape\\centering}{\\thesection}{0.5em}{}\n\\titleformat{\\subsection}{\\normalfont\\itshape}{\\thesubsection}{0.5em}{}\n\n\\begin{document}\n\n\\twocolumn[{\n  \\begin{center}\n    {\\LARGE\\bfseries Untitled Journal Article\\par}\n    \\vspace{0.8em}\n    {\\large Author Name\\par}\n    \\vspace{0.3em}\n    {\\small Affiliation\\\\\\texttt{email@example.com}}\n  \\end{center}\n  \\vspace{1em}\n}]\n\n\\begin{abstract}\nWrite a concise summary of the problem, method, and main evidence.\n\\end{abstract}\n\n\\section{Introduction}\nDescribe the problem and the paper's contribution.\n\n\\section{Related Work}\nPosition the work against the most relevant literature.\n\n\\section{Method}\nPresent the method with enough detail to reproduce it.\n\n\\section{Experiments}\nDescribe datasets, baselines, metrics, and results.\n\n\\section{Conclusion}\nSummarize the findings and limitations.\n\n\\bibliographystyle{plain}\n\\bibliography{references}\n\n\\end{document}\n",
+      "references.bib": "% Add BibTeX entries here. latexmk, pdflatex + bibtex, and Tectonic all\n% resolve \\bibliography{references} from this file.\n%\n% @inproceedings{example,\n%   author    = {Ada Lovelace and Alan Turing},\n%   title     = {An Example Reference},\n%   booktitle = {Proceedings of the Example Conference},\n%   year      = {2026},\n%   pages     = {1--10}\n% }\n"
+    }
+  },
+  {
+    "id": "preprint",
+    "name": "Preprint — arXiv-style",
+    "category": "Preprint",
+    "description": "Single-column manuscript with line numbers and a wide text block for preprints.",
+    "files": {
+      "main.tex": "% Preprint template: arXiv-style single-column manuscript with line numbers.\n\\documentclass[11pt]{article}\n\\usepackage[letterpaper,margin=1in]{geometry}\n\\usepackage{times}\n\\usepackage{amsmath,amssymb,booktabs,graphicx}\n\\usepackage{lineno}\n\\usepackage[hidelinks]{hyperref}\n\n\\title{Untitled Preprint}\n\\author{Author Name\\\\Affiliation\\\\\\texttt{email@example.com}}\n\\date{\\today}\n\n\\begin{document}\n\\linenumbers\n\\maketitle\n\n\\begin{abstract}\nWrite a concise summary of the problem, method, and main evidence.\n\\end{abstract}\n\n\\section{Introduction}\nDescribe the problem and the paper's contribution.\n\n\\section{Related Work}\nPosition the work against the most relevant literature.\n\n\\section{Method}\nPresent the method with enough detail to reproduce it.\n\n\\section{Experiments}\nDescribe datasets, baselines, metrics, and results.\n\n\\section{Conclusion}\nSummarize the findings and limitations.\n\n\\bibliographystyle{plain}\n\\bibliography{references}\n\n\\end{document}\n",
+      "references.bib": "% Add BibTeX entries here. latexmk, pdflatex + bibtex, and Tectonic all\n% resolve \\bibliography{references} from this file.\n%\n% @inproceedings{example,\n%   author    = {Ada Lovelace and Alan Turing},\n%   title     = {An Example Reference},\n%   booktitle = {Proceedings of the Example Conference},\n%   year      = {2026},\n%   pages     = {1--10}\n% }\n"
+    }
+  }
+]

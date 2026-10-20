@@ -1,11 +1,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleDot, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, Play, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleDot, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, X } from "lucide-react";
+import latexTemplateCatalog from "../shared/latex-templates.json";
+
+const latexTemplates: LatexTemplateSummary[] = latexTemplateCatalog;
 
 const EDITABLE = new Set(["tex", "bib", "bst", "cls", "sty", "cfg"]);
 const ASSETS = new Set([...EDITABLE, "pdf", "png", "jpg", "jpeg", "webp"]);
 const ext = (value: string) => value.split(".").at(-1)?.toLowerCase() || "";
 const editable = (value: string) => EDITABLE.has(ext(value));
 const projectRoot = (value: string) => value.split("/").slice(0, -1).join("/");
+
+const BROWSER_MIN_WIDTH = 160;
+const BROWSER_MAX_WIDTH = 360;
+const BROWSER_DEFAULT_WIDTH = 220;
+const EDITOR_MIN_WIDTH = 280;
+const PREVIEW_MIN_WIDTH = 320;
+const PREVIEW_SPLIT_MIN = 0.3;
+const PREVIEW_SPLIT_MAX = 0.8;
+const PREVIEW_SPLIT_DEFAULT = 0.62;
+
+function clampSetting(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function browserTrackFor(width: number) {
+  return Math.max(BROWSER_MIN_WIDTH, Math.min(BROWSER_MAX_WIDTH, width * 0.3, width - EDITOR_MIN_WIDTH - PREVIEW_MIN_WIDTH));
+}
+
+function readStoredNumber(key: string, fallback: number, min: number, max: number) {
+  if (typeof window === "undefined") return fallback;
+  const stored = Number(window.localStorage.getItem(key));
+  return Number.isFinite(stored) && stored > 0 ? clampSetting(stored, min, max) : fallback;
+}
+
+function readStoredFlag(key: string) {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(key) === "true";
+}
 
 function lineStart(content: string, line: number) {
   let offset = 0;
@@ -93,12 +124,20 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
   const [autoCompile, setAutoCompile] = useState(true);
   const [chooserOpen, setChooserOpen] = useState(true);
   const [projectName, setProjectName] = useState("paper");
+  const [templateId, setTemplateId] = useState(latexTemplates[0]?.id ?? "archimedes");
+  const [browserWidth, setBrowserWidth] = useState(() => readStoredNumber("archimedes-paper-browser-width", BROWSER_DEFAULT_WIDTH, BROWSER_MIN_WIDTH, BROWSER_MAX_WIDTH));
+  const [previewSplit, setPreviewSplit] = useState(() => readStoredNumber("archimedes-paper-split", PREVIEW_SPLIT_DEFAULT, PREVIEW_SPLIT_MIN, PREVIEW_SPLIT_MAX));
+  const [browserCollapsed, setBrowserCollapsed] = useState(() => readStoredFlag("archimedes-paper-browser-collapsed"));
+  const [widePanes, setWidePanes] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 861px)").matches);
+  const [paneWidth, setPaneWidth] = useState(0);
   const [importing, setImporting] = useState(false);
   const [createKind, setCreateKind] = useState<"file" | "folder" | null>(null);
   const [createName, setCreateName] = useState("");
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const lineNumbersRef = useRef<HTMLDivElement | null>(null);
   const highlightRef = useRef<HTMLPreElement | null>(null);
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const paneDragRef = useRef<{ kind: "browser" | "preview"; startX: number; startBrowser: number; startSplit: number } | null>(null);
   const fileRef = useRef<WorkspaceFilePreview | null>(null);
   const draftRef = useRef("");
   const savedRef = useRef("");
@@ -157,6 +196,25 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
   }, [bridge, mainPath, workspace]);
 
   useEffect(() => { if (openRequest?.path) void activateProject(openRequest.path); }, [activateProject, openRequest?.path, openRequest?.token]);
+  useEffect(() => { window.localStorage.setItem("archimedes-paper-browser-width", String(browserWidth)); }, [browserWidth]);
+  useEffect(() => { window.localStorage.setItem("archimedes-paper-split", String(previewSplit)); }, [previewSplit]);
+  useEffect(() => { window.localStorage.setItem("archimedes-paper-browser-collapsed", String(browserCollapsed)); }, [browserCollapsed]);
+  useEffect(() => () => document.body.classList.remove("paper-pane-resizing"), []);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 861px)");
+    const update = () => setWidePanes(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    const element = workspaceRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver((entries) => setPaneWidth(Math.round(entries[0]?.contentRect.width || 0)));
+    observer.observe(element);
+    setPaneWidth(element.clientWidth);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     if (!file || draft === savedDraft) return;
     setSaveState("unsaved");
@@ -175,7 +233,7 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
 
   async function createProject() {
     try {
-      const created = await bridge.createLatexProject(workspace, projectName.trim() || "paper");
+      const created = await bridge.createLatexProject(workspace, projectName.trim() || "paper", templateId);
       await onRefresh(); await activateProject(created.path); void compile(created.path);
     } catch (nextError) { setError(nextError instanceof Error ? nextError.message : String(nextError)); }
   }
@@ -209,6 +267,52 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
     setActiveDirectory(path);
     setExpanded((current) => { const next = new Set(current); next.has(path) ? next.delete(path) : next.add(path); return next; });
   }
+  function paneLimits() {
+    const element = workspaceRef.current;
+    const width = element?.clientWidth || paneWidth || 0;
+    const browser = browserCollapsed ? 0 : Math.min(browserWidth, browserTrackFor(width));
+    const available = Math.max(1, width - browser);
+    const minSplit = Math.min(PREVIEW_SPLIT_MAX, PREVIEW_MIN_WIDTH / available);
+    const maxSplit = Math.max(PREVIEW_SPLIT_MIN, (available - EDITOR_MIN_WIDTH) / available);
+    return { rect: element?.getBoundingClientRect(), width, available, browserMax: browserTrackFor(width), minSplit, maxSplit };
+  }
+  function beginPaneResize(kind: "browser" | "preview", event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    paneDragRef.current = { kind, startX: event.clientX, startBrowser: browserWidth, startSplit: previewSplit };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.classList.add("paper-pane-resizing");
+  }
+  function movePaneResize(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = paneDragRef.current;
+    if (!drag) return;
+    const { rect, available, minSplit, maxSplit, browserMax } = paneLimits();
+    if (!rect) return;
+    if (drag.kind === "browser") {
+      setBrowserWidth(clampSetting(drag.startBrowser + event.clientX - drag.startX, BROWSER_MIN_WIDTH, browserMax));
+      return;
+    }
+    setPreviewSplit(clampSetting((rect.right - event.clientX) / available, Math.min(minSplit, maxSplit), maxSplit));
+  }
+  function endPaneResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (!paneDragRef.current) return;
+    paneDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    document.body.classList.remove("paper-pane-resizing");
+  }
+  function handlePaneResizeKey(kind: "browser" | "preview", event: React.KeyboardEvent<HTMLDivElement>) {
+    const { minSplit, maxSplit, browserMax } = paneLimits();
+    const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if (kind === "browser") {
+      if (direction) { event.preventDefault(); setBrowserWidth((width) => clampSetting(width + direction * 8, BROWSER_MIN_WIDTH, browserMax)); return; }
+      if (event.key === "Home") { event.preventDefault(); setBrowserWidth(BROWSER_MIN_WIDTH); }
+      else if (event.key === "End") { event.preventDefault(); setBrowserWidth(browserMax); }
+      return;
+    }
+    if (direction) { event.preventDefault(); setPreviewSplit((split) => clampSetting(split - direction * 0.02, Math.min(minSplit, maxSplit), maxSplit)); return; }
+    if (event.key === "Home") { event.preventDefault(); setPreviewSplit(maxSplit); }
+    else if (event.key === "End") { event.preventDefault(); setPreviewSplit(minSplit); }
+  }
   function syncScroll(element: HTMLTextAreaElement) {
     if (lineNumbersRef.current) lineNumbersRef.current.scrollTop = element.scrollTop;
     if (highlightRef.current) { highlightRef.current.scrollTop = element.scrollTop; highlightRef.current.scrollLeft = element.scrollLeft; }
@@ -224,15 +328,26 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
   const lines = useMemo(() => draft.split("\n"), [draft]);
   const problemLines = useMemo(() => new Set(compileResult?.diagnostics.flatMap((item) => item.line ? [item.line] : []) ?? []), [compileResult]);
   const projectLabel = activeProject.split("/").at(-1) || "New project";
+  const activeTemplate = latexTemplates.find((template) => template.id === templateId) ?? latexTemplates[0];
+  const browserTrack = browserCollapsed ? 0 : Math.min(browserWidth, browserTrackFor(paneWidth));
+  const availableTrack = Math.max(1, paneWidth - browserTrack);
+  const minPreviewSplit = paneWidth ? Math.min(PREVIEW_SPLIT_MAX, PREVIEW_MIN_WIDTH / availableTrack) : PREVIEW_SPLIT_MIN;
+  const maxPreviewSplit = paneWidth ? Math.max(PREVIEW_SPLIT_MIN, (availableTrack - EDITOR_MIN_WIDTH) / availableTrack) : PREVIEW_SPLIT_MAX;
+  const effectivePreviewSplit = clampSetting(previewSplit, Math.min(minPreviewSplit, maxPreviewSplit), maxPreviewSplit);
+  const paneStyle = widePanes ? {
+    gridTemplateColumns: paneWidth
+      ? `${Math.round(browserTrack)}px ${Math.round(Math.max(EDITOR_MIN_WIDTH, availableTrack * (1 - effectivePreviewSplit)))}px ${Math.round(Math.max(PREVIEW_MIN_WIDTH, availableTrack * effectivePreviewSplit))}px`
+      : `${browserWidth}px calc((100% - ${browserWidth}px) * ${1 - previewSplit}) calc((100% - ${browserWidth}px) * ${previewSplit})`,
+  } as React.CSSProperties : undefined;
 
   return <div className="paper-writing-page">
     <header className="paper-writing-header"><div><span className="page-kicker">LaTeX workspace</span><h1>Paper writing</h1><p>Create a paper project, edit its source, and preview the compiled PDF in one place.</p></div><div className="paper-writing-actions">{file && <button className="secondary-button" onClick={() => onAskAI(file.path)}><MessageCircle size={14} />Ask AI</button>}<button className="secondary-button" onClick={() => setChooserOpen(true)}><FolderOpen size={14} />Projects</button>{activeProject && <><button className="secondary-button" disabled={importing} onClick={() => void importFolder()}>{importing ? <LoaderCircle className="spin" size={14} /> : <FolderUp size={14} />}{importing ? "Importing…" : "Import folder"}</button><button className="primary-button" disabled={!mainPath || compileState === "compiling"} onClick={() => void compile()}>{compileState === "compiling" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}{compileState === "compiling" ? "Compiling…" : "Recompile"}</button></>}</div></header>
-    <div className="paper-writing-workspace">
-      <aside className="paper-source-browser"><div className="paper-browser-title"><FolderOpen size={14} /><strong>{projectLabel}</strong>{activeProject && <div className="paper-browser-actions"><button onClick={() => { setCreateKind("file"); setCreateName("section.tex"); }} aria-label="New LaTeX file"><FilePlus2 size={14} /></button><button onClick={() => { setCreateKind("folder"); setCreateName("figures"); }} aria-label="New folder"><FolderPlus size={14} /></button></div>}</div><label className="paper-main-document">Main document<select value={mainPath} disabled={!activeProject} onChange={(event) => { setMainPath(event.target.value); void openFile(event.target.value); }}>{!activeProject && <option value="">Choose a project first</option>}{mainPath && <option value={mainPath}>{mainPath.split("/").at(-1)}</option>}</select></label><div className="paper-tree-scroll">{activeProject ? tree.entries.map((entry) => <TreeNode key={entry.path} entry={entry} depth={0} selected={file?.path || ""} activeDirectory={activeDirectory} expanded={expanded} loading={loading} onToggle={toggleDirectory} onLoad={(path) => void loadDirectory(path)} onOpen={(path) => void openFile(path)} />) : <div className="paper-project-placeholder"><FolderOpen size={20} /><strong>No project selected</strong><span>Start a blank paper or import an existing LaTeX folder.</span></div>}</div></aside>
-      <section className="latex-editor-pane"><div className="paper-pane-toolbar"><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><span className={`paper-save-state ${saveState}`}>{saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span></div>{file ? <div className="latex-editor-body"><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} onChange={(event) => { draftRef.current = event.target.value; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; draftRef.current = next; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div> : <div className="paper-writing-empty"><FileText size={25} /><strong>No LaTeX project open</strong><span>Choose a blank project or import a complete folder to start writing.</span><button className="primary-button" onClick={() => setChooserOpen(true)}><FolderOpen size={14} />Open project</button></div>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{error}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{diagnostic.message}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}</section>
+    <div className={browserCollapsed && widePanes ? "paper-writing-workspace browser-collapsed" : "paper-writing-workspace"} ref={workspaceRef} style={paneStyle}>
+      <aside className="paper-source-browser"><div className="paper-browser-title"><FolderOpen size={14} /><strong>{projectLabel}</strong>{activeProject && <div className="paper-browser-actions"><button onClick={() => { setCreateKind("file"); setCreateName("section.tex"); }} aria-label="New LaTeX file"><FilePlus2 size={14} /></button><button onClick={() => { setCreateKind("folder"); setCreateName("figures"); }} aria-label="New folder"><FolderPlus size={14} /></button></div>}</div><label className="paper-main-document">Main document<select value={mainPath} disabled={!activeProject} onChange={(event) => { setMainPath(event.target.value); void openFile(event.target.value); }}>{!activeProject && <option value="">Choose a project first</option>}{mainPath && <option value={mainPath}>{mainPath.split("/").at(-1)}</option>}</select></label><div className="paper-tree-scroll">{activeProject ? tree.entries.map((entry) => <TreeNode key={entry.path} entry={entry} depth={0} selected={file?.path || ""} activeDirectory={activeDirectory} expanded={expanded} loading={loading} onToggle={toggleDirectory} onLoad={(path) => void loadDirectory(path)} onOpen={(path) => void openFile(path)} />) : <div className="paper-project-placeholder"><FolderOpen size={20} /><strong>No project selected</strong><span>Start a blank paper or import an existing LaTeX folder.</span></div>}</div><div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize file browser" title="Drag to resize · double-click to reset" aria-valuemin={BROWSER_MIN_WIDTH} aria-valuemax={BROWSER_MAX_WIDTH} aria-valuenow={Math.round(browserWidth)} tabIndex={0} onPointerDown={(event) => beginPaneResize("browser", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setBrowserWidth(BROWSER_DEFAULT_WIDTH)} onKeyDown={(event) => handlePaneResizeKey("browser", event)} /></aside>
+      <section className="latex-editor-pane"><div className="paper-pane-toolbar"><button className="paper-browser-toggle" onClick={() => setBrowserCollapsed((collapsed) => !collapsed)} title={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-label={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-pressed={!browserCollapsed}>{browserCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><span className={`paper-save-state ${saveState}`}>{saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span></div>{file ? <div className="latex-editor-body"><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} onChange={(event) => { draftRef.current = event.target.value; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; draftRef.current = next; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div> : <div className="paper-writing-empty"><FileText size={25} /><strong>No LaTeX project open</strong><span>Choose a template or import a complete folder to start writing.</span><button className="primary-button" onClick={() => setChooserOpen(true)}><FolderOpen size={14} />Open project</button></div>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{error}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{diagnostic.message}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
       <section className="paper-pdf-pane"><div className="paper-pane-toolbar"><FileText size={14} /><strong>PDF preview</strong><label className="paper-auto-compile"><input type="checkbox" checked={autoCompile} onChange={(event) => setAutoCompile(event.target.checked)} />Auto compile</label><span className={`paper-compile-state ${compileState}`}>{compileState === "compiling" ? <LoaderCircle className="spin" size={11} /> : compileState === "success" ? <Check size={11} /> : compileState === "error" ? <AlertTriangle size={11} /> : null}{compileState === "success" ? `${compileResult?.duration_ms ?? 0} ms` : compileState === "error" ? "Build failed" : compileState === "compiling" ? "Building" : "Not built"}</span></div>{compileResult?.preview_url ? <iframe key={compileResult.preview_url} src={compileResult.preview_url} title="Compiled paper PDF" /> : <div className="paper-writing-empty"><FileText size={27} /><strong>Compile to preview</strong><span>The generated PDF appears here. Any build problem is listed beside the source with its line number.</span>{mainPath && <button className="primary-button" disabled={compileState === "compiling"} onClick={() => void compile()}><Play size={14} />Compile paper</button>}</div>}</section>
     </div>
-    {chooserOpen && <div className="paper-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && activeProject) setChooserOpen(false); }}><section className="paper-project-dialog" role="dialog" aria-modal="true" aria-labelledby="paper-project-title"><header><div><span className="page-kicker">Paper writing</span><h2 id="paper-project-title">New project</h2><p>Each paper owns its own folder, source files, figures, bibliography, and build output.</p></div>{activeProject && <button className="reader-icon-button" onClick={() => setChooserOpen(false)} aria-label="Close project chooser"><X size={16} /></button>}</header><div className="paper-project-options"><form onSubmit={(event) => { event.preventDefault(); void createProject(); }}><FilePlus2 size={19} /><div><strong>Blank project</strong><span>Start with a clean, compilable article template.</span></div><label>Project folder<input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="paper" /></label><button className="primary-button" type="submit" disabled={!projectName.trim()}>Create blank project</button></form><div className="paper-project-import"><FolderUp size={19} /><div><strong>Import existing folder</strong><span>Copy an Overleaf or local LaTeX project, including figures, bibliography, styles, and other assets.</span></div><button className="secondary-button" disabled={importing} onClick={() => void importFolder()}>{importing ? <LoaderCircle className="spin" size={14} /> : <FolderUp size={14} />}{importing ? "Importing…" : "Choose folder"}</button></div></div>{projects.some((project) => project.main && projectRoot(project.path)) && <div className="paper-existing-projects"><h3>Open an existing project</h3>{projects.filter((project) => project.main && projectRoot(project.path)).map((project) => <button key={project.path} onClick={() => void activateProject(project.path)}><FileCode2 size={14} /><span><strong>{project.title}</strong><small>{projectRoot(project.path)}</small></span><ChevronRight size={15} /></button>)}</div>}</section></div>}
+    {chooserOpen && <div className="paper-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && activeProject) setChooserOpen(false); }}><section className="paper-project-dialog" role="dialog" aria-modal="true" aria-labelledby="paper-project-title"><header><div><span className="page-kicker">Paper writing</span><h2 id="paper-project-title">New project</h2><p>Each paper owns its own folder, source files, figures, bibliography, and build output.</p></div>{activeProject && <button className="reader-icon-button" onClick={() => setChooserOpen(false)} aria-label="Close project chooser"><X size={16} /></button>}</header><div className="paper-project-options"><form onSubmit={(event) => { event.preventDefault(); void createProject(); }}><FilePlus2 size={19} /><div><strong>From template</strong><span>Start from a template that already compiles.</span></div><label>Project folder<input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="paper" /></label><label>Template<select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>{latexTemplates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.category}</option>)}</select></label><p className="paper-template-hint">{activeTemplate?.description}</p><button className="primary-button" type="submit" disabled={!projectName.trim()}>Create project</button></form><div className="paper-project-import"><FolderUp size={19} /><div><strong>Import existing folder</strong><span>Copy an Overleaf or local LaTeX project, including figures, bibliography, styles, and other assets.</span></div><button className="secondary-button" disabled={importing} onClick={() => void importFolder()}>{importing ? <LoaderCircle className="spin" size={14} /> : <FolderUp size={14} />}{importing ? "Importing…" : "Choose folder"}</button></div></div>{projects.some((project) => project.main && projectRoot(project.path)) && <div className="paper-existing-projects"><h3>Open an existing project</h3>{projects.filter((project) => project.main && projectRoot(project.path)).map((project) => <button key={project.path} onClick={() => void activateProject(project.path)}><FileCode2 size={14} /><span><strong>{project.title}</strong><small>{projectRoot(project.path)}</small></span><ChevronRight size={15} /></button>)}</div>}</section></div>}
     {createKind && <div className="paper-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateKind(null); }}><form className="paper-create-dialog" role="dialog" aria-modal="true" onSubmit={(event) => void createEntry(event)}><span className="page-kicker">{projectLabel}</span><h2>{createKind === "file" ? "New LaTeX file" : "New folder"}</h2><p>Creating in <strong>{activeDirectory || activeProject}</strong></p><label>{createKind === "file" ? "File name" : "Folder name"}<input autoFocus value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder={createKind === "file" ? "section.tex" : "figures"} /></label><div><button type="button" className="secondary-button" onClick={() => setCreateKind(null)}>Cancel</button><button type="submit" className="primary-button" disabled={!createName.trim()}>Create</button></div></form></div>}
   </div>;
 }
