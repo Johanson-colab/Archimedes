@@ -72,6 +72,18 @@ test("keeps dirty buffers and reports external conflicts", async () => {
   assert.equal(saving.files[0], current);
 });
 
+test("formats a line comment as a readable chat request", async () => {
+  const { formatArtifactComment } = await helpers();
+  assert.equal(
+    formatArtifactComment({ path: "src/experiment.py", startLine: 2, endLine: 2, excerpt: "return 1\n", body: "  Explain this value.  " }),
+    "Review comment on `src/experiment.py` (line 2):\n> return 1\n\nExplain this value.",
+  );
+  assert.match(
+    formatArtifactComment({ path: "src/a.ts", startLine: 3, endLine: 5, excerpt: "a\nb", body: "Tighten this" }),
+    /\(lines 3-5\):\n> a\n> b\n\nTighten this/,
+  );
+});
+
 test("tracks a successful save without dropping later keystrokes", async () => {
   const { createArtifactDraft, isDraftDirty, markDraftSaved } = await helpers();
   const draft = createArtifactDraft(markdownFile);

@@ -993,8 +993,15 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .artifact-save-state.unsaved { color: #d4a95c; }
 .artifact-save-state.saving { color: #a7a8b5; }
 .artifact-save-state.saved { color: #65b894; }
-.artifact-save-button { min-height: 24px; padding: 0 8px; font-size: 9px; }
-.artifact-save-button:disabled { cursor: default; opacity: .5; }
+.artifact-save-button, .artifact-comment-button { min-height: 24px; padding: 0 8px; font-size: 9px; }
+.artifact-save-button:disabled, .artifact-comment-button:disabled { cursor: default; opacity: .5; }
+.artifact-comment-box { display: grid; gap: 7px; padding: 9px 12px; background: #12141c; border-bottom: 1px solid #2c2e3a; }
+.artifact-comment-reference { display: flex; align-items: center; gap: 7px; color: #a7a8b5; font-size: 9px; }
+.artifact-comment-reference strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-comment-reference span { margin-left: auto; flex: 0 0 auto; color: #777a8c; }
+.artifact-comment-box pre { max-height: 90px; margin: 0; padding: 7px 8px; overflow: auto; color: var(--code-fg); background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 4px; font: 9px/1.5 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; }
+.artifact-comment-box textarea { min-height: 54px; padding: 7px 8px; color: #e8e8ef; background: #0c0e15; border: 1px solid #343645; border-radius: 4px; font: 10px/1.5 inherit; resize: vertical; }
+.artifact-comment-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .artifact-dirty-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #d4a95c; }
 .artifact-notice { display: flex; align-items: center; gap: 7px; padding: 7px 12px; color: #c7b27a; background: #1d1a12; border-bottom: 1px solid #3a3322; font-size: 10px; line-height: 1.4; }
 .artifact-notice span { min-width: 0; flex: 1; }
@@ -2490,6 +2497,11 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .artifact-dirty-dot { background: #a8652e; }
 .theme-paper .artifact-notice { color: #7a5a27; background: #fbf3e0; border-color: #ead9b3; }
 .theme-paper .artifact-notice.error { color: #9b4a44; background: #fbeeee; border-color: #e8c9c7; }
+.theme-paper .artifact-comment-box { background: #faf7f2; border-color: #e5dfd7; }
+.theme-paper .artifact-comment-reference { color: #6e6860; }
+.theme-paper .artifact-comment-reference span { color: #8d8881; }
+.theme-paper .artifact-comment-box pre { color: #39352f; background: #f4f1ec; border-color: #e0dad2; }
+.theme-paper .artifact-comment-box textarea { color: #2d2924; background: #fffefd; border-color: #dcd5cc; }
 .theme-paper .paper-browser-actions button { color: #777169; }
 .theme-paper .paper-browser-actions button:hover { color: #292620; background: #e9e5df; }
 .theme-paper .paper-browser-toggle { color: #777169; }
