@@ -23,7 +23,6 @@ import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
 import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
-import coldarkDark from "react-syntax-highlighter/dist/esm/styles/prism/coldark-dark";
 import LibraryView from "./LibraryView";
 import GalleryView from "./GalleryView";
 import BenchmarkRadarView from "./BenchmarkRadarView";
@@ -1683,10 +1682,9 @@ const MarkdownContent = memo(function MarkdownContent({ content }: { content: st
         return <SyntaxHighlighter
           className="message-code-block"
           language={language}
-          style={coldarkDark}
           useInlineStyles={false}
           PreTag="div"
-          customStyle={{ margin: 0, padding: "13px 15px", background: "#0d0f17", fontSize: "11px", lineHeight: 1.65 }}
+          customStyle={{ margin: 0, padding: "13px 15px", fontSize: "11px", lineHeight: 1.65 }}
           codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
         >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>;
       },
@@ -1845,7 +1843,7 @@ function FilePreview({ file, loading, error }: { file: WorkspaceFilePreview | nu
       {file.kind === "markdown" && <div className="artifact-view-toggle"><button className={markdownMode === "preview" ? "active" : ""} onClick={() => setMarkdownMode("preview")}>Preview</button><button className={markdownMode === "source" ? "active" : ""} onClick={() => setMarkdownMode("source")}>Source</button></div>}
     </div>
     <div className="artifact-preview-surface">
-      {file.kind === "markdown" && markdownMode === "preview" && <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{file.content || ""}</ReactMarkdown></article>}
+      {file.kind === "markdown" && markdownMode === "preview" && <article className="markdown-preview"><MarkdownContent content={file.content || ""} /></article>}
       {(file.kind === "text" || (file.kind === "markdown" && markdownMode === "source")) && <CodePreview content={file.content || ""} filePath={file.path} />}
       {file.kind === "pdf" && file.previewUrl && <iframe className="pdf-preview" src={file.previewUrl} title={file.name} />}
       {file.kind === "image" && file.previewUrl && <div className="image-preview"><img src={file.previewUrl} alt={file.name} /></div>}
@@ -1871,14 +1869,13 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
   return <div className="code-preview">
     <SyntaxHighlighter
       language={languageForFile(filePath)}
-      style={coldarkDark}
       useInlineStyles={false}
       showLineNumbers
       wrapLines
       wrapLongLines={false}
-      lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", color: "#5f6475", textAlign: "right", userSelect: "none" }}
+      lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", textAlign: "right", userSelect: "none" }}
       lineProps={{ className: "syntax-line" }}
-      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", background: "#0c0e15", fontSize: "11px", lineHeight: 1.65, tabSize: 2 }}
+      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "11px", lineHeight: 1.65, tabSize: 2 }}
       codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
     >{content || " "}</SyntaxHighlighter>
   </div>;
