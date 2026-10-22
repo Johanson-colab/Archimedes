@@ -112,6 +112,7 @@ type Modal = "artifact" | "evidence" | "search" | "source" | null;
 type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ResearchStageId = "conversation" | "ideas" | "experiments" | "writing" | "review";
 type ReasoningEffort = "low" | "medium" | "high";
+type ContextLength = "standard" | "extra-long";
 
 type ResearchStage = {
   id: ResearchStageId;
@@ -142,6 +143,18 @@ const reasoningEfforts: Array<{ id: ReasoningEffort; label: string }> = [
   { id: "medium", label: "Medium" },
   { id: "high", label: "High" },
 ];
+
+const contextLengths: Array<{ id: ContextLength; label: string }> = [
+  { id: "standard", label: "Standard" },
+  { id: "extra-long", label: "Extra Long" },
+];
+
+const previewModelCapabilities: ModelCapabilities = {
+  thinkingEfforts: ["low", "medium", "high"],
+  contextLengths: ["standard", "extra-long"],
+  nativeThinking: true,
+  contextCharacterLimits: { standard: 300_000, "extra-long": 600_000 },
+};
 
 function stageForMode(mode: ResearchMode) {
   return researchStages.find((stage) => stage.mode === mode) ?? researchStages[0];
@@ -179,7 +192,6 @@ const initialMessages: Message[] = [
 
 const INITIAL_VISIBLE_MESSAGE_COUNT = 60;
 const HISTORY_MESSAGE_PAGE_SIZE = 40;
-const CONTEXT_CHAR_LIMIT = 300_000;
 const CONTEXT_INSTRUCTION_OVERHEAD_CHARS = 4_800;
 
 function estimateAttachmentContextCharacters(item: ContextAttachment) {
@@ -396,6 +408,7 @@ const previewBridge = {
     return structuredClone(thread);
   },
   getModelConfig: async () => ({ provider: "custom" as ModelProviderId, baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", hasApiKey: false, source: "environment" as const }),
+  getModelCapabilities: async () => previewModelCapabilities,
   listProviderModels: async () => ({ models: [], source: "live" as const }),
   saveModelConfig: async ({ provider, baseUrl, model }: ModelConfigInput) => ({ provider, baseUrl, model, hasApiKey: true, source: "saved" as const }),
   testModelConfig: async ({ model }: ModelConfigInput) => ({ ok: true, latencyMs: 184, resolvedModel: model }),
@@ -404,7 +417,7 @@ const previewBridge = {
   readClipboardText: async () => "",
   writeClipboardText: async () => undefined,
   readClipboardImage: async () => null,
-  runAgent: async ({ prompt, threadId, projectId, mode, reasoningEffort = "medium", contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextItems?: ContextAttachment[] }) => {
+  runAgent: async ({ prompt, threadId, projectId, mode, reasoningEffort = "medium", contextLength = "standard", contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[] }) => {
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
@@ -415,7 +428,7 @@ const previewBridge = {
     const turnId = crypto.randomUUID();
     const taskId = crypto.randomUUID();
     thread.messages.push({ id: `${turnId}:user`, turn_id: turnId, role: "user", text: prompt, created_at: now });
-    emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: `Browser preview Agent · thinking: ${reasoningEffort}` });
+    emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: `Browser preview Agent · thinking: ${reasoningEffort} · context: ${contextLength}` });
     const actions: AgentAction[] = [];
     if (/(write|draft|note|生成|写入)/i.test(prompt)) {
       const action: AgentAction = {
@@ -637,6 +650,11 @@ function readReasoningEffort(): ReasoningEffort {
   return stored === "low" || stored === "medium" || stored === "high" ? stored : "medium";
 }
 
+function readContextLength(): ContextLength {
+  if (typeof window === "undefined") return "standard";
+  return window.localStorage.getItem("archimedes-context-length") === "extra-long" ? "extra-long" : "standard";
+}
+
 function App() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(readThemePreference);
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
@@ -668,6 +686,8 @@ function App() {
   const [chatViewNonce, setChatViewNonce] = useState(0);
   const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
+  const [contextLength, setContextLength] = useState<ContextLength>(readContextLength);
+  const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities>(previewModelCapabilities);
   const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
   const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
@@ -716,6 +736,27 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem("archimedes-reasoning-effort", reasoningEffort);
   }, [reasoningEffort]);
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-context-length", contextLength);
+  }, [contextLength]);
+
+  useEffect(() => {
+    let active = true;
+    void desktopBridge.getModelCapabilities().then((capabilities) => {
+      if (active) setModelCapabilities(capabilities);
+    }).catch(() => {
+      if (active) setModelCapabilities(previewModelCapabilities);
+    });
+    return () => { active = false; };
+  }, [activeModelConfig?.provider, activeModelConfig?.model]);
+
+  useEffect(() => {
+    if (modelCapabilities.thinkingEfforts.length && !modelCapabilities.thinkingEfforts.includes(reasoningEffort)) {
+      setReasoningEffort(modelCapabilities.thinkingEfforts.includes("medium") ? "medium" : modelCapabilities.thinkingEfforts[0]);
+    }
+    if (!modelCapabilities.contextLengths.includes(contextLength)) setContextLength("standard");
+  }, [contextLength, modelCapabilities, reasoningEffort]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
@@ -1124,7 +1165,7 @@ function App() {
     }
   }
 
-  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort) {
+  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength) {
     const question = draft.trim();
     const hasPastedImage = contextItems.some((item) => item.type === "image");
     if ((!question && !hasPastedImage) || agentBusy) return;
@@ -1144,7 +1185,7 @@ function App() {
     ]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextItems: submittedContext });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
@@ -1500,13 +1541,16 @@ function App() {
               interrupting={interrupting}
               pendingAction={pendingAction}
               changeSets={changeSets}
-              onSubmit={(draft, routedMode, effort) => void submitPrompt(draft, routedMode, effort)}
+              onSubmit={(draft, routedMode, effort, selectedContextLength) => void submitPrompt(draft, routedMode, effort, selectedContextLength)}
               onInterrupt={() => void interruptResearchTurn()}
               canInterrupt={Boolean(runningThreadId) && !interrupting}
               researchMode={researchMode}
               onResearchMode={setResearchMode}
               reasoningEffort={reasoningEffort}
               onReasoningEffort={setReasoningEffort}
+              contextLength={contextLength}
+              onContextLength={setContextLength}
+              modelCapabilities={modelCapabilities}
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
               onRemoveContext={(id) => setContextItems((current) => current.filter((item) => item.id !== id))}
@@ -1560,7 +1604,7 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
+function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   workspace: string;
@@ -1571,11 +1615,14 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   changeSets: WorkspaceChangeSet[];
   researchMode: ResearchMode;
   reasoningEffort: ReasoningEffort;
+  contextLength: ContextLength;
+  modelCapabilities: ModelCapabilities;
   contextItems: ContextAttachment[];
-  onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort) => void;
+  onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength) => void;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
   onReasoningEffort: (effort: ReasoningEffort) => void;
+  onContextLength: (length: ContextLength) => void;
   onAddContext: (items: ContextAttachment[]) => void;
   onRemoveContext: (id: string) => void;
   onApprove: () => void;
@@ -1589,6 +1636,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const latestEvent = events.at(-1);
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
+  const [contextLengthMenuOpen, setContextLengthMenuOpen] = useState(false);
   const [acceptedStages, setAcceptedStages] = useState<ResearchStageId[]>(() => {
     const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
     return researchStages.slice(0, activeIndex).map((stage) => stage.id);
@@ -1602,6 +1650,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const [prompt, setPrompt] = useState("");
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const reasoningMenuRef = useRef<HTMLDivElement>(null);
+  const contextLengthMenuRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1630,14 +1679,17 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
     () => contextItems.reduce((total, item) => total + estimateAttachmentContextCharacters(item), 0),
     [contextItems],
   );
+  const contextCharacterLimit = modelCapabilities.contextCharacterLimits[contextLength] || 300_000;
   const estimatedContextCharacters = Math.min(
-    CONTEXT_CHAR_LIMIT,
+    contextCharacterLimit,
     CONTEXT_INSTRUCTION_OVERHEAD_CHARS + messageContextCharacters + attachedContextCharacters + prompt.length,
   );
-  const contextUsage = estimatedContextCharacters / CONTEXT_CHAR_LIMIT;
+  const contextUsage = estimatedContextCharacters / contextCharacterLimit;
   const contextUsageState = contextUsage >= 0.9 ? "critical" : contextUsage >= 0.7 ? "warning" : "normal";
-  const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${CONTEXT_CHAR_LIMIT.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
+  const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${contextCharacterLimit.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
+  const availableThinkingEfforts = reasoningEfforts.filter((effort) => modelCapabilities.thinkingEfforts.includes(effort.id));
+  const availableContextLengths = contextLengths.filter((length) => modelCapabilities.contextLengths.includes(length.id));
 
   const scrollToLatest = () => {
     const container = scrollRef.current;
@@ -1672,13 +1724,14 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   }, [messages.length]);
 
   useEffect(() => {
-    if (!reasoningMenuOpen) return;
+    if (!reasoningMenuOpen && !contextLengthMenuOpen) return;
     const closeMenu = (event: MouseEvent) => {
       if (!reasoningMenuRef.current?.contains(event.target as Node)) setReasoningMenuOpen(false);
+      if (!contextLengthMenuRef.current?.contains(event.target as Node)) setContextLengthMenuOpen(false);
     };
     document.addEventListener("click", closeMenu);
     return () => document.removeEventListener("click", closeMenu);
-  }, [reasoningMenuOpen]);
+  }, [contextLengthMenuOpen, reasoningMenuOpen]);
 
   useEffect(() => {
     const closeMenu = () => setComposerMenu(null);
@@ -1767,7 +1820,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
     onResearchMode(predictedMode);
     setSelectedStage(null);
     setJourneyNotice("");
-    onSubmit(draft, predictedMode, reasoningEffort);
+    onSubmit(draft, predictedMode, reasoningEffort, contextLength);
   }
 
   function acceptCurrentCheckpoint() {
@@ -1906,13 +1959,25 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} items={contextItems} onAdd={onAddContext} />
           <div className="reasoning-effort-picker" ref={reasoningMenuRef}>
-            <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => setReasoningMenuOpen((open) => !open)} title={`Thinking: ${reasoningEffort}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>
-              <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>Thinking · {reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1)}</span><ChevronDown size={13} />
+            <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setReasoningMenuOpen((open) => !open); setContextLengthMenuOpen(false); }} title={availableThinkingEfforts.length ? `Thinking effort: ${reasoningEffort}` : "Thinking effort is not exposed by this model"} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>
+              <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>Thinking effort · {availableThinkingEfforts.length ? reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1) : "Unavailable"}</span><ChevronDown size={13} />
             </button>
-            {reasoningMenuOpen && <div className="reasoning-effort-menu" role="menu" aria-label="Thinking">
-              <div className="reasoning-effort-heading"><strong>Thinking</strong></div>
-              {reasoningEfforts.map((effort) => <button key={effort.id} className={effort.id === reasoningEffort ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>
+            {reasoningMenuOpen && <div className="reasoning-effort-menu" role="menu" aria-label="Thinking effort">
+              <div className="reasoning-effort-heading"><strong>Thinking effort</strong></div>
+              {availableThinkingEfforts.map((effort) => <button key={effort.id} className={effort.id === reasoningEffort ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>
                 <span className="reasoning-effort-copy"><strong>{effort.label}</strong></span>
+                <span className="reasoning-option-mark" aria-hidden="true" />
+              </button>)}
+            </div>}
+          </div>
+          <div className="context-length-picker" ref={contextLengthMenuRef}>
+            <button className={contextLengthMenuOpen ? "composer-tool context-length-trigger active" : "composer-tool context-length-trigger"} onClick={() => { setContextLengthMenuOpen((open) => !open); setReasoningMenuOpen(false); }} title={`Context length: ${contextLength}`} aria-haspopup="menu" aria-expanded={contextLengthMenuOpen}>
+              <span>Context length · {contextLength === "extra-long" ? "Extra Long" : "Standard"}</span><ChevronDown size={13} />
+            </button>
+            {contextLengthMenuOpen && <div className="context-length-menu" role="menu" aria-label="Context length">
+              <div className="reasoning-effort-heading"><strong>Context length</strong></div>
+              {availableContextLengths.map((length) => <button key={length.id} className={length.id === contextLength ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setContextLengthMenuOpen(false); }}>
+                <span className="reasoning-effort-copy"><strong>{length.label}</strong></span>
                 <span className="reasoning-option-mark" aria-hidden="true" />
               </button>)}
             </div>}

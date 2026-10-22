@@ -65,3 +65,26 @@ test("still marks a message that exceeds the expanded per-message safety limit",
 
   assert.match(conversation.messages.at(-1).content, /truncated by the Archimedes context budget/);
 });
+
+test("accepts the selected extra-long context budget when preserving history", () => {
+  const historicalTurns = Array.from({ length: 8 }, (_, index) => ({
+    id: `turn-${index + 1}`,
+    user_message: `Question ${index + 1}`,
+    assistant_message: "r".repeat(55_000),
+  }));
+  const conversation = prepareConversation({
+    thread: {
+      context_summary: "",
+      turns: [
+        ...historicalTurns,
+        { id: "turn-9", user_message: "Continue the analysis.", assistant_message: "" },
+      ],
+    },
+    currentTurnId: "turn-9",
+    mode: "free-chat",
+    contextCharacterLimit: 600_000,
+  });
+
+  assert.equal(conversation.compacted, false);
+  assert.equal(conversation.messages.filter((message) => message.role === "assistant").length, 8);
+});

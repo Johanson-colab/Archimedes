@@ -10,6 +10,7 @@ const agent = require("./agent.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const modelConfig = require("./model-config.cjs");
+const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
@@ -899,9 +900,10 @@ app.whenReady().then(() => {
       throw new Error("An Agent task requires a prompt of at most 20000 characters.");
     }
     const researchModes = new Set(["free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review", "deep-research"]);
-    const reasoningEfforts = new Set(["low", "medium", "high"]);
     const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
-    const reasoningEffort = reasoningEfforts.has(input.reasoningEffort) ? input.reasoningEffort : "medium";
+    const config = modelConfig.getActiveModelConfig();
+    const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort);
+    const contextLength = normalizeContextLength(config, input.contextLength);
     const workspace = resolveWorkspace(input.workspace);
     store.openWorkspace(workspace);
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
@@ -912,11 +914,14 @@ app.whenReady().then(() => {
       projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
       mode,
       reasoningEffort,
+      contextLength,
       contextItems,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => event.sender.send("agent:event", payload),
     });
   });
+
+  ipcMain.handle("model-config:capabilities", () => getModelCapabilities(modelConfig.getActiveModelConfig()));
 
   ipcMain.handle("agent:approve-action", (event, actionId) => {
     if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");

@@ -25,6 +25,7 @@ interface ResearchDeskBridge {
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
     getModelConfig: () => Promise<PublicModelConfig>;
+    getModelCapabilities: () => Promise<ModelCapabilities>;
     listProviderModels: (input: ModelCatalogInput) => Promise<ModelCatalogResponse>;
     saveModelConfig: (input: ModelConfigInput) => Promise<PublicModelConfig>;
     testModelConfig: (input: ModelConfigInput) => Promise<ModelConnectionResult>;
@@ -61,7 +62,7 @@ interface ResearchDeskBridge {
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
@@ -206,6 +207,14 @@ interface Window {
 type ReadingStatus = "unread" | "reading" | "read";
 type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ReasoningEffort = "low" | "medium" | "high";
+type ContextLength = "standard" | "extra-long";
+
+interface ModelCapabilities {
+  thinkingEfforts: ReasoningEffort[];
+  contextLengths: ContextLength[];
+  nativeThinking: boolean;
+  contextCharacterLimits: Record<ContextLength, number>;
+}
 
 interface ResearchSource {
   url: string;

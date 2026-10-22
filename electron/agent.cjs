@@ -11,7 +11,8 @@ const { completeAnthropic } = require("./agent/anthropic.cjs");
 const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData } = require("./agent/pdf-reader.cjs");
 const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = require("./agent/remote-content.cjs");
 const { evidenceForTool } = require("./agent/evidence.cjs");
-const { normalizeReasoningEffort, openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
+const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
+const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
 const { listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
@@ -763,13 +764,14 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", reasoningEffort = "medium", contextItems = [], emit = () => {}, browser }) {
+async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], emit = () => {}, browser }) {
   const thread = threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId });
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
   const task = store.startTask({ prompt });
   const turn = store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode });
   const config = getActiveModelConfig();
-  const resolvedReasoningEffort = normalizeReasoningEffort(reasoningEffort);
+  const resolvedReasoningEffort = normalizeModelReasoningEffort(config, reasoningEffort);
+  const resolvedContextLength = normalizeContextLength(config, contextLength);
   const policy = reasoningPolicy(resolvedReasoningEffort, mode);
   const controller = new AbortController();
   const actions = [];
@@ -796,6 +798,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
       attachmentManifest: attachedContextManifest(contextItems),
       mode,
       reasoningInstruction: policy.instruction,
+      contextCharacterLimit: contextCharacterLimit(config, resolvedContextLength),
     });
     if (context.compacted) {
       store.updateResearchThreadSummary(thread.id, context.summary);
@@ -816,7 +819,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
     const pdfCache = new Map();
     const maxToolRounds = policy.maxToolRounds;
     const allowWorkspaceActions = workspaceActionRequested(prompt);
-    emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort}` });
+    emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort} · context: ${resolvedContextLength}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
       const availableTools = tools.filter((tool) =>

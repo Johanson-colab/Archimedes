@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   deleteResearchProject: (id) => ipcRenderer.invoke("research-project:delete", { id }),
   archiveResearchThread: (id, archived = true) => ipcRenderer.invoke("research-thread:archive", { id, archived }),
   getModelConfig: () => ipcRenderer.invoke("model-config:get"),
+  getModelCapabilities: () => ipcRenderer.invoke("model-config:capabilities"),
   listProviderModels: (input) => ipcRenderer.invoke("model-config:list-models", input),
   saveModelConfig: (input) => ipcRenderer.invoke("model-config:save", input),
   testModelConfig: (input) => ipcRenderer.invoke("model-config:test", input),

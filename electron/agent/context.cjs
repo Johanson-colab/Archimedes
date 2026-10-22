@@ -61,7 +61,7 @@ function compactTurns(turns, previousSummary) {
   return clip(`Earlier research context (automatically compacted):\n${lines.join("\n")}`, MAX_SUMMARY_CHARS);
 }
 
-function prepareConversation({ thread, currentTurnId, attachmentManifest = "", mode, reasoningInstruction = "" }) {
+function prepareConversation({ thread, currentTurnId, attachmentManifest = "", mode, reasoningInstruction = "", contextCharacterLimit = MAX_CONTEXT_CHARS }) {
   const currentIndex = thread.turns.findIndex((turn) => turn.id === currentTurnId);
   if (currentIndex < 0) throw new Error("The active research turn is missing from its thread.");
 
@@ -74,7 +74,7 @@ function prepareConversation({ thread, currentTurnId, attachmentManifest = "", m
   for (let index = priorTurns.length - 1; index >= 0; index -= 1) {
     const turn = priorTurns[index];
     const size = turnCharacters(turn);
-    if (used + size <= MAX_CONTEXT_CHARS || selected.length < MIN_RECENT_TURNS) {
+    if (used + size <= contextCharacterLimit || selected.length < MIN_RECENT_TURNS) {
       selected.unshift(turn);
       used += size;
     } else {
