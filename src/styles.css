@@ -809,9 +809,15 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .composer-note { margin: 7px 0 0; color: #a0a09a; font-size: 9px; text-align: center; }
 
 /* Thinking is deliberately typographic: a compact signal meter, no decorative AI glyph. */
-.reasoning-effort-picker, .context-length-picker { position: relative; }
-.reasoning-trigger, .context-length-trigger { min-width: 148px; justify-content: flex-start; }
-.context-length-trigger { min-width: 156px; }
+.reasoning-effort-picker, .context-length-picker { position: relative; flex: 0 0 auto; }
+/* Keep the two research controls as quiet inline menus, rather than toolbar pills. */
+.conversation-composer-footer { gap: 12px; }
+.composer-tool.reasoning-trigger, .composer-tool.context-length-trigger {
+  min-width: 0;
+  padding: 0 2px;
+  gap: 7px;
+  border-radius: 0;
+}
 .reasoning-trigger > svg:last-child, .context-length-trigger > svg:last-child { margin-left: 1px; color: #858585; transition: transform .15s ease; }
 .reasoning-trigger.active > svg:last-child, .context-length-trigger.active > svg:last-child { transform: rotate(180deg); }
 .reasoning-meter { display: inline-flex; width: 14px; height: 12px; align-items: flex-end; gap: 2px; }
@@ -2917,6 +2923,14 @@ html:not([data-theme="paper"]) .research-workflow:hover .research-workflow-image
 .codex-shell:has(.has-welcome) :is(.codex-sidebar-label, .projects-heading, .project-chat-empty, .archived-toggle, .workspace-copy small, .conversation-title strong, .conversation-title span, .composer-note) { font-size: 13px; }
 .codex-shell:has(.has-welcome) .workspace-copy small { color: #a7a9b6; }
 .codex-shell:has(.has-welcome) .codex-nav-item { font-size: 13px; }
+
+/* The composer selectors read as one inline control row in every theme. */
+.composer-tool.reasoning-trigger:hover, .composer-tool.reasoning-trigger.active,
+.composer-tool.context-length-trigger:hover, .composer-tool.context-length-trigger.active,
+.theme-paper .composer-tool.reasoning-trigger:hover, .theme-paper .composer-tool.reasoning-trigger.active,
+.theme-paper .composer-tool.context-length-trigger:hover, .theme-paper .composer-tool.context-length-trigger.active {
+  background: transparent;
+}
 @keyframes welcome-shutter { from { clip-path: inset(0 100% 0 0); transform: scale(1.08); } to { clip-path: inset(0); transform: scale(1); } }
 @keyframes welcome-drift { from { object-position: 49.5% center; } to { object-position: 51.5% center; } }
 @keyframes welcome-rise { to { opacity: 1; transform: translateY(0); } }
