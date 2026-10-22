@@ -22,7 +22,6 @@ import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
 import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
-import coldarkDark from "react-syntax-highlighter/dist/esm/styles/prism/coldark-dark";
 import ConferenceDiscovery from "./ConferenceDiscovery";
 import {
   AlignLeft,
@@ -924,14 +923,13 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
           {activeFile.content.length <= 300_000 ? <SyntaxHighlighter
             className="codebase-source"
             language={codebaseLanguage(activeFile.path)}
-            style={coldarkDark}
             useInlineStyles={false}
             showLineNumbers
             wrapLines
             wrapLongLines={false}
             lineProps={(lineNumber: number) => ({ className: "syntax-line", "data-code-line": lineNumber })}
-            lineNumberStyle={{ minWidth: "38px", paddingRight: "12px", color: "#5f6475", textAlign: "right", userSelect: "none" }}
-            customStyle={{ minWidth: 0, minHeight: 0, margin: 0, padding: "15px 18px 56px 0", border: 0, background: "#0c0e15", fontSize: "11px", lineHeight: 1.65, overflow: "auto" }}
+            lineNumberStyle={{ minWidth: "38px", paddingRight: "12px", textAlign: "right", userSelect: "none" }}
+            customStyle={{ minWidth: 0, minHeight: 0, margin: 0, padding: "15px 18px 56px 0", border: 0, fontSize: "11px", lineHeight: 1.65, overflow: "auto" }}
             codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace' } }}
             onMouseUp={captureSelection}
           >{activeFile.content || " "}</SyntaxHighlighter> : <pre onMouseUp={captureSelection}><code>{activeFile.content}</code></pre>}
