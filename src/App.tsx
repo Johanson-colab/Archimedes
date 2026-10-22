@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
+﻿import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -34,15 +34,18 @@ import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSi
 import SkillsView from "./SkillsView";
 import TerminalPanel from "./TerminalPanel";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
+import { createArtifactDraft, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactDraft } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
 import ArchimedesMark from "./brand/ArchimedesMark";
 import ArchimedesWordmark from "./brand/ArchimedesWordmark";
 import {
+  AlertTriangle,
   BookOpen,
   Blocks,
   ArrowDown,
   CalendarDays,
   Check,
+  CircleDot,
   ChevronDown,
   ChevronRight,
   File,
@@ -55,6 +58,7 @@ import {
   Globe2,
   Images,
   Lightbulb,
+  LoaderCircle,
   MessageCircle,
   Monitor,
   Moon,
@@ -67,6 +71,7 @@ import {
   Plus,
   RefreshCw,
   Radar,
+  Save,
   Search,
   SendHorizontal,
   ShieldCheck,
@@ -189,6 +194,7 @@ const previewWorkspaceListeners = new Set<(payload: { path: string }) => void>()
 const previewChangeSetListeners = new Set<(payload: WorkspaceChangeSet) => void>();
 const previewPtySessions = new Map<string, { cwd: string; line: string; ready: boolean }>();
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
+const previewFileContents = new Map<string, string>();
 const previewTasks: SavedTask[] = [];
 const previewProjects: ResearchProject[] = [{ id: "preview-general", name: "General", description: "Default research project", chat_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, last_chat_at: null }];
 const previewArchivedProjects: ResearchProject[] = [];
@@ -265,11 +271,12 @@ const previewBridge = {
     name: filePath.split("/").at(-1) || filePath,
     path: filePath,
     kind: filePath.endsWith(".md") ? "markdown" as const : "text" as const,
-    size: 92,
+    size: previewFileContents.get(filePath)?.length ?? 92,
     modifiedAt: new Date().toISOString(),
-    content: filePath.endsWith(".md") ? "# Research brief\n\nBrowser preview of the active workspace." : filePath.endsWith(".tex") ? "\\documentclass{article}\n\\usepackage{amsmath}\n\\title{Archimedes Paper}\n\\author{}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\nWrite the paper here and the PDF preview updates automatically.\n\\end{document}\n" : "def run_experiment():\n    return {\"status\": \"ready\"}\n",
+    content: previewFileContents.get(filePath) ?? (filePath.endsWith(".md") ? "# Research brief\n\nBrowser preview of the active workspace." : filePath.endsWith(".tex") ? "\\documentclass{article}\n\\usepackage{amsmath}\n\\title{Archimedes Paper}\n\\author{}\n\\begin{document}\n\\maketitle\n\\section{Introduction}\nWrite the paper here and the PDF preview updates automatically.\n\\end{document}\n" : "def run_experiment():\n    return {\"status\": \"ready\"}\n"),
   }),
   writeWorkspaceFile: async (_workspace: string, filePath: string, content: string) => {
+    previewFileContents.set(filePath, content);
     for (const listener of previewWorkspaceListeners) listener({ path: filePath });
     return { name: filePath.split("/").at(-1) || filePath, path: filePath, kind: filePath.endsWith(".md") ? "markdown" as const : "text" as const, size: content.length, modifiedAt: new Date().toISOString(), content };
   },
@@ -500,6 +507,8 @@ const previewBridge = {
   },
 };
 
+const ArtifactCodeEditor = lazy(() => import("./ArtifactCodeEditor"));
+
 const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
 const MAX_PASTED_IMAGE_BYTES = 6 * 1024 * 1024;
 const PASTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -631,6 +640,10 @@ function App() {
   const [newProjectName, setNewProjectName] = useState("");
   const [projectToRemove, setProjectToRemove] = useState<ResearchProject | null>(null);
   const [artifactName, setArtifactName] = useState("");
+  const [artifactDrafts, setArtifactDrafts] = useState<Record<string, ArtifactDraft>>({});
+  const [artifactSaving, setArtifactSaving] = useState<Set<string>>(new Set());
+  const [artifactConflicts, setArtifactConflicts] = useState<Record<string, string>>({});
+  const [artifactErrors, setArtifactErrors] = useState<Record<string, string>>({});
   const [evidenceTitle, setEvidenceTitle] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("retrieval budget reasoning");
@@ -638,6 +651,8 @@ function App() {
   const activeThreadIdRef = useRef<string | null>(null);
   const threadOpenRequestRef = useRef(0);
   const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
+  const artifactDraftsRef = useRef<Record<string, ArtifactDraft>>({});
+  const artifactSavingRef = useRef<Set<string>>(new Set());
   const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
 
@@ -756,6 +771,16 @@ function App() {
     openFilesRef.current = openFiles;
   }, [openFiles]);
 
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!Object.values(artifactDraftsRef.current).some(isDraftDirty)) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   useEffect(() => () => clearPendingAssistantDeltas(), []);
 
   useEffect(() => {
@@ -834,6 +859,7 @@ function App() {
   }
 
   async function loadWorkspace(workspacePath: string) {
+    if (Object.values(artifactDraftsRef.current).some(isDraftDirty) && !window.confirm("Discard unsaved artifact changes?")) return;
     clearPendingAssistantDeltas();
     setWorkspaceReady(false);
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
@@ -850,6 +876,11 @@ function App() {
     setSelectedFilePath(null);
     setSelectedFile(null);
     setFileError("");
+    setDrafts({});
+    artifactSavingRef.current = new Set();
+    setArtifactSaving(new Set());
+    setArtifactConflicts({});
+    setArtifactErrors({});
     setWorkspaceReady(true);
 
     if (snapshot.threads.length) {
@@ -871,6 +902,26 @@ function App() {
 
   }
 
+  function setDrafts(next: Record<string, ArtifactDraft>) {
+    artifactDraftsRef.current = next;
+    setArtifactDrafts(next);
+  }
+
+  function setArtifactSavingPath(filePath: string, saving: boolean) {
+    const next = new Set(artifactSavingRef.current);
+    if (saving) next.add(filePath); else next.delete(filePath);
+    artifactSavingRef.current = next;
+    setArtifactSaving(next);
+  }
+
+  function ensureArtifactDraft(file: WorkspaceFilePreview) {
+    if (!isEditableArtifact(file)) return;
+    const current = artifactDraftsRef.current[file.path];
+    const draft = createArtifactDraft(file);
+    if (!draft || (current && isDraftDirty(current))) return;
+    setDrafts({ ...artifactDraftsRef.current, [file.path]: draft });
+  }
+
   async function refreshWorkspaceFiles() {
     if (!workspace) return;
     const nextTree = await desktopBridge.listWorkspaceFiles(workspace);
@@ -884,9 +935,11 @@ function App() {
           return file;
         }
       }));
-      openFilesRef.current = refreshedFiles;
-      setOpenFiles(refreshedFiles);
-      if (selectedFilePath) setSelectedFile(refreshedFiles.find((file) => file.path === selectedFilePath) ?? null);
+      const merged = mergeRefreshedArtifactFiles(currentOpenFiles, refreshedFiles, artifactDraftsRef.current, artifactSavingRef.current);
+      openFilesRef.current = merged.files;
+      setOpenFiles(merged.files);
+      setArtifactConflicts(merged.conflicts);
+      if (selectedFilePath) setSelectedFile(merged.files.find((file) => file.path === selectedFilePath) ?? null);
     }
   }
 
@@ -1096,6 +1149,7 @@ function App() {
     setFileError("");
     try {
       const file = await desktopBridge.readWorkspaceFile(workspace, filePath);
+      ensureArtifactDraft(file);
       setSelectedFile(file);
       setOpenFiles((current) => {
         const existingIndex = current.findIndex((candidate) => candidate.path === file.path);
@@ -1105,6 +1159,8 @@ function App() {
         openFilesRef.current = next;
         return next;
       });
+      setArtifactConflicts((current) => withoutKey(current, filePath));
+      setArtifactErrors((current) => withoutKey(current, filePath));
     } catch (error) {
       setSelectedFile(null);
       setFileError(error instanceof Error ? error.message : String(error));
@@ -1135,20 +1191,91 @@ function App() {
     setSelectedFilePath(file.path);
     setSelectedFile(file);
     setFileError("");
+    ensureArtifactDraft(file);
   }
 
   function closeArtifact(filePath: string) {
+    if (isDraftDirty(artifactDraftsRef.current[filePath]) && !window.confirm(`Discard unsaved changes to ${filePath}?`)) return;
     const current = openFilesRef.current;
     const closedIndex = current.findIndex((file) => file.path === filePath);
     if (closedIndex < 0) return;
     const next = current.filter((file) => file.path !== filePath);
     openFilesRef.current = next;
     setOpenFiles(next);
+    const nextDrafts = { ...artifactDraftsRef.current };
+    delete nextDrafts[filePath];
+    setDrafts(nextDrafts);
+    setArtifactConflicts((current) => withoutKey(current, filePath));
+    setArtifactErrors((current) => withoutKey(current, filePath));
     if (selectedFilePath !== filePath) return;
     const replacement = next[Math.min(closedIndex, next.length - 1)] ?? null;
     setSelectedFilePath(replacement?.path ?? null);
     setSelectedFile(replacement);
     setFileError("");
+  }
+
+  function updateArtifactDraft(filePath: string, content: string) {
+    const draft = artifactDraftsRef.current[filePath];
+    if (!draft || draft.content === content) return;
+    setDrafts({ ...artifactDraftsRef.current, [filePath]: { ...draft, content } });
+    setArtifactErrors((current) => withoutKey(current, filePath));
+  }
+
+  async function saveArtifact(filePath: string) {
+    const draft = artifactDraftsRef.current[filePath];
+    if (!draft || !isDraftDirty(draft)) return;
+    const contentAtSave = draft.content;
+    setArtifactSavingPath(filePath, true);
+    setArtifactErrors((current) => withoutKey(current, filePath));
+    try {
+      const saved = await desktopBridge.writeWorkspaceFile(workspace, filePath, prepareArtifactContent(draft));
+      const savedContent = toEditorText(saved.content ?? contentAtSave);
+      const latest = artifactDraftsRef.current[filePath];
+      if (latest) {
+        setDrafts({
+          ...artifactDraftsRef.current,
+          [filePath]: markDraftSaved({ ...latest, savedContent }, savedContent, saved.modifiedAt),
+        });
+      }
+      const updateFile = (file: WorkspaceFilePreview) => file.path === filePath
+        ? { ...file, ...saved, content: saved.content ?? file.content }
+        : file;
+      openFilesRef.current = openFilesRef.current.map(updateFile);
+      setOpenFiles(openFilesRef.current);
+      setSelectedFile((current) => current ? updateFile(current) : current);
+      setArtifactConflicts((current) => withoutKey(current, filePath));
+    } catch (error) {
+      setArtifactErrors((current) => ({ ...current, [filePath]: error instanceof Error ? error.message : String(error) }));
+    } finally {
+      setArtifactSavingPath(filePath, false);
+    }
+  }
+
+  async function reloadArtifact(filePath: string) {
+    try {
+      const file = await desktopBridge.readWorkspaceFile(workspace, filePath);
+      const draft = createArtifactDraft(file);
+      const nextDrafts = { ...artifactDraftsRef.current };
+      if (draft) nextDrafts[filePath] = draft;
+      else delete nextDrafts[filePath];
+      setDrafts(nextDrafts);
+      openFilesRef.current = openFilesRef.current.map((candidate) => candidate.path === filePath ? file : candidate);
+      setOpenFiles(openFilesRef.current);
+      setSelectedFile((current) => current?.path === filePath ? file : current);
+      setArtifactConflicts((current) => withoutKey(current, filePath));
+      setArtifactErrors((current) => withoutKey(current, filePath));
+    } catch (error) {
+      setArtifactErrors((current) => ({ ...current, [filePath]: error instanceof Error ? error.message : String(error) }));
+    }
+  }
+
+  function dismissArtifactConflict(filePath: string) {
+    const onDisk = artifactConflicts[filePath];
+    const draft = artifactDraftsRef.current[filePath];
+    if (draft && onDisk !== undefined) {
+      setDrafts({ ...artifactDraftsRef.current, [filePath]: { ...draft, savedContent: onDisk } });
+    }
+    setArtifactConflicts((current) => withoutKey(current, filePath));
   }
 
   async function createArtifact() {
@@ -1213,6 +1340,7 @@ function App() {
   }
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
+  const dirtyArtifactPaths = useMemo(() => new Set(Object.values(artifactDrafts).filter(isDraftDirty).map((draft) => draft.path)), [artifactDrafts]);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "benchmark-radar" ? "Benchmark Radar" : mainSection === "gallery" ? "Gallery" : mainSection === "writing" ? "Paper writing" : "Artifacts";
 
   return (
@@ -1336,7 +1464,7 @@ function App() {
           {galleryOpened && <div className={mainSection === "gallery" ? "gallery-view-cache" : "gallery-view-cache hidden"} aria-hidden={mainSection !== "gallery"}><GalleryView active={mainSection === "gallery"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} /></div>}
           {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (
-            <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} />
+            <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} />
           )}
           <div className={mainSection === "writing" ? "paper-writing-view-cache" : "paper-writing-view-cache hidden"} aria-hidden={mainSection !== "writing"}>
             {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
@@ -1827,27 +1955,79 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
   </div>;
 }
 
-function FilePreview({ file, loading, error }: { file: WorkspaceFilePreview | null; loading: boolean; error: string }) {
-  const [markdownMode, setMarkdownMode] = useState<"preview" | "source">("preview");
-  useEffect(() => setMarkdownMode("preview"), [file?.path]);
+function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading, error, onDraftChange, onSave, onReload, onDismissConflict }: {
+  file: WorkspaceFilePreview | null;
+  draft?: ArtifactDraft;
+  dirty: boolean;
+  saving: boolean;
+  conflict?: string;
+  saveError?: string;
+  loading: boolean;
+  error: string;
+  onDraftChange: (filePath: string, content: string) => void;
+  onSave: () => void;
+  onReload: () => void;
+  onDismissConflict: () => void;
+}) {
+  const [mode, setMode] = useState<"preview" | "edit">("preview");
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  useEffect(() => { setMode(dirty ? "edit" : "preview"); }, [file?.path]);
+  const editable = Boolean(draft);
+  const editing = editable && mode === "edit";
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handleSave = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s" || event.defaultPrevented) return;
+      event.preventDefault();
+      onSaveRef.current();
+    };
+    window.addEventListener("keydown", handleSave);
+    return () => window.removeEventListener("keydown", handleSave);
+  }, [dirty]);
 
   if (loading) return <div className="artifact-empty"><RefreshCw className="spin" size={18} />Loading file...</div>;
   if (error) return <div className="artifact-empty error"><FileText size={22} /><strong>Could not open this file</strong><span>{error}</span></div>;
   if (!file) return <div className="artifact-empty"><FolderOpen size={24} /><strong>Select a file from the workspace</strong><span>Code, Markdown, PDF, and images can be previewed here.</span></div>;
 
   return <section className="artifact-editor">
-    <div className="artifact-editor-header">
-      <span>{workspaceFileIcon({ type: "file", kind: file.kind })}</span>
-      <strong>{file.path}</strong>
-      <small>{formatFileSize(file.size)}</small>
-      {file.kind === "markdown" && <div className="artifact-view-toggle"><button className={markdownMode === "preview" ? "active" : ""} onClick={() => setMarkdownMode("preview")}>Preview</button><button className={markdownMode === "source" ? "active" : ""} onClick={() => setMarkdownMode("source")}>Source</button></div>}
+    <div className="artifact-editor-top">
+      <div className="artifact-editor-header">
+        <span>{workspaceFileIcon({ type: "file", kind: file.kind })}</span>
+        <strong>{file.path}</strong>
+        <small>{formatFileSize(file.size)}</small>
+        {editable && <div className="artifact-editor-actions">
+          <div className="artifact-view-toggle">
+            <button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}>Preview</button>
+            <button className={mode === "edit" ? "active" : ""} onClick={() => setMode("edit")}>Edit</button>
+          </div>
+          <span className={`artifact-save-state ${saving ? "saving" : dirty ? "unsaved" : "saved"}`}>
+            {saving ? <LoaderCircle className="spin" size={11} /> : dirty ? <CircleDot size={11} /> : <Check size={11} />}
+            {saving ? "Saving" : dirty ? "Unsaved" : "Saved"}
+          </span>
+          <button className="secondary-button artifact-save-button" disabled={!dirty || saving} onClick={onSave} title="Save (Ctrl/Cmd+S)"><Save size={12} />Save</button>
+        </div>}
+      </div>
+      {(conflict !== undefined || saveError) && <div className={`artifact-notice${saveError ? " error" : ""}`}>
+        <AlertTriangle size={13} />
+        {saveError ? <span>{saveError}</span> : <>
+          <span>This file changed on disk.</span>
+          <button className="secondary-button" onClick={onReload}>Reload</button>
+          <button className="secondary-button" onClick={onDismissConflict}>Keep editing</button>
+        </>}
+      </div>}
     </div>
-    <div className="artifact-preview-surface">
-      {file.kind === "markdown" && markdownMode === "preview" && <article className="markdown-preview"><MarkdownContent content={file.content || ""} /></article>}
-      {(file.kind === "text" || (file.kind === "markdown" && markdownMode === "source")) && <CodePreview content={file.content || ""} filePath={file.path} />}
-      {file.kind === "pdf" && file.previewUrl && <iframe className="pdf-preview" src={file.previewUrl} title={file.name} />}
-      {file.kind === "image" && file.previewUrl && <div className="image-preview"><img src={file.previewUrl} alt={file.name} /></div>}
-      {file.kind === "binary" && <div className="artifact-empty"><File size={24} /><strong>Binary preview is unavailable</strong><span>{file.name} is still available in the workspace.</span></div>}
+    <div className={`artifact-preview-surface${editing ? " editing" : ""}`}>
+      {editing ? <Suspense fallback={<div className="artifact-empty"><LoaderCircle className="spin" size={18} />Loading editor...</div>}>
+        <ArtifactCodeEditor filePath={file.path} value={draft?.content ?? ""} onChange={(value) => onDraftChange(file.path, value)} onSave={onSave} />
+      </Suspense> : <>
+        {file.kind === "markdown" && <article className="markdown-preview"><MarkdownContent content={draft?.content ?? file.content ?? ""} /></article>}
+        {file.kind === "text" && <CodePreview content={draft?.content ?? file.content ?? ""} filePath={file.path} />}
+        {file.kind === "pdf" && file.previewUrl && <iframe className="pdf-preview" src={file.previewUrl} title={file.name} />}
+        {file.kind === "image" && file.previewUrl && <div className="image-preview"><img src={file.previewUrl} alt={file.name} /></div>}
+        {file.kind === "binary" && <div className="artifact-empty"><File size={24} /><strong>Binary preview is unavailable</strong><span>{file.name} is still available in the workspace.</span></div>}
+      </>}
     </div>
   </section>;
 }
@@ -1887,7 +2067,14 @@ function formatFileSize(size: number) {
   return `${(size / 1_048_576).toFixed(1)} MB`;
 }
 
-function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewArtifact }: {
+function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in record)) return record;
+  const next = { ...record };
+  delete next[key];
+  return next;
+}
+
+function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewArtifact, onDraftChange, onSave, onReload, onDismissConflict }: {
   workspace: string;
   tree: WorkspaceFileTree;
   openFiles: WorkspaceFilePreview[];
@@ -1896,12 +2083,21 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   loading: boolean;
   error: string;
   loadingDirectories: Set<string>;
+  drafts: Record<string, ArtifactDraft>;
+  dirtyFiles: Set<string>;
+  savingFiles: Set<string>;
+  conflicts: Record<string, string>;
+  saveErrors: Record<string, string>;
   onOpenFile: (filePath: string) => void;
   onSelectOpenFile: (file: WorkspaceFilePreview) => void;
   onCloseFile: (filePath: string) => void;
   onLoadDirectory: (directory: string) => void;
   onRefresh: () => void;
   onNewArtifact: () => void;
+  onDraftChange: (filePath: string, content: string) => void;
+  onSave: (filePath: string) => void;
+  onReload: (filePath: string) => void;
+  onDismissConflict: (filePath: string) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const workspaceName = workspace.split("/").filter(Boolean).at(-1) || "Workspace";
@@ -1935,12 +2131,26 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
         <div className="artifact-tabs" role="tablist" aria-label="Open files">
           {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
             <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
+              {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
               {workspaceFileIcon({ type: "file", kind: openFile.kind })}<span>{openFile.name}</span>
             </button>
             <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
           </div>)}
         </div>
-        <FilePreview file={file} loading={loading} error={error} />
+        <FilePreview
+          file={file}
+          draft={file ? drafts[file.path] : undefined}
+          dirty={Boolean(file && dirtyFiles.has(file.path))}
+          saving={Boolean(file && savingFiles.has(file.path))}
+          conflict={file ? conflicts[file.path] : undefined}
+          saveError={file ? saveErrors[file.path] : undefined}
+          loading={loading}
+          error={error}
+          onDraftChange={onDraftChange}
+          onSave={() => file && onSave(file.path)}
+          onReload={() => file && onReload(file.path)}
+          onDismissConflict={() => file && onDismissConflict(file.path)}
+        />
       </div>
     </div>
   </div>;
