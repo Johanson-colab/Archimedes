@@ -52,6 +52,7 @@ import {
   FileCode2,
   FileImage,
   FileText,
+  Flag,
   Folder,
   FolderOpen,
   FlaskConical,
@@ -77,6 +78,7 @@ import {
   SendHorizontal,
   ShieldCheck,
   ScanSearch,
+  Sparkles,
   Square,
   SquareTerminal,
   Sun,
@@ -109,6 +111,15 @@ type TimelineEvent = {
 type PendingAction = AgentAction & { source: "agent" | "manual" };
 type Modal = "artifact" | "evidence" | "search" | "source" | null;
 type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
+type ResearchStageId = "conversation" | "ideas" | "experiments" | "writing" | "review";
+
+type ResearchStage = {
+  id: ResearchStageId;
+  label: string;
+  mode: ResearchMode;
+  checkpoint: string;
+  description: string;
+};
 
 const researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [
   { id: "free-chat", label: "Free chat", description: "Talk with AI without a predefined workflow", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },
@@ -117,6 +128,28 @@ const researchModes: Array<{ id: ResearchMode; label: string; description: strin
   { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
   { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <ScanSearch size={15} />, placeholder: "What paper or draft would you like to review?" },
 ];
+
+const researchStages: ResearchStage[] = [
+  { id: "conversation", label: "Conversation", mode: "free-chat", checkpoint: "Research brief", description: "Frame the question, constraints, evidence needs, and available resources." },
+  { id: "ideas", label: "Ideas", mode: "idea-spark", checkpoint: "Idea candidate", description: "Ground a falsifiable idea in literature and check its closest prior work." },
+  { id: "experiments", label: "Experiments", mode: "experiment-setup", checkpoint: "Claims & evidence", description: "Design, run, diagnose, and accept only the claims supported by results." },
+  { id: "writing", label: "Writing", mode: "paper-generation", checkpoint: "Manuscript", description: "Turn accepted claims and evidence into a traceable paper draft." },
+  { id: "review", label: "Review", mode: "paper-review", checkpoint: "Submission decision", description: "Audit novelty, evidence, reproducibility, and presentation before release." },
+];
+
+function stageForMode(mode: ResearchMode) {
+  return researchStages.find((stage) => stage.mode === mode) ?? researchStages[0];
+}
+
+function inferResearchMode(prompt: string, fallback: ResearchMode): ResearchMode {
+  const text = prompt.trim().toLowerCase();
+  if (!text) return fallback;
+  if (/(review|reviewer|审稿|评审|批评|rebuttal|claim.?evidence|论文检查)/i.test(text)) return "paper-review";
+  if (/(write|writing|draft|latex|abstract|introduction|method section|related work|写论文|写作|撰写|摘要|引言|方法章节)/i.test(text)) return "paper-generation";
+  if (/(experiment|benchmark|baseline|ablation|dataset|metric|training|seed|实验|基线|消融|数据集|指标|训练|复现)/i.test(text)) return "experiment-setup";
+  if (/(idea|novel|novelty|research direction|literature|paper search|研究方向|研究问题|创新|查新|文献|论文检索|选题)/i.test(text)) return "idea-spark";
+  return fallback;
+}
 
 const initialPapers = [
   { title: "Evidence-aware retrieval for long-context reasoning", meta: "Rao et al. · 2025", score: "94%" },
@@ -1074,13 +1107,15 @@ function App() {
     }
   }
 
-  async function submitPrompt(draft: string) {
+  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode) {
     const question = draft.trim();
     const hasPastedImage = contextItems.some((item) => item.type === "image");
     if ((!question && !hasPastedImage) || agentBusy) return;
     const requestPrompt = question || "Please analyze the attached image.";
     const submittedContext = contextItems;
     const submittedThreadId = activeThreadIdRef.current;
+
+    setResearchMode(requestedMode);
 
     clearPendingAssistantDeltas();
     setAgentBusy(true);
@@ -1092,7 +1127,7 @@ function App() {
     ]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: researchMode, contextItems: submittedContext });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, contextItems: submittedContext });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
@@ -1448,7 +1483,7 @@ function App() {
               interrupting={interrupting}
               pendingAction={pendingAction}
               changeSets={changeSets}
-              onSubmit={(draft) => void submitPrompt(draft)}
+              onSubmit={(draft, routedMode) => void submitPrompt(draft, routedMode)}
               onInterrupt={() => void interruptResearchTurn()}
               canInterrupt={Boolean(runningThreadId) && !interrupting}
               researchMode={researchMode}
@@ -1517,7 +1552,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   changeSets: WorkspaceChangeSet[];
   researchMode: ResearchMode;
   contextItems: ContextAttachment[];
-  onSubmit: (draft: string) => void;
+  onSubmit: (draft: string, mode: ResearchMode) => void;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
   onAddContext: (items: ContextAttachment[]) => void;
@@ -1533,6 +1568,15 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const latestEvent = events.at(-1);
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [routingAutomatic, setRoutingAutomatic] = useState(true);
+  const [acceptedStages, setAcceptedStages] = useState<ResearchStageId[]>(() => {
+    const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
+    return researchStages.slice(0, activeIndex).map((stage) => stage.id);
+  });
+  const [staleStages, setStaleStages] = useState<ResearchStageId[]>([]);
+  const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
+  const [branchCount, setBranchCount] = useState(1);
+  const [journeyNotice, setJourneyNotice] = useState("");
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [composerError, setComposerError] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -1553,6 +1597,10 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
     onComposerRequestApplied(composerRequest.id);
     requestAnimationFrame(() => composerRef.current?.focus());
   }, [composerRequest, onComposerRequestApplied]);
+
+  const activeStage = stageForMode(researchMode);
+  const predictedMode = routingAutomatic ? inferResearchMode(prompt, researchMode) : researchMode;
+  const predictedStage = stageForMode(predictedMode);
   const visibleMessages = messages.slice(historyStart);
   const hiddenMessageCount = historyStart;
   const messageContextCharacters = useMemo(
@@ -1697,7 +1745,42 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
     if (agentBusy || (!prompt.trim() && !contextItems.some((item) => item.type === "image"))) return;
     const draft = prompt;
     setPrompt("");
-    onSubmit(draft);
+    onResearchMode(predictedMode);
+    setSelectedStage(null);
+    setJourneyNotice("");
+    onSubmit(draft, predictedMode);
+  }
+
+  function acceptCurrentCheckpoint() {
+    const currentIndex = researchStages.findIndex((stage) => stage.id === activeStage.id);
+    const nextStage = researchStages[currentIndex + 1];
+    setAcceptedStages((current) => current.includes(activeStage.id) ? current : [...current, activeStage.id]);
+    setStaleStages((current) => current.filter((id) => id !== activeStage.id));
+    setJourneyNotice(`${activeStage.checkpoint} accepted${nextStage ? `. Archimedes will route new work toward ${nextStage.label}.` : ". Research cycle complete."}`);
+    setSelectedStage(null);
+    if (nextStage) onResearchMode(nextStage.mode);
+  }
+
+  function requestCheckpointChanges() {
+    setPrompt(`Revise the current ${activeStage.checkpoint.toLowerCase()}. Preserve the accepted evidence, explain what changed, and prepare a new checkpoint for review.`);
+    setSelectedStage(null);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
+  function branchFromCheckpoint() {
+    const nextBranch = branchCount + 1;
+    setBranchCount(nextBranch);
+    setJourneyNotice(`Created branch B${nextBranch} from ${activeStage.label}. The accepted branch remains available.`);
+    setSelectedStage(null);
+  }
+
+  function returnToStage(stage: ResearchStage) {
+    const targetIndex = researchStages.findIndex((candidate) => candidate.id === stage.id);
+    const downstream = researchStages.slice(targetIndex + 1).map((candidate) => candidate.id);
+    setStaleStages((current) => Array.from(new Set([...current, ...downstream.filter((id) => acceptedStages.includes(id))])));
+    setJourneyNotice(`Returned to ${stage.label}. Downstream accepted work is preserved and marked stale until revalidated.`);
+    setSelectedStage(null);
+    onResearchMode(stage.mode);
   }
 
   function selectWelcomeWorkflow(action: ResearchWelcomeAction) {
@@ -1708,7 +1791,44 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
     }
   }
 
-  return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
+  return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout has-journey"}>
+    {!welcomeVisible && <section className="research-journey" aria-label="Research progress">
+      <header className="research-journey-header">
+        <div><span>Research path</span><strong><Sparkles size={13} />AI routed · {activeStage.label}</strong></div>
+        <div className="research-journey-actions">
+          {journeyNotice && <span className="research-journey-notice">{journeyNotice}</span>}
+          <button onClick={() => setSelectedStage((current) => current === activeStage.id ? null : activeStage.id)}><Flag size={13} />Review checkpoint</button>
+        </div>
+      </header>
+      <div className="research-stage-track">
+        {researchStages.map((stage, index) => {
+          const accepted = acceptedStages.includes(stage.id);
+          const stale = staleStages.includes(stage.id);
+          const active = stage.id === activeStage.id;
+          const status = stale ? "stale" : active ? agentBusy ? "running" : "active" : accepted ? "accepted" : "planned";
+          return <div className="research-stage-segment" key={stage.id}>
+            <button className={`research-stage ${status} ${selectedStage === stage.id ? "selected" : ""}`} onClick={() => setSelectedStage((current) => current === stage.id ? null : stage.id)} aria-current={active ? "step" : undefined}>
+              <span className="research-stage-node">{accepted && !stale ? <Check size={12} /> : index + 1}</span>
+              <span><strong>{stage.label}</strong><small>{stale ? "Needs revalidation" : accepted ? "Accepted" : active ? agentBusy ? "Running" : "Current focus" : "Planned"}</small></span>
+            </button>
+            {index < researchStages.length - 1 && <span className={`research-stage-line ${accepted && !stale ? "complete" : ""}`} />}
+          </div>;
+        })}
+      </div>
+      {selectedStage && (() => {
+        const stage = researchStages.find((candidate) => candidate.id === selectedStage) ?? activeStage;
+        const isActive = stage.id === activeStage.id;
+        return <div className="research-checkpoint-panel">
+          <div><span>{isActive ? "Next checkpoint" : stage.label}</span><strong>{stage.checkpoint}</strong><p>{stage.description}</p></div>
+          <div className="research-checkpoint-actions">
+            {isActive && <button className="journey-primary" onClick={acceptCurrentCheckpoint}><Check size={13} />Accept & advance</button>}
+            {isActive && <button onClick={requestCheckpointChanges}><RefreshCw size={13} />Request changes</button>}
+            {isActive && <button onClick={branchFromCheckpoint}><Blocks size={13} />Create branch</button>}
+            {!isActive && <button onClick={() => returnToStage(stage)}><RefreshCw size={13} />Return here</button>}
+          </div>
+        </div>;
+      })()}
+    </section>}
     <div className="conversation-scroll-area">
     <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
       {welcomeVisible ? <ResearchWelcome onSelect={selectWelcomeWorkflow} /> : <div className="conversation-thread">
@@ -1767,15 +1887,21 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} items={contextItems} onAdd={onAddContext} />
           <div className="research-mode-picker" ref={modeMenuRef}>
-            <button className={modeMenuOpen ? "composer-tool mode-trigger active" : "composer-tool mode-trigger"} onClick={() => setModeMenuOpen((open) => !open)} title="Choose research mode" aria-haspopup="menu" aria-expanded={modeMenuOpen}>
-              {activeMode.icon}<span>{activeMode.label}</span><ChevronDown size={13} />
+            <button className={modeMenuOpen ? "composer-tool mode-trigger active" : "composer-tool mode-trigger"} onClick={() => setModeMenuOpen((open) => !open)} title="Research routing" aria-haspopup="menu" aria-expanded={modeMenuOpen}>
+              {routingAutomatic ? <Sparkles size={15} /> : activeMode.icon}<span>{routingAutomatic ? `Auto · ${predictedStage.label}` : activeMode.label}</span><ChevronDown size={13} />
             </button>
-            {modeMenuOpen && <div className="research-mode-menu" role="menu" aria-label="Research mode">
-              <div className="research-mode-menu-label">Research mode</div>
-              {researchModes.map((mode) => <button key={mode.id} className={mode.id === researchMode ? "research-mode-option selected" : "research-mode-option"} role="menuitemradio" aria-checked={mode.id === researchMode} onClick={() => { onResearchMode(mode.id); setModeMenuOpen(false); }}>
+            {modeMenuOpen && <div className="research-mode-menu" role="menu" aria-label="Research routing">
+              <div className="research-mode-menu-label">Routing</div>
+              <button className={routingAutomatic ? "research-mode-option selected" : "research-mode-option"} role="menuitemradio" aria-checked={routingAutomatic} onClick={() => { setRoutingAutomatic(true); setModeMenuOpen(false); }}>
+                <span className="research-mode-icon"><Sparkles size={15} /></span>
+                <span className="research-mode-copy"><strong>Auto routing</strong><small>Archimedes chooses the right research stage</small></span>
+                {routingAutomatic && <Check size={14} />}
+              </button>
+              <div className="research-mode-menu-label manual">Manual override</div>
+              {researchModes.map((mode) => <button key={mode.id} className={!routingAutomatic && mode.id === researchMode ? "research-mode-option selected" : "research-mode-option"} role="menuitemradio" aria-checked={!routingAutomatic && mode.id === researchMode} onClick={() => { setRoutingAutomatic(false); onResearchMode(mode.id); setModeMenuOpen(false); }}>
                 <span className="research-mode-icon">{mode.icon}</span>
                 <span className="research-mode-copy"><strong>{mode.label}</strong><small>{mode.description}</small></span>
-                {mode.id === researchMode && <Check size={14} />}
+                {!routingAutomatic && mode.id === researchMode && <Check size={14} />}
               </button>)}
             </div>}
           </div>

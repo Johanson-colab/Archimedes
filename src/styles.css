@@ -1668,6 +1668,153 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
   .library-card, .skill-collection-card, .gallery-card { transition: none; }
 }
 
+/* Research journey: AI routes work, people accept checkpoints and control rollbacks. */
+.conversation-layout.has-journey { grid-template-rows: auto minmax(0, 1fr) auto; }
+.research-journey {
+  position: relative;
+  z-index: 4;
+  color: #d7d7d2;
+  background: #151515;
+  border-bottom: 1px solid #30302e;
+}
+.research-journey-header {
+  display: flex;
+  width: min(100%, 1040px);
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 auto;
+  padding: 8px 24px 3px;
+}
+.research-journey-header > div:first-child { display: flex; align-items: center; gap: 10px; }
+.research-journey-header > div:first-child > span { color: #747470; font-size: 9px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.research-journey-header strong { display: inline-flex; align-items: center; gap: 5px; color: #b8b7b1; font-size: 10px; font-weight: 600; }
+.research-journey-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 10px; }
+.research-journey-actions button, .research-checkpoint-actions button {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  color: #bdbcb6;
+  background: transparent;
+  border: 1px solid #3b3b38;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 650;
+}
+.research-journey-actions button:hover, .research-checkpoint-actions button:hover { color: #f1f0eb; background: #272725; border-color: #555550; }
+.research-journey-notice { max-width: 460px; overflow: hidden; color: #8d8b84; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.research-stage-track {
+  display: flex;
+  width: min(100%, 1040px);
+  min-width: 650px;
+  margin: 0 auto;
+  padding: 3px 24px 12px;
+}
+.research-stage-segment { display: flex; min-width: 0; flex: 1 1 0; align-items: center; }
+.research-stage {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 4px;
+  color: #777772;
+  background: transparent;
+  border-radius: 5px;
+  text-align: left;
+}
+.research-stage:hover, .research-stage.selected { color: #dad9d3; background: #222220; }
+.research-stage-node {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: #797974;
+  background: #1d1d1b;
+  border: 1px solid #3a3a37;
+  border-radius: 50%;
+  font: 650 9px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.research-stage > span:last-child { display: grid; min-width: 0; gap: 1px; }
+.research-stage strong { overflow: hidden; color: inherit; font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.research-stage small { overflow: hidden; color: #686863; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.research-stage-line { height: 1px; min-width: 10px; flex: 1 1 24px; margin: 0 3px; background: #343431; }
+.research-stage-line.complete { background: #8b8479; }
+.research-stage.accepted { color: #c8c5bd; }
+.research-stage.accepted .research-stage-node { color: #171715; background: #c6c1b7; border-color: #c6c1b7; }
+.research-stage.active { color: #f0eee8; }
+.research-stage.active .research-stage-node { color: #e8ddc5; border-color: #b79f74; box-shadow: 0 0 0 3px rgba(183, 159, 116, .13); }
+.research-stage.running .research-stage-node { color: transparent; border-color: #b79f74; border-top-color: transparent; animation: context-spin .8s linear infinite; }
+.research-stage.stale { color: #ba9d69; }
+.research-stage.stale .research-stage-node { color: #ba9d69; border-style: dashed; border-color: #806d4b; }
+.research-checkpoint-panel {
+  display: grid;
+  width: min(calc(100% - 48px), 992px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  margin: 0 auto 12px;
+  padding: 12px 14px;
+  background: #1e1e1c;
+  border: 1px solid #393936;
+  border-radius: 6px;
+}
+.research-checkpoint-panel > div:first-child { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; }
+.research-checkpoint-panel > div:first-child > span { color: #8f8d84; font-size: 8px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.research-checkpoint-panel > div:first-child > strong { color: #e4e1d9; font-size: 11px; }
+.research-checkpoint-panel p { grid-column: 1 / -1; margin: 0; color: #8d8b84; font-size: 9px; line-height: 1.45; }
+.research-checkpoint-actions { display: flex; align-items: center; gap: 6px; }
+.research-checkpoint-actions .journey-primary { color: #1c1b18; background: #d7d0c4; border-color: #d7d0c4; }
+.research-checkpoint-actions .journey-primary:hover { color: #111; background: #ebe5db; border-color: #ebe5db; }
+.research-mode-menu-label.manual { margin-top: 4px; padding-top: 9px; border-top: 1px solid #393936; }
+
+.theme-paper .research-journey { color: #49453f; background: #f7f5f1; border-color: #e4e0d9; }
+.theme-paper .research-journey-header > div:first-child > span { color: #9a948b; }
+.theme-paper .research-journey-header strong { color: #68625a; }
+.theme-paper .research-journey-notice { color: #817a71; }
+.theme-paper .research-journey-actions button, .theme-paper .research-checkpoint-actions button { color: #625d56; border-color: #d9d4cc; }
+.theme-paper .research-journey-actions button:hover, .theme-paper .research-checkpoint-actions button:hover { color: #24211e; background: #ece8e2; border-color: #c9c3ba; }
+.theme-paper .research-stage { color: #a09a91; }
+.theme-paper .research-stage:hover, .theme-paper .research-stage.selected { color: #34312d; background: #eeebe6; }
+.theme-paper .research-stage-node { color: #89837a; background: #fbfaf8; border-color: #d9d4cc; }
+.theme-paper .research-stage small { color: #aaa39a; }
+.theme-paper .research-stage-line { background: #ded9d2; }
+.theme-paper .research-stage-line.complete { background: #8e877d; }
+.theme-paper .research-stage.accepted { color: #5d5851; }
+.theme-paper .research-stage.accepted .research-stage-node { color: #fff; background: #716b63; border-color: #716b63; }
+.theme-paper .research-stage.active { color: #25221f; }
+.theme-paper .research-stage.active .research-stage-node { color: #5b4a31; background: #fffaf1; border-color: #a2875c; box-shadow: 0 0 0 3px rgba(162, 135, 92, .13); }
+.theme-paper .research-stage.stale { color: #98733b; }
+.theme-paper .research-stage.stale .research-stage-node { color: #98733b; border-color: #b39668; }
+.theme-paper .research-checkpoint-panel { background: #fffefd; border-color: #ded9d1; }
+.theme-paper .research-checkpoint-panel > div:first-child > span, .theme-paper .research-checkpoint-panel p { color: #817b72; }
+.theme-paper .research-checkpoint-panel > div:first-child > strong { color: #292622; }
+.theme-paper .research-checkpoint-actions .journey-primary { color: #fff; background: #5f5a53; border-color: #5f5a53; }
+.theme-paper .research-checkpoint-actions .journey-primary:hover { color: #fff; background: #46413b; border-color: #46413b; }
+.theme-paper .research-mode-menu-label.manual { border-color: #e3dfd8; }
+
+@media (max-width: 760px) {
+  .research-journey-header, .research-stage-track { width: 100%; min-width: 0; padding-inline: 10px; }
+  .research-journey-header { gap: 8px; }
+  .research-journey-header > div:first-child > span { display: none; }
+  .research-journey-header strong { white-space: nowrap; }
+  .research-journey-actions { margin-left: auto; }
+  .research-journey-actions button { padding-inline: 7px; }
+  .research-stage-track { padding-bottom: 10px; }
+  .research-stage { grid-template-columns: 20px minmax(0, 1fr); gap: 4px; padding: 2px; }
+  .research-stage-node { width: 19px; height: 19px; }
+  .research-stage strong { font-size: 8px; }
+  .research-stage small { display: none; }
+  .research-stage-line { min-width: 3px; margin-inline: 1px; }
+  .research-checkpoint-panel { width: calc(100% - 20px); min-width: 0; grid-template-columns: 1fr; gap: 10px; }
+  .research-checkpoint-actions { flex-wrap: wrap; }
+  .research-journey-notice { display: none; }
+}
+
 /* High-specificity shell details inherited from the earlier light theme. */
 .projects-heading { color: var(--night-faint); }
 .projects-heading button, .project-toggle, .project-row-actions button,
