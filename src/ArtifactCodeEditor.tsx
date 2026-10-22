@@ -37,9 +37,6 @@ const editorTheme = EditorView.theme({
   },
   ".cm-activeLine": { backgroundColor: "var(--code-line-hover)" },
   ".cm-activeLineGutter": { color: "var(--code-fg)", backgroundColor: "var(--code-line-hover)" },
-  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
-    backgroundColor: "var(--code-selection)",
-  },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--code-fg)" },
   "&.cm-focused": { outline: "none" },
 });
