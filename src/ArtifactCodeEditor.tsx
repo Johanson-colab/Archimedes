@@ -6,6 +6,7 @@ import { HighlightStyle, LanguageDescription, indentUnit, syntaxHighlighting } f
 import { languages } from "@codemirror/language-data";
 import { markdown } from "@codemirror/lang-markdown";
 import { tags } from "@lezer/highlight";
+import type { ArtifactSelection } from "./artifact-editor";
 
 const highlightStyle = HighlightStyle.define([
   { tag: tags.comment, color: "var(--code-comment)" },
@@ -49,20 +50,23 @@ async function languageExtension(filePath: string) {
   return description ? (await description.load()).extension : [];
 }
 
-export default function ArtifactCodeEditor({ filePath, value, onChange, onSave }: {
+export default function ArtifactCodeEditor({ filePath, value, onChange, onSave, onSelectionChange }: {
   filePath: string;
   value: string;
   onChange: (value: string) => void;
   onSave: () => void;
+  onSelectionChange?: (selection: ArtifactSelection | null) => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+  const onSelectionChangeRef = useRef(onSelectionChange);
   valueRef.current = value;
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
+  onSelectionChangeRef.current = onSelectionChange;
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +86,17 @@ export default function ArtifactCodeEditor({ filePath, value, onChange, onSave }
             EditorView.contentAttributes.of({ "aria-label": `Edit ${filePath}`, spellcheck: "false" }),
             EditorView.updateListener.of((update) => {
               if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+              if (!update.selectionSet && !update.docChanged) return;
+              const range = update.state.selection.main;
+              if (range.empty) {
+                onSelectionChangeRef.current?.(null);
+                return;
+              }
+              onSelectionChangeRef.current?.({
+                startLine: update.state.doc.lineAt(range.from).number,
+                endLine: update.state.doc.lineAt(range.to).number,
+                excerpt: update.state.sliceDoc(range.from, range.to),
+              });
             }),
             ...(filePath.endsWith(".md") || filePath.endsWith(".mdx") ? [EditorView.lineWrapping] : []),
             language,
@@ -96,6 +111,7 @@ export default function ArtifactCodeEditor({ filePath, value, onChange, onSave }
       cancelled = true;
       view?.destroy();
       viewRef.current = null;
+      onSelectionChangeRef.current?.(null);
     };
   }, [filePath]);
 

@@ -8,6 +8,17 @@ export interface ArtifactDraft {
   modifiedAt: string;
 }
 
+export interface ArtifactSelection {
+  startLine: number;
+  endLine: number;
+  excerpt: string;
+}
+
+export interface ArtifactComment extends ArtifactSelection {
+  path: string;
+  body: string;
+}
+
 export const MAX_EDITABLE_ARTIFACT_BYTES = 2_000_000;
 
 export function isEditableArtifact(file: Pick<WorkspaceFilePreview, "kind" | "size"> | null | undefined) {
@@ -83,4 +94,13 @@ export function markDraftSaved(draft: ArtifactDraft, savedContent: string, modif
     savedContent,
     modifiedAt,
   };
+}
+
+export function formatArtifactComment(comment: ArtifactComment) {
+  const range = comment.startLine === comment.endLine
+    ? `line ${comment.startLine}`
+    : `lines ${comment.startLine}-${comment.endLine}`;
+  const excerpt = comment.excerpt.trim().slice(0, 2_000);
+  const quoted = excerpt.split(/\r?\n/).map((line) => `> ${line}`).join("\n");
+  return `Review comment on \`${comment.path}\` (${range}):\n${quoted}\n\n${comment.body.trim()}`;
 }
