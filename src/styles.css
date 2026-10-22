@@ -2322,6 +2322,9 @@ html[data-theme="paper"] * { scrollbar-color: #c9c4bc transparent; }
 .theme-paper .skill-index-row:hover, .theme-paper .workspace-tree-row:hover,
 .theme-paper .paper-tree-row:hover, .theme-paper .codebase-tree-node:hover,
 .theme-paper .artifact-tab:hover { background: #f2efeb; border-color: #ddd8d1; }
+.theme-paper .workspace-tree-row { color: #5e5e58; }
+.theme-paper .workspace-tree-row:hover { color: #292926; }
+.theme-paper .workspace-tree-row:not(.active):hover .tree-file-icon { color: #5f5a53; }
 .theme-paper .library-paper-list, .theme-paper .paper-inspector, .theme-paper .skills-index,
 .theme-paper .artifact-browser, .theme-paper .paper-source-browser, .theme-paper .artifact-preview-surface,
 .theme-paper .artifact-editor, .theme-paper .markdown-preview,
