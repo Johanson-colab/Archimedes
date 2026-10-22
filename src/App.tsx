@@ -34,7 +34,7 @@ import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSi
 import SkillsView from "./SkillsView";
 import TerminalPanel from "./TerminalPanel";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
-import { createArtifactDraft, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactDraft } from "./artifact-editor";
+import { createArtifactDraft, formatArtifactComment, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactComment, type ArtifactDraft, type ArtifactSelection } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
 import ArchimedesMark from "./brand/ArchimedesMark";
 import ArchimedesWordmark from "./brand/ArchimedesWordmark";
@@ -60,6 +60,7 @@ import {
   Lightbulb,
   LoaderCircle,
   MessageCircle,
+  MessageSquareText,
   Monitor,
   Moon,
   Orbit,
@@ -644,6 +645,7 @@ function App() {
   const [artifactSaving, setArtifactSaving] = useState<Set<string>>(new Set());
   const [artifactConflicts, setArtifactConflicts] = useState<Record<string, string>>({});
   const [artifactErrors, setArtifactErrors] = useState<Record<string, string>>({});
+  const [composerRequest, setComposerRequest] = useState<{ id: string; text: string } | null>(null);
   const [evidenceTitle, setEvidenceTitle] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("retrieval budget reasoning");
@@ -1278,6 +1280,11 @@ function App() {
     setArtifactConflicts((current) => withoutKey(current, filePath));
   }
 
+  function addArtifactComment(comment: ArtifactComment) {
+    setComposerRequest({ id: crypto.randomUUID(), text: formatArtifactComment(comment) });
+    setMainSection("chat");
+  }
+
   async function createArtifact() {
     const name = artifactName.trim();
     if (!name) return;
@@ -1454,6 +1461,8 @@ function App() {
               onOpenFile={openChangedFile}
               showWelcome={activeThreadId === null && messages.length === 1 && messages[0]?.id === "welcome" && !agentBusy}
               onWelcomeAction={openWelcomeWorkflow}
+              composerRequest={composerRequest}
+              onComposerRequestApplied={(id) => setComposerRequest((current) => current?.id === id ? null : current)}
             />
           )}
           <div className={mainSection === "library" ? "library-view-cache" : "library-view-cache hidden"} aria-hidden={mainSection !== "library"}>
@@ -1464,7 +1473,7 @@ function App() {
           {galleryOpened && <div className={mainSection === "gallery" ? "gallery-view-cache" : "gallery-view-cache hidden"} aria-hidden={mainSection !== "gallery"}><GalleryView active={mainSection === "gallery"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} /></div>}
           {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (
-            <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} />
+            <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} onAddComment={addArtifactComment} />
           )}
           <div className={mainSection === "writing" ? "paper-writing-view-cache" : "paper-writing-view-cache hidden"} aria-hidden={mainSection !== "writing"}>
             {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
@@ -1497,7 +1506,7 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction }: {
+function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   workspace: string;
@@ -1518,6 +1527,8 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   onOpenFile: (filePath: string) => void;
   showWelcome: boolean;
   onWelcomeAction: (action: ResearchWelcomeAction) => void;
+  composerRequest: { id: string; text: string } | null;
+  onComposerRequestApplied: (id: string) => void;
 }) {
   const latestEvent = events.at(-1);
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
@@ -1528,11 +1539,20 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const appliedComposerRequestRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
   const [followingOutput, setFollowingOutput] = useState(true);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const welcomeVisible = showWelcome && !welcomeDismissed;
+
+  useEffect(() => {
+    if (!composerRequest || appliedComposerRequestRef.current === composerRequest.id) return;
+    appliedComposerRequestRef.current = composerRequest.id;
+    setPrompt((current) => current.trim() ? `${current.trim()}\n\n${composerRequest.text}` : composerRequest.text);
+    onComposerRequestApplied(composerRequest.id);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }, [composerRequest, onComposerRequestApplied]);
   const visibleMessages = messages.slice(historyStart);
   const hiddenMessageCount = historyStart;
   const messageContextCharacters = useMemo(
@@ -1955,7 +1975,7 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
   </div>;
 }
 
-function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading, error, onDraftChange, onSave, onReload, onDismissConflict }: {
+function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading, error, onDraftChange, onSave, onReload, onDismissConflict, onAddComment }: {
   file: WorkspaceFilePreview | null;
   draft?: ArtifactDraft;
   dirty: boolean;
@@ -1968,11 +1988,20 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   onSave: () => void;
   onReload: () => void;
   onDismissConflict: () => void;
+  onAddComment: (comment: ArtifactComment) => void;
 }) {
   const [mode, setMode] = useState<"preview" | "edit">("preview");
+  const [selection, setSelection] = useState<ArtifactSelection | null>(null);
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentBody, setCommentBody] = useState("");
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
-  useEffect(() => { setMode(dirty ? "edit" : "preview"); }, [file?.path]);
+  useEffect(() => {
+    setMode(dirty ? "edit" : "preview");
+    setSelection(null);
+    setCommentOpen(false);
+    setCommentBody("");
+  }, [file?.path]);
   const editable = Boolean(draft);
   const editing = editable && mode === "edit";
 
@@ -2002,6 +2031,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
             <button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}>Preview</button>
             <button className={mode === "edit" ? "active" : ""} onClick={() => setMode("edit")}>Edit</button>
           </div>
+          {editing && <button className="secondary-button artifact-comment-button" disabled={!selection} onClick={() => setCommentOpen(true)} title={selection ? `Comment on lines ${selection.startLine}${selection.endLine !== selection.startLine ? `-${selection.endLine}` : ""}` : "Select text in the editor to comment"}><MessageSquareText size={12} />Comment</button>}
           <span className={`artifact-save-state ${saving ? "saving" : dirty ? "unsaved" : "saved"}`}>
             {saving ? <LoaderCircle className="spin" size={11} /> : dirty ? <CircleDot size={11} /> : <Check size={11} />}
             {saving ? "Saving" : dirty ? "Unsaved" : "Saved"}
@@ -2009,6 +2039,18 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
           <button className="secondary-button artifact-save-button" disabled={!dirty || saving} onClick={onSave} title="Save (Ctrl/Cmd+S)"><Save size={12} />Save</button>
         </div>}
       </div>
+      {commentOpen && selection && <form className="artifact-comment-box" onSubmit={(event) => {
+        event.preventDefault();
+        if (!commentBody.trim()) return;
+        onAddComment({ path: file.path, startLine: selection.startLine, endLine: selection.endLine, excerpt: selection.excerpt, body: commentBody });
+        setCommentOpen(false);
+        setCommentBody("");
+      }}>
+        <div className="artifact-comment-reference"><strong>{file.path}</strong><span>{selection.startLine === selection.endLine ? `Line ${selection.startLine}` : `Lines ${selection.startLine}-${selection.endLine}`}</span></div>
+        <pre>{selection.excerpt.slice(0, 1_200)}</pre>
+        <textarea autoFocus value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="What should Archimedes address?" aria-label="Review comment" />
+        <div className="artifact-comment-actions"><button type="button" className="secondary-button" onClick={() => { setCommentOpen(false); setCommentBody(""); }}>Cancel</button><button type="submit" className="primary-button" disabled={!commentBody.trim()}>Add to chat</button></div>
+      </form>}
       {(conflict !== undefined || saveError) && <div className={`artifact-notice${saveError ? " error" : ""}`}>
         <AlertTriangle size={13} />
         {saveError ? <span>{saveError}</span> : <>
@@ -2020,7 +2062,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
     </div>
     <div className={`artifact-preview-surface${editing ? " editing" : ""}`}>
       {editing ? <Suspense fallback={<div className="artifact-empty"><LoaderCircle className="spin" size={18} />Loading editor...</div>}>
-        <ArtifactCodeEditor filePath={file.path} value={draft?.content ?? ""} onChange={(value) => onDraftChange(file.path, value)} onSave={onSave} />
+        <ArtifactCodeEditor filePath={file.path} value={draft?.content ?? ""} onChange={(value) => onDraftChange(file.path, value)} onSave={onSave} onSelectionChange={setSelection} />
       </Suspense> : <>
         {file.kind === "markdown" && <article className="markdown-preview"><MarkdownContent content={draft?.content ?? file.content ?? ""} /></article>}
         {file.kind === "text" && <CodePreview content={draft?.content ?? file.content ?? ""} filePath={file.path} />}
@@ -2074,7 +2116,7 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
   return next;
 }
 
-function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewArtifact, onDraftChange, onSave, onReload, onDismissConflict }: {
+function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewArtifact, onDraftChange, onSave, onReload, onDismissConflict, onAddComment }: {
   workspace: string;
   tree: WorkspaceFileTree;
   openFiles: WorkspaceFilePreview[];
@@ -2098,6 +2140,7 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   onSave: (filePath: string) => void;
   onReload: (filePath: string) => void;
   onDismissConflict: (filePath: string) => void;
+  onAddComment: (comment: ArtifactComment) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const workspaceName = workspace.split("/").filter(Boolean).at(-1) || "Workspace";
@@ -2150,6 +2193,7 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
           onSave={() => file && onSave(file.path)}
           onReload={() => file && onReload(file.path)}
           onDismissConflict={() => file && onDismissConflict(file.path)}
+          onAddComment={onAddComment}
         />
       </div>
     </div>
