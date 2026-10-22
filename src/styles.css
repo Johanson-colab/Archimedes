@@ -1035,7 +1035,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 :is(.message-code-block, .code-preview, .codebase-source) .token.bold { font-weight: 700; }
 :is(.message-code-block, .code-preview, .codebase-source) .token.italic { font-style: italic; }
 :is(.message-code-block, .code-preview, .codebase-source) .token.namespace { opacity: .72; }
-:is(.message-code-block, .code-preview, .codebase-source) .linenumber { color: var(--code-line-number); }
+:is(.message-code-block, .code-preview, .codebase-source) .linenumber.linenumber { color: var(--code-line-number); }
 :is(.message-code-block, .code-preview, .codebase-source) ::selection { background: var(--code-selection); }
 .markdown-preview { width: min(100%, 860px); margin: 0 auto; padding: 30px clamp(24px, 5vw, 64px) 60px; color: #333330; font-size: 12px; line-height: 1.75; }
 .markdown-preview h1, .markdown-preview h2, .markdown-preview h3 { margin: 1.6em 0 .55em; color: #292926; line-height: 1.3; }
