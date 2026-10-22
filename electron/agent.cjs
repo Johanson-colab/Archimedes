@@ -11,12 +11,10 @@ const { completeAnthropic } = require("./agent/anthropic.cjs");
 const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData } = require("./agent/pdf-reader.cjs");
 const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = require("./agent/remote-content.cjs");
 const { evidenceForTool } = require("./agent/evidence.cjs");
+const { normalizeReasoningEffort, openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
 const { listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
-const MAX_TOOL_ROUNDS = 8;
-const MAX_ACADEMIC_SEARCHES = 4;
-const MAX_WEB_SEARCHES = 8;
 const MAX_FILE_BYTES = 64_000;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
@@ -687,16 +685,24 @@ function applyDelta(accumulator, delta, onTextDelta) {
   }
 }
 
-async function complete(config, messages, { signal, onTextDelta, allowTools = true, availableTools = tools }) {
+async function complete(config, messages, { signal, onTextDelta, allowTools = true, availableTools = tools, reasoningEffort }) {
   if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools });
-  const request = { model: config.model, messages, stream: true };
+  const nativeReasoning = openAiReasoningOptions(config, reasoningEffort);
+  const request = { model: config.model, messages, stream: true, ...nativeReasoning };
   if (allowTools && availableTools.length) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+  const requestCompletion = (body) => fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify(request),
+    body: JSON.stringify(body),
     signal,
   });
+  let response = await requestCompletion(request);
+  if (!response.ok && Object.keys(nativeReasoning).length && [400, 422].includes(response.status)) {
+    await response.text();
+    delete request.reasoning_effort;
+    delete request.reasoning;
+    response = await requestCompletion(request);
+  }
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 500);
     throw new Error(`Model request failed (${response.status}): ${detail}`);
@@ -757,12 +763,14 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", contextItems = [], emit = () => {}, browser }) {
+async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", reasoningEffort = "medium", contextItems = [], emit = () => {}, browser }) {
   const thread = threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId });
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
   const task = store.startTask({ prompt });
   const turn = store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode });
   const config = getActiveModelConfig();
+  const resolvedReasoningEffort = normalizeReasoningEffort(reasoningEffort);
+  const policy = reasoningPolicy(resolvedReasoningEffort, mode);
   const controller = new AbortController();
   const actions = [];
   activeRuns.set(thread.id, controller);
@@ -787,6 +795,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
       currentTurnId: turn.id,
       attachmentManifest: attachedContextManifest(contextItems),
       mode,
+      reasoningInstruction: policy.instruction,
     });
     if (context.compacted) {
       store.updateResearchThreadSummary(thread.id, context.summary);
@@ -805,17 +814,18 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
     let webSearches = 0;
     const foundPapers = new Map();
     const pdfCache = new Map();
-    const maxToolRounds = mode === "deep-research" ? 20 : MAX_TOOL_ROUNDS;
+    const maxToolRounds = policy.maxToolRounds;
     const allowWorkspaceActions = workspaceActionRequested(prompt);
-    emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model}` });
+    emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · reasoning: ${resolvedReasoningEffort}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
       const availableTools = tools.filter((tool) =>
-        !(tool.function.name === "search_academic_papers" && academicSearches >= (mode === "deep-research" ? 6 : MAX_ACADEMIC_SEARCHES)) &&
-        !(tool.function.name === "web_search" && webSearches >= (mode === "deep-research" ? MAX_WEB_SEARCHES : 3)));
+        !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
+        !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches));
       const message = await complete(config, messages, {
         signal: controller.signal,
         availableTools,
+        reasoningEffort: resolvedReasoningEffort,
         onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Streaming model output", delta }),
       });
       messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
@@ -829,7 +839,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
       for (const call of message.tool_calls) {
         try {
           if (call.function.name === "search_academic_papers") {
-            if (academicSearches >= (mode === "deep-research" ? 6 : MAX_ACADEMIC_SEARCHES)) {
+            if (academicSearches >= policy.maxAcademicSearches) {
               const content = JSON.stringify({ error: "The academic search budget is exhausted. Synthesize the findings already collected." });
               messages.push({ role: "tool", tool_call_id: call.id, content });
               store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
@@ -839,7 +849,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
           }
           if (call.function.name === "web_search") {
             const count = Array.isArray(parseArguments(call.function.arguments).queries) ? parseArguments(call.function.arguments).queries.length : 1;
-            if (webSearches + count > (mode === "deep-research" ? MAX_WEB_SEARCHES : 3)) {
+            if (webSearches + count > policy.maxWebSearches) {
               const content = JSON.stringify({ error: "The web search budget is exhausted. Synthesize from the sources already opened." });
               messages.push({ role: "tool", tool_call_id: call.id, content });
               store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
@@ -871,6 +881,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
     const finalMessage = await complete(config, messages, {
       signal: controller.signal,
       allowTools: false,
+      reasoningEffort: resolvedReasoningEffort,
       onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Synthesizing collected evidence", delta }),
     });
     const response = finalMessage.content || "The tool budget was reached before enough evidence was collected. Continue in this chat with a narrower research question.";

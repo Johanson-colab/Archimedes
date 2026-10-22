@@ -61,7 +61,7 @@ interface ResearchDeskBridge {
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextItems?: ContextAttachment[] }) => Promise<AgentRunResult>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
@@ -205,6 +205,7 @@ interface Window {
 
 type ReadingStatus = "unread" | "reading" | "read";
 type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
+type ReasoningEffort = "low" | "medium" | "high";
 
 interface ResearchSource {
   url: string;

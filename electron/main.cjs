@@ -899,7 +899,9 @@ app.whenReady().then(() => {
       throw new Error("An Agent task requires a prompt of at most 20000 characters.");
     }
     const researchModes = new Set(["free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review", "deep-research"]);
+    const reasoningEfforts = new Set(["low", "medium", "high"]);
     const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
+    const reasoningEffort = reasoningEfforts.has(input.reasoningEffort) ? input.reasoningEffort : "medium";
     const workspace = resolveWorkspace(input.workspace);
     store.openWorkspace(workspace);
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
@@ -909,6 +911,7 @@ app.whenReady().then(() => {
       threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
       projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
       mode,
+      reasoningEffort,
       contextItems,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => event.sender.send("agent:event", payload),

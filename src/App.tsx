@@ -78,7 +78,6 @@ import {
   SendHorizontal,
   ShieldCheck,
   ScanSearch,
-  Sparkles,
   Square,
   SquareTerminal,
   Sun,
@@ -112,6 +111,7 @@ type PendingAction = AgentAction & { source: "agent" | "manual" };
 type Modal = "artifact" | "evidence" | "search" | "source" | null;
 type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ResearchStageId = "conversation" | "ideas" | "experiments" | "writing" | "review";
+type ReasoningEffort = "low" | "medium" | "high";
 
 type ResearchStage = {
   id: ResearchStageId;
@@ -135,6 +135,12 @@ const researchStages: ResearchStage[] = [
   { id: "experiments", label: "Experiments", mode: "experiment-setup", checkpoint: "Claims & evidence", description: "Design, run, diagnose, and accept only the claims supported by results." },
   { id: "writing", label: "Writing", mode: "paper-generation", checkpoint: "Manuscript", description: "Turn accepted claims and evidence into a traceable paper draft." },
   { id: "review", label: "Review", mode: "paper-review", checkpoint: "Submission decision", description: "Audit novelty, evidence, reproducibility, and presentation before release." },
+];
+
+const reasoningEfforts: Array<{ id: ReasoningEffort; label: string; description: string }> = [
+  { id: "low", label: "Low", description: "Faster answers with essential tool use" },
+  { id: "medium", label: "Medium", description: "Balanced analysis and verification" },
+  { id: "high", label: "High", description: "Deeper checks and a larger tool budget" },
 ];
 
 function stageForMode(mode: ResearchMode) {
@@ -398,7 +404,7 @@ const previewBridge = {
   readClipboardText: async () => "",
   writeClipboardText: async () => undefined,
   readClipboardImage: async () => null,
-  runAgent: async ({ prompt, threadId, projectId, mode, contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; contextItems?: ContextAttachment[] }) => {
+  runAgent: async ({ prompt, threadId, projectId, mode, reasoningEffort = "medium", contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextItems?: ContextAttachment[] }) => {
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
@@ -409,7 +415,7 @@ const previewBridge = {
     const turnId = crypto.randomUUID();
     const taskId = crypto.randomUUID();
     thread.messages.push({ id: `${turnId}:user`, turn_id: turnId, role: "user", text: prompt, created_at: now });
-    emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: "Browser preview Agent" });
+    emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: `Browser preview Agent · reasoning: ${reasoningEffort}` });
     const actions: AgentAction[] = [];
     if (/(write|draft|note|生成|写入)/i.test(prompt)) {
       const action: AgentAction = {
@@ -625,6 +631,12 @@ function readThemePreference(): ThemePreference {
   return stored === "charcoal" || stored === "paper" || stored === "system" ? stored : "system";
 }
 
+function readReasoningEffort(): ReasoningEffort {
+  if (typeof window === "undefined") return "medium";
+  const stored = window.localStorage.getItem("archimedes-reasoning-effort");
+  return stored === "low" || stored === "medium" || stored === "high" ? stored : "medium";
+}
+
 function App() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(readThemePreference);
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
@@ -655,6 +667,7 @@ function App() {
   const [interrupting, setInterrupting] = useState(false);
   const [chatViewNonce, setChatViewNonce] = useState(0);
   const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
   const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
   const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
@@ -699,6 +712,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem("archimedes-theme", themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-reasoning-effort", reasoningEffort);
+  }, [reasoningEffort]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
@@ -1107,7 +1124,7 @@ function App() {
     }
   }
 
-  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode) {
+  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort) {
     const question = draft.trim();
     const hasPastedImage = contextItems.some((item) => item.type === "image");
     if ((!question && !hasPastedImage) || agentBusy) return;
@@ -1127,7 +1144,7 @@ function App() {
     ]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, contextItems: submittedContext });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextItems: submittedContext });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
@@ -1483,11 +1500,13 @@ function App() {
               interrupting={interrupting}
               pendingAction={pendingAction}
               changeSets={changeSets}
-              onSubmit={(draft, routedMode) => void submitPrompt(draft, routedMode)}
+              onSubmit={(draft, routedMode, effort) => void submitPrompt(draft, routedMode, effort)}
               onInterrupt={() => void interruptResearchTurn()}
               canInterrupt={Boolean(runningThreadId) && !interrupting}
               researchMode={researchMode}
               onResearchMode={setResearchMode}
+              reasoningEffort={reasoningEffort}
+              onReasoningEffort={setReasoningEffort}
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
               onRemoveContext={(id) => setContextItems((current) => current.filter((item) => item.id !== id))}
@@ -1541,7 +1560,7 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, contextItems, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
+function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   workspace: string;
@@ -1551,10 +1570,12 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   pendingAction: PendingAction | null;
   changeSets: WorkspaceChangeSet[];
   researchMode: ResearchMode;
+  reasoningEffort: ReasoningEffort;
   contextItems: ContextAttachment[];
-  onSubmit: (draft: string, mode: ResearchMode) => void;
+  onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort) => void;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
+  onReasoningEffort: (effort: ReasoningEffort) => void;
   onAddContext: (items: ContextAttachment[]) => void;
   onRemoveContext: (id: string) => void;
   onApprove: () => void;
@@ -1567,8 +1588,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
 }) {
   const latestEvent = events.at(-1);
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
-  const [modeMenuOpen, setModeMenuOpen] = useState(false);
-  const [routingAutomatic, setRoutingAutomatic] = useState(true);
+  const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
   const [acceptedStages, setAcceptedStages] = useState<ResearchStageId[]>(() => {
     const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
     return researchStages.slice(0, activeIndex).map((stage) => stage.id);
@@ -1581,7 +1601,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const [composerError, setComposerError] = useState("");
   const [prompt, setPrompt] = useState("");
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
-  const modeMenuRef = useRef<HTMLDivElement>(null);
+  const reasoningMenuRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1599,8 +1619,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   }, [composerRequest, onComposerRequestApplied]);
 
   const activeStage = stageForMode(researchMode);
-  const predictedMode = routingAutomatic ? inferResearchMode(prompt, researchMode) : researchMode;
-  const predictedStage = stageForMode(predictedMode);
+  const predictedMode = inferResearchMode(prompt, researchMode);
   const visibleMessages = messages.slice(historyStart);
   const hiddenMessageCount = historyStart;
   const messageContextCharacters = useMemo(
@@ -1653,13 +1672,13 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   }, [messages.length]);
 
   useEffect(() => {
-    if (!modeMenuOpen) return;
+    if (!reasoningMenuOpen) return;
     const closeMenu = (event: MouseEvent) => {
-      if (!modeMenuRef.current?.contains(event.target as Node)) setModeMenuOpen(false);
+      if (!reasoningMenuRef.current?.contains(event.target as Node)) setReasoningMenuOpen(false);
     };
     document.addEventListener("click", closeMenu);
     return () => document.removeEventListener("click", closeMenu);
-  }, [modeMenuOpen]);
+  }, [reasoningMenuOpen]);
 
   useEffect(() => {
     const closeMenu = () => setComposerMenu(null);
@@ -1748,7 +1767,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
     onResearchMode(predictedMode);
     setSelectedStage(null);
     setJourneyNotice("");
-    onSubmit(draft, predictedMode);
+    onSubmit(draft, predictedMode, reasoningEffort);
   }
 
   function acceptCurrentCheckpoint() {
@@ -1794,7 +1813,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout has-journey"}>
     {!welcomeVisible && <section className="research-journey" aria-label="Research progress">
       <header className="research-journey-header">
-        <div><span>Research path</span><strong><Sparkles size={13} />AI routed · {activeStage.label}</strong></div>
+        <div><span>Research path</span><strong>AI routed · {activeStage.label}</strong></div>
         <div className="research-journey-actions">
           {journeyNotice && <span className="research-journey-notice">{journeyNotice}</span>}
           <button onClick={() => setSelectedStage((current) => current === activeStage.id ? null : activeStage.id)}><Flag size={13} />Review checkpoint</button>
@@ -1886,22 +1905,15 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
         {composerError && <div className="composer-attachment-error" role="alert">{composerError}</div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} items={contextItems} onAdd={onAddContext} />
-          <div className="research-mode-picker" ref={modeMenuRef}>
-            <button className={modeMenuOpen ? "composer-tool mode-trigger active" : "composer-tool mode-trigger"} onClick={() => setModeMenuOpen((open) => !open)} title="Research routing" aria-haspopup="menu" aria-expanded={modeMenuOpen}>
-              {routingAutomatic ? <Sparkles size={15} /> : activeMode.icon}<span>{routingAutomatic ? `Auto · ${predictedStage.label}` : activeMode.label}</span><ChevronDown size={13} />
+          <div className="reasoning-effort-picker" ref={reasoningMenuRef}>
+            <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => setReasoningMenuOpen((open) => !open)} title={`Reasoning effort: ${reasoningEffort}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>
+              <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>{reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1)}</span><ChevronDown size={13} />
             </button>
-            {modeMenuOpen && <div className="research-mode-menu" role="menu" aria-label="Research routing">
-              <div className="research-mode-menu-label">Routing</div>
-              <button className={routingAutomatic ? "research-mode-option selected" : "research-mode-option"} role="menuitemradio" aria-checked={routingAutomatic} onClick={() => { setRoutingAutomatic(true); setModeMenuOpen(false); }}>
-                <span className="research-mode-icon"><Sparkles size={15} /></span>
-                <span className="research-mode-copy"><strong>Auto routing</strong><small>Archimedes chooses the right research stage</small></span>
-                {routingAutomatic && <Check size={14} />}
-              </button>
-              <div className="research-mode-menu-label manual">Manual override</div>
-              {researchModes.map((mode) => <button key={mode.id} className={!routingAutomatic && mode.id === researchMode ? "research-mode-option selected" : "research-mode-option"} role="menuitemradio" aria-checked={!routingAutomatic && mode.id === researchMode} onClick={() => { setRoutingAutomatic(false); onResearchMode(mode.id); setModeMenuOpen(false); }}>
-                <span className="research-mode-icon">{mode.icon}</span>
-                <span className="research-mode-copy"><strong>{mode.label}</strong><small>{mode.description}</small></span>
-                {!routingAutomatic && mode.id === researchMode && <Check size={14} />}
+            {reasoningMenuOpen && <div className="reasoning-effort-menu" role="menu" aria-label="Reasoning effort">
+              <div className="reasoning-effort-heading"><strong>Reasoning effort</strong><span>Controls model deliberation and Agent tool budget.</span></div>
+              {reasoningEfforts.map((effort) => <button key={effort.id} className={effort.id === reasoningEffort ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>
+                <span className="reasoning-effort-copy"><strong>{effort.label}</strong><small>{effort.description}</small></span>
+                <span className="reasoning-option-mark" aria-hidden="true" />
               </button>)}
             </div>}
           </div>
