@@ -137,10 +137,10 @@ const researchStages: ResearchStage[] = [
   { id: "review", label: "Review", mode: "paper-review", checkpoint: "Submission decision", description: "Audit novelty, evidence, reproducibility, and presentation before release." },
 ];
 
-const reasoningEfforts: Array<{ id: ReasoningEffort; label: string; description: string }> = [
-  { id: "low", label: "Low", description: "Faster answers with essential tool use" },
-  { id: "medium", label: "Medium", description: "Balanced analysis and verification" },
-  { id: "high", label: "High", description: "Deeper checks and a larger tool budget" },
+const reasoningEfforts: Array<{ id: ReasoningEffort; label: string }> = [
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium" },
+  { id: "high", label: "High" },
 ];
 
 function stageForMode(mode: ResearchMode) {
@@ -415,7 +415,7 @@ const previewBridge = {
     const turnId = crypto.randomUUID();
     const taskId = crypto.randomUUID();
     thread.messages.push({ id: `${turnId}:user`, turn_id: turnId, role: "user", text: prompt, created_at: now });
-    emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: `Browser preview Agent · reasoning: ${reasoningEffort}` });
+    emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: `Browser preview Agent · thinking: ${reasoningEffort}` });
     const actions: AgentAction[] = [];
     if (/(write|draft|note|生成|写入)/i.test(prompt)) {
       const action: AgentAction = {
@@ -1906,13 +1906,13 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} items={contextItems} onAdd={onAddContext} />
           <div className="reasoning-effort-picker" ref={reasoningMenuRef}>
-            <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => setReasoningMenuOpen((open) => !open)} title={`Reasoning effort: ${reasoningEffort}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>
-              <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>{reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1)}</span><ChevronDown size={13} />
+            <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => setReasoningMenuOpen((open) => !open)} title={`Thinking: ${reasoningEffort}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>
+              <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>Thinking · {reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1)}</span><ChevronDown size={13} />
             </button>
-            {reasoningMenuOpen && <div className="reasoning-effort-menu" role="menu" aria-label="Reasoning effort">
-              <div className="reasoning-effort-heading"><strong>Reasoning effort</strong><span>Controls model deliberation and Agent tool budget.</span></div>
+            {reasoningMenuOpen && <div className="reasoning-effort-menu" role="menu" aria-label="Thinking">
+              <div className="reasoning-effort-heading"><strong>Thinking</strong></div>
               {reasoningEfforts.map((effort) => <button key={effort.id} className={effort.id === reasoningEffort ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>
-                <span className="reasoning-effort-copy"><strong>{effort.label}</strong><small>{effort.description}</small></span>
+                <span className="reasoning-effort-copy"><strong>{effort.label}</strong></span>
                 <span className="reasoning-option-mark" aria-hidden="true" />
               </button>)}
             </div>}

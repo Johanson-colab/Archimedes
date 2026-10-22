@@ -816,7 +816,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
     const pdfCache = new Map();
     const maxToolRounds = policy.maxToolRounds;
     const allowWorkspaceActions = workspaceActionRequested(prompt);
-    emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · reasoning: ${resolvedReasoningEffort}` });
+    emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
       const availableTools = tools.filter((tool) =>
