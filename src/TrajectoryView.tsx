@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, FileCode2, ListTree, Wrench } from "lucide-react";
+import JsonCode from "./JsonCode";
 
 type TrajectoryViewProps = {
   thread: ResearchThread | null;
@@ -124,7 +125,7 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
                 <span>turn <code>{event.turn_id}</code></span>
                 <button onClick={() => void copy(JSON.stringify(event, null, 2), event.id)} title="Copy this event"><Copy size={12} />{copied === event.id ? "Copied" : "Copy"}</button>
               </div>
-              <pre className="trajectory-json">{JSON.stringify(event, null, 2)}</pre>
+              <JsonCode value={event} />
               {payload && <div className="trajectory-payload-note"><Check size={12} />Full payload includes {Object.keys(payload).length} top-level fields.</div>}
             </div>}
           </article>;
