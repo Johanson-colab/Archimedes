@@ -24,6 +24,7 @@ import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typesc
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import ConferenceDiscovery from "./ConferenceDiscovery";
 import { equationTokens, findEquationRects } from "./pdf-equations";
+import { applyPdfSearchHighlights } from "./pdf-search-highlights";
 import { useDialogFocus } from "./useDialogFocus";
 import {
   AlignLeft,
@@ -465,6 +466,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [pdfZoom, setPdfZoom] = useState(1);
   const [query, setQuery] = useState("");
   const [passages, setPassages] = useState<PaperPassage[]>([]);
+  const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const searchRequestRef = useRef(0);
   const [selection, setSelection] = useState("");
   const [selectionAnchor, setSelectionAnchor] = useState<SelectionAnchor | null>(null);
@@ -590,8 +592,12 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       setPassages(next);
       if (next[0]) {
         setPageNumber(next[0].page_number);
+        setActiveSearchQuery(query.trim());
         setError("");
-      } else setError(`No match found in the ${reader.pages.length} indexed PDF pages for “${query.trim()}”.`);
+      } else {
+        setActiveSearchQuery("");
+        setError(`No match found in the ${reader.pages.length} indexed PDF pages for “${query.trim()}”.`);
+      }
     } catch (findError) {
       if (searchRequest === searchRequestRef.current) setError(readableError(findError, "Could not search this paper."));
     }
@@ -855,7 +861,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
                 <button onClick={() => setPdfZoom((value) => Math.min(3.2, Math.round((value + .1) * 100) / 100))} disabled={pdfZoom >= 3.2} title="Zoom in 10%"><Plus size={16} /></button>
               </div>
             </div>
-            <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => { searchRequestRef.current += 1; setQuery(event.target.value); setError(""); }} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" /><button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
+            <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => { searchRequestRef.current += 1; setQuery(event.target.value); setActiveSearchQuery(""); setPassages([]); setError(""); }} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" />{query && <button className="paper-search-clear" onClick={() => { searchRequestRef.current += 1; setQuery(""); setActiveSearchQuery(""); setPassages([]); setError(""); }} title="Clear paper search" aria-label="Clear paper search"><X size={13} /></button>}<button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
             <div className="paper-reader-evidence-actions"><button className={highlightListOpen ? "paper-reader-evidence active" : "paper-reader-evidence"} onClick={() => setHighlightListOpen((value) => !value)} aria-expanded={highlightListOpen} title="查看高亮与笔记"><Highlighter size={14} />{reader?.highlights.length ?? 0}</button></div>
           </div>
           {highlightListOpen && <aside className="paper-highlight-list" aria-label="高亮与笔记">
@@ -866,7 +872,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             </article>) : <p className="paper-highlight-empty">还没有高亮或笔记。</p>}</div>
           </aside>}
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} searchQuery={activeSearchQuery} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -1515,9 +1521,10 @@ function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVi
   };
 }
 
-function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, figureCaptureActive, onZoomChange, onSelection, onFigureCapture, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; activeSelection: string; figureCaptureActive: boolean; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onFigureCapture: (capture: PaperFigureCapture) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
+function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, activeSelection, figureCaptureActive, onZoomChange, onSelection, onFigureCapture, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; searchQuery: string; zoom: number; activeSelection: string; figureCaptureActive: boolean; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onFigureCapture: (capture: PaperFigureCapture) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
+  const searchQueryRef = useRef(searchQuery);
   const onFigureCaptureRef = useRef(onFigureCapture);
   const [width, setWidth] = useState(880);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -1534,6 +1541,11 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
     const textLayer = hostRef.current?.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
     if (textLayer) applyPdfHighlights(textLayer, highlights.filter((highlight) => highlight.page_number === pageNumber));
   }, [highlights, pageNumber]);
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+    const textLayer = hostRef.current?.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
+    if (textLayer) applyPdfSearchHighlights(textLayer, searchQuery);
+  }, [searchQuery]);
   useEffect(() => { onFigureCaptureRef.current = onFigureCapture; }, [onFigureCapture]);
   useEffect(() => {
     if (activeSelection) return;
@@ -1628,6 +1640,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
           page.append(link);
         }
         applyPdfHighlights(textLayer, highlightsRef.current.filter((highlight) => highlight.page_number === pageNumber));
+        applyPdfSearchHighlights(textLayer, searchQueryRef.current);
         if (!cancelled) setState("ready");
         pdfPage.cleanup(); pdfDocument.cleanup();
       } catch (renderError) { if (!cancelled) { setState("error"); setError(readableError(renderError, "The PDF page could not be rendered.")); } }
