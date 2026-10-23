@@ -841,6 +841,20 @@ function getResearchThread(id) {
       }
     } catch { /* Tool errors and older event formats do not contain source records. */ }
   }
+  const events = db.prepare(`
+    SELECT id, turn_id, sequence, type, payload_json, created_at
+    FROM research_events
+    WHERE thread_id = ?
+    ORDER BY turn_id ASC, sequence ASC
+  `).all(id).map((event) => {
+    let payload;
+    try {
+      payload = JSON.parse(event.payload_json);
+    } catch {
+      payload = event.payload_json;
+    }
+    return { id: event.id, turn_id: event.turn_id, sequence: event.sequence, type: event.type, payload, created_at: event.created_at };
+  });
   const changeSets = db.prepare(`
     SELECT agent_actions.id, agent_actions.task_id, agent_actions.kind, agent_actions.payload_json,
       agent_actions.status, agent_actions.created_at, agent_actions.resolved_at, research_turns.id AS turn_id
@@ -870,6 +884,7 @@ function getResearchThread(id) {
     last_turn_at: turns.at(-1)?.created_at || thread.created_at,
     turns,
     changeSets,
+    events,
     messages: turns.flatMap((turn) => {
       const items = [{ id: `${turn.id}:user`, turn_id: turn.id, role: "user", text: turn.user_message, created_at: turn.created_at }];
       if (turn.assistant_message) {

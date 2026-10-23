@@ -1,12 +1,12 @@
 import { useEffect, type ReactNode } from "react";
-import { FolderTree, SquareTerminal, X } from "lucide-react";
+import { FolderTree, ListTree, Milestone, SquareTerminal, X } from "lucide-react";
 import TerminalPanel from "./TerminalPanel";
 
 const WORKBENCH_MIN_WIDTH = 320;
 const WORKBENCH_MAX_WIDTH = 560;
 const WORKBENCH_DEFAULT_WIDTH = 380;
 
-export type WorkbenchTab = "terminal" | "files";
+export type WorkbenchTab = "journey" | "trajectory" | "files" | "terminal";
 
 type RightWorkbenchProps = {
   bridge: ResearchDeskBridge;
@@ -17,12 +17,14 @@ type RightWorkbenchProps = {
   activeTab: WorkbenchTab;
   dirtyFileCount: number;
   files: ReactNode;
+  journey: ReactNode;
+  trajectory: ReactNode;
   onTabChange: (tab: WorkbenchTab) => void;
   onWidthChange: (width: number) => void;
   onClose: () => void;
 };
 
-export default function RightWorkbench({ bridge, open, theme, workspace, width, activeTab, dirtyFileCount, files, onTabChange, onWidthChange, onClose }: RightWorkbenchProps) {
+export default function RightWorkbench({ bridge, open, theme, workspace, width, activeTab, dirtyFileCount, files, journey, trajectory, onTabChange, onWidthChange, onClose }: RightWorkbenchProps) {
   useEffect(() => () => document.body.classList.remove("workbench-resizing"), []);
 
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
@@ -61,17 +63,25 @@ export default function RightWorkbench({ bridge, open, theme, workspace, width, 
     <div className="workbench-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize workbench" aria-valuemin={WORKBENCH_MIN_WIDTH} aria-valuemax={WORKBENCH_MAX_WIDTH} aria-valuenow={width} tabIndex={0} onPointerDown={startResize} onDoubleClick={() => onWidthChange(WORKBENCH_DEFAULT_WIDTH)} onKeyDown={handleResizeKey}><span /></div>
     <header className="workbench-header">
       <div className="workbench-tabs" role="tablist" aria-label="Workbench panels">
-        <button className={activeTab === "terminal" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "terminal"} onClick={() => onTabChange("terminal")} title="Terminal"><SquareTerminal size={14} /><span>Terminal</span></button>
-        <button className={activeTab === "files" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "files"} onClick={() => onTabChange("files")} title="Files"><FolderTree size={14} /><span>Files</span>{dirtyFileCount > 0 && <i className="workbench-tab-badge" title={`${dirtyFileCount} unsaved file${dirtyFileCount === 1 ? "" : "s"}`}>{dirtyFileCount}</i>}</button>
+        <button className={activeTab === "journey" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "journey"} onClick={() => onTabChange("journey")} title="Agent journey"><Milestone size={13} /><span>Journey</span></button>
+        <button className={activeTab === "trajectory" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "trajectory"} onClick={() => onTabChange("trajectory")} title="Agent trajectory"><ListTree size={13} /><span>Trajectory</span></button>
+        <button className={activeTab === "files" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "files"} onClick={() => onTabChange("files")} title="Files"><FolderTree size={13} /><span>Files</span>{dirtyFileCount > 0 && <i className="workbench-tab-badge" title={`${dirtyFileCount} unsaved file${dirtyFileCount === 1 ? "" : "s"}`}>{dirtyFileCount}</i>}</button>
+        <button className={activeTab === "terminal" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "terminal"} onClick={() => onTabChange("terminal")} title="Terminal"><SquareTerminal size={13} /><span>Terminal</span></button>
       </div>
       <button className="workbench-close" onClick={onClose} title="Close workbench" aria-label="Close workbench"><X size={15} /></button>
     </header>
     <div className="workbench-body">
-      <div className="workbench-panel" role="tabpanel" aria-label="Terminal" hidden={activeTab !== "terminal"}>
-        <TerminalPanel bridge={bridge} open={open && activeTab === "terminal"} theme={theme} workspace={workspace} orientation="right" onClose={onClose} />
+      <div className="workbench-panel" role="tabpanel" aria-label="Agent journey" hidden={activeTab !== "journey"}>
+        {journey}
+      </div>
+      <div className="workbench-panel" role="tabpanel" aria-label="Agent trajectory" hidden={activeTab !== "trajectory"}>
+        {trajectory}
       </div>
       <div className="workbench-panel" role="tabpanel" aria-label="Files" hidden={activeTab !== "files"}>
         {files}
+      </div>
+      <div className="workbench-panel" role="tabpanel" aria-label="Terminal" hidden={activeTab !== "terminal"}>
+        <TerminalPanel bridge={bridge} open={open && activeTab === "terminal"} theme={theme} workspace={workspace} orientation="right" onClose={onClose} />
       </div>
     </div>
   </aside>;

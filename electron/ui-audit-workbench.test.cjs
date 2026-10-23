@@ -8,6 +8,9 @@ const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const terminal = fs.readFileSync(path.join(root, "src", "TerminalPanel.tsx"), "utf8");
 const workbench = fs.readFileSync(path.join(root, "src", "RightWorkbench.tsx"), "utf8");
+const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
+const journey = fs.readFileSync(path.join(root, "src", "JourneyView.tsx"), "utf8");
+const store = fs.readFileSync(path.join(root, "electron", "store.cjs"), "utf8");
 
 test("terminal lives in the right workbench instead of the bottom panel", () => {
   assert.match(app, /<RightWorkbench[\s\S]*?onWidthChange/);
@@ -19,7 +22,7 @@ test("terminal lives in the right workbench instead of the bottom panel", () => 
 
 test("workbench opens from the right and becomes an overlay on narrow screens", () => {
   assert.match(css, /\.main-workspace \{[^}]*grid-template-columns: minmax\(0, 1fr\) var\(--workbench-width, 0px\)/);
-  assert.match(css, /\.right-workbench \{[^}]*grid-template-rows: 38px minmax\(0, 1fr\)/);
+  assert.match(css, /\.right-workbench \{[^}]*grid-template-rows: 42px minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 1280px\) \{[\s\S]*?\.right-workbench \{[^}]*position: absolute/);
 });
 
@@ -53,4 +56,29 @@ test("files use a compact workbench pane with drill-down and split modes", () =>
 test("dirty file changes are protected when the workbench closes", () => {
   assert.match(app, /Hide the workbench\? Unsaved file changes stay in the editor\./);
   assert.match(app, /Object\.values\(artifactDraftsRef\.current\)\.some\(isDraftDirty\)/);
+});
+
+test("agent trajectory mirrors the OpenCode context structure", () => {
+  assert.match(workbench, /activeTab === "journey"/);
+  assert.match(workbench, /activeTab === "trajectory"/);
+  assert.match(workbench, />Journey<\/span>/);
+  assert.match(workbench, />Trajectory<\/span>/);
+  assert.match(trajectory, /trajectory-stats/);
+  assert.match(trajectory, /Session ID/);
+  assert.match(trajectory, /Raw events/);
+  assert.match(trajectory, /JSON\.stringify\(event, null, 2\)/);
+  assert.match(trajectory, /Expand all/);
+  assert.match(trajectory, /Copy JSON/);
+  assert.match(store, /FROM research_events[\s\S]*?ORDER BY turn_id ASC, sequence ASC/);
+  assert.match(store, /events,/);
+});
+
+test("agent journey is derived from raw trajectory events", () => {
+  assert.match(journey, /Derived from \{events\.length\} raw events/);
+  assert.match(journey, /from trajectory event #\{event\.sequence\}/);
+  assert.match(journey, /const phases = \[/);
+  assert.match(journey, /View raw/);
+  assert.match(journey, /Open trajectory/);
+  assert.match(css, /\.trajectory-json \{[^}]*white-space: pre-wrap/);
+  assert.match(css, /\.theme-paper \.right-workbench \{[^}]*background: #f6f4f1/);
 });
