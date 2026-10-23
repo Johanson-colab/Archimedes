@@ -722,6 +722,7 @@ function App() {
   const [newProjectName, setNewProjectName] = useState("");
   const [projectToRemove, setProjectToRemove] = useState<ResearchProject | null>(null);
   const [threadToRemove, setThreadToRemove] = useState<ResearchThread | null>(null);
+  const [threadRemoveError, setThreadRemoveError] = useState("");
   const [artifactName, setArtifactName] = useState("");
   const [artifactDrafts, setArtifactDrafts] = useState<Record<string, ArtifactDraft>>({});
   const [artifactSaving, setArtifactSaving] = useState<Set<string>>(new Set());
@@ -1173,22 +1174,31 @@ function App() {
 
   async function removeThread(thread: ResearchThread) {
     if (agentBusy) return;
-    await desktopBridge.deleteResearchThread(thread.id);
-    setThreadToRemove(null);
-    const snapshot = await desktopBridge.openWorkspace(workspace);
-    setProjects(snapshot.projects);
-    setArchivedProjects(snapshot.archivedProjects ?? []);
-    setThreads(snapshot.threads);
-    setArchivedThreads(snapshot.archivedThreads);
-    if (activeThreadId === thread.id) {
-      const next = snapshot.threads[0];
-      if (next) await openResearchThread(next);
-      else {
-        activeThreadIdRef.current = null;
-        setActiveThreadId(null);
-        setMessages(initialMessages);
-        setChangeSets([]);
+    if (typeof desktopBridge.deleteResearchThread !== "function") {
+      setThreadRemoveError("Restart the desktop app to finish installing chat deletion.");
+      return;
+    }
+    try {
+      await desktopBridge.deleteResearchThread(thread.id);
+      setThreadRemoveError("");
+      setThreadToRemove(null);
+      const snapshot = await desktopBridge.openWorkspace(workspace);
+      setProjects(snapshot.projects);
+      setArchivedProjects(snapshot.archivedProjects ?? []);
+      setThreads(snapshot.threads);
+      setArchivedThreads(snapshot.archivedThreads);
+      if (activeThreadId === thread.id) {
+        const next = snapshot.threads[0];
+        if (next) await openResearchThread(next);
+        else {
+          activeThreadIdRef.current = null;
+          setActiveThreadId(null);
+          setMessages(initialMessages);
+          setChangeSets([]);
+        }
       }
+    } catch (error) {
+      setThreadRemoveError(error instanceof Error ? error.message : "The chat could not be deleted.");
     }
   }
 
@@ -1572,7 +1582,7 @@ function App() {
           onRemoveProject={setProjectToRemove}
           onOpenThread={(thread) => void openResearchThread(thread)}
           onArchiveThread={(thread, archived) => void archiveThread(thread, archived)}
-          onRemoveThread={setThreadToRemove}
+          onRemoveThread={(thread) => { setThreadRemoveError(""); setThreadToRemove(thread); }}
         />
 
         <div className="sidebar-workspace">
@@ -1714,7 +1724,7 @@ function App() {
       <WebSearchSettingsModal bridge={desktopBridge} open={webSearchSettingsOpen} onClose={() => setWebSearchSettingsOpen(false)} />
       <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
-      <ThreadRemoveModal thread={threadToRemove} onClose={() => setThreadToRemove(null)} onRemove={() => threadToRemove && void removeThread(threadToRemove)} />
+      <ThreadRemoveModal thread={threadToRemove} error={threadRemoveError} onClose={() => { setThreadRemoveError(""); setThreadToRemove(null); }} onRemove={() => threadToRemove && void removeThread(threadToRemove)} />
     </main>
   );
 }

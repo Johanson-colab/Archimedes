@@ -154,12 +154,13 @@ export function ProjectRemoveModal({ project, onClose, onRemove }: { project: Re
   </section></div>;
 }
 
-export function ThreadRemoveModal({ thread, onClose, onRemove }: { thread: ResearchThread | null; onClose: () => void; onRemove: () => void }) {
+export function ThreadRemoveModal({ thread, error, onClose, onRemove }: { thread: ResearchThread | null; error: string; onClose: () => void; onRemove: () => void }) {
   const dialogRef = useDialogFocus<HTMLElement>(Boolean(thread), onClose);
   if (!thread) return null;
   return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-remove-modal" role="dialog" aria-modal="true" aria-label={`Delete ${thread.title}`} onMouseDown={(event) => event.stopPropagation()}>
     <header className="modal-header"><div><span className="eyebrow">Permanent action</span><h2>Delete chat?</h2></div></header>
     <p><strong>{thread.title}</strong>, its research turns, recorded Agent actions, and chat history will be permanently deleted.</p>
+    {error && <p className="project-rename-error" role="alert">{error}</p>}
     <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="danger-button" onClick={onRemove}><Trash2 size={14} />Delete chat</button></div>
   </section></div>;
 }
