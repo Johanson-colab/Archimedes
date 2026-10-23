@@ -33,7 +33,6 @@ import {
   Boxes,
   Brain,
   CalendarDays,
-  ChartNoAxesCombined,
   Database,
   Check,
   ChevronDown,
@@ -339,7 +338,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
 type CodeChatAttachment = { path: string; startLine: number; endLine: number; snippet: string };
-type PaperVisualKind = "figure" | "table";
+type PaperVisualKind = "figure" | "table" | "equation";
 type PaperFigureCapture = { pageNumber: number; nearbyText: string; kind: PaperVisualKind; image: ContextAttachment };
 type PaperAiMode = "brief" | "audit";
 type PaperChatComposerCommand = { id: number; draft?: string };
@@ -467,7 +466,6 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [passages, setPassages] = useState<PaperPassage[]>([]);
   const [selection, setSelection] = useState("");
   const [selectionAnchor, setSelectionAnchor] = useState<SelectionAnchor | null>(null);
-  const [figureSelectionMode, setFigureSelectionMode] = useState(false);
   const [figureCapture, setFigureCapture] = useState<PaperFigureCapture | null>(null);
   const [translationPopover, setTranslationPopover] = useState<TranslationPopover | null>(null);
   const [translating, setTranslating] = useState(false);
@@ -551,21 +549,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
 
   function clearSelection() { setSelection(""); setSelectionAnchor(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
   function closeSelection() { clearSelection(); setTranslationPopover(null); }
-  function toggleFigureSelectionMode() {
-    setFigureSelectionMode((current) => {
-      const next = !current;
-      if (next) {
-        closeSelection();
-        setFigureCapture(null);
-      }
-      return next;
-    });
-  }
   function receiveFigureCapture(capture: PaperFigureCapture) {
     setFigureCapture(capture);
-    setFigureSelectionMode(false);
     setChatOpen(true);
-    setComposerCommand((current) => ({ id: current.id + 1, draft: `请解释论文第 ${capture.pageNumber} 页所选${capture.kind === "table" ? "表格" : "图片"}` }));
+    const objectName = capture.kind === "table" ? "表格" : capture.kind === "equation" ? "公式" : "图片";
+    setComposerCommand((current) => ({ id: current.id + 1, draft: `请解释论文第 ${capture.pageNumber} 页所选${objectName}` }));
   }
   function receiveSelection(text: string, anchor: SelectionAnchor) {
     const next = text.replace(/\s+/g, " ").trim();
@@ -856,7 +844,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
               </div>
             </div>
             <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" /><button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
-            <div className="paper-reader-evidence-actions"><button className={figureSelectionMode ? "paper-figure-ask-toggle active" : "paper-figure-ask-toggle"} onClick={toggleFigureSelectionMode} aria-pressed={figureSelectionMode}><ChartNoAxesCombined size={14} />{figureSelectionMode ? "点击图表" : figureCapture ? "重新选择图表" : "图表提问"}</button><button className={highlightListOpen ? "paper-reader-evidence active" : "paper-reader-evidence"} onClick={() => setHighlightListOpen((value) => !value)} aria-expanded={highlightListOpen} title="查看高亮与笔记"><Highlighter size={14} />{reader?.highlights.length ?? 0}</button></div>
+            <div className="paper-reader-evidence-actions"><button className={highlightListOpen ? "paper-reader-evidence active" : "paper-reader-evidence"} onClick={() => setHighlightListOpen((value) => !value)} aria-expanded={highlightListOpen} title="查看高亮与笔记"><Highlighter size={14} />{reader?.highlights.length ?? 0}</button></div>
           </div>
           {highlightListOpen && <aside className="paper-highlight-list" aria-label="高亮与笔记">
             <header><div><StickyNote size={15} /><strong>高亮与笔记</strong></div><button onClick={() => setHighlightListOpen(false)} title="关闭"><X size={14} /></button></header>
@@ -866,7 +854,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             </article>) : <p className="paper-highlight-empty">还没有高亮或笔记。</p>}</div>
           </aside>}
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} activeSelection={selection} figureSelectionMode={figureSelectionMode} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -882,7 +870,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={(prompt) => void askAI(prompt)} />
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>第 {figureCapture.pageNumber} 页{figureCapture.kind === "table" ? "表格" : "图片"}</span><p>该区域将作为高清图片发送给 AI。</p></div><button onClick={() => setFigureCapture(null)} title="Remove figure attachment"><X size={13} /></button></div>}
+        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>第 {figureCapture.pageNumber} 页{figureCapture.kind === "table" ? "表格" : figureCapture.kind === "equation" ? "公式" : "图片"}</span><p>该区域将作为高清图片发送给 AI。</p></div><button onClick={() => setFigureCapture(null)} title="Remove figure attachment"><X size={13} /></button></div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
       </aside></>}
     </div>
@@ -1066,6 +1054,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
 
 type PdfVisualRect = { left: number; top: number; width: number; height: number };
 type PdfTextLine = PdfVisualRect & { text: string };
+type PdfInteractiveRegion = { rect: PdfVisualRect; nearbyText: string; kind: PaperVisualKind; source: "caption" | "equation" | "image" };
 
 function clampPdfCoordinate(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -1089,7 +1078,10 @@ function pdfTextLines(page: HTMLElement, textLayer: HTMLElement): PdfTextLine[] 
     let line: (PdfTextLine & { bottom: number }) | undefined;
     for (let index = lines.length - 1; index >= 0; index -= 1) {
       const candidate = lines[index];
-      if (Math.abs(candidate.top + candidate.height / 2 - center) <= Math.max(4, span.height * .45)) {
+      const gap = Math.max(0, span.left - (candidate.left + candidate.width), candidate.left - (span.left + span.width));
+      // Matching only by Y merges the left and right columns into one line. Keep
+      // nearby formula fragments together, but never bridge a column gutter.
+      if (Math.abs(candidate.top + candidate.height / 2 - center) <= Math.max(4, span.height * .45) && gap <= Math.max(28, span.height * 4.5)) {
         line = candidate;
         break;
       }
@@ -1222,6 +1214,214 @@ function inferPdfVisualRect(page: HTMLElement, textLayer: HTMLElement, clientX: 
   return { rect: normalized, nearbyText, kind };
 }
 
+function pdfRectArea(rect: PdfVisualRect) {
+  return Math.max(0, rect.width) * Math.max(0, rect.height);
+}
+
+function pdfRectIntersection(first: PdfVisualRect, second: PdfVisualRect) {
+  const left = Math.max(first.left, second.left);
+  const top = Math.max(first.top, second.top);
+  const right = Math.min(first.left + first.width, second.left + second.width);
+  const bottom = Math.min(first.top + first.height, second.top + second.height);
+  return Math.max(0, right - left) * Math.max(0, bottom - top);
+}
+
+function unionPdfRects(first: PdfVisualRect, second: PdfVisualRect): PdfVisualRect {
+  const left = Math.min(first.left, second.left);
+  const top = Math.min(first.top, second.top);
+  const right = Math.max(first.left + first.width, second.left + second.width);
+  const bottom = Math.max(first.top + first.height, second.top + second.height);
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+function padPdfRect(rect: PdfVisualRect, padding: number, pageWidth: number, pageHeight: number): PdfVisualRect {
+  const left = clampPdfCoordinate(rect.left - padding, 0, pageWidth - 1);
+  const top = clampPdfCoordinate(rect.top - padding, 0, pageHeight - 1);
+  const right = clampPdfCoordinate(rect.left + rect.width + padding, left + 1, pageWidth);
+  const bottom = clampPdfCoordinate(rect.top + rect.height + padding, top + 1, pageHeight);
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+function pdfNearbyText(lines: PdfTextLine[], rect: PdfVisualRect) {
+  const nearby = { left: rect.left - 32, top: rect.top - 32, width: rect.width + 64, height: rect.height + 64 };
+  return lines
+    .filter((line) => pdfRectIntersection(line, nearby) > 0)
+    .map((line) => line.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 4_000);
+}
+
+function looksLikePdfEquation(text: string, line: PdfTextLine, pageWidth: number) {
+  if (!text || /^(?:figure|fig\.?|table)\s*\d+/i.test(text)) return false;
+  const symbols = (text.match(/[=+−±×÷≈≠≤≥∑∏∫√∂∇∈∉∞α-ωΑ-Ω‖⟨⟩→⇒∂∀∃]/g) || []).length;
+  const scripts = (text.match(/[{}_^]|\b(?:exp|log|softmax|argmax|argmin|sin|cos|lim)\b/gi) || []).length;
+  const proseWords = (text.match(/[A-Za-z]{4,}/g) || []).length;
+  const hasRelation = /[=≈≠≤≥∼]/.test(text);
+  const centered = Math.abs(line.left + line.width / 2 - pageWidth / 2) <= pageWidth * .28;
+  const compact = line.width <= pageWidth * .78;
+  return compact && centered && ((hasRelation && symbols + scripts >= 2 && proseWords <= 9) || (symbols + scripts >= 5 && proseWords <= 6));
+}
+
+function detectPdfEquationRegions(page: HTMLElement, textLayer: HTMLElement): PdfInteractiveRegion[] {
+  const bounds = page.getBoundingClientRect();
+  const lines = pdfTextLines(page, textLayer);
+  const equations = lines.filter((line) => looksLikePdfEquation(line.text, line, bounds.width));
+  const groups: PdfTextLine[][] = [];
+  for (const line of equations) {
+    const previous = groups.at(-1)?.at(-1);
+    const verticalGap = previous ? line.top - (previous.top + previous.height) : Number.POSITIVE_INFINITY;
+    const horizontalOverlap = previous ? pdfRectIntersection(
+      { left: previous.left, top: line.top, width: previous.width, height: Math.max(1, line.height) },
+      { left: line.left, top: line.top, width: line.width, height: Math.max(1, line.height) },
+    ) : 0;
+    if (previous && verticalGap <= Math.max(12, previous.height * 1.25) && (horizontalOverlap > 0 || Math.abs(previous.left + previous.width / 2 - (line.left + line.width / 2)) < bounds.width * .18)) groups.at(-1)!.push(line);
+    else groups.push([line]);
+  }
+  return groups.map((group) => {
+    const rect = group.slice(1).reduce<PdfVisualRect>((current, line) => unionPdfRects(current, line), group[0]);
+    const padded = padPdfRect(rect, 8, bounds.width, bounds.height);
+    return { rect: padded, nearbyText: pdfNearbyText(lines, padded), kind: "equation" as const, source: "equation" as const };
+  });
+}
+
+function detectPdfImageRegions(operatorList: { fnArray: number[]; argsArray: unknown[][] }, pdfjs: typeof import("pdfjs-dist"), viewport: { transform: number[]; width: number; height: number }): PdfVisualRect[] {
+  const stack: number[][] = [];
+  let current = [1, 0, 0, 1, 0, 0];
+  const regions: PdfVisualRect[] = [];
+  for (let index = 0; index < operatorList.fnArray.length; index += 1) {
+    const fn = operatorList.fnArray[index];
+    const args = operatorList.argsArray[index] as number[] | undefined;
+    if (fn === pdfjs.OPS.save) { stack.push([...current]); continue; }
+    if (fn === pdfjs.OPS.restore) { current = stack.pop() || [1, 0, 0, 1, 0, 0]; continue; }
+    if (fn === pdfjs.OPS.transform && args && args.length >= 6) { current = pdfjs.Util.transform(current, args.slice(0, 6)); continue; }
+    if (fn !== pdfjs.OPS.paintImageXObject && fn !== pdfjs.OPS.paintInlineImageXObject) continue;
+    const transform = pdfjs.Util.transform(viewport.transform, current);
+    const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map((source) => {
+      const point = [...source];
+      pdfjs.Util.applyTransform(point, transform);
+      return point;
+    });
+    const left = Math.min(...corners.map((point) => point[0]));
+    const right = Math.max(...corners.map((point) => point[0]));
+    const top = Math.min(...corners.map((point) => point[1]));
+    const bottom = Math.max(...corners.map((point) => point[1]));
+    const rect = padPdfRect({ left, top, width: right - left, height: bottom - top }, 4, viewport.width, viewport.height);
+    const areaRatio = pdfRectArea(rect) / (viewport.width * viewport.height);
+    if (rect.width >= 44 && rect.height >= 32 && areaRatio >= .004 && areaRatio <= .82) regions.push(rect);
+  }
+  return regions.filter((rect, index) => !regions.some((other, otherIndex) => otherIndex !== index && pdfRectArea(other) > pdfRectArea(rect) && pdfRectIntersection(rect, other) / pdfRectArea(rect) > .9));
+}
+
+function pdfCanvasInkScore(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVisualRect, text: PdfTextLine[]) {
+  const bounds = page.getBoundingClientRect();
+  const scaleX = canvas.width / bounds.width;
+  const scaleY = canvas.height / bounds.height;
+  const left = Math.max(0, Math.floor(rect.left * scaleX));
+  const top = Math.max(0, Math.floor(rect.top * scaleY));
+  const width = Math.min(canvas.width - left, Math.max(1, Math.ceil(rect.width * scaleX)));
+  const height = Math.min(canvas.height - top, Math.max(1, Math.ceil(rect.height * scaleY)));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context || width * height > 18_000_000) return 0;
+  const pixels = context.getImageData(left, top, width, height).data;
+  const overlappingText = text.filter((line) => pdfRectIntersection(line, rect) > 0);
+  const step = Math.max(2, Math.ceil(Math.max(width, height) / 520));
+  let ink = 0;
+  let sampled = 0;
+  for (let py = 0; py < height; py += step) for (let px = 0; px < width; px += step) {
+    const pageX = rect.left + px / scaleX;
+    const pageY = rect.top + py / scaleY;
+    if (overlappingText.some((line) => pageX >= line.left - 1 && pageX <= line.left + line.width + 1 && pageY >= line.top - 1 && pageY <= line.top + line.height + 1)) continue;
+    const offset = (py * width + px) * 4;
+    const darkness = 255 - (pixels[offset] + pixels[offset + 1] + pixels[offset + 2]) / 3;
+    if (pixels[offset + 3] > 30 && darkness > 38) ink += 1;
+    sampled += 1;
+  }
+  return sampled ? ink / sampled : 0;
+}
+
+function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canvas: HTMLCanvasElement, imageRects: PdfVisualRect[]): PdfInteractiveRegion[] {
+  const bounds = page.getBoundingClientRect();
+  const fragments = pdfTextFragments(page, textLayer);
+  const lines = pdfTextLines(page, textLayer);
+  const captions = pdfCaptionFragments(fragments).filter((line) => /^(?:(?:figure|fig\.?)\s*\d+[a-z]?\b|table\s*\d+[a-z]?\b|图\s*[一-龥\d]+|表\s*[一-龥\d]+)/i.test(line.text));
+  return captions.map((caption) => {
+    const kind: PaperVisualKind = /^(?:table|表)/i.test(caption.text) ? "table" : "figure";
+    const nearbyImage = imageRects
+      .map((rect) => ({ rect, distance: distanceToPdfRect(caption.left + caption.width / 2, caption.top + caption.height / 2, rect) }))
+      .filter(({ rect, distance }) => distance <= bounds.height * .22 && Math.max(0, Math.min(rect.left + rect.width, caption.left + caption.width) - Math.max(rect.left, caption.left)) > 0)
+      .sort((first, second) => first.distance - second.distance)[0]?.rect;
+    if (nearbyImage) {
+      const rect = padPdfRect(unionPdfRects(nearbyImage, caption), 7, bounds.width, bounds.height);
+      return { rect, nearbyText: pdfNearbyText(lines, rect), kind, source: "image" as const };
+    }
+    const x = bounds.left + caption.left + caption.width / 2;
+    const above = inferPdfVisualRect(page, textLayer, x, bounds.top + Math.max(4, caption.top - bounds.height * .18));
+    const below = inferPdfVisualRect(page, textLayer, x, bounds.top + Math.min(bounds.height - 4, caption.top + caption.height + bounds.height * .18));
+    const aboveScore = pdfCanvasInkScore(canvas, page, above.rect, lines);
+    const belowScore = pdfCanvasInkScore(canvas, page, below.rect, lines);
+    // Pixel evidence decides placement first. Conventional caption placement is
+    // only a tie-breaker because figures and tables can appear on either side.
+    const picked = Math.max(aboveScore, belowScore) > 0 && Math.abs(aboveScore - belowScore) > .0015
+      ? (aboveScore > belowScore ? above : below)
+      : (kind === "table" ? below : above);
+    const rect = padPdfRect(unionPdfRects(picked.rect, caption), 4, bounds.width, bounds.height);
+    return { rect, nearbyText: pdfNearbyText(lines, rect), kind, source: "caption" as const };
+  });
+}
+
+function mergePdfInteractiveRegions(regions: PdfInteractiveRegion[]) {
+  const accepted: PdfInteractiveRegion[] = [];
+  for (const region of regions.sort((first, second) => pdfRectArea(first.rect) - pdfRectArea(second.rect))) {
+    if (accepted.some((other) => other.kind === region.kind && pdfRectIntersection(other.rect, region.rect) / Math.min(pdfRectArea(other.rect), pdfRectArea(region.rect)) > .72)) continue;
+    accepted.push(region);
+  }
+  return accepted;
+}
+
+function installPdfInteractiveRegions(page: HTMLElement, canvas: HTMLCanvasElement, regions: PdfInteractiveRegion[], pageNumber: number, onCapture: (capture: PaperFigureCapture) => void) {
+  const overlays = regions.map((region) => {
+    const overlay = window.document.createElement("div");
+    overlay.className = `arch-pdf-object-region ${region.kind}`;
+    overlay.style.left = `${region.rect.left}px`;
+    overlay.style.top = `${region.rect.top}px`;
+    overlay.style.width = `${region.rect.width}px`;
+    overlay.style.height = `${region.rect.height}px`;
+    const action = window.document.createElement("button");
+    action.type = "button";
+    action.className = "arch-pdf-object-action";
+    action.textContent = region.kind === "equation" ? "解释这个公式" : region.kind === "table" ? "解释这个表格" : "解释这张图片";
+    action.addEventListener("mousedown", (event) => { event.preventDefault(); event.stopPropagation(); });
+    action.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      overlays.forEach((item) => item.classList.remove("selected"));
+      overlay.classList.add("active", "selected");
+      onCapture({ pageNumber, nearbyText: region.nearbyText, kind: region.kind, image: cropPdfVisual(canvas, page, region.rect, pageNumber, region.kind) });
+      window.getSelection()?.removeAllRanges();
+    });
+    overlay.append(action);
+    page.append(overlay);
+    return overlay;
+  });
+  const activate = (event: MouseEvent) => {
+    if ((event.target as Element | null)?.closest(".arch-pdf-object-action")) return;
+    const bounds = page.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    let match = -1;
+    let area = Number.POSITIVE_INFINITY;
+    regions.forEach((region, index) => {
+      const rect = region.rect;
+      if (x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height && pdfRectArea(rect) < area) { match = index; area = pdfRectArea(rect); }
+    });
+    overlays.forEach((overlay, index) => overlay.classList.toggle("active", index === match || overlay.classList.contains("selected")));
+  };
+  page.addEventListener("mousemove", activate);
+  page.addEventListener("mouseleave", () => overlays.forEach((overlay) => overlay.classList.toggle("active", overlay.classList.contains("selected"))));
+}
+
 function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVisualRect, pageNumber: number, kind: PaperVisualKind): ContextAttachment {
   const pageBounds = page.getBoundingClientRect();
   const scaleX = canvas.width / pageBounds.width;
@@ -1258,23 +1458,10 @@ function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVi
   };
 }
 
-function showPdfVisualSelection(page: HTMLElement, rect: PdfVisualRect, kind: PaperVisualKind) {
-  page.querySelector(".arch-pdf-visual-selection")?.remove();
-  const overlay = window.document.createElement("div");
-  overlay.className = "arch-pdf-visual-selection";
-  overlay.style.left = `${rect.left}px`;
-  overlay.style.top = `${rect.top}px`;
-  overlay.style.width = `${rect.width}px`;
-  overlay.style.height = `${rect.height}px`;
-  const label = window.document.createElement("span");
-  label.textContent = kind === "table" ? "已选择表格" : "已选择图片";
-  overlay.append(label);
-  page.append(overlay);
-}
-
-function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, figureSelectionMode, figureCaptureActive, onZoomChange, onSelection, onFigureCapture, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; activeSelection: string; figureSelectionMode: boolean; figureCaptureActive: boolean; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onFigureCapture: (capture: PaperFigureCapture) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
+function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, figureCaptureActive, onZoomChange, onSelection, onFigureCapture, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; activeSelection: string; figureCaptureActive: boolean; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onFigureCapture: (capture: PaperFigureCapture) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
+  const onFigureCaptureRef = useRef(onFigureCapture);
   const [width, setWidth] = useState(880);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
@@ -1290,13 +1477,14 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
     const textLayer = hostRef.current?.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
     if (textLayer) applyPdfHighlights(textLayer, highlights.filter((highlight) => highlight.page_number === pageNumber));
   }, [highlights, pageNumber]);
+  useEffect(() => { onFigureCaptureRef.current = onFigureCapture; }, [onFigureCapture]);
   useEffect(() => {
     if (activeSelection) return;
     clearActivePdfSelection(hostRef.current);
   }, [activeSelection]);
   useEffect(() => {
     if (figureCaptureActive) return;
-    hostRef.current?.querySelector(".arch-pdf-visual-selection")?.remove();
+    hostRef.current?.querySelectorAll(".arch-pdf-object-region.selected").forEach((element) => element.classList.remove("selected", "active"));
   }, [figureCaptureActive]);
   useEffect(() => {
     let cancelled = false;
@@ -1343,6 +1531,18 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
         // makes the DOM selection boxes drift from the canvas glyphs.
         const layer = new pdfjs.TextLayer({ textContentSource: textContent, container: textLayer, viewport });
         await layer.render();
+        // Geometry-based object detection must run after the page is in the live
+        // document. Detached PDF.js spans report zero-sized client rectangles.
+        if (cancelled) return;
+        renderHost.replaceChildren(page);
+        const operatorList = await pdfPage.getOperatorList();
+        const imageRects = detectPdfImageRegions(operatorList, pdfjs, viewport);
+        const equationRegions = detectPdfEquationRegions(page, textLayer);
+        const captionRegions = detectPdfCaptionRegions(page, textLayer, canvas, imageRects);
+        const uncaptionedImages: PdfInteractiveRegion[] = imageRects
+          .filter((rect) => !captionRegions.some((region) => region.source === "image" && pdfRectIntersection(region.rect, rect) / pdfRectArea(rect) > .72))
+          .map((rect) => ({ rect, nearbyText: pdfNearbyText(pdfTextLines(page, textLayer), rect), kind: "figure" as const, source: "image" as const }));
+        installPdfInteractiveRegions(page, canvas, mergePdfInteractiveRegions([...equationRegions, ...captionRegions, ...uncaptionedImages]), pageNumber, (capture) => onFigureCaptureRef.current(capture));
         const annotations = await pdfPage.getAnnotations();
         for (const annotation of annotations) {
           const targetUrl = typeof annotation.url === "string" ? annotation.url : "";
@@ -1366,7 +1566,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
           page.append(link);
         }
         applyPdfHighlights(textLayer, highlightsRef.current.filter((highlight) => highlight.page_number === pageNumber));
-        if (!cancelled) { renderHost.replaceChildren(page); setState("ready"); }
+        if (!cancelled) setState("ready");
         pdfPage.cleanup(); pdfDocument.cleanup();
       } catch (renderError) { if (!cancelled) { setState("error"); setError(readableError(renderError, "The PDF page could not be rendered.")); } }
     }
@@ -1375,19 +1575,6 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
   }, [onProjectDetected, onProjectLink, pageNumber, url, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
-    if (figureSelectionMode) {
-      const page = target.querySelector<HTMLElement>(".arch-pdf-page");
-      const canvas = page?.querySelector<HTMLCanvasElement>("canvas");
-      const textLayer = page?.querySelector<HTMLElement>(".arch-pdf-text-layer");
-      if (!page || !canvas || !textLayer) return;
-      const pageBounds = page.getBoundingClientRect();
-      if (event.clientX < pageBounds.left || event.clientX > pageBounds.right || event.clientY < pageBounds.top || event.clientY > pageBounds.bottom) return;
-      const { rect, nearbyText, kind } = inferPdfVisualRect(page, textLayer, event.clientX, event.clientY);
-      showPdfVisualSelection(page, rect, kind);
-      onFigureCapture({ pageNumber, nearbyText, kind, image: cropPdfVisual(canvas, page, rect, pageNumber, kind) });
-      window.getSelection()?.removeAllRanges();
-      return;
-    }
     const selection = window.getSelection();
     if (!selection?.rangeCount || !selection.toString().trim() || !target.contains(selection.anchorNode) || !target.contains(selection.focusNode)) { onClearSelection(); return; }
     const textLayer = target.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
@@ -1418,14 +1605,11 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
     onZoomChange((current) => Math.min(3.2, Math.max(.55, current * (event.deltaY < 0 ? 1.12 : .89))));
   }
   function beginSelection(event: ReactMouseEvent<HTMLDivElement>) {
+    if ((event.target as Element | null)?.closest(".arch-pdf-object-action")) return;
     clearActivePdfSelection(hostRef.current);
     onClearSelection();
-    if (figureSelectionMode) {
-      event.preventDefault();
-      window.getSelection()?.removeAllRanges();
-    }
   }
-  return <div className={figureSelectionMode ? "arch-pdf-stage figure-selecting" : "arch-pdf-stage"} onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
+  return <div className="arch-pdf-stage" onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
 }
 
 function selectionNodeSpan(node: Node | null, layer: HTMLElement) {
@@ -1488,6 +1672,7 @@ function pdfSelectionSegmentBounds(span: HTMLSpanElement, requestedStart: number
 }
 
 function selectPdfTextByLayout(layer: HTMLElement, anchorSpan: HTMLSpanElement, anchorNode: Node, anchorOffset: number, focusSpan: HTMLSpanElement, focusNode: Node, focusOffset: number) {
+  const layerBounds = layer.getBoundingClientRect();
   const measured = Array.from(layer.querySelectorAll<HTMLSpanElement>("span"))
     .filter((span) => span.textContent?.trim())
     .map((span) => ({ span, rect: span.getBoundingClientRect() }))
@@ -1501,9 +1686,26 @@ function selectPdfTextByLayout(layer: HTMLElement, anchorSpan: HTMLSpanElement, 
     : [focus, anchor, focusNode, focusOffset, anchorNode, anchorOffset];
   const top = first.rect.top - Math.max(first.rect.height, 8) * .45;
   const bottom = last.rect.bottom + Math.max(last.rect.height, 8) * .45;
+  const firstCenterY = first.rect.top + first.rect.height / 2;
+  const lastCenterY = last.rect.top + last.rect.height / 2;
+  const sameVisualLine = Math.abs(firstCenterY - lastCenterY) <= Math.max(first.rect.height, last.rect.height) * .82;
+  const selectionLeft = Math.min(first.rect.left, last.rect.left) - 14;
+  const selectionRight = Math.max(first.rect.right, last.rect.right) + 14;
+  const pageCenter = layerBounds.left + layerBounds.width / 2;
+  const firstSide = first.rect.right < pageCenter ? -1 : first.rect.left > pageCenter ? 1 : 0;
+  const lastSide = last.rect.right < pageCenter ? -1 : last.rect.left > pageCenter ? 1 : 0;
+  const sharedColumn = firstSide !== 0 && firstSide === lastSide ? firstSide : 0;
   // PDF extraction order can place a footer, note, or a neighbouring column
-  // between two visual text spans. Re-sort and crop by their page coordinates.
-  const visual = measured.filter(({ rect }) => rect.bottom >= top && rect.top <= bottom)
+  // between two visual text spans. Re-sort and crop by their page coordinates,
+  // then constrain the path to the selected line or column. Without this,
+  // equations and two-column papers absorb unrelated spans at the same Y.
+  const visual = measured.filter(({ rect }) => {
+    if (rect.bottom < top || rect.top > bottom) return false;
+    if (sameVisualLine) return rect.right >= selectionLeft && rect.left <= selectionRight;
+    if (sharedColumn < 0) return rect.left < pageCenter;
+    if (sharedColumn > 0) return rect.right > pageCenter;
+    return rect.right >= selectionLeft && rect.left <= selectionRight;
+  })
     .sort((a, b) => Math.abs(a.rect.top - b.rect.top) > 2 ? a.rect.top - b.rect.top : a.rect.left - b.rect.left);
   const start = visual.findIndex((item) => item.span === first.span);
   const end = visual.findIndex((item) => item.span === last.span);
