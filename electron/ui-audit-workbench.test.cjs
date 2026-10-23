@@ -39,7 +39,9 @@ test("workbench supports keyboard toggle and resizing", () => {
   assert.match(app, /event\.key === "`"/);
   assert.match(workbench, /role="separator"/);
   assert.match(workbench, /event\.key === "ArrowLeft"/);
-  assert.match(workbench, /WORKBENCH_MAX_WIDTH = 560/);
+  assert.match(workbench, /WORKBENCH_MAX_WIDTH = 1200/);
+  assert.match(workbench, /WORKBENCH_DEFAULT_RATIO = 0\.5/);
+  assert.match(workbench, /viewport \* WORKBENCH_DEFAULT_RATIO/);
   assert.match(css, /body\.workbench-resizing/);
 });
 
@@ -49,10 +51,19 @@ test("files use a compact workbench pane with drill-down and split modes", () =>
   assert.match(workbench, /activeTab === "files"/);
   assert.match(app, /openWorkbench\("files"\)/);
   assert.match(app, /<ArtifactsView[\s\S]*?compact[\s\S]*?compactWidth=\{workbenchWidth\}/);
-  assert.match(app, /const split = compactWidth >= 520/);
+  assert.match(app, /const split = compactWidth >= 560/);
   assert.match(app, /artifact-workbench-back/);
   assert.match(app, /Open full editor/);
-  assert.match(css, /\.artifact-workbench-body\.split \{[^}]*grid-template-columns: 168px minmax\(0, 1fr\)/);
+  assert.match(app, /FILES_EDITOR_MIN_WIDTH = 260/);
+  assert.match(app, /artifact-workbench-pane-toggles/);
+  assert.match(app, /artifact-workbench-divider/);
+  assert.match(app, /filesListCollapsed/);
+  assert.match(app, /filesEditorCollapsed/);
+  assert.match(app, /setCompactPane\("editor"\);\s*setFilesEditorCollapsed\(false\)/);
+  assert.match(app, /archimedes-files-pane-width/);
+  assert.match(css, /\.artifact-workbench-body\.split \{[^}]*grid-template-columns: var\(--files-pane-width, 236px\) 7px minmax\(0, 1fr\)/);
+  assert.match(css, /\.artifact-workbench-body\.editor-only, \.artifact-workbench-body\.browser-only/);
+  assert.match(css, /body\.files-pane-resizing/);
 });
 
 test("files use a tab-first header and keep one visible filename", () => {

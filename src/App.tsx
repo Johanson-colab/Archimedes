@@ -32,7 +32,7 @@ import ModelSettingsModal from "./ModelSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
-import RightWorkbench, { type WorkbenchTab } from "./RightWorkbench";
+import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth, type WorkbenchTab } from "./RightWorkbench";
 import JourneyView from "./JourneyView";
 import TrajectoryView from "./TrajectoryView";
 import TerminalSettingsModal from "./TerminalSettingsModal";
@@ -75,6 +75,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PanelRight,
+  PanelRightClose,
+  PanelRightOpen,
   FilePenLine,
   Play,
   Plus,
@@ -728,7 +730,7 @@ function App() {
   const [terminalSettingsMode, setTerminalSettingsMode] = useState<"settings" | "onboarding">("settings");
   const [workbenchWidth, setWorkbenchWidth] = useState(() => {
     const saved = Number(localStorage.getItem("archimedes-workbench-width"));
-    return Number.isFinite(saved) && saved >= 320 && saved <= 560 ? saved : 380;
+    return Number.isFinite(saved) && saved > 0 ? clampWorkbenchWidth(saved) : defaultWorkbenchWidth();
   });
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
@@ -830,6 +832,12 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem("archimedes-workbench-width", String(workbenchWidth));
   }, [workbenchWidth]);
+
+  useEffect(() => {
+    const handleResize = () => setWorkbenchWidth((width) => clampWorkbenchWidth(width));
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1744,7 +1752,7 @@ function App() {
           terminalSettings={terminalSettings}
           dirtyFileCount={dirtyArtifactPaths.size}
           onTabChange={setWorkbenchTab}
-          onWidthChange={setWorkbenchWidth}
+          onWidthChange={(width) => setWorkbenchWidth(clampWorkbenchWidth(width))}
           onOpenTerminalSettings={() => { setTerminalSettingsMode("settings"); setTerminalSettingsOpen(true); }}
           journey={<JourneyView
             thread={activeThread ?? null}
@@ -2537,6 +2545,20 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
   return next;
 }
 
+const FILES_PANE_DEFAULT_WIDTH = 236;
+const FILES_PANE_MIN_WIDTH = 160;
+const FILES_EDITOR_MIN_WIDTH = 260;
+
+function clampFilesPaneWidth(width: number, compactWidth: number) {
+  const maximum = Math.max(FILES_PANE_MIN_WIDTH, compactWidth - FILES_EDITOR_MIN_WIDTH - 7);
+  return Math.min(maximum, Math.max(FILES_PANE_MIN_WIDTH, Math.round(width)));
+}
+
+function readFilesPaneWidth() {
+  const saved = Number(window.localStorage.getItem("archimedes-files-pane-width"));
+  return Number.isFinite(saved) && saved >= FILES_PANE_MIN_WIDTH ? saved : FILES_PANE_DEFAULT_WIDTH;
+}
+
 function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewArtifact, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, compact = false, compactWidth = 0, onOpenFull }: {
   workspace: string;
   tree: WorkspaceFileTree;
@@ -2568,6 +2590,9 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [compactPane, setCompactPane] = useState<"browse" | "editor">(selectedPath ? "editor" : "browse");
+  const [filesPaneWidth, setFilesPaneWidth] = useState(readFilesPaneWidth);
+  const [filesListCollapsed, setFilesListCollapsed] = useState(false);
+  const [filesEditorCollapsed, setFilesEditorCollapsed] = useState(false);
   const workspaceName = workspace.split("/").filter(Boolean).at(-1) || "Workspace";
   useEffect(() => {
     if (!selectedPath) {
@@ -2575,6 +2600,7 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
       return;
     }
     setCompactPane("editor");
+    setFilesEditorCollapsed(false);
     const parts = selectedPath.split("/");
     setExpanded((current) => {
       const next = new Set(current);
@@ -2587,6 +2613,64 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
     if (next.has(filePath)) next.delete(filePath); else next.add(filePath);
     return next;
   });
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-files-pane-width", String(filesPaneWidth));
+  }, [filesPaneWidth]);
+
+  useEffect(() => {
+    if (!compact) return;
+    setFilesPaneWidth((width) => clampFilesPaneWidth(width, compactWidth));
+  }, [compact, compactWidth]);
+
+  function toggleFilesList() {
+    setFilesListCollapsed((collapsed) => {
+      const next = !collapsed;
+      if (next && filesEditorCollapsed) setFilesEditorCollapsed(false);
+      return next;
+    });
+  }
+
+  function toggleFilesEditor() {
+    setFilesEditorCollapsed((collapsed) => {
+      const next = !collapsed;
+      if (next && filesListCollapsed) setFilesListCollapsed(false);
+      return next;
+    });
+  }
+
+  function startFilesPaneResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = filesPaneWidth;
+    const onPointerMove = (pointerEvent: PointerEvent) => {
+      setFilesPaneWidth(clampFilesPaneWidth(startWidth + pointerEvent.clientX - startX, compactWidth));
+    };
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      document.body.classList.remove("files-pane-resizing");
+    };
+    document.body.classList.add("files-pane-resizing");
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+  }
+
+  function handleFilesPaneResizeKey(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      setFilesPaneWidth((width) => clampFilesPaneWidth(width - 16, compactWidth));
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      setFilesPaneWidth((width) => clampFilesPaneWidth(width + 16, compactWidth));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH);
+    }
+  }
 
   const browser = <aside className="artifact-browser">
     <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong></div>
@@ -2623,8 +2707,13 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   </div>;
 
   if (compact) {
-    const split = compactWidth >= 520;
+    const split = compactWidth >= 560;
     const showingEditor = compactPane === "editor";
+    const bodyClass = split
+      ? filesListCollapsed ? "artifact-workbench-body editor-only"
+        : filesEditorCollapsed ? "artifact-workbench-body browser-only"
+          : "artifact-workbench-body split"
+      : showingEditor ? "artifact-workbench-body editor" : "artifact-workbench-body";
     return <div className="artifact-workbench">
       <header className="artifact-workbench-toolbar">
         <div className="artifact-workbench-location">
@@ -2634,13 +2723,21 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
           {showingEditor && file && openFiles.length <= 1 && <span className="artifact-workbench-file" title={file.path}>{file.name}</span>}
         </div>
         <div className="artifact-workbench-actions">
+          {split && <div className="artifact-workbench-pane-toggles" role="group" aria-label="File panes">
+            <button className={filesListCollapsed ? "" : "active"} onClick={toggleFilesList} title={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-label={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-pressed={!filesListCollapsed}>{filesListCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button>
+            <button className={filesEditorCollapsed ? "" : "active"} onClick={toggleFilesEditor} title={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-label={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-pressed={!filesEditorCollapsed}>{filesEditorCollapsed ? <PanelRightOpen size={13} /> : <PanelRightClose size={13} />}</button>
+          </div>}
           <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>
           <button onClick={onNewArtifact} title="New file" aria-label="New file"><Plus size={14} /></button>
           {onOpenFull && <button onClick={onOpenFull} title="Open full editor" aria-label="Open full editor"><Maximize2 size={13} /></button>}
         </div>
       </header>
-      <div className={split ? "artifact-workbench-body split" : showingEditor ? "artifact-workbench-body editor" : "artifact-workbench-body"}>
-        {split ? <>{browser}{editor}</> : showingEditor ? editor : browser}
+      <div className={bodyClass} style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
+        {split ? <>
+          {!filesListCollapsed && browser}
+          {!filesListCollapsed && !filesEditorCollapsed && <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={Math.max(FILES_PANE_MIN_WIDTH, compactWidth - FILES_EDITOR_MIN_WIDTH - 7)} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>}
+          {!filesEditorCollapsed && editor}
+        </> : showingEditor ? editor : browser}
       </div>
     </div>;
   }

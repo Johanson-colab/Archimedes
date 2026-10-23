@@ -3,8 +3,23 @@ import { FolderTree, ListTree, Milestone, Settings, SquareTerminal } from "lucid
 import TerminalPanel from "./TerminalPanel";
 
 const WORKBENCH_MIN_WIDTH = 320;
-const WORKBENCH_MAX_WIDTH = 560;
-const WORKBENCH_DEFAULT_WIDTH = 380;
+const WORKBENCH_MAX_WIDTH = 1200;
+const WORKBENCH_DEFAULT_RATIO = 0.5;
+const WORKBENCH_MIN_MAIN_WIDTH = 560;
+
+export function maxWorkbenchWidth() {
+  const viewport = typeof window === "undefined" ? 1440 : window.innerWidth;
+  return Math.max(WORKBENCH_MIN_WIDTH, Math.min(WORKBENCH_MAX_WIDTH, viewport - WORKBENCH_MIN_MAIN_WIDTH));
+}
+
+export function clampWorkbenchWidth(width: number) {
+  return Math.min(maxWorkbenchWidth(), Math.max(WORKBENCH_MIN_WIDTH, Math.round(width)));
+}
+
+export function defaultWorkbenchWidth() {
+  const viewport = typeof window === "undefined" ? 1440 : window.innerWidth;
+  return clampWorkbenchWidth(viewport * WORKBENCH_DEFAULT_RATIO);
+}
 
 export type WorkbenchTab = "journey" | "trajectory" | "files" | "terminal";
 
@@ -38,8 +53,7 @@ export default function RightWorkbench({ bridge, open, theme, workspace, width, 
     const startX = event.clientX;
     const startWidth = width;
     const onPointerMove = (pointerEvent: PointerEvent) => {
-      const maximum = Math.max(WORKBENCH_MIN_WIDTH, Math.min(WORKBENCH_MAX_WIDTH, window.innerWidth - 720));
-      onWidthChange(Math.max(WORKBENCH_MIN_WIDTH, Math.min(maximum, startWidth + startX - pointerEvent.clientX)));
+      onWidthChange(clampWorkbenchWidth(startWidth + startX - pointerEvent.clientX));
     };
     const onPointerUp = () => {
       window.removeEventListener("pointermove", onPointerMove);
@@ -54,18 +68,18 @@ export default function RightWorkbench({ bridge, open, theme, workspace, width, 
   function handleResizeKey(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      onWidthChange(Math.min(WORKBENCH_MAX_WIDTH, width + 16));
+      onWidthChange(clampWorkbenchWidth(width + 16));
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
-      onWidthChange(Math.max(WORKBENCH_MIN_WIDTH, width - 16));
+      onWidthChange(clampWorkbenchWidth(width - 16));
     } else if (event.key === "Home") {
       event.preventDefault();
-      onWidthChange(WORKBENCH_DEFAULT_WIDTH);
+      onWidthChange(defaultWorkbenchWidth());
     }
   }
 
   return <aside className={open ? "right-workbench open" : "right-workbench"} aria-label="Workbench" aria-hidden={!open} inert={!open}>
-    <div className="workbench-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize workbench" aria-valuemin={WORKBENCH_MIN_WIDTH} aria-valuemax={WORKBENCH_MAX_WIDTH} aria-valuenow={width} tabIndex={0} onPointerDown={startResize} onDoubleClick={() => onWidthChange(WORKBENCH_DEFAULT_WIDTH)} onKeyDown={handleResizeKey}><span /></div>
+    <div className="workbench-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize workbench" aria-valuemin={WORKBENCH_MIN_WIDTH} aria-valuemax={maxWorkbenchWidth()} aria-valuenow={width} tabIndex={0} onPointerDown={startResize} onDoubleClick={() => onWidthChange(defaultWorkbenchWidth())} onKeyDown={handleResizeKey}><span /></div>
     <header className="workbench-header">
       <div className="workbench-tabs" role="tablist" aria-label="Workbench panels">
         <button className={activeTab === "journey" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "journey"} onClick={() => onTabChange("journey")} title="Agent journey"><Milestone size={13} /><span>Journey</span></button>
