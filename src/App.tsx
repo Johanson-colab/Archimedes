@@ -36,6 +36,7 @@ import TerminalPanel from "./TerminalPanel";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createArtifactDraft, formatArtifactComment, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactComment, type ArtifactDraft, type ArtifactSelection } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
+import CopyButton from "./CopyButton";
 import { useDialogFocus } from "./useDialogFocus";
 import ArchimedesMark from "./brand/ArchimedesMark";
 import ArchimedesWordmark from "./brand/ArchimedesWordmark";
@@ -2031,14 +2032,17 @@ const MarkdownContent = memo(function MarkdownContent({ content }: { content: st
       code: ({ className, children, ...props }) => {
         const language = /language-([\w-]+)/.exec(className || "")?.[1];
         if (!language) return <code className={className} {...props}>{children}</code>;
-        return <SyntaxHighlighter
-          className="message-code-block"
-          language={language}
-          useInlineStyles={false}
-          PreTag="div"
-          customStyle={{ margin: 0, padding: "13px 15px", fontSize: "11px", lineHeight: 1.65 }}
-          codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
-        >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>;
+        return <div className="code-block-shell">
+          <CopyButton text={String(children).replace(/\n$/, "")} />
+          <SyntaxHighlighter
+            className="message-code-block"
+            language={language}
+            useInlineStyles={false}
+            PreTag="div"
+            customStyle={{ margin: 0, padding: "13px 15px", fontSize: "11px", lineHeight: 1.65 }}
+            codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
+          >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>
+        </div>;
       },
     }}
   >{normalizeMathDelimiters(content)}</ReactMarkdown>;
@@ -2293,6 +2297,7 @@ function languageForFile(filePath: string) {
 
 function CodePreview({ content, filePath }: { content: string; filePath: string }) {
   return <div className="code-preview">
+    <CopyButton text={content || ""} />
     <SyntaxHighlighter
       language={languageForFile(filePath)}
       useInlineStyles={false}
