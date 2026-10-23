@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type WheelEvent as ReactWheelEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -74,6 +74,19 @@ import {
 } from "lucide-react";
 
 const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
+const PAPER_CHAT_DEFAULT_WIDTH = 354;
+const PAPER_CHAT_MIN_WIDTH = 280;
+const PAPER_CHAT_MAX_WIDTH = 640;
+
+function clampPaperChatWidth(value: number) {
+  return Math.min(PAPER_CHAT_MAX_WIDTH, Math.max(PAPER_CHAT_MIN_WIDTH, Math.round(value)));
+}
+
+function readPaperChatWidth() {
+  if (typeof window === "undefined") return PAPER_CHAT_DEFAULT_WIDTH;
+  const stored = Number(window.localStorage.getItem("archimedes-paper-chat-width"));
+  return Number.isFinite(stored) && stored > 0 ? clampPaperChatWidth(stored) : PAPER_CHAT_DEFAULT_WIDTH;
+}
 for (const [name, grammar] of Object.entries({ bash, c, cpp, css, go, java, javascript, json, jsx, latex, markdown, markup, python, rust, sql, tsx, typescript, yaml })) {
   SyntaxHighlighter.registerLanguage(name, grammar);
 }
@@ -448,6 +461,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [commentOpen, setCommentOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatWidth, setChatWidth] = useState(readPaperChatWidth);
+  const chatResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
   const [readerView, setReaderView] = useState<"paper" | "project" | "codebase">("paper");
   const [codebaseVisited, setCodebaseVisited] = useState(false);
@@ -469,6 +484,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const currentPage = reader?.pages.find((page) => page.page_number === pageNumber) ?? reader?.pages[0] ?? null;
   const lastPage = reader?.asset?.page_count ?? reader?.pages.at(-1)?.page_number ?? 1;
   const projectUrl = paper.github_url || detectedProjectUrl;
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-paper-chat-width", String(chatWidth));
+  }, [chatWidth]);
+  useEffect(() => () => document.body.classList.remove("paper-chat-resizing"), []);
 
   const loadReader = useCallback(async () => {
     try {
@@ -716,6 +736,40 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setChatMessages([]);
     setBriefingVersion((current) => current + 1);
   }
+  function beginChatResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    chatResizeRef.current = { startX: event.clientX, startWidth: chatWidth };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.classList.add("paper-chat-resizing");
+  }
+  function moveChatResize(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = chatResizeRef.current;
+    if (!drag) return;
+    // The handle sits to the left of the panel, so moving it left grows the chat.
+    setChatWidth(clampPaperChatWidth(drag.startWidth + drag.startX - event.clientX));
+  }
+  function endChatResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!chatResizeRef.current) return;
+    chatResizeRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    document.body.classList.remove("paper-chat-resizing");
+  }
+  function handleChatResizeKey(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = event.key === "ArrowLeft" ? 16 : event.key === "ArrowRight" ? -16 : 0;
+    if (step) {
+      event.preventDefault();
+      setChatWidth((width) => clampPaperChatWidth(width + step));
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      setChatWidth(PAPER_CHAT_MIN_WIDTH);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setChatWidth(PAPER_CHAT_MAX_WIDTH);
+    }
+  }
 
   return <section className={chatOpen ? "paper-workbench-page paper-chat-open" : "paper-workbench-page"}>
     <header className="paper-workbench-header paper-reader-header">
@@ -729,7 +783,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </div>
     </header>
     <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title="Open this paper's linked project" onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title="Open the local code audit workspace" onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
-    <div className="paper-reader-layout">
+    <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
       {readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
         {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
         {ready ? <>
@@ -757,12 +811,13 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       {codebaseVisited && projectUrl && isGithubRepositoryLink(projectUrl) && <main key={projectUrl} className={readerView === "codebase" ? "codebase-reader" : "codebase-reader codebase-reader-inactive"} aria-hidden={readerView !== "codebase"}>
         <RepositoryCodebaseView bridge={bridge} url={projectUrl} workspace={workspace} checkout={checkout} loading={checkoutLoading} error={checkoutError} onClone={cloneForAudit} onAddToChat={addCodeSelectionToChat} />
       </main>}
-      {chatOpen && <aside className="paper-ai-panel">
+      {chatOpen && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
+      <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div>{checkout ? <small className="paper-ai-evidence-scope"><ShieldCheck size={11} />Paper + full codebase · {checkout.commit.slice(0, 8)}</small> : repository && <small className="paper-ai-evidence-scope"><Code2 size={11} />Paper + curated repository snapshot</small>}</div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} onAsk={(prompt) => void askAI(prompt)} />
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
-      </aside>}
+      </aside></>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
       <button onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />高亮</button><button onClick={translateSelection}><Languages size={15} />翻译</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />评论</button><button onClick={openAskForSelection}><Bot size={15} />向 AI 提问</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />删除高亮</button>}
