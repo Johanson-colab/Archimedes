@@ -1264,8 +1264,29 @@ function looksLikePdfEquation(text: string, line: PdfTextLine, pageWidth: number
   return compact && centered && ((hasRelation && symbols + scripts >= 2 && proseWords <= 9) || (symbols + scripts >= 5 && proseWords <= 6));
 }
 
+function expandPdfEquationRect(seed: PdfVisualRect, fragments: PdfTextLine[], pageWidth: number, pageHeight: number) {
+  let expanded = seed;
+  for (let iteration = 0; iteration < 4; iteration += 1) {
+    const centerY = expanded.top + expanded.height / 2;
+    const horizontalReach = Math.max(42, Math.min(pageWidth * .095, expanded.height * 6.5));
+    const candidates = fragments.filter((fragment) => {
+      const fragmentCenterY = fragment.top + fragment.height / 2;
+      const verticalReach = Math.max(8, Math.max(expanded.height, fragment.height) * 1.05);
+      const horizontalGap = Math.max(0, fragment.left - (expanded.left + expanded.width), expanded.left - (fragment.left + fragment.width));
+      const proseWords = (fragment.text.match(/[A-Za-z]{4,}/g) || []).length;
+      const mathLike = fragment.text.length <= 22 || /[=+−±×÷≈≠≤≥∑∏∫√∂∇∈∞α-ωΑ-Ω‖⟨⟩_^{}()[\]0-9]/.test(fragment.text);
+      return Math.abs(fragmentCenterY - centerY) <= verticalReach && horizontalGap <= horizontalReach && proseWords <= 5 && mathLike;
+    });
+    const next = candidates.reduce<PdfVisualRect>((current, fragment) => unionPdfRects(current, fragment), expanded);
+    if (Math.abs(next.left - expanded.left) < .5 && Math.abs(next.width - expanded.width) < .5 && Math.abs(next.top - expanded.top) < .5 && Math.abs(next.height - expanded.height) < .5) break;
+    expanded = next;
+  }
+  return padPdfRect(expanded, 9, pageWidth, pageHeight);
+}
+
 function detectPdfEquationRegions(page: HTMLElement, textLayer: HTMLElement): PdfInteractiveRegion[] {
   const bounds = page.getBoundingClientRect();
+  const fragments = pdfTextFragments(page, textLayer);
   const lines = pdfTextLines(page, textLayer);
   const equations = lines.filter((line) => looksLikePdfEquation(line.text, line, bounds.width));
   const groups: PdfTextLine[][] = [];
@@ -1281,8 +1302,8 @@ function detectPdfEquationRegions(page: HTMLElement, textLayer: HTMLElement): Pd
   }
   return groups.map((group) => {
     const rect = group.slice(1).reduce<PdfVisualRect>((current, line) => unionPdfRects(current, line), group[0]);
-    const padded = padPdfRect(rect, 8, bounds.width, bounds.height);
-    return { rect: padded, nearbyText: pdfNearbyText(lines, padded), kind: "equation" as const, source: "equation" as const };
+    const expanded = expandPdfEquationRect(rect, fragments, bounds.width, bounds.height);
+    return { rect: expanded, nearbyText: pdfNearbyText(lines, expanded), kind: "equation" as const, source: "equation" as const };
   });
 }
 
@@ -1290,15 +1311,10 @@ function detectPdfImageRegions(operatorList: { fnArray: number[]; argsArray: unk
   const stack: number[][] = [];
   let current = [1, 0, 0, 1, 0, 0];
   const regions: PdfVisualRect[] = [];
-  for (let index = 0; index < operatorList.fnArray.length; index += 1) {
-    const fn = operatorList.fnArray[index];
-    const args = operatorList.argsArray[index] as number[] | undefined;
-    if (fn === pdfjs.OPS.save) { stack.push([...current]); continue; }
-    if (fn === pdfjs.OPS.restore) { current = stack.pop() || [1, 0, 0, 1, 0, 0]; continue; }
-    if (fn === pdfjs.OPS.transform && args && args.length >= 6) { current = pdfjs.Util.transform(current, args.slice(0, 6)); continue; }
-    if (fn !== pdfjs.OPS.paintImageXObject && fn !== pdfjs.OPS.paintInlineImageXObject) continue;
-    const transform = pdfjs.Util.transform(viewport.transform, current);
-    const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map((source) => {
+  const addTransformedRect = (transform: number[], sourceRect: number[], padding = 4) => {
+    if (sourceRect.length < 4) return;
+    const [firstX, firstY, secondX, secondY] = sourceRect;
+    const corners = [[firstX, firstY], [secondX, firstY], [firstX, secondY], [secondX, secondY]].map((source) => {
       const point = [...source];
       pdfjs.Util.applyTransform(point, transform);
       return point;
@@ -1307,9 +1323,44 @@ function detectPdfImageRegions(operatorList: { fnArray: number[]; argsArray: unk
     const right = Math.max(...corners.map((point) => point[0]));
     const top = Math.min(...corners.map((point) => point[1]));
     const bottom = Math.max(...corners.map((point) => point[1]));
-    const rect = padPdfRect({ left, top, width: right - left, height: bottom - top }, 4, viewport.width, viewport.height);
+    const rect = padPdfRect({ left, top, width: right - left, height: bottom - top }, padding, viewport.width, viewport.height);
     const areaRatio = pdfRectArea(rect) / (viewport.width * viewport.height);
     if (rect.width >= 44 && rect.height >= 32 && areaRatio >= .004 && areaRatio <= .82) regions.push(rect);
+  };
+  for (let index = 0; index < operatorList.fnArray.length; index += 1) {
+    const fn = operatorList.fnArray[index];
+    const args = operatorList.argsArray[index] as unknown[] | undefined;
+    if (fn === pdfjs.OPS.save) { stack.push([...current]); continue; }
+    if (fn === pdfjs.OPS.restore) { current = stack.pop() || [1, 0, 0, 1, 0, 0]; continue; }
+    if (fn === pdfjs.OPS.transform && args && args.length >= 6 && args.slice(0, 6).every((value) => typeof value === "number")) {
+      current = pdfjs.Util.transform(current, args.slice(0, 6) as number[]);
+      continue;
+    }
+    // A large proportion of LaTeX figures are imported as vector Form XObjects,
+    // not raster Image XObjects. Their declared bbox is the only reliable full-
+    // object boundary; ignoring it forces caption-based guessing and produces
+    // partial or whitespace-heavy hover regions.
+    if (fn === pdfjs.OPS.paintFormXObjectBegin) {
+      stack.push([...current]);
+      const matrixSource = args?.[0];
+      const bboxSource = args?.[1];
+      const matrix = (Array.isArray(matrixSource) || ArrayBuffer.isView(matrixSource))
+        ? Array.from(matrixSource as ArrayLike<number>).slice(0, 6)
+        : null;
+      const bbox = (Array.isArray(bboxSource) || ArrayBuffer.isView(bboxSource))
+        ? Array.from(bboxSource as ArrayLike<number>).slice(0, 4)
+        : null;
+      if (matrix) current = pdfjs.Util.transform(current, matrix.slice(0, 6));
+      if (bbox) addTransformedRect(pdfjs.Util.transform(viewport.transform, current), bbox, 3);
+      continue;
+    }
+    if (fn === pdfjs.OPS.paintFormXObjectEnd) {
+      current = stack.pop() || [1, 0, 0, 1, 0, 0];
+      continue;
+    }
+    if (fn !== pdfjs.OPS.paintImageXObject && fn !== pdfjs.OPS.paintInlineImageXObject) continue;
+    const transform = pdfjs.Util.transform(viewport.transform, current);
+    addTransformedRect(transform, [0, 0, 1, 1]);
   }
   return regions.filter((rect, index) => !regions.some((other, otherIndex) => otherIndex !== index && pdfRectArea(other) > pdfRectArea(rect) && pdfRectIntersection(rect, other) / pdfRectArea(rect) > .9));
 }
@@ -1341,6 +1392,48 @@ function pdfCanvasInkScore(canvas: HTMLCanvasElement, page: HTMLElement, rect: P
   return sampled ? ink / sampled : 0;
 }
 
+function tightenPdfVisualRect(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVisualRect) {
+  const bounds = page.getBoundingClientRect();
+  const scaleX = canvas.width / bounds.width;
+  const scaleY = canvas.height / bounds.height;
+  const sourceLeft = Math.max(0, Math.floor(rect.left * scaleX));
+  const sourceTop = Math.max(0, Math.floor(rect.top * scaleY));
+  const sourceWidth = Math.min(canvas.width - sourceLeft, Math.max(1, Math.ceil(rect.width * scaleX)));
+  const sourceHeight = Math.min(canvas.height - sourceTop, Math.max(1, Math.ceil(rect.height * scaleY)));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context || sourceWidth * sourceHeight > 24_000_000) return rect;
+  const pixels = context.getImageData(sourceLeft, sourceTop, sourceWidth, sourceHeight).data;
+  const stride = Math.max(1, Math.ceil(Math.max(sourceWidth, sourceHeight) / 1_100));
+  let minX = sourceWidth;
+  let minY = sourceHeight;
+  let maxX = -1;
+  let maxY = -1;
+  let ink = 0;
+  for (let py = 0; py < sourceHeight; py += stride) for (let px = 0; px < sourceWidth; px += stride) {
+    const offset = (py * sourceWidth + px) * 4;
+    const red = pixels[offset];
+    const green = pixels[offset + 1];
+    const blue = pixels[offset + 2];
+    const alpha = pixels[offset + 3];
+    const darkest = Math.min(red, green, blue);
+    const chroma = Math.max(red, green, blue) - darkest;
+    if (alpha <= 24 || (darkest >= 244 && chroma <= 8)) continue;
+    minX = Math.min(minX, px);
+    minY = Math.min(minY, py);
+    maxX = Math.max(maxX, px);
+    maxY = Math.max(maxY, py);
+    ink += 1;
+  }
+  if (ink < 18 || maxX < minX || maxY < minY) return rect;
+  const tightened: PdfVisualRect = {
+    left: rect.left + minX / scaleX,
+    top: rect.top + minY / scaleY,
+    width: Math.max(1, (maxX - minX + stride) / scaleX),
+    height: Math.max(1, (maxY - minY + stride) / scaleY),
+  };
+  return padPdfRect(tightened, 9, bounds.width, bounds.height);
+}
+
 function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canvas: HTMLCanvasElement, imageRects: PdfVisualRect[]): PdfInteractiveRegion[] {
   const bounds = page.getBoundingClientRect();
   const fragments = pdfTextFragments(page, textLayer);
@@ -1353,8 +1446,9 @@ function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canv
       .filter(({ rect, distance }) => distance <= bounds.height * .22 && Math.max(0, Math.min(rect.left + rect.width, caption.left + caption.width) - Math.max(rect.left, caption.left)) > 0)
       .sort((first, second) => first.distance - second.distance)[0]?.rect;
     if (nearbyImage) {
-      const rect = padPdfRect(unionPdfRects(nearbyImage, caption), 7, bounds.width, bounds.height);
-      return { rect, nearbyText: pdfNearbyText(lines, rect), kind, source: "image" as const };
+      const rect = tightenPdfVisualRect(canvas, page, nearbyImage);
+      const evidenceRect = unionPdfRects(rect, caption);
+      return { rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "image" as const };
     }
     const x = bounds.left + caption.left + caption.width / 2;
     const above = inferPdfVisualRect(page, textLayer, x, bounds.top + Math.max(4, caption.top - bounds.height * .18));
@@ -1366,8 +1460,13 @@ function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canv
     const picked = Math.max(aboveScore, belowScore) > 0 && Math.abs(aboveScore - belowScore) > .0015
       ? (aboveScore > belowScore ? above : below)
       : (kind === "table" ? below : above);
-    const rect = padPdfRect(unionPdfRects(picked.rect, caption), 4, bounds.width, bounds.height);
-    return { rect, nearbyText: pdfNearbyText(lines, rect), kind, source: "caption" as const };
+    const pickedAbove = picked === above;
+    const visualTop = pickedAbove ? picked.rect.top : Math.min(picked.rect.top + picked.rect.height - 1, caption.top + caption.height + 4);
+    const visualBottom = pickedAbove ? Math.max(picked.rect.top + 1, caption.top - 4) : picked.rect.top + picked.rect.height;
+    const visualOnly = { left: picked.rect.left, top: visualTop, width: picked.rect.width, height: visualBottom - visualTop };
+    const rect = tightenPdfVisualRect(canvas, page, visualOnly);
+    const evidenceRect = unionPdfRects(rect, caption);
+    return { rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "caption" as const };
   });
 }
 
@@ -1541,7 +1640,10 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
         const captionRegions = detectPdfCaptionRegions(page, textLayer, canvas, imageRects);
         const uncaptionedImages: PdfInteractiveRegion[] = imageRects
           .filter((rect) => !captionRegions.some((region) => region.source === "image" && pdfRectIntersection(region.rect, rect) / pdfRectArea(rect) > .72))
-          .map((rect) => ({ rect, nearbyText: pdfNearbyText(pdfTextLines(page, textLayer), rect), kind: "figure" as const, source: "image" as const }));
+          .map((rect) => {
+            const tightened = tightenPdfVisualRect(canvas, page, rect);
+            return { rect: tightened, nearbyText: pdfNearbyText(pdfTextLines(page, textLayer), tightened), kind: "figure" as const, source: "image" as const };
+          });
         installPdfInteractiveRegions(page, canvas, mergePdfInteractiveRegions([...equationRegions, ...captionRegions, ...uncaptionedImages]), pageNumber, (capture) => onFigureCaptureRef.current(capture));
         const annotations = await pdfPage.getAnnotations();
         for (const annotation of annotations) {
