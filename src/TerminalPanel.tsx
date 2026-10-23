@@ -68,12 +68,13 @@ type TerminalPanelProps = {
   open: boolean;
   theme: TerminalThemeName;
   workspace: string;
-  height: number;
-  onHeightChange: (height: number) => void;
+  orientation?: "bottom" | "right";
+  height?: number;
+  onHeightChange?: (height: number) => void;
   onClose: () => void;
 };
 
-export default function TerminalPanel({ bridge, open, theme, workspace, height, onHeightChange, onClose }: TerminalPanelProps) {
+export default function TerminalPanel({ bridge, open, theme, workspace, orientation = "bottom", height, onHeightChange, onClose }: TerminalPanelProps) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const creatingRef = useRef(false);
@@ -101,7 +102,11 @@ export default function TerminalPanel({ bridge, open, theme, workspace, height, 
   }, [bridge, workspace]);
 
   useEffect(() => {
-    if (open && tabs.length === 0) void createTerminal();
+    if (!open || tabs.length > 0) return;
+    // Let the workbench finish its width transition before the first terminal
+    // is measured; creating it at zero width produces a one-column renderer.
+    const timer = window.setTimeout(() => void createTerminal(), 220);
+    return () => window.clearTimeout(timer);
   }, [createTerminal, open, tabs.length]);
 
   async function closeTab(sessionId: string) {
@@ -118,12 +123,14 @@ export default function TerminalPanel({ bridge, open, theme, workspace, height, 
   }
 
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (height == null || !onHeightChange) return;
+    const resize = onHeightChange;
     event.preventDefault();
     const startY = event.clientY;
     const startHeight = height;
     const onPointerMove = (pointerEvent: PointerEvent) => {
       const maximum = Math.max(220, window.innerHeight - 190);
-      onHeightChange(Math.max(160, Math.min(maximum, startHeight + startY - pointerEvent.clientY)));
+      resize(Math.max(160, Math.min(maximum, startHeight + startY - pointerEvent.clientY)));
     };
     const onPointerUp = () => {
       window.removeEventListener("pointermove", onPointerMove);
@@ -135,8 +142,8 @@ export default function TerminalPanel({ bridge, open, theme, workspace, height, 
     window.addEventListener("pointerup", onPointerUp);
   }
 
-  return <section className={open ? "smart-terminal open" : "smart-terminal"} aria-label="Terminal panel">
-    <div className="terminal-resize-handle" onPointerDown={startResize} title="Drag to resize terminal"><span /></div>
+  return <section className={[open ? "smart-terminal open" : "smart-terminal", orientation === "right" ? "in-workbench" : ""].join(" ")} aria-label="Terminal panel">
+    {orientation === "bottom" && <div className="terminal-resize-handle" onPointerDown={startResize} title="Drag to resize terminal"><span /></div>}
     <div className="smart-terminal-tabs">
       <div className="terminal-tab-list" role="tablist" aria-label="Terminal sessions">
         {tabs.map((tab, index) => <div className={activeSessionId === tab.sessionId ? "terminal-tab active" : "terminal-tab"} key={tab.sessionId}>
@@ -150,7 +157,7 @@ export default function TerminalPanel({ bridge, open, theme, workspace, height, 
       </div>
       <button className="new-terminal-button" onClick={() => void createTerminal()} title="New terminal"><Plus size={15} /></button>
       <span className="terminal-workspace-label">{workspace.split("/").filter(Boolean).at(-1) || "Workspace"}</span>
-      <button className="close-terminal-panel" onClick={onClose} title="Close bottom panel"><X size={15} /></button>
+      <button className="close-terminal-panel" onClick={onClose} title="Close terminal panel"><X size={15} /></button>
     </div>
     <div className="terminal-surfaces">
       {tabs.map((tab) => <TerminalSurface
@@ -246,8 +253,15 @@ function TerminalSurface({ bridge, session, active, panelOpen, theme, onTitle, o
       void bridge.readyTerminal(session.sessionId);
       if (activeRef.current && panelOpenRef.current) terminal.focus();
     });
+    // The workbench animates from 0 to its saved width; fit once more after
+    // the panel settles so a terminal created during the opening motion does
+    // not stay at a one-column geometry.
+    const settleFit = window.setTimeout(() => {
+      if (activeRef.current && panelOpenRef.current) fit();
+    }, 260);
 
     return () => {
+      window.clearTimeout(settleFit);
       resizeObserver.disconnect();
       unsubscribeData();
       unsubscribeExit();
@@ -261,18 +275,24 @@ function TerminalSurface({ bridge, session, active, panelOpen, theme, onTitle, o
 
   useEffect(() => {
     if (!active || !panelOpen) return;
-    window.requestAnimationFrame(() => {
+    const fitWhenSettled = () => {
       try {
         fitAddonRef.current?.fit();
         const terminal = terminalRef.current;
-        if (terminal) {
-          bridge.resizeTerminal(session.sessionId, terminal.cols, terminal.rows);
-          terminal.focus();
-        }
+        if (terminal) bridge.resizeTerminal(session.sessionId, terminal.cols, terminal.rows);
       } catch {
         // The panel may still be finishing its layout transition.
       }
+    };
+    const frame = window.requestAnimationFrame(() => {
+      fitWhenSettled();
+      terminalRef.current?.focus();
     });
+    const settleFit = window.setTimeout(fitWhenSettled, 260);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settleFit);
+    };
   }, [active, bridge, panelOpen, session.sessionId]);
 
   return <div className={active ? "terminal-surface active" : "terminal-surface"} ref={hostRef} />;
