@@ -9,6 +9,7 @@ const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
+const { resolveTerminalShell } = require("./terminal-shell.cjs");
 const modelConfig = require("./model-config.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -1019,8 +1020,7 @@ app.whenReady().then(() => {
     const workspace = resolveWorkspace(input.cwd);
     const cols = Math.max(2, Math.min(500, Number(input.cols) || 80));
     const rows = Math.max(1, Math.min(200, Number(input.rows) || 24));
-    const shell = process.platform === "win32" ? (process.env.COMSPEC || "powershell.exe") : (process.env.SHELL || os.userInfo().shell || "/bin/zsh");
-    const args = process.platform === "win32" ? [] : ["-l"];
+    const { shell, args } = resolveTerminalShell();
     const sessionId = randomUUID();
     const terminalProcess = pty.spawn(shell, args, {
       name: "xterm-256color",
