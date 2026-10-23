@@ -1059,14 +1059,18 @@ function clampPdfCoordinate(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function pdfTextLines(page: HTMLElement, textLayer: HTMLElement): PdfTextLine[] {
+function pdfTextFragments(page: HTMLElement, textLayer: HTMLElement): PdfTextLine[] {
   const pageBounds = page.getBoundingClientRect();
-  const spans = Array.from(textLayer.querySelectorAll<HTMLElement>("span")).flatMap((span) => {
+  return Array.from(textLayer.querySelectorAll<HTMLElement>("span")).flatMap((span) => {
     const text = span.textContent?.replace(/\s+/g, " ").trim() || "";
     const bounds = span.getBoundingClientRect();
     if (!text || !bounds.width || !bounds.height) return [];
     return [{ text, left: bounds.left - pageBounds.left, top: bounds.top - pageBounds.top, width: bounds.width, height: bounds.height }];
   }).sort((first, second) => first.top - second.top || first.left - second.left);
+}
+
+function pdfTextLines(page: HTMLElement, textLayer: HTMLElement): PdfTextLine[] {
+  const spans = pdfTextFragments(page, textLayer);
   const lines: Array<PdfTextLine & { bottom: number }> = [];
   for (const span of spans) {
     const center = span.top + span.height / 2;
@@ -1099,22 +1103,68 @@ function distanceToPdfRect(x: number, y: number, rect: PdfVisualRect) {
   return Math.hypot(dx, dy);
 }
 
+function pdfCaptionFragments(fragments: PdfTextLine[]) {
+  const labelOnlyPattern = /^(?:figure|fig\.?|table|图|表)$/i;
+  const numberPattern = /^(?:\d+[a-z]?\b|[一二三四五六七八九十]+)/i;
+  const joined: PdfTextLine[] = [];
+  for (const label of fragments) {
+    if (!labelOnlyPattern.test(label.text)) continue;
+    const labelRight = label.left + label.width;
+    const number = fragments
+      .filter((fragment) => fragment !== label && numberPattern.test(fragment.text))
+      .filter((fragment) => Math.abs(fragment.top + fragment.height / 2 - (label.top + label.height / 2)) <= Math.max(label.height, fragment.height) * .6)
+      .filter((fragment) => fragment.left >= labelRight - 2 && fragment.left - labelRight <= Math.max(24, label.height * 2.5))
+      .sort((first, second) => first.left - second.left)[0];
+    if (!number) continue;
+    const right = Math.max(labelRight, number.left + number.width);
+    const bottom = Math.max(label.top + label.height, number.top + number.height);
+    joined.push({ text: `${label.text} ${number.text}`, left: label.left, top: Math.min(label.top, number.top), width: right - label.left, height: bottom - Math.min(label.top, number.top) });
+  }
+  return [...fragments, ...joined];
+}
+
 function inferPdfVisualRect(page: HTMLElement, textLayer: HTMLElement, clientX: number, clientY: number): { rect: PdfVisualRect; nearbyText: string; kind: PaperVisualKind } {
   const pageBounds = page.getBoundingClientRect();
   const x = clampPdfCoordinate(clientX - pageBounds.left, 0, pageBounds.width);
   const y = clampPdfCoordinate(clientY - pageBounds.top, 0, pageBounds.height);
+  const fragments = pdfTextFragments(page, textLayer);
   const lines = pdfTextLines(page, textLayer);
   const figureCaptionPattern = /^(?:(?:figure|fig\.?)\s*\d+[a-z]?\b|图\s*[一二三四五六七八九十\d]+)/i;
   const tableCaptionPattern = /^(?:table\s*\d+[a-z]?\b|表\s*[一二三四五六七八九十\d]+)/i;
-  const captionCandidate = lines
+  const captionFragments = pdfCaptionFragments(fragments);
+  const captionCandidates = (captionFragments.some((fragment) => figureCaptionPattern.test(fragment.text) || tableCaptionPattern.test(fragment.text)) ? captionFragments : lines)
     .filter((line) => figureCaptionPattern.test(line.text) || tableCaptionPattern.test(line.text))
     .map((line) => ({ line, kind: tableCaptionPattern.test(line.text) ? "table" as const : "figure" as const, distance: distanceToPdfRect(x, y, line) }))
     .filter((candidate) => candidate.distance <= Math.max(pageBounds.width, pageBounds.height) * .62)
-    .sort((first, second) => first.distance - second.distance)[0];
+    .sort((first, second) => first.distance - second.distance);
+  const captionCandidate = captionCandidates[0];
   const caption = captionCandidate?.line;
   const kind: PaperVisualKind = captionCandidate?.kind ?? "figure";
   let rect: PdfVisualRect;
-  if (caption) {
+  if (caption && kind === "table") {
+    const captionX = caption.left + caption.width / 2;
+    const captionY = caption.top + caption.height / 2;
+    const captionIsBelow = y < captionY;
+    const visualHeight = clampPdfCoordinate(
+      Math.abs(y - captionY) * 1.7,
+      pageBounds.height * .26,
+      pageBounds.height * .42,
+    );
+    const visualWidth = clampPdfCoordinate(
+      Math.max(pageBounds.width * .34, caption.width * 1.16),
+      pageBounds.width * .34,
+      pageBounds.width * .94,
+    );
+    const centerX = caption.width >= pageBounds.width * .26
+      ? clampPdfCoordinate(captionX, visualWidth / 2, pageBounds.width - visualWidth / 2)
+      : clampPdfCoordinate(x, visualWidth / 2, pageBounds.width - visualWidth / 2);
+    rect = {
+      left: centerX - visualWidth / 2,
+      top: captionIsBelow ? caption.top - visualHeight : caption.top - 8,
+      width: visualWidth,
+      height: visualHeight + caption.height + 8,
+    };
+  } else if (caption) {
     const captionX = caption.left + caption.width / 2;
     const captionY = caption.top + caption.height / 2;
     const deltaX = x - captionX;
