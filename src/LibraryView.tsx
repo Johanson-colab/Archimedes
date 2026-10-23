@@ -338,6 +338,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
 type CodeChatAttachment = { path: string; startLine: number; endLine: number; snippet: string };
+type PaperFigureCapture = { pageNumber: number; nearbyText: string; image: ContextAttachment };
 type PaperAiMode = "brief" | "audit";
 type PaperChatComposerCommand = { id: number; draft?: string };
 type SelectionAnchor = { x: number; y: number };
@@ -464,6 +465,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [passages, setPassages] = useState<PaperPassage[]>([]);
   const [selection, setSelection] = useState("");
   const [selectionAnchor, setSelectionAnchor] = useState<SelectionAnchor | null>(null);
+  const [figureSelectionMode, setFigureSelectionMode] = useState(false);
+  const [figureCapture, setFigureCapture] = useState<PaperFigureCapture | null>(null);
   const [translationPopover, setTranslationPopover] = useState<TranslationPopover | null>(null);
   const [translating, setTranslating] = useState(false);
   const [highlightPickerOpen, setHighlightPickerOpen] = useState(false);
@@ -545,6 +548,22 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
 
   function clearSelection() { setSelection(""); setSelectionAnchor(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
   function closeSelection() { clearSelection(); setTranslationPopover(null); }
+  function toggleFigureSelectionMode() {
+    setFigureSelectionMode((current) => {
+      const next = !current;
+      if (next) {
+        closeSelection();
+        setFigureCapture(null);
+      }
+      return next;
+    });
+  }
+  function receiveFigureCapture(capture: PaperFigureCapture) {
+    setFigureCapture(capture);
+    setFigureSelectionMode(false);
+    setChatOpen(true);
+    setComposerCommand((current) => ({ id: current.id + 1, draft: `请解释论文第 ${capture.pageNumber} 页所选图表。先说明图表元素、坐标或表格结构，再解释主要趋势、比较关系和作者想支持的结论；区分图中直接可见的信息与推断。` }));
+  }
   function receiveSelection(text: string, anchor: SelectionAnchor) {
     const next = text.replace(/\s+/g, " ").trim();
     if (!next) return;
@@ -651,7 +670,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       "\n\nSelected code from " + attachment.path + ":" + attachment.startLine + "-" + attachment.endLine +
       ":\n```\n" + attachment.snippet + "\n```"
     ).join("");
-    const prompt = userPrompt + attachedCode;
+    const attachedFigure = options.initialBriefing ? null : figureCapture;
+    const figureEvidence = attachedFigure
+      ? `\n\nA visual region from PDF page ${attachedFigure.pageNumber} is attached as an image. Inspect the actual pixels before answering. Nearby extracted PDF text follows; it may include a caption or surrounding prose, but do not treat it as a substitute for the image:\n${attachedFigure.nearbyText || "No nearby text was recovered."}`
+      : "";
+    const prompt = userPrompt + attachedCode + figureEvidence;
     const repositoryInstruction = repositoryForContext
       ? checkout && aiMode === "audit"
         ? ` A full local Git checkout is attached for a strict code audit at commit ${checkout.commit.slice(0, 12)}. Before making an implementation claim, search the checkout, then read the exact source file. Build an explicit evidence chain with Paper: p. N and Code: path:L-N. Separate confirmed implementation, paper-only claim, and inference. Do not infer implementation details from a README or file name.`
@@ -665,6 +688,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setChatOpen(true);
     if (!options.initialBriefing) {
       setCodeAttachments([]);
+      setFigureCapture(null);
       setChatMessages((current) => [...current, { role: "user", text: userPrompt }]);
     }
     setChatBusy(true);
@@ -679,7 +703,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         threadId: chatThreadId,
         projectId: projectId || undefined,
         mode: options.initialBriefing || aiMode === "audit" ? "deep-research" : "free-chat",
-        contextItems: researchContext,
+        contextItems: attachedFigure ? [...researchContext, attachedFigure.image] : researchContext,
         clientRunId,
       });
       setChatThreadId(result.threadId);
@@ -826,10 +850,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
               </div>
             </div>
             <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" /><button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
-            <span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span>
+            <div className="paper-reader-evidence-actions"><button className={figureSelectionMode ? "paper-figure-ask-toggle active" : "paper-figure-ask-toggle"} onClick={toggleFigureSelectionMode} aria-pressed={figureSelectionMode}>{figureSelectionMode ? "点击图表" : figureCapture ? "重新选择图表" : "图表提问"}</button><span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span></div>
           </div>
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} activeSelection={selection} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} activeSelection={selection} figureSelectionMode={figureSelectionMode} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -845,6 +869,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={(prompt) => void askAI(prompt)} />
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
+        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected visual region from page ${figureCapture.pageNumber}`} /><div><span>第 {figureCapture.pageNumber} 页图表</span><p>该区域将作为高清图片发送给 AI。</p></div><button onClick={() => setFigureCapture(null)} title="Remove figure attachment"><X size={13} /></button></div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
       </aside></>}
     </div>
@@ -1026,7 +1051,162 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
   </div>;
 });
 
-function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, onZoomChange, onSelection, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; activeSelection: string; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
+type PdfVisualRect = { left: number; top: number; width: number; height: number };
+type PdfTextLine = PdfVisualRect & { text: string };
+
+function clampPdfCoordinate(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function pdfTextLines(page: HTMLElement, textLayer: HTMLElement): PdfTextLine[] {
+  const pageBounds = page.getBoundingClientRect();
+  const spans = Array.from(textLayer.querySelectorAll<HTMLElement>("span")).flatMap((span) => {
+    const text = span.textContent?.replace(/\s+/g, " ").trim() || "";
+    const bounds = span.getBoundingClientRect();
+    if (!text || !bounds.width || !bounds.height) return [];
+    return [{ text, left: bounds.left - pageBounds.left, top: bounds.top - pageBounds.top, width: bounds.width, height: bounds.height }];
+  }).sort((first, second) => first.top - second.top || first.left - second.left);
+  const lines: Array<PdfTextLine & { bottom: number }> = [];
+  for (const span of spans) {
+    const center = span.top + span.height / 2;
+    let line: (PdfTextLine & { bottom: number }) | undefined;
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const candidate = lines[index];
+      if (Math.abs(candidate.top + candidate.height / 2 - center) <= Math.max(4, span.height * .45)) {
+        line = candidate;
+        break;
+      }
+    }
+    if (!line) {
+      lines.push({ ...span, bottom: span.top + span.height });
+      continue;
+    }
+    const right = Math.max(line.left + line.width, span.left + span.width);
+    line.left = Math.min(line.left, span.left);
+    line.top = Math.min(line.top, span.top);
+    line.bottom = Math.max(line.bottom, span.top + span.height);
+    line.width = right - line.left;
+    line.height = line.bottom - line.top;
+    line.text = `${line.text} ${span.text}`.replace(/\s+/g, " ").trim();
+  }
+  return lines.map(({ bottom: _bottom, ...line }) => line);
+}
+
+function distanceToPdfRect(x: number, y: number, rect: PdfVisualRect) {
+  const dx = x < rect.left ? rect.left - x : x > rect.left + rect.width ? x - rect.left - rect.width : 0;
+  const dy = y < rect.top ? rect.top - y : y > rect.top + rect.height ? y - rect.top - rect.height : 0;
+  return Math.hypot(dx, dy);
+}
+
+function inferPdfVisualRect(page: HTMLElement, textLayer: HTMLElement, clientX: number, clientY: number): { rect: PdfVisualRect; nearbyText: string } {
+  const pageBounds = page.getBoundingClientRect();
+  const x = clampPdfCoordinate(clientX - pageBounds.left, 0, pageBounds.width);
+  const y = clampPdfCoordinate(clientY - pageBounds.top, 0, pageBounds.height);
+  const lines = pdfTextLines(page, textLayer);
+  const captionPattern = /^(?:(?:figure|fig\.?|table)\s*\d+[a-z]?\b|(?:图|表)\s*[一二三四五六七八九十\d]+)/i;
+  const caption = lines
+    .filter((line) => captionPattern.test(line.text))
+    .map((line) => ({ line, distance: distanceToPdfRect(x, y, line) }))
+    .filter((candidate) => candidate.distance <= Math.max(pageBounds.width, pageBounds.height) * .62)
+    .sort((first, second) => first.distance - second.distance)[0]?.line;
+  let rect: PdfVisualRect;
+  if (caption) {
+    const captionX = caption.left + caption.width / 2;
+    const captionY = caption.top + caption.height / 2;
+    const deltaX = x - captionX;
+    const deltaY = y - captionY;
+    if (Math.abs(deltaY) >= Math.abs(deltaX) * .55) {
+      const visualHeight = clampPdfCoordinate(Math.max(pageBounds.height * .3, Math.abs(deltaY) * 1.9), pageBounds.height * .3, pageBounds.height * .64);
+      const captionIsBelow = deltaY < 0;
+      const top = captionIsBelow ? caption.top - visualHeight : caption.top - 10;
+      const bottom = captionIsBelow ? caption.top + caption.height + 10 : caption.top + caption.height + visualHeight;
+      const wideCaption = caption.width >= pageBounds.width * .42;
+      const visualWidth = wideCaption ? pageBounds.width * .94 : Math.min(pageBounds.width * .62, Math.max(pageBounds.width * .42, caption.width * 1.22));
+      const centerX = wideCaption ? pageBounds.width / 2 : clampPdfCoordinate((x + captionX) / 2, visualWidth / 2, pageBounds.width - visualWidth / 2);
+      rect = { left: centerX - visualWidth / 2, top, width: visualWidth, height: bottom - top };
+    } else {
+      const visualWidth = clampPdfCoordinate(Math.max(pageBounds.width * .38, Math.abs(deltaX) * 1.85), pageBounds.width * .38, pageBounds.width * .72);
+      const captionIsRight = deltaX < 0;
+      const left = captionIsRight ? caption.left - visualWidth : caption.left - 10;
+      const right = captionIsRight ? caption.left + caption.width + 10 : caption.left + caption.width + visualWidth;
+      const visualHeight = Math.min(pageBounds.height * .54, Math.max(pageBounds.height * .28, caption.height * 8));
+      const centerY = clampPdfCoordinate((y + captionY) / 2, visualHeight / 2, pageBounds.height - visualHeight / 2);
+      rect = { left, top: centerY - visualHeight / 2, width: right - left, height: visualHeight };
+    }
+  } else {
+    const width = pageBounds.width * .84;
+    const height = pageBounds.height * .44;
+    rect = { left: x - width / 2, top: y - height / 2, width, height };
+  }
+  const padding = 10;
+  const left = clampPdfCoordinate(rect.left - padding, 0, pageBounds.width - 1);
+  const top = clampPdfCoordinate(rect.top - padding, 0, pageBounds.height - 1);
+  const right = clampPdfCoordinate(rect.left + rect.width + padding, left + 1, pageBounds.width);
+  const bottom = clampPdfCoordinate(rect.top + rect.height + padding, top + 1, pageBounds.height);
+  const normalized = { left, top, width: right - left, height: bottom - top };
+  const nearbyText = lines
+    .filter((line) => distanceToPdfRect(line.left + line.width / 2, line.top + line.height / 2, {
+      left: normalized.left - 36, top: normalized.top - 36, width: normalized.width + 72, height: normalized.height + 72,
+    }) === 0)
+    .map((line) => line.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 4_000);
+  return { rect: normalized, nearbyText };
+}
+
+function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVisualRect, pageNumber: number): ContextAttachment {
+  const pageBounds = page.getBoundingClientRect();
+  const scaleX = canvas.width / pageBounds.width;
+  const scaleY = canvas.height / pageBounds.height;
+  const sourceX = Math.max(0, Math.floor(rect.left * scaleX));
+  const sourceY = Math.max(0, Math.floor(rect.top * scaleY));
+  const sourceWidth = Math.min(canvas.width - sourceX, Math.max(1, Math.ceil(rect.width * scaleX)));
+  const sourceHeight = Math.min(canvas.height - sourceY, Math.max(1, Math.ceil(rect.height * scaleY)));
+  const outputScale = Math.min(1, 2_400 / Math.max(sourceWidth, sourceHeight));
+  const output = window.document.createElement("canvas");
+  output.width = Math.max(1, Math.round(sourceWidth * outputScale));
+  output.height = Math.max(1, Math.round(sourceHeight * outputScale));
+  const context = output.getContext("2d");
+  if (!context) throw new Error("Figure capture is unavailable.");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, output.width, output.height);
+  context.drawImage(canvas, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, output.width, output.height);
+  let mimeType: ContextImage["mimeType"] = "image/png";
+  let dataUrl = output.toDataURL(mimeType);
+  let base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  let sizeBytes = Math.ceil(base64.length * 3 / 4);
+  if (sizeBytes > 5_500_000) {
+    mimeType = "image/jpeg";
+    dataUrl = output.toDataURL(mimeType, .9);
+    base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+    sizeBytes = Math.ceil(base64.length * 3 / 4);
+  }
+  return {
+    id: `paper-visual:${pageNumber}:${crypto.randomUUID()}`,
+    type: "image",
+    name: `PDF page ${pageNumber} visual region`,
+    detail: `Automatically selected figure or table from PDF page ${pageNumber}`,
+    image: { dataUrl, mimeType, sizeBytes, width: output.width, height: output.height },
+  };
+}
+
+function showPdfVisualSelection(page: HTMLElement, rect: PdfVisualRect) {
+  page.querySelector(".arch-pdf-visual-selection")?.remove();
+  const overlay = window.document.createElement("div");
+  overlay.className = "arch-pdf-visual-selection";
+  overlay.style.left = `${rect.left}px`;
+  overlay.style.top = `${rect.top}px`;
+  overlay.style.width = `${rect.width}px`;
+  overlay.style.height = `${rect.height}px`;
+  const label = window.document.createElement("span");
+  label.textContent = "已选择图表";
+  overlay.append(label);
+  page.append(overlay);
+}
+
+function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, figureSelectionMode, figureCaptureActive, onZoomChange, onSelection, onFigureCapture, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; activeSelection: string; figureSelectionMode: boolean; figureCaptureActive: boolean; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onFigureCapture: (capture: PaperFigureCapture) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
   const [width, setWidth] = useState(880);
@@ -1048,6 +1228,10 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, on
     if (activeSelection) return;
     clearActivePdfSelection(hostRef.current);
   }, [activeSelection]);
+  useEffect(() => {
+    if (figureCaptureActive) return;
+    hostRef.current?.querySelector(".arch-pdf-visual-selection")?.remove();
+  }, [figureCaptureActive]);
   useEffect(() => {
     let cancelled = false;
     let destroyLoadingTask: (() => void) | undefined;
@@ -1125,6 +1309,19 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, on
   }, [onProjectDetected, onProjectLink, pageNumber, url, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
+    if (figureSelectionMode) {
+      const page = target.querySelector<HTMLElement>(".arch-pdf-page");
+      const canvas = page?.querySelector<HTMLCanvasElement>("canvas");
+      const textLayer = page?.querySelector<HTMLElement>(".arch-pdf-text-layer");
+      if (!page || !canvas || !textLayer) return;
+      const pageBounds = page.getBoundingClientRect();
+      if (event.clientX < pageBounds.left || event.clientX > pageBounds.right || event.clientY < pageBounds.top || event.clientY > pageBounds.bottom) return;
+      const { rect, nearbyText } = inferPdfVisualRect(page, textLayer, event.clientX, event.clientY);
+      showPdfVisualSelection(page, rect);
+      onFigureCapture({ pageNumber, nearbyText, image: cropPdfVisual(canvas, page, rect, pageNumber) });
+      window.getSelection()?.removeAllRanges();
+      return;
+    }
     const selection = window.getSelection();
     if (!selection?.rangeCount || !selection.toString().trim() || !target.contains(selection.anchorNode) || !target.contains(selection.focusNode)) { onClearSelection(); return; }
     const textLayer = target.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
@@ -1154,11 +1351,15 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, on
     event.preventDefault();
     onZoomChange((current) => Math.min(3.2, Math.max(.55, current * (event.deltaY < 0 ? 1.12 : .89))));
   }
-  function beginSelection() {
+  function beginSelection(event: ReactMouseEvent<HTMLDivElement>) {
     clearActivePdfSelection(hostRef.current);
     onClearSelection();
+    if (figureSelectionMode) {
+      event.preventDefault();
+      window.getSelection()?.removeAllRanges();
+    }
   }
-  return <div className="arch-pdf-stage" onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
+  return <div className={figureSelectionMode ? "arch-pdf-stage figure-selecting" : "arch-pdf-stage"} onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
 }
 
 function selectionNodeSpan(node: Node | null, layer: HTMLElement) {
