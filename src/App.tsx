@@ -1511,7 +1511,7 @@ function App() {
           </div>
           <button className="workspace-button" onClick={chooseWorkspace} title="Choose workspace" disabled={agentBusy}>
             <span className="workspace-icon"><FolderOpen size={15} /></span>
-            <span className="workspace-copy"><strong>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "Choose workspace"}</strong><small>{workspaceReady ? `${threads.length} research chats` : "Opening workspace"}</small></span>
+            <span className="workspace-copy"><strong>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "Choose workspace"}</strong><small>{workspaceReady ? threads.length ? `${threads.length} research chats` : "Ready for a new task" : "Opening workspace"}</small></span>
             <ChevronDown size={14} />
           </button>
         </div>
