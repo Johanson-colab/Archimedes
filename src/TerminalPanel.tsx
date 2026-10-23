@@ -165,7 +165,6 @@ export default function TerminalPanel({ bridge, open, theme, workspace, settings
       </div>
       <button className="new-terminal-button" onClick={() => void createTerminal()} title="New terminal"><Plus size={15} /></button>
       <span className="terminal-workspace-label">{workspace.split("/").filter(Boolean).at(-1) || "Workspace"}</span>
-      <button className="close-terminal-panel" onClick={onClose} title="Close terminal panel"><X size={15} /></button>
     </div>
     <div className="terminal-surfaces">
       {tabs.map((tab) => <TerminalSurface
