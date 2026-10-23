@@ -28,7 +28,7 @@ test("paper and charcoal have one readable primary accent", () => {
   const paper = palette(':root[data-theme="paper"]');
   assert.equal(paper.accent, "#8a5a24");
   assert.equal(paper["accent-ink"], "#ffffff");
-  assert.equal(charcoal.accent, "#a79df5");
+  assert.equal(charcoal.accent, "#c9a227");
   assert.equal(charcoal["accent-ink"], "#111111");
   assert.ok(contrast(paper["accent-ink"], paper.accent) >= 4.5);
   assert.ok(contrast(charcoal["accent-ink"], charcoal.accent) >= 4.5);
