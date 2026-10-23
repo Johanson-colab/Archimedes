@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol, clipboard, nativeImage } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol, clipboard } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -34,10 +34,8 @@ const workspaceWatchers = new Map();
 const allowedContextPaths = new Set();
 const WORKSPACE_STATE_FILE = "last-workspace.json";
 const MAX_CLIPBOARD_IMAGE_BYTES = 6 * 1024 * 1024;
-const APP_NAME = "Archimedes";
-const APP_ICON_PATH = path.join(__dirname, "assets", "app-icon-256.png");
 
-app.setName(APP_NAME);
+app.setName("Archimedes");
 app.setAppUserModelId("com.archimedes.research");
 protocol.registerSchemesAsPrivileged([{
   scheme: "archimedes-file",
@@ -166,9 +164,8 @@ function createWindow(workspace) {
     minWidth: 1100,
     minHeight: 720,
     backgroundColor: "#f6f7f5",
-    title: APP_NAME,
     titleBarStyle: "hiddenInset",
-    icon: APP_ICON_PATH,
+    icon: path.join(__dirname, "assets", "app-icon-256.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -479,10 +476,6 @@ async function sanitizeAgentContext(items, workspace) {
 }
 
 app.whenReady().then(() => {
-  if (process.platform === "darwin" && app.dock) {
-    const dockIcon = nativeImage.createFromPath(APP_ICON_PATH);
-    if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
-  }
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
