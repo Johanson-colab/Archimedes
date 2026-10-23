@@ -36,6 +36,33 @@ test("Windows uses COMSPEC only as the last built-in fallback", () => {
   assert.equal(result.shell, cmd);
 });
 
+test("explicit shell profiles do not fall through to a different shell", () => {
+  const pwsh = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
+  const powershell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+  const env = { ProgramFiles: "C:\\Program Files", SystemRoot: "C:\\Windows", COMSPEC: "C:\\Windows\\System32\\cmd.exe" };
+  const result = resolveTerminalShell({
+    platform: "win32",
+    profile: "powershell",
+    env,
+    exists: (candidate) => candidate === pwsh || candidate === powershell,
+    userShell: "",
+  });
+  assert.equal(result.shell, powershell);
+});
+
+test("custom shell paths are honored when they exist", () => {
+  const custom = "C:\\Tools\\nu.exe";
+  const result = resolveTerminalShell({
+    platform: "win32",
+    profile: "custom",
+    customShell: custom,
+    env: { ProgramFiles: "C:\\Program Files", SystemRoot: "C:\\Windows" },
+    exists: (candidate) => candidate === custom,
+    userShell: "",
+  });
+  assert.equal(result.shell, custom);
+});
+
 test("macOS and Linux use the login shell with -l", () => {
   const mac = resolveTerminalShell({
     platform: "darwin",

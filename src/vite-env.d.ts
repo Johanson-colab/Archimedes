@@ -69,6 +69,9 @@ interface ResearchDeskBridge {
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
     runTerminal: (input: { command: string; cwd?: string; actionId?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
     stopTerminal: (sessionId: string) => Promise<void>;
+    getTerminalSettings: () => Promise<TerminalSettings>;
+    saveTerminalSettings: (input: Partial<TerminalSettings>) => Promise<TerminalSettings>;
+    openExternalTerminal: (input: { cwd?: string; externalTerminal?: TerminalExternalTerminal }) => Promise<{ opened: boolean; app: string; error?: string }>;
     createTerminal: (input: { cwd?: string; cols?: number; rows?: number }) => Promise<TerminalSessionInfo>;
     readyTerminal: (sessionId: string) => Promise<void>;
     writeTerminal: (sessionId: string, data: string) => void;
@@ -199,6 +202,23 @@ interface TerminalSessionInfo {
   workspace: string;
   shell: string;
   pid: number;
+}
+
+type TerminalShellProfile = "auto" | "pwsh" | "powershell" | "cmd" | "zsh" | "fish" | "bash" | "custom";
+type TerminalExternalTerminal = "auto" | "windows-terminal" | "ghostty" | "wezterm" | "terminal" | "none";
+
+interface TerminalSettings {
+  shell: TerminalShellProfile;
+  customShell: string;
+  fontFamily: string;
+  fontSize: number;
+  scrollback: number;
+  externalTerminal: TerminalExternalTerminal;
+  onboarded: boolean;
+  platform: string;
+  detectedShell: string;
+  detectedShellName: string;
+  externalTerminalLabel: string;
 }
 
 interface Window {
