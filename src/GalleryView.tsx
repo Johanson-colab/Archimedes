@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ExternalLink, GraduationCap, ImageOff, Images, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
 import { GALLERY_CATALOG_ADDITIONS, GALLERY_CATALOG_VERSION, GALLERY_COVERAGE } from "./gallery-catalog";
+import { useDialogFocus } from "./useDialogFocus";
 
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
@@ -126,21 +127,19 @@ function FigureCard({ figure, onOpen }: { figure: Figure; onOpen: () => void }) 
 function FigureDialog({ figure, index, total, onClose, onStep }: {
   figure: Figure; index: number; total: number; onClose: () => void; onStep: (step: number) => void;
 }) {
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useDialogFocus<HTMLElement>(true, onClose);
   useEffect(() => {
-    closeRef.current?.focus();
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
       if (event.key === "ArrowLeft") onStep(-1);
       if (event.key === "ArrowRight") onStep(1);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, onStep]);
+  }, [onStep]);
   const source = paperUrl(figure);
   return createPortal(<div className="gallery-dialog-backdrop" onMouseDown={onClose}>
-    <section className="gallery-dialog" role="dialog" aria-modal="true" aria-label={`Figure from ${figure.title}`} onMouseDown={(event) => event.stopPropagation()}>
-      <header><span>{index + 1} / {total.toLocaleString()}</span><button ref={closeRef} type="button" title="Close figure" aria-label="Close figure" onClick={onClose}><X size={20} /></button></header>
+    <section ref={dialogRef} tabIndex={-1} className="gallery-dialog" role="dialog" aria-modal="true" aria-label={`Figure from ${figure.title}`} onMouseDown={(event) => event.stopPropagation()}>
+      <header><span>{index + 1} / {total.toLocaleString()}</span><button type="button" title="Close figure" aria-label="Close figure" onClick={onClose}><X size={20} /></button></header>
       <div className="gallery-dialog-content"><button type="button" aria-label="Previous figure" title="Previous figure" onClick={() => onStep(-1)}><ArrowLeft size={21} /></button><img src={imageUrl(figure)} alt={`Figure from ${figure.title}`} /><button type="button" aria-label="Next figure" title="Next figure" onClick={() => onStep(1)}><ArrowRight size={21} /></button></div>
       <footer><div><span className="gallery-dialog-kicker">{figure.venue.toUpperCase()} {figure.year} · {PATTERNS.find(([id]) => id === figure.pattern)?.[1] || figure.pattern}{tierName(figure) ? ` · ${tierName(figure)}` : ""}</span><h2>{figure.title}</h2><p>{figure.authors.join(", ")}</p></div><div className="gallery-dialog-links">{source && <a href={source} target="_blank" rel="noreferrer">Open paper <ExternalLink size={14} /></a>}<a href={imageUrl(figure)} target="_blank" rel="noreferrer">Image source <ExternalLink size={14} /></a></div></footer>
     </section>

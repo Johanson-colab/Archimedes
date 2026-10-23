@@ -20,6 +20,7 @@ import deepseekLogo from "./assets/providers/deepseek.png";
 import moonshotLogo from "./assets/providers/moonshot.jpg";
 import openaiLogo from "./assets/providers/openai.png";
 import qwenLogo from "./assets/providers/qwen.png";
+import { useDialogFocus } from "./useDialogFocus";
 
 type ProviderId = ModelProviderId;
 
@@ -49,6 +50,7 @@ const providers: Array<{
 ];
 
 export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   const [provider, setProvider] = useState<ProviderId>("custom");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
@@ -162,7 +164,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
 
   if (!open) return null;
   return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section className="model-settings-modal" role="dialog" aria-modal="true" aria-label="Model settings" onMouseDown={(event) => event.stopPropagation()}>
+    <section ref={dialogRef} tabIndex={-1} className="model-settings-modal" role="dialog" aria-modal="true" aria-label="Model settings" onMouseDown={(event) => event.stopPropagation()}>
       <header className="model-settings-header">
         <div><span>Agent runtime</span><h2>Model providers</h2><p>Choose the model Archimedes uses for new research turns.</p></div>
         <button className="quiet-icon-button" onClick={onClose} title="Close model settings"><X size={17} /></button>

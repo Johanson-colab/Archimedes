@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Folder, FolderPlus, MessageSquarePlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { useDialogFocus } from "./useDialogFocus";
 
 export default function ProjectSidebar({ projects, archivedProjects, threads, archivedThreads, activeProjectId, activeThreadId, disabled, onNewProject, onNewChat, onRenameProject, onArchiveProject, onRemoveProject, onOpenThread, onArchiveThread }: {
   projects: ResearchProject[];
@@ -129,8 +130,9 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
 }
 
 export function NewProjectModal({ open, name, onName, onClose, onCreate }: { open: boolean; name: string; onName: (value: string) => void; onClose: () => void; onCreate: () => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   if (!open) return null;
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="workspace-modal project-create-modal" role="dialog" aria-modal="true" aria-label="New research project" onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-create-modal" role="dialog" aria-modal="true" aria-label="New research project" onMouseDown={(event) => event.stopPropagation()}>
     <header className="modal-header"><div><span className="eyebrow">Research workspace</span><h2>New project</h2></div></header>
     <p>A project groups related chats while keeping every chat history independent.</p>
     <label>Project name<input autoFocus value={name} onChange={(event) => onName(event.target.value)} placeholder="Agent reliability study" maxLength={100} onKeyDown={(event) => event.key === "Enter" && onCreate()} /></label>
@@ -139,9 +141,10 @@ export function NewProjectModal({ open, name, onName, onClose, onCreate }: { ope
 }
 
 export function ProjectRemoveModal({ project, onClose, onRemove }: { project: ResearchProject | null; onClose: () => void; onRemove: () => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>(Boolean(project), onClose);
   if (!project) return null;
   const chatLabel = project.chat_count === 1 ? "1 chat" : `${project.chat_count} chats`;
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="workspace-modal project-remove-modal" role="dialog" aria-modal="true" aria-label={`Remove ${project.name}`} onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-remove-modal" role="dialog" aria-modal="true" aria-label={`Remove ${project.name}`} onMouseDown={(event) => event.stopPropagation()}>
     <header className="modal-header"><div><span className="eyebrow">Permanent action</span><h2>Remove project?</h2></div></header>
     <p><strong>{project.name}</strong> and its {chatLabel}, research turns, and recorded Agent actions will be permanently deleted.</p>
     <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="danger-button" onClick={onRemove}><Trash2 size={14} />Remove project</button></div>

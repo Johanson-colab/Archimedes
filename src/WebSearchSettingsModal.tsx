@@ -4,6 +4,7 @@ import braveLogo from "@lobehub/icons-static-svg/icons/brave-color.svg";
 import exaLogo from "@lobehub/icons-static-svg/icons/exa-color.svg";
 import firecrawlLogo from "@lobehub/icons-static-svg/icons/firecrawl-color.svg";
 import tavilyLogo from "@lobehub/icons-static-svg/icons/tavily-color.svg";
+import { useDialogFocus } from "./useDialogFocus";
 
 function brandIcon(src: string) {
   return <img className="web-data-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
@@ -17,6 +18,7 @@ const providers: Array<{ id: WebSearchProviderId; name: string; description: str
 ];
 
 export default function WebSearchSettingsModal({ bridge, open, onClose }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   const [provider, setProvider] = useState<WebSearchProviderId>("brave");
   const [configured, setConfigured] = useState<WebSearchProviderId[]>([]);
   const [apiKey, setApiKey] = useState("");
@@ -47,7 +49,7 @@ export default function WebSearchSettingsModal({ bridge, open, onClose }: { brid
 
   if (!open) return null;
   return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section className="web-search-modal" role="dialog" aria-modal="true" aria-label="Web search settings" onMouseDown={(event) => event.stopPropagation()}>
+    <section ref={dialogRef} tabIndex={-1} className="web-search-modal" role="dialog" aria-modal="true" aria-label="Web search settings" onMouseDown={(event) => event.stopPropagation()}>
       <header className="model-settings-header"><div><span>Agent tools</span><h2>Web data</h2><p>Choose the search service Archimedes uses. Your own API key stays on this device.</p></div><button className="quiet-icon-button" onClick={onClose} title="Close web data settings"><X size={17} /></button></header>
       <div className="web-data-layout">
         <nav className="web-data-provider-list" aria-label="Web data providers">

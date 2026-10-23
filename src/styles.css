@@ -432,8 +432,8 @@ body.sidebar-resizing .codex-shell { transition: none; }
 
 .sidebar-resizer { position: absolute; z-index: 6; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; background: transparent; }
 .sidebar-resizer::after { position: absolute; inset: 0 0 0 auto; width: 1px; background: transparent; content: ""; transition: background .15s ease; }
-.sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after { background: #8a8a84; }
-.sidebar-resizer:focus-visible { outline: none; }
+.sidebar-resizer:hover::after, .sidebar-resizer:focus-visible::after { width: 2px; background: #8a8a84; }
+.sidebar-resizer:focus-visible { outline: 2px solid #8a8a84; outline-offset: -2px; }
 body.sidebar-resizing { cursor: col-resize; user-select: none; }
 body.sidebar-resizing * { cursor: col-resize !important; }
 .sidebar-collapse-button { display: grid; width: 24px; height: 24px; flex: 0 0 auto; margin-left: auto; place-items: center; color: #85857f; background: transparent; border-radius: 5px; }
@@ -1195,8 +1195,8 @@ html body :is(.message-code-block, .code-preview, .codebase-source)::selection {
 .paper-pdf-pane iframe { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; background: #e7e9e7; border: 0; }
 .paper-pane-resizer { position: absolute; z-index: 6; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; background: transparent; touch-action: none; }
 .paper-pane-resizer::after { position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; content: ""; transition: background .15s ease; }
-.paper-pane-resizer:hover::after, .paper-pane-resizer:focus-visible::after { background: #8a8a84; }
-.paper-pane-resizer:focus-visible { outline: none; }
+.paper-pane-resizer:hover::after, .paper-pane-resizer:focus-visible::after { width: 2px; background: #8a8a84; }
+.paper-pane-resizer:focus-visible { outline: 2px solid #8a8a84; outline-offset: -2px; }
 body.paper-pane-resizing { cursor: col-resize; user-select: none; }
 body.paper-pane-resizing * { cursor: col-resize !important; }
 .paper-browser-toggle { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; color: #727a74; background: transparent; border-radius: 4px; }
@@ -2343,6 +2343,10 @@ html[data-theme="paper"] .paper-create-backdrop {
   background: rgba(44, 39, 33, .34);
   backdrop-filter: blur(2px);
 }
+html[data-theme="paper"] .sidebar-resizer:focus-visible,
+html[data-theme="paper"] .paper-pane-resizer:focus-visible { outline-color: #5f5a53; }
+html[data-theme="paper"] .sidebar-resizer:focus-visible::after,
+html[data-theme="paper"] .paper-pane-resizer:focus-visible::after { background: #5f5a53; }
 .theme-paper .sidebar-nav, .theme-paper .knowledge-group, .theme-paper .sidebar-workspace { border-color: #e8e4de; }
 .theme-paper .codex-sidebar-label, .theme-paper .projects-heading, .theme-paper .conversation-title span,
 .theme-paper .workspace-copy small, .theme-paper .composer-note, .theme-paper .composer-context { color: #6f6a63; }
@@ -2377,7 +2381,7 @@ html[data-theme="paper"] .paper-create-backdrop {
 .theme-paper .message-markdown a, .theme-paper .conversation-sources a { color: #4f4a43; text-decoration-color: #aaa39a; }
 .theme-paper .conversation-sources a { background: #f3f1ed; border-color: #e2ddd6; }
 .theme-paper .conversation-composer { background: #fffefd; border-color: #e1ddd6; }
-.theme-paper .conversation-composer:focus-within { border-color: #e1ddd6; box-shadow: none; }
+.theme-paper .conversation-composer:focus-within { border-color: #b9b1a6; box-shadow: 0 0 0 2px rgba(57, 53, 47, .16); }
 .theme-paper .conversation-composer textarea:focus-visible { outline: none; }
 .theme-paper .conversation-composer textarea, .theme-paper .paper-ai-compose textarea { color: #292722; }
 .theme-paper .conversation-composer textarea::placeholder { color: #aaa49c; }
@@ -2931,7 +2935,7 @@ html:not([data-theme="paper"]) .research-workflow:hover .research-workflow-image
 .research-workflow-replication .research-workflow-copy > span, .research-workflow-illustration .research-workflow-copy > span { padding-right: 22px; }
 .has-welcome .conversation-composer-wrap { background: var(--welcome-ground); }
 .has-welcome .conversation-composer, .theme-paper .has-welcome .conversation-composer { color: var(--welcome-ink); background: var(--welcome-paper); border: 1px solid var(--welcome-line); border-radius: 0; box-shadow: none; }
-.has-welcome .conversation-composer:focus-within, .theme-paper .has-welcome .conversation-composer:focus-within { border-color: var(--welcome-line); box-shadow: none; outline: none; }
+.has-welcome .conversation-composer:focus-within, .theme-paper .has-welcome .conversation-composer:focus-within { border-color: var(--welcome-bronze); box-shadow: 0 0 0 2px var(--welcome-bronze); outline: none; }
 .has-welcome .conversation-composer textarea, .theme-paper .has-welcome .conversation-composer textarea { color: var(--welcome-ink); }
 .has-welcome .conversation-composer textarea:focus-visible { outline: none; }
 .has-welcome .conversation-composer textarea::placeholder, .theme-paper .has-welcome .conversation-composer textarea::placeholder { color: var(--welcome-muted); }
