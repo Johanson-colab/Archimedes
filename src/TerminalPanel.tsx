@@ -6,6 +6,13 @@ import "@xterm/xterm/css/xterm.css";
 
 type TerminalThemeName = "charcoal" | "paper";
 
+const TERMINAL_FONT_FAMILY = (() => {
+  const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  if (/Windows/i.test(userAgent)) return '"Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace';
+  if (/Macintosh|Mac OS X/i.test(userAgent)) return '"SFMono-Regular", "SF Mono", Menlo, Monaco, monospace';
+  return '"JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", monospace';
+})();
+
 const PAPER_TERMINAL_THEME: ITheme = {
   background: "#f8f8f6",
   foreground: "#30302d",
@@ -209,12 +216,12 @@ function TerminalSurface({ bridge, session, active, panelOpen, theme, onTitle, o
       allowProposedApi: false,
       cursorBlink: true,
       cursorStyle: "bar",
-      fontFamily: '"SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, monospace',
+      fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: 12,
       fontWeight: "400",
       lineHeight: 1.22,
       macOptionIsMeta: true,
-      scrollback: 5000,
+      scrollback: 10000,
       theme: terminalTheme(themeRef.current),
     });
     const fitAddon = new FitAddon();
