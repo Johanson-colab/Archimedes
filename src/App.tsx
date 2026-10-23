@@ -33,6 +33,8 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
 import RightWorkbench, { type WorkbenchTab } from "./RightWorkbench";
+import JourneyView from "./JourneyView";
+import TrajectoryView from "./TrajectoryView";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createArtifactDraft, formatArtifactComment, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactComment, type ArtifactDraft, type ArtifactSelection } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
@@ -433,12 +435,17 @@ const previewBridge = {
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
       const resolvedProjectId = projectId || previewProjects[0]?.id || "preview-general";
-      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, title: prompt.slice(0, 72), mode, status: "running", context_summary: "", turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [] };
+      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, title: prompt.slice(0, 72), mode, status: "running", context_summary: "", turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
       previewThreads.unshift(thread);
     }
     const turnId = crypto.randomUUID();
     const taskId = crypto.randomUUID();
     thread.messages.push({ id: `${turnId}:user`, turn_id: turnId, role: "user", text: prompt, created_at: now });
+    thread.events ??= [];
+    const appendPreviewEvent = (type: string, payload: unknown) => {
+      thread!.events!.push({ id: crypto.randomUUID(), turn_id: turnId, sequence: thread!.events!.length + 1, type, payload, created_at: new Date().toISOString() });
+    };
+    appendPreviewEvent("user_message", { text: prompt, mode, reasoningEffort, contextLength });
     emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: `Browser preview Agent · thinking: ${reasoningEffort} · context: ${contextLength}` });
     const actions: AgentAction[] = [];
     if (/(write|draft|note|生成|写入)/i.test(prompt)) {
@@ -453,17 +460,20 @@ const previewBridge = {
       };
       previewActions.push(action);
       actions.push(action);
+      appendPreviewEvent("tool_call", { call_id: crypto.randomUUID(), name: "write_file", arguments: { path: "notes/agent-research-brief.md", content: action.payload.content }, status: "approval_required" });
       emitPreviewAgentEvent({ type: "tool", threadId: thread.id, turnId, title: "write artifact", detail: "Prepared a draft for approval" });
     }
     const selectedMode = researchModes.find((candidate) => candidate.id === mode)?.label ?? "Research";
     const contextNote = contextItems?.length ? ` I received ${contextItems.length} attached context item${contextItems.length === 1 ? "" : "s"}.` : "";
     const response = `Preview Agent (${selectedMode}): I reviewed the active research workspace and framed the request as an evidence-backed next step.${contextNote} In the desktop app, this same request will use your configured model and restricted workspace tools.`;
+    appendPreviewEvent("assistant_step", { content: "Reviewing the research request and available workspace context.", protocol: "preview", tool_calls: actions.length ? [{ id: actions[0].id, function: { name: "write_file", arguments: JSON.stringify(actions[0].payload) } }] : [] });
     emitPreviewAgentEvent({ type: "assistant_delta", threadId: thread.id, turnId, title: "Writing response", detail: "Streaming model output", delta: response });
     const completedAt = new Date().toISOString();
     const task = { id: taskId, prompt, response, status: "completed", created_at: now };
     previewTasks.push(task);
     thread.turns.push({ id: turnId, thread_id: thread.id, task_id: taskId, mode, user_message: prompt, assistant_message: response, status: "completed", created_at: now, completed_at: completedAt });
     thread.messages.push({ id: `${turnId}:assistant`, turn_id: turnId, role: "assistant", text: response, created_at: completedAt });
+    appendPreviewEvent("assistant_message", { text: response, status: "completed", model: "gpt-4.1-mini" });
     thread.mode = mode;
     thread.status = "idle";
     thread.turn_count = thread.turns.length;
@@ -679,6 +689,7 @@ function App() {
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
+  const [trajectoryEvents, setTrajectoryEvents] = useState<ResearchEvent[]>([]);
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
@@ -690,7 +701,7 @@ function App() {
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
-  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("terminal");
+  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("trajectory");
   const [workbenchWidth, setWorkbenchWidth] = useState(() => {
     const saved = Number(localStorage.getItem("archimedes-workbench-width"));
     return Number.isFinite(saved) && saved >= 320 && saved <= 560 ? saved : 380;
@@ -1029,12 +1040,14 @@ function App() {
     if (snapshot.threads.length) {
       const thread = await desktopBridge.getResearchThread(snapshot.threads[0].id, snapshot.workspace);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
+      setTrajectoryEvents(thread.events ?? []);
       setActiveThreadId(thread.id);
       setActiveProjectId(thread.project_id);
       setResearchMode(thread.mode);
       setChangeSets(thread.changeSets ?? []);
     } else {
       setMessages(initialMessages);
+      setTrajectoryEvents([]);
       setActiveThreadId(null);
       setActiveProjectId(snapshot.projects?.[0]?.id ?? null);
       setChangeSets([]);
@@ -1112,6 +1125,7 @@ function App() {
     activeThreadIdRef.current = null;
     setActiveThreadId(null);
     setMessages(initialMessages);
+    setTrajectoryEvents([]);
     setPendingAction(null);
     setContextItems([]);
     setChangeSets([]);
@@ -1131,6 +1145,7 @@ function App() {
       setActiveThreadId(thread.id);
       setActiveProjectId(thread.project_id);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
+      setTrajectoryEvents(thread.events ?? []);
       setResearchMode(thread.mode);
       setChangeSets(thread.changeSets ?? []);
       const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
@@ -1273,6 +1288,7 @@ function App() {
         clearPendingAssistantDeltas();
         activeThreadIdRef.current = result.threadId;
         setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
+        setTrajectoryEvents(result.thread.events ?? []);
         setActiveThreadId(result.threadId);
         setActiveProjectId(result.thread.project_id);
         setChangeSets(result.thread.changeSets ?? []);
@@ -1672,6 +1688,21 @@ function App() {
           onTabChange={setWorkbenchTab}
           onWidthChange={setWorkbenchWidth}
           onClose={closeWorkbench}
+          journey={<JourneyView
+            thread={activeThread ?? null}
+            events={trajectoryEvents}
+            modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
+            onOpenTrajectory={() => setWorkbenchTab("trajectory")}
+          />}
+          trajectory={<TrajectoryView
+            thread={activeThread ?? null}
+            events={trajectoryEvents}
+            provider={activeModelConfig?.provider}
+            model={activeModelConfig?.model}
+            modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
+            onCopy={(text) => desktopBridge.writeClipboardText(text)}
+            onOpenJourney={() => setWorkbenchTab("journey")}
+          />}
           files={<ArtifactsView
             compact
             compactWidth={workbenchWidth}

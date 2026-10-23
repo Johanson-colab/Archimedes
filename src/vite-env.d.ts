@@ -611,10 +611,20 @@ interface ResearchTurn {
   completed_at: string | null;
 }
 
+interface ResearchEvent {
+  id: string;
+  turn_id: string;
+  sequence: number;
+  type: string;
+  payload: unknown;
+  created_at: string;
+}
+
 interface ResearchThreadDetail extends ResearchThread {
   turns: ResearchTurn[];
   messages: ResearchThreadMessage[];
   changeSets: WorkspaceChangeSet[];
+  events?: ResearchEvent[];
 }
 
 interface AgentAction {
