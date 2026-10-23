@@ -816,17 +816,15 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .composer-note { margin: 7px 0 0; color: #a0a09a; font-size: 10px; text-align: center; }
 
 /* Thinking is deliberately typographic: a compact signal meter, no decorative AI glyph. */
-.reasoning-effort-picker, .context-length-picker { position: relative; flex: 0 0 auto; }
-/* Keep the two research controls as quiet inline menus, rather than toolbar pills. */
-.conversation-composer-footer { gap: 12px; }
-.composer-tool.reasoning-trigger, .composer-tool.context-length-trigger {
+.reasoning-effort-picker { position: relative; flex: 0 0 auto; }
+.composer-tool.reasoning-trigger {
   min-width: 0;
   padding: 0 2px;
   gap: 7px;
   border-radius: 0;
 }
-.reasoning-trigger > svg:last-child, .context-length-trigger > svg:last-child { margin-left: 1px; color: #858585; transition: transform .15s ease; }
-.reasoning-trigger.active > svg:last-child, .context-length-trigger.active > svg:last-child { transform: rotate(180deg); }
+.reasoning-trigger > svg:last-child { margin-left: 1px; color: #858585; transition: transform .15s ease; }
+.reasoning-trigger.active > svg:last-child { transform: rotate(180deg); }
 .reasoning-meter { display: inline-flex; width: 14px; height: 12px; align-items: flex-end; gap: 2px; }
 .reasoning-meter i { display: block; width: 2px; background: currentColor; border-radius: 1px; opacity: .24; }
 .reasoning-meter i:nth-child(1) { height: 4px; }
@@ -835,12 +833,12 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .reasoning-meter.low i:nth-child(1),
 .reasoning-meter.medium i:nth-child(-n+2),
 .reasoning-meter.high i { opacity: 1; }
-.reasoning-effort-menu, .context-length-menu {
+.reasoning-effort-menu {
   position: absolute;
   z-index: 20;
   bottom: calc(100% + 8px);
   left: 0;
-  width: 176px;
+  width: 232px;
   padding: 6px;
   color: #ddd;
   background: #232323;
@@ -856,16 +854,27 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .reasoning-effort-copy strong { color: inherit; font-size: 10px; font-weight: 700; }
 .reasoning-option-mark { display: block; width: 8px; height: 8px; justify-self: center; border: 1px solid #696969; border-radius: 50%; }
 .reasoning-effort-option.selected .reasoning-option-mark { background: #dedede; border-color: #dedede; box-shadow: inset 0 0 0 2px #303030; }
-.theme-paper .reasoning-effort-menu, .theme-paper .context-length-menu { color: #4c4741; background: #fffefd; border-color: #ddd7cf; box-shadow: 0 18px 45px rgba(59, 53, 46, .15); }
+.reasoning-settings-divider { height: 1px; margin: 6px 3px; background: #3b3b3b; }
+.context-length-menu-trigger { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto 13px; align-items: center; gap: 7px; padding: 9px; color: #f0f0f0; background: transparent; border-radius: 5px; text-align: left; font-size: 10px; font-weight: 700; }
+.context-length-menu-trigger > span:nth-child(2) { color: #a9a9a9; font-weight: 500; }
+.context-length-menu-trigger:hover, .context-length-menu-trigger.active { background: #303030; }
+.context-length-menu-trigger.active > svg { transform: rotate(90deg); }
+.context-length-menu-options { margin-top: 2px; padding-top: 2px; border-top: 1px solid #3b3b3b; }
+.theme-paper .reasoning-effort-menu { color: #4c4741; background: #fffefd; border-color: #ddd7cf; box-shadow: 0 18px 45px rgba(59, 53, 46, .15); }
 .theme-paper .reasoning-effort-heading { border-color: #e3ded7; }
 .theme-paper .reasoning-effort-heading strong { color: #2d2924; }
 .theme-paper .reasoning-effort-option { color: #5e5850; }
 .theme-paper .reasoning-effort-option:hover, .theme-paper .reasoning-effort-option.selected { color: #292620; background: #eeeae4; }
 .theme-paper .reasoning-option-mark { border-color: #aaa39a; }
 .theme-paper .reasoning-effort-option.selected .reasoning-option-mark { background: #6d665e; border-color: #6d665e; box-shadow: inset 0 0 0 2px #eeeae4; }
+.theme-paper .reasoning-settings-divider, .theme-paper .context-length-menu-options { border-color: #e3ded7; background: #e3ded7; }
+.theme-paper .context-length-menu-options { background: transparent; }
+.theme-paper .context-length-menu-trigger { color: #2d2924; }
+.theme-paper .context-length-menu-trigger > span:nth-child(2) { color: #817a72; }
+.theme-paper .context-length-menu-trigger:hover, .theme-paper .context-length-menu-trigger.active { background: #eeeae4; }
 
 @media (max-width: 680px) {
-  .reasoning-effort-menu, .context-length-menu { width: min(176px, calc(100vw - 82px)); }
+  .reasoning-effort-menu { width: min(232px, calc(100vw - 82px)); }
 }
 
 .right-workbench {
@@ -3030,11 +3039,9 @@ html:not([data-theme="paper"]) .research-workflow:hover .research-workflow-image
 html[data-theme="paper"] .codex-shell:has(.has-welcome) .workspace-copy small { color: #6f6a63; }
 .codex-shell:has(.has-welcome) .codex-nav-item { font-size: 13px; }
 
-/* The composer selectors read as one inline control row in every theme. */
+/* The composer trigger itself remains a quiet inline control in every theme. */
 .composer-tool.reasoning-trigger:hover, .composer-tool.reasoning-trigger.active,
-.composer-tool.context-length-trigger:hover, .composer-tool.context-length-trigger.active,
-.theme-paper .composer-tool.reasoning-trigger:hover, .theme-paper .composer-tool.reasoning-trigger.active,
-.theme-paper .composer-tool.context-length-trigger:hover, .theme-paper .composer-tool.context-length-trigger.active {
+.theme-paper .composer-tool.reasoning-trigger:hover, .theme-paper .composer-tool.reasoning-trigger.active {
   background: transparent;
 }
 @keyframes welcome-shutter { from { clip-path: inset(0 100% 0 0); transform: scale(1.08); } to { clip-path: inset(0); transform: scale(1); } }

@@ -1674,7 +1674,6 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const [prompt, setPrompt] = useState("");
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const reasoningMenuRef = useRef<HTMLDivElement>(null);
-  const contextLengthMenuRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1748,14 +1747,16 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   }, [messages.length]);
 
   useEffect(() => {
-    if (!reasoningMenuOpen && !contextLengthMenuOpen) return;
+    if (!reasoningMenuOpen) return;
     const closeMenu = (event: MouseEvent) => {
-      if (!reasoningMenuRef.current?.contains(event.target as Node)) setReasoningMenuOpen(false);
-      if (!contextLengthMenuRef.current?.contains(event.target as Node)) setContextLengthMenuOpen(false);
+      if (!reasoningMenuRef.current?.contains(event.target as Node)) {
+        setReasoningMenuOpen(false);
+        setContextLengthMenuOpen(false);
+      }
     };
     document.addEventListener("click", closeMenu);
     return () => document.removeEventListener("click", closeMenu);
-  }, [contextLengthMenuOpen, reasoningMenuOpen]);
+  }, [reasoningMenuOpen]);
 
   useEffect(() => {
     const closeMenu = () => setComposerMenu(null);
@@ -1992,18 +1993,16 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
                 <span className="reasoning-effort-copy"><strong>{effort.label}</strong></span>
                 <span className="reasoning-option-mark" aria-hidden="true" />
               </button>)}
-            </div>}
-          </div>
-          <div className="context-length-picker" ref={contextLengthMenuRef}>
-            <button className={contextLengthMenuOpen ? "composer-tool context-length-trigger active" : "composer-tool context-length-trigger"} onClick={() => { setContextLengthMenuOpen((open) => !open); setReasoningMenuOpen(false); }} title={`Context length: ${contextLength}`} aria-haspopup="menu" aria-expanded={contextLengthMenuOpen}>
-              <span>Context length · {contextLength === "extra-long" ? "Extra Long" : "Standard"}</span><ChevronDown size={13} />
-            </button>
-            {contextLengthMenuOpen && <div className="context-length-menu" role="menu" aria-label="Context length">
-              <div className="reasoning-effort-heading"><strong>Context length</strong></div>
-              {availableContextLengths.map((length) => <button key={length.id} className={length.id === contextLength ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setContextLengthMenuOpen(false); }}>
-                <span className="reasoning-effort-copy"><strong>{length.label}</strong></span>
-                <span className="reasoning-option-mark" aria-hidden="true" />
-              </button>)}
+              <div className="reasoning-settings-divider" />
+              <button className={contextLengthMenuOpen ? "context-length-menu-trigger active" : "context-length-menu-trigger"} role="menuitem" aria-haspopup="menu" aria-expanded={contextLengthMenuOpen} onClick={() => setContextLengthMenuOpen((open) => !open)}>
+                <span>Context length</span><span>{contextLength === "extra-long" ? "Extra Long" : "Standard"}</span><ChevronRight size={13} />
+              </button>
+              {contextLengthMenuOpen && <div className="context-length-menu-options" role="menu" aria-label="Context length">
+                {availableContextLengths.map((length) => <button key={length.id} className={length.id === contextLength ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setContextLengthMenuOpen(false); }}>
+                  <span className="reasoning-effort-copy"><strong>{length.label}</strong></span>
+                  <span className="reasoning-option-mark" aria-hidden="true" />
+                </button>)}
+              </div>}
             </div>}
           </div>
           <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
