@@ -800,7 +800,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             <span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span>
           </div>
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} activeSelection={selection} onZoomChange={setPdfZoom} onSelection={receiveSelection} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
@@ -997,7 +997,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
   </div>;
 });
 
-function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSelection, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
+function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, onZoomChange, onSelection, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; zoom: number; activeSelection: string; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
   const [width, setWidth] = useState(880);
@@ -1015,6 +1015,10 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSel
     const textLayer = hostRef.current?.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
     if (textLayer) applyPdfHighlights(textLayer, highlights.filter((highlight) => highlight.page_number === pageNumber));
   }, [highlights, pageNumber]);
+  useEffect(() => {
+    if (activeSelection) return;
+    hostRef.current?.querySelectorAll(".arch-pdf-active-selection").forEach((element) => element.classList.remove("arch-pdf-active-selection"));
+  }, [activeSelection]);
   useEffect(() => {
     let cancelled = false;
     let destroyLoadingTask: (() => void) | undefined;
@@ -1093,16 +1097,87 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, onZoomChange, onSel
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
     const selection = window.getSelection();
-    if (!selection?.rangeCount || !selection.toString().trim() || !target.contains(selection.anchorNode)) { onClearSelection(); return; }
-    const rect = selection.getRangeAt(0).getBoundingClientRect();
-    onSelection(selection.toString(), { x: rect.left + rect.width / 2, y: rect.top });
+    if (!selection?.rangeCount || !selection.toString().trim() || !target.contains(selection.anchorNode) || !target.contains(selection.focusNode)) { onClearSelection(); return; }
+    const textLayer = target.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
+    const anchorNode = selection.anchorNode;
+    const focusNode = selection.focusNode;
+    if (!anchorNode || !focusNode) { onClearSelection(); return; }
+    const anchorSpan = textLayer && selectionNodeSpan(anchorNode, textLayer);
+    const focusSpan = textLayer && selectionNodeSpan(focusNode, textLayer);
+    const precise = textLayer && anchorSpan && focusSpan
+      ? selectPdfTextByLayout(textLayer, anchorSpan, anchorNode, selection.anchorOffset, focusSpan, focusNode, selection.focusOffset)
+      : null;
+    const text = precise?.text || selection.toString();
+    if (!text.trim()) { onClearSelection(); return; }
+    textLayer?.querySelectorAll(".arch-pdf-active-selection").forEach((element) => element.classList.remove("arch-pdf-active-selection"));
+    precise?.spans.forEach((span) => span.classList.add("arch-pdf-active-selection"));
+    const rect = (precise?.spans.at(-1) || focusSpan || anchorSpan)?.getBoundingClientRect() || selection.getRangeAt(0).getBoundingClientRect();
+    window.getSelection()?.removeAllRanges();
+    onSelection(text, { x: rect.left + rect.width / 2, y: rect.top });
   }
   function zoomWithTrackpad(event: ReactWheelEvent<HTMLDivElement>) {
     if (!event.ctrlKey) return;
     event.preventDefault();
     onZoomChange((current) => Math.min(3.2, Math.max(.55, current * (event.deltaY < 0 ? 1.12 : .89))));
   }
-  return <div className="arch-pdf-stage" onMouseDown={onClearSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
+  function beginSelection() {
+    hostRef.current?.querySelectorAll(".arch-pdf-active-selection").forEach((element) => element.classList.remove("arch-pdf-active-selection"));
+    onClearSelection();
+  }
+  return <div className="arch-pdf-stage" onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
+}
+
+function selectionNodeSpan(node: Node | null, layer: HTMLElement) {
+  const element = node?.nodeType === Node.ELEMENT_NODE ? node as Element : node?.parentElement;
+  const span = element?.closest<HTMLSpanElement>("span");
+  return span && layer.contains(span) ? span : null;
+}
+
+function textOffsetWithinSpan(span: HTMLSpanElement, node: Node, offset: number) {
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(span);
+    range.setEnd(node, offset);
+    return range.toString().length;
+  } catch { return 0; }
+}
+
+function selectPdfTextByLayout(layer: HTMLElement, anchorSpan: HTMLSpanElement, anchorNode: Node, anchorOffset: number, focusSpan: HTMLSpanElement, focusNode: Node, focusOffset: number) {
+  const measured = Array.from(layer.querySelectorAll<HTMLSpanElement>("span"))
+    .filter((span) => span.textContent?.trim())
+    .map((span) => ({ span, rect: span.getBoundingClientRect() }))
+    .filter(({ rect }) => rect.width > 0 && rect.height > 0);
+  const anchor = measured.find((item) => item.span === anchorSpan);
+  const focus = measured.find((item) => item.span === focusSpan);
+  if (!anchor || !focus) return null;
+  const before = (left: DOMRect, right: DOMRect) => left.top < right.top - 2 || (Math.abs(left.top - right.top) <= 2 && left.left <= right.left);
+  const [first, last, firstNode, firstOffset, lastNode, lastOffset] = before(anchor.rect, focus.rect)
+    ? [anchor, focus, anchorNode, anchorOffset, focusNode, focusOffset]
+    : [focus, anchor, focusNode, focusOffset, anchorNode, anchorOffset];
+  const top = first.rect.top - Math.max(first.rect.height, 8) * .45;
+  const bottom = last.rect.bottom + Math.max(last.rect.height, 8) * .45;
+  // PDF extraction order can place a footer, note, or a neighbouring column
+  // between two visual text spans. Re-sort and crop by their page coordinates.
+  const visual = measured.filter(({ rect }) => rect.bottom >= top && rect.top <= bottom)
+    .sort((a, b) => Math.abs(a.rect.top - b.rect.top) > 2 ? a.rect.top - b.rect.top : a.rect.left - b.rect.left);
+  const start = visual.findIndex((item) => item.span === first.span);
+  const end = visual.findIndex((item) => item.span === last.span);
+  if (start < 0 || end < start) return null;
+  const spans = visual.slice(start, end + 1);
+  const firstTextOffset = textOffsetWithinSpan(first.span, firstNode, firstOffset);
+  const lastTextOffset = textOffsetWithinSpan(last.span, lastNode, lastOffset);
+  let previousTop = Number.NaN;
+  const text = spans.map(({ span, rect }, index) => {
+    const source = span.textContent || "";
+    const fragment = index === 0 && index === spans.length - 1 ? source.slice(Math.min(firstTextOffset, lastTextOffset), Math.max(firstTextOffset, lastTextOffset))
+      : index === 0 ? source.slice(firstTextOffset)
+        : index === spans.length - 1 ? source.slice(0, lastTextOffset)
+          : source;
+    const prefix = Number.isNaN(previousTop) || Math.abs(rect.top - previousTop) <= 2 ? "" : "\n";
+    previousTop = rect.top;
+    return prefix + fragment;
+  }).join("").replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim();
+  return { text, spans: spans.map(({ span }) => span) };
 }
 
 function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighlight[]) {
