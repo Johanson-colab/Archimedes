@@ -1017,7 +1017,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, on
   }, [highlights, pageNumber]);
   useEffect(() => {
     if (activeSelection) return;
-    hostRef.current?.querySelectorAll(".arch-pdf-active-selection").forEach((element) => element.classList.remove("arch-pdf-active-selection"));
+    clearActivePdfSelection(hostRef.current);
   }, [activeSelection]);
   useEffect(() => {
     let cancelled = false;
@@ -1109,9 +1109,14 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, on
       : null;
     const text = precise?.text || selection.toString();
     if (!text.trim()) { onClearSelection(); return; }
-    textLayer?.querySelectorAll(".arch-pdf-active-selection").forEach((element) => element.classList.remove("arch-pdf-active-selection"));
-    precise?.spans.forEach((span) => span.classList.add("arch-pdf-active-selection"));
-    const rect = (precise?.spans.at(-1) || focusSpan || anchorSpan)?.getBoundingClientRect() || selection.getRangeAt(0).getBoundingClientRect();
+    clearActivePdfSelection(textLayer);
+    precise?.segments.forEach(({ span, start, end }) => {
+      const bounds = pdfSelectionSegmentBounds(span, start, end);
+      span.style.setProperty("--arch-selection-start", `${bounds.start}%`);
+      span.style.setProperty("--arch-selection-end", `${bounds.end}%`);
+      span.classList.add("arch-pdf-active-selection");
+    });
+    const rect = (precise?.segments.at(-1)?.span || focusSpan || anchorSpan)?.getBoundingClientRect() || selection.getRangeAt(0).getBoundingClientRect();
     window.getSelection()?.removeAllRanges();
     onSelection(text, { x: rect.left + rect.width / 2, y: rect.top });
   }
@@ -1121,7 +1126,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, on
     onZoomChange((current) => Math.min(3.2, Math.max(.55, current * (event.deltaY < 0 ? 1.12 : .89))));
   }
   function beginSelection() {
-    hostRef.current?.querySelectorAll(".arch-pdf-active-selection").forEach((element) => element.classList.remove("arch-pdf-active-selection"));
+    clearActivePdfSelection(hostRef.current);
     onClearSelection();
   }
   return <div className="arch-pdf-stage" onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
@@ -1140,6 +1145,50 @@ function textOffsetWithinSpan(span: HTMLSpanElement, node: Node, offset: number)
     range.setEnd(node, offset);
     return range.toString().length;
   } catch { return 0; }
+}
+
+function clearActivePdfSelection(root: ParentNode | null) {
+  root?.querySelectorAll<HTMLElement>(".arch-pdf-active-selection").forEach((element) => {
+    element.classList.remove("arch-pdf-active-selection");
+    element.style.removeProperty("--arch-selection-start");
+    element.style.removeProperty("--arch-selection-end");
+  });
+}
+
+function pdfTextPosition(span: HTMLSpanElement, requestedOffset: number) {
+  const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+  let remaining = Math.max(0, requestedOffset);
+  let node = walker.nextNode();
+  while (node) {
+    const length = node.textContent?.length || 0;
+    if (remaining <= length) return { node, offset: remaining };
+    remaining -= length;
+    node = walker.nextNode();
+  }
+  return { node: span, offset: span.childNodes.length };
+}
+
+function pdfSelectionSegmentBounds(span: HTMLSpanElement, requestedStart: number, requestedEnd: number) {
+  const length = span.textContent?.length || 0;
+  const start = Math.max(0, Math.min(length, requestedStart));
+  const end = Math.max(start, Math.min(length, requestedEnd));
+  if (start === 0 && end === length) return { start: 0, end: 100 };
+  try {
+    const range = document.createRange();
+    const from = pdfTextPosition(span, start);
+    const to = pdfTextPosition(span, end);
+    range.setStart(from.node, from.offset);
+    range.setEnd(to.node, to.offset);
+    const spanRect = span.getBoundingClientRect();
+    const rangeRect = range.getBoundingClientRect();
+    if (spanRect.width <= 0 || rangeRect.width <= 0) throw new Error("No measurable text range");
+    return {
+      start: Math.max(0, Math.min(100, (rangeRect.left - spanRect.left) / spanRect.width * 100)),
+      end: Math.max(0, Math.min(100, (rangeRect.right - spanRect.left) / spanRect.width * 100)),
+    };
+  } catch {
+    return { start: length ? start / length * 100 : 0, end: length ? end / length * 100 : 100 };
+  }
 }
 
 function selectPdfTextByLayout(layer: HTMLElement, anchorSpan: HTMLSpanElement, anchorNode: Node, anchorOffset: number, focusSpan: HTMLSpanElement, focusNode: Node, focusOffset: number) {
@@ -1166,18 +1215,23 @@ function selectPdfTextByLayout(layer: HTMLElement, anchorSpan: HTMLSpanElement, 
   const spans = visual.slice(start, end + 1);
   const firstTextOffset = textOffsetWithinSpan(first.span, firstNode, firstOffset);
   const lastTextOffset = textOffsetWithinSpan(last.span, lastNode, lastOffset);
+  const segments = spans.map(({ span }, index) => {
+    const length = span.textContent?.length || 0;
+    if (spans.length === 1) return { span, start: Math.min(firstTextOffset, lastTextOffset), end: Math.max(firstTextOffset, lastTextOffset) };
+    if (index === 0) return { span, start: firstTextOffset, end: length };
+    if (index === spans.length - 1) return { span, start: 0, end: lastTextOffset };
+    return { span, start: 0, end: length };
+  });
   let previousTop = Number.NaN;
   const text = spans.map(({ span, rect }, index) => {
     const source = span.textContent || "";
-    const fragment = index === 0 && index === spans.length - 1 ? source.slice(Math.min(firstTextOffset, lastTextOffset), Math.max(firstTextOffset, lastTextOffset))
-      : index === 0 ? source.slice(firstTextOffset)
-        : index === spans.length - 1 ? source.slice(0, lastTextOffset)
-          : source;
+    const segment = segments[index];
+    const fragment = source.slice(segment.start, segment.end);
     const prefix = Number.isNaN(previousTop) || Math.abs(rect.top - previousTop) <= 2 ? "" : "\n";
     previousTop = rect.top;
     return prefix + fragment;
   }).join("").replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim();
-  return { text, spans: spans.map(({ span }) => span) };
+  return { text, segments };
 }
 
 function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighlight[]) {
