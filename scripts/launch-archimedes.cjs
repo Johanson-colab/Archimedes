@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const APP_NAME = "Archimedes";
+const SHELL_REVISION = "2";
 const electronExecutable = require("electron");
 
 function run(command, args) {
@@ -35,24 +36,20 @@ function brandedMacApplication() {
   const sourceApp = path.resolve(electronExecutable, "../../..");
   const sourceInfo = path.join(sourceApp, "Contents", "Info.plist");
   const icon = path.join(__dirname, "..", "electron", "assets", "app-icon-256.png");
-  const fingerprint = [fs.statSync(sourceInfo).mtimeMs, fs.statSync(icon).mtimeMs]
+  const fingerprint = [SHELL_REVISION, fs.statSync(sourceInfo).mtimeMs, fs.statSync(icon).mtimeMs]
     .map((value) => Math.floor(value).toString(36)).join("-");
   const destination = path.join(os.tmpdir(), "archimedes-electron-shell", fingerprint, `${APP_NAME}.app`);
-  const executable = path.join(destination, "Contents", "MacOS", APP_NAME);
+  const executable = path.join(destination, "Contents", "MacOS", "Electron");
 
   if (!fs.existsSync(destination)) {
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.cpSync(sourceApp, destination, { recursive: true, dereference: true });
-  }
-  if (!fs.existsSync(executable)) {
-    fs.renameSync(path.join(destination, "Contents", "MacOS", "Electron"), executable);
   }
   if (!fs.existsSync(path.join(destination, "Contents", "Resources", "archimedes.icns"))) {
     const plist = path.join(destination, "Contents", "Info.plist");
     macIcon(icon, path.join(destination, "Contents", "Resources", "archimedes.icns"));
     run("plutil", ["-replace", "CFBundleDisplayName", "-string", APP_NAME, plist]);
     run("plutil", ["-replace", "CFBundleName", "-string", APP_NAME, plist]);
-    run("plutil", ["-replace", "CFBundleExecutable", "-string", APP_NAME, plist]);
     run("plutil", ["-replace", "CFBundleIconFile", "-string", "archimedes", plist]);
   }
   return executable;
