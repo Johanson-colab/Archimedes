@@ -346,6 +346,14 @@ type ReaderLibraryPaper = LibraryPaper & { github_url?: string; github_stars?: n
 const PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT = 60;
 const PAPER_CHAT_HISTORY_PAGE_SIZE = 40;
 const PAPER_BRIEFING_REQUEST = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise Chinese Markdown with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
+const PAPER_BRIEFING_INSTRUCTION_PREFIX = "You are preparing a durable research reading guide for the paper ";
+
+function isHiddenPaperBriefingInstruction(message: PaperChatMessage) {
+  return message.role === "user" && (
+    message.text === PAPER_BRIEFING_REQUEST ||
+    message.text.startsWith(PAPER_BRIEFING_INSTRUCTION_PREFIX)
+  );
+}
 const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: string }> = [
   { value: "yellow", label: "Yellow" },
   { value: "red", label: "Red" },
@@ -357,12 +365,12 @@ const PaperChatMarkdown = memo(function PaperChatMarkdown({ text }: { text: stri
   return <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(text)}</ReactMarkdown></div>;
 });
 
-const PaperChatMessageRow = memo(function PaperChatMessageRow({ message }: { message: PaperChatMessage }) {
-  return <article className={message.role}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <PaperChatMarkdown text={message.text} /> : <p>{message.text}</p>}</article>;
+const PaperChatMessageRow = memo(function PaperChatMessageRow({ message, streaming = false }: { message: PaperChatMessage; streaming?: boolean }) {
+  return <article className={`${message.role}${streaming ? " streaming" : ""}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <PaperChatMarkdown text={message.text || "…"} /> : <p>{message.text}</p>}{streaming && <i className="paper-ai-stream-cursor" aria-label="Generating response" />}</article>;
 });
 
-const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, onAsk }: {
-  messages: PaperChatMessage[]; busy: boolean; aiMode: PaperAiMode; onAsk: (prompt: string) => void;
+const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, streamingText, onAsk }: {
+  messages: PaperChatMessage[]; busy: boolean; aiMode: PaperAiMode; streamingText: string | null; onAsk: (prompt: string) => void;
 }) {
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyInitializedRef = useRef(messages.length > 0);
@@ -388,7 +396,8 @@ const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, 
     {messages.length ? <>
       {hiddenMessageCount > 0 && <button className="paper-ai-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - PAPER_CHAT_HISTORY_PAGE_SIZE))}>Show {Math.min(PAPER_CHAT_HISTORY_PAGE_SIZE, hiddenMessageCount)} earlier messages</button>}
       {visibleMessages.map((message, index) => <PaperChatMessageRow key={`${message.role}-${index + historyStart}`} message={message} />)}
-    </> : <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}
+    </> : streamingText === null && <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}
+    {streamingText !== null && <PaperChatMessageRow message={{ role: "assistant", text: streamingText }} streaming />}
     {busy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{messages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}
     {hasAssistantMessage && !busy && <div className="paper-ai-suggestions">
       <button onClick={prompt("请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。", "这篇论文最核心的贡献是什么？请结合全文说明。")}>{aiMode === "audit" ? "核验方法" : "核心贡献"}</button>
@@ -477,9 +486,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [chatCancelling, setChatCancelling] = useState(false);
   const [chatThreadId, setChatThreadId] = useState<string | undefined>();
   const [chatMessages, setChatMessages] = useState<PaperChatMessage[]>([]);
+  const [streamingChatText, setStreamingChatText] = useState<string | null>(null);
   const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
   const [briefingVersion, setBriefingVersion] = useState(0);
   const briefingStartedRef = useRef(false);
+  const activePaperRunIdRef = useRef<string | null>(null);
   const ready = reader?.asset?.status === "ready" && reader.pages.length > 0 && Boolean(reader.asset.preview_url);
   const currentPage = reader?.pages.find((page) => page.page_number === pageNumber) ?? reader?.pages[0] ?? null;
   const lastPage = reader?.asset?.page_count ?? reader?.pages.at(-1)?.page_number ?? 1;
@@ -504,11 +515,13 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setChatHistoryLoaded(false);
     setChatThreadId(undefined);
     setChatMessages([]);
+    setStreamingChatText(null);
+    activePaperRunIdRef.current = null;
     void bridge.getLibraryPaperChatThread(paper.id, workspace).then((thread) => {
       if (!active) return;
       if (thread) {
         const messages = thread.messages
-          .filter((message) => !(message.role === "user" && message.text === PAPER_BRIEFING_REQUEST))
+          .filter((message) => !isHiddenPaperBriefingInstruction(message))
           .map((message) => ({ role: message.role, text: message.text }));
         setChatThreadId(thread.id);
         setChatMessages(messages);
@@ -521,6 +534,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     });
     return () => { active = false; };
   }, [bridge, paper.id, workspace]);
+
+  useEffect(() => bridge.onAgentEvent((event) => {
+    if (event.type !== "assistant_delta" || !event.delta || event.clientRunId !== activePaperRunIdRef.current) return;
+    setStreamingChatText((current) => (current ?? "") + event.delta);
+  }), [bridge]);
 
   const selectedHighlight = reader?.highlights.find((highlight) => highlight.page_number === pageNumber &&
     (highlight.quote === selection || highlight.quote.includes(selection) || selection.includes(highlight.quote))) ?? null;
@@ -651,6 +669,9 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     }
     setChatBusy(true);
     setChatCancelling(false);
+    const clientRunId = crypto.randomUUID();
+    activePaperRunIdRef.current = clientRunId;
+    setStreamingChatText("");
     try {
       const result = await bridge.runAgent({
         prompt: instruction,
@@ -659,6 +680,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         projectId: projectId || undefined,
         mode: options.initialBriefing || aiMode === "audit" ? "deep-research" : "free-chat",
         contextItems: researchContext,
+        clientRunId,
       });
       setChatThreadId(result.threadId);
       setChatMessages((current) => [...current, { role: "assistant", text: result.response }]);
@@ -667,7 +689,14 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       onAgentRun?.(result);
     } catch (askError) {
       setChatMessages((current) => [...current, { role: "assistant", text: `I could not answer that yet: ${readableError(askError, "Agent request failed.")}` }]);
-    } finally { setChatBusy(false); setChatCancelling(false); }
+    } finally {
+      if (activePaperRunIdRef.current === clientRunId) {
+        activePaperRunIdRef.current = null;
+        setStreamingChatText(null);
+      }
+      setChatBusy(false);
+      setChatCancelling(false);
+    }
   }
   useEffect(() => {
     if (aiMode !== "brief" || !chatOpen || !ready || !chatHistoryLoaded || chatBusy || briefingStartedRef.current) return;
@@ -814,7 +843,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       {chatOpen && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
       <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div>{checkout ? <small className="paper-ai-evidence-scope"><ShieldCheck size={11} />Paper + full codebase · {checkout.commit.slice(0, 8)}</small> : repository && <small className="paper-ai-evidence-scope"><Code2 size={11} />Paper + curated repository snapshot</small>}</div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
-        <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} onAsk={(prompt) => void askAI(prompt)} />
+        <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={(prompt) => void askAI(prompt)} />
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
       </aside></>}

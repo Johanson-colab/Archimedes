@@ -914,6 +914,7 @@ app.whenReady().then(() => {
     const workspace = resolveWorkspace(input.workspace);
     store.openWorkspace(workspace);
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
+    const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
     return agent.runAgent({
       prompt: input.prompt.trim(),
       workspace,
@@ -924,7 +925,7 @@ app.whenReady().then(() => {
       contextLength,
       contextItems,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
-      emit: (payload) => event.sender.send("agent:event", payload),
+      emit: (payload) => event.sender.send("agent:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) }),
     });
   });
 

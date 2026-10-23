@@ -3102,6 +3102,9 @@ html[data-theme="paper"] .paper-pane-resizer:focus-visible::after { background: 
 .theme-paper .paper-ai-context span,
 .theme-paper .paper-ai-context p,
 .theme-paper .paper-ai-evidence-scope,
+.paper-ai-stream-cursor { display: inline-block; width: 5px; height: 12px; margin: 1px 0 0 2px; vertical-align: -1px; background: currentColor; animation: paper-ai-stream-blink 1s steps(2, start) infinite; }
+@keyframes paper-ai-stream-blink { 50% { opacity: 0; } }
+
 .theme-paper .paper-ai-working,
 .theme-paper .paper-ai-empty,
 .theme-paper .paper-ai-thread article > span,
