@@ -1033,9 +1033,21 @@ body.workbench-dock-resizing * { cursor: row-resize !important; }
 .artifact-workbench-actions button { display: grid; width: 27px; height: 27px; place-items: center; color: #8f8f8f; background: transparent; border-radius: 5px; }
 .artifact-workbench-actions button:hover { color: #f4f4f4; background: #2a2a2a; }
 .artifact-workbench-body { min-width: 0; min-height: 0; overflow: hidden; }
-.artifact-workbench-body.split { display: grid; grid-template-columns: 168px minmax(0, 1fr); }
+.artifact-workbench-body.split { display: grid; grid-template-columns: var(--files-pane-width, 236px) 7px minmax(0, 1fr); }
+.artifact-workbench-body.editor-only, .artifact-workbench-body.browser-only { display: grid; grid-template-columns: minmax(0, 1fr); }
 .artifact-workbench-body .artifact-browser { width: 100%; height: 100%; border-right: 0; }
-.artifact-workbench-body.split .artifact-browser { border-right: 1px solid #292929; }
+.artifact-workbench-body.split .artifact-browser { border-right: 0; }
+.artifact-workbench-divider { position: relative; background: #191919; cursor: col-resize; touch-action: none; }
+.artifact-workbench-divider::after { position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: #2f2f2f; content: ""; transition: background .15s ease; }
+.artifact-workbench-divider:hover::after, .artifact-workbench-divider:focus-visible::after, body.files-pane-resizing .artifact-workbench-divider::after { width: 2px; background: var(--accent); }
+.artifact-workbench-divider span { position: absolute; top: 50%; left: 1px; width: 5px; height: 26px; margin-top: -13px; background: #262626; border: 1px solid #3a3a3a; border-radius: 3px; }
+.artifact-workbench-divider:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.artifact-workbench-pane-toggles { display: flex; gap: 2px; margin-right: 4px; padding: 2px; background: #202020; border: 1px solid #303030; border-radius: 6px; }
+.artifact-workbench-pane-toggles button { display: grid; width: 24px; height: 22px; place-items: center; color: #8f8f8f; background: transparent; border-radius: 4px; }
+.artifact-workbench-pane-toggles button:hover { color: #f4f4f4; background: #2a2a2a; }
+.artifact-workbench-pane-toggles button.active { color: #f4f4f4; background: #303030; }
+body.files-pane-resizing { cursor: col-resize; user-select: none; }
+body.files-pane-resizing * { cursor: col-resize !important; }
 .artifact-workbench-body .artifact-editor-pane { width: 100%; height: 100%; }
 .artifact-workbench-body.split .artifact-browser-title { padding-inline: 6px; }
 .artifact-workbench-body .artifact-browser-title { height: 34px; }
@@ -1413,7 +1425,6 @@ body.paper-pane-resizing * { cursor: col-resize !important; }
     right: 0;
     bottom: 0;
     width: min(var(--workbench-width, 380px), calc(100vw - 56px));
-    max-width: 560px;
     box-shadow: -18px 0 48px rgba(0, 0, 0, .28);
   }
   .right-workbench:not(.open) { width: 0; box-shadow: none; }
@@ -2632,6 +2643,12 @@ html[data-theme="paper"] .paper-pane-resizer:focus-visible::after { background: 
 .theme-paper .artifact-workbench-actions button { color: #77726b; }
 .theme-paper .artifact-workbench-actions button:hover { color: #252422; background: #e9e5df; }
 .theme-paper .artifact-workbench-body.split .artifact-browser { border-color: #e8e4de; }
+.theme-paper .artifact-workbench-divider { background: #efede9; }
+.theme-paper .artifact-workbench-divider::after { background: #d8d2c8; }
+.theme-paper .artifact-workbench-divider span { background: #f6f4f1; border-color: #ded8d0; }
+.theme-paper .artifact-workbench-pane-toggles { background: #eeeae4; border-color: #e0dbd2; }
+.theme-paper .artifact-workbench-pane-toggles button { color: #77726b; }
+.theme-paper .artifact-workbench-pane-toggles button:hover, .theme-paper .artifact-workbench-pane-toggles button.active { color: #252422; background: #fffefd; }
 .theme-paper .artifact-tab.active .artifact-tab-main > svg { color: #35322e; }
 .theme-paper .trajectory-view { color: #37342f; background: #f6f4f1; }
 .theme-paper .trajectory-stat span, .theme-paper .trajectory-section-title, .theme-paper .trajectory-section-head p { color: #8b857d; }
