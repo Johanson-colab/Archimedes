@@ -32,7 +32,7 @@ import ModelSettingsModal from "./ModelSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
-import RightWorkbench from "./RightWorkbench";
+import RightWorkbench, { type WorkbenchTab } from "./RightWorkbench";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createArtifactDraft, formatArtifactComment, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactComment, type ArtifactDraft, type ArtifactSelection } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
@@ -49,6 +49,7 @@ import {
   Check,
   CircleDot,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   File,
   FileCode2,
@@ -62,6 +63,7 @@ import {
   Images,
   Lightbulb,
   LoaderCircle,
+  Maximize2,
   MessageCircle,
   MessageSquareText,
   Monitor,
@@ -681,6 +683,7 @@ function App() {
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("terminal");
   const [workbenchWidth, setWorkbenchWidth] = useState(() => {
     const saved = Number(localStorage.getItem("archimedes-workbench-width"));
     return Number.isFinite(saved) && saved >= 320 && saved <= 560 ? saved : 380;
@@ -785,15 +788,30 @@ function App() {
   }, [workbenchWidth]);
 
   useEffect(() => {
-    const toggleWorkbench = (event: KeyboardEvent) => {
+    const handleWorkbenchShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "`") {
         event.preventDefault();
-        setWorkbenchOpen((open) => !open);
+        toggleWorkbench();
       }
     };
-    window.addEventListener("keydown", toggleWorkbench);
-    return () => window.removeEventListener("keydown", toggleWorkbench);
-  }, []);
+    window.addEventListener("keydown", handleWorkbenchShortcut);
+    return () => window.removeEventListener("keydown", handleWorkbenchShortcut);
+  }, [workbenchOpen]);
+
+  function openWorkbench(tab: WorkbenchTab) {
+    setWorkbenchTab(tab);
+    setWorkbenchOpen(true);
+  }
+
+  function closeWorkbench() {
+    if (Object.values(artifactDraftsRef.current).some(isDraftDirty) && !window.confirm("Hide the workbench? Unsaved file changes stay in the editor.")) return;
+    setWorkbenchOpen(false);
+  }
+
+  function toggleWorkbench() {
+    if (workbenchOpen) closeWorkbench();
+    else setWorkbenchOpen(true);
+  }
 
   useEffect(() => () => {
     document.body.classList.remove("sidebar-resizing");
@@ -1251,7 +1269,7 @@ function App() {
   async function runCommand(command: string, actionId?: string) {
     const trimmedCommand = command.trim();
     if (!trimmedCommand || runningSession) return;
-    setWorkbenchOpen(true);
+    openWorkbench("terminal");
     try {
       const { sessionId } = await desktopBridge.runTerminal({ command: trimmedCommand, cwd: workspace, actionId });
       setRunningSession(sessionId);
@@ -1260,8 +1278,9 @@ function App() {
     }
   }
 
-  async function openArtifact(filePath: string) {
-    setMainSection("artifacts");
+  async function openArtifact(filePath: string, surface: "workbench" | "page" = "workbench") {
+    if (surface === "page") setMainSection("artifacts");
+    else openWorkbench("files");
     setSelectedFilePath(filePath);
     setFileLoading(true);
     setFileError("");
@@ -1304,8 +1323,9 @@ function App() {
     setMainSection("chat");
   }
 
-  function selectOpenArtifact(file: WorkspaceFilePreview) {
-    setMainSection("artifacts");
+  function selectOpenArtifact(file: WorkspaceFilePreview, surface: "workbench" | "page" = "workbench") {
+    if (surface === "page") setMainSection("artifacts");
+    else openWorkbench("files");
     setSelectedFilePath(file.path);
     setSelectedFile(file);
     setFileError("");
@@ -1481,8 +1501,8 @@ function App() {
         </button>
 
         <nav className="sidebar-nav" aria-label="Primary">
-          <button className={mainSection === "artifacts" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("artifacts")} title="Artifacts">
-            <Folder size={16} /><span>Artifacts</span>
+          <button className={mainSection === "artifacts" || (workbenchOpen && workbenchTab === "files") ? "codex-nav-item active" : "codex-nav-item"} onClick={() => openWorkbench("files")} title="Files">
+            <Folder size={16} /><span>Files</span>
           </button>
           <button className={mainSection === "skills" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("skills")} title="Browse skills">
             <Blocks size={16} /><span>Skills</span>
@@ -1547,7 +1567,7 @@ function App() {
           <div className="main-toolbar-actions">
             {mainSection === "chat" && <button className="model-provider-button" onClick={() => setModelSettingsOpen(true)} title={`Model providers${activeModelConfig?.model ? ` · ${activeModelConfig.model}` : ""}`}><Orbit size={17} strokeWidth={1.8} /><span>{activeModelConfig?.model || "Choose model"}</span></button>}
             {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setWebSearchSettingsOpen(true)} title="Web search settings" aria-label="Web search settings"><Globe2 size={17} /></button>}
-            <button className={workbenchOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => setWorkbenchOpen((open) => !open)} title={workbenchOpen ? "Hide workbench (Ctrl+`)" : "Show workbench (Ctrl+`)"} aria-label={workbenchOpen ? "Hide workbench" : "Show workbench"} aria-pressed={workbenchOpen}>
+            <button className={workbenchOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={toggleWorkbench} title={workbenchOpen ? "Hide workbench (Ctrl+`)" : "Show workbench (Ctrl+`)"} aria-label={workbenchOpen ? "Hide workbench" : "Show workbench"} aria-pressed={workbenchOpen}>
               <PanelRight size={18} />
             </button>
           </div>
@@ -1595,13 +1615,53 @@ function App() {
           {galleryOpened && <div className={mainSection === "gallery" ? "gallery-view-cache" : "gallery-view-cache hidden"} aria-hidden={mainSection !== "gallery"}><GalleryView active={mainSection === "gallery"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} /></div>}
           {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (
-            <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath)} onSelectOpenFile={selectOpenArtifact} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} onAddComment={addArtifactComment} />
+            <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath, "page")} onSelectOpenFile={(file) => selectOpenArtifact(file, "page")} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} onAddComment={addArtifactComment} />
           )}
           <div className={mainSection === "writing" ? "paper-writing-view-cache" : "paper-writing-view-cache hidden"} aria-hidden={mainSection !== "writing"}>
             {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
           </div>
         </div>
-        <RightWorkbench bridge={desktopBridge} open={workbenchOpen} theme={theme} workspace={workspace} width={workbenchWidth} onWidthChange={setWorkbenchWidth} onClose={() => setWorkbenchOpen(false)} />
+        <RightWorkbench
+          bridge={desktopBridge}
+          open={workbenchOpen}
+          theme={theme}
+          workspace={workspace}
+          width={workbenchWidth}
+          activeTab={workbenchTab}
+          dirtyFileCount={dirtyArtifactPaths.size}
+          onTabChange={setWorkbenchTab}
+          onWidthChange={setWorkbenchWidth}
+          onClose={closeWorkbench}
+          files={<ArtifactsView
+            compact
+            compactWidth={workbenchWidth}
+            workspace={workspace}
+            tree={fileTree}
+            openFiles={openFiles}
+            selectedPath={selectedFilePath}
+            file={selectedFile}
+            loading={fileLoading}
+            error={fileError}
+            loadingDirectories={loadingDirectories}
+            drafts={artifactDrafts}
+            dirtyFiles={dirtyArtifactPaths}
+            savingFiles={artifactSaving}
+            conflicts={artifactConflicts}
+            saveErrors={artifactErrors}
+            onOpenFile={(filePath) => void openArtifact(filePath)}
+            onSelectOpenFile={(file) => selectOpenArtifact(file)}
+            onCloseFile={closeArtifact}
+            onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)}
+            onRefresh={() => void refreshWorkspaceFiles()}
+            onNewArtifact={() => setModal("artifact")}
+            onDraftChange={updateArtifactDraft}
+            onSave={(filePath) => void saveArtifact(filePath)}
+            onReload={(filePath) => void reloadArtifact(filePath)}
+            onDismissConflict={dismissArtifactConflict}
+            onAddComment={addArtifactComment}
+            onOpenFull={() => { setMainSection("artifacts"); setWorkbenchOpen(false); }}
+          />}
+        />
         </div>
       </section>
 
@@ -2347,7 +2407,7 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
   return next;
 }
 
-function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewArtifact, onDraftChange, onSave, onReload, onDismissConflict, onAddComment }: {
+function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewArtifact, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, compact = false, compactWidth = 0, onOpenFull }: {
   workspace: string;
   tree: WorkspaceFileTree;
   openFiles: WorkspaceFilePreview[];
@@ -2372,11 +2432,19 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   onReload: (filePath: string) => void;
   onDismissConflict: (filePath: string) => void;
   onAddComment: (comment: ArtifactComment) => void;
+  compact?: boolean;
+  compactWidth?: number;
+  onOpenFull?: () => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [compactPane, setCompactPane] = useState<"browse" | "editor">(selectedPath ? "editor" : "browse");
   const workspaceName = workspace.split("/").filter(Boolean).at(-1) || "Workspace";
   useEffect(() => {
-    if (!selectedPath) return;
+    if (!selectedPath) {
+      setCompactPane("browse");
+      return;
+    }
+    setCompactPane("editor");
     const parts = selectedPath.split("/");
     setExpanded((current) => {
       const next = new Set(current);
@@ -2390,43 +2458,70 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
     return next;
   });
 
+  const browser = <aside className="artifact-browser">
+    <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong></div>
+    {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
+    {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
+  </aside>;
+
+  const editor = <div className="artifact-editor-pane">
+    <div className="artifact-tabs" role="tablist" aria-label="Open files">
+      {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
+        <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
+          {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
+          {workspaceFileIcon({ type: "file", kind: openFile.kind })}<span>{openFile.name}</span>
+        </button>
+        <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
+      </div>)}
+    </div>
+    <FilePreview
+      file={file}
+      draft={file ? drafts[file.path] : undefined}
+      dirty={Boolean(file && dirtyFiles.has(file.path))}
+      saving={Boolean(file && savingFiles.has(file.path))}
+      conflict={file ? conflicts[file.path] : undefined}
+      saveError={file ? saveErrors[file.path] : undefined}
+      loading={loading}
+      error={error}
+      onDraftChange={onDraftChange}
+      onSave={() => file && onSave(file.path)}
+      onReload={() => file && onReload(file.path)}
+      onDismissConflict={() => file && onDismissConflict(file.path)}
+      onAddComment={onAddComment}
+    />
+  </div>;
+
+  if (compact) {
+    const split = compactWidth >= 520;
+    const showingEditor = compactPane === "editor";
+    return <div className="artifact-workbench">
+      <header className="artifact-workbench-toolbar">
+        <div className="artifact-workbench-location">
+          {showingEditor && !split
+            ? <button className="artifact-workbench-back" onClick={() => setCompactPane("browse")} title="Back to files"><ChevronLeft size={13} /><span>Files</span></button>
+            : <><FolderOpen size={13} /><strong>Files</strong></>}
+          {showingEditor && file && <span className="artifact-workbench-file">{file.name}</span>}
+        </div>
+        <div className="artifact-workbench-actions">
+          <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>
+          <button onClick={onNewArtifact} title="New file" aria-label="New file"><Plus size={14} /></button>
+          {onOpenFull && <button onClick={onOpenFull} title="Open full editor" aria-label="Open full editor"><Maximize2 size={13} /></button>}
+        </div>
+      </header>
+      <div className={split ? "artifact-workbench-body split" : showingEditor ? "artifact-workbench-body editor" : "artifact-workbench-body"}>
+        {split ? <>{browser}{editor}</> : showingEditor ? editor : browser}
+      </div>
+    </div>;
+  }
+
   return <div className="artifacts-page">
     <header className="artifacts-header">
       <div><span className="page-kicker">Workspace</span><h1>Artifacts</h1><p>Browse the active folder and inspect files created or changed by Archimedes.</p></div>
       <div className="artifacts-header-actions"><button className="secondary-button" onClick={onRefresh} title="Refresh workspace files"><RefreshCw size={14} />Refresh</button><button className="primary-button" onClick={onNewArtifact}><Plus size={15} />New file</button></div>
     </header>
     <div className="artifacts-workspace">
-      <aside className="artifact-browser">
-        <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong></div>
-        {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
-        {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
-      </aside>
-      <div className="artifact-editor-pane">
-        <div className="artifact-tabs" role="tablist" aria-label="Open files">
-          {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
-            <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
-              {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
-              {workspaceFileIcon({ type: "file", kind: openFile.kind })}<span>{openFile.name}</span>
-            </button>
-            <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
-          </div>)}
-        </div>
-        <FilePreview
-          file={file}
-          draft={file ? drafts[file.path] : undefined}
-          dirty={Boolean(file && dirtyFiles.has(file.path))}
-          saving={Boolean(file && savingFiles.has(file.path))}
-          conflict={file ? conflicts[file.path] : undefined}
-          saveError={file ? saveErrors[file.path] : undefined}
-          loading={loading}
-          error={error}
-          onDraftChange={onDraftChange}
-          onSave={() => file && onSave(file.path)}
-          onReload={() => file && onReload(file.path)}
-          onDismissConflict={() => file && onDismissConflict(file.path)}
-          onAddComment={onAddComment}
-        />
-      </div>
+      {browser}
+      {editor}
     </div>
   </div>;
 }

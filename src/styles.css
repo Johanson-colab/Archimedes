@@ -905,9 +905,34 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .workbench-tab.active { color: #f0eff5; box-shadow: inset 0 -2px var(--night-accent); }
 .workbench-tab svg { flex: 0 0 auto; }
 .workbench-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workbench-tab-badge { display: grid; min-width: 14px; height: 14px; padding: 0 3px; place-items: center; color: #111; background: var(--accent); border-radius: 7px; font-size: 8px; font-style: normal; font-weight: 750; }
 .workbench-close { display: grid; width: 25px; height: 25px; flex: 0 0 auto; margin-left: auto; place-items: center; color: #898b9b; background: transparent; border-radius: 4px; }
 .workbench-close:hover { color: #f0f0f4; background: #20222c; }
 .workbench-body { min-width: 0; min-height: 0; overflow: hidden; }
+.workbench-panel { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.workbench-panel[hidden] { display: none; }
+
+.artifact-workbench { display: grid; height: 100%; min-width: 0; min-height: 0; grid-template-rows: 34px minmax(0, 1fr); background: #0d0f16; }
+.artifact-workbench-toolbar { display: flex; min-width: 0; align-items: center; gap: 6px; padding: 0 6px 0 9px; color: #aaaab7; background: #0e1017; border-bottom: 1px solid #292b38; }
+.artifact-workbench-location { display: flex; min-width: 0; flex: 1; align-items: center; gap: 5px; }
+.artifact-workbench-location > svg { flex: 0 0 auto; color: #858797; }
+.artifact-workbench-location strong { color: #d9d8e1; font-size: 10px; font-weight: 680; }
+.artifact-workbench-back { display: inline-flex; height: 24px; align-items: center; gap: 2px; padding: 0 5px 0 2px; color: #b8b8c6; background: transparent; border-radius: 4px; font-size: 10px; }
+.artifact-workbench-back:hover { color: #f0eff5; background: #20222d; }
+.artifact-workbench-file { min-width: 0; overflow: hidden; color: #898b9b; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-workbench-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 1px; }
+.artifact-workbench-actions button { display: grid; width: 25px; height: 25px; place-items: center; color: #898b9b; background: transparent; border-radius: 4px; }
+.artifact-workbench-actions button:hover { color: #f0f0f4; background: #20222c; }
+.artifact-workbench-body { min-width: 0; min-height: 0; overflow: hidden; }
+.artifact-workbench-body.split { display: grid; grid-template-columns: 168px minmax(0, 1fr); }
+.artifact-workbench-body .artifact-browser { width: 100%; height: 100%; border-right: 0; }
+.artifact-workbench-body.split .artifact-browser { border-right: 1px solid #292b38; }
+.artifact-workbench-body .artifact-editor-pane { width: 100%; height: 100%; }
+.artifact-workbench-body.split .artifact-browser-title { padding-inline: 6px; }
+.artifact-workbench-body .artifact-browser-title { height: 34px; }
+.artifact-workbench-body .artifact-tabs { min-height: 35px; }
+.artifact-workbench-body .artifact-editor-header { min-height: 40px; }
+.artifact-workbench-body .artifact-preview-surface { height: 100%; }
 
 .workbench-resize-handle { position: absolute; z-index: 6; top: 0; bottom: 0; left: 0; display: grid; width: 7px; place-items: center; cursor: col-resize; touch-action: none; }
 .workbench-resize-handle::after { width: 1px; height: 100%; background: transparent; content: ""; transition: background .15s ease; }
@@ -2481,6 +2506,16 @@ html[data-theme="paper"] .paper-pane-resizer:focus-visible::after { background: 
 .theme-paper .workbench-close { color: #85857f; }
 .theme-paper .workbench-close:hover { color: #282825; background: #dfdfda; }
 .theme-paper .workbench-resize-handle:hover::after, .theme-paper .workbench-resize-handle:focus-visible::after { background: var(--accent); }
+.theme-paper .artifact-workbench { background: #fbfaf8; }
+.theme-paper .artifact-workbench-toolbar { color: #555550; background: #f5f3ef; border-color: #e5e1db; }
+.theme-paper .artifact-workbench-location > svg { color: #77726b; }
+.theme-paper .artifact-workbench-location strong { color: #35322e; }
+.theme-paper .artifact-workbench-back { color: #625d56; }
+.theme-paper .artifact-workbench-back:hover { color: #24211e; background: #ece8e2; }
+.theme-paper .artifact-workbench-file { color: #8b857d; }
+.theme-paper .artifact-workbench-actions button { color: #85857f; }
+.theme-paper .artifact-workbench-actions button:hover { color: #282825; background: #e9e5df; }
+.theme-paper .artifact-workbench-body.split .artifact-browser { border-color: #e5e1db; }
 .theme-paper .library-card:hover, .theme-paper .skill-collection-card:hover,
 .theme-paper .knowledge-main .library-card:hover, .theme-paper .library-paper-row:hover,
 .theme-paper .skill-index-row:hover, .theme-paper .workspace-tree-row:hover,

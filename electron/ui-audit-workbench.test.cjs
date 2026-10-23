@@ -37,3 +37,20 @@ test("workbench supports keyboard toggle and resizing", () => {
   assert.match(workbench, /WORKBENCH_MAX_WIDTH = 560/);
   assert.match(css, /body\.workbench-resizing/);
 });
+
+test("files use a compact workbench pane with drill-down and split modes", () => {
+  assert.match(workbench, /FolderTree/);
+  assert.match(workbench, /workbench-tab-badge/);
+  assert.match(workbench, /activeTab === "files"/);
+  assert.match(app, /openWorkbench\("files"\)/);
+  assert.match(app, /<ArtifactsView[\s\S]*?compact[\s\S]*?compactWidth=\{workbenchWidth\}/);
+  assert.match(app, /const split = compactWidth >= 520/);
+  assert.match(app, /artifact-workbench-back/);
+  assert.match(app, /Open full editor/);
+  assert.match(css, /\.artifact-workbench-body\.split \{[^}]*grid-template-columns: 168px minmax\(0, 1fr\)/);
+});
+
+test("dirty file changes are protected when the workbench closes", () => {
+  assert.match(app, /Hide the workbench\? Unsaved file changes stay in the editor\./);
+  assert.match(app, /Object\.values\(artifactDraftsRef\.current\)\.some\(isDraftDirty\)/);
+});
