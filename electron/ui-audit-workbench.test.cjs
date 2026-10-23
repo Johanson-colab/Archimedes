@@ -21,10 +21,10 @@ test("terminal lives in the right workbench instead of the bottom panel", () => 
   assert.match(workbench, /<TerminalPanel[\s\S]*?orientation="right"/);
 });
 
-test("workbench opens from the right and becomes an overlay on narrow screens", () => {
-  assert.match(css, /\.main-workspace \{[^}]*grid-template-columns: minmax\(0, 1fr\) var\(--workbench-width, 0px\)/);
-  assert.match(css, /\.right-workbench \{[^}]*grid-template-rows: 42px minmax\(0, 1fr\)/);
-  assert.match(css, /@media \(max-width: 1280px\) \{[\s\S]*?\.right-workbench \{[^}]*position: absolute/);
+test("workbench shares the sidebar top edge and overlays only on narrow screens", () => {
+  assert.match(css, /\.codex-main \{[^}]*grid-template-columns: minmax\(0, 1fr\) var\(--workbench-width, 0px\)/);
+  assert.match(css, /\.right-workbench \{[^}]*grid-column: 2;[^}]*grid-row: 1 \/ span 2;[^}]*grid-template-rows: 52px minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(max-width: 1280px\) \{[\s\S]*?\.codex-main \{ grid-template-columns: minmax\(0, 1fr\); \}[\s\S]*?\.main-toolbar \{ padding-right: calc\(var\(--workbench-width, 0px\) \+ 18px\); \}[\s\S]*?\.right-workbench \{[^}]*position: absolute/);
 });
 
 test("terminal sessions stay mounted when the workbench is hidden", () => {
@@ -61,14 +61,14 @@ test("files use a tab-first header and keep one visible filename", () => {
   assert.match(css, /\.artifact-editor-pane\.no-tabs \{ grid-template-rows: minmax\(0, 1fr\); \}/);
 });
 
-test("terminal can dock below the active workbench panel", () => {
-  assert.match(workbench, /PanelBottom/);
-  assert.match(workbench, /terminalDock/);
-  assert.match(workbench, /workbench-dock-divider/);
+test("terminal is a workbench tab with no dock or duplicate close controls", () => {
   assert.match(workbench, /workbench-terminal-panel/);
-  assert.match(workbench, /workbench-dock-resizing/);
-  assert.match(css, /\.workbench-body\.terminal-dock \{[^}]*grid-template-rows: minmax\(0, 1fr\) 7px var\(--dock-height, 280px\)/);
-  assert.match(css, /\.workbench-dock-divider \{/);
+  assert.match(workbench, /activeTab === "terminal"/);
+  assert.doesNotMatch(workbench, /PanelBottom|terminalDock|workbench-dock-divider|workbench-close/);
+  assert.doesNotMatch(app, /workbench-dock-divider/);
+  assert.doesNotMatch(css, /\.workbench-body\.terminal-dock|\.workbench-dock-divider|\.workbench-close/);
+  assert.doesNotMatch(terminal, /close-terminal-panel/);
+  assert.match(workbench, /activeTab === "terminal" && <button className="workbench-action"/);
 });
 
 test("dirty file changes are protected when the workbench closes", () => {

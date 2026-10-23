@@ -1733,6 +1733,7 @@ function App() {
             {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
           </div>
         </div>
+        </div>
         <RightWorkbench
           bridge={desktopBridge}
           open={workbenchOpen}
@@ -1745,7 +1746,6 @@ function App() {
           onTabChange={setWorkbenchTab}
           onWidthChange={setWorkbenchWidth}
           onOpenTerminalSettings={() => { setTerminalSettingsMode("settings"); setTerminalSettingsOpen(true); }}
-          onClose={closeWorkbench}
           journey={<JourneyView
             thread={activeThread ?? null}
             events={trajectoryEvents}
@@ -1791,7 +1791,6 @@ function App() {
             onOpenFull={() => { setMainSection("artifacts"); setWorkbenchOpen(false); }}
           />}
         />
-        </div>
       </section>
 
       <WorkspaceModal
