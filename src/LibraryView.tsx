@@ -25,6 +25,7 @@ import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import ConferenceDiscovery from "./ConferenceDiscovery";
 import { equationTokens, findEquationRects } from "./pdf-equations";
 import { applyPdfSearchHighlights } from "./pdf-search-highlights";
+import { findPdfHorizontalRules, findRuledTableRect, findTextTableRect } from "./pdf-table-regions";
 import { useDialogFocus } from "./useDialogFocus";
 import {
   AlignLeft,
@@ -1398,6 +1399,21 @@ function tightenPdfVisualRect(canvas: HTMLCanvasElement, page: HTMLElement, rect
   return padPdfRect(tightened, 9, bounds.width, bounds.height);
 }
 
+function detectPdfTableRect(canvas: HTMLCanvasElement, page: HTMLElement, caption: PdfVisualRect, fragments: PdfTextLine[]) {
+  const bounds = page.getBoundingClientRect();
+  const scaleX = canvas.width / bounds.width;
+  const scaleY = canvas.height / bounds.height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (context) {
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const ruled = findRuledTableRect(caption, findPdfHorizontalRules(pixels, canvas.width, canvas.height, scaleX, scaleY, bounds.width), bounds.width, bounds.height);
+    if (ruled) return ruled;
+  }
+  // Borderless tables are common in camera-ready papers; their repeated wide
+  // multi-cell rows are still a stronger boundary than caption distance.
+  return findTextTableRect(caption, fragments, bounds.width, bounds.height);
+}
+
 function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canvas: HTMLCanvasElement, imageRects: PdfVisualRect[]): PdfInteractiveRegion[] {
   const bounds = page.getBoundingClientRect();
   const fragments = pdfTextFragments(page, textLayer);
@@ -1413,6 +1429,10 @@ function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canv
       const rect = tightenPdfVisualRect(canvas, page, nearbyImage);
       const evidenceRect = unionPdfRects(rect, caption);
       return { rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "image" as const };
+    }
+    if (kind === "table") {
+      const rect = detectPdfTableRect(canvas, page, caption, fragments);
+      if (rect) return { rect, nearbyText: pdfNearbyText(lines, unionPdfRects(rect, caption)), kind, source: "caption" as const };
     }
     const x = bounds.left + caption.left + caption.width / 2;
     const above = inferPdfVisualRect(page, textLayer, x, bounds.top + Math.max(4, caption.top - bounds.height * .18));
