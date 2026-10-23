@@ -32,7 +32,7 @@ import ModelSettingsModal from "./ModelSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
-import TerminalPanel from "./TerminalPanel";
+import RightWorkbench from "./RightWorkbench";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createArtifactDraft, formatArtifactComment, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactComment, type ArtifactDraft, type ArtifactSelection } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
@@ -67,9 +67,9 @@ import {
   Monitor,
   Moon,
   Orbit,
-  PanelBottom,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRight,
   FilePenLine,
   Play,
   Plus,
@@ -680,8 +680,11 @@ function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalHeight, setTerminalHeight] = useState(260);
+  const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchWidth, setWorkbenchWidth] = useState(() => {
+    const saved = Number(localStorage.getItem("archimedes-workbench-width"));
+    return Number.isFinite(saved) && saved >= 320 && saved <= 560 ? saved : 380;
+  });
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [interrupting, setInterrupting] = useState(false);
@@ -777,7 +780,25 @@ function App() {
     window.localStorage.setItem("archimedes-sidebar-hidden", String(sidebarHidden));
   }, [sidebarHidden]);
 
-  useEffect(() => () => document.body.classList.remove("sidebar-resizing"), []);
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-workbench-width", String(workbenchWidth));
+  }, [workbenchWidth]);
+
+  useEffect(() => {
+    const toggleWorkbench = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "`") {
+        event.preventDefault();
+        setWorkbenchOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", toggleWorkbench);
+    return () => window.removeEventListener("keydown", toggleWorkbench);
+  }, []);
+
+  useEffect(() => () => {
+    document.body.classList.remove("sidebar-resizing");
+    document.body.classList.remove("workbench-resizing");
+  }, []);
 
   function beginSidebarResize(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
@@ -1230,7 +1251,7 @@ function App() {
   async function runCommand(command: string, actionId?: string) {
     const trimmedCommand = command.trim();
     if (!trimmedCommand || runningSession) return;
-    setTerminalOpen(true);
+    setWorkbenchOpen(true);
     try {
       const { sessionId } = await desktopBridge.runTerminal({ command: trimmedCommand, cwd: workspace, actionId });
       setRunningSession(sessionId);
@@ -1519,19 +1540,20 @@ function App() {
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>
 
-      <section className={terminalOpen ? "codex-main panel-open" : "codex-main"} style={{ "--terminal-height": `${terminalHeight}px` } as React.CSSProperties}>
+      <section className={workbenchOpen ? "codex-main workbench-open" : "codex-main"} style={{ "--workbench-width": workbenchOpen ? `${workbenchWidth}px` : "0px" } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
           {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title="Show sidebar" aria-label="Show sidebar" aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
           <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
           <div className="main-toolbar-actions">
             {mainSection === "chat" && <button className="model-provider-button" onClick={() => setModelSettingsOpen(true)} title={`Model providers${activeModelConfig?.model ? ` · ${activeModelConfig.model}` : ""}`}><Orbit size={17} strokeWidth={1.8} /><span>{activeModelConfig?.model || "Choose model"}</span></button>}
             {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setWebSearchSettingsOpen(true)} title="Web search settings" aria-label="Web search settings"><Globe2 size={17} /></button>}
-            <button className={terminalOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => setTerminalOpen((open) => !open)} title={terminalOpen ? "Hide bottom panel" : "Show bottom panel"} aria-pressed={terminalOpen}>
-              <PanelBottom size={18} />
+            <button className={workbenchOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => setWorkbenchOpen((open) => !open)} title={workbenchOpen ? "Hide workbench (Ctrl+`)" : "Show workbench (Ctrl+`)"} aria-label={workbenchOpen ? "Hide workbench" : "Show workbench"} aria-pressed={workbenchOpen}>
+              <PanelRight size={18} />
             </button>
           </div>
         </header>
 
+        <div className="main-workspace">
         <div className={mainSection === "chat" ? "main-view chat-main" : "main-view knowledge-main"}>
           {mainSection === "chat" && (
             <ConversationView
@@ -1579,8 +1601,8 @@ function App() {
             {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
           </div>
         </div>
-
-        <TerminalPanel bridge={desktopBridge} open={terminalOpen} theme={theme} workspace={workspace} height={terminalHeight} onHeightChange={setTerminalHeight} onClose={() => setTerminalOpen(false)} />
+        <RightWorkbench bridge={desktopBridge} open={workbenchOpen} theme={theme} workspace={workspace} width={workbenchWidth} onWidthChange={setWorkbenchWidth} onClose={() => setWorkbenchOpen(false)} />
+        </div>
       </section>
 
       <WorkspaceModal
