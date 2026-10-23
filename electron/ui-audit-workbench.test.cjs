@@ -9,6 +9,7 @@ const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const terminal = fs.readFileSync(path.join(root, "src", "TerminalPanel.tsx"), "utf8");
 const workbench = fs.readFileSync(path.join(root, "src", "RightWorkbench.tsx"), "utf8");
 const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
+const jsonCode = fs.readFileSync(path.join(root, "src", "JsonCode.tsx"), "utf8");
 const journey = fs.readFileSync(path.join(root, "src", "JourneyView.tsx"), "utf8");
 const terminalSettings = fs.readFileSync(path.join(root, "src", "TerminalSettingsModal.tsx"), "utf8");
 const store = fs.readFileSync(path.join(root, "electron", "store.cjs"), "utf8");
@@ -85,10 +86,23 @@ test("agent trajectory mirrors the OpenCode context structure", () => {
   assert.match(trajectory, /Session ID/);
   assert.match(trajectory, /Raw events/);
   assert.match(trajectory, /JSON\.stringify\(event, null, 2\)/);
+  assert.match(trajectory, /<JsonCode value=\{event\}/);
   assert.match(trajectory, /Expand all/);
   assert.match(trajectory, /Copy JSON/);
   assert.match(store, /FROM research_events[\s\S]*?ORDER BY turn_id ASC, sequence ASC/);
   assert.match(store, /events,/);
+});
+
+test("raw trajectory json is highlighted without changing copied json", () => {
+  assert.match(jsonCode, /JSON\.stringify\(value, null, 2\)/);
+  assert.match(jsonCode, /function tokenizeJson/);
+  assert.match(jsonCode, /json-token-\$\{token\.kind\}/);
+  assert.match(css, /\.trajectory-json \.json-token-key \{ color: #9fc7e8/);
+  assert.match(css, /\.trajectory-json \.json-token-string \{ color: #c7d7a3/);
+  assert.match(css, /\.trajectory-json \.json-token-number \{ color: #e0b66b/);
+  assert.match(css, /\.trajectory-json \.json-token-literal \{ color: #d6a3e0/);
+  assert.match(css, /\.theme-paper \.trajectory-json \.json-token-key \{ color: #2f607c/);
+  assert.match(trajectory, /copy\(JSON\.stringify\(event, null, 2\), event\.id\)/);
 });
 
 test("terminal settings expose platform shell, font and external terminal controls", () => {
