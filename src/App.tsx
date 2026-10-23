@@ -35,6 +35,7 @@ import SkillsView from "./SkillsView";
 import RightWorkbench, { type WorkbenchTab } from "./RightWorkbench";
 import JourneyView from "./JourneyView";
 import TrajectoryView from "./TrajectoryView";
+import TerminalSettingsModal from "./TerminalSettingsModal";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createArtifactDraft, formatArtifactComment, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactComment, type ArtifactDraft, type ArtifactSelection } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
@@ -251,6 +252,20 @@ const previewAgentListeners = new Set<(payload: AgentEvent) => void>();
 const previewWorkspaceListeners = new Set<(payload: { path: string }) => void>();
 const previewChangeSetListeners = new Set<(payload: WorkspaceChangeSet) => void>();
 const previewPtySessions = new Map<string, { cwd: string; line: string; ready: boolean }>();
+const previewPlatform = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent) ? "win32" : typeof navigator !== "undefined" && /Macintosh|Mac OS X/i.test(navigator.userAgent) ? "darwin" : "linux";
+let previewTerminalSettings: TerminalSettings = {
+  shell: "auto",
+  customShell: "",
+  fontFamily: "",
+  fontSize: 12,
+  scrollback: 10_000,
+  externalTerminal: "auto",
+  onboarded: false,
+  platform: previewPlatform,
+  detectedShell: previewPlatform === "win32" ? "pwsh.exe" : previewPlatform === "darwin" ? "/bin/zsh" : "/bin/bash",
+  detectedShellName: previewPlatform === "win32" ? "pwsh.exe" : previewPlatform === "darwin" ? "zsh" : "bash",
+  externalTerminalLabel: previewPlatform === "win32" ? "Windows Terminal" : previewPlatform === "darwin" ? "Ghostty" : "WezTerm",
+};
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
 const previewFileContents = new Map<string, string>();
 const previewTasks: SavedTask[] = [];
@@ -517,6 +532,12 @@ const previewBridge = {
   stopTerminal: async (sessionId: string) => {
     for (const listener of previewListeners) listener({ sessionId, data: "[process stopped]\n" });
   },
+  getTerminalSettings: async () => previewTerminalSettings,
+  saveTerminalSettings: async (input: Partial<TerminalSettings>) => {
+    previewTerminalSettings = { ...previewTerminalSettings, ...input };
+    return previewTerminalSettings;
+  },
+  openExternalTerminal: async () => ({ opened: true, app: previewTerminalSettings.externalTerminalLabel }),
   createTerminal: async ({ cwd }: { cwd?: string; cols?: number; rows?: number }) => {
     const sessionId = crypto.randomUUID();
     previewPtySessions.set(sessionId, { cwd: cwd || previewWorkspace, line: "", ready: false });
@@ -702,6 +723,9 @@ function App() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("trajectory");
+  const [terminalSettings, setTerminalSettings] = useState<TerminalSettings | null>(null);
+  const [terminalSettingsOpen, setTerminalSettingsOpen] = useState(false);
+  const [terminalSettingsMode, setTerminalSettingsMode] = useState<"settings" | "onboarding">("settings");
   const [workbenchWidth, setWorkbenchWidth] = useState(() => {
     const saved = Number(localStorage.getItem("archimedes-workbench-width"));
     return Number.isFinite(saved) && saved >= 320 && saved <= 560 ? saved : 380;
@@ -806,6 +830,38 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem("archimedes-workbench-width", String(workbenchWidth));
   }, [workbenchWidth]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void desktopBridge.getTerminalSettings()
+      .then((settings) => { if (!cancelled) setTerminalSettings(settings); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!terminalSettings || terminalSettings.onboarded || !workbenchOpen || workbenchTab !== "terminal") return;
+    setTerminalSettingsMode("onboarding");
+    setTerminalSettingsOpen(true);
+  }, [terminalSettings, workbenchOpen, workbenchTab]);
+
+  async function saveTerminalSettings(patch: Partial<TerminalSettings>) {
+    const next = await desktopBridge.saveTerminalSettings(patch);
+    setTerminalSettings(next);
+    setTerminalSettingsOpen(false);
+  }
+
+  async function openExternalTerminal(externalTerminal: TerminalExternalTerminal) {
+    const result = await desktopBridge.openExternalTerminal({ cwd: workspace, externalTerminal });
+    if (!result.opened) throw new Error(result.error || `${result.app} could not be opened.`);
+  }
+
+  function closeTerminalSettings() {
+    if (terminalSettingsMode === "onboarding" && terminalSettings && !terminalSettings.onboarded) {
+      void desktopBridge.saveTerminalSettings({ onboarded: true }).then(setTerminalSettings).catch(() => undefined);
+    }
+    setTerminalSettingsOpen(false);
+  }
 
   useEffect(() => {
     const handleWorkbenchShortcut = (event: KeyboardEvent) => {
@@ -1684,9 +1740,11 @@ function App() {
           workspace={workspace}
           width={workbenchWidth}
           activeTab={workbenchTab}
+          terminalSettings={terminalSettings}
           dirtyFileCount={dirtyArtifactPaths.size}
           onTabChange={setWorkbenchTab}
           onWidthChange={setWorkbenchWidth}
+          onOpenTerminalSettings={() => { setTerminalSettingsMode("settings"); setTerminalSettingsOpen(true); }}
           onClose={closeWorkbench}
           journey={<JourneyView
             thread={activeThread ?? null}
@@ -1751,6 +1809,7 @@ function App() {
         onCreateArtifact={() => void createArtifact()}
         onAddEvidence={addEvidence}
       />
+      <TerminalSettingsModal open={terminalSettingsOpen} mode={terminalSettingsMode} settings={terminalSettings} workspace={workspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
       <ModelSettingsModal bridge={desktopBridge} open={modelSettingsOpen} onClose={() => setModelSettingsOpen(false)} onSaved={setActiveModelConfig} />
       <WebSearchSettingsModal bridge={desktopBridge} open={webSearchSettingsOpen} onClose={() => setWebSearchSettingsOpen(false)} />
       <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />

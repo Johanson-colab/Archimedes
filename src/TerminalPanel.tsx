@@ -75,13 +75,14 @@ type TerminalPanelProps = {
   open: boolean;
   theme: TerminalThemeName;
   workspace: string;
+  settings?: TerminalSettings | null;
   orientation?: "bottom" | "right";
   height?: number;
   onHeightChange?: (height: number) => void;
   onClose: () => void;
 };
 
-export default function TerminalPanel({ bridge, open, theme, workspace, orientation = "bottom", height, onHeightChange, onClose }: TerminalPanelProps) {
+export default function TerminalPanel({ bridge, open, theme, workspace, settings, orientation = "bottom", height, onHeightChange, onClose }: TerminalPanelProps) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const creatingRef = useRef(false);
@@ -174,6 +175,7 @@ export default function TerminalPanel({ bridge, open, theme, workspace, orientat
         active={tab.sessionId === activeSessionId}
         panelOpen={open}
         theme={theme}
+        settings={settings}
         onTitle={(title) => setTabs((current) => current.map((candidate) => candidate.sessionId === tab.sessionId ? { ...candidate, title } : candidate))}
         onExit={() => setTabs((current) => current.map((candidate) => candidate.sessionId === tab.sessionId ? { ...candidate, status: "exited" } : candidate))}
       />)}
@@ -181,12 +183,13 @@ export default function TerminalPanel({ bridge, open, theme, workspace, orientat
   </section>;
 }
 
-function TerminalSurface({ bridge, session, active, panelOpen, theme, onTitle, onExit }: {
+function TerminalSurface({ bridge, session, active, panelOpen, theme, settings, onTitle, onExit }: {
   bridge: ResearchDeskBridge;
   session: TerminalTab;
   active: boolean;
   panelOpen: boolean;
   theme: TerminalThemeName;
+  settings?: TerminalSettings | null;
   onTitle: (title: string) => void;
   onExit: () => void;
 }) {
@@ -205,6 +208,22 @@ function TerminalSurface({ bridge, session, active, panelOpen, theme, onTitle, o
     themeRef.current = theme;
     if (terminalRef.current) terminalRef.current.options.theme = terminalTheme(theme);
   }, [theme]);
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.fontFamily = settings?.fontFamily?.trim() || TERMINAL_FONT_FAMILY;
+    terminal.options.fontSize = settings?.fontSize || 12;
+    terminal.options.scrollback = settings?.scrollback || 10000;
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        fitAddonRef.current?.fit();
+        if (terminal.cols > 0 && terminal.rows > 0) bridge.resizeTerminal(session.sessionId, terminal.cols, terminal.rows);
+      } catch {
+        // The workbench may still be settling after a resize.
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [bridge, session.sessionId, settings?.fontFamily, settings?.fontSize, settings?.scrollback]);
   useEffect(() => { onTitleRef.current = onTitle; }, [onTitle]);
   useEffect(() => { onExitRef.current = onExit; }, [onExit]);
 
@@ -216,12 +235,12 @@ function TerminalSurface({ bridge, session, active, panelOpen, theme, onTitle, o
       allowProposedApi: false,
       cursorBlink: true,
       cursorStyle: "bar",
-      fontFamily: TERMINAL_FONT_FAMILY,
-      fontSize: 12,
+      fontFamily: settings?.fontFamily?.trim() || TERMINAL_FONT_FAMILY,
+      fontSize: settings?.fontSize || 12,
       fontWeight: "400",
       lineHeight: 1.22,
       macOptionIsMeta: true,
-      scrollback: 10000,
+      scrollback: settings?.scrollback || 10000,
       theme: terminalTheme(themeRef.current),
     });
     const fitAddon = new FitAddon();

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { FolderTree, ListTree, Milestone, PanelBottom, SquareTerminal, X } from "lucide-react";
+import { FolderTree, ListTree, Milestone, PanelBottom, Settings, SquareTerminal, X } from "lucide-react";
 import TerminalPanel from "./TerminalPanel";
 
 const WORKBENCH_MIN_WIDTH = 320;
@@ -15,16 +15,18 @@ type RightWorkbenchProps = {
   workspace: string;
   width: number;
   activeTab: WorkbenchTab;
+  terminalSettings: TerminalSettings | null;
   dirtyFileCount: number;
   files: ReactNode;
   journey: ReactNode;
   trajectory: ReactNode;
   onTabChange: (tab: WorkbenchTab) => void;
   onWidthChange: (width: number) => void;
+  onOpenTerminalSettings: () => void;
   onClose: () => void;
 };
 
-export default function RightWorkbench({ bridge, open, theme, workspace, width, activeTab, dirtyFileCount, files, journey, trajectory, onTabChange, onWidthChange, onClose }: RightWorkbenchProps) {
+export default function RightWorkbench({ bridge, open, theme, workspace, width, activeTab, terminalSettings, dirtyFileCount, files, journey, trajectory, onTabChange, onWidthChange, onOpenTerminalSettings, onClose }: RightWorkbenchProps) {
   const [terminalDock, setTerminalDock] = useState(() => window.localStorage.getItem("archimedes-terminal-dock") === "true");
   const [dockHeight, setDockHeight] = useState(() => {
     const saved = Number(window.localStorage.getItem("archimedes-terminal-dock-height"));
@@ -121,6 +123,7 @@ export default function RightWorkbench({ bridge, open, theme, workspace, width, 
         <button className={activeTab === "files" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "files"} onClick={() => onTabChange("files")} title="Files"><FolderTree size={13} /><span>Files</span>{dirtyFileCount > 0 && <i className="workbench-tab-badge" title={`${dirtyFileCount} unsaved file${dirtyFileCount === 1 ? "" : "s"}`}>{dirtyFileCount}</i>}</button>
         <button className={activeTab === "terminal" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "terminal"} onClick={() => onTabChange("terminal")} title="Terminal"><SquareTerminal size={13} /><span>Terminal</span></button>
       </div>
+      <button className="workbench-dock-toggle" onClick={onOpenTerminalSettings} title="Terminal settings" aria-label="Terminal settings"><Settings size={14} /></button>
       <button className={terminalDock ? "workbench-dock-toggle active" : "workbench-dock-toggle"} onClick={() => setTerminalDock((value) => !value)} title={terminalDock ? "Hide terminal dock" : "Show terminal dock"} aria-label={terminalDock ? "Hide terminal dock" : "Show terminal dock"} aria-pressed={terminalDock}><PanelBottom size={15} /></button>
       <button className="workbench-close" onClick={onClose} title="Close workbench" aria-label="Close workbench"><X size={15} /></button>
     </header>
@@ -138,7 +141,7 @@ export default function RightWorkbench({ bridge, open, theme, workspace, width, 
       </div>
       <div className="workbench-dock-divider" role="separator" aria-orientation="horizontal" aria-label="Resize terminal dock" aria-valuemin={180} aria-valuemax={520} aria-valuenow={dockHeight} tabIndex={0} hidden={!dockActive} onPointerDown={startDockResize} onDoubleClick={() => setDockHeight(280)} onKeyDown={handleDockResizeKey}><span /></div>
       <div className="workbench-terminal-panel" hidden={activeTab !== "terminal" && !terminalDock}>
-        <TerminalPanel bridge={bridge} open={open && (activeTab === "terminal" || terminalDock)} theme={theme} workspace={workspace} orientation="right" onClose={closeTerminal} />
+        <TerminalPanel bridge={bridge} open={open && (activeTab === "terminal" || terminalDock)} theme={theme} workspace={workspace} settings={terminalSettings} orientation="right" onClose={closeTerminal} />
       </div>
     </div>
   </aside>;

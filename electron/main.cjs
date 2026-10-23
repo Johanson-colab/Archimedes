@@ -9,7 +9,7 @@ const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
-const { resolveTerminalShell } = require("./terminal-shell.cjs");
+const terminalSettings = require("./terminal-settings.cjs");
 const modelConfig = require("./model-config.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -479,6 +479,7 @@ app.whenReady().then(() => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
+  terminalSettings.initialize(app.getPath("userData"));
   installApplicationMenu();
   protocol.handle("archimedes-file", (request) => {
     try {
@@ -1016,11 +1017,15 @@ app.whenReady().then(() => {
     if (session?.senderId === event.sender.id) session.process.kill("SIGTERM");
   });
 
+  ipcMain.handle("terminal:get-settings", () => terminalSettings.terminalSettings());
+  ipcMain.handle("terminal:save-settings", (_event, input = {}) => terminalSettings.saveTerminalSettings(input));
+  ipcMain.handle("terminal:open-external", (_event, input = {}) => terminalSettings.openExternalTerminal(input));
+
   ipcMain.handle("terminal:create", (event, input = {}) => {
     const workspace = resolveWorkspace(input.cwd);
     const cols = Math.max(2, Math.min(500, Number(input.cols) || 80));
     const rows = Math.max(1, Math.min(200, Number(input.rows) || 24));
-    const { shell, args } = resolveTerminalShell();
+    const { shell, args } = terminalSettings.shellLaunch();
     const sessionId = randomUUID();
     const terminalProcess = pty.spawn(shell, args, {
       name: "xterm-256color",

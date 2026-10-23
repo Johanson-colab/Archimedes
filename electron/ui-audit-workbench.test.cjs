@@ -10,6 +10,7 @@ const terminal = fs.readFileSync(path.join(root, "src", "TerminalPanel.tsx"), "u
 const workbench = fs.readFileSync(path.join(root, "src", "RightWorkbench.tsx"), "utf8");
 const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
 const journey = fs.readFileSync(path.join(root, "src", "JourneyView.tsx"), "utf8");
+const terminalSettings = fs.readFileSync(path.join(root, "src", "TerminalSettingsModal.tsx"), "utf8");
 const store = fs.readFileSync(path.join(root, "electron", "store.cjs"), "utf8");
 
 test("terminal lives in the right workbench instead of the bottom panel", () => {
@@ -88,6 +89,22 @@ test("agent trajectory mirrors the OpenCode context structure", () => {
   assert.match(trajectory, /Copy JSON/);
   assert.match(store, /FROM research_events[\s\S]*?ORDER BY turn_id ASC, sequence ASC/);
   assert.match(store, /events,/);
+});
+
+test("terminal settings expose platform shell, font and external terminal controls", () => {
+  assert.match(app, /<TerminalSettingsModal/);
+  assert.match(app, /getTerminalSettings\(\)/);
+  assert.match(app, /saveTerminalSettings/);
+  assert.match(terminalSettings, /Shell profile/);
+  assert.match(terminalSettings, /Font family/);
+  assert.match(terminalSettings, /Scrollback/);
+  assert.match(terminalSettings, /External terminal/);
+  assert.match(terminalSettings, /Choose your terminal/);
+  assert.match(terminalSettings, /Open external/);
+  assert.match(terminal, /settings\?\.fontFamily/);
+  assert.match(terminal, /settings\?\.fontSize/);
+  assert.match(terminal, /settings\?\.scrollback/);
+  assert.match(css, /\.terminal-settings-modal/);
 });
 
 test("agent journey is derived from raw trajectory events", () => {
