@@ -338,7 +338,8 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryP
 
 type PaperChatMessage = { role: "assistant" | "user"; text: string };
 type CodeChatAttachment = { path: string; startLine: number; endLine: number; snippet: string };
-type PaperFigureCapture = { pageNumber: number; nearbyText: string; image: ContextAttachment };
+type PaperVisualKind = "figure" | "table";
+type PaperFigureCapture = { pageNumber: number; nearbyText: string; kind: PaperVisualKind; image: ContextAttachment };
 type PaperAiMode = "brief" | "audit";
 type PaperChatComposerCommand = { id: number; draft?: string };
 type SelectionAnchor = { x: number; y: number };
@@ -562,7 +563,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setFigureCapture(capture);
     setFigureSelectionMode(false);
     setChatOpen(true);
-    setComposerCommand((current) => ({ id: current.id + 1, draft: `请解释论文第 ${capture.pageNumber} 页所选图表/表格` }));
+    setComposerCommand((current) => ({ id: current.id + 1, draft: `请解释论文第 ${capture.pageNumber} 页所选${capture.kind === "table" ? "表格" : "图片"}` }));
   }
   function receiveSelection(text: string, anchor: SelectionAnchor) {
     const next = text.replace(/\s+/g, " ").trim();
@@ -672,7 +673,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     ).join("");
     const attachedFigure = options.initialBriefing ? null : figureCapture;
     const figureEvidence = attachedFigure
-      ? `\n\nA visual region from PDF page ${attachedFigure.pageNumber} is attached as an image. Inspect the actual pixels before answering. Nearby extracted PDF text follows; it may include a caption or surrounding prose, but do not treat it as a substitute for the image:\n${attachedFigure.nearbyText || "No nearby text was recovered."}`
+      ? `\n\nA ${attachedFigure.kind} from PDF page ${attachedFigure.pageNumber} is attached as an image. Inspect the actual pixels before answering. Nearby extracted PDF text follows; it may include a caption or surrounding prose, but do not treat it as a substitute for the image:\n${attachedFigure.nearbyText || "No nearby text was recovered."}`
       : "";
     const prompt = userPrompt + attachedCode + figureEvidence;
     const repositoryInstruction = repositoryForContext
@@ -869,7 +870,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={(prompt) => void askAI(prompt)} />
         {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected visual region from page ${figureCapture.pageNumber}`} /><div><span>第 {figureCapture.pageNumber} 页图表</span><p>该区域将作为高清图片发送给 AI。</p></div><button onClick={() => setFigureCapture(null)} title="Remove figure attachment"><X size={13} /></button></div>}
+        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>第 {figureCapture.pageNumber} 页{figureCapture.kind === "table" ? "表格" : "图片"}</span><p>该区域将作为高清图片发送给 AI。</p></div><button onClick={() => setFigureCapture(null)} title="Remove figure attachment"><X size={13} /></button></div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
       </aside></>}
     </div>
@@ -1098,17 +1099,20 @@ function distanceToPdfRect(x: number, y: number, rect: PdfVisualRect) {
   return Math.hypot(dx, dy);
 }
 
-function inferPdfVisualRect(page: HTMLElement, textLayer: HTMLElement, clientX: number, clientY: number): { rect: PdfVisualRect; nearbyText: string } {
+function inferPdfVisualRect(page: HTMLElement, textLayer: HTMLElement, clientX: number, clientY: number): { rect: PdfVisualRect; nearbyText: string; kind: PaperVisualKind } {
   const pageBounds = page.getBoundingClientRect();
   const x = clampPdfCoordinate(clientX - pageBounds.left, 0, pageBounds.width);
   const y = clampPdfCoordinate(clientY - pageBounds.top, 0, pageBounds.height);
   const lines = pdfTextLines(page, textLayer);
-  const captionPattern = /^(?:(?:figure|fig\.?|table)\s*\d+[a-z]?\b|(?:图|表)\s*[一二三四五六七八九十\d]+)/i;
-  const caption = lines
-    .filter((line) => captionPattern.test(line.text))
-    .map((line) => ({ line, distance: distanceToPdfRect(x, y, line) }))
+  const figureCaptionPattern = /^(?:(?:figure|fig\.?)\s*\d+[a-z]?\b|图\s*[一二三四五六七八九十\d]+)/i;
+  const tableCaptionPattern = /^(?:table\s*\d+[a-z]?\b|表\s*[一二三四五六七八九十\d]+)/i;
+  const captionCandidate = lines
+    .filter((line) => figureCaptionPattern.test(line.text) || tableCaptionPattern.test(line.text))
+    .map((line) => ({ line, kind: tableCaptionPattern.test(line.text) ? "table" as const : "figure" as const, distance: distanceToPdfRect(x, y, line) }))
     .filter((candidate) => candidate.distance <= Math.max(pageBounds.width, pageBounds.height) * .62)
-    .sort((first, second) => first.distance - second.distance)[0]?.line;
+    .sort((first, second) => first.distance - second.distance)[0];
+  const caption = captionCandidate?.line;
+  const kind: PaperVisualKind = captionCandidate?.kind ?? "figure";
   let rect: PdfVisualRect;
   if (caption) {
     const captionX = caption.left + caption.width / 2;
@@ -1153,10 +1157,10 @@ function inferPdfVisualRect(page: HTMLElement, textLayer: HTMLElement, clientX: 
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 4_000);
-  return { rect: normalized, nearbyText };
+  return { rect: normalized, nearbyText, kind };
 }
 
-function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVisualRect, pageNumber: number): ContextAttachment {
+function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVisualRect, pageNumber: number, kind: PaperVisualKind): ContextAttachment {
   const pageBounds = page.getBoundingClientRect();
   const scaleX = canvas.width / pageBounds.width;
   const scaleY = canvas.height / pageBounds.height;
@@ -1186,13 +1190,13 @@ function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVi
   return {
     id: `paper-visual:${pageNumber}:${crypto.randomUUID()}`,
     type: "image",
-    name: `PDF page ${pageNumber} visual region`,
-    detail: `Automatically selected figure or table from PDF page ${pageNumber}`,
+    name: `PDF page ${pageNumber} ${kind}`,
+    detail: `Automatically selected ${kind} from PDF page ${pageNumber}`,
     image: { dataUrl, mimeType, sizeBytes, width: output.width, height: output.height },
   };
 }
 
-function showPdfVisualSelection(page: HTMLElement, rect: PdfVisualRect) {
+function showPdfVisualSelection(page: HTMLElement, rect: PdfVisualRect, kind: PaperVisualKind) {
   page.querySelector(".arch-pdf-visual-selection")?.remove();
   const overlay = window.document.createElement("div");
   overlay.className = "arch-pdf-visual-selection";
@@ -1201,7 +1205,7 @@ function showPdfVisualSelection(page: HTMLElement, rect: PdfVisualRect) {
   overlay.style.width = `${rect.width}px`;
   overlay.style.height = `${rect.height}px`;
   const label = window.document.createElement("span");
-  label.textContent = "已选择图表";
+  label.textContent = kind === "table" ? "已选择表格" : "已选择图片";
   overlay.append(label);
   page.append(overlay);
 }
@@ -1316,9 +1320,9 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
       if (!page || !canvas || !textLayer) return;
       const pageBounds = page.getBoundingClientRect();
       if (event.clientX < pageBounds.left || event.clientX > pageBounds.right || event.clientY < pageBounds.top || event.clientY > pageBounds.bottom) return;
-      const { rect, nearbyText } = inferPdfVisualRect(page, textLayer, event.clientX, event.clientY);
-      showPdfVisualSelection(page, rect);
-      onFigureCapture({ pageNumber, nearbyText, image: cropPdfVisual(canvas, page, rect, pageNumber) });
+      const { rect, nearbyText, kind } = inferPdfVisualRect(page, textLayer, event.clientX, event.clientY);
+      showPdfVisualSelection(page, rect, kind);
+      onFigureCapture({ pageNumber, nearbyText, kind, image: cropPdfVisual(canvas, page, rect, pageNumber, kind) });
       window.getSelection()?.removeAllRanges();
       return;
     }
