@@ -25,6 +25,31 @@ test("retains official conference provenance and presentation when saving and re
   }
 });
 
+test("finds phrases across PDF whitespace, soft hyphens, and a line-ending hyphen", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-reader-find-"));
+  try {
+    store.openWorkspace(workspace);
+    const library = store.createLibrary({ name: "Reading" });
+    const paper = store.addPaper(library.id, { title: "Indexed PDF", authors: [], source: "test" });
+    store.replacePaperReaderAsset(paper.id, {
+      relative_path: "paper.pdf", sha256: "test", size_bytes: 1, page_count: 2,
+      pages: [
+        { page_number: 1, text: "The AI\u00a0Scientist proposes MLE-\nSTAR." },
+        { page_number: 2, text: "Nothing relevant here." },
+      ], truncated: false, warning: "",
+    });
+    const ai = store.findPaperPassages(paper.id, "AI Scientist");
+    const mle = store.findPaperPassages(paper.id, "MLE-STAR");
+    assert.equal(ai.length, 1);
+    assert.equal(mle.length, 1);
+    assert.equal(ai[0].page_number, 1);
+    assert.equal(mle[0].excerpt.includes("MLE- STAR"), true);
+  } finally {
+    store.openWorkspace(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-reader-find-close-")));
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test("shows only successfully opened PDF pages and web pages as reply sources", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-sources-"));
   try {

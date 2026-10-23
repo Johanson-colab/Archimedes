@@ -23,6 +23,7 @@ import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import ConferenceDiscovery from "./ConferenceDiscovery";
+import { equationTokens, findEquationRects } from "./pdf-equations";
 import { useDialogFocus } from "./useDialogFocus";
 import {
   AlignLeft,
@@ -464,6 +465,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [pdfZoom, setPdfZoom] = useState(1);
   const [query, setQuery] = useState("");
   const [passages, setPassages] = useState<PaperPassage[]>([]);
+  const searchRequestRef = useRef(0);
   const [selection, setSelection] = useState("");
   const [selectionAnchor, setSelectionAnchor] = useState<SelectionAnchor | null>(null);
   const [figureCapture, setFigureCapture] = useState<PaperFigureCapture | null>(null);
@@ -577,12 +579,22 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   }
   async function find() {
     if (!query.trim() || !reader) return;
+    const searchRequest = ++searchRequestRef.current;
+    setError("");
     try {
       const next = await bridge.findLibraryPaperPassages(paper.id, query.trim(), workspace);
+      // Searches can finish out of order when someone edits the phrase and
+      // presses Enter again. An old empty response must not overwrite a newer
+      // successful search with the misleading "no match" banner.
+      if (searchRequest !== searchRequestRef.current) return;
       setPassages(next);
-      if (next[0]) setPageNumber(next[0].page_number);
-      else setError("No matching passage was found in the indexed pages.");
-    } catch (findError) { setError(readableError(findError, "Could not search this paper.")); }
+      if (next[0]) {
+        setPageNumber(next[0].page_number);
+        setError("");
+      } else setError(`No match found in the ${reader.pages.length} indexed PDF pages for “${query.trim()}”.`);
+    } catch (findError) {
+      if (searchRequest === searchRequestRef.current) setError(readableError(findError, "Could not search this paper."));
+    }
   }
   async function saveHighlight(note = "", color: PaperHighlightInput["color"] = "yellow") {
     if (!currentPage || !selection) return;
@@ -843,7 +855,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
                 <button onClick={() => setPdfZoom((value) => Math.min(3.2, Math.round((value + .1) * 100) / 100))} disabled={pdfZoom >= 3.2} title="Zoom in 10%"><Plus size={16} /></button>
               </div>
             </div>
-            <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" /><button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
+            <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => { searchRequestRef.current += 1; setQuery(event.target.value); setError(""); }} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" /><button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
             <div className="paper-reader-evidence-actions"><button className={highlightListOpen ? "paper-reader-evidence active" : "paper-reader-evidence"} onClick={() => setHighlightListOpen((value) => !value)} aria-expanded={highlightListOpen} title="查看高亮与笔记"><Highlighter size={14} />{reader?.highlights.length ?? 0}</button></div>
           </div>
           {highlightListOpen && <aside className="paper-highlight-list" aria-label="高亮与笔记">
@@ -1253,60 +1265,6 @@ function pdfNearbyText(lines: PdfTextLine[], rect: PdfVisualRect) {
     .slice(0, 4_000);
 }
 
-function looksLikePdfEquation(text: string, line: PdfTextLine, pageWidth: number) {
-  if (!text || /^(?:figure|fig\.?|table)\s*\d+/i.test(text)) return false;
-  const symbols = (text.match(/[=+−±×÷≈≠≤≥∑∏∫√∂∇∈∉∞α-ωΑ-Ω‖⟨⟩→⇒∂∀∃]/g) || []).length;
-  const scripts = (text.match(/[{}_^]|\b(?:exp|log|softmax|argmax|argmin|sin|cos|lim)\b/gi) || []).length;
-  const proseWords = (text.match(/[A-Za-z]{4,}/g) || []).length;
-  const hasRelation = /[=≈≠≤≥∼]/.test(text);
-  const centered = Math.abs(line.left + line.width / 2 - pageWidth / 2) <= pageWidth * .28;
-  const compact = line.width <= pageWidth * .78;
-  return compact && centered && ((hasRelation && symbols + scripts >= 2 && proseWords <= 9) || (symbols + scripts >= 5 && proseWords <= 6));
-}
-
-function expandPdfEquationRect(seed: PdfVisualRect, fragments: PdfTextLine[], pageWidth: number, pageHeight: number) {
-  let expanded = seed;
-  for (let iteration = 0; iteration < 4; iteration += 1) {
-    const centerY = expanded.top + expanded.height / 2;
-    const horizontalReach = Math.max(42, Math.min(pageWidth * .095, expanded.height * 6.5));
-    const candidates = fragments.filter((fragment) => {
-      const fragmentCenterY = fragment.top + fragment.height / 2;
-      const verticalReach = Math.max(8, Math.max(expanded.height, fragment.height) * 1.05);
-      const horizontalGap = Math.max(0, fragment.left - (expanded.left + expanded.width), expanded.left - (fragment.left + fragment.width));
-      const proseWords = (fragment.text.match(/[A-Za-z]{4,}/g) || []).length;
-      const mathLike = fragment.text.length <= 22 || /[=+−±×÷≈≠≤≥∑∏∫√∂∇∈∞α-ωΑ-Ω‖⟨⟩_^{}()[\]0-9]/.test(fragment.text);
-      return Math.abs(fragmentCenterY - centerY) <= verticalReach && horizontalGap <= horizontalReach && proseWords <= 5 && mathLike;
-    });
-    const next = candidates.reduce<PdfVisualRect>((current, fragment) => unionPdfRects(current, fragment), expanded);
-    if (Math.abs(next.left - expanded.left) < .5 && Math.abs(next.width - expanded.width) < .5 && Math.abs(next.top - expanded.top) < .5 && Math.abs(next.height - expanded.height) < .5) break;
-    expanded = next;
-  }
-  return padPdfRect(expanded, 9, pageWidth, pageHeight);
-}
-
-function detectPdfEquationRegions(page: HTMLElement, textLayer: HTMLElement): PdfInteractiveRegion[] {
-  const bounds = page.getBoundingClientRect();
-  const fragments = pdfTextFragments(page, textLayer);
-  const lines = pdfTextLines(page, textLayer);
-  const equations = lines.filter((line) => looksLikePdfEquation(line.text, line, bounds.width));
-  const groups: PdfTextLine[][] = [];
-  for (const line of equations) {
-    const previous = groups.at(-1)?.at(-1);
-    const verticalGap = previous ? line.top - (previous.top + previous.height) : Number.POSITIVE_INFINITY;
-    const horizontalOverlap = previous ? pdfRectIntersection(
-      { left: previous.left, top: line.top, width: previous.width, height: Math.max(1, line.height) },
-      { left: line.left, top: line.top, width: line.width, height: Math.max(1, line.height) },
-    ) : 0;
-    if (previous && verticalGap <= Math.max(12, previous.height * 1.25) && (horizontalOverlap > 0 || Math.abs(previous.left + previous.width / 2 - (line.left + line.width / 2)) < bounds.width * .18)) groups.at(-1)!.push(line);
-    else groups.push([line]);
-  }
-  return groups.map((group) => {
-    const rect = group.slice(1).reduce<PdfVisualRect>((current, line) => unionPdfRects(current, line), group[0]);
-    const expanded = expandPdfEquationRect(rect, fragments, bounds.width, bounds.height);
-    return { rect: expanded, nearbyText: pdfNearbyText(lines, expanded), kind: "equation" as const, source: "equation" as const };
-  });
-}
-
 function detectPdfImageRegions(operatorList: { fnArray: number[]; argsArray: unknown[][] }, pdfjs: typeof import("pdfjs-dist"), viewport: { transform: number[]; width: number; height: number }): PdfVisualRect[] {
   const stack: number[][] = [];
   let current = [1, 0, 0, 1, 0, 0];
@@ -1636,7 +1594,9 @@ function PdfPaperCanvas({ url, pageNumber, highlights, zoom, activeSelection, fi
         renderHost.replaceChildren(page);
         const operatorList = await pdfPage.getOperatorList();
         const imageRects = detectPdfImageRegions(operatorList, pdfjs, viewport);
-        const equationRegions = detectPdfEquationRegions(page, textLayer);
+        const nearbyLines = pdfTextLines(page, textLayer);
+        const equationRegions: PdfInteractiveRegion[] = findEquationRects(equationTokens(textContent, viewport), viewport.width, viewport.height, imageRects)
+          .map((rect) => ({ rect, nearbyText: pdfNearbyText(nearbyLines, rect), kind: "equation", source: "equation" }));
         const captionRegions = detectPdfCaptionRegions(page, textLayer, canvas, imageRects);
         const uncaptionedImages: PdfInteractiveRegion[] = imageRects
           .filter((rect) => !captionRegions.some((region) => region.source === "image" && pdfRectIntersection(region.rect, rect) / pdfRectArea(rect) > .72))

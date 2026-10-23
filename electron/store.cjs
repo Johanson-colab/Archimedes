@@ -488,13 +488,39 @@ function findPaperPassages(paperId, query) {
   const db = requireDatabase();
   const needle = String(query || "").trim();
   if (!needle || needle.length > 200) throw new Error("Enter a search phrase of at most 200 characters.");
-  const rows = db.prepare("SELECT page_number, text FROM paper_reader_pages WHERE paper_id = ? AND lower(text) LIKE ? ORDER BY page_number ASC LIMIT 24")
-    .all(paperId, `%${needle.toLowerCase()}%`);
-  return rows.map((row) => {
-    const index = row.text.toLowerCase().indexOf(needle.toLowerCase());
-    return { page_number: row.page_number, start_offset: index, end_offset: index + needle.length,
-      excerpt: row.text.slice(Math.max(0, index - 180), Math.min(row.text.length, index + needle.length + 220)).replace(/\s+/g, " ") };
-  });
+  // PDF extraction commonly inserts newlines, soft hyphens, or non-breaking
+  // spaces inside one visible phrase. Build a normalized string while keeping
+  // an index back to the stored page text for excerpts and highlights.
+  const normalize = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase()
+    .replace(/[\u00ad\u200b]/g, "").replace(/[‐‑‒–—]/g, "-").replace(/-\s+/g, "-").replace(/\s+/g, " ").trim();
+  const normalizedNeedle = normalize(needle);
+  const rows = db.prepare("SELECT page_number, text FROM paper_reader_pages WHERE paper_id = ? ORDER BY page_number ASC")
+    .all(paperId);
+  const hits = [];
+  for (const row of rows) {
+    const source = String(row.text || "");
+    const compact = [];
+    const positions = [];
+    for (let index = 0; index < source.length; index += 1) {
+      const character = source[index].normalize("NFKC").toLocaleLowerCase();
+      if (/[\u00ad\u200b]/.test(character)) continue;
+      const value = /[‐‑‒–—]/.test(character) ? "-" : /\s/.test(character) ? " " : character;
+      // A line ending hyphen is a PDF layout artefact, not a word boundary.
+      if (value === " " && (compact.at(-1) === " " || compact.at(-1) === "-")) continue;
+      compact.push(value); positions.push(index);
+    }
+    while (compact[0] === " ") { compact.shift(); positions.shift(); }
+    while (compact.at(-1) === " ") { compact.pop(); positions.pop(); }
+    const normalizedText = compact.join("");
+    const index = normalizedText.indexOf(normalizedNeedle);
+    if (index < 0) continue;
+    const start = positions[index] ?? 0;
+    const end = (positions[index + normalizedNeedle.length - 1] ?? start) + 1;
+    hits.push({ page_number: row.page_number, start_offset: start, end_offset: end,
+      excerpt: source.slice(Math.max(0, start - 180), Math.min(source.length, end + 220)).replace(/\s+/g, " ") });
+    if (hits.length >= 24) break;
+  }
+  return hits;
 }
 
 function createPaperHighlight(paperId, input) {
