@@ -93,3 +93,22 @@ test("restores the research thread linked to a paper", () => {
     fs.rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test("permanently deletes an archived research chat and its turns", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-thread-delete-"));
+  try {
+    store.openWorkspace(workspace);
+    const thread = store.createResearchThread({ prompt: "Discard this archived chat", mode: "free-chat" });
+    const turn = store.startResearchTurn({ threadId: thread.id, taskId: null, prompt: "Discard this archived chat", mode: "free-chat" });
+    store.finishResearchTurn(turn.id, { response: "Temporary research." });
+    store.archiveResearchThread(thread.id);
+    assert.equal(store.listResearchThreads({ archived: true }).some((candidate) => candidate.id === thread.id), true);
+
+    assert.deepEqual(store.deleteResearchThread(thread.id), { deleted: true });
+    assert.equal(store.listResearchThreads({ archived: true }).some((candidate) => candidate.id === thread.id), false);
+    assert.throws(() => store.getResearchThread(thread.id), /Research thread not found/);
+  } finally {
+    store.openWorkspace(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-thread-delete-close-")));
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});

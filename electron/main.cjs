@@ -646,6 +646,11 @@ app.whenReady().then(() => {
     return store.archiveResearchThread(input.id, input.archived !== false);
   });
 
+  ipcMain.handle("research-thread:delete", (_event, input = {}) => {
+    if (typeof input.id !== "string") throw new Error("A research thread ID is required.");
+    return store.deleteResearchThread(input.id);
+  });
+
   ipcMain.handle("model-config:get", () => modelConfig.getPublicModelConfig());
 
   ipcMain.handle("model-config:list-models", (_event, input = {}) => modelConfig.listProviderModels(input));

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Folder, FolderPlus, MessageSquarePlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
 
-export default function ProjectSidebar({ projects, archivedProjects, threads, archivedThreads, activeProjectId, activeThreadId, disabled, onNewProject, onNewChat, onRenameProject, onArchiveProject, onRemoveProject, onOpenThread, onArchiveThread }: {
+export default function ProjectSidebar({ projects, archivedProjects, threads, archivedThreads, activeProjectId, activeThreadId, disabled, onNewProject, onNewChat, onRenameProject, onArchiveProject, onRemoveProject, onOpenThread, onArchiveThread, onRemoveThread }: {
   projects: ResearchProject[];
   archivedProjects: ResearchProject[];
   threads: ResearchThread[];
@@ -17,6 +17,7 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
   onRemoveProject: (project: ResearchProject) => void;
   onOpenThread: (thread: ResearchThread) => void;
   onArchiveThread: (thread: ResearchThread, archived: boolean) => void;
+  onRemoveThread: (thread: ResearchThread) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
@@ -125,7 +126,7 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
     {archivedThreads.length > 0 && <>
       <button className={showArchived ? "archived-toggle active" : "archived-toggle"} onClick={() => setShowArchived((visible) => !visible)}><Archive size={13} /><span>Archived chats</span><small>{archivedThreads.length}</small></button>
       {showArchived && <div className="archived-chat-list">
-        {archivedThreads.map((thread) => <div className="archived-chat-row" key={thread.id}><span>{thread.title}</span><button onClick={() => onArchiveThread(thread, false)} title="Restore chat"><ArchiveRestore size={12} /></button></div>)}
+        {archivedThreads.map((thread) => <div className="archived-chat-row" key={thread.id}><span>{thread.title}</span><div><button onClick={() => onArchiveThread(thread, false)} title="Restore chat" disabled={disabled}><ArchiveRestore size={12} /></button><button className="archived-chat-delete" onClick={() => onRemoveThread(thread)} title="Permanently delete chat" disabled={disabled}><Trash2 size={12} /></button></div></div>)}
       </div>}
     </>}
   </section>;
@@ -150,5 +151,15 @@ export function ProjectRemoveModal({ project, onClose, onRemove }: { project: Re
     <header className="modal-header"><div><span className="eyebrow">Permanent action</span><h2>Remove project?</h2></div></header>
     <p><strong>{project.name}</strong> and its {chatLabel}, research turns, and recorded Agent actions will be permanently deleted.</p>
     <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="danger-button" onClick={onRemove}><Trash2 size={14} />Remove project</button></div>
+  </section></div>;
+}
+
+export function ThreadRemoveModal({ thread, onClose, onRemove }: { thread: ResearchThread | null; onClose: () => void; onRemove: () => void }) {
+  const dialogRef = useDialogFocus<HTMLElement>(Boolean(thread), onClose);
+  if (!thread) return null;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-remove-modal" role="dialog" aria-modal="true" aria-label={`Delete ${thread.title}`} onMouseDown={(event) => event.stopPropagation()}>
+    <header className="modal-header"><div><span className="eyebrow">Permanent action</span><h2>Delete chat?</h2></div></header>
+    <p><strong>{thread.title}</strong>, its research turns, recorded Agent actions, and chat history will be permanently deleted.</p>
+    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="danger-button" onClick={onRemove}><Trash2 size={14} />Delete chat</button></div>
   </section></div>;
 }

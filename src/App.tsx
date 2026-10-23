@@ -30,7 +30,7 @@ import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ModelSettingsModal from "./ModelSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
-import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
+import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
 import RightWorkbench from "./RightWorkbench";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
@@ -409,6 +409,13 @@ const previewBridge = {
     target.unshift(thread);
     return structuredClone(thread);
   },
+  deleteResearchThread: async (id: string) => {
+    for (const collection of [previewThreads, previewArchivedThreads]) {
+      const index = collection.findIndex((thread) => thread.id === id);
+      if (index >= 0) collection.splice(index, 1);
+    }
+    return { deleted: true };
+  },
   getModelConfig: async () => ({ provider: "custom" as ModelProviderId, baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", hasApiKey: false, source: "environment" as const }),
   getModelCapabilities: async () => previewModelCapabilities,
   listProviderModels: async () => ({ models: [], source: "live" as const }),
@@ -711,6 +718,7 @@ function App() {
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [projectToRemove, setProjectToRemove] = useState<ResearchProject | null>(null);
+  const [threadToRemove, setThreadToRemove] = useState<ResearchThread | null>(null);
   const [artifactName, setArtifactName] = useState("");
   const [artifactDrafts, setArtifactDrafts] = useState<Record<string, ArtifactDraft>>({});
   const [artifactSaving, setArtifactSaving] = useState<Set<string>>(new Set());
@@ -1145,6 +1153,27 @@ function App() {
     }
   }
 
+  async function removeThread(thread: ResearchThread) {
+    if (agentBusy) return;
+    await desktopBridge.deleteResearchThread(thread.id);
+    setThreadToRemove(null);
+    const snapshot = await desktopBridge.openWorkspace(workspace);
+    setProjects(snapshot.projects);
+    setArchivedProjects(snapshot.archivedProjects ?? []);
+    setThreads(snapshot.threads);
+    setArchivedThreads(snapshot.archivedThreads);
+    if (activeThreadId === thread.id) {
+      const next = snapshot.threads[0];
+      if (next) await openResearchThread(next);
+      else {
+        activeThreadIdRef.current = null;
+        setActiveThreadId(null);
+        setMessages(initialMessages);
+        setChangeSets([]);
+      }
+    }
+  }
+
   async function archiveProject(project: ResearchProject, archived: boolean) {
     if (agentBusy) return;
     await desktopBridge.archiveResearchProject(project.id, archived);
@@ -1523,6 +1552,7 @@ function App() {
           onRemoveProject={setProjectToRemove}
           onOpenThread={(thread) => void openResearchThread(thread)}
           onArchiveThread={(thread, archived) => void archiveThread(thread, archived)}
+          onRemoveThread={setThreadToRemove}
         />
 
         <div className="sidebar-workspace">
@@ -1624,6 +1654,7 @@ function App() {
       <WebSearchSettingsModal bridge={desktopBridge} open={webSearchSettingsOpen} onClose={() => setWebSearchSettingsOpen(false)} />
       <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
+      <ThreadRemoveModal thread={threadToRemove} onClose={() => setThreadToRemove(null)} onRemove={() => threadToRemove && void removeThread(threadToRemove)} />
     </main>
   );
 }

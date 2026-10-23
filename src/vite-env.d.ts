@@ -24,6 +24,7 @@ interface ResearchDeskBridge {
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
+    deleteResearchThread: (id: string) => Promise<{ deleted: boolean }>;
     getModelConfig: () => Promise<PublicModelConfig>;
     getModelCapabilities: () => Promise<ModelCapabilities>;
     listProviderModels: (input: ModelCatalogInput) => Promise<ModelCatalogResponse>;

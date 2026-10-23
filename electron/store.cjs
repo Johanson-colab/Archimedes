@@ -765,6 +765,31 @@ function archiveResearchThread(id, archived = true) {
   return getResearchThread(id);
 }
 
+function deleteResearchThread(id) {
+  const db = requireDatabase();
+  const thread = db.prepare("SELECT id, project_id, status FROM research_threads WHERE id = ?").get(id);
+  if (!thread) throw new Error("Research thread not found.");
+  if (thread.status === "running") throw new Error("Stop the running research turn before permanently deleting this chat.");
+
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      DELETE FROM task_runs
+      WHERE id IN (
+        SELECT task_id FROM research_turns
+        WHERE thread_id = ? AND task_id IS NOT NULL
+      )
+    `).run(id);
+    db.prepare("DELETE FROM research_threads WHERE id = ?").run(id);
+    if (thread.project_id) db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(timestamp(), thread.project_id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return { deleted: true };
+}
+
 function getResearchThread(id) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
@@ -1048,6 +1073,7 @@ module.exports = {
   archiveResearchProject,
   deleteResearchProject,
   archiveResearchThread,
+  deleteResearchThread,
   listLibraries,
   listPapers,
   listResearchProjects,

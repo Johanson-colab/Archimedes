@@ -130,6 +130,8 @@
 .archived-project-row:hover > div, .archived-project-row:focus-within > div { display: flex; }
 .archived-chat-row { display: flex; min-width: 0; height: 27px; align-items: center; padding-left: 8px; color: #85857f; font-size: 9px; }
 .archived-chat-row > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archived-chat-row > div { display: flex; padding-right: 2px; }
+.archived-chat-row .archived-chat-delete:hover { color: #c65a52; background: #f4e7e4; }
 .project-create-modal { width: min(100%, 420px); }
 .project-remove-modal { width: min(100%, 410px); }
 .danger-button { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; padding: 0 11px; color: #fff; background: #b34942; border-radius: 5px; font-size: 10px; font-weight: 700; }
@@ -3044,6 +3046,8 @@ html[data-theme="paper"] .codex-shell:has(.has-welcome) .workspace-copy small { 
 .theme-paper .composer-tool.reasoning-trigger:hover, .theme-paper .composer-tool.reasoning-trigger.active {
   background: transparent;
 }
+.archived-chat-row .archived-chat-delete:hover { color: #d2675f; background: #3b2423; }
+.theme-paper .archived-chat-row .archived-chat-delete:hover { color: #a84b43; background: #f4e7e4; }
 @keyframes welcome-shutter { from { clip-path: inset(0 100% 0 0); transform: scale(1.08); } to { clip-path: inset(0); transform: scale(1); } }
 @keyframes welcome-rise { to { opacity: 1; transform: translateY(0); } }
 @keyframes welcome-image-settle { from { filter: saturate(.65) contrast(.9); transform: scale(1.045); } to { filter: saturate(.82) contrast(.96); transform: scale(1); } }
