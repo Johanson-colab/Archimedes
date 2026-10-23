@@ -562,7 +562,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setFigureCapture(capture);
     setFigureSelectionMode(false);
     setChatOpen(true);
-    setComposerCommand((current) => ({ id: current.id + 1, draft: `请解释论文第 ${capture.pageNumber} 页所选图表。先说明图表元素、坐标或表格结构，再解释主要趋势、比较关系和作者想支持的结论；区分图中直接可见的信息与推断。` }));
+    setComposerCommand((current) => ({ id: current.id + 1, draft: `请解释论文第 ${capture.pageNumber} 页所选图表/表格` }));
   }
   function receiveSelection(text: string, anchor: SelectionAnchor) {
     const next = text.replace(/\s+/g, " ").trim();
