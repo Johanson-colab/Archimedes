@@ -33,6 +33,7 @@ import {
   Boxes,
   Brain,
   CalendarDays,
+  ChartNoAxesCombined,
   Database,
   Check,
   ChevronDown,
@@ -473,6 +474,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [highlightPickerOpen, setHighlightPickerOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [comment, setComment] = useState("");
+  const [highlightListOpen, setHighlightListOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(readPaperChatWidth);
   const chatResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -604,16 +606,19 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         end_offset: start >= 0 ? start + selection.length : undefined,
       }, workspace);
       setReader((current) => current ? { ...current, highlights: [...current.highlights, item] } : current);
+      if (note.trim()) setHighlightListOpen(true);
       closeSelection();
     } catch (highlightError) { setError(readableError(highlightError, "Could not save this highlight.")); }
   }
-  async function deleteSelectedHighlight() {
-    if (!selectedHighlight) return;
+  async function deleteHighlight(id: string) {
     try {
-      await bridge.deleteLibraryPaperHighlight(selectedHighlight.id, workspace);
-      setReader((current) => current ? { ...current, highlights: current.highlights.filter((highlight) => highlight.id !== selectedHighlight.id) } : current);
+      await bridge.deleteLibraryPaperHighlight(id, workspace);
+      setReader((current) => current ? { ...current, highlights: current.highlights.filter((highlight) => highlight.id !== id) } : current);
       closeSelection();
     } catch (deleteError) { setError(readableError(deleteError, "Could not remove this highlight.")); }
+  }
+  async function deleteSelectedHighlight() {
+    if (selectedHighlight) await deleteHighlight(selectedHighlight.id);
   }
   const paperContext: ContextAttachment[] = [{ id: `paper:${paper.id}`, type: "paper", name: paper.title, detail: `${paper.year ?? "n.d."} · ${paper.venue || "Paper"}`, paper: { title: paper.title, authors: paper.authors, year: paper.year, abstract: paper.abstract, url: paper.url, pdfUrl: paper.pdf_url } }];
   const repositoryForContext: PaperRepositorySnapshot | null = repository || (checkout ? {
@@ -851,8 +856,15 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
               </div>
             </div>
             <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" /><button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
-            <div className="paper-reader-evidence-actions"><button className={figureSelectionMode ? "paper-figure-ask-toggle active" : "paper-figure-ask-toggle"} onClick={toggleFigureSelectionMode} aria-pressed={figureSelectionMode}>{figureSelectionMode ? "点击图表" : figureCapture ? "重新选择图表" : "图表提问"}</button><span className="paper-reader-evidence"><Highlighter size={14} />{reader?.highlights.length ?? 0}</span></div>
+            <div className="paper-reader-evidence-actions"><button className={figureSelectionMode ? "paper-figure-ask-toggle active" : "paper-figure-ask-toggle"} onClick={toggleFigureSelectionMode} aria-pressed={figureSelectionMode}><ChartNoAxesCombined size={14} />{figureSelectionMode ? "点击图表" : figureCapture ? "重新选择图表" : "图表提问"}</button><button className={highlightListOpen ? "paper-reader-evidence active" : "paper-reader-evidence"} onClick={() => setHighlightListOpen((value) => !value)} aria-expanded={highlightListOpen} title="查看高亮与笔记"><Highlighter size={14} />{reader?.highlights.length ?? 0}</button></div>
           </div>
+          {highlightListOpen && <aside className="paper-highlight-list" aria-label="高亮与笔记">
+            <header><div><StickyNote size={15} /><strong>高亮与笔记</strong></div><button onClick={() => setHighlightListOpen(false)} title="关闭"><X size={14} /></button></header>
+            <div>{reader?.highlights.length ? reader.highlights.map((highlight) => <article key={highlight.id}>
+              <button className="paper-highlight-entry" onClick={() => { setPageNumber(highlight.page_number); setHighlightListOpen(false); }}><span><i className={`paper-highlight-dot ${highlight.color}`} />第 {highlight.page_number} 页</span><p>{highlight.quote}</p>{highlight.note && <small>{highlight.note}</small>}</button>
+              <button className="paper-highlight-delete" onClick={() => void deleteHighlight(highlight.id)} title="删除这条高亮或笔记"><Trash2 size={13} /></button>
+            </article>) : <p className="paper-highlight-empty">还没有高亮或笔记。</p>}</div>
+          </aside>}
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
           <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} zoom={pdfZoom} activeSelection={selection} figureSelectionMode={figureSelectionMode} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
@@ -1520,7 +1532,10 @@ function selectPdfTextByLayout(layer: HTMLElement, anchorSpan: HTMLSpanElement, 
 
 function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighlight[]) {
   const spans = Array.from(textLayer.querySelectorAll("span"));
-  for (const span of spans) span.classList.remove("arch-pdf-highlight", "arch-pdf-highlight-yellow", "arch-pdf-highlight-red", "arch-pdf-highlight-blue", "arch-pdf-highlight-green", "arch-pdf-highlight-pink");
+  for (const span of spans) {
+    span.classList.remove("arch-pdf-highlight", "arch-pdf-highlight-note", "arch-pdf-highlight-yellow", "arch-pdf-highlight-red", "arch-pdf-highlight-blue", "arch-pdf-highlight-green", "arch-pdf-highlight-pink");
+    span.removeAttribute("title");
+  }
   if (!highlights.length) return;
   const compact = (value: string) => value.replace(/\s+/g, "").toLocaleLowerCase();
   const spanRanges: Array<{ element: HTMLSpanElement; start: number; end: number }> = [];
@@ -1540,6 +1555,10 @@ function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighligh
     const end = start + quote.length;
     for (const range of spanRanges) if (range.start < end && range.end > start && !painted.has(range.element)) {
       range.element.classList.add("arch-pdf-highlight", `arch-pdf-highlight-${highlight.color}`);
+      if (highlight.note) {
+        range.element.classList.add("arch-pdf-highlight-note");
+        range.element.title = highlight.note;
+      }
       painted.add(range.element);
     }
   }
