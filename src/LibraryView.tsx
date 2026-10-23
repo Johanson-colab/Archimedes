@@ -23,6 +23,7 @@ import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import ConferenceDiscovery from "./ConferenceDiscovery";
+import { useDialogFocus } from "./useDialogFocus";
 import {
   AlignLeft,
   ArrowLeft,
@@ -1146,6 +1147,7 @@ function normalizePaperMathLine(line: string) {
 }
 
 function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | "new" | null; onClose: () => void; onSave: (input: { name: string; description: string; color: string }) => Promise<void> }) {
+  const dialogRef = useDialogFocus<HTMLElement>(Boolean(editor), onClose);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(LIBRARY_COLORS[0]);
@@ -1161,7 +1163,7 @@ function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | 
     setBusy(true);
     try { await onSave({ name: name.trim(), description: description.trim(), color }); } finally { setBusy(false); }
   }
-  return <div className="modal-backdrop" onMouseDown={onClose}><section className="workspace-modal" role="dialog" aria-modal="true" aria-label={editor === "new" ? "New library" : "Edit library"} onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="modal-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal" role="dialog" aria-modal="true" aria-label={editor === "new" ? "New library" : "Edit library"} onMouseDown={(event) => event.stopPropagation()}>
     <div className="modal-header"><div><span className="eyebrow">Knowledge base</span><h2>{editor === "new" ? "New literature library" : "Edit library"}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
     <label>Library name<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Agentic RAG" /></label>
     <label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="What belongs in this research direction?" /></label>
@@ -1171,6 +1173,7 @@ function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | 
 }
 
 function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: boolean; bridge: ResearchDeskBridge; library: ResearchLibrary; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void> }) {
+  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AcademicSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -1206,7 +1209,7 @@ function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: 
       setAdding(null);
     }
   }
-  return <div className="modal-backdrop" onMouseDown={onClose}><section className="workspace-modal paper-import-modal" role="dialog" aria-modal="true" aria-label="Import paper" onMouseDown={(event) => event.stopPropagation()}>
+  return <div className="modal-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal paper-import-modal" role="dialog" aria-modal="true" aria-label="Import paper" onMouseDown={(event) => event.stopPropagation()}>
     <div className="modal-header"><div><span className="eyebrow">Import into {library.name}</span><h2>Find academic papers</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
     <p>Search by title, topic, DOI, arXiv URL, or arXiv ID. arXiv links are resolved directly; other queries use Semantic Scholar and OpenAlex.</p>
     <div className="external-search-box"><Search size={16} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void search()} placeholder="e.g. adaptive retrieval or 2401.18059" /><button className="primary-button" disabled={searching || !query.trim()} onClick={() => void search()}>{searching ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div>
