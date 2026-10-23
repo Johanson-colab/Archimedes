@@ -1418,7 +1418,7 @@ function DeepSearchResults({ response, loading, error, targetLibrary, added, add
 
 function formatPaperDate(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function formatFeedTime(value: string) {

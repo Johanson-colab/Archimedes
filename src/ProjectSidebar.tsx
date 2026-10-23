@@ -93,7 +93,7 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                   setEditingProjectId(null);
                 }
               }} /></span>
-              : <button className="project-select" onClick={() => toggleProject(project.id)} title={project.name} aria-expanded={isExpanded}><Folder size={14} /><span>{project.name}</span><small>{projectThreads.length}</small></button>}
+              : <button className="project-select" onClick={() => toggleProject(project.id)} title={project.name} aria-expanded={isExpanded}><Folder size={14} /><span>{project.name}</span>{projectThreads.length > 0 && <small>{projectThreads.length}</small>}</button>}
             <span className="project-row-actions">
               <button onClick={() => onNewChat(project.id)} title={`New chat in ${project.name}`} disabled={disabled}><MessageSquarePlus size={13} /></button>
               <button onClick={() => beginRename(project)} title={`Rename ${project.name}`} disabled={disabled}><Pencil size={12} /></button>
@@ -113,19 +113,21 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
       {!projects.length && <div className="recent-empty">Create a project to begin</div>}
     </div>
     {renameError && <div className="project-rename-error" role="alert">{renameError}</div>}
-    <button className={showArchivedProjects ? "archived-toggle active" : "archived-toggle"} onClick={() => setShowArchivedProjects((visible) => !visible)}><Archive size={13} /><span>Archived projects</span><small>{archivedProjects.length}</small></button>
-    {showArchivedProjects && <div className="archived-project-list">
-      {archivedProjects.map((project) => <div className="archived-project-row" key={project.id}>
-        <span title={project.name}><Folder size={13} /><strong>{project.name}</strong><small>{project.chat_count}</small></span>
-        <div><button onClick={() => onArchiveProject(project, false)} title={`Restore ${project.name}`} disabled={disabled}><ArchiveRestore size={12} /></button><button onClick={() => onRemoveProject(project)} title={`Remove ${project.name}`} disabled={disabled}><Trash2 size={12} /></button></div>
-      </div>)}
-      {!archivedProjects.length && <div className="project-chat-empty">No archived projects</div>}
-    </div>}
-    <button className={showArchived ? "archived-toggle active" : "archived-toggle"} onClick={() => setShowArchived((visible) => !visible)}><Archive size={13} /><span>Archived chats</span><small>{archivedThreads.length}</small></button>
-    {showArchived && <div className="archived-chat-list">
-      {archivedThreads.map((thread) => <div className="archived-chat-row" key={thread.id}><span>{thread.title}</span><button onClick={() => onArchiveThread(thread, false)} title="Restore chat"><ArchiveRestore size={12} /></button></div>)}
-      {!archivedThreads.length && <div className="project-chat-empty">Archive is empty</div>}
-    </div>}
+    {archivedProjects.length > 0 && <>
+      <button className={showArchivedProjects ? "archived-toggle active" : "archived-toggle"} onClick={() => setShowArchivedProjects((visible) => !visible)}><Archive size={13} /><span>Archived projects</span><small>{archivedProjects.length}</small></button>
+      {showArchivedProjects && <div className="archived-project-list">
+        {archivedProjects.map((project) => <div className="archived-project-row" key={project.id}>
+          <span title={project.name}><Folder size={13} /><strong>{project.name}</strong>{project.chat_count > 0 && <small>{project.chat_count}</small>}</span>
+          <div><button onClick={() => onArchiveProject(project, false)} title={`Restore ${project.name}`} disabled={disabled}><ArchiveRestore size={12} /></button><button onClick={() => onRemoveProject(project)} title={`Remove ${project.name}`} disabled={disabled}><Trash2 size={12} /></button></div>
+        </div>)}
+      </div>}
+    </>}
+    {archivedThreads.length > 0 && <>
+      <button className={showArchived ? "archived-toggle active" : "archived-toggle"} onClick={() => setShowArchived((visible) => !visible)}><Archive size={13} /><span>Archived chats</span><small>{archivedThreads.length}</small></button>
+      {showArchived && <div className="archived-chat-list">
+        {archivedThreads.map((thread) => <div className="archived-chat-row" key={thread.id}><span>{thread.title}</span><button onClick={() => onArchiveThread(thread, false)} title="Restore chat"><ArchiveRestore size={12} /></button></div>)}
+      </div>}
+    </>}
   </section>;
 }
 
