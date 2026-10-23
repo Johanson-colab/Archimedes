@@ -2336,7 +2336,7 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
   </div>;
 }
 
-function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading, error, onDraftChange, onSave, onReload, onDismissConflict, onAddComment }: {
+function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading, error, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, compact = false }: {
   file: WorkspaceFilePreview | null;
   draft?: ArtifactDraft;
   dirty: boolean;
@@ -2350,6 +2350,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   onReload: () => void;
   onDismissConflict: () => void;
   onAddComment: (comment: ArtifactComment) => void;
+  compact?: boolean;
 }) {
   const [mode, setMode] = useState<"preview" | "edit">("preview");
   const [selection, setSelection] = useState<ArtifactSelection | null>(null);
@@ -2383,10 +2384,10 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
 
   return <section className="artifact-editor">
     <div className="artifact-editor-top">
-      <div className="artifact-editor-header">
-        <span>{workspaceFileIcon({ type: "file", kind: file.kind })}</span>
+      {(editable || !compact) && <div className={compact ? "artifact-editor-header compact" : "artifact-editor-header"}>
+        {!compact && <><span>{workspaceFileIcon({ type: "file", kind: file.kind })}</span>
         <strong>{file.path}</strong>
-        <small>{formatFileSize(file.size)}</small>
+        <small>{formatFileSize(file.size)}</small></>}
         {editable && <div className="artifact-editor-actions">
           <div className="artifact-view-toggle">
             <button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}>Preview</button>
@@ -2399,7 +2400,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
           </span>
           <button className="secondary-button artifact-save-button" disabled={!dirty || saving} onClick={onSave} title="Save (Ctrl/Cmd+S)"><Save size={12} />Save</button>
         </div>}
-      </div>
+      </div>}
       {commentOpen && selection && <form className="artifact-comment-box" onSubmit={(event) => {
         event.preventDefault();
         if (!commentBody.trim()) return;
@@ -2535,8 +2536,8 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const editor = <div className="artifact-editor-pane">
-    <div className="artifact-tabs" role="tablist" aria-label="Open files">
+  const editor = <div className={compact && openFiles.length <= 1 ? "artifact-editor-pane no-tabs" : "artifact-editor-pane"}>
+    {(!compact || openFiles.length > 1) && <div className="artifact-tabs" role="tablist" aria-label="Open files">
       {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
         <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
           {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
@@ -2544,8 +2545,9 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
         </button>
         <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
       </div>)}
-    </div>
+    </div>}
     <FilePreview
+      compact={compact}
       file={file}
       draft={file ? drafts[file.path] : undefined}
       dirty={Boolean(file && dirtyFiles.has(file.path))}
@@ -2571,7 +2573,7 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
           {showingEditor && !split
             ? <button className="artifact-workbench-back" onClick={() => setCompactPane("browse")} title="Back to files"><ChevronLeft size={13} /><span>Files</span></button>
             : <><FolderOpen size={13} /><strong>Files</strong></>}
-          {showingEditor && file && <span className="artifact-workbench-file">{file.name}</span>}
+          {showingEditor && file && openFiles.length <= 1 && <span className="artifact-workbench-file" title={file.path}>{file.name}</span>}
         </div>
         <div className="artifact-workbench-actions">
           <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>

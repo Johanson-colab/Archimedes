@@ -53,6 +53,23 @@ test("files use a compact workbench pane with drill-down and split modes", () =>
   assert.match(css, /\.artifact-workbench-body\.split \{[^}]*grid-template-columns: 168px minmax\(0, 1fr\)/);
 });
 
+test("files use a tab-first header and keep one visible filename", () => {
+  assert.match(app, /openFiles\.length > 1\) && <div className="artifact-tabs"/);
+  assert.match(app, /artifact-editor-header compact/);
+  assert.match(app, /openFiles\.length <= 1 && <span className="artifact-workbench-file"/);
+  assert.match(css, /\.artifact-editor-pane\.no-tabs \{ grid-template-rows: minmax\(0, 1fr\); \}/);
+});
+
+test("terminal can dock below the active workbench panel", () => {
+  assert.match(workbench, /PanelBottom/);
+  assert.match(workbench, /terminalDock/);
+  assert.match(workbench, /workbench-dock-divider/);
+  assert.match(workbench, /workbench-terminal-panel/);
+  assert.match(workbench, /workbench-dock-resizing/);
+  assert.match(css, /\.workbench-body\.terminal-dock \{[^}]*grid-template-rows: minmax\(0, 1fr\) 7px var\(--dock-height, 280px\)/);
+  assert.match(css, /\.workbench-dock-divider \{/);
+});
+
 test("dirty file changes are protected when the workbench closes", () => {
   assert.match(app, /Hide the workbench\? Unsaved file changes stay in the editor\./);
   assert.match(app, /Object\.values\(artifactDraftsRef\.current\)\.some\(isDraftDirty\)/);
