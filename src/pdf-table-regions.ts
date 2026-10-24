@@ -76,13 +76,19 @@ function ruleGroup(caption: PdfTableRect, rules: PdfTableRule[], direction: "abo
   const maxGap = Math.max(pageHeight * .29, caption.height * 12);
   const group: PdfTableRule[] = [];
   for (const rule of ordered) {
-    if (group.length && Math.abs(rule.y - group.at(-1)!.y) > maxGap) break;
+    const verticalGap = group.length ? Math.abs(rule.y - group.at(-1)!.y) : 0;
+    if (group.length && verticalGap > maxGap) break;
     if (group.length) {
       const anchorLeft = Math.min(...group.map((item) => item.left));
       const anchorRight = Math.max(...group.map((item) => item.right));
       const overlap = Math.max(0, Math.min(anchorRight, rule.right) - Math.max(anchorLeft, rule.left));
       const overlapRatio = overlap / Math.max(1, Math.min(anchorRight - anchorLeft, rule.right - rule.left));
       if (overlapRatio < .55) break;
+      // A later, substantially narrower rule after a real vertical break is
+      // usually the next table in another column. Narrow grouped-header rules
+      // occur immediately after the top rule and must remain included.
+      const widthRatio = (rule.right - rule.left) / Math.max(1, anchorRight - anchorLeft);
+      if (group.length >= 2 && widthRatio < .7 && verticalGap > pageHeight * .045) break;
     }
     group.push(rule);
   }
@@ -91,7 +97,12 @@ function ruleGroup(caption: PdfTableRect, rules: PdfTableRule[], direction: "abo
   const spanBottom = Math.max(...group.map((rule) => rule.y));
   const distance = direction === "below" ? spanTop - bottom(caption) : caption.top - spanBottom;
   const averageWidth = group.reduce((sum, rule) => sum + rule.right - rule.left, 0) / group.length;
-  return { group, distance, score: group.length * 1_000 + averageWidth - distance * 4 };
+  const groupLeft = Math.min(...group.map((rule) => rule.left));
+  const groupRight = Math.max(...group.map((rule) => rule.right));
+  const overlap = Math.max(0, Math.min(groupRight, captionRight) - Math.max(groupLeft, caption.left));
+  const horizontalUnion = Math.max(groupRight, captionRight) - Math.min(groupLeft, caption.left);
+  const alignment = overlap / Math.max(1, horizontalUnion);
+  return { group, distance, score: alignment * 10_000 + group.length * 500 + averageWidth - distance * 4 };
 }
 
 /** Uses the first and last rules of the caption-adjacent table, never caption heuristics. */

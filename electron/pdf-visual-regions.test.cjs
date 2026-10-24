@@ -9,6 +9,7 @@ test("recognizes caption labels but rejects prose references that begin with Fig
   assert.equal(pdfCaptionKind("Figure 5"), "figure");
   assert.equal(pdfCaptionKind("Figure 5 compares three skill-update settings."), null);
   assert.equal(pdfCaptionKind("表 2：主要结果"), "table");
+  assert.equal(pdfCaptionKind("Table 3 | Component ablation"), "table");
 });
 
 test("detects a paragraph-shaped caption fallback as prose", async () => {

@@ -7,8 +7,8 @@ export type PdfVisualRegionLike = {
   source: "caption" | "equation" | "image";
 };
 
-const ENGLISH_CAPTION = /^(figure|fig\.?|table)\s*\d+[a-z]?\s*(?::|\.|$)/i;
-const CHINESE_CAPTION = /^(图|表)\s*[一二三四五六七八九十百零\d]+\s*(?::|：|\.|。|$)/;
+const ENGLISH_CAPTION = /^(figure|fig\.?|table)\s*\d+[a-z]?\s*(?::|\.|\||｜|$)/i;
+const CHINESE_CAPTION = /^(图|表)\s*[一二三四五六七八九十百零\d]+\s*(?::|：|\.|。|\||｜|$)/;
 
 /**
  * Recognises an actual caption label, rather than an in-prose reference such as

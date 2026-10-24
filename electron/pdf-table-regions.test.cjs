@@ -61,3 +61,20 @@ test("keeps a long table whose body has sparse section rules", async () => {
   assert.equal(rect.top, 119);
   assert.equal(rect.top + rect.height, 474);
 });
+
+test("prefers the caption-aligned table over a wider table immediately above it", async () => {
+  const { findRuledTableRect } = await api;
+  const caption = { left: 305, top: 397, width: 220, height: 26 };
+  const rect = findRuledTableRect(caption, [
+    { left: 70, right: 525, y: 166 },
+    { left: 70, right: 525, y: 268 },
+    { left: 70, right: 525, y: 386 }, // previous full-width table ends here
+    { left: 306, right: 525, y: 445 },
+    { left: 306, right: 525, y: 478 },
+    { left: 306, right: 525, y: 591 },
+  ], 595, 842);
+  assert(rect);
+  assert(rect.left > 300);
+  assert(rect.top > caption.top);
+  assert(rect.top + rect.height > 590);
+});

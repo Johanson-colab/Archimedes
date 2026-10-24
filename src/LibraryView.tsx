@@ -1411,7 +1411,19 @@ function tightenPdfVisualRect(canvas: HTMLCanvasElement, page: HTMLElement, rect
   return padPdfRect(tightened, 9, bounds.width, bounds.height);
 }
 
-function detectPdfTableRect(canvas: HTMLCanvasElement, page: HTMLElement, caption: PdfVisualRect, fragments: PdfTextLine[]) {
+function clipPdfTableAtOtherCaptions(rect: PdfVisualRect, caption: PdfVisualRect, otherCaptions: PdfVisualRect[]) {
+  let top = rect.top;
+  let bottom = rect.top + rect.height;
+  for (const other of otherCaptions) {
+    const horizontalOverlap = Math.max(0, Math.min(rect.left + rect.width, other.left + other.width) - Math.max(rect.left, other.left));
+    if (horizontalOverlap < Math.min(24, other.width * .15)) continue;
+    if (other.top > caption.top && other.top < bottom) bottom = Math.min(bottom, other.top - 4);
+    if (other.top + other.height < caption.top && other.top + other.height > top) top = Math.max(top, other.top + other.height + 4);
+  }
+  return { ...rect, top, height: Math.max(1, bottom - top) };
+}
+
+function detectPdfTableRect(canvas: HTMLCanvasElement, page: HTMLElement, caption: PdfVisualRect, fragments: PdfTextLine[], otherCaptions: PdfVisualRect[]) {
   const bounds = page.getBoundingClientRect();
   const scaleX = canvas.width / bounds.width;
   const scaleY = canvas.height / bounds.height;
@@ -1419,11 +1431,12 @@ function detectPdfTableRect(canvas: HTMLCanvasElement, page: HTMLElement, captio
   if (context) {
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
     const ruled = findRuledTableRect(caption, findPdfHorizontalRules(pixels, canvas.width, canvas.height, scaleX, scaleY, bounds.width), bounds.width, bounds.height);
-    if (ruled) return ruled;
+    if (ruled) return clipPdfTableAtOtherCaptions(ruled, caption, otherCaptions);
   }
   // Borderless tables are common in camera-ready papers; their repeated wide
   // multi-cell rows are still a stronger boundary than caption distance.
-  return findTextTableRect(caption, fragments, bounds.width, bounds.height);
+  const textTable = findTextTableRect(caption, fragments, bounds.width, bounds.height);
+  return textTable ? clipPdfTableAtOtherCaptions(textTable, caption, otherCaptions) : null;
 }
 
 function pdfCaptionCandidates(fragments: PdfTextLine[], lines: PdfTextLine[]) {
@@ -1543,7 +1556,7 @@ function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canv
       return [{ rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "image" as const }];
     }
     if (kind === "table") {
-      const rect = detectPdfTableRect(canvas, page, caption, fragments);
+      const rect = detectPdfTableRect(canvas, page, caption, fragments, captions.filter((candidate) => candidate.line !== caption).map((candidate) => candidate.line));
       // A real table is itself dense, aligned text. Paragraph-density rejection
       // belongs only to the figure fallback; applying it here hides large tables.
       if (rect) return [{ rect, nearbyText: pdfNearbyText(lines, unionPdfRects(rect, caption)), kind, source: "caption" as const }];
