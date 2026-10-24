@@ -102,6 +102,19 @@ test("code terminal and trace text keeps an 11px floor", () => {
   assert.match(typography, /\.codebase-editor pre,[\s\S]*?\.paper-ai-compose textarea \{[\s\S]*?font-size: 12px/);
 });
 
+test("remaining knowledge surfaces keep an 11px floor", () => {
+  assert.match(typography, /\.daily-mode-tabs button,[\s\S]*?\.daily-search-kind button \{ font-size: 11px; \}/);
+  assert.match(typography, /\.daily-paper-row small \{ font-size: 11px; \}/);
+  assert.match(typography, /\.paper-writing-empty span \{ font-size: 11px; \}/);
+  assert.match(typography, /\.skill-index-row small \{ font-size: 11px; \}/);
+  assert.match(typography, /\.gallery-credit \{ font-size: 11px; \}/);
+  assert.match(typography, /\.reader-title span \{ font-size: 11px; \}/);
+  assert.match(typography, /\.reader-rail-paper small,[\s\S]*?font-size: 10px/);
+  assert.match(typography, /\.module-toolbar-actions \.secondary-button,[\s\S]*?font-size: 11px/);
+  assert.match(typography, /\.paper-project-dialog \.paper-template-hint \{ font-size: 11px; \}/);
+  assert.match(typography, /\.reader-ask-button,[\s\S]*?\.paper-search-control button \{ font-size: 11px; \}/);
+});
+
 test("Geist Sans and Geist Mono are bundled locally", () => {
   const settings = fs.readFileSync(path.join(root, "src", "SettingsModal.tsx"), "utf8");
   const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");

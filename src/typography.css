@@ -431,3 +431,108 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .gallery-page { padding-top: 18px; }
 .daily-page { padding-top: 18px; }
 .benchmark-radar-page { padding-top: 22px; }
+
+/* Remaining knowledge, writing, gallery, and reader chrome. These surfaces
+   still carried 8-10px labels after the first type-scale pass. */
+.module-toolbar-actions .secondary-button,
+.module-toolbar-actions .primary-button,
+.module-toolbar-actions .gallery-proceedings-link { font-size: 11px; }
+.module-toolbar-note { font-size: 11px; }
+
+.page-kicker { font-size: 11px; }
+
+/* Daily papers. */
+.daily-mode-tabs button,
+.daily-range-control button,
+.daily-topic-filter button,
+.daily-search-kind button { font-size: 11px; }
+.daily-save-target,
+.daily-save-target select { font-size: 11px; }
+.daily-search-row > span,
+.daily-search-meta,
+.daily-clear-search { font-size: 11px; }
+.daily-paper-date,
+.daily-paper-date span { font-size: 11px; }
+.daily-paper-row p { font-size: 12px; }
+.daily-paper-row small { font-size: 11px; }
+.daily-paper-signals span,
+.daily-paper-signals a { font-size: 11px; }
+.daily-search-plan p,
+.daily-search-plan details,
+.daily-search-plan-tags > span,
+.deep-match-reason,
+.daily-search-warning,
+.daily-deep-progress span { font-size: 11px; }
+.daily-search-plan-tags small { font-size: 10px; }
+
+/* Paper writing. */
+.paper-pane-toolbar > strong { font-size: 11px; }
+.paper-writing-empty strong { font-size: 13px; }
+.paper-writing-empty span { font-size: 11px; }
+.paper-project-placeholder { font-size: 11px; }
+.paper-project-placeholder strong { font-size: 12px; }
+.paper-project-options strong { font-size: 13px; }
+.paper-project-options span,
+.paper-project-options label,
+.paper-template-hint,
+.paper-existing-projects button small { font-size: 11px; }
+.paper-existing-projects h3 { font-size: 11px; }
+
+/* Skills. */
+.skills-total { font-size: 11px; }
+.skills-search input { font-size: 12px; }
+.skill-collection-copy small { font-size: 11px; }
+.skill-collection-count { font-size: 11px; }
+.skill-category h2 { font-size: 10px; }
+.skill-index-row strong { font-size: 12px; }
+.skill-index-row small { font-size: 11px; }
+.skill-preview-header > div > span { font-size: 10px; }
+.skill-preview-header p { font-size: 12px; }
+
+/* Gallery. */
+.gallery-card-meta,
+.gallery-card-meta > span { font-size: 11px; }
+.gallery-credit { font-size: 11px; }
+.gallery-image-open,
+.gallery-dialog-kicker { font-size: 11px; }
+
+/* PDF reader chrome. */
+.reader-title span { font-size: 11px; }
+.paper-reader-tabs small { font-size: 10px; }
+.reader-find button,
+.reader-outline button,
+.reader-status,
+.reader-document-source,
+.reader-question-grid button,
+.reader-progress-top,
+.reader-progress-card button,
+.reader-evidence-summary p,
+.reader-import-card span,
+.reader-import-card .primary-button,
+.reader-import-card .secondary-button,
+.reader-passage-results button,
+.reader-highlight-list p { font-size: 11px; }
+.reader-document-kicker { font-size: 10px; }
+.reader-highlight-list span { font-size: 10px; }
+.reader-rail-paper small,
+.reader-rail-meta,
+.reader-nav-label,
+.reader-section-nav button small,
+.reader-rail-footer,
+.reader-notebook-section-title small { font-size: 10px; }
+
+/* Final small-label pass: high-specificity dialog and toolbar labels. */
+.eyebrow,
+.panel-kicker,
+.gallery-header .eyebrow { font-size: 11px; }
+.skills-page-header p,
+.skills-detail-header p { font-size: 12px; }
+.paper-browser-title strong { font-size: 12px; }
+.paper-project-dialog > header p { font-size: 12px; }
+.paper-project-dialog .paper-template-hint { font-size: 11px; }
+.gallery-facet-options small { font-size: 11px; }
+.gallery-results-bar a { font-size: 11px; }
+.reader-ask-button,
+.paper-reader-tabs small,
+.paper-reader-evidence,
+.paper-search-control button { font-size: 11px; }
