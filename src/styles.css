@@ -3125,6 +3125,8 @@ html[data-theme="paper"] .paper-pane-resizer:focus-visible::after { background: 
 .theme-paper .paper-ai-mode-toggle button { color: #746e66; }
 .theme-paper .paper-ai-mode-toggle button.active { color: #292620; background: #fffefd; box-shadow: 0 1px 2px rgba(44, 39, 33, .08); }
 .theme-paper .paper-ai-suggestions button:hover { color: #292620; background: #e8e3dc; border-color: #cfc7bd; }
+.theme-paper .reader-ask-button { color: #5c564e; background: #f3f0eb; border-color: #dfd9d2; }
+.theme-paper .reader-ask-button:hover, .theme-paper .reader-ask-button.active { color: #292620; background: #e9e5df; border-color: #d2cbc2; }
 .theme-paper .paper-page-controls button,
 .theme-paper .paper-zoom-control > button { color: #625c54; border-color: #ddd7cf; }
 .theme-paper .paper-page-controls button:hover:not(:disabled),
