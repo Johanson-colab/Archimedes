@@ -34,6 +34,16 @@ test("primary UI text moves to a 14px/15px scale", () => {
   assert.match(typography, /\.conversation-composer textarea \{ font-size: 14px/);
 });
 
+test("conversation and projects share one readable scale", () => {
+  assert.match(typography, /\.message-markdown p,\s*\.conversation-message p \{ font-size: 15px; \}/);
+  assert.match(typography, /\.conversation-message-role \{ font-size: 11px; \}/);
+  assert.match(typography, /\.conversation-sources a \{ font-size: 11px; \}/);
+  assert.match(typography, /\.project-select span \{ font-size: 13px; \}/);
+  assert.match(typography, /\.project-chat-open \{ font-size: 12px; line-height: 1\.4; \}/);
+  assert.match(typography, /\.project-select small \{ font-size: 11px; \}/);
+  assert.match(typography, /\.nav-count \{ font-size: 11px; \}/);
+});
+
 test("reading and settings surfaces use a clearer hierarchy", () => {
   assert.match(typography, /\.paper-inspector-title h2 \{ font-size: 24px/);
   assert.match(typography, /\.paper-abstract \{ font-size: 14px; line-height: 1\.65/);
