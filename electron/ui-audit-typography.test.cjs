@@ -52,6 +52,18 @@ test("reading and settings surfaces use a clearer hierarchy", () => {
   assert.match(typography, /\.settings-nav-item \{ height: 34px; font-size: 12px/);
 });
 
+test("right workbench metadata moves above the 10px floor", () => {
+  assert.match(typography, /\.workbench-tab \{ font-size: 12px/);
+  assert.match(typography, /\.journey-goal p \{ font-size: 13px/);
+  assert.match(typography, /\.journey-progress-meta \{ font-size: 11px; \}/);
+  assert.match(typography, /\.journey-phase small \{ font-size: 11px; \}/);
+  assert.match(typography, /\.journey-signals span \{ font-size: 11px; \}/);
+  assert.match(typography, /\.journey-note \{ font-size: 12px/);
+  assert.match(typography, /\.trajectory-stat span,\s*\.trajectory-section-title \{ font-size: 11px; \}/);
+  assert.match(typography, /\.trajectory-event-copy small,\s*\.trajectory-event-time,\s*\.trajectory-event-meta \{ font-size: 10px; \}/);
+  assert.match(typography, /\.trajectory-json \{ font-size: 11px/);
+});
+
 test("mono and editorial surfaces follow the selected font tokens", () => {
   assert.match(typography, /\.paper-page-controls strong,[\s\S]*?\.paper-zoom-control > \.paper-zoom-readout,[\s\S]*?font-family: var\(--font-mono\)/);
   assert.match(typography, /\.trajectory-event-copy small,[\s\S]*?\.trajectory-json,[\s\S]*?font-family: var\(--font-mono\)/);
