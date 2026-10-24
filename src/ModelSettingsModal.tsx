@@ -20,6 +20,7 @@ import deepseekLogo from "./assets/providers/deepseek.png";
 import moonshotLogo from "./assets/providers/moonshot.jpg";
 import openaiLogo from "./assets/providers/openai.png";
 import qwenLogo from "./assets/providers/qwen.png";
+import { useUISettings } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
 type ProviderId = ModelProviderId;
@@ -49,8 +50,9 @@ const providers: Array<{
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [], icon: <Network size={17} /> },
 ];
 
-export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void }) {
-  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
+export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean }) {
+  const { t } = useUISettings();
+  const dialogRef = useDialogFocus<HTMLElement>(open && !embedded, onClose);
   const [provider, setProvider] = useState<ProviderId>("custom");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
@@ -163,12 +165,11 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
   }
 
   if (!open) return null;
-  return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="model-settings-modal" role="dialog" aria-modal="true" aria-label="Model settings" onMouseDown={(event) => event.stopPropagation()}>
-      <header className="model-settings-header">
+  const content = <>
+      {!embedded && <header className="model-settings-header">
         <div><span>Agent runtime</span><h2>Model providers</h2><p>Choose the model Archimedes uses for new research turns.</p></div>
         <button className="quiet-icon-button" onClick={onClose} title="Close model settings"><X size={17} /></button>
-      </header>
+      </header>}
 
       <div className="model-settings-body">
         <nav className="provider-list" aria-label="Model providers">
@@ -180,32 +181,35 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved }: {
         </nav>
 
         <div className="provider-config">
-          {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />Loading configuration</div> : <>
-            <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{model || selected.caption}</p></div></div>
-            <label><span><Server size={14} />Base URL</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
-            <label><span><KeyRound size={14} />API key</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? "Saved securely · enter a new key to replace" : "Enter API key"} autoComplete="off" spellCheck={false} /></label>
-            <label><span><BrainCircuit size={14} />Model</span><div className="model-combobox">
-              <input value={model} onChange={(event) => { setModel(event.target.value); setModelSearch(event.target.value); setModelMenuOpen(true); }} placeholder="Model identifier" spellCheck={false} aria-expanded={modelMenuOpen} aria-controls="model-catalog" />
-              <button type="button" className="model-catalog-toggle" onClick={toggleModelMenu} title="Show available models" aria-label="Show available models"><ChevronDown size={16} /></button>
+          {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />{t("Loading configuration")}</div> : <>
+            <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>
+            <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
+            <label><span><KeyRound size={14} />{t("API key")}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} /></label>
+            <label><span><BrainCircuit size={14} />{t("Model")}</span><div className="model-combobox">
+              <input value={model} onChange={(event) => { setModel(event.target.value); setModelSearch(event.target.value); setModelMenuOpen(true); }} placeholder={t("Model identifier")} spellCheck={false} aria-expanded={modelMenuOpen} aria-controls="model-catalog" />
+              <button type="button" className="model-catalog-toggle" onClick={toggleModelMenu} title={t("Show available models")} aria-label={t("Show available models")}><ChevronDown size={16} /></button>
               {modelMenuOpen && <div className="model-catalog" id="model-catalog">
-                <div className="model-catalog-header"><span>{catalogModels.length ? `${availableModels.length} models · live catalog merged` : `${availableModels.length} supported models`}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title="Refresh live catalog">{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}Refresh</button></div>
-                {catalogError && <p className="model-catalog-note">{catalogError} Showing the recommended list below.</p>}
+                <div className="model-catalog-header"><span>{catalogModels.length ? t("{count} models · live catalog merged", { count: availableModels.length }) : t("{count} supported models", { count: availableModels.length })}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title={t("Refresh live catalog")}>{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}{t("Refresh")}</button></div>
+                {catalogError && <p className="model-catalog-note">{catalogError} {t("Showing the recommended list below.")}</p>}
                 <div className="model-catalog-list">
                   {availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())).map((name) => <button type="button" key={name} className={name === model ? "active" : ""} onClick={() => { setModel(name); setModelSearch(""); setModelMenuOpen(false); }}><span>{name}</span>{name === model && <Check size={13} />}</button>)}
-                  {!availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())).length && <p className="model-catalog-empty">No matching model. Keep typing to use a custom identifier.</p>}
+                  {!availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())).length && <p className="model-catalog-empty">{t("No matching model. Keep typing to use a custom identifier.")}</p>}
                 </div>
               </div>}
             </div></label>
-            <div className="model-security-note"><KeyRound size={13} /><span>The API key is stored in Electron user data and never returned to the page.</span></div>
+            <div className="model-security-note"><KeyRound size={13} /><span>{t("The API key is stored in Electron user data and never returned to the page.")}</span></div>
             {feedback.text && <div className={`model-feedback ${feedback.kind}`}>{feedback.kind === "success" ? <Check size={14} /> : <X size={14} />}<span>{feedback.text}</span></div>}
           </>}
         </div>
       </div>
 
       <footer className="model-settings-footer">
-        <button className="secondary-button" onClick={() => void testConnection()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{testing ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}Test connection</button>
-        <div><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={() => void save()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{saving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}Save model</button></div>
+        <button className="secondary-button" onClick={() => void testConnection()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{testing ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t("Test connection")}</button>
+        <div>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Cancel")}</button>}<button className="primary-button" onClick={() => void save()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{saving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{t("Save model")}</button></div>
       </footer>
-    </section>
+    </>;
+  if (embedded) return <section className="settings-embedded model-settings-modal" aria-label="Model settings">{content}</section>;
+  return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="model-settings-modal" role="dialog" aria-modal="true" aria-label="Model settings" onMouseDown={(event) => event.stopPropagation()}>{content}</section>
   </div>;
 }

@@ -499,6 +499,14 @@ app.whenReady().then(() => {
     return windowWorkspaces.get(event.sender.id) ?? null;
   });
 
+  ipcMain.handle("window:set-ui-zoom", (event, factor) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    const numeric = Number(factor);
+    const next = Number.isFinite(numeric) ? Math.min(1.5, Math.max(.75, numeric)) : 1;
+    if (browserWindow && !browserWindow.isDestroyed()) browserWindow.webContents.setZoomFactor(next);
+    return next;
+  });
+
   ipcMain.handle("workspace:choose", async (event) => {
     return chooseFolderForWindow(BrowserWindow.fromWebContents(event.sender), "Choose a research workspace");
   });
