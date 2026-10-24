@@ -26,6 +26,7 @@ import ConferenceDiscovery from "./ConferenceDiscovery";
 import { equationTokens, findEquationRects } from "./pdf-equations";
 import { applyPdfSearchHighlights } from "./pdf-search-highlights";
 import { findPdfHorizontalRules, findRuledTableRect, findTextTableRect } from "./pdf-table-regions";
+import { isDensePdfProse, mergePdfVisualRegions, pdfCaptionKind } from "./pdf-visual-regions";
 import { useUISettings, type Language } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 import {
@@ -1425,53 +1426,146 @@ function detectPdfTableRect(canvas: HTMLCanvasElement, page: HTMLElement, captio
   return findTextTableRect(caption, fragments, bounds.width, bounds.height);
 }
 
+function pdfCaptionCandidates(fragments: PdfTextLine[], lines: PdfTextLine[]) {
+  const candidates = [...lines, ...pdfCaptionFragments(fragments)]
+    .flatMap((line) => {
+      const kind = pdfCaptionKind(line.text);
+      return kind ? [{ line, kind }] : [];
+    })
+    // Full caption lines carry the correct column and are more useful than a
+    // separate “Figure” + “3” text fragment at the same position.
+    .sort((first, second) => second.line.width - first.line.width);
+  const accepted: typeof candidates = [];
+  for (const candidate of candidates) {
+    const centerY = candidate.line.top + candidate.line.height / 2;
+    const duplicate = accepted.some((other) => {
+      if (other.kind !== candidate.kind) return false;
+      const otherCenterY = other.line.top + other.line.height / 2;
+      return Math.abs(centerY - otherCenterY) <= Math.max(5, candidate.line.height, other.line.height) * .7
+        && pdfRectIntersection(candidate.line, other.line) > 0;
+    });
+    if (!duplicate) accepted.push(candidate);
+  }
+  return accepted;
+}
+
+function pdfCaptionColumn(caption: PdfVisualRect, pageWidth: number): PdfVisualRect {
+  if (caption.width >= pageWidth * .46) return { left: pageWidth * .035, top: 0, width: pageWidth * .93, height: 0 };
+  const center = caption.left + caption.width / 2;
+  if (center < pageWidth / 2) return { left: pageWidth * .045, top: 0, width: pageWidth * .455, height: 0 };
+  return { left: pageWidth * .5, top: 0, width: pageWidth * .455, height: 0 };
+}
+
+function pdfVerticalGap(first: PdfVisualRect, second: PdfVisualRect) {
+  const firstBottom = first.top + first.height;
+  const secondBottom = second.top + second.height;
+  return Math.max(0, second.top - firstBottom, first.top - secondBottom);
+}
+
+function pdfImageCluster(caption: PdfVisualRect, imageRects: PdfVisualRect[], column: PdfVisualRect, pageHeight: number) {
+  const captionBottom = caption.top + caption.height;
+  const candidates = imageRects.filter((rect) => {
+    const overlap = Math.max(0, Math.min(rect.left + rect.width, column.left + column.width) - Math.max(rect.left, column.left));
+    const isAbove = rect.top + rect.height <= caption.top + 3;
+    const isBelow = rect.top >= captionBottom - 3;
+    const distance = isAbove ? caption.top - rect.top - rect.height : isBelow ? rect.top - captionBottom : Number.POSITIVE_INFINITY;
+    return overlap >= Math.min(rect.width * .25, 24) && distance <= pageHeight * .46;
+  });
+  if (!candidates.length) return null;
+  const anchor = [...candidates].sort((first, second) => distanceToPdfRect(caption.left + caption.width / 2, caption.top + caption.height / 2, first) - distanceToPdfRect(caption.left + caption.width / 2, caption.top + caption.height / 2, second))[0];
+  const direction = anchor.top + anchor.height / 2 < caption.top + caption.height / 2 ? "above" : "below";
+  const onSide = candidates.filter((rect) => direction === "above" ? rect.top + rect.height <= caption.top + 3 : rect.top >= captionBottom - 3);
+  const cluster = [anchor];
+  let union = anchor;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const rect of onSide) {
+      if (cluster.includes(rect)) continue;
+      const gap = pdfVerticalGap(union, rect);
+      const expanded = unionPdfRects(union, rect);
+      if (gap <= pageHeight * .115 && expanded.height <= pageHeight * .56) {
+        cluster.push(rect);
+        union = expanded;
+        changed = true;
+      }
+    }
+  }
+  return { rects: cluster, union, direction } as const;
+}
+
+function pdfTrimCandidatePastProse(lines: PdfTextLine[], candidate: PdfVisualRect, anchor: PdfVisualRect, direction: "above" | "below") {
+  const longLines = lines
+    .filter((line) => line.text.length >= 34 && line.width >= candidate.width * .46)
+    .filter((line) => pdfRectIntersection(line, candidate) > 0)
+    .filter((line) => direction === "above" ? line.top + line.height <= anchor.top : line.top >= anchor.top + anchor.height)
+    .sort((first, second) => first.top - second.top);
+  const runs: PdfTextLine[][] = [];
+  for (const line of longLines) {
+    const run = runs.at(-1);
+    const previous = run?.at(-1);
+    if (run && previous && line.top - previous.top - previous.height <= Math.max(14, line.height * 1.8) && Math.abs(line.left - previous.left) <= Math.max(20, candidate.width * .09)) run.push(line);
+    else runs.push([line]);
+  }
+  const proseRuns = runs.filter((run) => run.length >= 3);
+  if (!proseRuns.length) return candidate;
+  if (direction === "above") {
+    const last = proseRuns.at(-1)!.at(-1)!;
+    const top = Math.max(candidate.top, last.top + last.height + 7);
+    return { ...candidate, top, height: Math.max(1, candidate.top + candidate.height - top) };
+  }
+  const first = proseRuns[0][0];
+  return { ...candidate, height: Math.max(1, first.top - candidate.top - 7) };
+}
+
+function pdfCompositeImageRect(page: HTMLElement, canvas: HTMLCanvasElement, lines: PdfTextLine[], caption: PdfVisualRect, cluster: NonNullable<ReturnType<typeof pdfImageCluster>>, column: PdfVisualRect) {
+  if (cluster.rects.length === 1) return tightenPdfVisualRect(canvas, page, cluster.union);
+  const bounds = page.getBoundingClientRect();
+  const expansion = Math.max(bounds.height * .1, cluster.union.height * .86);
+  const candidate: PdfVisualRect = cluster.direction === "above"
+    ? { left: column.left, top: Math.max(0, cluster.union.top - expansion), width: column.width, height: caption.top - 4 - Math.max(0, cluster.union.top - expansion) }
+    : { left: column.left, top: caption.top + caption.height + 4, width: column.width, height: Math.min(bounds.height, cluster.union.top + cluster.union.height + expansion) - caption.top - caption.height - 4 };
+  const trimmed = pdfTrimCandidatePastProse(lines, candidate, cluster.union, cluster.direction);
+  return tightenPdfVisualRect(canvas, page, trimmed);
+}
+
 function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canvas: HTMLCanvasElement, imageRects: PdfVisualRect[]): PdfInteractiveRegion[] {
   const bounds = page.getBoundingClientRect();
   const fragments = pdfTextFragments(page, textLayer);
   const lines = pdfTextLines(page, textLayer);
-  const captions = pdfCaptionFragments(fragments).filter((line) => /^(?:(?:figure|fig\.?)\s*\d+[a-z]?\b|table\s*\d+[a-z]?\b|图\s*[一-龥\d]+|表\s*[一-龥\d]+)/i.test(line.text));
-  return captions.map((caption) => {
-    const kind: PaperVisualKind = /^(?:table|表)/i.test(caption.text) ? "table" : "figure";
-    const nearbyImage = imageRects
-      .map((rect) => ({ rect, distance: distanceToPdfRect(caption.left + caption.width / 2, caption.top + caption.height / 2, rect) }))
-      .filter(({ rect, distance }) => distance <= bounds.height * .22 && Math.max(0, Math.min(rect.left + rect.width, caption.left + caption.width) - Math.max(rect.left, caption.left)) > 0)
-      .sort((first, second) => first.distance - second.distance)[0]?.rect;
-    if (nearbyImage) {
-      const rect = tightenPdfVisualRect(canvas, page, nearbyImage);
+  const captions = pdfCaptionCandidates(fragments, lines);
+  return captions.flatMap<PdfInteractiveRegion>(({ line: caption, kind }) => {
+    const column = pdfCaptionColumn(caption, bounds.width);
+    const imageCluster = pdfImageCluster(caption, imageRects, column, bounds.height);
+    if (imageCluster) {
+      const rect = pdfCompositeImageRect(page, canvas, lines, caption, imageCluster, column);
       const evidenceRect = unionPdfRects(rect, caption);
-      return { rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "image" as const };
+      return [{ rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "image" as const }];
     }
     if (kind === "table") {
       const rect = detectPdfTableRect(canvas, page, caption, fragments);
-      if (rect) return { rect, nearbyText: pdfNearbyText(lines, unionPdfRects(rect, caption)), kind, source: "caption" as const };
+      if (rect && !isDensePdfProse(lines, rect)) return [{ rect, nearbyText: pdfNearbyText(lines, unionPdfRects(rect, caption)), kind, source: "caption" as const }];
     }
-    const x = bounds.left + caption.left + caption.width / 2;
-    const above = inferPdfVisualRect(page, textLayer, x, bounds.top + Math.max(4, caption.top - bounds.height * .18));
-    const below = inferPdfVisualRect(page, textLayer, x, bounds.top + Math.min(bounds.height - 4, caption.top + caption.height + bounds.height * .18));
-    const aboveScore = pdfCanvasInkScore(canvas, page, above.rect, lines);
-    const belowScore = pdfCanvasInkScore(canvas, page, below.rect, lines);
-    // Pixel evidence decides placement first. Conventional caption placement is
-    // only a tie-breaker because figures and tables can appear on either side.
-    const picked = Math.max(aboveScore, belowScore) > 0 && Math.abs(aboveScore - belowScore) > .0015
-      ? (aboveScore > belowScore ? above : below)
-      : (kind === "table" ? below : above);
-    const pickedAbove = picked === above;
-    const visualTop = pickedAbove ? picked.rect.top : Math.min(picked.rect.top + picked.rect.height - 1, caption.top + caption.height + 4);
-    const visualBottom = pickedAbove ? Math.max(picked.rect.top + 1, caption.top - 4) : picked.rect.top + picked.rect.height;
-    const visualOnly = { left: picked.rect.left, top: visualTop, width: picked.rect.width, height: visualBottom - visualTop };
-    const rect = tightenPdfVisualRect(canvas, page, visualOnly);
+    // Vector-only figures have no image XObject. Search only inside the caption's
+    // column, then require real non-text ink and reject paragraph-shaped regions.
+    const above: PdfVisualRect = { left: column.left, top: Math.max(0, caption.top - bounds.height * .47), width: column.width, height: Math.min(bounds.height * .47, caption.top - 4) };
+    const belowTop = caption.top + caption.height + 4;
+    const below: PdfVisualRect = { left: column.left, top: belowTop, width: column.width, height: Math.min(bounds.height * .47, bounds.height - belowTop) };
+    const candidates = [above, below]
+      .filter((rect) => rect.width > 20 && rect.height > 20 && !isDensePdfProse(lines, rect))
+      .map((rect) => ({ rect, score: pdfCanvasInkScore(canvas, page, rect, lines) }))
+      .filter((candidate) => candidate.score >= .0022)
+      .sort((first, second) => second.score - first.score);
+    if (!candidates.length) return [];
+    const rect = tightenPdfVisualRect(canvas, page, candidates[0].rect);
+    if (isDensePdfProse(lines, rect)) return [];
     const evidenceRect = unionPdfRects(rect, caption);
-    return { rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "caption" as const };
+    return [{ rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "caption" as const }];
   });
 }
 
 function mergePdfInteractiveRegions(regions: PdfInteractiveRegion[]) {
-  const accepted: PdfInteractiveRegion[] = [];
-  for (const region of regions.sort((first, second) => pdfRectArea(first.rect) - pdfRectArea(second.rect))) {
-    if (accepted.some((other) => other.kind === region.kind && pdfRectIntersection(other.rect, region.rect) / Math.min(pdfRectArea(other.rect), pdfRectArea(region.rect)) > .72)) continue;
-    accepted.push(region);
-  }
-  return accepted;
+  return mergePdfVisualRegions(regions);
 }
 
 function installPdfInteractiveRegions(page: HTMLElement, canvas: HTMLCanvasElement, regions: PdfInteractiveRegion[], pageNumber: number, onCapture: (capture: PaperFigureCapture) => void, labels: Record<PaperVisualKind, string>) {

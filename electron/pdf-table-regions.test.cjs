@@ -36,3 +36,14 @@ test("falls back to a compact cluster of repeated table cells for borderless tab
   const rect = findTextTableRect(caption, fragments, 612, 792);
   assert(rect && rect.top < 90 && rect.top + rect.height < 145);
 });
+
+test("does not treat grid lines from an adjacent-column chart as a table", async () => {
+  const { findRuledTableRect } = await api;
+  const caption = { left: 65, top: 90, width: 220, height: 28 };
+  const rect = findRuledTableRect(caption, [
+    { left: 340, right: 560, y: 150 },
+    { left: 340, right: 560, y: 190 },
+    { left: 340, right: 560, y: 230 },
+  ], 612, 792);
+  assert.equal(rect, null);
+});

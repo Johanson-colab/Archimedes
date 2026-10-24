@@ -52,11 +52,24 @@ export function findPdfHorizontalRules(pixels: Uint8ClampedArray, imageWidth: nu
   return merged.map(({ count: _count, ...rule }) => rule);
 }
 
-function ruleGroup(caption: PdfTableRect, rules: PdfTableRule[], direction: "above" | "below", pageHeight: number) {
+function ruleGroup(caption: PdfTableRect, rules: PdfTableRule[], direction: "above" | "below", pageWidth: number, pageHeight: number) {
+  const captionRight = right(caption);
+  const captionCenter = caption.left + caption.width / 2;
   const ordered = rules
     .filter((rule) => direction === "below" ? rule.y > bottom(caption) + 2 : rule.y < caption.top - 2)
+    // A chart in the neighbouring column often contributes several horizontal
+    // grid lines. They are not evidence for a table whose caption is elsewhere.
+    .filter((rule) => {
+      const overlap = Math.max(0, Math.min(rule.right, captionRight) - Math.max(rule.left, caption.left));
+      const ruleCenter = (rule.left + rule.right) / 2;
+      return overlap >= Math.min(24, caption.width * .14)
+        || (caption.width < pageWidth * .16 && Math.abs(ruleCenter - captionCenter) <= pageWidth * .22);
+    })
     .sort((first, second) => direction === "below" ? first.y - second.y : second.y - first.y);
-  const maxGap = Math.max(pageHeight * .42, caption.height * 24);
+  if (!ordered.length) return null;
+  const firstDistance = direction === "below" ? ordered[0].y - bottom(caption) : caption.top - ordered[0].y;
+  if (firstDistance > Math.max(pageHeight * .2, caption.height * 12)) return null;
+  const maxGap = Math.max(pageHeight * .19, caption.height * 12);
   const group: PdfTableRule[] = [];
   for (const rule of ordered) {
     if (group.length && Math.abs(rule.y - group.at(-1)!.y) > maxGap) break;
@@ -72,7 +85,7 @@ function ruleGroup(caption: PdfTableRect, rules: PdfTableRule[], direction: "abo
 
 /** Uses the first and last rules of the caption-adjacent table, never caption heuristics. */
 export function findRuledTableRect(caption: PdfTableRect, rules: PdfTableRule[], pageWidth: number, pageHeight: number): PdfTableRect | null {
-  const candidates = ([ruleGroup(caption, rules, "above", pageHeight), ruleGroup(caption, rules, "below", pageHeight)]).filter(Boolean) as Array<NonNullable<ReturnType<typeof ruleGroup>>>;
+  const candidates = ([ruleGroup(caption, rules, "above", pageWidth, pageHeight), ruleGroup(caption, rules, "below", pageWidth, pageHeight)]).filter(Boolean) as Array<NonNullable<ReturnType<typeof ruleGroup>>>;
   const selected = candidates.sort((first, second) => second.score - first.score)[0];
   if (!selected) return null;
   const rect: PdfTableRect = {
