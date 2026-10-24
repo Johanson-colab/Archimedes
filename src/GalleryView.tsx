@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, ExternalLink, GraduationCap, ImageOff, Images, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, GraduationCap, ImageOff, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
 import { GALLERY_CATALOG_ADDITIONS, GALLERY_CATALOG_VERSION, GALLERY_COVERAGE } from "./gallery-catalog";
+import ToolbarActions from "./ToolbarActions";
 import { useDialogFocus } from "./useDialogFocus";
 
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
@@ -183,7 +184,7 @@ export default function GalleryView({ active, onBrowseProceedings }: { active: b
   const emnlp2026 = GALLERY_COVERAGE.find((row) => row.venue === "emnlp" && row.year === 2026);
 
   return <main className="gallery-page">
-    <header className="gallery-header"><div><span className="eyebrow">Visual research index</span><h1>Gallery</h1><p>Curated figures from peer-reviewed AI conference papers.</p></div><div className="gallery-header-actions"><button type="button" className="gallery-proceedings-link" onClick={onBrowseProceedings}><GraduationCap size={15} />Browse full proceedings</button><span className="gallery-header-icon"><Images size={23} /></span></div></header>
+    <ToolbarActions active={active}><button type="button" className="gallery-proceedings-link" onClick={onBrowseProceedings}><GraduationCap size={15} />Browse full proceedings</button></ToolbarActions>
     <div className="gallery-controls"><label className="gallery-search"><Search size={17} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search paper title, author, or topic" aria-label="Search gallery" /></label><label className="gallery-sort"><SlidersHorizontal size={15} /><span>Sort</span><select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort gallery"><option value="newest">Newest first</option><option value="venue">Venue / year</option><option value="oldest">Oldest first</option></select></label></div>
     <div className="gallery-filters">
       <Facet label="Venue" value={filters.venue} onChange={(value) => updateFilter("venue", value)} options={[{ value: "all", label: "All" }, ...VENUES.map((venue) => ({ value: venue, label: venue, count: figures.filter((figure) => figure.venue === venue.toLowerCase()).length }))]} />

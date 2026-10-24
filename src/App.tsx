@@ -1619,6 +1619,7 @@ function App() {
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const dirtyArtifactPaths = useMemo(() => new Set(Object.values(artifactDrafts).filter(isDraftDirty).map((draft) => draft.path)), [artifactDrafts]);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "skills" ? t("Skills") : mainSection === "library" ? t("Literature library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "gallery" ? t("Gallery") : mainSection === "writing" ? t("Paper writing") : t("Artifacts");
+  const mainSubtitle = mainSection === "gallery" ? t("Visual research index") : mainSection === "writing" ? t("LaTeX workspace") : mainSection === "daily" ? t("Live research feed") : mainSection === "benchmark-radar" ? t("Benchmark intelligence") : workspaceReady ? t("Workspace connected") : t("Opening workspace");
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
@@ -1694,8 +1695,9 @@ function App() {
       <section className={workbenchOpen ? "codex-main workbench-open" : "codex-main"} style={{ "--workbench-width": workbenchOpen ? `${workbenchWidth}px` : "0px" } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
           {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
-          <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? t("Workspace connected") : t("Opening workspace")}</span></div>
+          <div className="conversation-title"><strong>{mainTitle}</strong><span>{mainSubtitle}</span></div>
           <div className="main-toolbar-actions">
+            <div id="module-toolbar-actions" className="module-toolbar-actions" />
             <button className={workbenchOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={toggleWorkbench} title={workbenchOpen ? `${t("Hide workbench")} (Ctrl+\`)` : `${t("Show workbench")} (Ctrl+\`)`} aria-label={workbenchOpen ? t("Hide workbench") : t("Show workbench")} aria-pressed={workbenchOpen}>
               <PanelRight size={18} />
             </button>
@@ -1747,7 +1749,7 @@ function App() {
             <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath, "page")} onSelectOpenFile={(file) => selectOpenArtifact(file, "page")} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} onAddComment={addArtifactComment} />
           )}
           <div className={mainSection === "writing" ? "paper-writing-view-cache" : "paper-writing-view-cache hidden"} aria-hidden={mainSection !== "writing"}>
-            {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
+            {workspaceReady && <PaperWritingView active={mainSection === "writing"} bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
           </div>
         </div>
         </div>

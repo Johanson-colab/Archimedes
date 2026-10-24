@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Bookmark, BookmarkCheck, ExternalLink, LibraryBig, LoaderCircle, Radar, Search } from "lucide-react";
+import ToolbarActions from "./ToolbarActions";
 
 type RadarTab = "radar" | "library";
 type TimeWindow = "latest" | "30d" | "90d";
@@ -127,10 +128,7 @@ export default function BenchmarkRadarView() {
   if (!data) return <main className="benchmark-radar-page benchmark-loading error"><Radar size={26} /><strong>Benchmark Radar is unavailable</strong><p>{error || "The local Benchmark Radar dataset could not be opened."}</p></main>;
 
   return <main className="benchmark-radar-page">
-    <header className="benchmark-header">
-      <div><span className="eyebrow">Benchmark intelligence</span><h1>Benchmark Radar</h1><p>Track emerging public evaluations and search the Benchmark Radar library inside Archimedes.</p></div>
-      <div className="benchmark-source"><Radar size={18} /><span>Updated {data.updatedAt || "locally"}</span><small>{data.library.length.toLocaleString()} indexed</small></div>
-    </header>
+    <ToolbarActions><span className="module-toolbar-note"><Radar size={12} />Updated {data.updatedAt || "locally"} · {data.library.length.toLocaleString()} indexed</span></ToolbarActions>
 
     <nav className="benchmark-tabs" aria-label="Benchmark Radar view">
       <button className={tab === "radar" ? "active" : ""} onClick={() => setTab("radar")}><Radar size={16} />Radar</button>
