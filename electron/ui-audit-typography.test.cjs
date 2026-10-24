@@ -77,6 +77,7 @@ test("right workbench metadata moves above the 10px floor", () => {
   assert.match(typography, /\.trajectory-stat span,\s*\.trajectory-section-title \{ font-size: 12px; \}/);
   assert.match(typography, /\.trajectory-event-copy small,\s*\.trajectory-event-time,\s*\.trajectory-event-meta \{ font-size: 12px; \}/);
   assert.match(typography, /\.trajectory-json \{ font-size: 12px; \}/);
+  assert.match(typography, /\.trajectory-section-head h3 \{\s*color: var\(--night-muted\);\s*font-size: 12px;\s*font-weight: 400;/);
 });
 
 test("mono and editorial surfaces follow the selected font tokens", () => {
