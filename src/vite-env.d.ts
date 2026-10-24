@@ -208,7 +208,7 @@ interface TerminalSessionInfo {
 }
 
 type TerminalShellProfile = "auto" | "pwsh" | "powershell" | "cmd" | "zsh" | "fish" | "bash" | "custom";
-type TerminalExternalTerminal = "auto" | "windows-terminal" | "ghostty" | "wezterm" | "terminal" | "none";
+type TerminalExternalTerminal = "auto" | "windows-terminal" | "ghostty" | "wezterm" | "tabby" | "terminal" | "none";
 
 interface TerminalSettings {
   shell: TerminalShellProfile;
