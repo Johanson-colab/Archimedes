@@ -1549,17 +1549,18 @@ function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canv
   const captions = pdfCaptionCandidates(fragments, lines);
   return captions.flatMap<PdfInteractiveRegion>(({ line: caption, kind }) => {
     const column = pdfCaptionColumn(caption, bounds.width);
+    if (kind === "table") {
+      // Tables often share a page with a nearby chart. Resolve row/rule
+      // structure first; otherwise the table caption can steal the following
+      // figure's image object and the real table never gets an overlay.
+      const rect = detectPdfTableRect(canvas, page, caption, fragments, captions.filter((candidate) => candidate.line !== caption).map((candidate) => candidate.line));
+      if (rect) return [{ rect, nearbyText: pdfNearbyText(lines, unionPdfRects(rect, caption)), kind, source: "caption" as const }];
+    }
     const imageCluster = pdfImageCluster(caption, imageRects, column, bounds.height);
     if (imageCluster) {
       const rect = pdfCompositeImageRect(page, canvas, lines, caption, imageCluster, column);
       const evidenceRect = unionPdfRects(rect, caption);
       return [{ rect, nearbyText: pdfNearbyText(lines, evidenceRect), kind, source: "image" as const }];
-    }
-    if (kind === "table") {
-      const rect = detectPdfTableRect(canvas, page, caption, fragments, captions.filter((candidate) => candidate.line !== caption).map((candidate) => candidate.line));
-      // A real table is itself dense, aligned text. Paragraph-density rejection
-      // belongs only to the figure fallback; applying it here hides large tables.
-      if (rect) return [{ rect, nearbyText: pdfNearbyText(lines, unionPdfRects(rect, caption)), kind, source: "caption" as const }];
     }
     // Vector-only figures have no image XObject. Search only inside the caption's
     // column, then require real non-text ink and reject paragraph-shaped regions.
