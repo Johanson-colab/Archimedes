@@ -102,7 +102,7 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
 
     <div className="trajectory-section trajectory-raw">
       <div className="trajectory-section-head">
-        <div><h3>Raw events</h3><p>Every field is preserved. Expand an event to inspect its full payload.</p></div>
+        <div><h3>Raw events</h3></div>
         <div className="trajectory-head-actions">
           <button onClick={() => void copy(JSON.stringify(events, null, 2), "all")} title="Copy all raw events"><Copy size={13} />{copied === "all" ? "Copied" : "Copy JSON"}</button>
           <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(events.map((event) => event.id)))} title={allExpanded ? "Collapse all events" : "Expand all events"}>{allExpanded ? "Collapse all" : "Expand all"}</button>

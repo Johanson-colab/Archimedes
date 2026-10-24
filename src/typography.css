@@ -596,3 +596,10 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .workspace-tree-row { font-size: 12px; }
 .workspace-tree-row strong { font-size: 12px; font-weight: 400; }
 .workspace-tree-row small { font-size: 11px; }
+
+/* Raw events is a section label, not a competing title. */
+.trajectory-section-head h3 {
+  color: var(--night-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
