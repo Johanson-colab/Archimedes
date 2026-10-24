@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   platform: process.platform,
   getInitialWorkspace: () => ipcRenderer.invoke("window:initial-workspace"),
   setTitleBarTheme: (theme) => ipcRenderer.invoke("window:set-titlebar-theme", theme),
+  setUiZoom: (factor) => ipcRenderer.invoke("window:set-ui-zoom", factor),
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
   chooseContextPaths: (kind, workspace) => ipcRenderer.invoke("context:choose-paths", { kind, workspace }),
   listContextResources: (kind, workspace) => ipcRenderer.invoke("context:list-resources", { kind, workspace }),

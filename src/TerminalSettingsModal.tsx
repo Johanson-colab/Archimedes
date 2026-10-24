@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Settings2, X } from "lucide-react";
+import { useUISettings } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
 type TerminalSettingsModalProps = {
@@ -10,6 +11,7 @@ type TerminalSettingsModalProps = {
   onClose: () => void;
   onSave: (patch: Partial<TerminalSettings>) => Promise<void>;
   onOpenExternal: (externalTerminal: TerminalExternalTerminal) => Promise<void>;
+  embedded?: boolean;
 };
 
 const WINDOWS_SHELLS: Array<{ value: TerminalShellProfile; label: string }> = [
@@ -28,8 +30,9 @@ const POSIX_SHELLS: Array<{ value: TerminalShellProfile; label: string }> = [
   { value: "custom", label: "Custom executable" },
 ];
 
-export default function TerminalSettingsModal({ open, mode, settings, workspace, onClose, onSave, onOpenExternal }: TerminalSettingsModalProps) {
-  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
+export default function TerminalSettingsModal({ open, mode, settings, workspace, onClose, onSave, onOpenExternal, embedded = false }: TerminalSettingsModalProps) {
+  const { t } = useUISettings();
+  const dialogRef = useDialogFocus<HTMLElement>(open && !embedded, onClose);
   const [form, setForm] = useState<Partial<TerminalSettings>>({});
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -98,74 +101,76 @@ export default function TerminalSettingsModal({ open, mode, settings, workspace,
     }
   }
 
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="workspace-modal terminal-settings-modal" role="dialog" aria-modal="true" aria-label={mode === "onboarding" ? "Choose your terminal" : "Terminal settings"} onMouseDown={(event) => event.stopPropagation()}>
-      <div className="modal-header">
-        <div><span className="eyebrow">{mode === "onboarding" ? "First terminal" : "Workspace terminal"}</span><h2>{mode === "onboarding" ? "Choose your terminal" : "Terminal settings"}</h2></div>
-        <button className="icon-button" onClick={onClose} title="Close" aria-label="Close"><X size={16} /></button>
-      </div>
+  const content = <>
+      {!embedded && <div className="modal-header">
+        <div><span className="eyebrow">{mode === "onboarding" ? t("First terminal") : t("Workspace terminal")}</span><h2>{mode === "onboarding" ? t("Choose your terminal") : t("Terminal settings")}</h2></div>
+        <button className="icon-button" onClick={onClose} title={t("Close")} aria-label={t("Close")}><X size={16} /></button>
+      </div>}
 
       <div className="terminal-settings-body">
-        {mode === "onboarding" && <p className="terminal-settings-intro">Pick the shell Archimedes should use for new terminals. You can change this later in Terminal settings.</p>}
+        {mode === "onboarding" && <p className="terminal-settings-intro">{t("Pick the shell Archimedes should use for new terminals. You can change this later in Terminal settings.")}</p>}
 
         <div className="terminal-settings-platform"><span>{platformLabel}</span><strong>{settings.detectedShellName || settings.detectedShell}</strong></div>
 
         <label className="terminal-settings-field">
-          <span>Shell profile</span>
+          <span>{t("Shell profile")}</span>
           <select value={form.shell || "auto"} onChange={(event) => setForm((current) => ({ ...current, shell: event.target.value as TerminalShellProfile }))}>
-            {shellOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+            {shellOptions.map((option) => <option value={option.value} key={option.value}>{t(option.label)}</option>)}
           </select>
-          <small>Recommended for {platformLabel}: {recommendedShell}. Detected: {settings.detectedShellName || settings.detectedShell}</small>
+          <small>{t("Recommended for {platform}: {shell}. Detected: {detected}", { platform: platformLabel, shell: recommendedShell, detected: settings.detectedShellName || settings.detectedShell })}</small>
         </label>
 
         {(form.shell || settings.shell) === "custom" && <label className="terminal-settings-field">
-          <span>Custom shell</span>
+          <span>{t("Custom shell")}</span>
           <input value={form.customShell || ""} onChange={(event) => setForm((current) => ({ ...current, customShell: event.target.value }))} placeholder={platform === "win32" ? "C:\\path\\to\\pwsh.exe" : "/usr/local/bin/fish"} />
         </label>}
 
         <div className="terminal-settings-grid">
           <label className="terminal-settings-field">
-            <span>Font family</span>
+            <span>{t("Font family")}</span>
             <input value={form.fontFamily || ""} onChange={(event) => setForm((current) => ({ ...current, fontFamily: event.target.value }))} placeholder={platform === "win32" ? "Cascadia Mono" : platform === "darwin" ? "SF Mono" : "JetBrains Mono"} />
           </label>
           <label className="terminal-settings-field">
-            <span>Font size</span>
+            <span>{t("Font size")}</span>
             <input type="number" min={10} max={20} value={form.fontSize ?? 12} onChange={(event) => setForm((current) => ({ ...current, fontSize: Number(event.target.value) }))} />
           </label>
         </div>
 
         <div className="terminal-settings-grid">
           <label className="terminal-settings-field">
-            <span>Scrollback</span>
+            <span>{t("Scrollback")}</span>
             <select value={form.scrollback ?? 10_000} onChange={(event) => setForm((current) => ({ ...current, scrollback: Number(event.target.value) }))}>
-              <option value={5_000}>5,000 lines</option>
-              <option value={10_000}>10,000 lines</option>
-              <option value={25_000}>25,000 lines</option>
+              <option value={5_000}>{t("5,000 lines")}</option>
+              <option value={10_000}>{t("10,000 lines")}</option>
+              <option value={25_000}>{t("25,000 lines")}</option>
             </select>
           </label>
           <label className="terminal-settings-field">
-            <span>External terminal</span>
+            <span>{t("External terminal")}</span>
             <select value={form.externalTerminal || "auto"} onChange={(event) => setForm((current) => ({ ...current, externalTerminal: event.target.value as TerminalExternalTerminal }))}>
-              {externalOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+              {externalOptions.map((option) => <option value={option.value} key={option.value}>{t(option.label)}</option>)}
             </select>
           </label>
         </div>
 
         <div className="terminal-settings-external">
-          <div><Settings2 size={13} /><span>Open the active workspace in {settings.externalTerminalLabel}.</span></div>
-          <button className="secondary-button" onClick={() => void openExternal()} disabled={opening}><ArrowUpRight size={13} />{opening ? "Opening…" : "Open external"}</button>
+          <div><Settings2 size={13} /><span>{t("Open the active workspace in {terminal}.", { terminal: settings.externalTerminalLabel })}</span></div>
+          <button className="secondary-button" onClick={() => void openExternal()} disabled={opening}><ArrowUpRight size={13} />{opening ? t("Opening…") : t("Open external")}</button>
         </div>
 
         {error && <p className="terminal-settings-error">{error}</p>}
       </div>
 
       <div className="modal-actions terminal-settings-actions">
-        <button className="secondary-button" onClick={() => setForm({ shell: "auto", customShell: "", fontFamily: "", fontSize: 12, scrollback: 10_000, externalTerminal: "auto" })}>Restore recommended</button>
+        <button className="secondary-button" onClick={() => setForm({ shell: "auto", customShell: "", fontFamily: "", fontSize: 12, scrollback: 10_000, externalTerminal: "auto" })}>{t("Restore recommended")}</button>
         <span style={{ flex: 1 }} />
         {mode === "onboarding"
-          ? <><button className="secondary-button" onClick={() => void save({ onboarded: true })}>Not now</button><button className="primary-button" onClick={() => void save({})} disabled={saving}>{saving ? "Saving…" : "Continue"}</button></>
-          : <><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={() => void save({})} disabled={saving}>{saving ? "Saving…" : "Save"}</button></>}
+          ? <><button className="secondary-button" onClick={() => void save({ onboarded: true })}>{t("Not now")}</button><button className="primary-button" onClick={() => void save({})} disabled={saving}>{saving ? t("Saving…") : t("Continue")}</button></>
+          : <>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Cancel")}</button>}<button className="primary-button" onClick={() => void save({})} disabled={saving}>{saving ? t("Saving…") : t("Save")}</button></>}
       </div>
-    </section>
+    </>;
+  if (embedded) return <section className="settings-embedded terminal-settings-modal" aria-label="Terminal settings">{content}</section>;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="workspace-modal terminal-settings-modal" role="dialog" aria-modal="true" aria-label={mode === "onboarding" ? "Choose your terminal" : "Terminal settings"} onMouseDown={(event) => event.stopPropagation()}>{content}</section>
   </div>;
 }
