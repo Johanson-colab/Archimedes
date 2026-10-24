@@ -53,6 +53,24 @@ test("invalid profiles fall back to auto", () => {
   assert.equal(saved.externalTerminal, "auto");
 });
 
+test("tabby is available as a cross-platform external terminal", () => {
+  const win = settings.getExternalTerminal("win32", "tabby");
+  assert.equal(win.app, "Tabby");
+  assert.match(win.command, /tabby\.exe$/i);
+
+  const mac = settings.getExternalTerminal("darwin", "tabby");
+  assert.equal(mac.command, "open");
+  assert.deepEqual(mac.args, ["-a", "Tabby", "--args", "open"]);
+
+  const linux = settings.getExternalTerminal("linux", "tabby");
+  assert.equal(linux.command, "tabby");
+
+  settings.initialize(userData);
+  const saved = settings.saveTerminalSettings({ externalTerminal: "tabby" });
+  assert.equal(saved.externalTerminal, "tabby");
+  assert.equal(saved.externalTerminalLabel, "Tabby");
+});
+
 test("disabled external terminal does not spawn anything", async () => {
   settings.initialize(userData);
   settings.saveTerminalSettings({ externalTerminal: "none" });

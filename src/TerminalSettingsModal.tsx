@@ -59,21 +59,28 @@ export default function TerminalSettingsModal({ open, mode, settings, workspace,
     ? [
       { value: "auto", label: "Windows Terminal · recommended" },
       { value: "wezterm", label: "WezTerm" },
+      { value: "tabby", label: "Tabby" },
       { value: "none", label: "Do not open external terminal" },
     ]
     : platform === "darwin"
       ? [
         { value: "auto", label: "Ghostty · recommended" },
         { value: "wezterm", label: "WezTerm" },
+        { value: "tabby", label: "Tabby" },
         { value: "terminal", label: "Terminal.app" },
         { value: "none", label: "Do not open external terminal" },
       ]
       : [
         { value: "auto", label: "WezTerm · recommended" },
         { value: "ghostty", label: "Ghostty" },
+        { value: "tabby", label: "Tabby" },
         { value: "none", label: "Do not open external terminal" },
       ];
 
+  const selectedExternal = form.externalTerminal || settings.externalTerminal || "auto";
+  const externalLabel = selectedExternal === "auto"
+    ? settings.externalTerminalLabel
+    : externalOptions.find((option) => option.value === selectedExternal)?.label.split(" · ")[0] || settings.externalTerminalLabel;
   const recommendedShell = platform === "win32" ? "PowerShell 7" : platform === "darwin" ? "zsh" : "$SHELL";
   const platformLabel = platform === "win32" ? "Windows" : platform === "darwin" ? "macOS" : "Linux";
 
@@ -154,7 +161,7 @@ export default function TerminalSettingsModal({ open, mode, settings, workspace,
         </div>
 
         <div className="terminal-settings-external">
-          <div><Settings2 size={13} /><span>{t("Open the active workspace in {terminal}.", { terminal: settings.externalTerminalLabel })}</span></div>
+          <div><Settings2 size={13} /><span>{t("Open the active workspace in {terminal}.", { terminal: externalLabel })}</span></div>
           <button className="secondary-button" onClick={() => void openExternal()} disabled={opening}><ArrowUpRight size={13} />{opening ? t("Opening…") : t("Open external")}</button>
         </div>
 

@@ -6,7 +6,7 @@ const { resolveTerminalShell } = require("./terminal-shell.cjs");
 
 const SETTINGS_FILE = "terminal-settings.json";
 const SHELL_PROFILES = new Set(["auto", "pwsh", "powershell", "cmd", "zsh", "fish", "bash", "custom"]);
-const EXTERNAL_TERMINALS = new Set(["auto", "windows-terminal", "ghostty", "wezterm", "terminal", "none"]);
+const EXTERNAL_TERMINALS = new Set(["auto", "windows-terminal", "ghostty", "wezterm", "tabby", "terminal", "none"]);
 let settingsPath = "";
 let settings = null;
 
@@ -50,8 +50,22 @@ function persist() {
   fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
 }
 
+function tabbyExecutable(platform) {
+  if (platform !== "win32") return "tabby";
+  const candidates = [
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs", "Tabby", "Tabby.exe"),
+    process.env.ProgramFiles && path.join(process.env.ProgramFiles, "Tabby", "Tabby.exe"),
+    process.env["ProgramFiles(x86)"] && path.join(process.env["ProgramFiles(x86)"], "Tabby", "Tabby.exe"),
+  ].filter(Boolean);
+  return candidates.find((candidate) => fs.existsSync(candidate)) || "tabby.exe";
+}
+
 function getExternalTerminal(platform, requested) {
   if (requested === "none") return null;
+  if (requested === "tabby") {
+    if (platform === "darwin") return { command: "open", args: ["-a", "Tabby", "--args", "open"], app: "Tabby" };
+    return { command: tabbyExecutable(platform), app: "Tabby" };
+  }
   if (platform === "win32") {
     if (requested === "wezterm") return { command: "wezterm.exe", app: "WezTerm" };
     return { command: "wt.exe", app: "Windows Terminal" };
@@ -94,7 +108,11 @@ function openExternalTerminal({ cwd, externalTerminal } = {}) {
   if (!target) return Promise.resolve({ opened: false, app: "None" });
   const targetCwd = cwd || os.homedir();
   let args;
-  if (process.platform === "win32") {
+  if (target.app === "Tabby") {
+    args = process.platform === "darwin"
+      ? ["-a", "Tabby", "--args", "open", targetCwd]
+      : ["open", targetCwd];
+  } else if (process.platform === "win32") {
     args = target.command === "wezterm.exe" ? ["start", "--cwd", targetCwd] : ["-d", targetCwd];
   } else if (target.app === "Ghostty") {
     args = ["-a", "Ghostty", "--args", `--working-directory=${targetCwd}`];
@@ -121,5 +139,6 @@ module.exports = {
   terminalSettings,
   saveTerminalSettings,
   shellLaunch,
+  getExternalTerminal,
   openExternalTerminal,
 };
