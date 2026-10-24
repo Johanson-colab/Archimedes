@@ -93,6 +93,16 @@ test("terminal is a workbench tab with no dock or duplicate close controls", () 
   assert.doesNotMatch(workbench, /workbench-action/);
 });
 
+test("files and trajectory share one row token system", () => {
+  assert.match(css, /--rail-row-ink: #a7a8b5/);
+  assert.match(css, /--rail-row-hover-bg: #202020/);
+  assert.match(css, /--rail-row-active-bg: #25253a/);
+  assert.match(css, /\.workspace-tree-row,\s*\.trajectory-event-head \{ color: var\(--rail-row-ink\); \}/);
+  assert.match(css, /\.workspace-tree-row:hover,\s*\.trajectory-event-head:hover \{ color: var\(--rail-row-ink-strong\); background: var\(--rail-row-hover-bg\); \}/);
+  assert.match(css, /\.workspace-tree-row\.active,\s*\.trajectory-event\.open \.trajectory-event-head \{ color: var\(--rail-row-ink-strong\); background: var\(--rail-row-active-bg\); \}/);
+  assert.match(css, /\.theme-paper \{[\s\S]*?--rail-row-hover-bg: #efede9/);
+});
+
 test("terminal settings sit in the terminal tab row with a distinct icon", () => {
   assert.match(workbench, /onOpenSettings=\{onOpenTerminalSettings\}/);
   assert.match(terminal, /SlidersHorizontal/);
