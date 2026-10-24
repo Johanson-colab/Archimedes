@@ -3460,3 +3460,12 @@ html:not([data-theme="paper"]) .sidebar-settings-button:hover { color: #f0f0f0; 
 
 .theme-paper .sidebar-settings-button { color: #6f6a63; }
 .theme-paper .sidebar-settings-button:hover { color: #282622; background: #e5e1da; }
+
+/* Focus belongs to the whole composer, not just its textarea. The global
+   textarea focus ring would otherwise draw a gold box around the upper input
+   area while the footer sits outside it. */
+.conversation-composer textarea:focus-visible { outline: none; }
+.conversation-composer:focus-within {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 55%, transparent);
+}
