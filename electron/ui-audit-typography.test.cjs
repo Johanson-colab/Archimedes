@@ -49,7 +49,21 @@ test("reading and settings surfaces use a clearer hierarchy", () => {
   assert.match(typography, /\.paper-abstract \{ font-size: 14px; line-height: 1\.65/);
   assert.match(typography, /\.library-card-copy strong \{ font-size: 16px/);
   assert.match(typography, /\.settings-header h2 \{ font-size: 24px/);
-  assert.match(typography, /\.settings-nav-item \{ height: 34px; font-size: 12px/);
+  assert.match(typography, /\.settings-nav-item \{ height: 34px; font-size: 13px/);
+});
+
+test("settings metadata no longer drops to 8-9px", () => {
+  assert.match(typography, /\.settings-version \{ font-size: 11px; \}/);
+  assert.match(typography, /\.settings-card-heading strong \{ font-size: 14px/);
+  assert.match(typography, /\.settings-card-heading p \{ font-size: 12px/);
+  assert.match(typography, /\.settings-field \{ font-size: 12px; \}/);
+  assert.match(typography, /\.provider-option small \{ font-size: 11px; \}/);
+  assert.match(typography, /\.model-catalog-header \{ font-size: 11px; \}/);
+  assert.match(typography, /\.terminal-settings-field \{ font-size: 12px; \}/);
+  assert.match(typography, /\.terminal-settings-field small \{ font-size: 11px; \}/);
+  assert.match(typography, /\.terminal-settings-actions \.primary-button,[\s\S]*?font-size: 12px/);
+  assert.match(typography, /\.settings-workspace-path \{ font-size: 11px; \}/);
+  assert.match(typography, /\.settings-about dd \{ font-size: 11px; \}/);
 });
 
 test("right workbench metadata moves above the 10px floor", () => {

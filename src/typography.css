@@ -238,17 +238,61 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .settings-header h2 { font-size: 24px; line-height: 1.25; letter-spacing: -.02em; }
 .settings-header p { font-size: 12px; line-height: 1.5; }
 .settings-brand strong { font-size: 14px; }
-.settings-brand span { font-size: 10px; }
-.settings-version { font-size: 9px; }
-.settings-nav-item { height: 34px; font-size: 12px; }
+.settings-brand span { font-size: 11px; }
+.settings-version { font-size: 11px; }
+.settings-nav-item { height: 34px; font-size: 13px; }
 .settings-card { padding: 18px; }
-.settings-card-heading strong { font-size: 13px; line-height: 1.35; }
-.settings-card-heading p { font-size: 11px; line-height: 1.5; }
-.settings-field { font-size: 11px; }
+.settings-card-heading strong { font-size: 14px; line-height: 1.35; }
+.settings-card-heading p { font-size: 12px; line-height: 1.5; }
+.settings-field { font-size: 12px; }
 .settings-field select { height: 38px; font-size: 13px; }
 .settings-segmented button { height: 32px; min-width: 76px; font-size: 12px; }
-.settings-theme-option strong { font-size: 12px; }
-.settings-theme-option small { font-size: 10px; }
+.settings-theme-option strong { font-size: 13px; }
+.settings-theme-option small { font-size: 11px; }
+.settings-actions button { font-size: 12px; }
+.settings-note { font-size: 11px; }
+.settings-workspace-path { font-size: 11px; }
+.settings-empty { font-size: 12px; }
+.settings-about p { font-size: 12px; }
+.settings-about dt { font-size: 11px; }
+.settings-about dd { font-size: 11px; }
+
+/* Model and web-data settings. */
+.provider-option strong { font-size: 12px; }
+.provider-option small { font-size: 11px; }
+.provider-config-title h3 { font-size: 16px; }
+.provider-config-title p { font-size: 11px; }
+.provider-config label { font-size: 11px; }
+.provider-config input { font-size: 12px; }
+.model-catalog-header { font-size: 11px; }
+.model-catalog-header button { font-size: 11px; }
+.model-catalog-note,
+.model-catalog-empty { font-size: 11px; }
+.model-catalog-list button { font-size: 12px; }
+.model-security-note { font-size: 11px; }
+.web-data-provider-copy strong { font-size: 12px; }
+.web-data-provider-copy small { font-size: 11px; }
+.web-data-selected p { font-size: 12px; }
+.web-data-field label { font-size: 11px; }
+.web-data-security { font-size: 11px; }
+.web-data-link { font-size: 11px; }
+.web-data-feedback { font-size: 11px; }
+.model-settings-footer > span { font-size: 11px; }
+
+/* Terminal settings. */
+.terminal-settings-intro { font-size: 12px; }
+.terminal-settings-platform { font-size: 11px; }
+.terminal-settings-platform strong { font-size: 11px; }
+.terminal-settings-field { font-size: 12px; }
+.terminal-settings-field small { font-size: 11px; }
+.terminal-settings-field input,
+.terminal-settings-field select { font-size: 12px; }
+.terminal-settings-external { font-size: 11px; }
+.terminal-settings-external button { font-size: 11px; }
+.terminal-settings-actions .primary-button,
+.terminal-settings-actions .secondary-button { font-size: 12px; }
+.terminal-settings-error { font-size: 11px; }
+.terminal-settings-modal .eyebrow { font-size: 11px; }
 
 /* Right workbench. */
 .workbench-tab { font-size: 12px; font-weight: 600; }
