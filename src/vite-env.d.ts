@@ -67,6 +67,7 @@ interface ResearchDeskBridge {
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string }) => Promise<AgentRunResult>;
+    runPaperReview: (input: PaperReviewInput) => Promise<PaperReviewResult>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
@@ -84,6 +85,7 @@ interface ResearchDeskBridge {
     onPtyData: (callback: (payload: { sessionId: string; data: string }) => void) => () => void;
     onPtyExit: (callback: (payload: { sessionId: string; exitCode: number; signal?: number }) => void) => () => void;
     onAgentEvent: (callback: (payload: AgentEvent) => void) => () => void;
+    onPaperReviewEvent: (callback: (payload: PaperReviewEvent) => void) => () => void;
     onMenuNewChat: (callback: () => void) => () => void;
     onMenuOpenFolder: (callback: (workspace: string) => void) => () => void;
     onWorkspaceFilesChanged: (callback: (payload: { path: string }) => void) => () => void;
@@ -679,6 +681,43 @@ interface AgentEvent {
   delta?: string;
   clientRunId?: string;
   action?: AgentAction;
+}
+
+interface PaperReviewInput {
+  paper: Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
+  pageCount: number;
+  workspace: string;
+  projectId?: string | null;
+  reasoningEffort?: ReasoningEffort;
+  contextLength?: ContextLength;
+  contextItems?: ContextAttachment[];
+  clientRunId?: string;
+}
+
+interface PaperReviewAgentResult {
+  id: "related" | "method" | "experiments" | "limitations";
+  title: string;
+  status: "complete" | "error";
+  response: string;
+  error: string;
+  repaired: boolean;
+  run: AgentRunResult | null;
+}
+
+interface PaperReviewResult {
+  specialists: PaperReviewAgentResult[];
+  supervisor: { verdict: "ready" | "repair"; repairTargets: string[]; reason: string; run: AgentRunResult | null };
+  summary: { response: string; run: AgentRunResult };
+  agentRuns: AgentRunResult[];
+}
+
+interface PaperReviewEvent {
+  type: "stage";
+  stage: "specialists" | "specialist_started" | "specialist_complete" | "specialist_failed" | "supervisor" | "repair" | "summary" | "complete";
+  reviewerId?: "related" | "method" | "experiments" | "limitations";
+  title: string;
+  detail: string;
+  clientRunId?: string;
 }
 
 interface BenchmarkRadarRecord {

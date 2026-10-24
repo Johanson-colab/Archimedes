@@ -7,6 +7,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
+const { runPaperReview } = require("./paper-review-orchestrator.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
@@ -961,6 +962,43 @@ app.whenReady().then(() => {
       contextItems,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => event.sender.send("agent:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) }),
+    });
+  });
+
+  ipcMain.handle("paper-review:run", async (event, input) => {
+    if (!input?.paper || typeof input.paper.id !== "string" || typeof input.paper.title !== "string") {
+      throw new Error("A paper record is required to run an evidence review.");
+    }
+    const workspace = resolveWorkspace(input.workspace);
+    store.openWorkspace(workspace);
+    const config = modelConfig.getActiveModelConfig();
+    const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort || "high");
+    const contextLength = normalizeContextLength(config, input.contextLength || "extra-long");
+    const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
+    const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
+    const paper = {
+      id: input.paper.id,
+      title: input.paper.title.slice(0, 1_000),
+      authors: Array.isArray(input.paper.authors) ? input.paper.authors.slice(0, 50).map((author) => String(author).slice(0, 300)) : [],
+      year: Number.isInteger(input.paper.year) ? input.paper.year : null,
+      venue: String(input.paper.venue || "").slice(0, 1_000),
+      abstract: String(input.paper.abstract || "").slice(0, 12_000),
+      url: String(input.paper.url || "").slice(0, 4_000),
+      pdf_url: String(input.paper.pdf_url || "").slice(0, 4_000),
+    };
+    const emit = (payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send("paper-review:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) });
+    };
+    return runPaperReview({
+      paper,
+      pageCount: Math.max(0, Math.min(5_000, Number(input.pageCount) || 0)),
+      workspace,
+      projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
+      contextItems,
+      reasoningEffort,
+      contextLength,
+      browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
+      emit,
     });
   });
 

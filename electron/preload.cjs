@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   readClipboardImage: () => ipcRenderer.invoke("clipboard:read-image"),
   saveTask: (task) => ipcRenderer.invoke("task:save", task),
   runAgent: (input) => ipcRenderer.invoke("agent:run", input),
+  runPaperReview: (input) => ipcRenderer.invoke("paper-review:run", input),
   interruptAgent: (threadId) => ipcRenderer.invoke("agent:interrupt", threadId),
   approveAgentAction: (actionId) => ipcRenderer.invoke("agent:approve-action", actionId),
   rejectAgentAction: (actionId) => ipcRenderer.invoke("agent:reject-action", actionId),
@@ -99,6 +100,11 @@ contextBridge.exposeInMainWorld("researchDesk", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("agent:event", listener);
     return () => ipcRenderer.removeListener("agent:event", listener);
+  },
+  onPaperReviewEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("paper-review:event", listener);
+    return () => ipcRenderer.removeListener("paper-review:event", listener);
   },
   onMenuNewChat: (callback) => {
     const listener = () => callback();
