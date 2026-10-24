@@ -1553,6 +1553,7 @@ function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVi
 }
 
 function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, activeSelection, figureCaptureActive, onZoomChange, onSelection, onFigureCapture, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; searchQuery: string; zoom: number; activeSelection: string; figureCaptureActive: boolean; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onFigureCapture: (capture: PaperFigureCapture) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
+  const stageRef = useRef<HTMLDivElement>(null);
   const { t } = useUISettings();
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
@@ -1562,10 +1563,15 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(420, Math.floor(entry.contentRect.width))));
-    observer.observe(host);
+    const stage = stageRef.current;
+    if (!stage) return;
+    // Observe the scroll container, not the surface. The surface width changes
+    // when a scrollbar appears, which used to feed a fit-to-width render loop.
+    const observer = new ResizeObserver(([entry]) => {
+      const next = Math.max(320, Math.floor(entry.contentRect.width));
+      setWidth((current) => Math.abs(current - next) < 1 ? current : next);
+    });
+    observer.observe(stage);
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
@@ -1606,7 +1612,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
         const pdfDocument = await loadingTask.promise;
         const pdfPage = await pdfDocument.getPage(pageNumber);
         const baseViewport = pdfPage.getViewport({ scale: 1 });
-        const fitScale = Math.min(1.65, Math.max(.7, (width - 72) / baseViewport.width));
+        const fitScale = Math.min(1.65, Math.max(.7, (width - 4) / baseViewport.width));
         const scale = fitScale * zoom;
         const viewport = pdfPage.getViewport({ scale });
         const page = window.document.createElement("div");
@@ -1716,7 +1722,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     clearActivePdfSelection(hostRef.current);
     onClearSelection();
   }
-  return <div className="arch-pdf-stage" onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />{t("Rendering original PDF…")}</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
+  return <div className="arch-pdf-stage" ref={stageRef} onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />{t("Rendering original PDF…")}</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
 }
 
 function selectionNodeSpan(node: Node | null, layer: HTMLElement) {
