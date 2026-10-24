@@ -42,6 +42,12 @@ test("reading and settings surfaces use a clearer hierarchy", () => {
   assert.match(typography, /\.settings-nav-item \{ height: 34px; font-size: 12px/);
 });
 
+test("mono and editorial surfaces follow the selected font tokens", () => {
+  assert.match(typography, /\.paper-page-controls strong,[\s\S]*?\.paper-zoom-control > \.paper-zoom-readout,[\s\S]*?font-family: var\(--font-mono\)/);
+  assert.match(typography, /\.trajectory-event-copy small,[\s\S]*?\.trajectory-json,[\s\S]*?font-family: var\(--font-mono\)/);
+  assert.match(typography, /\.research-welcome-copy h1,[\s\S]*?\.research-workflow-copy strong,[\s\S]*?\.research-stage-node \{[\s\S]*?font-family: var\(--font-ui\)/);
+});
+
 test("Geist Sans and Geist Mono are bundled locally", () => {
   const settings = fs.readFileSync(path.join(root, "src", "SettingsModal.tsx"), "utf8");
   const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");

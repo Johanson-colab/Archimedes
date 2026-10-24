@@ -76,14 +76,59 @@ samp,
 pre,
 .message-markdown code,
 .message-markdown pre,
-.trajectory-json,
-.settings-workspace-path,
+.paper-page-controls strong,
+.paper-zoom-control > .paper-zoom-readout,
+.arch-pdf-zoom-readout,
 .codebase-editor pre,
+.codebase-selection span,
+.paper-code-file-chips button,
+.paper-code-data-paths li,
+.paper-code-readme,
+.paper-code-file-content > header,
 .paper-code-file-content pre,
 .reader-page-text pre,
-.arch-pdf-zoom-readout {
+.workflow-step > span,
+.proposal-preview,
+.terminal-output,
+.terminal-command,
+.paper-row-year,
+.reader-outline button span,
+.reader-section-number,
+.approval-diff-stats,
+.workspace-change-card > header small,
+.change-file-list > button > span,
+.change-file-list em,
+.change-file-list i,
+.trajectory-event-copy small,
+.trajectory-event-meta code,
+.trajectory-json,
+.skill-markdown code,
+.artifact-comment-box pre,
+.code-preview,
+.markdown-preview code,
+.latex-line-numbers,
+.latex-editor-body textarea,
+.latex-diagnostics pre,
+.paper-ai-markdown code,
+.paper-ai-code-attachment,
+.latex-highlight,
+.latex-editor-textarea,
+.terminal-settings-platform strong,
+.settings-workspace-path,
+.settings-about dd {
   font-family: var(--font-mono);
 }
+
+/* The welcome board previously used an editorial serif. Geist Sans keeps the
+   whole product on one type family, matching the Conductor direction. */
+.research-welcome-copy h1,
+.research-workflow-copy strong,
+.research-stage-node {
+  font-family: var(--font-ui);
+}
+
+.research-welcome-copy h1 { font-weight: 600; }
+.research-workflow-copy strong { font-weight: 600; }
 
 /* Warm surface pass. */
 html:not([data-theme="paper"]) .codex-shell,
