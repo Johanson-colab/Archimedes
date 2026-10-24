@@ -42,7 +42,32 @@ test("reading and settings surfaces use a clearer hierarchy", () => {
   assert.match(typography, /\.settings-nav-item \{ height: 34px; font-size: 12px/);
 });
 
-test("phase B does not bundle or load Geist yet", () => {
-  assert.doesNotMatch(typography, /font-family:[^;]*Geist/i);
-  assert.doesNotMatch(typography, /@font-face/);
+test("Geist Sans and Geist Mono are bundled locally", () => {
+  const settings = fs.readFileSync(path.join(root, "src", "SettingsModal.tsx"), "utf8");
+  const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
+  const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
+  const library = fs.readFileSync(path.join(root, "src", "LibraryView.tsx"), "utf8");
+  const editor = fs.readFileSync(path.join(root, "src", "ArtifactCodeEditor.tsx"), "utf8");
+
+  assert.ok(fs.existsSync(path.join(root, "src", "assets", "fonts", "Geist-Variable.woff2")));
+  assert.ok(fs.existsSync(path.join(root, "src", "assets", "fonts", "GeistMono-Variable.woff2")));
+  assert.ok(fs.existsSync(path.join(root, "src", "assets", "fonts", "OFL.txt")));
+  assert.match(typography, /@font-face \{[\s\S]*?font-family: "Geist"/);
+  assert.match(typography, /Geist-Variable\.woff2/);
+  assert.match(typography, /@font-face \{[\s\S]*?font-family: "Geist Mono"/);
+  assert.match(typography, /GeistMono-Variable\.woff2/);
+  assert.match(typography, /html\[data-interface-font="geist"\] \{[\s\S]*?--font-ui: "Geist"/);
+  assert.match(typography, /html\[data-mono-font="geist-mono"\] \{[\s\S]*?--font-mono: "Geist Mono"/);
+  assert.match(i18n, /return window\.localStorage\.getItem\(INTERFACE_FONT_STORAGE_KEY\) === "system" \? "system" : "geist"/);
+  assert.match(i18n, /return window\.localStorage\.getItem\(MONO_FONT_STORAGE_KEY\) === "system" \? "system" : "geist-mono"/);
+  assert.match(i18n, /document\.documentElement\.dataset\.interfaceFont = interfaceFont/);
+  assert.match(settings, /t\("Interface font"\)/);
+  assert.match(settings, /t\("Code font"\)/);
+  assert.match(settings, /setInterfaceFont/);
+  assert.match(settings, /setMonoFont/);
+  assert.match(index, /dataset\.interfaceFont =/);
+  assert.match(app, /fontFamily: "var\(--font-mono\)"/);
+  assert.match(library, /fontFamily: "var\(--font-mono\)"/);
+  assert.match(editor, /fontFamily: "var\(--font-mono\)"/);
 });

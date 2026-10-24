@@ -2,9 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 export type Language = "en" | "zh";
 export type TextSize = "small" | "default" | "large";
+export type InterfaceFont = "system" | "geist";
+export type MonoFont = "system" | "geist-mono";
 
 const LANGUAGE_STORAGE_KEY = "archimedes-language";
 const TEXT_SIZE_STORAGE_KEY = "archimedes-text-size";
+const INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";
+const MONO_FONT_STORAGE_KEY = "archimedes-mono-font";
 const TEXT_SCALE: Record<TextSize, number> = { small: .9, default: 1, large: 1.1 };
 
 const translations: Record<string, string> = {
@@ -97,6 +101,7 @@ const translations: Record<string, string> = {
   "Text size scales the whole interface for easier reading.": "文字大小会缩放整个界面，便于阅读。",
   "Appearance": "外观",
   "Interface theme": "界面主题",
+  "Theme and fonts": "主题与字体",
   "Theme": "主题",
   "Charcoal": "炭黑",
   "System": "系统",
@@ -106,6 +111,12 @@ const translations: Record<string, string> = {
   "Follow system appearance": "跟随系统外观",
   "Use charcoal theme": "使用炭黑主题",
   "Use paper theme": "使用纸张主题",
+  "Interface font": "界面字体",
+  "Code font": "代码字体",
+  "Geist Sans": "Geist Sans",
+  "Geist Mono": "Geist Mono",
+  "System mono": "系统等宽字体",
+  "Geist fonts are bundled locally.": "Geist 字体已本地打包。",
   "Models": "模型",
   "Default model and providers": "默认模型与提供商",
   "Web search": "网页搜索",
@@ -290,6 +301,10 @@ type UISettings = {
   setLanguage: (language: Language) => void;
   textSize: TextSize;
   setTextSize: (size: TextSize) => void;
+  interfaceFont: InterfaceFont;
+  setInterfaceFont: (font: InterfaceFont) => void;
+  monoFont: MonoFont;
+  setMonoFont: (font: MonoFont) => void;
   t: (key: string, values?: Record<string, string | number>) => string;
 };
 
@@ -306,9 +321,21 @@ function readTextSize(): TextSize {
   return stored === "small" || stored === "large" ? stored : "default";
 }
 
+function readInterfaceFont(): InterfaceFont {
+  if (typeof window === "undefined") return "geist";
+  return window.localStorage.getItem(INTERFACE_FONT_STORAGE_KEY) === "system" ? "system" : "geist";
+}
+
+function readMonoFont(): MonoFont {
+  if (typeof window === "undefined") return "geist-mono";
+  return window.localStorage.getItem(MONO_FONT_STORAGE_KEY) === "system" ? "system" : "geist-mono";
+}
+
 export function UISettingsProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguage] = useState<Language>(readLanguage);
   const [textSize, setTextSize] = useState<TextSize>(readTextSize);
+  const [interfaceFont, setInterfaceFont] = useState<InterfaceFont>(readInterfaceFont);
+  const [monoFont, setMonoFont] = useState<MonoFont>(readMonoFont);
 
   useEffect(() => {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
@@ -329,13 +356,26 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
     }
   }, [textSize]);
 
+  useEffect(() => {
+    window.localStorage.setItem(INTERFACE_FONT_STORAGE_KEY, interfaceFont);
+    document.documentElement.dataset.interfaceFont = interfaceFont;
+  }, [interfaceFont]);
+
+  useEffect(() => {
+    window.localStorage.setItem(MONO_FONT_STORAGE_KEY, monoFont);
+    document.documentElement.dataset.monoFont = monoFont;
+  }, [monoFont]);
+
   const t = useCallback((key: string, values?: Record<string, string | number>) => {
     const template = language === "zh" ? translations[key] ?? key : key;
     if (!values) return template;
     return template.replace(/\{(\w+)\}/g, (match, name: string) => values[name] === undefined ? match : String(values[name]));
   }, [language]);
 
-  const value = useMemo(() => ({ language, setLanguage, textSize, setTextSize, t }), [language, t, textSize]);
+  const value = useMemo(() => ({
+    language, setLanguage, textSize, setTextSize,
+    interfaceFont, setInterfaceFont, monoFont, setMonoFont, t,
+  }), [interfaceFont, language, monoFont, t, textSize]);
 
   return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;
 }

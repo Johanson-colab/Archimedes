@@ -2284,7 +2284,7 @@ const MarkdownContent = memo(function MarkdownContent({ content }: { content: st
             useInlineStyles={false}
             PreTag="div"
             customStyle={{ margin: 0, padding: "13px 15px", fontSize: "11px", lineHeight: 1.65 }}
-            codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
+            codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
           >{String(children).replace(/\n$/, "")}</SyntaxHighlighter>
         </div>;
       },
@@ -2552,7 +2552,7 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
       lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", textAlign: "right", userSelect: "none" }}
       lineProps={{ className: "syntax-line" }}
       customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "11px", lineHeight: 1.65, tabSize: 2 }}
-      codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, monospace' } }}
+      codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
     >{content || " "}</SyntaxHighlighter>
   </div>;
 }

@@ -1071,7 +1071,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
             lineProps={(lineNumber: number) => ({ className: "syntax-line", "data-code-line": lineNumber })}
             lineNumberStyle={{ minWidth: "38px", paddingRight: "12px", textAlign: "right", userSelect: "none" }}
             customStyle={{ minWidth: 0, minHeight: 0, margin: 0, padding: "15px 18px 56px 0", border: 0, fontSize: "11px", lineHeight: 1.65, overflow: "auto" }}
-            codeTagProps={{ style: { fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace' } }}
+            codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
             onMouseUp={captureSelection}
           >{activeFile.content || " "}</SyntaxHighlighter> : <pre onMouseUp={captureSelection}><code>{activeFile.content}</code></pre>}
           {snippet ? <div className="codebase-selection"><span>{activeFile.path} line {snippetLine}</span><button className="secondary-button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onAddToChat(activeFile, snippet, snippetLine); setSnippet(""); window.getSelection()?.removeAllRanges(); }}><MessageSquareText size={13} />Add to chat</button><button className="reader-icon-button" onClick={() => setSnippet("")} title="Discard code selection"><X size={13} /></button></div> : null}

@@ -11,8 +11,12 @@
           const stored = localStorage.getItem("archimedes-theme");
           const system = matchMedia("(prefers-color-scheme: dark)").matches ? "charcoal" : "paper";
           document.documentElement.dataset.theme = stored === "charcoal" || stored === "paper" ? stored : system;
+          document.documentElement.dataset.interfaceFont = localStorage.getItem("archimedes-interface-font") === "system" ? "system" : "geist";
+          document.documentElement.dataset.monoFont = localStorage.getItem("archimedes-mono-font") === "system" ? "system" : "geist-mono";
         } catch {
           document.documentElement.dataset.theme = "charcoal";
+          document.documentElement.dataset.interfaceFont = "geist";
+          document.documentElement.dataset.monoFont = "geist-mono";
         }
       })();
     </script>
