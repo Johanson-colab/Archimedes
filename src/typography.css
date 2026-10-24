@@ -119,6 +119,83 @@ pre,
   font-family: var(--font-mono);
 }
 
+/* Code, terminal, and trace text keeps an 11px floor. */
+.paper-page-controls strong,
+.paper-zoom-control > .paper-zoom-readout,
+.arch-pdf-zoom-readout,
+.codebase-selection span,
+.codebase-selection .secondary-button,
+.codebase-explorer > header,
+.codebase-editor > header,
+.codebase-editor > header small,
+.codebase-toolbar span:last-child,
+.github-project-toolbar > span:last-child,
+.paper-code-file-chips button,
+.paper-code-data-paths li,
+.paper-code-readme,
+.paper-code-file-content > header,
+.paper-code-file-content pre,
+.paper-code-tabs button,
+.paper-code-section-heading,
+.paper-code-section-heading span,
+.paper-code-panel footer,
+.paper-code-panel footer .secondary-button,
+.paper-code-muted,
+.paper-code-repository-meta,
+.paper-main-document,
+.paper-main-document select,
+.paper-save-state,
+.paper-compile-state,
+.paper-auto-compile,
+.workflow-step > span,
+.proposal-preview,
+.paper-row-year,
+.reader-outline button span,
+.reader-section-number,
+.approval-diff-stats,
+.workspace-change-card > header small,
+.change-file-list > button > span,
+.change-file-list em,
+.change-file-list i,
+.trajectory-event-copy small,
+.trajectory-event-time,
+.trajectory-event-meta,
+.trajectory-event-meta code,
+.trajectory-json,
+.artifact-comment-box pre,
+.latex-line-numbers,
+.latex-diagnostics header,
+.latex-diagnostics header > span,
+.latex-diagnostics button b,
+.latex-diagnostics button span,
+.latex-diagnostics details,
+.latex-diagnostics p,
+.latex-diagnostics pre,
+.paper-ai-markdown code,
+.paper-ai-code-attachment,
+.paper-ai-context span,
+.paper-ai-thread article > span,
+.paper-ai-mode-toggle button,
+.paper-ai-evidence-scope,
+.paper-ai-figure-context p,
+.paper-ai-figure-context span,
+.paper-ai-suggestions button,
+.paper-ai-load-history,
+.paper-ai-working,
+.paper-ai-compose .primary-button {
+  font-size: 11px;
+}
+
+/* Terminal and editor bodies stay at 12px. */
+.codebase-editor pre,
+.terminal-command,
+.latex-editor-body textarea,
+.latex-highlight,
+.latex-editor-textarea,
+.paper-ai-compose textarea {
+  font-size: 12px;
+}
+
 /* The welcome board previously used an editorial serif. Geist Sans keeps the
    whole product on one type family, matching the Conductor direction. */
 .research-welcome-copy h1,
@@ -326,8 +403,8 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .trajectory-event-copy strong { font-size: 12px; }
 .trajectory-event-copy small,
 .trajectory-event-time,
-.trajectory-event-meta { font-size: 10px; }
-.trajectory-event-meta code { font-size: 10px; }
+.trajectory-event-meta { font-size: 11px; }
+.trajectory-event-meta code { font-size: 11px; }
 .trajectory-head-actions button,
 .trajectory-event-meta button,
 .trajectory-empty button { font-size: 11px; }

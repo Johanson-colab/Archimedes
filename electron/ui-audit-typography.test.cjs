@@ -74,7 +74,7 @@ test("right workbench metadata moves above the 10px floor", () => {
   assert.match(typography, /\.journey-signals span \{ font-size: 11px; \}/);
   assert.match(typography, /\.journey-note \{ font-size: 12px/);
   assert.match(typography, /\.trajectory-stat span,\s*\.trajectory-section-title \{ font-size: 11px; \}/);
-  assert.match(typography, /\.trajectory-event-copy small,\s*\.trajectory-event-time,\s*\.trajectory-event-meta \{ font-size: 10px; \}/);
+  assert.match(typography, /\.trajectory-event-copy small,\s*\.trajectory-event-time,\s*\.trajectory-event-meta \{ font-size: 11px; \}/);
   assert.match(typography, /\.trajectory-json \{ font-size: 11px/);
 });
 
@@ -82,6 +82,24 @@ test("mono and editorial surfaces follow the selected font tokens", () => {
   assert.match(typography, /\.paper-page-controls strong,[\s\S]*?\.paper-zoom-control > \.paper-zoom-readout,[\s\S]*?font-family: var\(--font-mono\)/);
   assert.match(typography, /\.trajectory-event-copy small,[\s\S]*?\.trajectory-json,[\s\S]*?font-family: var\(--font-mono\)/);
   assert.match(typography, /\.research-welcome-copy h1,[\s\S]*?\.research-workflow-copy strong,[\s\S]*?\.research-stage-node \{[\s\S]*?font-family: var\(--font-ui\)/);
+});
+
+test("code terminal and trace text keeps an 11px floor", () => {
+  const block = typography.match(/\/\* Code, terminal, and trace text keeps an 11px floor\. \*\/([\s\S]*?)\r?\n\r?\n/);
+  assert.ok(block, "mono floor block is missing");
+  for (const selector of [
+    ".paper-code-file-content pre",
+    ".paper-code-readme",
+    ".trajectory-event-copy small",
+    ".trajectory-event-meta code",
+    ".latex-diagnostics pre",
+    ".paper-ai-markdown code",
+    ".artifact-comment-box pre",
+  ]) {
+    assert.ok(block[1].includes(selector), `${selector} is missing from the mono floor`);
+  }
+  assert.match(block[1], /font-size: 11px/);
+  assert.match(typography, /\.codebase-editor pre,[\s\S]*?\.paper-ai-compose textarea \{[\s\S]*?font-size: 12px/);
 });
 
 test("Geist Sans and Geist Mono are bundled locally", () => {
