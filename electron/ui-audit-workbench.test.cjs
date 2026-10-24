@@ -90,7 +90,16 @@ test("terminal is a workbench tab with no dock or duplicate close controls", () 
   assert.doesNotMatch(app, /workbench-dock-divider/);
   assert.doesNotMatch(css, /\.workbench-body\.terminal-dock|\.workbench-dock-divider|\.workbench-close/);
   assert.doesNotMatch(terminal, /close-terminal-panel/);
-  assert.match(workbench, /activeTab === "terminal" && <button className="workbench-action"/);
+  assert.doesNotMatch(workbench, /workbench-action/);
+});
+
+test("terminal settings sit in the terminal tab row with a distinct icon", () => {
+  assert.match(workbench, /onOpenSettings=\{onOpenTerminalSettings\}/);
+  assert.match(terminal, /SlidersHorizontal/);
+  assert.match(terminal, /className="terminal-settings-button"/);
+  assert.match(terminal, /function terminalTabLabel/);
+  assert.doesNotMatch(terminal, /terminal-workspace-label/);
+  assert.match(terminal, /terminalTabLabel\(settings\?\.detectedShellName \|\| settings\?\.detectedShell \|\| tab\.title, index\)/);
 });
 
 test("dirty file changes are protected when the workbench closes", () => {

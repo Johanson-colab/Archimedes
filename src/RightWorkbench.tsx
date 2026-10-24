@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { FolderTree, ListTree, Milestone, Settings, SquareTerminal } from "lucide-react";
+import { FolderTree, ListTree, Milestone, SquareTerminal } from "lucide-react";
 import { useUISettings } from "./i18n";
 import TerminalPanel from "./TerminalPanel";
 
@@ -89,7 +89,6 @@ export default function RightWorkbench({ bridge, open, theme, workspace, width, 
         <button className={activeTab === "files" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "files"} onClick={() => onTabChange("files")} title={t("Files")}><FolderTree size={13} /><span>{t("Files")}</span>{dirtyFileCount > 0 && <i className="workbench-tab-badge" title={`${dirtyFileCount} unsaved file${dirtyFileCount === 1 ? "" : "s"}`}>{dirtyFileCount}</i>}</button>
         <button className={activeTab === "terminal" ? "workbench-tab active" : "workbench-tab"} role="tab" aria-selected={activeTab === "terminal"} onClick={() => onTabChange("terminal")} title={t("Terminal")}><SquareTerminal size={13} /><span>{t("Terminal")}</span></button>
       </div>
-      {activeTab === "terminal" && <button className="workbench-action" onClick={onOpenTerminalSettings} title={t("Terminal settings")} aria-label={t("Terminal settings")}><Settings size={14} /></button>}
     </header>
     <div className="workbench-body">
       <div className="workbench-content" hidden={activeTab === "terminal"}>
@@ -104,7 +103,7 @@ export default function RightWorkbench({ bridge, open, theme, workspace, width, 
         </div>
       </div>
       <div className="workbench-terminal-panel" hidden={activeTab !== "terminal"}>
-        <TerminalPanel bridge={bridge} open={open && activeTab === "terminal"} theme={theme} workspace={workspace} settings={terminalSettings} orientation="right" onClose={closeTerminal} />
+        <TerminalPanel bridge={bridge} open={open && activeTab === "terminal"} theme={theme} workspace={workspace} settings={terminalSettings} orientation="right" onClose={closeTerminal} onOpenSettings={onOpenTerminalSettings} />
       </div>
     </div>
   </aside>;
