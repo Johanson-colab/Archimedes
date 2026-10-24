@@ -251,39 +251,45 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .settings-theme-option small { font-size: 10px; }
 
 /* Right workbench. */
-.workbench-tab { font-size: 11px; font-weight: 600; }
-.workbench-tab-badge { font-size: 9px; }
-.journey-intro span { font-size: 10px; }
+.workbench-tab { font-size: 12px; font-weight: 600; }
+.workbench-tab-badge { font-size: 10px; }
+.journey-intro span { font-size: 11px; }
 .journey-intro strong { font-size: 14px; font-weight: 600; }
-.journey-status { font-size: 10px; }
+.journey-status { font-size: 11px; }
 .journey-goal-head span,
-.journey-goal-head strong { font-size: 10px; }
-.journey-goal p { font-size: 12px; line-height: 1.55; }
-.journey-progress-meta { font-size: 9px; }
-.journey-block-title { font-size: 11px; }
+.journey-goal-head strong { font-size: 11px; }
+.journey-goal p { font-size: 13px; line-height: 1.55; }
+.journey-progress-meta { font-size: 11px; }
+.journey-block-title { font-size: 12px; }
 .journey-block-title-row button,
-.journey-footer button { font-size: 10px; }
-.journey-phase strong { font-size: 11px; }
-.journey-phase small { font-size: 9px; }
-.journey-signals span { font-size: 9px; }
-.journey-signals strong { font-size: 12px; }
-.journey-milestones strong { font-size: 11px; }
+.journey-footer button { font-size: 11px; }
+.journey-phase strong { font-size: 12px; }
+.journey-phase small { font-size: 11px; }
+.journey-signals span { font-size: 11px; }
+.journey-signals strong { font-size: 13px; }
+.journey-milestones strong { font-size: 12px; }
 .journey-milestones small,
-.journey-empty { font-size: 9px; }
-.journey-note { font-size: 10px; line-height: 1.55; }
-.journey-footer { font-size: 9px; }
+.journey-empty { font-size: 11px; }
+.journey-note { font-size: 12px; line-height: 1.55; }
+.journey-footer { font-size: 11px; }
 .trajectory-view { font-size: 12px; }
 .trajectory-stat span,
-.trajectory-section-title { font-size: 10px; }
-.trajectory-stat strong { font-size: 12px; }
-.trajectory-summary { font-size: 11px; line-height: 1.55; }
-.trajectory-section-head h3 { font-size: 13px; }
-.trajectory-section-head p { font-size: 10px; }
-.trajectory-event-copy strong { font-size: 11px; }
+.trajectory-section-title { font-size: 11px; }
+.trajectory-stat strong { font-size: 13px; }
+.trajectory-summary { font-size: 12px; line-height: 1.55; }
+.trajectory-section-head h3 { font-size: 14px; }
+.trajectory-section-head p { font-size: 11px; }
+.trajectory-event-copy strong { font-size: 12px; }
 .trajectory-event-copy small,
 .trajectory-event-time,
-.trajectory-event-meta { font-size: 9px; }
-.trajectory-json { font-size: 10px; line-height: 1.55; }
+.trajectory-event-meta { font-size: 10px; }
+.trajectory-event-meta code { font-size: 10px; }
+.trajectory-head-actions button,
+.trajectory-event-meta button,
+.trajectory-empty button { font-size: 11px; }
+.trajectory-payload-note { font-size: 11px; }
+.trajectory-empty span { font-size: 11px; }
+.trajectory-json { font-size: 11px; line-height: 1.55; }
 
 /* Dialogs. */
 .workspace-modal > p { font-size: 13px; line-height: 1.6; }
