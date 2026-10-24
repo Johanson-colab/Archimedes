@@ -1002,6 +1002,12 @@ app.whenReady().then(() => {
     });
   });
 
+  ipcMain.handle("paper-review:cleanup-internal-runs", (event, { workspace } = {}) => {
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(resolvedWorkspace);
+    return store.deleteInternalPaperReviewThreads();
+  });
+
   ipcMain.handle("model-config:capabilities", () => getModelCapabilities(modelConfig.getActiveModelConfig()));
 
   ipcMain.handle("agent:approve-action", (event, actionId) => {

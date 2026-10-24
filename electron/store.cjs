@@ -816,6 +816,26 @@ function deleteResearchThread(id) {
   return { deleted: true };
 }
 
+function deleteInternalPaperReviewThreads() {
+  const db = requireDatabase();
+  const rows = db.prepare(`
+    SELECT DISTINCT research_threads.id
+    FROM research_threads
+    JOIN research_turns ON research_turns.thread_id = research_threads.id
+    WHERE research_threads.archived_at IS NULL
+      AND research_turns.mode = 'paper-review'
+      AND (
+        research_turns.user_message LIKE 'You are the % specialist in an evidence-first paper review of %'
+        OR research_turns.user_message LIKE 'You are the Evidence Supervisor for a multi-agent review of %'
+        OR research_turns.user_message LIKE 'You are revising the % report for % after an evidence audit.%'
+        OR research_turns.user_message LIKE 'You are the Summary agent for an evidence-audited review of %'
+      )
+  `).all();
+  const threadIds = rows.map((row) => row.id);
+  for (const id of threadIds) deleteResearchThread(id);
+  return { threadIds };
+}
+
 function getResearchThread(id) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
@@ -1096,6 +1116,7 @@ module.exports = {
   renameResearchProject,
   createResearchThread,
   deleteLibrary,
+  deleteInternalPaperReviewThreads,
   finishCommand,
   finishResearchTurn,
   finishTask,

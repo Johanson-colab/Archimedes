@@ -66,7 +66,9 @@ function emitStage(emit, payload) {
 }
 
 async function runPaperReview({ paper, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser, emit = () => {} }) {
-  const common = { workspace, projectId, mode: "paper-review", reasoningEffort, contextLength, contextItems, browser, emit: () => {} };
+  // Review specialists are internal workers. Their reports are returned to the
+  // review workbench, never persisted as user-visible project conversations.
+  const common = { workspace, projectId, mode: "paper-review", reasoningEffort, contextLength, contextItems, browser, transient: true, emit: () => {} };
   emitStage(emit, { stage: "specialists", title: "Four independent readings", detail: "Related work, method, experiments, and limitations are reading the source in parallel." });
 
   const settled = await Promise.all(SPECIALISTS.map(async (specialist) => {

@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 const store = require("./store.cjs");
 const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
@@ -498,10 +499,10 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, allowWorkspaceActions, browser, config }) {
+async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, allowWorkspaceActions, browser, config, recordEvent = () => {} }) {
   const args = parseArguments(call.function.arguments);
   const name = call.function.name;
-  store.appendResearchEvent({ threadId, turnId, type: "tool_call", payload: { call_id: call.id, name, arguments: args } });
+  recordEvent({ type: "tool_call", payload: { call_id: call.id, name, arguments: args } });
   emit({
     type: "tool",
     title: name.replaceAll("_", " "),
@@ -764,11 +765,17 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], emit = () => {}, browser }) {
-  const thread = threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId });
+async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], emit = () => {}, browser, transient = false }) {
+  const transientThread = {
+    id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
+  };
+  const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId });
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
-  const task = store.startTask({ prompt });
-  const turn = store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode });
+  const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });
+  const turn = transient
+    ? { id: randomUUID(), thread_id: thread.id, task_id: task.id, mode, user_message: prompt, assistant_message: "", status: "running", created_at: new Date().toISOString(), completed_at: null }
+    : store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode });
   const config = getActiveModelConfig();
   const resolvedReasoningEffort = normalizeModelReasoningEffort(config, reasoningEffort);
   const resolvedContextLength = normalizeContextLength(config, contextLength);
@@ -778,10 +785,15 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
   activeRuns.set(thread.id, controller);
 
   const emitTurn = (payload) => emit({ ...payload, threadId: thread.id, turnId: turn.id });
+  const recordEvent = (event) => {
+    if (!transient) store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, ...event });
+  };
   const finish = (response, status) => {
-    store.finishTask(task.id, { response, status });
-    store.finishResearchTurn(turn.id, { response, status });
-    return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: store.getResearchThread(thread.id) };
+    if (!transient) {
+      store.finishTask(task.id, { response, status });
+      store.finishResearchTurn(turn.id, { response, status });
+    }
+    return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: transient ? { ...thread, status: "idle" } : store.getResearchThread(thread.id) };
   };
 
   if (!config.apiKey) {
@@ -793,7 +805,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
 
   try {
     const context = prepareConversation({
-      thread: store.getResearchThreadContext(thread.id),
+      thread: transient ? { id: thread.id, title: thread.title, mode, context_summary: "", turns: [] } : store.getResearchThreadContext(thread.id),
       currentTurnId: turn.id,
       attachmentManifest: attachedContextManifest(contextItems),
       mode,
@@ -801,8 +813,8 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
       contextCharacterLimit: contextCharacterLimit(config, resolvedContextLength),
     });
     if (context.compacted) {
-      store.updateResearchThreadSummary(thread.id, context.summary);
-      store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "context_compacted", payload: { omitted_turn_count: context.omittedTurnCount } });
+      if (!transient) store.updateResearchThreadSummary(thread.id, context.summary);
+      recordEvent({ type: "context_compacted", payload: { omitted_turn_count: context.omittedTurnCount } });
     }
     const messages = context.messages;
     const images = contextItems.filter((item) => item.type === "image" && item.image?.dataUrl).slice(0, 4);
@@ -818,7 +830,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
     const foundPapers = new Map();
     const pdfCache = new Map();
     const maxToolRounds = policy.maxToolRounds;
-    const allowWorkspaceActions = workspaceActionRequested(prompt);
+    const allowWorkspaceActions = !transient && workspaceActionRequested(prompt);
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort} · context: ${resolvedContextLength}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
@@ -832,7 +844,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
         onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Streaming model output", delta }),
       });
       messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
-      store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls, protocol: message.protocol } });
+      recordEvent({ type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls, protocol: message.protocol } });
       if (!message.tool_calls.length) {
         const response = message.content || "The research turn completed without a final text response.";
         emitTurn({ type: "complete", title: "Research turn complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
@@ -845,7 +857,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
             if (academicSearches >= policy.maxAcademicSearches) {
               const content = JSON.stringify({ error: "The academic search budget is exhausted. Synthesize the findings already collected." });
               messages.push({ role: "tool", tool_call_id: call.id, content });
-              store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
+              recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
               continue;
             }
             academicSearches += 1;
@@ -855,24 +867,24 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
             if (webSearches + count > policy.maxWebSearches) {
               const content = JSON.stringify({ error: "The web search budget is exhausted. Synthesize from the sources already opened." });
               messages.push({ role: "tool", tool_call_id: call.id, content });
-              store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
+              recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
               continue;
             }
             webSearches += count;
           }
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, allowWorkspaceActions, browser, config });
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, allowWorkspaceActions, browser, config, recordEvent });
           if (result.action) actions.push(result.action);
           messages.push({ role: "tool", tool_call_id: call.id, content: result.content });
-          store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content: result.content } });
+          recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content: result.content } });
           try {
             for (const evidence of evidenceForTool(call.function.name, parseArguments(call.function.arguments), JSON.parse(result.content))) {
-              store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "source_evidence", payload: { call_id: call.id, ...evidence } });
+              recordEvent({ type: "source_evidence", payload: { call_id: call.id, ...evidence } });
             }
           } catch { /* Evidence extraction does not change the result delivered to the model. */ }
         } catch (error) {
           const content = JSON.stringify({ error: error.message || String(error) });
           messages.push({ role: "tool", tool_call_id: call.id, content });
-          store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
+          recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
         }
       }
     }

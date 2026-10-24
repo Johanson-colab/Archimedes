@@ -23,14 +23,14 @@ function reviewError(error: unknown) {
   return error instanceof Error ? error.message : String(error || "The review could not be completed.");
 }
 
-export default function PaperReviewWorkbench({ bridge, workspace, projectId, paper, pageCount, ready, onAgentRun }: {
+export default function PaperReviewWorkbench({ bridge, workspace, projectId, paper, pageCount, ready, onInternalReviewThreadsDeleted }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   projectId?: string | null;
   paper: ReviewPaper;
   pageCount: number;
   ready: boolean;
-  onAgentRun?: (result: AgentRunResult) => void;
+  onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
 }) {
   const [runs, setRuns] = useState<Record<ReviewAgentId, ReviewRun>>(initialRuns);
   const [summary, setSummary] = useState<ReviewRun>({ status: "idle", response: "", error: "" });
@@ -53,6 +53,16 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     setStage(event.detail);
     if (event.stage === "supervisor" || event.stage === "repair") setAudit(event.detail);
   }), [bridge]);
+
+  useEffect(() => {
+    let mounted = true;
+    void bridge.cleanupPaperReviewRuns(workspace).then(({ threadIds }) => {
+      if (mounted && threadIds.length) onInternalReviewThreadsDeleted?.(threadIds);
+    }).catch(() => {
+      // Cleanup is best-effort: a review can still run even if no legacy rows exist.
+    });
+    return () => { mounted = false; };
+  }, [bridge, onInternalReviewThreadsDeleted, workspace]);
 
   const completeCount = REVIEWERS.filter((reviewer) => runs[reviewer.id].status === "complete").length;
   const errorCount = REVIEWERS.filter((reviewer) => runs[reviewer.id].status === "error").length;
@@ -88,7 +98,6 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         ? `${result.supervisor.reason} A targeted repair was completed for ${result.supervisor.repairTargets.join(" and ")}.`
         : result.supervisor.reason);
       setSummary({ status: "complete", response: result.summary.response, error: "" });
-      result.agentRuns.forEach((agentRun) => onAgentRun?.(agentRun));
       setStage("The review memorandum is ready. Open any reading to inspect its evidence trail.");
     } catch (error) {
       const message = reviewError(error);

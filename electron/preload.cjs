@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   saveTask: (task) => ipcRenderer.invoke("task:save", task),
   runAgent: (input) => ipcRenderer.invoke("agent:run", input),
   runPaperReview: (input) => ipcRenderer.invoke("paper-review:run", input),
+  cleanupPaperReviewRuns: (workspace) => ipcRenderer.invoke("paper-review:cleanup-internal-runs", { workspace }),
   interruptAgent: (threadId) => ipcRenderer.invoke("agent:interrupt", threadId),
   approveAgentAction: (actionId) => ipcRenderer.invoke("agent:approve-action", actionId),
   rejectAgentAction: (actionId) => ipcRenderer.invoke("agent:reject-action", actionId),
