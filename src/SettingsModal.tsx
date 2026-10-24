@@ -1,8 +1,8 @@
-import { FolderOpen, Globe2, Info, Languages, Monitor, Moon, Orbit, Palette, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
+import { Code2, FolderOpen, Globe2, Info, Languages, Monitor, Moon, Orbit, Palette, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
 import ModelSettingsModal from "./ModelSettingsModal";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
-import { useUISettings, type Language, type TextSize } from "./i18n";
+import { useUISettings, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type SettingsSection = "general" | "appearance" | "models" | "web" | "terminal" | "workspace" | "about";
@@ -60,7 +60,7 @@ export default function SettingsModal({
   onSaveTerminalSettings,
   onOpenExternalTerminal,
 }: SettingsModalProps) {
-  const { language, setLanguage, textSize, setTextSize, t } = useUISettings();
+  const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   if (!open) return null;
 
@@ -68,7 +68,7 @@ export default function SettingsModal({
 
   const sectionHeadings: Record<SettingsSection, { title: string; description: string }> = {
     general: { title: t("General"), description: t("Preferences that apply across Archimedes.") },
-    appearance: { title: t("Appearance"), description: t("Interface theme") },
+    appearance: { title: t("Appearance"), description: t("Theme and fonts") },
     models: { title: t("Models"), description: t("Default model and providers") },
     web: { title: t("Web search"), description: t("Search provider and API keys") },
     terminal: { title: t("Terminal"), description: t("Shell, font, and external terminal") },
@@ -130,6 +130,24 @@ export default function SettingsModal({
                   <Sun size={16} /><strong>{t("Paper")}</strong><small>{t("Light")}</small>
                 </button>
               </div>
+            </section>
+
+            <section className="settings-card">
+              <div className="settings-card-heading"><Type size={15} /><div><strong>{t("Interface font")}</strong><p>{t("Geist fonts are bundled locally.")}</p></div></div>
+              <label className="settings-field">
+                <span>{t("Interface font")}</span>
+                <select value={interfaceFont} onChange={(event) => setInterfaceFont(event.target.value as InterfaceFont)}>
+                  <option value="geist">{t("Geist Sans")}</option>
+                  <option value="system">{t("System")}</option>
+                </select>
+              </label>
+              <label className="settings-field">
+                <span><Code2 size={13} /> {t("Code font")}</span>
+                <select value={monoFont} onChange={(event) => setMonoFont(event.target.value as MonoFont)}>
+                  <option value="geist-mono">{t("Geist Mono")}</option>
+                  <option value="system">{t("System mono")}</option>
+                </select>
+              </label>
             </section>
           </div>}
 

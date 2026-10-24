@@ -26,7 +26,7 @@ const editorTheme = EditorView.theme({
   "&": { height: "100%", color: "var(--code-fg)", backgroundColor: "var(--code-bg)", fontSize: "11px" },
   ".cm-scroller": {
     overflow: "auto",
-    fontFamily: '"SFMono-Regular", Consolas, monospace',
+    fontFamily: "var(--font-mono)",
     lineHeight: "1.65",
   },
   ".cm-content": { padding: "13px 0 28px", caretColor: "var(--code-fg)" },

@@ -8,9 +8,9 @@ type TerminalThemeName = "charcoal" | "paper";
 
 const TERMINAL_FONT_FAMILY = (() => {
   const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
-  if (/Windows/i.test(userAgent)) return '"Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace';
-  if (/Macintosh|Mac OS X/i.test(userAgent)) return '"SFMono-Regular", "SF Mono", Menlo, Monaco, monospace';
-  return '"JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", monospace';
+  if (/Windows/i.test(userAgent)) return '"Geist Mono", "Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace';
+  if (/Macintosh|Mac OS X/i.test(userAgent)) return '"Geist Mono", "SFMono-Regular", "SF Mono", Menlo, Monaco, monospace';
+  return '"Geist Mono", "JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", monospace';
 })();
 
 const PAPER_TERMINAL_THEME: ITheme = {

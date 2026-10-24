@@ -6,7 +6,25 @@
  * bundled Geist Sans / Geist Mono and a font preference.
  */
 
+@font-face {
+  font-family: "Geist";
+  src: url("./assets/fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./assets/fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
   --night-ground: #141110;
   --night-sidebar: #1b1816;
   --night-panel: #211e1c;
@@ -32,6 +50,39 @@
   --night-ink-soft: #5f5a54;
   --night-muted: #756f6c;
   --night-faint: #a8a19a;
+}
+
+html[data-interface-font="geist"] {
+  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+html[data-mono-font="geist-mono"] {
+  --font-mono: "Geist Mono", "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+}
+
+body,
+.codex-shell,
+.codex-shell button,
+.codex-shell input,
+.codex-shell textarea,
+.codex-shell select,
+.research-welcome {
+  font-family: var(--font-ui);
+}
+
+code,
+kbd,
+samp,
+pre,
+.message-markdown code,
+.message-markdown pre,
+.trajectory-json,
+.settings-workspace-path,
+.codebase-editor pre,
+.paper-code-file-content pre,
+.reader-page-text pre,
+.arch-pdf-zoom-readout {
+  font-family: var(--font-mono);
 }
 
 /* Warm surface pass. */
