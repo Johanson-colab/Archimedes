@@ -4,11 +4,13 @@ export type Language = "en" | "zh";
 export type TextSize = "small" | "default" | "large";
 export type InterfaceFont = "system" | "geist";
 export type MonoFont = "system" | "geist-mono";
+export type ChatVerbosity = "low" | "medium" | "high";
 
 const LANGUAGE_STORAGE_KEY = "archimedes-language";
 const TEXT_SIZE_STORAGE_KEY = "archimedes-text-size";
 const INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";
 const MONO_FONT_STORAGE_KEY = "archimedes-mono-font";
+const CHAT_VERBOSITY_STORAGE_KEY = "archimedes-chat-verbosity";
 const TEXT_SCALE: Record<TextSize, number> = { small: 1, default: 1.1, large: 1.2 };
 
 const translations: Record<string, string> = {
@@ -298,6 +300,27 @@ const translations: Record<string, string> = {
   "Set up a faithful baseline.": "搭建忠实的基线。",
   "Generate figures": "生成图表",
   "Prepare figures with visual rigor.": "以严谨的视觉标准准备图表。",
+  "Chat verbosity": "聊天详细程度",
+  "Controls how much agent activity appears inline in chat.": "控制聊天区显示多少 Agent 活动细节。",
+  "Low": "低",
+  "Medium": "中",
+  "High": "高",
+  "Summary only": "仅摘要",
+  "Grouped steps": "分组步骤",
+  "Full detail": "完整细节",
+  "Agent activity": "Agent 活动",
+  "Working": "运行中",
+  "Stopping task": "正在停止任务",
+  "Completed": "已完成",
+  "Read": "读取",
+  "Search": "搜索",
+  "Run": "运行",
+  "Edit": "编辑",
+  "Show {count} more": "再显示 {count} 个",
+  "Show less": "收起",
+  "{count} step": "{count} 个步骤",
+  "{count} steps": "{count} 个步骤",
+  "{count} sources": "{count} 个来源",
 };
 
 type UISettings = {
@@ -309,6 +332,8 @@ type UISettings = {
   setInterfaceFont: (font: InterfaceFont) => void;
   monoFont: MonoFont;
   setMonoFont: (font: MonoFont) => void;
+  chatVerbosity: ChatVerbosity;
+  setChatVerbosity: (verbosity: ChatVerbosity) => void;
   t: (key: string, values?: Record<string, string | number>) => string;
 };
 
@@ -335,11 +360,18 @@ function readMonoFont(): MonoFont {
   return window.localStorage.getItem(MONO_FONT_STORAGE_KEY) === "system" ? "system" : "geist-mono";
 }
 
+function readChatVerbosity(): ChatVerbosity {
+  if (typeof window === "undefined") return "medium";
+  const stored = window.localStorage.getItem(CHAT_VERBOSITY_STORAGE_KEY);
+  return stored === "low" || stored === "high" ? stored : "medium";
+}
+
 export function UISettingsProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguage] = useState<Language>(readLanguage);
   const [textSize, setTextSize] = useState<TextSize>(readTextSize);
   const [interfaceFont, setInterfaceFont] = useState<InterfaceFont>(readInterfaceFont);
   const [monoFont, setMonoFont] = useState<MonoFont>(readMonoFont);
+  const [chatVerbosity, setChatVerbosity] = useState<ChatVerbosity>(readChatVerbosity);
 
   useEffect(() => {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
@@ -370,6 +402,11 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
     document.documentElement.dataset.monoFont = monoFont;
   }, [monoFont]);
 
+  useEffect(() => {
+    window.localStorage.setItem(CHAT_VERBOSITY_STORAGE_KEY, chatVerbosity);
+    document.documentElement.dataset.chatVerbosity = chatVerbosity;
+  }, [chatVerbosity]);
+
   const t = useCallback((key: string, values?: Record<string, string | number>) => {
     const template = language === "zh" ? translations[key] ?? key : key;
     if (!values) return template;
@@ -378,8 +415,9 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
 
   const value = useMemo(() => ({
     language, setLanguage, textSize, setTextSize,
-    interfaceFont, setInterfaceFont, monoFont, setMonoFont, t,
-  }), [interfaceFont, language, monoFont, t, textSize]);
+    interfaceFont, setInterfaceFont, monoFont, setMonoFont,
+    chatVerbosity, setChatVerbosity, t,
+  }), [chatVerbosity, interfaceFont, language, monoFont, t, textSize]);
 
   return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;
 }

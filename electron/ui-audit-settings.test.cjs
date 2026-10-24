@@ -73,6 +73,18 @@ test("text size has three presets and scales the interface", () => {
   assert.match(fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8"), /setUiZoom: \(factor\) => ipcRenderer\.invoke\("window:set-ui-zoom", factor\)/);
 });
 
+test("chat verbosity follows the opencode low / medium / high model", () => {
+  assert.match(i18n, /export type ChatVerbosity = "low" \| "medium" \| "high"/);
+  assert.match(i18n, /const CHAT_VERBOSITY_STORAGE_KEY = "archimedes-chat-verbosity"/);
+  assert.match(i18n, /function readChatVerbosity\(\): ChatVerbosity \{[\s\S]*?return "medium"/);
+  assert.match(i18n, /document\.documentElement\.dataset\.chatVerbosity = chatVerbosity/);
+  assert.match(settings, /\{ id: "low", label: "Low", description: "Summary only" \}/);
+  assert.match(settings, /\{ id: "medium", label: "Medium", description: "Grouped steps" \}/);
+  assert.match(settings, /\{ id: "high", label: "High", description: "Full detail" \}/);
+  assert.match(settings, /t\("Chat verbosity"\)/);
+  assert.match(settings, /setChatVerbosity\(item\.id\)/);
+});
+
 test("settings support dark and paper themes", () => {
   assert.match(css, /html:not\(\[data-theme="paper"\]\) \.settings-modal/);
   assert.match(css, /html:not\(\[data-theme="paper"\]\) \.settings-nav-item\.active/);
