@@ -2147,7 +2147,6 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   }
 
   return <section className="library-page daily-page">
-    <header className="library-page-header"><div><span className="eyebrow">Live research feed</span><h1>Daily papers</h1><p>Track newly submitted arXiv work and community-trending papers, then save useful records into your library.</p></div><span className="daily-mark"><CalendarDays size={20} /></span></header>
     <div className="daily-feed-toolbar daily-conference-toolbar">
       <div className="daily-live-controls">
       <div className="daily-mode-tabs" role="tablist" aria-label="Paper feed mode">
