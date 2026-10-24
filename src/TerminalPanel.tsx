@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITheme } from "@xterm/xterm";
-import { Plus, SquareTerminal, X } from "lucide-react";
+import { Plus, SlidersHorizontal, SquareTerminal, X } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 
 type TerminalThemeName = "charcoal" | "paper";
@@ -80,9 +80,22 @@ type TerminalPanelProps = {
   height?: number;
   onHeightChange?: (height: number) => void;
   onClose: () => void;
+  onOpenSettings?: () => void;
 };
 
-export default function TerminalPanel({ bridge, open, theme, workspace, settings, orientation = "bottom", height, onHeightChange, onClose }: TerminalPanelProps) {
+function terminalTabLabel(title: string, index: number) {
+  const base = title.split(/[\\/]/).filter(Boolean).at(-1)?.replace(/\.exe$/i, "") || "";
+  if (!base) return `Terminal ${index + 1}`;
+  const lower = base.toLowerCase();
+  if (lower === "powershell") return "PowerShell";
+  if (lower === "pwsh") return "PowerShell 7";
+  if (lower === "cmd") return "Command Prompt";
+  if (lower === "zsh") return "Zsh";
+  if (lower === "bash") return "Bash";
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+export default function TerminalPanel({ bridge, open, theme, workspace, settings, orientation = "bottom", height, onHeightChange, onClose, onOpenSettings }: TerminalPanelProps) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const creatingRef = useRef(false);
@@ -154,17 +167,20 @@ export default function TerminalPanel({ bridge, open, theme, workspace, settings
     {orientation === "bottom" && <div className="terminal-resize-handle" onPointerDown={startResize} title="Drag to resize terminal"><span /></div>}
     <div className="smart-terminal-tabs">
       <div className="terminal-tab-list" role="tablist" aria-label="Terminal sessions">
-        {tabs.map((tab, index) => <div className={activeSessionId === tab.sessionId ? "terminal-tab active" : "terminal-tab"} key={tab.sessionId}>
-          <button className="terminal-tab-select" onClick={() => setActiveSessionId(tab.sessionId)} role="tab" aria-selected={activeSessionId === tab.sessionId} title={tab.workspace}>
-            <SquareTerminal size={13} />
-            <span>{tab.title || `Terminal ${index + 1}`}</span>
-            {tab.status === "exited" && <i>exited</i>}
-          </button>
-          <button className="terminal-tab-close" onClick={() => void closeTab(tab.sessionId)} title={`Close ${tab.title}`}><X size={12} /></button>
-        </div>)}
+        {tabs.map((tab, index) => {
+          const label = terminalTabLabel(settings?.detectedShellName || settings?.detectedShell || tab.title, index);
+          return <div className={activeSessionId === tab.sessionId ? "terminal-tab active" : "terminal-tab"} key={tab.sessionId}>
+            <button className="terminal-tab-select" onClick={() => setActiveSessionId(tab.sessionId)} role="tab" aria-selected={activeSessionId === tab.sessionId} title={tab.workspace}>
+              <SquareTerminal size={13} />
+              <span>{label}</span>
+              {tab.status === "exited" && <i>exited</i>}
+            </button>
+            <button className="terminal-tab-close" onClick={() => void closeTab(tab.sessionId)} title={`Close ${label}`}><X size={12} /></button>
+          </div>;
+        })}
       </div>
       <button className="new-terminal-button" onClick={() => void createTerminal()} title="New terminal"><Plus size={15} /></button>
-      <span className="terminal-workspace-label">{workspace.split("/").filter(Boolean).at(-1) || "Workspace"}</span>
+      {onOpenSettings && <button className="terminal-settings-button" onClick={onOpenSettings} title="Terminal settings" aria-label="Terminal settings"><SlidersHorizontal size={14} /></button>}
     </div>
     <div className="terminal-surfaces">
       {tabs.map((tab) => <TerminalSurface

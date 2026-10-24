@@ -3628,3 +3628,21 @@ html:not([data-theme="paper"]) .sidebar-settings-button:hover { color: #f0f0f0; 
   white-space: nowrap;
 }
 .workspace-tree-row { height: 30px; }
+
+/* Terminal settings belong to the terminal tab row, not the workbench header. */
+.terminal-settings-button {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  place-items: center;
+  color: #85857f;
+  background: transparent;
+  border-radius: 4px;
+}
+.terminal-settings-button:hover { color: #282825; background: #dfdfda; }
+html:not([data-theme="paper"]) .terminal-settings-button { color: #898b9b; }
+html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4; background: #20222c; }
+.theme-paper .terminal-settings-button { color: #77726b; }
+.theme-paper .terminal-settings-button:hover { color: #252422; background: #e9e5df; }
