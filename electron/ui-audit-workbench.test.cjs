@@ -93,6 +93,12 @@ test("terminal is a workbench tab with no dock or duplicate close controls", () 
   assert.doesNotMatch(workbench, /workbench-action/);
 });
 
+test("paper workbench toggle uses a warm active tone instead of green", () => {
+  assert.match(css, /\.theme-paper \.quiet-icon-button\.active \{ color: #5a4a1c; background: #f1e8cf; box-shadow: inset 0 0 0 1px #d9c48a; \}/);
+  assert.match(css, /\.theme-paper \.quiet-icon-button\.active:hover \{ color: #4d3f16; background: #eadfbe; \}/);
+  assert.doesNotMatch(css, /\.theme-paper \.quiet-icon-button\.active \{ color: #245e4b/);
+});
+
 test("files and trajectory share one row token system", () => {
   assert.match(css, /--rail-row-ink: #a7a8b5/);
   assert.match(css, /--rail-row-hover-bg: #202020/);
