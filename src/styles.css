@@ -3322,3 +3322,18 @@ html[data-theme="paper"] .codex-shell:has(.has-welcome) .workspace-copy small { 
 .theme-paper .terminal-settings-external button { color: #625d56; background: #fffefd; border-color: #ded8d0; }
 .theme-paper .terminal-settings-actions { background: #efede9; border-color: #e8e4de; }
 .terminal-settings-modal .eyebrow { text-transform: none; letter-spacing: 0; font-size: 9px; }
+
+/* Single-row window chrome (Windows overlay title bar). */
+html[data-titlebar="overlay"] .codex-sidebar { padding-top: 0; }
+html[data-titlebar="overlay"] .codex-brand { height: 52px; padding-left: 12px; -webkit-app-region: drag; }
+html[data-titlebar="overlay"] .codex-brand button { -webkit-app-region: no-drag; }
+html[data-titlebar="overlay"] .main-toolbar { -webkit-app-region: drag; }
+html[data-titlebar="overlay"] .main-toolbar button,
+html[data-titlebar="overlay"] .main-toolbar a,
+html[data-titlebar="overlay"] .main-toolbar input,
+html[data-titlebar="overlay"] .main-toolbar select { -webkit-app-region: no-drag; }
+html[data-titlebar="overlay"] .codex-main:not(.workbench-open) .main-toolbar { padding-right: calc(18px + 138px); }
+html[data-titlebar="overlay"] .right-workbench .workbench-header { padding-right: 146px; -webkit-app-region: drag; }
+html[data-titlebar="overlay"] .right-workbench .workbench-header button { -webkit-app-region: no-drag; }
+html[data-titlebar="overlay"] .workbench-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+html[data-titlebar="overlay"] .workbench-tabs::-webkit-scrollbar { display: none; }

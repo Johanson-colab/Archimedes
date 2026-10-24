@@ -781,7 +781,15 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "paper" ? "#fbfaf8" : "#20211F");
+    const applyTitleBar = desktopBridge.setTitleBarTheme;
+    if (applyTitleBar) void applyTitleBar(theme).catch(() => undefined);
   }, [theme]);
+
+  useEffect(() => {
+    const platform = desktopBridge.platform ?? "web";
+    document.documentElement.dataset.platform = platform;
+    document.documentElement.dataset.titlebar = platform === "win32" ? "overlay" : platform === "darwin" ? "inset" : "default";
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem("archimedes-theme", themePreference);

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol, clipboard } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -157,14 +157,27 @@ function watchWorkspace(sender, workspace) {
   }
 }
 
+function titleBarOverlay(theme) {
+  const dark = theme !== "paper";
+  return {
+    color: dark ? "#141414" : "#fbfaf8",
+    symbolColor: dark ? "#e6e5e0" : "#33332f",
+    height: 52,
+  };
+}
+
 function createWindow(workspace) {
+  const overlay = process.platform === "win32";
+  const initialTheme = nativeTheme.shouldUseDarkColors ? "charcoal" : "paper";
   const browserWindow = new BrowserWindow({
     width: 1560,
     height: 980,
     minWidth: 1100,
     minHeight: 720,
-    backgroundColor: "#f6f7f5",
-    titleBarStyle: "hiddenInset",
+    backgroundColor: initialTheme === "paper" ? "#f6f7f5" : "#111111",
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : overlay ? "hidden" : undefined,
+    titleBarOverlay: overlay ? titleBarOverlay(initialTheme) : undefined,
+    autoHideMenuBar: process.platform !== "darwin",
     icon: path.join(__dirname, "assets", "app-icon-256.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -175,6 +188,8 @@ function createWindow(workspace) {
       webviewTag: true,
     },
   });
+
+  if (process.platform !== "darwin") browserWindow.setMenuBarVisibility(false);
 
   const senderId = browserWindow.webContents.id;
   browserWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
@@ -497,6 +512,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle("window:initial-workspace", (event) => {
     return windowWorkspaces.get(event.sender.id) ?? null;
+  });
+
+  ipcMain.handle("window:set-titlebar-theme", (event, theme) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!browserWindow || browserWindow.isDestroyed()) return;
+    const dark = theme !== "paper";
+    try {
+      browserWindow.setTitleBarOverlay(titleBarOverlay(theme));
+    } catch {
+      // Linux window managers may not expose an overlay title bar.
+    }
+    browserWindow.setBackgroundColor(dark ? "#111111" : "#f6f7f5");
   });
 
   ipcMain.handle("workspace:choose", async (event) => {
