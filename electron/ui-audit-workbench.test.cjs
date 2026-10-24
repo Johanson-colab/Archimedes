@@ -73,6 +73,16 @@ test("files use a tab-first header and keep one visible filename", () => {
   assert.match(css, /\.artifact-editor-pane\.no-tabs \{ grid-template-rows: minmax\(0, 1fr\); \}/);
 });
 
+test("files collapse the redundant title row and hide the saved label", () => {
+  assert.match(app, /!compact && <div className="artifact-browser-title">/);
+  assert.match(app, /artifact-workbench-workspace/);
+  assert.doesNotMatch(app, /<FolderOpen size=\{13\} \/><strong>Files<\/strong>/);
+  assert.match(app, /\{\(saving \|\| dirty\) && <span className=\{`artifact-save-state/);
+  assert.doesNotMatch(app, /"Saving" : dirty \? "Unsaved" : "Saved"/);
+  assert.match(css, /\.artifact-workbench-location strong\.artifact-workbench-workspace/);
+  assert.match(css, /\.workspace-tree-row \{ height: 30px; \}/);
+});
+
 test("terminal is a workbench tab with no dock or duplicate close controls", () => {
   assert.match(workbench, /workbench-terminal-panel/);
   assert.match(workbench, /activeTab === "terminal"/);
