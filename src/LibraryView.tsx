@@ -26,6 +26,7 @@ import ConferenceDiscovery from "./ConferenceDiscovery";
 import { equationTokens, findEquationRects } from "./pdf-equations";
 import { applyPdfSearchHighlights } from "./pdf-search-highlights";
 import { findPdfHorizontalRules, findRuledTableRect, findTextTableRect } from "./pdf-table-regions";
+import { useUISettings, type Language } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 import {
   AlignLeft,
@@ -350,12 +351,18 @@ type TranslationPopover = { source: string; translation: string; anchor: Selecti
 type ReaderLibraryPaper = LibraryPaper & { github_url?: string; github_stars?: number };
 const PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT = 60;
 const PAPER_CHAT_HISTORY_PAGE_SIZE = 40;
-const PAPER_BRIEFING_REQUEST = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise Chinese Markdown with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
+const PAPER_BRIEFING_REQUEST_EN = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise English Markdown with exactly these sections:\n\n## Key terms\nList 4-8 essential terms, each with a one-line explanation.\n\n## Three-sentence summary\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## Paper map\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## Limitations and open questions\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
+const PAPER_BRIEFING_REQUEST_ZH = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise Chinese Markdown with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
 const PAPER_BRIEFING_INSTRUCTION_PREFIX = "You are preparing a durable research reading guide for the paper ";
+
+function paperBriefingRequest(language: Language) {
+  return language === "zh" ? PAPER_BRIEFING_REQUEST_ZH : PAPER_BRIEFING_REQUEST_EN;
+}
 
 function isHiddenPaperBriefingInstruction(message: PaperChatMessage) {
   return message.role === "user" && (
-    message.text === PAPER_BRIEFING_REQUEST ||
+    message.text === PAPER_BRIEFING_REQUEST_EN ||
+    message.text === PAPER_BRIEFING_REQUEST_ZH ||
     message.text.startsWith(PAPER_BRIEFING_INSTRUCTION_PREFIX)
   );
 }
@@ -377,6 +384,7 @@ const PaperChatMessageRow = memo(function PaperChatMessageRow({ message, streami
 const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, streamingText, onAsk }: {
   messages: PaperChatMessage[]; busy: boolean; aiMode: PaperAiMode; streamingText: string | null; onAsk: (prompt: string) => void;
 }) {
+  const { language, t } = useUISettings();
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyInitializedRef = useRef(messages.length > 0);
   const visibleMessages = messages.slice(historyStart);
@@ -396,6 +404,7 @@ const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, 
     setHistoryStart((current) => Math.min(current, Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT)));
   }, [messages.length]);
   const prompt = (audit: string, brief: string) => () => onAsk(aiMode === "audit" ? audit : brief);
+  const zh = language === "zh";
 
   return <div className="paper-ai-thread">
     {messages.length ? <>
@@ -405,10 +414,10 @@ const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, 
     {streamingText !== null && <PaperChatMessageRow message={{ role: "assistant", text: streamingText }} streaming />}
     {busy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{messages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}
     {hasAssistantMessage && !busy && <div className="paper-ai-suggestions">
-      <button onClick={prompt("请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。", "这篇论文最核心的贡献是什么？请结合全文说明。")}>{aiMode === "audit" ? "核验方法" : "核心贡献"}</button>
-      <button onClick={prompt("请检查训练与评估配置是否支持论文中的实验主张。", "请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？")}>{aiMode === "audit" ? "核验实验" : "讲解方法"}</button>
-      <button onClick={prompt("请列出论文中的哪些关键主张在代码中无法确认或尚未实现。", "实验设置、数据集、基线、指标和主要结果分别是什么？")}>{aiMode === "audit" ? "缺口分析" : "查看实验"}</button>
-      <button onClick={prompt("请给出最短的复现实验路径：入口、配置、数据和评估步骤。", "论文有哪些局限、威胁或尚未验证的主张？")}>{aiMode === "audit" ? "复现路径" : "分析局限"}</button>
+      <button onClick={prompt(zh ? "请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。" : "Verify which files and functions implement the paper's core method, and build an evidence chain.", zh ? "这篇论文最核心的贡献是什么？请结合全文说明。" : "What is the paper's core contribution? Explain it using the full text.")}>{aiMode === "audit" ? t("Verify method") : t("Core contribution")}</button>
+      <button onClick={prompt(zh ? "请检查训练与评估配置是否支持论文中的实验主张。" : "Check whether the training and evaluation setup supports the paper's experimental claims.", zh ? "请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？" : "Explain the method in detail: inputs, key mechanisms, and training or inference flow.")}>{aiMode === "audit" ? t("Verify experiments") : t("Explain method")}</button>
+      <button onClick={prompt(zh ? "请列出论文中的哪些关键主张在代码中无法确认或尚未实现。" : "List the key claims that cannot be confirmed in the code or are not implemented.", zh ? "实验设置、数据集、基线、指标和主要结果分别是什么？" : "What are the experimental setup, datasets, baselines, metrics, and main results?")}>{aiMode === "audit" ? t("Gap analysis") : t("View experiments")}</button>
+      <button onClick={prompt(zh ? "请给出最短的复现实验路径：入口、配置、数据和评估步骤。" : "Give the shortest reproduction path: entry point, configuration, data, and evaluation steps.", zh ? "论文有哪些局限、威胁或尚未验证的主张？" : "What limitations, threats, or unverified claims does the paper have?")}>{aiMode === "audit" ? t("Reproduction path") : t("Analyze limitations")}</button>
     </div>}
   </div>;
 });
@@ -417,6 +426,7 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
   busy: boolean; cancelling: boolean; canInterrupt: boolean; attachments: CodeChatAttachment[]; command: PaperChatComposerCommand;
   onAsk: (prompt: string) => boolean; onInterrupt: () => void; onRemoveAttachment: (index: number) => void;
 }) {
+  const { t } = useUISettings();
   const [draft, setDraft] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resizeFrameRef = useRef<number | null>(null);
@@ -446,12 +456,12 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
     <div className="paper-ai-compose-input">
       {attachments.length > 0 && <div className="paper-ai-code-attachments">
         {attachments.map((attachment, index) => <div className="paper-ai-code-attachment" key={attachment.path + ":" + attachment.startLine + ":" + index} title={attachment.path + ":" + attachment.startLine + "-" + attachment.endLine}>
-          <FileCode2 size={13} /><span>{attachment.path}:{attachment.startLine}{attachment.endLine !== attachment.startLine ? "-" + attachment.endLine : ""}</span><button type="button" onClick={() => onRemoveAttachment(index)} title="Remove code attachment" aria-label={"Remove " + attachment.path + " code attachment"}><X size={12} /></button>
+          <FileCode2 size={13} /><span>{attachment.path}:{attachment.startLine}{attachment.endLine !== attachment.startLine ? "-" + attachment.endLine : ""}</span><button type="button" onClick={() => onRemoveAttachment(index)} title={t("Remove code attachment")} aria-label={t("Remove {path} code attachment", { path: attachment.path })}><X size={12} /></button>
         </div>)}
       </div>}
-      <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? "Ask about the selected code…" : "Ask about the paper…"} rows={1} />
+      <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? t("Ask about the selected code…") : t("Ask about the paper…")} rows={1} />
     </div>
-    <button className="primary-button" disabled={busy ? !canInterrupt || cancelling : !draft.trim()} onClick={busy ? onInterrupt : submit}>{busy ? <><Square size={13} fill="currentColor" />{cancelling ? "Stopping" : "Stop"}</> : <><Send size={14} />Send</>}</button>
+    <button className="primary-button" disabled={busy ? !canInterrupt || cancelling : !draft.trim()} onClick={busy ? onInterrupt : submit}>{busy ? <><Square size={13} fill="currentColor" />{cancelling ? t("Stopping") : t("Stop")}</> : <><Send size={14} />{t("Send")}</>}</button>
   </div>;
 });
 
@@ -460,6 +470,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>;
   bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; onAgentRun?: (result: AgentRunResult) => void;
 }) {
+  const { language, t } = useUISettings();
   const [reader, setReader] = useState<PaperReaderState | null>(null);
   const [busy, setBusy] = useState<"remote" | "local" | null>(null);
   const [error, setError] = useState("");
@@ -557,8 +568,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   function receiveFigureCapture(capture: PaperFigureCapture) {
     setFigureCapture(capture);
     setChatOpen(true);
-    const objectName = capture.kind === "table" ? "表格" : capture.kind === "equation" ? "公式" : "图片";
-    setComposerCommand((current) => ({ id: current.id + 1, draft: `请解释论文第 ${capture.pageNumber} 页所选${objectName}` }));
+    const objectName = capture.kind === "table" ? t("Table") : capture.kind === "equation" ? t("Equation") : t("Image");
+    setComposerCommand((current) => ({ id: current.id + 1, draft: language === "zh" ? `请解释论文第 ${capture.pageNumber} 页所选${objectName}` : `Explain the selected ${objectName.toLowerCase()} from page ${capture.pageNumber} of the paper.` }));
   }
   function receiveSelection(text: string, anchor: SelectionAnchor) {
     const next = text.replace(/\s+/g, " ").trim();
@@ -738,8 +749,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   useEffect(() => {
     if (aiMode !== "brief" || !chatOpen || !ready || !chatHistoryLoaded || chatBusy || briefingStartedRef.current) return;
     briefingStartedRef.current = true;
-    void askAI(PAPER_BRIEFING_REQUEST, { initialBriefing: true });
-  }, [briefingVersion, chatBusy, chatHistoryLoaded, chatOpen, ready]);
+    void askAI(paperBriefingRequest(language), { initialBriefing: true });
+  }, [briefingVersion, chatBusy, chatHistoryLoaded, chatOpen, language, ready]);
   async function translateSelection() {
     if (!selection || !selectionAnchor || translating) return;
     const source = selection;
@@ -762,7 +773,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   function commandComposer(draft?: string) {
     setComposerCommand((current) => ({ id: current.id + 1, ...(draft === undefined ? {} : { draft }) }));
   }
-  function openAskForSelection() { setChatOpen(true); commandComposer(`请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。`); }
+  function openAskForSelection() { setChatOpen(true); commandComposer(language === "zh" ? `请解释论文第 ${pageNumber} 页所选这段话的含义、上下文和可能的局限。` : `Explain the meaning, context, and possible limitations of the passage selected on page ${pageNumber}.`); }
   const addCodeSelectionToChat = useCallback((file: RepositoryCheckoutFile, snippet: string, startLine: number) => {
     const cleanSnippet = snippet.slice(0, 12_000);
     if (!cleanSnippet.trim()) return;
@@ -839,44 +850,44 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
 
   return <section className={chatOpen ? "paper-workbench-page paper-chat-open" : "paper-workbench-page"}>
     <header className="paper-workbench-header paper-reader-header">
-      <button className="reader-back-button" onClick={onBack}><ChevronLeft size={16} />Library</button>
+      <button className="reader-back-button" onClick={onBack}><ChevronLeft size={16} />{t("Library")}</button>
       <span className="reader-header-divider" />
       <div className="reader-title"><span>{library.name}</span><strong title={paper.title}>{paper.title}</strong></div>
       <div className="reader-header-actions">
-        {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title="Open source"><ExternalLink size={16} /></a>}
-        <button className="reader-icon-button" title={paper.starred ? "Unstar paper" : "Star paper"} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={16} fill={paper.starred ? "currentColor" : "none"} /></button>
-        <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title="Ask Archimedes" onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>Ask AI</span></button>
+        {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title={t("Open source")}><ExternalLink size={16} /></a>}
+        <button className="reader-icon-button" title={paper.starred ? t("Unstar paper") : t("Star paper")} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={16} fill={paper.starred ? "currentColor" : "none"} /></button>
+        <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>{t("Ask AI")}</span></button>
       </div>
     </header>
-    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />原始论文</button><button role="tab" disabled title="评述工作台即将推出"><BookOpen size={16} />评述 <small>Coming soon</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title="Open this paper's linked project" onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title="Open the local code audit workspace" onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
+    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />{t("Original paper")}</button><button role="tab" disabled title={t("Review")}><BookOpen size={16} />{t("Review")} <small>{t("Coming soon")}</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
       {readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
         {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
         {ready ? <>
           <div className="paper-reader-toolbar">
             <div className="paper-reader-navigation">
-              <div className="paper-page-controls"><button onClick={() => setPageNumber((value) => Math.max(1, value - 1))} disabled={pageNumber <= 1} title="Previous page"><ChevronLeft size={17} /></button><strong>{pageNumber} / {lastPage}</strong><button onClick={() => setPageNumber((value) => Math.min(lastPage, value + 1))} disabled={pageNumber >= lastPage} title="Next page"><ChevronRight size={17} /></button></div>
-              <div className="paper-zoom-control" aria-label="PDF zoom">
-                <button onClick={() => setPdfZoom((value) => Math.max(.55, Math.round((value - .1) * 100) / 100))} disabled={pdfZoom <= .55} title="Zoom out 10%"><Minus size={16} /></button>
-                <button className="paper-zoom-readout" onClick={() => setPdfZoom(1)} title="Reset zoom to 100%"><span>{Math.round(pdfZoom * 100)}%</span><ChevronDown size={14} /></button>
-                <button onClick={() => setPdfZoom((value) => Math.min(3.2, Math.round((value + .1) * 100) / 100))} disabled={pdfZoom >= 3.2} title="Zoom in 10%"><Plus size={16} /></button>
+              <div className="paper-page-controls"><button onClick={() => setPageNumber((value) => Math.max(1, value - 1))} disabled={pageNumber <= 1} title={t("Previous page")}><ChevronLeft size={17} /></button><strong>{pageNumber} / {lastPage}</strong><button onClick={() => setPageNumber((value) => Math.min(lastPage, value + 1))} disabled={pageNumber >= lastPage} title={t("Next page")}><ChevronRight size={17} /></button></div>
+              <div className="paper-zoom-control" aria-label={t("PDF zoom")}>
+                <button onClick={() => setPdfZoom((value) => Math.max(.55, Math.round((value - .1) * 100) / 100))} disabled={pdfZoom <= .55} title={t("Zoom out 10%")}><Minus size={16} /></button>
+                <button className="paper-zoom-readout" onClick={() => setPdfZoom(1)} title={t("Reset zoom to 100%")}><span>{Math.round(pdfZoom * 100)}%</span><ChevronDown size={14} /></button>
+                <button onClick={() => setPdfZoom((value) => Math.min(3.2, Math.round((value + .1) * 100) / 100))} disabled={pdfZoom >= 3.2} title={t("Zoom in 10%")}><Plus size={16} /></button>
               </div>
             </div>
-            <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => { searchRequestRef.current += 1; setQuery(event.target.value); setActiveSearchQuery(""); setPassages([]); setError(""); }} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder="Find in paper" />{query && <button className="paper-search-clear" onClick={() => { searchRequestRef.current += 1; setQuery(""); setActiveSearchQuery(""); setPassages([]); setError(""); }} title="Clear paper search" aria-label="Clear paper search"><X size={13} /></button>}<button onClick={() => void find()} disabled={!query.trim()}>Find</button></div>
-            <div className="paper-reader-evidence-actions"><button className={highlightListOpen ? "paper-reader-evidence active" : "paper-reader-evidence"} onClick={() => setHighlightListOpen((value) => !value)} aria-expanded={highlightListOpen} title="查看高亮与笔记"><Highlighter size={14} />{reader?.highlights.length ?? 0}</button></div>
+            <div className="paper-search-control"><Search size={15} /><input value={query} onChange={(event) => { searchRequestRef.current += 1; setQuery(event.target.value); setActiveSearchQuery(""); setPassages([]); setError(""); }} onKeyDown={(event) => event.key === "Enter" && void find()} placeholder={t("Find in paper")} />{query && <button className="paper-search-clear" onClick={() => { searchRequestRef.current += 1; setQuery(""); setActiveSearchQuery(""); setPassages([]); setError(""); }} title={t("Clear paper search")} aria-label={t("Clear paper search")}><X size={13} /></button>}<button onClick={() => void find()} disabled={!query.trim()}>{t("Find")}</button></div>
+            <div className="paper-reader-evidence-actions"><button className={highlightListOpen ? "paper-reader-evidence active" : "paper-reader-evidence"} onClick={() => setHighlightListOpen((value) => !value)} aria-expanded={highlightListOpen} title={t("Highlights & notes")}><Highlighter size={14} />{reader?.highlights.length ?? 0}</button></div>
           </div>
-          {highlightListOpen && <aside className="paper-highlight-list" aria-label="高亮与笔记">
-            <header><div><StickyNote size={15} /><strong>高亮与笔记</strong></div><button onClick={() => setHighlightListOpen(false)} title="关闭"><X size={14} /></button></header>
+          {highlightListOpen && <aside className="paper-highlight-list" aria-label={t("Highlights & notes")}>
+            <header><div><StickyNote size={15} /><strong>{t("Highlights & notes")}</strong></div><button onClick={() => setHighlightListOpen(false)} title={t("Close")}><X size={14} /></button></header>
             <div>{reader?.highlights.length ? reader.highlights.map((highlight) => <article key={highlight.id}>
-              <button className="paper-highlight-entry" onClick={() => { setPageNumber(highlight.page_number); setHighlightListOpen(false); }}><span><i className={`paper-highlight-dot ${highlight.color}`} />第 {highlight.page_number} 页</span><p>{highlight.quote}</p>{highlight.note && <small>{highlight.note}</small>}</button>
-              <button className="paper-highlight-delete" onClick={() => void deleteHighlight(highlight.id)} title="删除这条高亮或笔记"><Trash2 size={13} /></button>
-            </article>) : <p className="paper-highlight-empty">还没有高亮或笔记。</p>}</div>
+              <button className="paper-highlight-entry" onClick={() => { setPageNumber(highlight.page_number); setHighlightListOpen(false); }}><span><i className={`paper-highlight-dot ${highlight.color}`} />{t("Page {page}", { page: highlight.page_number })}</span><p>{highlight.quote}</p>{highlight.note && <small>{highlight.note}</small>}</button>
+              <button className="paper-highlight-delete" onClick={() => void deleteHighlight(highlight.id)} title={t("Delete this highlight or note")}><Trash2 size={13} /></button>
+            </article>) : <p className="paper-highlight-empty">{t("No highlights or notes yet.")}</p>}</div>
           </aside>}
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
           <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} searchQuery={activeSearchQuery} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
-          <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>Open the original paper</h2><p>{paper.pdf_url ? "The public PDF can be cached locally and opened in the reader." : "Attach a local PDF to open the original paper here."}</p>
-          <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? "Preparing…" : "Prepare PDF"}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}Attach PDF</button></div>
+          <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>{t("Open the original paper")}</h2><p>{paper.pdf_url ? t("The public PDF can be cached locally and opened in the reader.") : t("Attach a local PDF to open the original paper here.")}</p>
+          <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? t("Preparing…") : t("Prepare PDF")}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{t("Attach PDF")}</button></div>
         </div>}
         {(error || reader?.asset?.error) && <div className="reader-runtime-error">{error || reader?.asset?.error}</div>}
         </>}
@@ -886,22 +897,22 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </main>}
       {chatOpen && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
       <aside className="paper-ai-panel">
-        <header><div><span className="eyebrow">Archimedes</span><h2>论文对话</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>Paper briefing</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>Code audit</button></div></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title="Read the full paper again"><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title="Close AI panel"><X size={16} /></button></div></header>
+        <header><div><span className="eyebrow">Archimedes</span><h2>{t("Paper chat")}</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>{t("Paper briefing")}</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>{t("Code audit")}</button></div></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title={t("Read the full paper again")}><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")}><X size={16} /></button></div></header>
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={(prompt) => void askAI(prompt)} />
-        {selection && <div className="paper-ai-context"><span>p. {pageNumber} selection</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>第 {figureCapture.pageNumber} 页{figureCapture.kind === "table" ? "表格" : figureCapture.kind === "equation" ? "公式" : "图片"}</span><p>该区域将作为高清图片发送给 AI。</p></div><button onClick={() => setFigureCapture(null)} title="Remove figure attachment"><X size={13} /></button></div>}
+        {selection && <div className="paper-ai-context"><span>{t("p. {page} selection", { page: pageNumber })}</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
+        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
       </aside></>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
-      <button onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />高亮</button><button onClick={translateSelection}><Languages size={15} />翻译</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />评论</button><button onClick={openAskForSelection}><Bot size={15} />向 AI 提问</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />删除高亮</button>}
-      {highlightPickerOpen && <div className="paper-highlight-picker" role="menu" aria-label="Highlight color">{HIGHLIGHT_COLORS.map((color) => <button key={color.value} className={`highlight-color ${color.value}`} title={color.label} onClick={() => void saveHighlight("", color.value)}><span /></button>)}</div>}
-      {commentOpen && <form className="paper-comment-composer" onSubmit={(event) => { event.preventDefault(); void saveHighlight(comment, "blue"); }}><textarea autoFocus value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment…" rows={3} /><div><button type="button" onClick={closeSelection}>Cancel</button><button type="submit" disabled={!comment.trim()}>Save</button></div></form>}
+      <button onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />{t("Highlight")}</button><button onClick={translateSelection}><Languages size={15} />{t("Translate")}</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />{t("Comment")}</button><button onClick={openAskForSelection}><Bot size={15} />{t("Ask AI")}</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />{t("Delete highlight")}</button>}
+      {highlightPickerOpen && <div className="paper-highlight-picker" role="menu" aria-label={t("Highlight color")}>{HIGHLIGHT_COLORS.map((color) => <button key={color.value} className={`highlight-color ${color.value}`} title={t(color.label)} onClick={() => void saveHighlight("", color.value)}><span /></button>)}</div>}
+      {commentOpen && <form className="paper-comment-composer" onSubmit={(event) => { event.preventDefault(); void saveHighlight(comment, "blue"); }}><textarea autoFocus value={comment} onChange={(event) => setComment(event.target.value)} placeholder={t("Write a comment…")} rows={3} /><div><button type="button" onClick={closeSelection}>{t("Cancel")}</button><button type="submit" disabled={!comment.trim()}>{t("Save")}</button></div></form>}
     </div>}
     {translationPopover && <aside className="paper-translation-popover" style={{ left: Math.min(window.innerWidth - 404, Math.max(12, translationPopover.anchor.x - 150)), top: Math.min(window.innerHeight - 278, Math.max(12, translationPopover.anchor.y + 18)) }} onMouseDown={(event) => event.preventDefault()}>
-      <header><span><Languages size={14} />译文</span><button onClick={() => setTranslationPopover(null)} title="Close translation"><X size={14} /></button></header>
+      <header><span><Languages size={14} />{t("Translation")}</span><button onClick={() => setTranslationPopover(null)} title={t("Close translation")}><X size={14} /></button></header>
       <p className="paper-translation-source">{translationPopover.source}</p>
-      <div className={translationPopover.error ? "paper-translation-result error" : "paper-translation-result"}>{translating ? <><LoaderCircle className="spin" size={14} />正在翻译…</> : translationPopover.error || translationPopover.translation}</div>
+      <div className={translationPopover.error ? "paper-translation-result error" : "paper-translation-result"}>{translating ? <><LoaderCircle className="spin" size={14} />{t("Translating…")}</> : translationPopover.error || translationPopover.translation}</div>
     </aside>}
   </section>;
 }
@@ -1463,7 +1474,7 @@ function mergePdfInteractiveRegions(regions: PdfInteractiveRegion[]) {
   return accepted;
 }
 
-function installPdfInteractiveRegions(page: HTMLElement, canvas: HTMLCanvasElement, regions: PdfInteractiveRegion[], pageNumber: number, onCapture: (capture: PaperFigureCapture) => void) {
+function installPdfInteractiveRegions(page: HTMLElement, canvas: HTMLCanvasElement, regions: PdfInteractiveRegion[], pageNumber: number, onCapture: (capture: PaperFigureCapture) => void, labels: Record<PaperVisualKind, string>) {
   const overlays = regions.map((region) => {
     const overlay = window.document.createElement("div");
     overlay.className = `arch-pdf-object-region ${region.kind}`;
@@ -1474,7 +1485,7 @@ function installPdfInteractiveRegions(page: HTMLElement, canvas: HTMLCanvasEleme
     const action = window.document.createElement("button");
     action.type = "button";
     action.className = "arch-pdf-object-action";
-    action.textContent = region.kind === "equation" ? "解释这个公式" : region.kind === "table" ? "解释这个表格" : "解释这张图片";
+    action.textContent = labels[region.kind];
     action.addEventListener("mousedown", (event) => { event.preventDefault(); event.stopPropagation(); });
     action.addEventListener("click", (event) => {
       event.preventDefault();
@@ -1542,6 +1553,7 @@ function cropPdfVisual(canvas: HTMLCanvasElement, page: HTMLElement, rect: PdfVi
 }
 
 function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, activeSelection, figureCaptureActive, onZoomChange, onSelection, onFigureCapture, onClearSelection, onProjectLink, onProjectDetected }: { url: string; pageNumber: number; highlights: PaperHighlight[]; searchQuery: string; zoom: number; activeSelection: string; figureCaptureActive: boolean; onZoomChange: (updater: (current: number) => number) => void; onSelection: (text: string, anchor: SelectionAnchor) => void; onFigureCapture: (capture: PaperFigureCapture) => void; onClearSelection: () => void; onProjectLink: (url: string) => void; onProjectDetected: (url: string) => void }) {
+  const { t } = useUISettings();
   const hostRef = useRef<HTMLDivElement>(null);
   const highlightsRef = useRef(highlights);
   const searchQueryRef = useRef(searchQuery);
@@ -1636,7 +1648,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
             const tightened = tightenPdfVisualRect(canvas, page, rect);
             return { rect: tightened, nearbyText: pdfNearbyText(pdfTextLines(page, textLayer), tightened), kind: "figure" as const, source: "image" as const };
           });
-        installPdfInteractiveRegions(page, canvas, mergePdfInteractiveRegions([...equationRegions, ...captionRegions, ...uncaptionedImages]), pageNumber, (capture) => onFigureCaptureRef.current(capture));
+        installPdfInteractiveRegions(page, canvas, mergePdfInteractiveRegions([...equationRegions, ...captionRegions, ...uncaptionedImages]), pageNumber, (capture) => onFigureCaptureRef.current(capture), { equation: t("Explain this equation"), table: t("Explain this table"), figure: t("Explain this image") });
         const annotations = await pdfPage.getAnnotations();
         for (const annotation of annotations) {
           const targetUrl = typeof annotation.url === "string" ? annotation.url : "";
@@ -1667,7 +1679,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     }
     void render();
     return () => { cancelled = true; destroyLoadingTask?.(); };
-  }, [onProjectDetected, onProjectLink, pageNumber, url, width, zoom]);
+  }, [onProjectDetected, onProjectLink, pageNumber, t, url, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
     const selection = window.getSelection();
@@ -1704,7 +1716,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     clearActivePdfSelection(hostRef.current);
     onClearSelection();
   }
-  return <div className="arch-pdf-stage" onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />Rendering original PDF…</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
+  return <div className="arch-pdf-stage" onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />{t("Rendering original PDF…")}</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
 }
 
 function selectionNodeSpan(node: Node | null, layer: HTMLElement) {

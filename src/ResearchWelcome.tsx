@@ -1,4 +1,5 @@
 import { ArrowUpRight } from "lucide-react";
+import { useUISettings } from "./i18n";
 
 export type ResearchWelcomeAction = "idea" | "literature" | "replication" | "illustration";
 
@@ -35,12 +36,13 @@ const workflows: Array<{
 ];
 
 export default function ResearchWelcome({ onSelect }: { onSelect: (action: ResearchWelcomeAction) => void }) {
-  return <section className="research-welcome" aria-label="Start a research workflow">
+  const { t } = useUISettings();
+  return <section className="research-welcome" aria-label={t("Start a research workflow")}>
     <div className="research-welcome-hero">
       <img src="/welcome/archimedes-hero.jpg" alt="Archimedes in a classical study surrounded by geometric instruments" />
       <div className="research-welcome-copy">
-        <h1>Choose your path</h1>
-        <blockquote>Turn curiosity into questions worth testing, and evidence into answers worth trusting.</blockquote>
+        <h1>{t("Choose your path")}</h1>
+        <blockquote>{t("Turn curiosity into questions worth testing, and evidence into answers worth trusting.")}</blockquote>
       </div>
     </div>
 
@@ -48,8 +50,8 @@ export default function ResearchWelcome({ onSelect }: { onSelect: (action: Resea
       {workflows.map((workflow) => <button key={workflow.id} type="button" className={`research-workflow research-workflow-${workflow.id}`} onClick={() => onSelect(workflow.id)}>
         <span className="research-workflow-image"><img src={workflow.image} alt="" /></span>
         <span className="research-workflow-copy">
-          <strong>{workflow.title}</strong>
-          <span>{workflow.description}</span>
+          <strong>{t(workflow.title)}</strong>
+          <span>{t(workflow.description)}</span>
           <ArrowUpRight size={18} aria-hidden="true" />
         </span>
       </button>)}

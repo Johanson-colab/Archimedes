@@ -2,6 +2,7 @@
 
 interface ResearchDeskBridge {
     getInitialWorkspace: () => Promise<string | null>;
+    setUiZoom?: (factor: number) => Promise<number>;
     chooseWorkspace: () => Promise<string | null>;
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
