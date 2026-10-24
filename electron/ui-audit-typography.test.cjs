@@ -38,8 +38,8 @@ test("conversation and projects share one readable scale", () => {
   assert.match(typography, /\.message-markdown p,\s*\.conversation-message p \{ font-size: 15px; \}/);
   assert.match(typography, /\.conversation-message-role \{ font-size: 11px; \}/);
   assert.match(typography, /\.conversation-sources a \{ font-size: 11px; \}/);
-  assert.match(typography, /\.project-select span \{ font-size: 13px; \}/);
-  assert.match(typography, /\.project-chat-open \{ font-size: 12px; line-height: 1\.4; \}/);
+  assert.match(typography, /\.project-select span,\s*\.project-chat-open,[\s\S]*?font-size: 13px;\s*font-weight: 400;/);
+  assert.match(typography, /\.project-chat-row\.active \.project-chat-open \{[\s\S]*?font-weight: 400;/);
   assert.match(typography, /\.project-select small \{ font-size: 11px; \}/);
   assert.match(typography, /\.nav-count \{ font-size: 11px; \}/);
 });
@@ -67,15 +67,16 @@ test("settings metadata no longer drops to 8-9px", () => {
 });
 
 test("right workbench metadata moves above the 10px floor", () => {
-  assert.match(typography, /\.workbench-tab \{ font-size: 12px/);
-  assert.match(typography, /\.journey-goal p \{ font-size: 13px/);
-  assert.match(typography, /\.journey-progress-meta \{ font-size: 11px; \}/);
-  assert.match(typography, /\.journey-phase small \{ font-size: 11px; \}/);
-  assert.match(typography, /\.journey-signals span \{ font-size: 11px; \}/);
-  assert.match(typography, /\.journey-note \{ font-size: 12px/);
-  assert.match(typography, /\.trajectory-stat span,\s*\.trajectory-section-title \{ font-size: 11px; \}/);
-  assert.match(typography, /\.trajectory-event-copy small,\s*\.trajectory-event-time,\s*\.trajectory-event-meta \{ font-size: 11px; \}/);
-  assert.match(typography, /\.trajectory-json \{ font-size: 11px/);
+  assert.match(typography, /\.workbench-tab \{ font-size: 13px; font-weight: 500; \}/);
+  assert.match(typography, /\.journey-intro strong \{ font-size: 15px; font-weight: 500; \}/);
+  assert.match(typography, /\.journey-goal p \{ font-size: 14px; \}/);
+  assert.match(typography, /\.journey-progress-meta \{ font-size: 12px; \}/);
+  assert.match(typography, /\.journey-phase small \{ font-size: 12px; \}/);
+  assert.match(typography, /\.journey-signals span \{ font-size: 12px; \}/);
+  assert.match(typography, /\.journey-note \{ font-size: 13px; \}/);
+  assert.match(typography, /\.trajectory-stat span,\s*\.trajectory-section-title \{ font-size: 12px; \}/);
+  assert.match(typography, /\.trajectory-event-copy small,\s*\.trajectory-event-time,\s*\.trajectory-event-meta \{ font-size: 12px; \}/);
+  assert.match(typography, /\.trajectory-json \{ font-size: 12px; \}/);
 });
 
 test("mono and editorial surfaces follow the selected font tokens", () => {

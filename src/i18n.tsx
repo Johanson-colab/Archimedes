@@ -9,7 +9,7 @@ const LANGUAGE_STORAGE_KEY = "archimedes-language";
 const TEXT_SIZE_STORAGE_KEY = "archimedes-text-size";
 const INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";
 const MONO_FONT_STORAGE_KEY = "archimedes-mono-font";
-const TEXT_SCALE: Record<TextSize, number> = { small: .9, default: 1, large: 1.1 };
+const TEXT_SCALE: Record<TextSize, number> = { small: 1, default: 1.1, large: 1.2 };
 
 const translations: Record<string, string> = {
   // Application chrome

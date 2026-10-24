@@ -536,3 +536,63 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .paper-reader-tabs small,
 .paper-reader-evidence,
 .paper-search-control button { font-size: 11px; }
+
+/* Sidebar project and chat titles follow the library row scale: 13px, regular
+   weight. Selection is expressed with color/background, not bold text. */
+.project-select,
+.project-select span,
+.project-chat-open,
+.project-tree-row.active .project-select span,
+.project-chat-row.active .project-chat-open {
+  font-size: 13px;
+  font-weight: 400;
+}
+.project-chat-open { line-height: 1.4; }
+
+/* Right workbench: match the library reading scale and drop the extra-bold
+   metadata. Labels are 12px/400, values 13-14px/500. */
+.workbench-tab { font-size: 13px; font-weight: 500; }
+.workbench-tab-badge { font-size: 10px; }
+.journey-intro span { font-size: 12px; }
+.journey-intro strong { font-size: 15px; font-weight: 500; }
+.journey-status { font-size: 12px; font-weight: 400; }
+.journey-goal-head span,
+.journey-goal-head strong { font-size: 12px; }
+.journey-goal-head span { font-weight: 400; }
+.journey-goal-head strong { font-weight: 500; }
+.journey-goal p { font-size: 14px; }
+.journey-progress-meta { font-size: 12px; }
+.journey-block-title { font-size: 12px; }
+.journey-block-title-row button,
+.journey-footer button { font-size: 12px; }
+.journey-phase strong { font-size: 13px; font-weight: 500; }
+.journey-phase small { font-size: 12px; }
+.journey-signals span { font-size: 12px; }
+.journey-signals strong { font-size: 14px; font-weight: 500; }
+.journey-milestones strong { font-size: 13px; font-weight: 500; }
+.journey-milestones small,
+.journey-empty { font-size: 12px; }
+.journey-note { font-size: 13px; }
+.journey-footer { font-size: 12px; }
+
+.trajectory-stat span,
+.trajectory-section-title { font-size: 12px; }
+.trajectory-stat strong { font-size: 14px; font-weight: 500; }
+.trajectory-summary { font-size: 13px; }
+.trajectory-section-head h3 { font-size: 15px; font-weight: 500; }
+.trajectory-section-head p { font-size: 12px; }
+.trajectory-event-copy strong { font-size: 13px; font-weight: 500; }
+.trajectory-event-copy small,
+.trajectory-event-time,
+.trajectory-event-meta { font-size: 12px; }
+.trajectory-event-meta code { font-size: 12px; }
+.trajectory-head-actions button,
+.trajectory-event-meta button,
+.trajectory-empty button { font-size: 12px; }
+.trajectory-payload-note { font-size: 12px; }
+.trajectory-empty span { font-size: 12px; }
+.trajectory-json { font-size: 12px; }
+
+.workspace-tree-row { font-size: 12px; }
+.workspace-tree-row strong { font-size: 12px; font-weight: 400; }
+.workspace-tree-row small { font-size: 11px; }
