@@ -47,3 +47,17 @@ test("does not treat grid lines from an adjacent-column chart as a table", async
   ], 612, 792);
   assert.equal(rect, null);
 });
+
+test("keeps a long table whose body has sparse section rules", async () => {
+  const { findRuledTableRect } = await api;
+  const caption = { left: 70, top: 75, width: 470, height: 18 };
+  const rect = findRuledTableRect(caption, [
+    { left: 70, right: 540, y: 124 },
+    { left: 240, right: 540, y: 154 }, // grouped header rule
+    { left: 70, right: 540, y: 334 },
+    { left: 70, right: 540, y: 469 },
+  ], 612, 792);
+  assert(rect);
+  assert.equal(rect.top, 119);
+  assert.equal(rect.top + rect.height, 474);
+});

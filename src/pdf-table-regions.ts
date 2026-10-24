@@ -69,10 +69,21 @@ function ruleGroup(caption: PdfTableRect, rules: PdfTableRule[], direction: "abo
   if (!ordered.length) return null;
   const firstDistance = direction === "below" ? ordered[0].y - bottom(caption) : caption.top - ordered[0].y;
   if (firstDistance > Math.max(pageHeight * .2, caption.height * 12)) return null;
-  const maxGap = Math.max(pageHeight * .19, caption.height * 12);
+  // Long benchmark tables often have only a top rule, section separators, and
+  // a bottom rule. A small row-gap cutoff truncates them to the header. The
+  // wider allowance is safe when every later rule remains horizontally aligned
+  // with the caption-adjacent table rather than merely sharing the page.
+  const maxGap = Math.max(pageHeight * .29, caption.height * 12);
   const group: PdfTableRule[] = [];
   for (const rule of ordered) {
     if (group.length && Math.abs(rule.y - group.at(-1)!.y) > maxGap) break;
+    if (group.length) {
+      const anchorLeft = Math.min(...group.map((item) => item.left));
+      const anchorRight = Math.max(...group.map((item) => item.right));
+      const overlap = Math.max(0, Math.min(anchorRight, rule.right) - Math.max(anchorLeft, rule.left));
+      const overlapRatio = overlap / Math.max(1, Math.min(anchorRight - anchorLeft, rule.right - rule.left));
+      if (overlapRatio < .55) break;
+    }
     group.push(rule);
   }
   if (group.length < 2) return null;

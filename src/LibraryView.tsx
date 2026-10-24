@@ -1544,7 +1544,9 @@ function detectPdfCaptionRegions(page: HTMLElement, textLayer: HTMLElement, canv
     }
     if (kind === "table") {
       const rect = detectPdfTableRect(canvas, page, caption, fragments);
-      if (rect && !isDensePdfProse(lines, rect)) return [{ rect, nearbyText: pdfNearbyText(lines, unionPdfRects(rect, caption)), kind, source: "caption" as const }];
+      // A real table is itself dense, aligned text. Paragraph-density rejection
+      // belongs only to the figure fallback; applying it here hides large tables.
+      if (rect) return [{ rect, nearbyText: pdfNearbyText(lines, unionPdfRects(rect, caption)), kind, source: "caption" as const }];
     }
     // Vector-only figures have no image XObject. Search only inside the caption's
     // column, then require real non-text ink and reject paragraph-shaped regions.
