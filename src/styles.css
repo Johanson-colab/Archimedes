@@ -3646,3 +3646,46 @@ html:not([data-theme="paper"]) .terminal-settings-button { color: #898b9b; }
 html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4; background: #20222c; }
 .theme-paper .terminal-settings-button { color: #77726b; }
 .theme-paper .terminal-settings-button:hover { color: #252422; background: #e9e5df; }
+
+/* Shared row tokens for Files and Trajectory so both lists read as one system. */
+:root {
+  --rail-row-ink: #a7a8b5;
+  --rail-row-ink-strong: #f1f0f6;
+  --rail-row-hover-bg: #202020;
+  --rail-row-active-bg: #25253a;
+  --rail-row-muted: #8f8f8f;
+}
+.theme-paper {
+  --rail-row-ink: #625f59;
+  --rail-row-ink-strong: #252422;
+  --rail-row-hover-bg: #efede9;
+  --rail-row-active-bg: #f1e8cf;
+  --rail-row-muted: #8b857d;
+}
+.workspace-tree-row,
+.trajectory-event-head { color: var(--rail-row-ink); }
+.workspace-tree-row:hover,
+.trajectory-event-head:hover { color: var(--rail-row-ink-strong); background: var(--rail-row-hover-bg); }
+.workspace-tree-row.active,
+.trajectory-event.open .trajectory-event-head { color: var(--rail-row-ink-strong); background: var(--rail-row-active-bg); }
+.trajectory-event-copy strong { color: var(--rail-row-ink-strong); }
+.workspace-tree-row .tree-disclosure,
+.workspace-tree-row .tree-file-icon,
+.trajectory-event-icon,
+.trajectory-event-time,
+.trajectory-event-copy small,
+.trajectory-event-meta { color: var(--rail-row-muted); }
+.workspace-tree-row:hover .tree-disclosure,
+.workspace-tree-row:hover .tree-file-icon,
+.trajectory-event-head:hover .trajectory-event-icon { color: var(--rail-row-ink-strong); }
+.theme-paper .workspace-tree-row:hover,
+.theme-paper .trajectory-event-head:hover { color: var(--rail-row-ink-strong); background: var(--rail-row-hover-bg); }
+.theme-paper .workspace-tree-row.active,
+.theme-paper .trajectory-event.open .trajectory-event-head { color: var(--rail-row-ink-strong); background: var(--rail-row-active-bg); }
+.theme-paper .workspace-tree-row .tree-disclosure,
+.theme-paper .workspace-tree-row .tree-file-icon,
+.theme-paper .trajectory-event-icon,
+.theme-paper .trajectory-event-time,
+.theme-paper .trajectory-event-copy small,
+.theme-paper .trajectory-event-meta { color: var(--rail-row-muted); }
+.theme-paper .trajectory-event-copy strong { color: var(--rail-row-ink-strong); }
