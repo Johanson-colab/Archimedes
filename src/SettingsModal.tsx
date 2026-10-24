@@ -1,8 +1,8 @@
-import { Code2, FolderOpen, Globe2, Info, Languages, Monitor, Moon, Orbit, Palette, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
+import { Code2, FolderOpen, Globe2, Info, Languages, MessageSquareText, Monitor, Moon, Orbit, Palette, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
 import ModelSettingsModal from "./ModelSettingsModal";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
-import { useUISettings, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
+import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type SettingsSection = "general" | "appearance" | "models" | "web" | "terminal" | "workspace" | "about";
@@ -42,6 +42,12 @@ const textSizes: Array<{ id: TextSize; label: string }> = [
   { id: "large", label: "Large" },
 ];
 
+const verbosityOptions: Array<{ id: ChatVerbosity; label: string; description: string }> = [
+  { id: "low", label: "Low", description: "Summary only" },
+  { id: "medium", label: "Medium", description: "Grouped steps" },
+  { id: "high", label: "High", description: "Full detail" },
+];
+
 export default function SettingsModal({
   open,
   section,
@@ -60,7 +66,7 @@ export default function SettingsModal({
   onSaveTerminalSettings,
   onOpenExternalTerminal,
 }: SettingsModalProps) {
-  const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, t } = useUISettings();
+  const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   if (!open) return null;
 
@@ -113,6 +119,14 @@ export default function SettingsModal({
               <div className="settings-segmented" role="group" aria-label={t("Text size")}>
                 {textSizes.map((item) => <button key={item.id} className={textSize === item.id ? "active" : ""} aria-pressed={textSize === item.id} onClick={() => setTextSize(item.id)}>{t(item.label)}</button>)}
               </div>
+            </section>
+
+            <section className="settings-card">
+              <div className="settings-card-heading"><MessageSquareText size={15} /><div><strong>{t("Chat verbosity")}</strong><p>{t("Controls how much agent activity appears inline in chat.")}</p></div></div>
+              <div className="settings-segmented" role="group" aria-label={t("Chat verbosity")}>
+                {verbosityOptions.map((item) => <button key={item.id} className={chatVerbosity === item.id ? "active" : ""} aria-pressed={chatVerbosity === item.id} onClick={() => setChatVerbosity(item.id)}>{t(item.label)}</button>)}
+              </div>
+              <p className="settings-note">{t(verbosityOptions.find((item) => item.id === chatVerbosity)?.description ?? "Grouped steps")}</p>
             </section>
           </div>}
 

@@ -31,6 +31,7 @@ import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth, type WorkbenchTab } from "./RightWorkbench";
+import ChatActivityTimeline from "./ChatActivityTimeline";
 import JourneyView from "./JourneyView";
 import TrajectoryView from "./TrajectoryView";
 import TerminalSettingsModal from "./TerminalSettingsModal";
@@ -1120,6 +1121,7 @@ function App() {
       const thread = await desktopBridge.getResearchThread(snapshot.threads[0].id, snapshot.workspace);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
+      setEvents([]);
       setActiveThreadId(thread.id);
       setActiveProjectId(thread.project_id);
       setResearchMode(thread.mode);
@@ -1127,6 +1129,7 @@ function App() {
     } else {
       setMessages(initialMessages);
       setTrajectoryEvents([]);
+      setEvents([]);
       setActiveThreadId(null);
       setActiveProjectId(snapshot.projects?.[0]?.id ?? null);
       setChangeSets([]);
@@ -1225,6 +1228,7 @@ function App() {
       setActiveProjectId(thread.project_id);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
+      setEvents([]);
       setResearchMode(thread.mode);
       setChangeSets(thread.changeSets ?? []);
       const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
@@ -1353,10 +1357,7 @@ function App() {
     setAgentBusy(true);
     setInterrupting(false);
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt }]);
-    setEvents((current) => [
-      ...current.filter((event) => event.title !== "Evidence synthesis"),
-      { title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" },
-    ]);
+    setEvents([{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
       const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext });
@@ -1368,6 +1369,7 @@ function App() {
         activeThreadIdRef.current = result.threadId;
         setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
         setTrajectoryEvents(result.thread.events ?? []);
+        setEvents([]);
         setActiveThreadId(result.threadId);
         setActiveProjectId(result.thread.project_id);
         setChangeSets(result.thread.changeSets ?? []);
@@ -1711,6 +1713,7 @@ function App() {
               key={activeThreadId ?? `new:${chatViewNonce}`}
               messages={messages}
               events={events}
+              trajectoryEvents={trajectoryEvents}
               workspace={workspace}
               agentBusy={agentBusy}
               interrupting={interrupting}
@@ -1853,9 +1856,10 @@ function App() {
   );
 }
 
-function ConversationView({ messages, events, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
+  trajectoryEvents: ResearchEvent[];
   workspace: string;
   agentBusy: boolean;
   interrupting: boolean;
@@ -1882,7 +1886,6 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   composerRequest: { id: string; text: string } | null;
   onComposerRequestApplied: (id: string) => void;
 }) {
-  const latestEvent = events.at(-1);
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
   const [contextLengthMenuOpen, setContextLengthMenuOpen] = useState(false);
@@ -1919,6 +1922,7 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
   const predictedMode = inferResearchMode(prompt, researchMode);
   const visibleMessages = messages.slice(historyStart);
   const hiddenMessageCount = historyStart;
+  const lastUserIndex = visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1);
   const messageContextCharacters = useMemo(
     () => messages.reduce((total, message) => total + message.text.length, 0),
     [messages],
@@ -2157,11 +2161,13 @@ function ConversationView({ messages, events, workspace, agentBusy, interrupting
         {hiddenMessageCount > 0 && <button className="conversation-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - HISTORY_MESSAGE_PAGE_SIZE))}>
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount) === 1 ? "message" : "messages"}
         </button>}
-        {visibleMessages.map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
+        {visibleMessages.slice(0, lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
+
+        {lastUserIndex >= 0 && <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />}
+
+        {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
 
         {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
-
-        {agentBusy && <div className="conversation-running"><span className="assistant-mark"><ArchimedesMark size={14} variant="small" /></span><div><strong>{interrupting ? "Stopping task" : latestEvent?.title ?? "Archimedes is working"}</strong><small>{interrupting ? "Waiting for the active task to stop" : latestEvent?.detail ?? "Reading research context"}</small><div className="agent-typing"><span /><span /><span /></div></div></div>}
 
         {pendingAction && (
           <section className="conversation-approval">
