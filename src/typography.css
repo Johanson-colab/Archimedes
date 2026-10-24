@@ -155,11 +155,16 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .new-task-button { font-size: 14px; }
 .codex-sidebar-label { font-size: 11px; letter-spacing: .02em; }
 .projects-heading { font-size: 11px; }
-.project-select span { font-size: 12px; }
-.project-select small { font-size: 10px; }
-.project-chat-open { font-size: 11px; }
-.project-chat-empty, .recent-empty { font-size: 10px; }
-.archived-toggle { font-size: 11px; }
+.project-select span { font-size: 13px; }
+.project-select small { font-size: 11px; }
+.project-chat-open { font-size: 12px; line-height: 1.4; }
+.project-chat-empty, .recent-empty { font-size: 11px; }
+.archived-toggle { font-size: 12px; }
+.archived-toggle small { font-size: 11px; }
+.archived-project-row, .archived-chat-row { font-size: 12px; }
+.archived-project-row small { font-size: 11px; }
+.project-rename-error { font-size: 11px; }
+.nav-count { font-size: 11px; }
 .workspace-copy strong { font-size: 13px; }
 .workspace-copy small { font-size: 11px; }
 .conversation-title strong { font-size: 14px; font-weight: 600; line-height: 1.35; }
@@ -171,6 +176,25 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .message-markdown h2 { font-size: 20px; letter-spacing: -.015em; }
 .message-markdown h3 { font-size: 16px; }
 .message-markdown h4 { font-size: 15px; }
+/* Paragraphs used to fall back to 13px while list items inherited 15px. */
+.message-markdown p,
+.conversation-message p { font-size: 15px; }
+.conversation-message-role { font-size: 11px; }
+.conversation-sources a { font-size: 11px; }
+.composer-context { font-size: 11px; }
+.composer-note { font-size: 11px; }
+.context-picker-label { font-size: 11px; }
+.attached-context-chip { font-size: 11px; }
+.research-stage-node { font-size: 10px; }
+.research-stage strong { font-size: 11px; }
+.research-stage small { font-size: 10px; }
+.research-journey-header > div:first-child > span { font-size: 11px; }
+.research-journey-header strong { font-size: 11px; }
+.research-journey-actions button,
+.research-checkpoint-actions button { font-size: 11px; }
+.research-journey-notice { font-size: 11px; }
+.research-checkpoint-panel > div:first-child > span { font-size: 10px; }
+.research-checkpoint-panel p { font-size: 11px; }
 .conversation-composer textarea { font-size: 14px; line-height: 1.55; }
 
 /* Library and paper reader. */
