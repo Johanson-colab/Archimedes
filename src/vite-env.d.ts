@@ -1,7 +1,10 @@
 /// <reference types="vite/client" />
 
 interface ResearchDeskBridge {
+    platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
+    setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
+    setUiZoom?: (factor: number) => Promise<number>;
     chooseWorkspace: () => Promise<string | null>;
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;

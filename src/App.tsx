@@ -28,14 +28,14 @@ import GalleryView from "./GalleryView";
 import BenchmarkRadarView from "./BenchmarkRadarView";
 import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
 import ContextPicker, { ContextChips } from "./ContextPicker";
-import ModelSettingsModal from "./ModelSettingsModal";
-import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
 import SkillsView from "./SkillsView";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth, type WorkbenchTab } from "./RightWorkbench";
 import JourneyView from "./JourneyView";
 import TrajectoryView from "./TrajectoryView";
 import TerminalSettingsModal from "./TerminalSettingsModal";
+import SettingsModal, { type SettingsSection } from "./SettingsModal";
+import { useUISettings } from "./i18n";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createArtifactDraft, formatArtifactComment, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactComment, type ArtifactDraft, type ArtifactSelection } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
@@ -62,16 +62,12 @@ import {
   Folder,
   FolderOpen,
   FlaskConical,
-  Globe2,
   Images,
   Lightbulb,
   LoaderCircle,
   Maximize2,
   MessageCircle,
   MessageSquareText,
-  Monitor,
-  Moon,
-  Orbit,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRight,
@@ -85,11 +81,11 @@ import {
   Save,
   Search,
   SendHorizontal,
+  Settings,
   ShieldCheck,
   ScanSearch,
   Square,
   SquareTerminal,
-  Sun,
   X,
 } from "lucide-react";
 
@@ -700,8 +696,11 @@ function readContextLength(): ContextLength {
 }
 
 function App() {
+  const { t } = useUISettings();
   const [themePreference, setThemePreference] = useState<ThemePreference>(readThemePreference);
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const theme: AppTheme = themePreference === "system" ? systemAppearance : themePreference;
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
@@ -752,8 +751,6 @@ function App() {
   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
-  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
-  const [webSearchSettingsOpen, setWebSearchSettingsOpen] = useState(false);
   const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -781,11 +778,29 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "paper" ? "#fbfaf8" : "#20211F");
+    const applyTitleBar = desktopBridge.setTitleBarTheme;
+    if (applyTitleBar) void applyTitleBar(theme).catch(() => undefined);
   }, [theme]);
+
+  useEffect(() => {
+    const platform = desktopBridge.platform ?? "web";
+    document.documentElement.dataset.platform = platform;
+    document.documentElement.dataset.titlebar = platform === "win32" ? "overlay" : platform === "darwin" ? "inset" : "default";
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem("archimedes-theme", themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    const handleSettingsShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key !== ",") return;
+      event.preventDefault();
+      setSettingsOpen((open) => !open);
+    };
+    window.addEventListener("keydown", handleSettingsShortcut);
+    return () => window.removeEventListener("keydown", handleSettingsShortcut);
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem("archimedes-reasoning-effort", reasoningEffort);
@@ -1603,47 +1618,47 @@ function App() {
 
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const dirtyArtifactPaths = useMemo(() => new Set(Object.values(artifactDrafts).filter(isDraftDirty).map((draft) => draft.path)), [artifactDrafts]);
-  const mainTitle = mainSection === "chat" ? activeThread?.title ?? "New research task" : mainSection === "skills" ? "Skills" : mainSection === "library" ? "Literature library" : mainSection === "daily" ? "Daily papers" : mainSection === "benchmark-radar" ? "Benchmark Radar" : mainSection === "gallery" ? "Gallery" : mainSection === "writing" ? "Paper writing" : "Artifacts";
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "skills" ? t("Skills") : mainSection === "library" ? t("Literature library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "gallery" ? t("Gallery") : mainSection === "writing" ? t("Paper writing") : t("Artifacts");
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
-      <aside className="codex-sidebar" aria-label="Archimedes navigation" data-ui="application-navigation" inert={sidebarHidden}>
+      <aside className="codex-sidebar" aria-label={t("Archimedes navigation")} data-ui="application-navigation" inert={sidebarHidden}>
         <div className="codex-brand">
           <ArchimedesMark className="codex-brand-symbol" size={24} variant="small" />
           <ArchimedesWordmark className="codex-brand-wordmark" />
-          <button className="sidebar-collapse-button" onClick={() => setSidebarHidden(true)} title="Hide sidebar" aria-label="Hide sidebar"><PanelLeftClose size={16} /></button>
+          <button className="sidebar-collapse-button" onClick={() => setSidebarHidden(true)} title={t("Hide sidebar")} aria-label={t("Hide sidebar")}><PanelLeftClose size={16} /></button>
         </div>
 
-        <button className="new-task-button" onClick={() => startNewTask()} title="New research task" disabled={agentBusy}>
+        <button className="new-task-button" onClick={() => startNewTask()} title={t("New research task")} disabled={agentBusy}>
           <Plus size={17} />
-          <span>New</span>
+          <span>{t("New")}</span>
         </button>
 
-        <nav className="sidebar-nav" aria-label="Primary">
-          <button className={mainSection === "artifacts" || (workbenchOpen && workbenchTab === "files") ? "codex-nav-item active" : "codex-nav-item"} onClick={() => openWorkbench("files")} title="Files">
-            <Folder size={16} /><span>Files</span>
+        <nav className="sidebar-nav" aria-label={t("Primary")}>
+          <button className={mainSection === "artifacts" || (workbenchOpen && workbenchTab === "files") ? "codex-nav-item active" : "codex-nav-item"} onClick={() => openWorkbench("files")} title={t("Files")}>
+            <Folder size={16} /><span>{t("Files")}</span>
           </button>
-          <button className={mainSection === "skills" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("skills")} title="Browse skills">
-            <Blocks size={16} /><span>Skills</span>
+          <button className={mainSection === "skills" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("skills")} title={t("Browse skills")}>
+            <Blocks size={16} /><span>{t("Skills")}</span>
           </button>
         </nav>
 
         <section className="sidebar-group knowledge-group">
-          <div className="codex-sidebar-label">Knowledge</div>
-          <button className={mainSection === "library" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("library")} title="Literature library">
-            <BookOpen size={16} /><span>Literature library</span>
+          <div className="codex-sidebar-label">{t("Knowledge")}</div>
+          <button className={mainSection === "library" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("library")} title={t("Open literature library")}>
+            <BookOpen size={16} /><span>{t("Literature library")}</span>
           </button>
-          <button className={mainSection === "daily" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setDailyStartMode("latest"); setMainSection("daily"); }} title="Daily papers">
-            <CalendarDays size={16} /><span>Daily papers</span>
+          <button className={mainSection === "daily" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setDailyStartMode("latest"); setMainSection("daily"); }} title={t("Open daily papers")}>
+            <CalendarDays size={16} /><span>{t("Daily papers")}</span>
           </button>
-          <button className={mainSection === "benchmark-radar" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("benchmark-radar")} title="Benchmark Radar">
-            <Radar size={16} /><span>Benchmark Radar</span>
+          <button className={mainSection === "benchmark-radar" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("benchmark-radar")} title={t("Open Benchmark Radar")}>
+            <Radar size={16} /><span>{t("Benchmark Radar")}</span>
           </button>
-          <button className={mainSection === "gallery" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setGalleryOpened(true); setMainSection("gallery"); }} title="Gallery">
-            <Images size={16} /><span>Gallery</span>
+          <button className={mainSection === "gallery" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setGalleryOpened(true); setMainSection("gallery"); }} title={t("Open gallery")}>
+            <Images size={16} /><span>{t("Gallery")}</span>
           </button>
-          <button className={mainSection === "writing" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("writing")} title="Paper writing">
-            <FilePenLine size={16} /><span>Paper writing</span>
+          <button className={mainSection === "writing" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("writing")} title={t("Open paper writing")}>
+            <FilePenLine size={16} /><span>{t("Paper writing")}</span>
           </button>
         </section>
 
@@ -1666,28 +1681,22 @@ function App() {
         />
 
         <div className="sidebar-workspace">
-          <div className="theme-switcher" role="group" aria-label="Appearance">
-            <button className={themePreference === "charcoal" ? "active" : ""} onClick={() => setThemePreference("charcoal")} title="Use charcoal theme" aria-label="Use charcoal theme" aria-pressed={themePreference === "charcoal"}><Moon size={14} /></button>
-            <button className={themePreference === "system" ? "active" : ""} onClick={() => setThemePreference("system")} title={`Follow system appearance (currently ${systemAppearance === "charcoal" ? "dark" : "light"})`} aria-label="Follow system appearance" aria-pressed={themePreference === "system"}><Monitor size={14} /></button>
-            <button className={themePreference === "paper" ? "active" : ""} onClick={() => setThemePreference("paper")} title="Use paper theme" aria-label="Use paper theme" aria-pressed={themePreference === "paper"}><Sun size={14} /></button>
-          </div>
-          <button className="workspace-button" onClick={chooseWorkspace} title="Choose workspace" disabled={agentBusy}>
+          <button className="workspace-button" onClick={chooseWorkspace} title={t("Choose workspace")} disabled={agentBusy}>
             <span className="workspace-icon"><FolderOpen size={15} /></span>
-            <span className="workspace-copy"><strong>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "Choose workspace"}</strong><small>{workspaceReady ? threads.length ? `${threads.length} research chats` : "Ready for a new task" : "Opening workspace"}</small></span>
+            <span className="workspace-copy"><strong>{workspace ? workspace.split(/[\\/]/).filter(Boolean).at(-1) : t("Choose workspace")}</strong><small>{workspaceReady ? threads.length ? t("{count} research chats", { count: threads.length }) : t("Ready for a new task") : t("Opening workspace")}</small></span>
             <ChevronDown size={14} />
           </button>
+          <button className="sidebar-settings-button" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}><Settings size={15} strokeWidth={1.7} /></button>
         </div>
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>
 
       <section className={workbenchOpen ? "codex-main workbench-open" : "codex-main"} style={{ "--workbench-width": workbenchOpen ? `${workbenchWidth}px` : "0px" } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
-          {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title="Show sidebar" aria-label="Show sidebar" aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
-          <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? "Workspace connected" : "Opening workspace"}</span></div>
+          {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
+          <div className="conversation-title"><strong>{mainTitle}</strong><span>{workspaceReady ? t("Workspace connected") : t("Opening workspace")}</span></div>
           <div className="main-toolbar-actions">
-            {mainSection === "chat" && <button className="model-provider-button" onClick={() => setModelSettingsOpen(true)} title={`Model providers${activeModelConfig?.model ? ` · ${activeModelConfig.model}` : ""}`}><Orbit size={17} strokeWidth={1.8} /><span>{activeModelConfig?.model || "Choose model"}</span></button>}
-            {mainSection === "chat" && <button className="quiet-icon-button" onClick={() => setWebSearchSettingsOpen(true)} title="Web search settings" aria-label="Web search settings"><Globe2 size={17} /></button>}
-            <button className={workbenchOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={toggleWorkbench} title={workbenchOpen ? "Hide workbench (Ctrl+`)" : "Show workbench (Ctrl+`)"} aria-label={workbenchOpen ? "Hide workbench" : "Show workbench"} aria-pressed={workbenchOpen}>
+            <button className={workbenchOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={toggleWorkbench} title={workbenchOpen ? `${t("Hide workbench")} (Ctrl+\`)` : `${t("Show workbench")} (Ctrl+\`)`} aria-label={workbenchOpen ? t("Hide workbench") : t("Show workbench")} aria-pressed={workbenchOpen}>
               <PanelRight size={18} />
             </button>
           </div>
@@ -1753,7 +1762,7 @@ function App() {
           dirtyFileCount={dirtyArtifactPaths.size}
           onTabChange={setWorkbenchTab}
           onWidthChange={(width) => setWorkbenchWidth(clampWorkbenchWidth(width))}
-          onOpenTerminalSettings={() => { setTerminalSettingsMode("settings"); setTerminalSettingsOpen(true); }}
+          onOpenTerminalSettings={() => { setSettingsSection("terminal"); setSettingsOpen(true); }}
           journey={<JourneyView
             thread={activeThread ?? null}
             events={trajectoryEvents}
@@ -1816,9 +1825,25 @@ function App() {
         onCreateArtifact={() => void createArtifact()}
         onAddEvidence={addEvidence}
       />
-      <TerminalSettingsModal open={terminalSettingsOpen} mode={terminalSettingsMode} settings={terminalSettings} workspace={workspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
-      <ModelSettingsModal bridge={desktopBridge} open={modelSettingsOpen} onClose={() => setModelSettingsOpen(false)} onSaved={setActiveModelConfig} />
-      <WebSearchSettingsModal bridge={desktopBridge} open={webSearchSettingsOpen} onClose={() => setWebSearchSettingsOpen(false)} />
+      <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={workspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
+      <SettingsModal
+        open={settingsOpen}
+        section={settingsSection}
+        onSectionChange={setSettingsSection}
+        onClose={() => setSettingsOpen(false)}
+        themePreference={themePreference}
+        systemAppearance={systemAppearance}
+        onThemePreferenceChange={setThemePreference}
+        bridge={desktopBridge}
+        onModelSaved={setActiveModelConfig}
+        workspace={workspace}
+        workspaceReady={workspaceReady}
+        agentBusy={agentBusy}
+        onChooseWorkspace={() => void chooseWorkspace()}
+        terminalSettings={terminalSettings}
+        onSaveTerminalSettings={saveTerminalSettings}
+        onOpenExternalTerminal={openExternalTerminal}
+      />
       <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
       <ThreadRemoveModal thread={threadToRemove} error={threadRemoveError} onClose={() => { setThreadRemoveError(""); setThreadToRemove(null); }} onRemove={() => threadToRemove && void removeThread(threadToRemove)} />
