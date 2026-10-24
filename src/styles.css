@@ -1902,6 +1902,18 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
 .paper-workbench-header, .paper-reader-tabs, .paper-reader-toolbar, .paper-ai-panel,
 .paper-ai-panel > header, .paper-ai-compose, .paper-ai-context, .codebase-toolbar,
 .codebase-explorer, .codebase-editor > header { border-color: var(--night-line); }
+.paper-workbench-header { background: var(--night-panel); }
+.reader-title span { color: var(--night-muted); }
+.reader-title strong { color: var(--night-ink); }
+.reader-header-divider { background: var(--night-line); }
+.reader-back-button { color: var(--night-ink-soft); }
+.reader-back-button:hover { color: var(--night-ink); background: var(--night-panel-soft); }
+.paper-workbench-header .reader-icon-button,
+.paper-workbench-header .reader-tool-button { color: var(--night-muted); }
+.paper-workbench-header .reader-icon-button:hover,
+.paper-workbench-header .reader-tool-button:hover { color: var(--night-ink); background: var(--night-panel-soft); }
+.reader-ask-button { color: var(--night-ink-soft); background: var(--night-panel-soft); border-color: var(--night-line); }
+.reader-ask-button:hover, .reader-ask-button.active { color: var(--night-ink); background: #343434; border-color: #4a4a4a; }
 .paper-reader-tabs button { color: #858797; }.paper-reader-tabs button.active { color: #c7c2ff; border-color: var(--night-accent); }
 .paper-reader-tabs small { color: #8c8e9b; background: #20222b; }
 .paper-reader-toolbar { color: var(--night-ink-soft); }
