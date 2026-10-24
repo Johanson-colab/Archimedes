@@ -23,6 +23,7 @@ import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import ConferenceDiscovery from "./ConferenceDiscovery";
+import PaperReviewWorkbench from "./PaperReviewWorkbench";
 import { equationTokens, findEquationRects } from "./pdf-equations";
 import { applyPdfSearchHighlights } from "./pdf-search-highlights";
 import { findPdfHorizontalRules, findRuledTableRect, findTextTableRect } from "./pdf-table-regions";
@@ -494,7 +495,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [chatWidth, setChatWidth] = useState(readPaperChatWidth);
   const chatResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
-  const [readerView, setReaderView] = useState<"paper" | "project" | "codebase">("paper");
+  const [readerView, setReaderView] = useState<"paper" | "review" | "project" | "codebase">("paper");
   const [codebaseVisited, setCodebaseVisited] = useState(false);
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
   const [checkout, setCheckout] = useState<RepositoryCheckout | null>(null);
@@ -857,12 +858,12 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <div className="reader-header-actions">
         {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title={t("Open source")}><ExternalLink size={16} /></a>}
         <button className="reader-icon-button" title={paper.starred ? t("Unstar paper") : t("Star paper")} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={16} fill={paper.starred ? "currentColor" : "none"} /></button>
-        <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>{t("Ask AI")}</span></button>
+        {readerView !== "review" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>{t("Ask AI")}</span></button>}
       </div>
     </header>
-    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />{t("Original paper")}</button><button role="tab" disabled title={t("Review")}><BookOpen size={16} />{t("Review")} <small>{t("Coming soon")}</small></button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
+    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />{t("Original paper")}</button><button className={readerView === "review" ? "active" : ""} role="tab" aria-selected={readerView === "review"} onClick={() => { setReaderView("review"); setChatOpen(false); }}><BookOpen size={16} />{t("Review")}</button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
-      {readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
+      {readerView === "review" ? <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} onAgentRun={onAgentRun} /> : readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
         {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
         {ready ? <>
           <div className="paper-reader-toolbar">
