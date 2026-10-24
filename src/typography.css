@@ -1,0 +1,172 @@
+/*
+ * Warm typography scale (issue #67, phase B).
+ *
+ * Phase B intentionally keeps the system UI font stack and only adjusts the
+ * palette, type scale, line height, and weight hierarchy. Phase A will add
+ * bundled Geist Sans / Geist Mono and a font preference.
+ */
+
+:root {
+  --night-ground: #141110;
+  --night-sidebar: #1b1816;
+  --night-panel: #211e1c;
+  --night-panel-raised: #262220;
+  --night-panel-soft: #2b2724;
+  --night-line: #3a332f;
+  --night-line-soft: #2d2825;
+  --night-ink: #eae8e6;
+  --night-ink-soft: #c9c4c0;
+  --night-muted: #a5a09c;
+  --night-faint: #7d7672;
+}
+
+:root[data-theme="paper"] {
+  --night-ground: #faf7f2;
+  --night-sidebar: #f4f0e9;
+  --night-panel: #fffdf8;
+  --night-panel-raised: #f7f3ec;
+  --night-panel-soft: #efe9df;
+  --night-line: #e6ded4;
+  --night-line-soft: #eee8df;
+  --night-ink: #2c2826;
+  --night-ink-soft: #5f5a54;
+  --night-muted: #756f6c;
+  --night-faint: #a8a19a;
+}
+
+/* Warm surface pass. */
+html:not([data-theme="paper"]) .codex-shell,
+html:not([data-theme="paper"]) .codex-main,
+html:not([data-theme="paper"]) .main-view { background: var(--night-ground); }
+html:not([data-theme="paper"]) .codex-sidebar { background: var(--night-sidebar); }
+html:not([data-theme="paper"]) .main-toolbar { background: #141110; border-color: var(--night-line-soft); }
+html:not([data-theme="paper"]) .right-workbench { background: #181513; border-color: var(--night-line); }
+html:not([data-theme="paper"]) .workbench-header { background: #141110; border-color: var(--night-line); }
+html:not([data-theme="paper"]) .workbench-tab:hover { background: #24201d; }
+html:not([data-theme="paper"]) .workbench-tab.active { background: #2a2622; box-shadow: inset 0 0 0 1px #453d31; }
+html:not([data-theme="paper"]) .settings-modal { background: #181513; border-color: #3a332f; }
+html:not([data-theme="paper"]) .settings-sidebar { background: #141110; border-color: #2d2825; }
+html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-color: #3a332f; }
+
+.theme-paper.codex-shell,
+.theme-paper .codex-main,
+.theme-paper .main-view { background: var(--night-ground); }
+.theme-paper .codex-sidebar { background: var(--night-sidebar); }
+.theme-paper .main-toolbar { background: rgba(255, 253, 248, .96); border-color: var(--night-line-soft); }
+
+/* Application chrome. */
+.codex-nav-item { font-size: 14px; line-height: 1.4; }
+.new-task-button { font-size: 14px; }
+.codex-sidebar-label { font-size: 11px; letter-spacing: .02em; }
+.projects-heading { font-size: 11px; }
+.project-select span { font-size: 12px; }
+.project-select small { font-size: 10px; }
+.project-chat-open { font-size: 11px; }
+.project-chat-empty, .recent-empty { font-size: 10px; }
+.archived-toggle { font-size: 11px; }
+.workspace-copy strong { font-size: 13px; }
+.workspace-copy small { font-size: 11px; }
+.conversation-title strong { font-size: 14px; font-weight: 600; line-height: 1.35; }
+.conversation-title span { font-size: 11px; line-height: 1.35; }
+
+/* Conversation. */
+.message-markdown { font-size: 15px; line-height: 1.68; }
+.message-markdown h1 { font-size: 24px; letter-spacing: -.02em; }
+.message-markdown h2 { font-size: 20px; letter-spacing: -.015em; }
+.message-markdown h3 { font-size: 16px; }
+.message-markdown h4 { font-size: 15px; }
+.conversation-composer textarea { font-size: 14px; line-height: 1.55; }
+
+/* Library and paper reader. */
+.library-page-header h1,
+.library-detail-header h1 { font-size: 28px; line-height: 1.2; letter-spacing: -.025em; }
+.library-page-header p,
+.library-detail-header p { font-size: 13px; line-height: 1.55; }
+.library-card-copy strong { font-size: 16px; }
+.library-card-copy small { font-size: 12px; line-height: 1.55; }
+.library-card-meta { font-size: 12px; }
+.library-paper-row strong { font-size: 13px; line-height: 1.4; }
+.library-paper-row small,
+.library-paper-row .paper-row-year { font-size: 11px; }
+.paper-inspector-kicker { font-size: 10px; }
+.paper-inspector-title h2 { font-size: 24px; line-height: 1.3; letter-spacing: -.02em; }
+.paper-authors { font-size: 12px; line-height: 1.55; }
+.paper-abstract { font-size: 14px; line-height: 1.65; }
+.paper-record-row label,
+.paper-notes { font-size: 11px; }
+.paper-record-row select,
+.paper-notes textarea { font-size: 12px; }
+.reader-title span { font-size: 9px; }
+.reader-title strong { font-size: 13px; }
+.reader-back-button { font-size: 11px; }
+
+/* Knowledge modules. */
+.paper-writing-header h1 { font-size: 24px; line-height: 1.25; letter-spacing: -.02em; }
+.paper-writing-header p { font-size: 11px; line-height: 1.5; }
+.gallery-header .eyebrow { font-size: 11px; }
+.gallery-header h1 { font-size: 30px; line-height: 1.15; letter-spacing: -.03em; }
+.gallery-header p { font-size: 14px; line-height: 1.55; }
+.gallery-card-body h2 { font-size: 15px; line-height: 1.4; }
+.gallery-card-body p { font-size: 12px; }
+.gallery-facet-label { font-size: 12px; }
+.gallery-facet-options button { font-size: 12px; }
+.gallery-results-bar { font-size: 12px; }
+.daily-paper-row h2 { font-size: 15px; line-height: 1.4; }
+.daily-paper-row p { font-size: 12px; line-height: 1.55; }
+
+/* Settings. */
+.settings-header h2 { font-size: 24px; line-height: 1.25; letter-spacing: -.02em; }
+.settings-header p { font-size: 12px; line-height: 1.5; }
+.settings-brand strong { font-size: 14px; }
+.settings-brand span { font-size: 10px; }
+.settings-version { font-size: 9px; }
+.settings-nav-item { height: 34px; font-size: 12px; }
+.settings-card { padding: 18px; }
+.settings-card-heading strong { font-size: 13px; line-height: 1.35; }
+.settings-card-heading p { font-size: 11px; line-height: 1.5; }
+.settings-field { font-size: 11px; }
+.settings-field select { height: 38px; font-size: 13px; }
+.settings-segmented button { height: 32px; min-width: 76px; font-size: 12px; }
+.settings-theme-option strong { font-size: 12px; }
+.settings-theme-option small { font-size: 10px; }
+
+/* Right workbench. */
+.workbench-tab { font-size: 11px; font-weight: 600; }
+.workbench-tab-badge { font-size: 9px; }
+.journey-intro span { font-size: 10px; }
+.journey-intro strong { font-size: 14px; font-weight: 600; }
+.journey-status { font-size: 10px; }
+.journey-goal-head span,
+.journey-goal-head strong { font-size: 10px; }
+.journey-goal p { font-size: 12px; line-height: 1.55; }
+.journey-progress-meta { font-size: 9px; }
+.journey-block-title { font-size: 11px; }
+.journey-block-title-row button,
+.journey-footer button { font-size: 10px; }
+.journey-phase strong { font-size: 11px; }
+.journey-phase small { font-size: 9px; }
+.journey-signals span { font-size: 9px; }
+.journey-signals strong { font-size: 12px; }
+.journey-milestones strong { font-size: 11px; }
+.journey-milestones small,
+.journey-empty { font-size: 9px; }
+.journey-note { font-size: 10px; line-height: 1.55; }
+.journey-footer { font-size: 9px; }
+.trajectory-view { font-size: 12px; }
+.trajectory-stat span,
+.trajectory-section-title { font-size: 10px; }
+.trajectory-stat strong { font-size: 12px; }
+.trajectory-summary { font-size: 11px; line-height: 1.55; }
+.trajectory-section-head h3 { font-size: 13px; }
+.trajectory-section-head p { font-size: 10px; }
+.trajectory-event-copy strong { font-size: 11px; }
+.trajectory-event-copy small,
+.trajectory-event-time,
+.trajectory-event-meta { font-size: 9px; }
+.trajectory-json { font-size: 10px; line-height: 1.55; }
+
+/* Dialogs. */
+.workspace-modal > p { font-size: 13px; line-height: 1.6; }
+.workspace-modal label { font-size: 12px; }
+.workspace-modal input,
+.workspace-modal textarea { font-size: 13px; }
