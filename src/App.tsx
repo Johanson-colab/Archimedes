@@ -2487,10 +2487,10 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
             <button className={mode === "edit" ? "active" : ""} onClick={() => setMode("edit")}>Edit</button>
           </div>
           {editing && <button className="secondary-button artifact-comment-button" disabled={!selection} onClick={() => setCommentOpen(true)} title={selection ? `Comment on lines ${selection.startLine}${selection.endLine !== selection.startLine ? `-${selection.endLine}` : ""}` : "Select text in the editor to comment"}><MessageSquareText size={12} />Comment</button>}
-          <span className={`artifact-save-state ${saving ? "saving" : dirty ? "unsaved" : "saved"}`}>
-            {saving ? <LoaderCircle className="spin" size={11} /> : dirty ? <CircleDot size={11} /> : <Check size={11} />}
-            {saving ? "Saving" : dirty ? "Unsaved" : "Saved"}
-          </span>
+          {(saving || dirty) && <span className={`artifact-save-state ${saving ? "saving" : "unsaved"}`}>
+            {saving ? <LoaderCircle className="spin" size={11} /> : <CircleDot size={11} />}
+            {saving ? "Saving" : "Unsaved"}
+          </span>}
           <button className="secondary-button artifact-save-button" disabled={!dirty || saving} onClick={onSave} title="Save (Ctrl/Cmd+S)"><Save size={12} />Save</button>
         </div>}
       </div>}
@@ -2700,7 +2700,7 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   }
 
   const browser = <aside className="artifact-browser">
-    <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong></div>
+    {!compact && <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong></div>}
     {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
@@ -2746,7 +2746,7 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
         <div className="artifact-workbench-location">
           {showingEditor && !split
             ? <button className="artifact-workbench-back" onClick={() => setCompactPane("browse")} title="Back to files"><ChevronLeft size={13} /><span>Files</span></button>
-            : <><FolderOpen size={13} /><strong>Files</strong></>}
+            : <strong className="artifact-workbench-workspace" title={workspace}>{workspaceName}</strong>}
           {showingEditor && file && openFiles.length <= 1 && <span className="artifact-workbench-file" title={file.path}>{file.name}</span>}
         </div>
         <div className="artifact-workbench-actions">
