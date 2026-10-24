@@ -43,8 +43,9 @@
   --radius-control: 6px;
 }
 
-html[data-ui-zoom="css"][data-text-size="small"] { --ui-scale: .9; }
-html[data-ui-zoom="css"][data-text-size="large"] { --ui-scale: 1.1; }
+html[data-ui-zoom="css"][data-text-size="small"] { --ui-scale: 1; }
+html[data-ui-zoom="css"][data-text-size="default"] { --ui-scale: 1.1; }
+html[data-ui-zoom="css"][data-text-size="large"] { --ui-scale: 1.2; }
 
 /* Original-paper reader: the PDF is the primary work surface. */
 .paper-workbench-page { width: 100%; max-width: none; height: 100%; min-height: 0; grid-template-rows: 58px 48px minmax(0, 1fr); background: #f7f7f5; }

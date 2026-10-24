@@ -64,8 +64,10 @@ test("text size has three presets and scales the interface", () => {
   assert.match(settings, /\{ id: "small", label: "Small" \}/);
   assert.match(settings, /\{ id: "default", label: "Default" \}/);
   assert.match(settings, /\{ id: "large", label: "Large" \}/);
-  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="small"\] \{ --ui-scale: \.9; \}/);
-  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="large"\] \{ --ui-scale: 1\.1; \}/);
+  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="small"\] \{ --ui-scale: 1; \}/);
+  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="default"\] \{ --ui-scale: 1\.1; \}/);
+  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="large"\] \{ --ui-scale: 1\.2; \}/);
+  assert.match(i18n, /const TEXT_SCALE: Record<TextSize, number> = \{ small: 1, default: 1\.1, large: 1\.2 \};/);
   assert.match(css, /\.codex-shell \{[^}]*zoom: var\(--ui-scale, 1\)/);
   assert.match(i18n, /root\.dataset\.uiZoom = "native"/);
   assert.match(fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8"), /setUiZoom: \(factor\) => ipcRenderer\.invoke\("window:set-ui-zoom", factor\)/);
