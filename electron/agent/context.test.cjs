@@ -21,6 +21,20 @@ test("uses the Free chat instructions without falling back to Idea spark", () =>
   assert.doesNotMatch(conversation.messages[0].content, /Produce a small set of novel, testable ideas/);
 });
 
+test("builds a conversation from an in-memory transient turn", () => {
+  const conversation = prepareConversation({
+    thread: {
+      context_summary: "",
+      turns: [{ id: "transient-turn", user_message: "Read the attached paper.", assistant_message: "" }],
+    },
+    currentTurnId: "transient-turn",
+    mode: "paper-review",
+  });
+
+  assert.match(conversation.messages.at(-1).content, /Read the attached paper/);
+  assert.match(conversation.messages[0].content, /Operate in Paper review mode/);
+});
+
 test("adds the selected reasoning policy to the system instructions", () => {
   const conversation = prepareConversation({
     thread: {

@@ -805,7 +805,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
 
   try {
     const context = prepareConversation({
-      thread: transient ? { id: thread.id, title: thread.title, mode, context_summary: "", turns: [] } : store.getResearchThreadContext(thread.id),
+      // Transient workers do not persist turns, but prepareConversation still
+      // needs the current turn in its in-memory thread to build the request.
+      thread: transient ? { id: thread.id, title: thread.title, mode, context_summary: "", turns: [turn] } : store.getResearchThreadContext(thread.id),
       currentTurnId: turn.id,
       attachmentManifest: attachedContextManifest(contextItems),
       mode,
