@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useUISettings } from "./i18n";
+import { eventHasError, isUnresolvedError, latestAnswerSequence } from "./journeyEventState";
 import { useDialogFocus } from "./useDialogFocus";
 
 type JourneyViewProps = {
@@ -142,22 +143,6 @@ function collectSources(payload: unknown, sources: Set<string>): void {
   for (const value of Object.values(item)) {
     if (value && typeof value === "object") collectSources(value, sources);
   }
-}
-
-function eventHasError(event: ResearchEvent): boolean {
-  const payload = record(event.payload);
-  if (event.type.toLowerCase().includes("error")) return true;
-  if (typeof payload.error === "string" && payload.error.trim().length > 0) return true;
-  if (event.type === "tool_result" || event.type === "tool.result") {
-    const content = payload.content;
-    if (typeof content === "string") {
-      try {
-        const parsed = JSON.parse(content);
-        if (parsed && typeof parsed === "object" && typeof parsed.error === "string" && parsed.error.trim()) return true;
-      } catch { /* plain text tool output */ }
-    }
-  }
-  return false;
 }
 
 function collectSummarySources(events: ResearchEvent[]): JourneySourceInput[] {
@@ -379,10 +364,11 @@ function buildEvidence(events: ResearchEvent[], pendingAction: AgentAction | nul
   const sources = new Set<string>();
   const artifacts = new Set<string>();
   let open = pendingAction ? 1 : 0;
+  const latestAnswer = latestAnswerSequence(events);
   for (const event of events) {
     for (const source of eventSources(event)) sources.add(source);
     for (const file of eventFiles(event)) files.add(file);
-    if (eventHasError(event)) open += 1;
+    if (isUnresolvedError(event, latestAnswer)) open += 1;
     if (event.type === "tool_call" && (toolName(event) === "write_file" || toolName(event) === "write_artifact")) {
       const path = text(record(record(event.payload).arguments).path) || text(record(record(event.payload).arguments).file_path);
       if (path) artifacts.add(path);
@@ -618,7 +604,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   const firstTime = timeValue(events[0]?.created_at) || timeValue(thread?.created_at);
   const lastTime = timeValue(events.at(-1)?.created_at) || timeValue(thread?.updated_at) || Date.now();
   const duration = formatDuration(firstTime, lastTime, t);
-  const hasErrors = events.some(eventHasError);
+  const hasErrors = evidence.open > (pendingAction ? 1 : 0);
   const status: JourneyData["status"] = !steps ? "not-started" : pendingAction ? "waiting" : agentBusy || thread?.status === "running" ? "running" : hasErrors ? "attention" : chapters.every((chapter) => chapter.status === "done") ? "complete" : "attention";
   const ruleBrief = useMemo(() => buildBrief({ steps, chapters: sourceChapters, evidence, events, pendingAction, thread, settings }, t), [events, evidence, pendingAction, settings, sourceChapters, steps, thread, t]);
   const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps }, t);

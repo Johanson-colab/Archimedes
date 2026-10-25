@@ -15,6 +15,7 @@ const preload = fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const summarizer = fs.readFileSync(path.join(root, "electron", "journey-summarizer.cjs"), "utf8");
 const snapshots = fs.readFileSync(path.join(root, "electron", "journey-snapshots.cjs"), "utf8");
+const eventState = fs.readFileSync(path.join(root, "src", "journeyEventState.ts"), "utf8");
 const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
 
 test("journey has a dedicated settings section with all controls", () => {
@@ -68,6 +69,11 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(journey, /function buildChapters/);
   assert.match(journey, /function buildEpisodes/);
   assert.match(journey, /function buildEvidence/);
+  assert.match(journey, /isUnresolvedError/);
+  assert.match(journey, /latestAnswerSequence/);
+  assert.match(journey, /hasErrors = evidence\.open/);
+  assert.match(eventState, /export function isUnresolvedError/);
+  assert.match(eventState, /status === "completed"/);
   assert.match(journey, /function buildBrief/);
   assert.match(journey, /journey-scrubber/);
   assert.match(journey, /journey-chapters/);
