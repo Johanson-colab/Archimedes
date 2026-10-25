@@ -312,26 +312,27 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .daily-paper-row p { font-size: 12px; line-height: 1.55; }
 
 /* Settings. */
-.settings-header h2 { font-size: 24px; line-height: 1.25; letter-spacing: -.02em; }
+.settings-header h2 { font-size: 20px; line-height: 1.25; letter-spacing: -.015em; }
 .settings-header p { font-size: 12px; line-height: 1.5; }
-.settings-brand strong { font-size: 14px; }
+.settings-brand strong { font-size: 13px; }
 .settings-brand span { font-size: 11px; }
 .settings-version { font-size: 11px; }
 .settings-nav-item { height: 34px; font-size: 13px; }
-.settings-card { padding: 18px; }
-.settings-card-heading strong { font-size: 14px; line-height: 1.35; }
-.settings-card-heading p { font-size: 12px; line-height: 1.5; }
-.settings-field { font-size: 12px; }
-.settings-field select { height: 38px; font-size: 13px; }
-.settings-segmented button { height: 32px; min-width: 76px; font-size: 12px; }
-.settings-theme-option strong { font-size: 13px; }
-.settings-theme-option small { font-size: 11px; }
+.settings-section-title { font-size: 12px; line-height: 1.4; }
+.settings-row-title { font-size: 13px; line-height: 1.35; }
+.settings-row-description { font-size: 12px; line-height: 1.5; }
+.settings-row-hint { font-size: 11px; line-height: 1.4; }
+.settings-select { font-size: 12px; }
+.settings-choice button { font-size: 12px; }
+.settings-slider-label { font-size: 12px; }
+.settings-slider-value,
+.settings-slider-scale button { font-size: 11px; }
 .settings-actions button { font-size: 12px; }
-.settings-note { font-size: 11px; }
-.settings-workspace-path { font-size: 11px; }
+.settings-path { font-size: 11px; }
 .settings-empty { font-size: 12px; }
+.settings-about strong { font-size: 18px; }
 .settings-about p { font-size: 12px; }
-.settings-about dt { font-size: 11px; }
+.settings-about dt,
 .settings-about dd { font-size: 11px; }
 
 /* Model and web-data settings. */

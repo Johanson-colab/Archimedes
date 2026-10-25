@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type Language = "en" | "zh";
-export type TextSize = "small" | "default" | "large";
+export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
 export type InterfaceFont = "system" | "geist";
 export type MonoFont = "system" | "geist-mono";
 export type ChatVerbosity = "low" | "medium" | "high";
@@ -11,7 +11,7 @@ const TEXT_SIZE_STORAGE_KEY = "archimedes-text-size";
 const INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";
 const MONO_FONT_STORAGE_KEY = "archimedes-mono-font";
 const CHAT_VERBOSITY_STORAGE_KEY = "archimedes-chat-verbosity";
-const TEXT_SCALE: Record<TextSize, number> = { small: 1, default: 1.1, large: 1.2 };
+const TEXT_SCALE: Record<TextSize, number> = { smaller: 1, small: 1.05, default: 1.1, large: 1.15, larger: 1.2 };
 
 const translations: Record<string, string> = {
   // Application chrome
@@ -101,10 +101,19 @@ const translations: Record<string, string> = {
   "English": "English",
   "简体中文": "简体中文",
   "Text size": "文字大小",
+  "Smaller": "更小",
   "Small": "小",
   "Default": "默认",
   "Large": "大",
+  "Larger": "更大",
   "Text size scales the whole interface for easier reading.": "文字大小会缩放整个界面，便于阅读。",
+  "Interface": "界面",
+  "Conversation": "对话",
+  "Fonts": "字体",
+  "Folder": "文件夹",
+  "Choose how Archimedes looks. System follows the operating system.": "选择 Archimedes 的外观。跟随系统会使用操作系统的设置。",
+  "Used for conversation, navigation, and interface text.": "用于对话、导航与界面文字。",
+  "Used for code, terminal output, and trajectory detail.": "用于代码、终端输出与轨迹详情。",
   "Appearance": "外观",
   "Interface theme": "界面主题",
   "Theme and fonts": "主题与字体",
@@ -131,6 +140,7 @@ const translations: Record<string, string> = {
   "Workspace": "工作区",
   "Current folder and access": "当前文件夹与访问权限",
   "About": "关于",
+  "Build information": "版本信息",
   "Version": "版本",
   "Local-first AI for research.": "本地优先的研究 AI。",
   "Current workspace": "当前工作区",
@@ -347,7 +357,7 @@ function readLanguage(): Language {
 function readTextSize(): TextSize {
   if (typeof window === "undefined") return "default";
   const stored = window.localStorage.getItem(TEXT_SIZE_STORAGE_KEY);
-  return stored === "small" || stored === "large" ? stored : "default";
+  return stored === "smaller" || stored === "small" || stored === "large" || stored === "larger" ? stored : "default";
 }
 
 function readInterfaceFont(): InterfaceFont {
