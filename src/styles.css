@@ -650,7 +650,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .conversation-thread { width: min(100%, 820px); min-height: 100%; margin: 0 auto; padding: 52px 30px 34px; }
 .conversation-load-history { display: flex; min-height: 31px; align-items: center; justify-content: center; margin: 0 auto 26px; padding: 0 11px; color: #47695a; background: #f5f8f5; border: 1px solid #d5e1d8; border-radius: 5px; font-size: 10px; font-weight: 700; }
 .conversation-load-history:hover { color: #234b3b; background: #eaf2ec; border-color: #bcd1c2; }
-.conversation-message { display: flex; gap: 13px; margin-bottom: 31px; }
+.conversation-message { display: flex; gap: 13px; margin-bottom: 31px; content-visibility: auto; contain-intrinsic-size: auto 240px; }
 .conversation-message.user { justify-content: flex-end; }
 .assistant-mark { width: 27px; height: 27px; flex: 0 0 auto; margin-top: 1px; border-radius: 7px; }
 .conversation-message-copy { min-width: 0; }

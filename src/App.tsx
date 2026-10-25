@@ -1,4 +1,4 @@
-﻿import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
+﻿import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -1856,6 +1856,112 @@ function App() {
   );
 }
 
+const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile }: {
+  messages: Message[];
+  events: TimelineEvent[];
+  trajectoryEvents: ResearchEvent[];
+  agentBusy: boolean;
+  interrupting: boolean;
+  pendingAction: PendingAction | null;
+  changeSets: WorkspaceChangeSet[];
+  welcomeVisible: boolean;
+  onWelcomeAction: (action: ResearchWelcomeAction) => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onOpenFile: (filePath: string) => void;
+}) {
+  const { t } = useUISettings();
+  const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
+  const historyExpandedRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const followOutputRef = useRef(true);
+  const [followingOutput, setFollowingOutput] = useState(true);
+  const visibleMessages = useMemo(() => messages.slice(historyStart), [historyStart, messages]);
+  const hiddenMessageCount = historyStart;
+  const lastUserIndex = useMemo(
+    () => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1),
+    [visibleMessages],
+  );
+
+  const scrollToLatest = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
+  }, []);
+
+  const updateFollowState = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 56;
+    if (followOutputRef.current !== isNearBottom) {
+      followOutputRef.current = isNearBottom;
+      setFollowingOutput(isNearBottom);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (welcomeVisible) {
+      followOutputRef.current = true;
+      setFollowingOutput(true);
+      const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 0, behavior: "auto" }));
+      return () => cancelAnimationFrame(frame);
+    }
+    if (!followOutputRef.current) return;
+    const frame = requestAnimationFrame(scrollToLatest);
+    return () => cancelAnimationFrame(frame);
+  }, [agentBusy, changeSets, messages, pendingAction, scrollToLatest, welcomeVisible]);
+
+  useEffect(() => {
+    const tailStart = Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT);
+    setHistoryStart((current) => historyExpandedRef.current ? Math.min(current, tailStart) : tailStart);
+  }, [messages.length]);
+
+  return <div className="conversation-scroll-area">
+    <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
+      {welcomeVisible ? <ResearchWelcome onSelect={onWelcomeAction} /> : <div className="conversation-thread">
+        {hiddenMessageCount > 0 && <button className="conversation-load-history" onClick={() => {
+          historyExpandedRef.current = true;
+          setHistoryStart((current) => Math.max(0, current - HISTORY_MESSAGE_PAGE_SIZE));
+        }}>
+          {t("Show {count} earlier {unit}", { count: Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount), unit: t(Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount) === 1 ? "message" : "messages") })}
+        </button>}
+        {visibleMessages.slice(0, lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
+
+        {lastUserIndex >= 0 && <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />}
+
+        {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
+
+        {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
+
+        {pendingAction && (
+          <section className="conversation-approval">
+            <div className="approval-icon">{pendingAction.kind === "write" ? <FileText size={16} /> : <SquareTerminal size={16} />}</div>
+            <div className="approval-content">
+              <span>{t(pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval")}</span>
+              <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
+              {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
+              {pendingAction.kind === "write" && pendingAction.payload.content && <pre className="proposal-preview">{pendingAction.payload.content.slice(0, 260)}</pre>}
+              <p>{t(pendingAction.kind === "write" ? "This will write a file inside the selected workspace." : "This will run in the selected workspace and record its output.")}</p>
+              <div className="approval-actions">
+                <button className="secondary-button" onClick={onReject}><X size={14} />{t("Dismiss")}</button>
+                <button className="primary-button" onClick={onApprove}>{pendingAction.kind === "write" ? <Check size={14} /> : <Play size={14} />}{t(pendingAction.kind === "write" ? "Apply" : "Run")}</button>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>}
+    </div>
+    {!followingOutput && <button className="conversation-jump-latest" onClick={() => {
+      followOutputRef.current = true;
+      setFollowingOutput(true);
+      scrollToLatest();
+    }} title={t("Jump to latest message")}>
+      <ArrowDown size={15} />
+      <span>{t("Latest")}</span>
+    </button>}
+  </div>;
+});
+
 function ConversationView({ messages, events, trajectoryEvents, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
@@ -1901,13 +2007,9 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [composerError, setComposerError] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const reasoningMenuRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const followOutputRef = useRef(true);
-  const [followingOutput, setFollowingOutput] = useState(true);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const welcomeVisible = showWelcome && !welcomeDismissed;
 
@@ -1921,9 +2023,6 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
 
   const activeStage = stageForMode(researchMode);
   const predictedMode = inferResearchMode(prompt, researchMode);
-  const visibleMessages = messages.slice(historyStart);
-  const hiddenMessageCount = historyStart;
-  const lastUserIndex = visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1);
   const messageContextCharacters = useMemo(
     () => messages.reduce((total, message) => total + message.text.length, 0),
     [messages],
@@ -1943,38 +2042,6 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
   const availableThinkingEfforts = reasoningEfforts.filter((effort) => modelCapabilities.thinkingEfforts.includes(effort.id));
   const availableContextLengths = contextLengths.filter((length) => modelCapabilities.contextLengths.includes(length.id));
-
-  const scrollToLatest = () => {
-    const container = scrollRef.current;
-    if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
-  };
-
-  const updateFollowState = () => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 56;
-    if (followOutputRef.current !== isNearBottom) {
-      followOutputRef.current = isNearBottom;
-      setFollowingOutput(isNearBottom);
-    }
-  };
-
-  useEffect(() => {
-    if (welcomeVisible) {
-      followOutputRef.current = true;
-      setFollowingOutput(true);
-      const frame = requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 0, behavior: "auto" }));
-      return () => cancelAnimationFrame(frame);
-    }
-    if (!followOutputRef.current) return;
-    const frame = requestAnimationFrame(scrollToLatest);
-    return () => cancelAnimationFrame(frame);
-  }, [messages, agentBusy, pendingAction, changeSets, welcomeVisible]);
-
-  useEffect(() => {
-    setHistoryStart((current) => Math.min(current, Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT)));
-  }, [messages.length]);
 
   useEffect(() => {
     if (!reasoningMenuOpen) return;
@@ -2112,13 +2179,13 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
     onResearchMode(stage.mode);
   }
 
-  function selectWelcomeWorkflow(action: ResearchWelcomeAction) {
+  const selectWelcomeWorkflow = useCallback((action: ResearchWelcomeAction) => {
     onWelcomeAction(action);
     if (action === "idea") {
       setWelcomeDismissed(true);
       requestAnimationFrame(() => composerRef.current?.focus());
     }
-  }
+  }, [onWelcomeAction]);
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout has-journey"}>
     {!welcomeVisible && <section className="research-journey" aria-label={t("Research progress")}>
@@ -2158,47 +2225,20 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
         </div>;
       })()}
     </section>}
-    <div className="conversation-scroll-area">
-    <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
-      {welcomeVisible ? <ResearchWelcome onSelect={selectWelcomeWorkflow} /> : <div className="conversation-thread">
-        {hiddenMessageCount > 0 && <button className="conversation-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - HISTORY_MESSAGE_PAGE_SIZE))}>
-          {t("Show {count} earlier {unit}", { count: Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount), unit: t(Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount) === 1 ? "message" : "messages") })}
-        </button>}
-        {visibleMessages.slice(0, lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
-
-        {lastUserIndex >= 0 && <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />}
-
-        {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
-
-        {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
-
-        {pendingAction && (
-          <section className="conversation-approval">
-            <div className="approval-icon">{pendingAction.kind === "write" ? <FileText size={16} /> : <SquareTerminal size={16} />}</div>
-            <div className="approval-content">
-              <span>{t(pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval")}</span>
-              <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
-              {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
-              {pendingAction.kind === "write" && pendingAction.payload.content && <pre className="proposal-preview">{pendingAction.payload.content.slice(0, 260)}</pre>}
-              <p>{t(pendingAction.kind === "write" ? "This will write a file inside the selected workspace." : "This will run in the selected workspace and record its output.")}</p>
-              <div className="approval-actions">
-                <button className="secondary-button" onClick={onReject}><X size={14} />{t("Dismiss")}</button>
-                <button className="primary-button" onClick={onApprove}>{pendingAction.kind === "write" ? <Check size={14} /> : <Play size={14} />}{t(pendingAction.kind === "write" ? "Apply" : "Run")}</button>
-              </div>
-            </div>
-          </section>
-        )}
-      </div>}
-    </div>
-    {!followingOutput && <button className="conversation-jump-latest" onClick={() => {
-      followOutputRef.current = true;
-      setFollowingOutput(true);
-      scrollToLatest();
-    }} title={t("Jump to latest message")}>
-      <ArrowDown size={15} />
-      <span>{t("Latest")}</span>
-    </button>}
-    </div>
+    <ConversationHistory
+      messages={messages}
+      events={events}
+      trajectoryEvents={trajectoryEvents}
+      agentBusy={agentBusy}
+      interrupting={interrupting}
+      pendingAction={pendingAction}
+      changeSets={changeSets}
+      welcomeVisible={welcomeVisible}
+      onWelcomeAction={selectWelcomeWorkflow}
+      onApprove={onApprove}
+      onReject={onReject}
+      onOpenFile={onOpenFile}
+    />
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
       <div className="conversation-composer">
