@@ -567,6 +567,7 @@ const previewBridge = {
         episodes: chapter.episodes.map((episode) => ({ id: episode.id, title: episode.title, outcome: episode.outcome })),
       })),
       claims: [],
+      chapterPlan: [],
     };
     window.localStorage.setItem(`archimedes-journey-summary:${input.threadId}`, JSON.stringify(snapshot));
     return snapshot;
@@ -769,6 +770,7 @@ function App() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("trajectory");
+  const [trajectoryFocusSequence, setTrajectoryFocusSequence] = useState<number | null>(null);
   const [journeySettings, setJourneySettings] = useState<JourneySettings>(defaultJourneySettings);
   const [terminalSettings, setTerminalSettings] = useState<TerminalSettings | null>(null);
   const [terminalSettingsOpen, setTerminalSettingsOpen] = useState(false);
@@ -991,6 +993,11 @@ function App() {
   function openWorkbench(tab: WorkbenchTab) {
     setWorkbenchTab(tab);
     setWorkbenchOpen(true);
+  }
+
+  function openTrajectoryAt(sequence?: number) {
+    setTrajectoryFocusSequence(typeof sequence === "number" ? sequence : null);
+    setWorkbenchTab("trajectory");
   }
 
   function closeWorkbench() {
@@ -1871,9 +1878,10 @@ function App() {
             modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
             settings={journeySettings}
             pendingAction={pendingAction}
-            agentBusy={agentBusy}
+            agentBusy={agentBusy && Boolean(activeThreadId) && runningThreadId === activeThreadId}
             active={workbenchOpen && workbenchTab === "journey"}
-            onOpenTrajectory={() => setWorkbenchTab("trajectory")}
+            onOpenTrajectory={() => openTrajectoryAt()}
+            onOpenTrajectoryAt={openTrajectoryAt}
             onOpenSettings={() => { setSettingsSection("journey"); setSettingsOpen(true); }}
             onReviewPending={reviewPendingAction}
           />}
@@ -1885,6 +1893,8 @@ function App() {
             modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
             onCopy={(text) => desktopBridge.writeClipboardText(text)}
             onOpenJourney={() => setWorkbenchTab("journey")}
+            focusSequence={trajectoryFocusSequence}
+            onFocusApplied={() => setTrajectoryFocusSequence(null)}
           />}
           files={<ArtifactsView
             compact

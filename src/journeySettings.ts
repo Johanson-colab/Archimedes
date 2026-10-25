@@ -15,6 +15,7 @@ export const defaultJourneySettings: JourneySettings = {
   briefInterval: 5,
   summaryLength: "standard",
   summaryModel: "current",
+  economyModel: "",
   updateOnTurnEnd: true,
   updateOnApproval: true,
   evidenceLedger: true,
@@ -52,6 +53,8 @@ export function normalizeJourneySettings(input: Partial<JourneySettings> = {}): 
   next.briefInterval = clampNumber(next.briefInterval, 5, 1, 15);
   next.maxPinned = clampNumber(next.maxPinned, 5, 3, 10);
   next.summaryTokenBudget = clampNumber(next.summaryTokenBudget, 500, 200, 800, 50);
+  next.economyModel = typeof next.economyModel === "string" ? next.economyModel.trim().slice(0, 160) : "";
+  if (next.summaryModel === "economy" && !next.economyModel) next.summaryModel = "current";
   next.sinceYouLeft = Boolean(next.sinceYouLeft);
   next.followLive = Boolean(next.followLive);
   next.autoMerge = Boolean(next.autoMerge);

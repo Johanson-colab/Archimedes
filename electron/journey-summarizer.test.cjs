@@ -130,6 +130,53 @@ test("claims fall back to the previous snapshot when the model omits them", asyn
   assert.deepEqual(snapshot.claims[1].sourceIds, []);
 });
 
+test("chapter plans are contiguous, validated, and capped", () => {
+  const planInput = {
+    ...input,
+    chapters: [
+      ...input.chapters,
+      { id: "chapter-3", title: "Check evidence", summary: "2 steps", status: "done", steps: 2, episodes: [] },
+      { id: "chapter-4", title: "Write the answer", summary: "2 steps", status: "done", steps: 2, episodes: [] },
+    ],
+  };
+  const planSettings = { ...settings, chapterDetection: "ai", maxChapters: 2 };
+  const raw = {
+    brief: "Brief",
+    nextMove: "Continue",
+    chapters: [],
+    chapterPlan: [
+      { id: "plan-1", title: "Frame and draft", summary: "Two phases.", chapterIds: ["chapter-1", "chapter-2"] },
+      { id: "plan-2", title: "Overlap", summary: "Invalid.", chapterIds: ["chapter-2", "chapter-3"] },
+      { id: "plan-3", title: "Gap", summary: "Not contiguous.", chapterIds: ["chapter-1", "chapter-3"] },
+      { id: "plan-4", title: "Later", summary: "Single.", chapterIds: ["chapter-4"] },
+    ],
+  };
+  const snapshot = validateSummary(raw, planInput, null, config, planSettings);
+  assert.equal(snapshot.chapterPlan.length, 2);
+  assert.deepEqual(snapshot.chapterPlan[0].chapterIds, ["chapter-1", "chapter-2", "chapter-3"]);
+  assert.deepEqual(snapshot.chapterPlan[1].chapterIds, ["chapter-4"]);
+  assert.equal(snapshot.chapterPlan[0].title, "Frame and draft");
+  const turns = validateSummary(raw, planInput, null, config, { ...planSettings, chapterDetection: "turns" });
+  assert.deepEqual(turns.chapterPlan, []);
+});
+
+test("economy model overrides the active model without mutating config", async () => {
+  let captured = null;
+  const snapshot = await summarizeJourney({
+    input,
+    settings: { ...settings, summaryModel: "economy", economyModel: "cheap-model" },
+    previous: null,
+    config,
+    complete: async (runtimeConfig) => {
+      captured = runtimeConfig;
+      return response({ brief: "Economy brief.", nextMove: "Continue.", chapters: [] });
+    },
+  });
+  assert.equal(captured.model, "cheap-model");
+  assert.equal(snapshot.model, "cheap-model");
+  assert.equal(config.model, "test-model");
+});
+
 test("summarizer retries once when the model returns invalid JSON", async () => {
   let calls = 0;
   const snapshot = await summarizeJourney({
@@ -199,6 +246,11 @@ test("prompt includes ids, length guidance, and token budget", () => {
   assert.equal(payload.sources[0].id, "source-1");
   assert.equal(payload.chapters[0].episodes[0].id, "episode-1");
   assert.equal(payload.previousBrief, "Old brief.");
+  const aiMessages = buildPrompt(input, { ...settings, chapterDetection: "ai", maxChapters: 3 }, null);
+  assert.match(aiMessages[0].content, /chapterPlan/);
+  const aiPayload = JSON.parse(aiMessages[1].content);
+  assert.equal(aiPayload.chapterDetection, "ai");
+  assert.equal(aiPayload.maxChapters, 3);
 });
 
 test("parse and validate tolerate partial output", () => {

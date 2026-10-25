@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, FileCode2, ListTree, Wrench } from "lucide-react";
 import JsonCode from "./JsonCode";
 
@@ -10,6 +10,8 @@ type TrajectoryViewProps = {
   modeLabel: string;
   onCopy: (text: string) => Promise<void> | void;
   onOpenJourney: () => void;
+  focusSequence?: number | null;
+  onFocusApplied?: () => void;
 };
 
 function formatTime(value: string | undefined) {
@@ -45,9 +47,12 @@ function isToolCall(event: ResearchEvent) {
   return event.type === "tool_call" || event.type === "tool.result" || event.type === "tool_result";
 }
 
-export default function TrajectoryView({ thread, events, provider, model, modeLabel, onCopy, onOpenJourney }: TrajectoryViewProps) {
+export default function TrajectoryView({ thread, events, provider, model, modeLabel, onCopy, onOpenJourney, focusSequence, onFocusApplied }: TrajectoryViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState("");
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const focusAppliedRef = useRef(onFocusApplied);
+  focusAppliedRef.current = onFocusApplied;
   const files = useMemo(() => {
     const next = new Set<string>();
     for (const event of events) collectFiles(event.payload, next);
@@ -56,6 +61,18 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
   const toolCalls = events.filter(isToolCall).length;
   const messages = events.filter((event) => event.type === "user_message" || event.type === "assistant_message").length;
   const allExpanded = events.length > 0 && events.every((event) => expanded.has(event.id));
+
+  useEffect(() => {
+    if (focusSequence == null) return;
+    const target = events.find((event) => event.sequence >= focusSequence);
+    if (!target) { focusAppliedRef.current?.(); return; }
+    setExpanded((current) => current.has(target.id) ? current : new Set(current).add(target.id));
+    const timer = window.setTimeout(() => {
+      sectionRef.current?.querySelector<HTMLElement>(`[data-trajectory-sequence="${target.sequence}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      focusAppliedRef.current?.();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [events, focusSequence]);
 
   function toggle(id: string) {
     setExpanded((current) => {
@@ -87,7 +104,7 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
     { label: "Updated", value: formatTime(thread?.updated_at) },
   ];
 
-  return <section className="trajectory-view" aria-label="Agent trajectory">
+  return <section className="trajectory-view" aria-label="Agent trajectory" ref={sectionRef}>
     <div className="trajectory-stats">
       {stats.map((stat) => <div className="trajectory-stat" key={stat.label}>
         <span>{stat.label}</span>
@@ -113,7 +130,7 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
         {events.map((event) => {
           const open = expanded.has(event.id);
           const payload = payloadObject(event.payload);
-          return <article className={open ? "trajectory-event open" : "trajectory-event"} key={event.id}>
+          return <article className={open ? "trajectory-event open" : "trajectory-event"} key={event.id} data-trajectory-sequence={event.sequence}>
             <button className="trajectory-event-head" onClick={() => toggle(event.id)} aria-expanded={open}>
               <span className="trajectory-event-icon">{isToolCall(event) ? <Wrench size={12} /> : event.type === "assistant_message" || event.type === "user_message" ? <FileCode2 size={12} /> : <ListTree size={12} />}</span>
               <span className="trajectory-event-copy"><strong>{event.type}</strong><small>#{event.sequence} · {event.id}</small></span>

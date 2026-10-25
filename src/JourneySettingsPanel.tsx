@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useUISettings } from "./i18n";
 
 type JourneySettingsPanelProps = {
@@ -22,6 +23,24 @@ function Choice<T extends string>({ value, options, label, onChange }: { value: 
 
 function Toggle({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
   return <button className={checked ? "settings-toggle on" : "settings-toggle"} role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}><span /></button>;
+}
+
+function TextField({ value, label, placeholder, onChange }: { value: string; label: string; placeholder: string; onChange: (value: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    const next = draft.trim();
+    if (next !== value) onChange(next);
+  };
+  return <input
+    className="settings-text-input"
+    value={draft}
+    aria-label={label}
+    placeholder={placeholder}
+    onChange={(event) => setDraft(event.target.value)}
+    onBlur={commit}
+    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); event.currentTarget.blur(); } }}
+  />;
 }
 
 function Stepper({ value, unit, min, max, step = 1, label, disabled = false, onChange }: { value: number; unit: string; min: number; max: number; step?: number; label: string; disabled?: boolean; onChange: (value: number) => void }) {
@@ -106,9 +125,16 @@ export default function JourneySettingsPanel({ settings, onChange, onReset, onOp
           <div className="settings-control-stack">
             <select className="settings-select" value={settings.summaryModel} aria-label={t("Summary model")} onChange={(event) => save({ summaryModel: event.target.value as JourneySummaryModel })}>
               <option value="current">{t("Current chat model")}</option>
-              <option value="economy" disabled>{t("Economy model · not configured")}</option>
+              <option value="economy" disabled={!settings.economyModel}>{settings.economyModel ? t("Economy model") : t("Economy model · not configured")}</option>
             </select>
-            <span className="settings-control-note">{t("Economy model becomes available after it is configured.")} <button onClick={onOpenModels}>{t("Open Models")}</button></span>
+            <span className="settings-control-label">{t("Economy model name")}</span>
+            <TextField
+              value={settings.economyModel}
+              label={t("Economy model name")}
+              placeholder={t("e.g. gpt-4.1-mini")}
+              onChange={(economyModel) => save({ economyModel, ...(economyModel ? {} : { summaryModel: "current" as JourneySummaryModel }) })}
+            />
+            <span className="settings-control-note">{t("Economy model uses the same provider and API key.")} <button onClick={onOpenModels}>{t("Open Models")}</button></span>
           </div>
         </Row>
         <Row title={t("Update on turn end")} description={t("Recompute the brief when a turn completes.")}>
@@ -137,9 +163,9 @@ export default function JourneySettingsPanel({ settings, onChange, onReset, onOp
 
     <section className="settings-section">
       <h3 className="settings-section-title">{t("Advanced")}</h3>
-      <p className="settings-group-note">{t("Chapter boundaries still follow turns in this build. The setting is saved for AI grouping.")}</p>
+      <p className="settings-group-note">{t("AI groups adjacent chapters into narrative units. Turn grouping keeps one chapter per conversation turn.")}</p>
       <div className="settings-group">
-        <Row title={t("Chapter detection")} description={t("AI groups by intent. Turns group by conversation turn.")}>
+        <Row title={t("Chapter detection")} description={t("Group adjacent chapters by intent, or keep one chapter per turn.")}>
           <Choice value={settings.chapterDetection} label={t("Chapter detection")} onChange={(chapterDetection) => save({ chapterDetection })} options={[{ value: "ai", label: t("AI") }, { value: "turns", label: t("Turns") }]} />
         </Row>
         <Row title={t("Summary token budget")} description={t("Upper bound for one summary call.")}>

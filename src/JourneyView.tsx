@@ -12,6 +12,7 @@ type JourneyViewProps = {
   agentBusy: boolean;
   active: boolean;
   onOpenTrajectory: () => void;
+  onOpenTrajectoryAt?: (sequence: number) => void;
   onOpenSettings: () => void;
   onReviewPending: () => void;
 };
@@ -36,11 +37,20 @@ type JourneyChapter = {
   steps: number;
   episodes: JourneyEpisode[];
   manual?: boolean;
+  planned?: boolean;
+  memberIds?: string[];
 };
 
 type JourneyMergeRange = {
   start: number;
   end: number;
+};
+
+type JourneyChapterPlan = {
+  id: string;
+  title: string;
+  summary: string;
+  chapterIds: string[];
 };
 
 type JourneyEvidence = {
@@ -282,6 +292,7 @@ function mergeChapters(chapters: JourneyChapter[], first: number, last: number, 
     end: merged.at(-1)?.end ?? 0,
     steps: merged.reduce((total, chapter) => total + chapter.steps, 0),
     episodes: episodes.slice(-12),
+    memberIds: merged.flatMap((chapter) => [chapter.id, ...(chapter.memberIds ?? [])]),
   };
 }
 
@@ -299,6 +310,7 @@ function mergeChapterRange(chapters: JourneyChapter[], range: JourneyMergeRange,
     steps,
     episodes: parts.flatMap((chapter) => chapter.episodes),
     manual: true,
+    memberIds: parts.flatMap((chapter) => [chapter.id, ...(chapter.memberIds ?? [])]),
   };
 }
 
@@ -410,7 +422,7 @@ function buildNextMove(data: { pendingAction: AgentAction | null; thread: Resear
   return t("Audit the event range or continue with a follow-up question.");
 }
 
-function viewKey(kind: "pins" | "seen" | "titles" | "merges", threadId: string | null): string {
+function viewKey(kind: "pins" | "seen" | "titles" | "merges" | "ungrouped", threadId: string | null): string {
   return `archimedes-journey-${kind}:${threadId || "new"}`;
 }
 
@@ -450,6 +462,14 @@ function readMerges(threadId: string | null): JourneyMergeRange[] {
   } catch { return []; }
 }
 
+function readUngrouped(threadId: string | null): string[] {
+  if (!threadId) return [];
+  try {
+    const value = JSON.parse(localStorage.getItem(viewKey("ungrouped", threadId)) || "[]") as unknown;
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch { return []; }
+}
+
 function readSeen(threadId: string | null): number | null {
   if (!threadId) return null;
   const value = Number(localStorage.getItem(viewKey("seen", threadId)));
@@ -473,6 +493,45 @@ function mergeSummaryChapters(chapters: JourneyChapter[], summary: JourneySummar
       }),
     };
   });
+}
+
+function applyChapterPlan(chapters: JourneyChapter[], plan: JourneyChapterPlan[] | undefined, t: (key: string, values?: Record<string, string | number>) => string, ungrouped: string[] = []): JourneyChapter[] {
+  if (!plan?.length) return chapters;
+  const byId = new Map(chapters.map((chapter) => [chapter.id, chapter]));
+  const groups = new Map<string, JourneyChapterPlan>();
+  for (const group of plan) {
+    if (!Array.isArray(group.chapterIds) || group.chapterIds.length < 2) continue;
+    if (ungrouped.includes(group.chapterIds[0])) continue;
+    if (group.chapterIds.some((id) => !byId.has(id))) continue;
+    const indexes = group.chapterIds.map((id) => chapters.findIndex((chapter) => chapter.id === id));
+    if (indexes.some((value, index) => value < 0 || (index > 0 && value !== indexes[index - 1] + 1))) continue;
+    groups.set(group.chapterIds[0], group);
+  }
+  if (!groups.size) return chapters;
+  const result: JourneyChapter[] = [];
+  const consumed = new Set<string>();
+  for (const chapter of chapters) {
+    if (consumed.has(chapter.id)) continue;
+    const group = groups.get(chapter.id);
+    if (!group) { result.push(chapter); continue; }
+    const parts = group.chapterIds.map((id) => byId.get(id)).filter((part): part is JourneyChapter => Boolean(part));
+    if (parts.length < 2) { result.push(chapter); continue; }
+    const steps = parts.reduce((total, part) => total + part.steps, 0);
+    result.push({
+      id: parts[0].id,
+      title: group.title || parts[0].title,
+      summary: group.summary || `${plural(parts.length, t("chapter"))} · ${plural(steps, t("step"))}`,
+      status: parts.some((part) => part.status === "error") ? "error" : parts.some((part) => part.status === "waiting") ? "waiting" : parts.some((part) => part.status === "running") ? "running" : parts.some((part) => part.status === "open") ? "open" : "done",
+      start: parts[0].start,
+      end: parts.at(-1)?.end ?? parts[0].end,
+      steps,
+      episodes: parts.flatMap((part) => part.episodes),
+      memberIds: parts.flatMap((part) => [part.id, ...(part.memberIds ?? [])]),
+      planned: true,
+    });
+    for (const id of group.chapterIds) consumed.add(id);
+  }
+  return result;
 }
 
 function relativeTime(value: string, t: (key: string, values?: Record<string, string | number>) => string): string {
@@ -507,11 +566,16 @@ function claimStatusLabel(status: JourneyClaim["status"]): string {
   return "Needs evidence";
 }
 
-export default function JourneyView({ bridge, thread, events, modeLabel, settings, pendingAction, agentBusy, active, onOpenTrajectory, onOpenSettings, onReviewPending }: JourneyViewProps) {
+function chapterPinIds(chapter: JourneyChapter): string[] {
+  return [...new Set([chapter.id, ...(chapter.memberIds ?? [])])];
+}
+
+export default function JourneyView({ bridge, thread, events, modeLabel, settings, pendingAction, agentBusy, active, onOpenTrajectory, onOpenTrajectoryAt, onOpenSettings, onReviewPending }: JourneyViewProps) {
   const { t } = useUISettings();
   const [view, setView] = useState<"story" | "outline">(settings.defaultView);
   const [mapOpen, setMapOpen] = useState(false);
   const [mapQuery, setMapQuery] = useState("");
+  const [mapZoom, setMapZoom] = useState(1);
   const [mapSelected, setMapSelected] = useState<string | null>(null);
   const [pins, setPins] = useState<string[]>(() => readPins(thread?.id ?? null));
   const [seen, setSeen] = useState<number | null>(() => readSeen(thread?.id ?? null));
@@ -523,12 +587,15 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   const [dismissedSince, setDismissedSince] = useState(false);
   const [titles, setTitles] = useState<Record<string, string>>(() => readTitles(thread?.id ?? null));
   const [merges, setMerges] = useState<JourneyMergeRange[]>(() => readMerges(thread?.id ?? null));
+  const [ungrouped, setUngrouped] = useState<string[]>(() => readUngrouped(thread?.id ?? null));
   const [editingChapter, setEditingChapter] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [summary, setSummary] = useState<JourneySummarySnapshot | null>(null);
   const [summaryUpdating, setSummaryUpdating] = useState(false);
   const [summaryError, setSummaryError] = useState("");
   const summaryBusyRef = useRef(false);
+  const pendingSummaryRefreshRef = useRef<{ threadId: string; force: boolean } | null>(null);
+  const requestSummaryRef = useRef<(force?: boolean) => void>(() => {});
   const lastSummaryAtRef = useRef(0);
   const summaryThreadRef = useRef<string | null>(thread?.id ?? null);
   const previousBusyRef = useRef(agentBusy);
@@ -538,20 +605,26 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
 
   const sourceChapters = useMemo(() => buildChapters(events, settings, pendingAction, thread, t, merges), [events, merges, pendingAction, settings, thread, t]);
   const titledSourceChapters = useMemo(() => sourceChapters.map((chapter) => titles[chapter.id] ? { ...chapter, title: titles[chapter.id] } : chapter), [sourceChapters, titles]);
-  const chapters = useMemo(() => mergeSummaryChapters(sourceChapters, summary).map((chapter) => titles[chapter.id] ? { ...chapter, title: titles[chapter.id] } : chapter), [sourceChapters, summary, titles]);
+  const summarizedChapters = useMemo(() => mergeSummaryChapters(sourceChapters, summary), [sourceChapters, summary]);
+  const groupedChapters = useMemo(() => settings.chapterDetection === "ai" ? applyChapterPlan(summarizedChapters, summary?.chapterPlan, t, ungrouped) : summarizedChapters, [settings.chapterDetection, summarizedChapters, summary?.chapterPlan, t, ungrouped]);
+  const chapters = useMemo(() => groupedChapters.map((chapter) => {
+    const custom = titles[chapter.id] ?? chapter.memberIds?.map((id) => titles[id]).find(Boolean);
+    return custom ? { ...chapter, title: custom } : chapter;
+  }), [groupedChapters, titles]);
   const evidence = useMemo(() => buildEvidence(events, pendingAction), [events, pendingAction]);
-  const sourceTitles = useMemo(() => new Map(collectSummarySources(events).map((source) => [source.id, source.title])), [events]);
+  const chapterEvidence = useMemo(() => new Map(chapters.map((chapter) => [chapter.id, buildEvidence(events.filter((event) => event.sequence >= chapter.start && event.sequence <= chapter.end), null)])), [chapters, events]);
+  const sourceInfo = useMemo(() => new Map(collectSummarySources(events).map((source) => [source.id, { title: source.title, eventId: source.eventId }])), [events]);
   const steps = events.length;
   const firstTime = timeValue(events[0]?.created_at) || timeValue(thread?.created_at);
   const lastTime = timeValue(events.at(-1)?.created_at) || timeValue(thread?.updated_at) || Date.now();
   const duration = formatDuration(firstTime, lastTime, t);
   const hasErrors = events.some(eventHasError);
-  const status: JourneyData["status"] = !steps ? "not-started" : pendingAction ? "waiting" : thread?.status === "running" ? "running" : hasErrors ? "attention" : chapters.every((chapter) => chapter.status === "done") ? "complete" : "attention";
+  const status: JourneyData["status"] = !steps ? "not-started" : pendingAction ? "waiting" : agentBusy || thread?.status === "running" ? "running" : hasErrors ? "attention" : chapters.every((chapter) => chapter.status === "done") ? "complete" : "attention";
   const ruleBrief = useMemo(() => buildBrief({ steps, chapters: sourceChapters, evidence, events, pendingAction, thread, settings }, t), [events, evidence, pendingAction, settings, sourceChapters, steps, thread, t]);
   const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps }, t);
   const brief = summary?.brief || ruleBrief;
   const nextMove = summary?.nextMove || ruleNextMove;
-  const pinnedChapters = chapters.filter((chapter) => pins.includes(chapter.id));
+  const pinnedChapters = chapters.filter((chapter) => chapterPinIds(chapter).some((id) => pins.includes(id)));
   const mapAvailable = steps > 0 && settings.mapMode !== "off" && (settings.mapMode === "always" || chapters.length >= settings.mapChapters || steps >= settings.mapSteps);
   const lastSequence = events.at(-1)?.sequence ?? 0;
   const newEvents = seen === null ? [] : events.filter((event) => event.sequence > seen);
@@ -579,6 +652,12 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   }, [settings.defaultView]);
 
   useEffect(() => {
+    if (settings.chapterDetection === "ai" || !thread?.id) return;
+    setUngrouped([]);
+    localStorage.removeItem(viewKey("ungrouped", thread.id));
+  }, [settings.chapterDetection, thread?.id]);
+
+  useEffect(() => {
     setPins(readPins(thread?.id ?? null));
     setSeen(readSeen(thread?.id ?? null));
     setExpanded(new Set());
@@ -590,6 +669,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     setMapSelected(null);
     setTitles(readTitles(thread?.id ?? null));
     setMerges(readMerges(thread?.id ?? null));
+    setUngrouped(readUngrouped(thread?.id ?? null));
     setEditingChapter(null);
     setDraftTitle("");
     setSummary(null);
@@ -599,6 +679,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     previousBusyRef.current = agentBusy;
     previousPendingRef.current = pendingAction?.id ?? null;
     lastSummaryAtRef.current = 0;
+    pendingSummaryRefreshRef.current = null;
   }, [thread?.id]);
 
   useEffect(() => {
@@ -648,8 +729,13 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
 
   function togglePin(id: string) {
     if (!thread?.id) return;
+    const target = chapters.find((chapter) => chapter.id === id);
+    const groupIds = target ? chapterPinIds(target) : [id];
     setPins((current) => {
-      const next = current.includes(id) ? current.filter((value) => value !== id) : current.length >= settings.maxPinned ? current : [...current, id];
+      const pinned = groupIds.some((value) => current.includes(value));
+      const next = pinned
+        ? current.filter((value) => !groupIds.includes(value))
+        : current.length >= settings.maxPinned ? current : [...current, id];
       localStorage.setItem(viewKey("pins", thread.id), JSON.stringify(next));
       return next;
     });
@@ -676,7 +762,11 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
 
   async function requestSummary(force = false) {
     const threadId = thread?.id;
-    if (!threadId || !sourceChapters.length || summaryBusyRef.current) return;
+    if (!threadId || !sourceChapters.length) return;
+    if (summaryBusyRef.current) {
+      if (force) pendingSummaryRefreshRef.current = { threadId, force };
+      return;
+    }
     if (!force && !settings.liveSummaries) return;
     if (!force && summary && summary.coversTo >= lastSequence) return;
     if (!force && Date.now() - lastSummaryAtRef.current < settings.briefInterval * 60_000) return;
@@ -715,8 +805,15 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     } finally {
       summaryBusyRef.current = false;
       if (summaryThreadRef.current === threadId) setSummaryUpdating(false);
+      const pending = pendingSummaryRefreshRef.current;
+      pendingSummaryRefreshRef.current = null;
+      if (pending?.threadId === summaryThreadRef.current) {
+        window.setTimeout(() => requestSummaryRef.current(true), 150);
+      }
     }
   }
+
+  requestSummaryRef.current = (force = false) => { void requestSummary(force); };
 
   useEffect(() => {
     const triggered = settings.liveSummaries || settings.updateOnTurnEnd || (settings.updateOnApproval && Boolean(pendingAction));
@@ -756,7 +853,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     if (active && id && id !== previous && settings.updateOnApproval) void requestSummary(true);
   }, [active, pendingAction?.id, settings.updateOnApproval]);
 
-  const summarySignature = `${settings.summaryLength}|${settings.summaryModel}|${settings.summaryTokenBudget}|${settings.targetEpisodes}|${settings.maxChapters}|${settings.autoMerge}|${JSON.stringify(merges)}`;
+  const summarySignature = `${settings.summaryLength}|${settings.summaryModel}|${settings.summaryTokenBudget}|${settings.targetEpisodes}|${settings.maxChapters}|${settings.autoMerge}|${settings.chapterDetection}|${JSON.stringify(merges)}`;
   const previousSummarySignatureRef = useRef(summarySignature);
   useEffect(() => {
     if (!active) return;
@@ -788,12 +885,12 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     if (!thread?.id || !nextChapter) return;
     const range = { start: chapter.start, end: nextChapter.end };
     const group = chapters.filter((item) => item.start <= range.end && item.end >= range.start);
-    const groupIds = group.map((item) => item.id);
+    const groupIds = [...new Set(group.flatMap((item) => chapterPinIds(item)))];
     const mergedId = manualChapterId(range);
     const nextMerges = [...merges.filter((item) => item.end < range.start || item.start > range.end), range].sort((a, b) => a.start - b.start);
     setMerges(nextMerges);
     localStorage.setItem(viewKey("merges", thread.id), JSON.stringify(nextMerges));
-    const inheritedTitle = groupIds.map((id) => titles[id]).find(Boolean);
+    const inheritedTitle = groupIds.map((id) => titles[id]).find(Boolean) || chapter.title;
     if (inheritedTitle) {
       const nextTitles = { ...titles };
       for (const id of groupIds) delete nextTitles[id];
@@ -811,6 +908,13 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
 
   function splitChapter(chapter: JourneyChapter) {
     if (!thread?.id) return;
+    if (chapter.planned) {
+      const nextUngrouped = [...new Set([...ungrouped, chapter.id])];
+      setUngrouped(nextUngrouped);
+      localStorage.setItem(viewKey("ungrouped", thread.id), JSON.stringify(nextUngrouped));
+      return;
+    }
+    if (!chapter.manual) return;
     const nextMerges = merges.filter((item) => item.end < chapter.start || item.start > chapter.end);
     setMerges(nextMerges);
     localStorage.setItem(viewKey("merges", thread.id), JSON.stringify(nextMerges));
@@ -827,9 +931,15 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     }
   }
 
+  function openClaim(claim: JourneyClaim) {
+    const sequence = claim.sourceIds.map((id) => sourceInfo.get(id)?.eventId).find((value): value is number => typeof value === "number");
+    if (typeof sequence === "number" && onOpenTrajectoryAt) onOpenTrajectoryAt(sequence);
+    else onOpenTrajectory();
+  }
+
   function renderChapter(chapter: JourneyChapter, index: number, dense = false) {
     const isExpanded = expandedIds.has(chapter.id);
-    const isPinned = pins.includes(chapter.id);
+    const isPinned = chapterPinIds(chapter).some((id) => pins.includes(id));
     const nextChapter = chapters[index + 1];
     const episodes = dense || showAllEpisodes.has(chapter.id) ? chapter.episodes : chapter.episodes.slice(0, settings.targetEpisodes);
     const hidden = chapter.episodes.length - episodes.length;
@@ -848,12 +958,12 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
         {editingChapter !== chapter.id && <div className="journey-chapter-actions">
           <button className="journey-row-action" onClick={() => beginRename(chapter)}>{t("Rename")}</button>
           {nextChapter && <button className="journey-row-action" title={t("Merge with next chapter")} onClick={() => mergeWithNext(chapter, nextChapter)}>{t("Merge")}</button>}
-          {chapter.manual && <button className="journey-row-action" title={t("Split merged chapter")} onClick={() => splitChapter(chapter)}>{t("Split")}</button>}
+          {chapter.manual || chapter.planned ? <button className="journey-row-action" title={t("Split chapter group")} onClick={() => splitChapter(chapter)}>{t("Split")}</button> : null}
           <button className={isPinned ? "journey-pin pinned" : "journey-pin"} aria-pressed={isPinned} title={isPinned ? t("Unpin chapter") : t("Pin chapter")} onClick={() => togglePin(chapter.id)}>{isPinned ? t("Pinned") : t("Pin")}</button>
         </div>}
       </div>
       {isExpanded && <div className="journey-episodes">
-        {episodes.map((episode) => <button className={`journey-episode ${episode.status}`} key={episode.id} title={`Events #${episode.start}–#${episode.end}`} onClick={onOpenTrajectory}>
+        {episodes.map((episode) => <button className={`journey-episode ${episode.status}`} key={episode.id} title={`Events #${episode.start}–#${episode.end}`} onClick={() => onOpenTrajectoryAt ? onOpenTrajectoryAt(episode.start) : onOpenTrajectory()}>
           <span className="journey-episode-head"><span className="journey-episode-dot" /><span className="journey-episode-title">{episode.title}</span><span className="journey-episode-meta">#{episode.start}{episode.end !== episode.start ? `–#${episode.end}` : ""}</span></span>
           <span className="journey-episode-outcome">{episode.outcome}</span>
         </button>)}
@@ -865,7 +975,10 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   const filteredMapChapters = mapQuery.trim()
     ? chapters.filter((chapter) => `${chapter.title} ${chapter.summary} ${chapter.episodes.map((episode) => `${episode.title} ${episode.outcome}`).join(" ")}`.toLowerCase().includes(mapQuery.trim().toLowerCase()))
     : chapters;
-  const selectedMapChapter = chapters.find((chapter) => chapter.id === mapSelected) ?? activeChapter;
+  const selectedMapChapter = filteredMapChapters.find((chapter) => chapter.id === mapSelected)
+    ?? filteredMapChapters.find((chapter) => chapter.id === activeChapter?.id)
+    ?? filteredMapChapters[0];
+  const selectedEvidence = selectedMapChapter ? chapterEvidence.get(selectedMapChapter.id) ?? evidence : evidence;
   const filterChapters = outlineFilter === "pinned" ? pinnedChapters : outlineFilter === "open" ? chapters.filter((chapter) => chapter.status !== "done") : chapters;
 
   const since = settings.sinceYouLeft && !dismissedSince && digest ? <aside className="journey-since">
@@ -897,9 +1010,8 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       </div>
     </div>
     <h1>{thread?.title || t("New research task")}</h1>
-    <div className="journey-status-line">
-      <span className={`journey-status-dot ${status}`} />
-      <strong>{t(statusLabel(status))}</strong>
+    <div className="journey-status-line" role="status" aria-live="polite">
+      <strong className={`journey-status-text ${status}`}>{t(statusLabel(status))}</strong>
       {duration && <><span className="journey-dot-sep">·</span><span>{duration}</span></>}
       <span className="journey-dot-sep">·</span><span>{plural(steps, t("step"))}</span>
     </div>
@@ -962,11 +1074,11 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       {settings.openClaims && (claims.length > 0 || summary) && <section className="journey-section journey-claims-section">
         <div className="journey-section-head"><h2>{t("Claims")}</h2><span>{claims.length ? claimStats : t("from AI summary")}</span></div>
         {claims.length ? <div className="journey-claims">{claims.map((claim) => {
-          const sourceLabels = claim.sourceIds.map((id) => sourceTitles.get(id)).filter(Boolean) as string[];
+          const sourceLabels = claim.sourceIds.map((id) => sourceInfo.get(id)?.title).filter(Boolean) as string[];
           const sourceMeta = sourceLabels.length
             ? `${truncate(sourceLabels[0], 56)}${sourceLabels.length > 1 ? ` +${sourceLabels.length - 1}` : ""}`
             : claim.sourceIds.length ? plural(claim.sourceIds.length, t("source")) : t("no sources");
-          return <button className="journey-claim" key={claim.id} title={`${claim.text} — ${t(claimStatusLabel(claim.status))}`} onClick={onOpenTrajectory}>
+          return <button className="journey-claim" key={claim.id} title={`${claim.text} — ${t(claimStatusLabel(claim.status))}`} onClick={() => openClaim(claim)}>
             <span className={`journey-claim-dot ${claim.status}`} />
             <span className="journey-claim-copy"><span className="journey-claim-text">{claim.text}</span><span className="journey-claim-meta" title={sourceLabels.join(" · ")}>{t(claimStatusLabel(claim.status))} · {sourceMeta}</span></span>
           </button>;
@@ -988,21 +1100,31 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       <section ref={mapDialogRef} tabIndex={-1} className="journey-map" role="dialog" aria-modal="true" aria-label={t("Journey map")} onMouseDown={(event) => event.stopPropagation()}>
         <header className="journey-map-header">
           <div><h2>{t("Journey map")}</h2><p>{thread?.title || t("New research task")} · {plural(steps, t("step"))} · {plural(chapters.length, t("chapter"))}</p></div>
-          <div className="journey-map-tools"><input value={mapQuery} onChange={(event) => setMapQuery(event.target.value)} placeholder={t("Search episodes, sources, files")} aria-label={t("Search journey")} /><button onClick={() => setMapOpen(false)}>{t("Close")}</button></div>
+          <div className="journey-map-tools">
+            <div className="journey-map-zoom" role="group" aria-label={t("Map zoom")}>
+              <button onClick={() => setMapZoom((current) => Math.max(0.8, Math.round((current - 0.1) * 10) / 10))} aria-label={t("Zoom out")}>−</button>
+              <button className="journey-map-zoom-value" onClick={() => setMapZoom(1)} aria-label={t("Reset map zoom")} title={t("Reset map zoom")}>{Math.round(mapZoom * 100)}%</button>
+              <button onClick={() => setMapZoom((current) => Math.min(1.4, Math.round((current + 0.1) * 10) / 10))} aria-label={t("Zoom in")}>+</button>
+            </div>
+            <input value={mapQuery} onChange={(event) => setMapQuery(event.target.value)} placeholder={t("Search chapters and episodes")} aria-label={t("Search journey")} />
+            <button onClick={() => setMapOpen(false)}>{t("Close")}</button>
+          </div>
         </header>
         <div className="journey-map-body">
           <div className="journey-map-tree">
-            <div className="journey-map-root"><span>{t("Research question")}</span><strong>{thread?.title || t("New research task")}</strong><small>{plural(steps, t("step"))} · {plural(chapters.length, t("chapter"))}</small></div>
-            <div className="journey-map-chapters">
-              {filteredMapChapters.map((chapter) => <div className="journey-map-chapter-group" key={chapter.id}>
-                <button className={selectedMapChapter?.id === chapter.id ? "journey-map-chapter selected" : "journey-map-chapter"} onClick={() => setMapSelected(chapter.id)}>
-                  <span className="journey-map-index">{String(chapters.indexOf(chapter) + 1).padStart(2, "0")}</span>
-                  <span><strong>{chapter.title}</strong><small>{plural(chapter.steps, t("step"))} · {t(chapterStatusLabel(chapter.status))}</small></span>
-                </button>
-                {selectedMapChapter?.id === chapter.id && <div className="journey-map-episode-list">{chapter.episodes.map((episode) => <button key={episode.id} onClick={onOpenTrajectory}><span className={`journey-map-episode-dot ${episode.status}`} /><strong>{episode.title}</strong><small>#{episode.start}</small></button>)}</div>}
-              </div>)}
+            <div className="journey-map-canvas" style={{ zoom: mapZoom } as React.CSSProperties}>
+              <div className="journey-map-root"><span>{t("Research question")}</span><strong>{thread?.title || t("New research task")}</strong><small>{plural(steps, t("step"))} · {plural(chapters.length, t("chapter"))}</small></div>
+              <div className="journey-map-chapters">
+                {filteredMapChapters.map((chapter) => <div className="journey-map-chapter-group" key={chapter.id}>
+                  <button className={selectedMapChapter?.id === chapter.id ? "journey-map-chapter selected" : "journey-map-chapter"} onClick={() => setMapSelected(chapter.id)}>
+                    <span className="journey-map-index">{String(chapters.indexOf(chapter) + 1).padStart(2, "0")}</span>
+                    <span><strong>{chapter.title}</strong><small>{plural(chapter.steps, t("step"))} · {t(chapterStatusLabel(chapter.status))}</small></span>
+                  </button>
+                  {selectedMapChapter?.id === chapter.id && <div className="journey-map-episode-list">{chapter.episodes.map((episode) => <button key={episode.id} onClick={() => onOpenTrajectoryAt ? onOpenTrajectoryAt(episode.start) : onOpenTrajectory()}><span className={`journey-map-episode-dot ${episode.status}`} /><strong>{episode.title}</strong><small>#{episode.start}</small></button>)}</div>}
+                </div>)}
+              </div>
+              {filteredMapChapters.length === 0 && <p className="journey-map-empty">{t("No chapters match this search.")}</p>}
             </div>
-            {filteredMapChapters.length === 0 && <p className="journey-map-empty">{t("No chapters match this search.")}</p>}
           </div>
           <aside className="journey-map-inspector">
             {selectedMapChapter ? <>
@@ -1011,12 +1133,14 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
               <p className="journey-map-meta">{plural(selectedMapChapter.steps, t("step"))} · #{selectedMapChapter.start}–#{selectedMapChapter.end}</p>
               <p className="journey-map-summary">{selectedMapChapter.summary}</p>
               <h3>{t("Episodes")}</h3>
-              <div className="journey-map-episodes">{selectedMapChapter.episodes.map((episode) => <button key={episode.id} onClick={onOpenTrajectory}><span>#{episode.start}</span><strong>{episode.title}</strong><small>{plural(episode.steps, t("step"))}</small></button>)}</div>
-              <h3>{t("Evidence")}</h3>
-              <div className="journey-map-evidence"><span>{plural(evidence.sources, t("source"))}</span><span>{plural(evidence.files, t("file"))}</span><span>{plural(evidence.artifacts, t("artifact"))}</span></div>
+              <div className="journey-map-episodes">{selectedMapChapter.episodes.map((episode) => <button key={episode.id} onClick={() => onOpenTrajectoryAt ? onOpenTrajectoryAt(episode.start) : onOpenTrajectory()}><span>#{episode.start}</span><strong>{episode.title}</strong><small>{plural(episode.steps, t("step"))}</small></button>)}</div>
+              {settings.evidenceLedger && <>
+                <h3>{t("Evidence")}</h3>
+                <div className="journey-map-evidence"><span>{plural(selectedEvidence.sources, t("source"))}</span><span>{plural(selectedEvidence.files, t("file"))}</span><span>{plural(selectedEvidence.artifacts, t("artifact"))}</span></div>
+              </>}
               <div className="journey-map-actions">
-                <button className="journey-primary" onClick={onOpenTrajectory}>{t("Open in Trajectory")}</button>
-                <button className="journey-ghost" onClick={() => togglePin(selectedMapChapter.id)}>{pins.includes(selectedMapChapter.id) ? t("Unpin chapter") : t("Pin chapter")}</button>
+                <button className="journey-primary" onClick={() => onOpenTrajectoryAt ? onOpenTrajectoryAt(selectedMapChapter.start) : onOpenTrajectory()}>{t("Open in Trajectory")}</button>
+                <button className="journey-ghost" onClick={() => togglePin(selectedMapChapter.id)}>{chapterPinIds(selectedMapChapter).some((id) => pins.includes(id)) ? t("Unpin chapter") : t("Pin chapter")}</button>
               </div>
             </> : <p className="journey-map-empty">{t("Select a chapter to inspect it.")}</p>}
           </aside>
