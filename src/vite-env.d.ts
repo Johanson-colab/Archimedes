@@ -709,13 +709,13 @@ interface PaperReviewAgentResult {
 interface PaperReviewResult {
   specialists: PaperReviewAgentResult[];
   supervisor: { verdict: "ready" | "repair"; repairTargets: string[]; reason: string; run: AgentRunResult | null };
-  summary: { response: string; run: AgentRunResult };
+  summary: { response: string; error?: string; run: AgentRunResult | null };
   agentRuns: AgentRunResult[];
 }
 
 interface PaperReviewEvent {
   type: "stage";
-  stage: "specialists" | "specialist_started" | "specialist_complete" | "specialist_failed" | "supervisor" | "repair" | "summary" | "complete";
+  stage: "specialists" | "specialist_started" | "specialist_complete" | "specialist_failed" | "supervisor" | "repair" | "summary" | "complete" | "failed";
   reviewerId?: "related" | "method" | "experiments" | "limitations";
   title: string;
   detail: string;

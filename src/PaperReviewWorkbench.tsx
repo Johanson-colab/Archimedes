@@ -54,7 +54,8 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     if (!runIdRef.current || event.clientRunId !== runIdRef.current) return;
     const localizedStage = event.stage === "specialists" ? t("Related work, method, experiments, and limitations are reading the source in parallel.")
       : event.stage === "specialist_started" ? t("Checking the original PDF for page-cited evidence.")
-        : event.stage === "specialist_complete" ? t("An independent evidence note is ready.")
+          : event.stage === "specialist_complete" ? t("An independent evidence note is ready.")
+            : event.stage === "specialist_failed" ? event.detail
           : event.stage === "supervisor" ? t("Checking citations, overclaims, and conflicts before synthesis.")
             : event.stage === "repair" ? t("Targeted specialist notes are being checked against the PDF again.")
               : event.stage === "summary" ? t("Combining audited evidence while retaining uncertainty and disagreements.")
@@ -62,6 +63,12 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
                   : event.detail;
     setStage(localizedStage);
     if (event.stage === "supervisor" || event.stage === "repair") setAudit(localizedStage);
+    if (event.stage === "specialist_failed" && event.reviewerId) {
+      setRuns((current) => ({
+        ...current,
+        [event.reviewerId!]: { status: "error", response: "", error: event.detail || t("This reading could not be completed. Try again after checking the model connection." ) },
+      }));
+    }
   }), [bridge, t]);
 
   useEffect(() => {
@@ -112,6 +119,12 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         nextRuns[report.id] = { status: report.status, response: report.response, error: report.error, repaired: report.repaired };
       }
       setRuns(nextRuns);
+      if (result.summary.error) {
+        setAudit(result.supervisor.reason);
+        setSummary({ status: "error", response: "", error: result.summary.error });
+        setStage(result.summary.error);
+        return;
+      }
       setAudit(result.supervisor.repairTargets.length
         ? t("{reason} A targeted repair was completed for {targets}.", { reason: result.supervisor.reason, targets: result.supervisor.repairTargets.map((id) => t(REVIEWERS.find((reviewer) => reviewer.id === id)?.title || id)).join(t(" and ")) })
         : result.supervisor.reason);
@@ -119,6 +132,12 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       setStage(t("The review memorandum is ready. Open any reading to inspect its evidence trail."));
     } catch (error) {
       const message = reviewError(error);
+      setRuns((current) => Object.fromEntries(REVIEWERS.map((reviewer) => {
+        const existing = current[reviewer.id];
+        return [reviewer.id, existing.status === "working"
+          ? { status: "error", response: "", error: message }
+          : existing];
+      })) as Record<ReviewAgentId, ReviewRun>);
       setSummary({ status: "error", response: "", error: message });
       setStage(message);
     } finally {

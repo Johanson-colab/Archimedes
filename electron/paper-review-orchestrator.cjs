@@ -28,7 +28,7 @@ function specialistPrompt(specialist, paper, pageCount, language) {
     ? "## 主要发现\n## 带页码引用的证据\n## 不确定性与缺失证据\n## 可能改变评估的问题"
     : "## Findings\n## Page-cited evidence\n## Uncertainty and missing evidence\n## Questions that could change the assessment";
   const outputInstruction = language === "zh" ? "请全程使用简体中文作答，专业术语可在首次出现时保留英文。" : "Write the report in English.";
-  return `You are the ${specialist.title} specialist in an evidence-first paper review of “${paper.title}”.\n\n${specialist.instruction}\n\nThe attached PDF contains ${pageCount || "indexed"} pages. Read the relevant original PDF sections before writing. Do not invent details. Cite a PDF page for every material factual claim, result, or author claim. Write for an evidence supervisor, not as a generic summary. ${outputInstruction}\n\nUse exactly these sections:\n${structure}`;
+  return `You are the ${specialist.title} specialist in an evidence-first paper review of “${paper.title}”.\n\n${specialist.instruction}\n\nThe attached PDF contains ${pageCount || "indexed"} pages. Before writing, call read_attached_paper_pdf with attachment_id "paper:${paper.id}" to read the original source pages relevant to your assignment. Read further page ranges as needed; the attachment manifest and abstract alone are not evidence. Do not invent details. Cite a PDF page for every material factual claim, result, or author claim. Write for an evidence supervisor, not as a generic summary. ${outputInstruction}\n\nUse exactly these sections:\n${structure}`;
 }
 
 function supervisorPrompt(paper, reports, language) {
@@ -78,29 +78,67 @@ function emitStage(emit, payload) {
   emit({ type: "stage", ...payload });
 }
 
-async function runPaperReview({ paper, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser, language = "en", emit = () => {} }) {
+function conciseFailure(error) {
+  const message = String(error?.message || error || "The specialist did not complete its reading.")
+    .replace(/\s+/g, " ")
+    .trim();
+  return message.length > 360 ? `${message.slice(0, 357)}…` : message;
+}
+
+async function mapWithConcurrency(items, limit, task) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(Math.max(1, limit), items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await task(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function failureSummary(settled) {
+  const details = settled
+    .filter((result) => result.status === "error")
+    .map((result) => `${result.title}: ${conciseFailure(result.error)}`)
+    .join(" · ");
+  return `No independent PDF reading completed. Check the model connection or provider rate limit, then retry. ${details}`.trim();
+}
+
+async function runPaperReview({ paper, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser, language = "en", emit = () => {}, runAgentImpl = runAgent }) {
   // Review specialists are internal workers. Their reports are returned to the
   // review workbench, never persisted as user-visible project conversations.
   const common = { workspace, projectId, mode: "paper-review", reasoningEffort, contextLength, contextItems, browser, transient: true, emit: () => {} };
-  emitStage(emit, { stage: "specialists", title: "Four independent readings", detail: "Related work, method, experiments, and limitations are reading the source in parallel." });
+  emitStage(emit, { stage: "specialists", title: "Independent readings", detail: "Related work, method, experiments, and limitations are reading the source with two protected model slots." });
 
-  const settled = await Promise.all(SPECIALISTS.map(async (specialist) => {
+  // Long PDFs often require several tool calls. Keeping two workers active avoids
+  // turning a transient provider concurrency limit into four failed readings.
+  const settled = await mapWithConcurrency(SPECIALISTS, 2, async (specialist) => {
     emitStage(emit, { stage: "specialist_started", reviewerId: specialist.id, title: `${specialist.title} is reading`, detail: "Checking the original PDF for page-cited evidence." });
     try {
-      const result = await runAgent({ ...common, prompt: specialistPrompt(specialist, paper, pageCount, language) });
+      const result = await runAgentImpl({ ...common, prompt: specialistPrompt(specialist, paper, pageCount, language) });
       if (result.status !== "completed") throw new Error(result.response || "The specialist did not complete its reading.");
       emitStage(emit, { stage: "specialist_complete", reviewerId: specialist.id, title: `${specialist.title} completed`, detail: "Its independent evidence note is ready." });
       return { ...specialist, status: "complete", response: result.response, error: "", run: result };
     } catch (error) {
-      const message = error?.message || String(error);
+      const message = conciseFailure(error);
       emitStage(emit, { stage: "specialist_failed", reviewerId: specialist.id, title: `${specialist.title} needs attention`, detail: message });
       return { ...specialist, status: "error", response: "", error: message, run: null };
     }
-  }));
+  });
 
   const usable = settled.filter((result) => result.status === "complete");
   if (!usable.length) {
-    throw new Error("No specialist completed a page-cited reading, so Archimedes cannot produce a reliable review memorandum.");
+    const error = failureSummary(settled);
+    emitStage(emit, { stage: "failed", title: "Review could not start", detail: error });
+    return {
+      specialists: settled.map(({ id, title, status, response, error: specialistError, repaired, run }) => ({ id, title, status, response, error: specialistError, repaired: Boolean(repaired), run })),
+      supervisor: { verdict: "ready", repairTargets: [], reason: "Evidence audit did not begin because no independent reading completed.", run: null },
+      summary: { response: "", error, run: null },
+      agentRuns: [],
+    };
   }
   const agentRuns = settled.map((result) => result.run).filter(Boolean);
 
@@ -108,7 +146,7 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
   let supervisorRun = null;
   let supervisor = { verdict: "ready", repair_targets: [], reason: "Evidence audit unavailable; the memorandum will retain all stated uncertainty.", requirements: {} };
   try {
-    supervisorRun = await runAgent({ ...common, prompt: supervisorPrompt(paper, usable, language) });
+    supervisorRun = await runAgentImpl({ ...common, prompt: supervisorPrompt(paper, usable, language) });
     agentRuns.push(supervisorRun);
     if (supervisorRun.status === "completed") supervisor = parseSupervisor(supervisorRun.response);
   } catch (error) {
@@ -122,7 +160,7 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
       const previous = settled.find((item) => item.id === id);
       if (!specialist || !previous?.response) return null;
       try {
-        const run = await runAgent({ ...common, prompt: repairPrompt(specialist, paper, previous.response, supervisor.requirements[id], pageCount, language) });
+        const run = await runAgentImpl({ ...common, prompt: repairPrompt(specialist, paper, previous.response, supervisor.requirements[id], pageCount, language) });
         agentRuns.push(run);
         if (run.status !== "completed") throw new Error(run.response || "The repair pass did not complete.");
         return { id, response: run.response, run };
@@ -146,9 +184,18 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
 
   const finalReports = settled.filter((result) => result.status === "complete" && result.response);
   emitStage(emit, { stage: "summary", title: "Writing the memorandum", detail: "Combining audited evidence while retaining uncertainty and disagreements." });
-  const summaryRun = await runAgent({ ...common, prompt: summaryPrompt(paper, finalReports, supervisor, language) });
+  const summaryRun = await runAgentImpl({ ...common, prompt: summaryPrompt(paper, finalReports, supervisor, language) });
   agentRuns.push(summaryRun);
-  if (summaryRun.status !== "completed") throw new Error(summaryRun.response || "The Summary agent did not complete the review memorandum.");
+  if (summaryRun.status !== "completed") {
+    const error = conciseFailure(summaryRun.response || "The Summary agent did not complete the review memorandum.");
+    emitStage(emit, { stage: "failed", title: "Memorandum needs attention", detail: error });
+    return {
+      specialists: settled.map(({ id, title, status, response, error: specialistError, repaired, run }) => ({ id, title, status, response, error: specialistError, repaired: Boolean(repaired), run })),
+      supervisor: { verdict: supervisor.verdict, repairTargets: supervisor.repair_targets, reason: supervisor.reason, run: supervisorRun },
+      summary: { response: "", error, run: summaryRun },
+      agentRuns,
+    };
+  }
   emitStage(emit, { stage: "complete", title: "Review memorandum complete", detail: "The evidence-audited review is ready to read." });
 
   return {

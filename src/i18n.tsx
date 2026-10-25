@@ -469,6 +469,7 @@ const translations: Record<string, string> = {
   "Four independent readings are starting from the indexed original PDF.": "四个独立评述 Agent 正在读取已建立索引的原始 PDF。",
   "The evidence audit will begin after the independent readings finish.": "独立评述结束后将开始证据核验。",
   "Related work, method, experiments, and limitations are reading the source in parallel.": "相关工作、研究方法、实验分析和局限性 Agent 正在并行阅读原文。",
+  "This reading could not be completed. Try again after checking the model connection.": "这项评述未能完成。请检查模型连接后重试。",
   "Checking the original PDF for page-cited evidence.": "正在从原始 PDF 中核查带页码引用的证据。",
   "An independent evidence note is ready.": "一份独立证据笔记已完成。",
   "Checking citations, overclaims, and conflicts before synthesis.": "正在汇总前检查引用、过度主张与结论冲突。",
