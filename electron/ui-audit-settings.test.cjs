@@ -1,4 +1,4 @@
-const assert = require("node:assert/strict");
+﻿const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
@@ -25,7 +25,7 @@ test("global settings is a single dialog with app-level sections", () => {
   assert.match(settings, /t\("Terminal"\)/);
   assert.match(settings, /t\("Workspace"\)/);
   assert.match(settings, /t\("About"\)/);
-  assert.match(css, /\.settings-modal \{[^}]*grid-template-columns: 212px minmax\(0, 1fr\)/);
+  assert.match(css, /\.settings-modal \{[^}]*grid-template-columns: 256px minmax\(0, 1fr\)/);
 });
 
 test("settings entry is a small quiet icon next to the workspace", () => {
@@ -59,18 +59,38 @@ test("language can switch between English and Chinese with English as default", 
   assert.match(i18n, /"Literature library": "文献库"/);
 });
 
-test("text size has three presets and scales the interface", () => {
-  assert.match(i18n, /export type TextSize = "small" \| "default" \| "large"/);
-  assert.match(settings, /\{ id: "small", label: "Small" \}/);
-  assert.match(settings, /\{ id: "default", label: "Default" \}/);
-  assert.match(settings, /\{ id: "large", label: "Large" \}/);
-  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="small"\] \{ --ui-scale: 1; \}/);
+test("text size has five steps behind a horizontal slider", () => {
+  assert.match(i18n, /export type TextSize = "smaller" \| "small" \| "default" \| "large" \| "larger"/);
+  assert.match(settings, /\{ id: "smaller", label: "Smaller", scale: 1 \}/);
+  assert.match(settings, /\{ id: "small", label: "Small", scale: 1\.05 \}/);
+  assert.match(settings, /\{ id: "default", label: "Default", scale: 1\.1 \}/);
+  assert.match(settings, /\{ id: "large", label: "Large", scale: 1\.15 \}/);
+  assert.match(settings, /\{ id: "larger", label: "Larger", scale: 1\.2 \}/);
+  assert.match(settings, /type="range"[\s\S]*?max=\{textSizeSteps\.length - 1\}/);
+  assert.match(settings, /--settings-slider-progress/);
+  assert.match(settings, /settings-slider-scale/);
+  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="smaller"\] \{ --ui-scale: 1; \}/);
+  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="small"\] \{ --ui-scale: 1\.05; \}/);
   assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="default"\] \{ --ui-scale: 1\.1; \}/);
-  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="large"\] \{ --ui-scale: 1\.2; \}/);
-  assert.match(i18n, /const TEXT_SCALE: Record<TextSize, number> = \{ small: 1, default: 1\.1, large: 1\.2 \};/);
+  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="large"\] \{ --ui-scale: 1\.15; \}/);
+  assert.match(css, /html\[data-ui-zoom="css"\]\[data-text-size="larger"\] \{ --ui-scale: 1\.2; \}/);
+  assert.match(i18n, /const TEXT_SCALE: Record<TextSize, number> = \{ smaller: 1, small: 1\.05, default: 1\.1, large: 1\.15, larger: 1\.2 \};/);
   assert.match(css, /\.codex-shell \{[^}]*zoom: var\(--ui-scale, 1\)/);
   assert.match(i18n, /root\.dataset\.uiZoom = "native"/);
   assert.match(fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8"), /setUiZoom: \(factor\) => ipcRenderer\.invoke\("window:set-ui-zoom", factor\)/);
+});
+
+test("settings use flat grouped lists instead of per-item cards", () => {
+  assert.match(settings, /className="settings-section"/);
+  assert.match(settings, /className="settings-group"/);
+  assert.match(settings, /className="settings-row"/);
+  assert.match(settings, /className="settings-row-copy"/);
+  assert.match(settings, /settings-row-stacked/);
+  assert.doesNotMatch(settings, /settings-card/);
+  assert.match(css, /\.settings-group \{[^}]*box-shadow: inset 0 0 0 1px var\(--night-line-soft\)/);
+  assert.match(css, /\.settings-row \+ \.settings-row \{ border-top: 1px solid var\(--night-line-soft\); \}/);
+  assert.match(css, /\.settings-content \{ width: 100%; max-width: 720px; \}/);
+  assert.match(css, /\.settings-nav-item\.active \{[^}]*box-shadow: inset 2px 0 0 var\(--accent\)/);
 });
 
 test("chat verbosity follows the opencode low / medium / high model", () => {
@@ -86,7 +106,9 @@ test("chat verbosity follows the opencode low / medium / high model", () => {
 });
 
 test("settings support dark and paper themes", () => {
-  assert.match(css, /html:not\(\[data-theme="paper"\]\) \.settings-modal/);
-  assert.match(css, /html:not\(\[data-theme="paper"\]\) \.settings-nav-item\.active/);
+  assert.match(css, /\.settings-modal \{[^}]*color: var\(--night-ink\); background: var\(--night-ground\)/);
+  assert.match(css, /\.settings-group \{[^}]*background: var\(--night-panel\)/);
+  assert.match(css, /\.settings-nav-item\.active \{[^}]*background: var\(--night-panel-raised\)/);
   assert.match(css, /\.theme-paper \.sidebar-settings-button/);
 });
+

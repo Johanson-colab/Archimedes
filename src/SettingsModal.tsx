@@ -1,4 +1,4 @@
-import { Code2, FolderOpen, Globe2, Info, Languages, MessageSquareText, Monitor, Moon, Orbit, Palette, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
+﻿import { Code2, FolderOpen, Globe2, Info, Languages, MessageSquareText, Monitor, Moon, Orbit, Palette, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
 import ModelSettingsModal from "./ModelSettingsModal";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
@@ -36,10 +36,12 @@ const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNod
   { id: "about", label: "About", icon: <Info size={15} /> },
 ];
 
-const textSizes: Array<{ id: TextSize; label: string }> = [
-  { id: "small", label: "Small" },
-  { id: "default", label: "Default" },
-  { id: "large", label: "Large" },
+const textSizeSteps: Array<{ id: TextSize; label: string; scale: number }> = [
+  { id: "smaller", label: "Smaller", scale: 1 },
+  { id: "small", label: "Small", scale: 1.05 },
+  { id: "default", label: "Default", scale: 1.1 },
+  { id: "large", label: "Large", scale: 1.15 },
+  { id: "larger", label: "Larger", scale: 1.2 },
 ];
 
 const verbosityOptions: Array<{ id: ChatVerbosity; label: string; description: string }> = [
@@ -71,6 +73,10 @@ export default function SettingsModal({
   if (!open) return null;
 
   const workspaceName = workspace ? workspace.split(/[\\/]/).filter(Boolean).at(-1) : "";
+  const embedded = section === "models" || section === "web" || section === "terminal";
+  const sizeIndex = Math.max(0, textSizeSteps.findIndex((item) => item.id === textSize));
+  const activeSize = textSizeSteps[sizeIndex] ?? textSizeSteps[2];
+  const activeVerbosity = verbosityOptions.find((item) => item.id === chatVerbosity) ?? verbosityOptions[1];
 
   const sectionHeadings: Record<SettingsSection, { title: string; description: string }> = {
     general: { title: t("General"), description: t("Preferences that apply across Archimedes.") },
@@ -79,7 +85,7 @@ export default function SettingsModal({
     web: { title: t("Web search"), description: t("Search provider and API keys") },
     terminal: { title: t("Terminal"), description: t("Shell, font, and external terminal") },
     workspace: { title: t("Workspace"), description: t("Current folder and access") },
-    about: { title: t("About"), description: t("Version") },
+    about: { title: t("About"), description: t("Build information") },
   };
   const heading = sectionHeadings[section];
 
@@ -97,96 +103,161 @@ export default function SettingsModal({
 
       <div className="settings-main">
         <header className="settings-header">
-          <div><h2>{heading.title}</h2><p>{heading.description}</p></div>
+          <div className="settings-header-copy"><h2>{heading.title}</h2><p>{heading.description}</p></div>
           <button className="settings-close" onClick={onClose} title={t("Close settings")} aria-label={t("Close settings")}><X size={16} /></button>
         </header>
 
-        <div className={section === "models" || section === "web" || section === "terminal" ? "settings-body settings-body-embedded" : "settings-body"}>
-          {section === "general" && <div className="settings-sections">
-            <section className="settings-card">
-              <div className="settings-card-heading"><Languages size={15} /><div><strong>{t("Language")}</strong><p>{t("Choose the language for the Archimedes interface.")}</p></div></div>
-              <label className="settings-field">
-                <span>{t("Language")}</span>
-                <select value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
-                  <option value="en">English</option>
-                  <option value="zh">简体中文</option>
-                </select>
-              </label>
-            </section>
+        <div className={embedded ? "settings-body settings-body-embedded" : "settings-body"}>
+          <div className="settings-content">
+            {section === "general" && <div className="settings-sections">
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Interface")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Language")}</span>
+                      <p className="settings-row-description">{t("Choose the language for the Archimedes interface.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <select className="settings-select" value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label={t("Language")}>
+                        <option value="en">English</option>
+                        <option value="zh">简体中文</option>
+                      </select>
+                    </div>
+                  </div>
 
-            <section className="settings-card">
-              <div className="settings-card-heading"><Type size={15} /><div><strong>{t("Text size")}</strong><p>{t("Text size scales the whole interface for easier reading.")}</p></div></div>
-              <div className="settings-segmented" role="group" aria-label={t("Text size")}>
-                {textSizes.map((item) => <button key={item.id} className={textSize === item.id ? "active" : ""} aria-pressed={textSize === item.id} onClick={() => setTextSize(item.id)}>{t(item.label)}</button>)}
-              </div>
-            </section>
+                  <div className="settings-row settings-row-stacked">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Text size")}</span>
+                      <p className="settings-row-description">{t("Text size scales the whole interface for easier reading.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-slider">
+                        <div className="settings-slider-head">
+                          <span className="settings-slider-label">{t(activeSize.label)}</span>
+                          <span className="settings-slider-value">{Math.round(activeSize.scale * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={textSizeSteps.length - 1}
+                          step={1}
+                          value={sizeIndex}
+                          aria-label={t("Text size")}
+                          aria-valuetext={`${t(activeSize.label)} · ${Math.round(activeSize.scale * 100)}%`}
+                          style={{ "--settings-slider-progress": `${(sizeIndex / (textSizeSteps.length - 1)) * 100}%` } as React.CSSProperties}
+                          onChange={(event) => setTextSize(textSizeSteps[Number(event.target.value)]?.id ?? "default")}
+                        />
+                        <div className="settings-slider-scale">
+                          {textSizeSteps.map((item) => <button key={item.id} type="button" className={textSize === item.id ? "active" : ""} aria-pressed={textSize === item.id} onClick={() => setTextSize(item.id)}>{t(item.label)}</button>)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-            <section className="settings-card">
-              <div className="settings-card-heading"><MessageSquareText size={15} /><div><strong>{t("Chat verbosity")}</strong><p>{t("Controls how much agent activity appears inline in chat.")}</p></div></div>
-              <div className="settings-segmented" role="group" aria-label={t("Chat verbosity")}>
-                {verbosityOptions.map((item) => <button key={item.id} className={chatVerbosity === item.id ? "active" : ""} aria-pressed={chatVerbosity === item.id} onClick={() => setChatVerbosity(item.id)}>{t(item.label)}</button>)}
-              </div>
-              <p className="settings-note">{t(verbosityOptions.find((item) => item.id === chatVerbosity)?.description ?? "Grouped steps")}</p>
-            </section>
-          </div>}
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Conversation")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Chat verbosity")}</span>
+                      <p className="settings-row-description">{t("Controls how much agent activity appears inline in chat.")}</p>
+                      <span className="settings-row-hint">{t(activeVerbosity.description)}</span>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Chat verbosity")}>
+                        {verbosityOptions.map((item) => <button key={item.id} className={chatVerbosity === item.id ? "active" : ""} aria-pressed={chatVerbosity === item.id} onClick={() => setChatVerbosity(item.id)}>{t(item.label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>}
 
-          {section === "appearance" && <div className="settings-sections">
-            <section className="settings-card">
-              <div className="settings-card-heading"><Palette size={15} /><div><strong>{t("Interface theme")}</strong><p>{t("Theme")}</p></div></div>
-              <div className="settings-theme-grid" role="group" aria-label={t("Theme")}>
-                <button className={themePreference === "charcoal" ? "settings-theme-option active" : "settings-theme-option"} onClick={() => onThemePreferenceChange("charcoal")} aria-pressed={themePreference === "charcoal"}>
-                  <Moon size={16} /><strong>{t("Charcoal")}</strong><small>{t("Dark")}</small>
-                </button>
-                <button className={themePreference === "system" ? "settings-theme-option active" : "settings-theme-option"} onClick={() => onThemePreferenceChange("system")} aria-pressed={themePreference === "system"}>
-                  <Monitor size={16} /><strong>{t("System")}</strong><small>{systemAppearance === "charcoal" ? t("Dark") : t("Light")}</small>
-                </button>
-                <button className={themePreference === "paper" ? "settings-theme-option active" : "settings-theme-option"} onClick={() => onThemePreferenceChange("paper")} aria-pressed={themePreference === "paper"}>
-                  <Sun size={16} /><strong>{t("Paper")}</strong><small>{t("Light")}</small>
-                </button>
-              </div>
-            </section>
+            {section === "appearance" && <div className="settings-sections">
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Theme")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Interface theme")}</span>
+                      <p className="settings-row-description">{t("Choose how Archimedes looks. System follows the operating system.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Theme")}>
+                        <button className={themePreference === "charcoal" ? "active" : ""} onClick={() => onThemePreferenceChange("charcoal")} aria-pressed={themePreference === "charcoal"}><Moon size={13} />{t("Charcoal")}</button>
+                        <button className={themePreference === "system" ? "active" : ""} onClick={() => onThemePreferenceChange("system")} aria-pressed={themePreference === "system"}><Monitor size={13} />{t("System")}</button>
+                        <button className={themePreference === "paper" ? "active" : ""} onClick={() => onThemePreferenceChange("paper")} aria-pressed={themePreference === "paper"}><Sun size={13} />{t("Paper")}</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-            <section className="settings-card">
-              <div className="settings-card-heading"><Type size={15} /><div><strong>{t("Interface font")}</strong><p>{t("Geist fonts are bundled locally.")}</p></div></div>
-              <label className="settings-field">
-                <span>{t("Interface font")}</span>
-                <select value={interfaceFont} onChange={(event) => setInterfaceFont(event.target.value as InterfaceFont)}>
-                  <option value="geist">{t("Geist Sans")}</option>
-                  <option value="system">{t("System")}</option>
-                </select>
-              </label>
-              <label className="settings-field">
-                <span><Code2 size={13} /> {t("Code font")}</span>
-                <select value={monoFont} onChange={(event) => setMonoFont(event.target.value as MonoFont)}>
-                  <option value="geist-mono">{t("Geist Mono")}</option>
-                  <option value="system">{t("System mono")}</option>
-                </select>
-              </label>
-            </section>
-          </div>}
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Fonts")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Interface font")}</span>
+                      <p className="settings-row-description">{t("Used for conversation, navigation, and interface text.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <select className="settings-select" value={interfaceFont} onChange={(event) => setInterfaceFont(event.target.value as InterfaceFont)} aria-label={t("Interface font")}>
+                        <option value="geist">{t("Geist Sans")}</option>
+                        <option value="system">{t("System")}</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title"><Code2 size={13} />{t("Code font")}</span>
+                      <p className="settings-row-description">{t("Used for code, terminal output, and trajectory detail.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <select className="settings-select" value={monoFont} onChange={(event) => setMonoFont(event.target.value as MonoFont)} aria-label={t("Code font")}>
+                        <option value="geist-mono">{t("Geist Mono")}</option>
+                        <option value="system">{t("System mono")}</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>}
 
-          {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} />}
-          {section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}
-          {section === "terminal" && (terminalSettings
-            ? <TerminalSettingsModal open embedded mode="settings" settings={terminalSettings} workspace={workspace} onClose={() => undefined} onSave={onSaveTerminalSettings} onOpenExternal={onOpenExternalTerminal} />
-            : <div className="settings-empty">{t("Loading terminal settings…")}</div>)}
+            {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} />}
+            {section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}
+            {section === "terminal" && (terminalSettings
+              ? <TerminalSettingsModal open embedded mode="settings" settings={terminalSettings} workspace={workspace} onClose={() => undefined} onSave={onSaveTerminalSettings} onOpenExternal={onOpenExternalTerminal} />
+              : <div className="settings-empty">{t("Loading terminal settings…")}</div>)}
 
-          {section === "workspace" && <div className="settings-sections">
-            <section className="settings-card">
-              <div className="settings-card-heading"><FolderOpen size={15} /><div><strong>{t("Current workspace")}</strong><p>{workspaceName || t("Opening workspace")}</p></div></div>
-              <code className="settings-workspace-path">{workspace || "—"}</code>
-              <p className="settings-note">{workspaceReady ? t("Workspace connected") : t("Opening workspace")}</p>
-              <div className="settings-actions"><button className="primary-button" onClick={onChooseWorkspace} disabled={agentBusy}><FolderOpen size={14} />{t("Change folder")}</button></div>
-            </section>
-          </div>}
+            {section === "workspace" && <div className="settings-sections">
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Folder")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row settings-row-stacked">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Current workspace")}</span>
+                      <p className="settings-row-description">{workspaceName || t("Opening workspace")} · {workspaceReady ? t("Workspace connected") : t("Opening workspace")}</p>
+                    </div>
+                    <div className="settings-row-control settings-workspace-control">
+                      <code className="settings-path">{workspace || "—"}</code>
+                      <button className="primary-button" onClick={onChooseWorkspace} disabled={agentBusy}><FolderOpen size={14} />{t("Change folder")}</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>}
 
-          {section === "about" && <div className="settings-sections">
-            <section className="settings-card settings-about">
+            {section === "about" && <div className="settings-about">
               <SettingsMark large />
-              <div><strong>Archimedes</strong><p>{t("Local-first AI for research.")}</p></div>
+              <strong>Archimedes</strong>
+              <p>{t("Local-first AI for research.")}</p>
               <dl><dt>{t("Version")}</dt><dd>0.1.0</dd></dl>
-            </section>
-          </div>}
+            </div>}
+          </div>
         </div>
       </div>
     </section>
@@ -196,3 +267,4 @@ export default function SettingsModal({
 function SettingsMark({ large = false }: { large?: boolean }) {
   return <span className={large ? "settings-mark large" : "settings-mark"} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5l2.6-1.5M17.2 9l2.6-1.5" /><circle cx="12" cy="12" r="3.4" /></svg></span>;
 }
+
