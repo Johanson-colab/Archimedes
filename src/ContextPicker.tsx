@@ -13,6 +13,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useUISettings } from "./i18n";
 
 type PickerView = "root" | "libraries" | "papers" | "plugins" | "skills";
 
@@ -22,6 +23,7 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
   items: ContextAttachment[];
   onAdd: (items: ContextAttachment[]) => void;
 }) {
+  const { t } = useUISettings();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<PickerView>("root");
   const [loading, setLoading] = useState(false);
@@ -144,47 +146,47 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
     const searchable = `${resource.name} ${resource.detail || ""}`.toLowerCase();
     return resourceTerms.every((term) => searchable.includes(term));
   });
-  const title = view === "libraries" ? "Literature Library" : view === "papers" ? selectedLibrary?.name ?? "Papers" : view === "plugins" ? "Plugins" : view === "skills" ? "Skills" : "Add context";
+  const title = view === "libraries" ? t("Literature library") : view === "papers" ? selectedLibrary?.name ?? t("Papers") : view === "plugins" ? t("Plugins") : view === "skills" ? t("Skills") : t("Add context");
 
   return <div className="context-picker" ref={pickerRef}>
-      <button className={open ? "composer-add-button active" : "composer-add-button"} onClick={() => reset(!open)} title="Add context" aria-label="Add context" aria-haspopup="dialog" aria-expanded={open}>
+      <button className={open ? "composer-add-button active" : "composer-add-button"} onClick={() => reset(!open)} title={t("Add context")} aria-label={t("Add context")} aria-haspopup="dialog" aria-expanded={open}>
         <Plus size={17} />
       </button>
-      {open && <div className="context-picker-menu" role="dialog" aria-label="Add context">
-        {view !== "root" && <div className="context-picker-header"><button onClick={() => { setView(view === "papers" ? "libraries" : "root"); setError(""); }} title="Back"><ArrowLeft size={15} /></button><strong>{title}</strong></div>}
+      {open && <div className="context-picker-menu" role="dialog" aria-label={t("Add context")}>
+        {view !== "root" && <div className="context-picker-header"><button onClick={() => { setView(view === "papers" ? "libraries" : "root"); setError(""); }} title={t("Back")}><ArrowLeft size={15} /></button><strong>{title}</strong></div>}
 
         {view === "root" && <>
-          <div className="context-picker-label">Add context</div>
-          <PickerAction icon={<FilePlus2 size={16} />} label="Local file" detail="Attach one or more files" onClick={() => void chooseLocal("file")} />
-          <PickerAction icon={<FolderPlus size={16} />} label="Local folder" detail="Give Archimedes access to a folder" onClick={() => void chooseLocal("folder")} />
+          <div className="context-picker-label">{t("Add context")}</div>
+          <PickerAction icon={<FilePlus2 size={16} />} label={t("Local file")} detail={t("Attach one or more files")} onClick={() => void chooseLocal("file")} />
+          <PickerAction icon={<FolderPlus size={16} />} label={t("Local folder")} detail={t("Give Archimedes access to a folder")} onClick={() => void chooseLocal("folder")} />
           <div className="context-picker-divider" />
-          <PickerAction icon={<BookMarked size={16} />} label="Literature Library" detail="Add papers from your collections" onClick={() => void showLibraries()} />
-          <PickerAction icon={<Plug size={16} />} label="Plugins" detail="Attach an installed plugin" onClick={() => void showResources("plugin")} />
-          <PickerAction icon={<Sparkles size={16} />} label="Skills" detail="Attach research instructions" onClick={() => void showResources("skill")} />
+          <PickerAction icon={<BookMarked size={16} />} label={t("Literature library")} detail={t("Add papers from your collections")} onClick={() => void showLibraries()} />
+          <PickerAction icon={<Plug size={16} />} label={t("Plugins")} detail={t("Attach an installed plugin")} onClick={() => void showResources("plugin")} />
+          <PickerAction icon={<Sparkles size={16} />} label={t("Skills")} detail={t("Attach research instructions")} onClick={() => void showResources("skill")} />
         </>}
 
-        {loading && <div className="context-picker-state"><LoaderCircle className="spin" size={17} />Loading...</div>}
+        {loading && <div className="context-picker-state"><LoaderCircle className="spin" size={17} />{t("Loading...")}</div>}
         {!loading && view === "libraries" && <div className="context-picker-list">
-          {libraries.map((library) => <button key={library.id} className="context-list-row" onClick={() => void showPapers(library)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{library.name}</strong><small>{library.paper_count} papers</small></span></button>)}
-          {!libraries.length && <div className="context-picker-state">No literature libraries yet.</div>}
+          {libraries.map((library) => <button key={library.id} className="context-list-row" onClick={() => void showPapers(library)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{library.name}</strong><small>{t("{count} papers", { count: library.paper_count })}</small></span></button>)}
+          {!libraries.length && <div className="context-picker-state">{t("No literature libraries yet.")}</div>}
         </div>}
 
         {!loading && view === "papers" && <>
-          <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search saved papers" /></label>
+          <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search saved papers")} /></label>
           <div className="context-picker-list">
             {filteredPapers.map((paper) => {
               const id = `paper:${paper.id}`;
-              return <button key={paper.id} className="context-list-row" onClick={() => addPaper(paper)} disabled={selectedIds.has(id)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{paper.title}</strong><small>{paper.authors.slice(0, 2).join(", ") || "Saved paper"}</small></span>{selectedIds.has(id) && <Check size={14} />}</button>;
+              return <button key={paper.id} className="context-list-row" onClick={() => addPaper(paper)} disabled={selectedIds.has(id)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{paper.title}</strong><small>{paper.authors.slice(0, 2).join(", ") || t("Saved paper")}</small></span>{selectedIds.has(id) && <Check size={14} />}</button>;
             })}
-            {!filteredPapers.length && <div className="context-picker-state">No matching papers.</div>}
+            {!filteredPapers.length && <div className="context-picker-state">{t("No matching papers.")}</div>}
           </div>
         </>}
 
         {!loading && (view === "plugins" || view === "skills") && <>
-          <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${view}`} /></label>
+          <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search {type}", { type: t(view === "plugins" ? "Plugins" : "Skills") })} /></label>
           <div className="context-picker-list">
             {filteredResources.map((resource) => <button key={resource.id} className="context-list-row" onClick={() => addResource(resource)} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
-            {!filteredResources.length && <div className="context-picker-state">No matching {view} found.</div>}
+            {!filteredResources.length && <div className="context-picker-state">{t("No matching {type} found.", { type: t(view === "plugins" ? "Plugins" : "Skills") })}</div>}
           </div>
         </>}
 
@@ -194,9 +196,10 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
 }
 
 export function ContextChips({ items, onRemove }: { items: ContextAttachment[]; onRemove: (id: string) => void }) {
+  const { t } = useUISettings();
   if (!items.length) return null;
-  return <div className="attached-contexts" aria-label="Attached context">
-    {items.map((item) => <span className={item.type === "image" ? "attached-context-chip image" : "attached-context-chip"} key={item.id} title={item.detail || item.path || item.name}>{item.type === "image" && item.image ? <img src={item.image.dataUrl} alt="" /> : <ContextTypeIcon type={item.type} />}<span>{item.name}</span><button onClick={() => onRemove(item.id)} title={`Remove ${item.name}`}><X size={12} /></button></span>)}
+  return <div className="attached-contexts" aria-label={t("Attached context")}>
+    {items.map((item) => <span className={item.type === "image" ? "attached-context-chip image" : "attached-context-chip"} key={item.id} title={item.detail || item.path || item.name}>{item.type === "image" && item.image ? <img src={item.image.dataUrl} alt="" /> : <ContextTypeIcon type={item.type} />}<span>{item.name}</span><button onClick={() => onRemove(item.id)} title={t("Remove {name}", { name: item.name })}><X size={12} /></button></span>)}
   </div>;
 }
 

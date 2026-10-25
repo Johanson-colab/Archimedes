@@ -23,22 +23,35 @@ const SPECIALISTS = [
   },
 ];
 
-function specialistPrompt(specialist, paper, pageCount) {
-  return `You are the ${specialist.title} specialist in an evidence-first paper review of “${paper.title}”.\n\n${specialist.instruction}\n\nThe attached PDF contains ${pageCount || "indexed"} pages. Read the relevant original PDF sections before writing. Do not invent details. Cite a PDF page for every material factual claim, result, or author claim. Write for an evidence supervisor, not as a generic summary.\n\nUse exactly these sections:\n## Findings\n## Page-cited evidence\n## Uncertainty and missing evidence\n## Questions that could change the assessment`;
+function specialistPrompt(specialist, paper, pageCount, language) {
+  const structure = language === "zh"
+    ? "## 主要发现\n## 带页码引用的证据\n## 不确定性与缺失证据\n## 可能改变评估的问题"
+    : "## Findings\n## Page-cited evidence\n## Uncertainty and missing evidence\n## Questions that could change the assessment";
+  const outputInstruction = language === "zh" ? "请全程使用简体中文作答，专业术语可在首次出现时保留英文。" : "Write the report in English.";
+  return `You are the ${specialist.title} specialist in an evidence-first paper review of “${paper.title}”.\n\n${specialist.instruction}\n\nThe attached PDF contains ${pageCount || "indexed"} pages. Read the relevant original PDF sections before writing. Do not invent details. Cite a PDF page for every material factual claim, result, or author claim. Write for an evidence supervisor, not as a generic summary. ${outputInstruction}\n\nUse exactly these sections:\n${structure}`;
 }
 
-function supervisorPrompt(paper, reports) {
+function supervisorPrompt(paper, reports, language) {
   const dossier = reports.map(({ id, title, response }) => `### ${title} (${id})\n${String(response || "").slice(0, 8_000)}`).join("\n\n");
-  return `You are the Evidence Supervisor for a multi-agent review of “${paper.title}”. Audit the four specialist reports below before a final summary is permitted.\n\nCheck: (1) material factual claims have PDF page citations, (2) specialists do not overstate novelty or experimental evidence, (3) disagreements and gaps remain visible. You may request one targeted revision pass for no more than two specialists.\n\nReturn ONLY valid JSON in this schema:\n{"verdict":"ready"|"repair","repair_targets":["related"|"method"|"experiments"|"limitations"],"reason":"short evidence-specific explanation","requirements":{"related":"...","method":"...","experiments":"...","limitations":"..."}}\n\nUse an empty repair_targets array when ready. Requirements must only describe necessary repairs.\n\nSpecialist reports:\n${dossier}`;
+  const outputInstruction = language === "zh" ? "JSON 中的 reason 和 requirements 必须使用简体中文。" : "Write reason and requirements in English.";
+  return `You are the Evidence Supervisor for a multi-agent review of “${paper.title}”. Audit the four specialist reports below before a final summary is permitted.\n\nCheck: (1) material factual claims have PDF page citations, (2) specialists do not overstate novelty or experimental evidence, (3) disagreements and gaps remain visible. You may request one targeted revision pass for no more than two specialists. ${outputInstruction}\n\nReturn ONLY valid JSON in this schema:\n{"verdict":"ready"|"repair","repair_targets":["related"|"method"|"experiments"|"limitations"],"reason":"short evidence-specific explanation","requirements":{"related":"...","method":"...","experiments":"...","limitations":"..."}}\n\nUse an empty repair_targets array when ready. Requirements must only describe necessary repairs.\n\nSpecialist reports:\n${dossier}`;
 }
 
-function repairPrompt(specialist, paper, priorResponse, requirement, pageCount) {
-  return `You are revising the ${specialist.title} report for “${paper.title}” after an evidence audit. The PDF has ${pageCount || "indexed"} pages.\n\nAudit requirement: ${requirement || "Strengthen page-cited evidence and preserve uncertainty."}\n\nPrevious report:\n${String(priorResponse || "").slice(0, 9_000)}\n\nRe-read the relevant PDF pages. Replace the report with a corrected version using exactly:\n## Findings\n## Page-cited evidence\n## Uncertainty and missing evidence\n## Questions that could change the assessment\n\nDo not claim a fact, result, or comparison without a page citation.`;
+function repairPrompt(specialist, paper, priorResponse, requirement, pageCount, language) {
+  const structure = language === "zh"
+    ? "## 主要发现\n## 带页码引用的证据\n## 不确定性与缺失证据\n## 可能改变评估的问题"
+    : "## Findings\n## Page-cited evidence\n## Uncertainty and missing evidence\n## Questions that could change the assessment";
+  const outputInstruction = language === "zh" ? "请全程使用简体中文作答。" : "Write the report in English.";
+  return `You are revising the ${specialist.title} report for “${paper.title}” after an evidence audit. The PDF has ${pageCount || "indexed"} pages.\n\nAudit requirement: ${requirement || "Strengthen page-cited evidence and preserve uncertainty."}\n\nPrevious report:\n${String(priorResponse || "").slice(0, 9_000)}\n\nRe-read the relevant PDF pages. ${outputInstruction} Replace the report with a corrected version using exactly:\n${structure}\n\nDo not claim a fact, result, or comparison without a page citation.`;
 }
 
-function summaryPrompt(paper, reports, supervisor) {
+function summaryPrompt(paper, reports, supervisor, language) {
   const dossier = reports.map(({ title, response }) => `### ${title}\n${String(response || "").slice(0, 8_000)}`).join("\n\n");
-  return `You are the Summary agent for an evidence-audited review of “${paper.title}”. Produce a durable research memorandum from the specialist reports.\n\nSupervisor verdict:\n${supervisor?.reason || "No additional supervisor note."}\n\nOnly page-cited statements count as verified paper evidence. Preserve uncertainty and disagreement; do not invent citations.\n\nUse exactly this structure:\n# Review memorandum\n## Central contribution\n## Method in brief\n## Experimental record\n## Position in related work\n## Limitations and open questions\n## Reproducibility checklist\n## Suggested next verification\n\nSpecialist reports:\n${dossier}`;
+  const structure = language === "zh"
+    ? "# 评述备忘录\n## 核心贡献\n## 方法概要\n## 实验证据\n## 相关工作定位\n## 局限与开放问题\n## 可复现性清单\n## 建议的下一步核验"
+    : "# Review memorandum\n## Central contribution\n## Method in brief\n## Experimental record\n## Position in related work\n## Limitations and open questions\n## Reproducibility checklist\n## Suggested next verification";
+  const outputInstruction = language === "zh" ? "请全程使用简体中文作答，专业术语可在首次出现时保留英文。" : "Write the memorandum in English.";
+  return `You are the Summary agent for an evidence-audited review of “${paper.title}”. Produce a durable research memorandum from the specialist reports.\n\nSupervisor verdict:\n${supervisor?.reason || "No additional supervisor note."}\n\nOnly page-cited statements count as verified paper evidence. Preserve uncertainty and disagreement; do not invent citations. ${outputInstruction}\n\nUse exactly this structure:\n${structure}\n\nSpecialist reports:\n${dossier}`;
 }
 
 function parseSupervisor(response) {
@@ -65,7 +78,7 @@ function emitStage(emit, payload) {
   emit({ type: "stage", ...payload });
 }
 
-async function runPaperReview({ paper, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser, emit = () => {} }) {
+async function runPaperReview({ paper, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser, language = "en", emit = () => {} }) {
   // Review specialists are internal workers. Their reports are returned to the
   // review workbench, never persisted as user-visible project conversations.
   const common = { workspace, projectId, mode: "paper-review", reasoningEffort, contextLength, contextItems, browser, transient: true, emit: () => {} };
@@ -74,7 +87,7 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
   const settled = await Promise.all(SPECIALISTS.map(async (specialist) => {
     emitStage(emit, { stage: "specialist_started", reviewerId: specialist.id, title: `${specialist.title} is reading`, detail: "Checking the original PDF for page-cited evidence." });
     try {
-      const result = await runAgent({ ...common, prompt: specialistPrompt(specialist, paper, pageCount) });
+      const result = await runAgent({ ...common, prompt: specialistPrompt(specialist, paper, pageCount, language) });
       if (result.status !== "completed") throw new Error(result.response || "The specialist did not complete its reading.");
       emitStage(emit, { stage: "specialist_complete", reviewerId: specialist.id, title: `${specialist.title} completed`, detail: "Its independent evidence note is ready." });
       return { ...specialist, status: "complete", response: result.response, error: "", run: result };
@@ -95,7 +108,7 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
   let supervisorRun = null;
   let supervisor = { verdict: "ready", repair_targets: [], reason: "Evidence audit unavailable; the memorandum will retain all stated uncertainty.", requirements: {} };
   try {
-    supervisorRun = await runAgent({ ...common, prompt: supervisorPrompt(paper, usable) });
+    supervisorRun = await runAgent({ ...common, prompt: supervisorPrompt(paper, usable, language) });
     agentRuns.push(supervisorRun);
     if (supervisorRun.status === "completed") supervisor = parseSupervisor(supervisorRun.response);
   } catch (error) {
@@ -109,7 +122,7 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
       const previous = settled.find((item) => item.id === id);
       if (!specialist || !previous?.response) return null;
       try {
-        const run = await runAgent({ ...common, prompt: repairPrompt(specialist, paper, previous.response, supervisor.requirements[id], pageCount) });
+        const run = await runAgent({ ...common, prompt: repairPrompt(specialist, paper, previous.response, supervisor.requirements[id], pageCount, language) });
         agentRuns.push(run);
         if (run.status !== "completed") throw new Error(run.response || "The repair pass did not complete.");
         return { id, response: run.response, run };
@@ -133,7 +146,7 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
 
   const finalReports = settled.filter((result) => result.status === "complete" && result.response);
   emitStage(emit, { stage: "summary", title: "Writing the memorandum", detail: "Combining audited evidence while retaining uncertainty and disagreements." });
-  const summaryRun = await runAgent({ ...common, prompt: summaryPrompt(paper, finalReports, supervisor) });
+  const summaryRun = await runAgent({ ...common, prompt: summaryPrompt(paper, finalReports, supervisor, language) });
   agentRuns.push(summaryRun);
   if (summaryRun.status !== "completed") throw new Error(summaryRun.response || "The Summary agent did not complete the review memorandum.");
   emitStage(emit, { stage: "complete", title: "Review memorandum complete", detail: "The evidence-audited review is ready to read." });

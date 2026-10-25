@@ -126,8 +126,8 @@ test("dirty file changes are protected when the workbench closes", () => {
 test("agent trajectory mirrors the OpenCode context structure", () => {
   assert.match(workbench, /activeTab === "journey"/);
   assert.match(workbench, /activeTab === "trajectory"/);
-  assert.match(workbench, />Journey<\/span>/);
-  assert.match(workbench, />Trajectory<\/span>/);
+  assert.match(workbench, /\{t\("Journey"\)\}<\/span>/);
+  assert.match(workbench, /\{t\("Trajectory"\)\}<\/span>/);
   assert.match(trajectory, /trajectory-stats/);
   assert.match(trajectory, /Session ID/);
   assert.match(trajectory, /Raw events/);
@@ -170,8 +170,8 @@ test("terminal settings expose platform shell, font and external terminal contro
 });
 
 test("agent journey is derived from raw trajectory events", () => {
-  assert.match(journey, /Derived from \{events\.length\} raw events/);
-  assert.match(journey, /from trajectory event #\{event\.sequence\}/);
+  assert.match(journey, /t\("Derived from \{count\} raw events", \{ count: events\.length \}\)/);
+  assert.match(journey, /t\("from trajectory event #\{sequence\}", \{ sequence: event\.sequence \}\)/);
   assert.match(journey, /const phases = \[/);
   assert.match(journey, /View raw/);
   assert.match(journey, /Open trajectory/);

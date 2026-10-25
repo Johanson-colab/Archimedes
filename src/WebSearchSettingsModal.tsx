@@ -51,9 +51,9 @@ export default function WebSearchSettingsModal({ bridge, open, onClose, embedded
 
   if (!open) return null;
   const content = <>
-      {!embedded && <header className="model-settings-header"><div><span>Agent tools</span><h2>Web data</h2><p>Choose the search service Archimedes uses. Your own API key stays on this device.</p></div><button className="quiet-icon-button" onClick={onClose} title="Close web data settings"><X size={17} /></button></header>}
+      {!embedded && <header className="model-settings-header"><div><span>{t("Agent tools")}</span><h2>{t("Web data")}</h2><p>{t("Choose the search service Archimedes uses. Your own API key stays on this device.")}</p></div><button className="quiet-icon-button" onClick={onClose} title={t("Close web data settings")}><X size={17} /></button></header>}
       <div className="web-data-layout">
-        <nav className="web-data-provider-list" aria-label="Web data providers">
+        <nav className="web-data-provider-list" aria-label={t("Web data providers")}>
           {providers.map((item) => <button key={item.id} type="button" className={`web-data-provider${provider === item.id ? " active" : ""}`} onClick={() => { setProvider(item.id); setApiKey(""); setFeedback(""); }}>
             <span className={`web-data-icon ${item.id}`}>{item.icon}</span><span className="web-data-provider-copy"><strong>{item.name}</strong><small>{t(item.description)}</small></span>{configured.includes(item.id) && <Check className="web-data-check" size={15} />}
           </button>)}
@@ -68,8 +68,8 @@ export default function WebSearchSettingsModal({ bridge, open, onClose, embedded
       </div>
       <footer className="model-settings-footer"><span>{hasSelectedKey ? t("{provider} key saved", { provider: selected.name }) : t("Add a key to activate this provider")}</span><div>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Close")}</button>}<button className="primary-button" onClick={() => void save()} disabled={saving || (!apiKey.trim() && !hasSelectedKey)}><Save size={14} />{t("Use {provider}", { provider: selected.name })}</button></div></footer>
     </>;
-  if (embedded) return <section className="settings-embedded web-search-modal" aria-label="Web search settings">{content}</section>;
+  if (embedded) return <section className="settings-embedded web-search-modal" aria-label={t("Web search settings")}>{content}</section>;
   return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="web-search-modal" role="dialog" aria-modal="true" aria-label="Web search settings" onMouseDown={(event) => event.stopPropagation()}>{content}</section>
+    <section ref={dialogRef} tabIndex={-1} className="web-search-modal" role="dialog" aria-modal="true" aria-label={t("Web search settings")} onMouseDown={(event) => event.stopPropagation()}>{content}</section>
   </div>;
 }

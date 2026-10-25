@@ -167,12 +167,12 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   if (!open) return null;
   const content = <>
       {!embedded && <header className="model-settings-header">
-        <div><span>Agent runtime</span><h2>Model providers</h2><p>Choose the model Archimedes uses for new research turns.</p></div>
-        <button className="quiet-icon-button" onClick={onClose} title="Close model settings"><X size={17} /></button>
+        <div><span>{t("Agent runtime")}</span><h2>{t("Model providers")}</h2><p>{t("Choose the model Archimedes uses for new research turns.")}</p></div>
+        <button className="quiet-icon-button" onClick={onClose} title={t("Close model settings")}><X size={17} /></button>
       </header>}
 
       <div className="model-settings-body">
-        <nav className="provider-list" aria-label="Model providers">
+        <nav className="provider-list" aria-label={t("Model providers")}>
           {providers.map((item) => <button key={item.id} className={item.id === provider ? "provider-option active" : "provider-option"} onClick={() => chooseProvider(item)}>
             <span className="provider-icon">{item.icon}</span>
             <span><strong>{item.name}</strong><small>{item.id === provider && model ? model : item.caption}</small></span>
@@ -208,8 +208,8 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         <div>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Cancel")}</button>}<button className="primary-button" onClick={() => void save()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{saving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{t("Save model")}</button></div>
       </footer>
     </>;
-  if (embedded) return <section className="settings-embedded model-settings-modal" aria-label="Model settings">{content}</section>;
+  if (embedded) return <section className="settings-embedded model-settings-modal" aria-label={t("Model settings")}>{content}</section>;
   return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="model-settings-modal" role="dialog" aria-modal="true" aria-label="Model settings" onMouseDown={(event) => event.stopPropagation()}>{content}</section>
+    <section ref={dialogRef} tabIndex={-1} className="model-settings-modal" role="dialog" aria-modal="true" aria-label={t("Model settings")} onMouseDown={(event) => event.stopPropagation()}>{content}</section>
   </div>;
 }

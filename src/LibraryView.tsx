@@ -173,6 +173,7 @@ type LibraryViewProps = {
 };
 
 export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted }: LibraryViewProps) {
+  const { t } = useUISettings();
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -231,7 +232,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   }
 
   async function deleteLibrary() {
-    if (!selectedLibrary || !window.confirm(`Delete "${selectedLibrary.name}"? Papers shared with other libraries are kept.`)) return;
+    if (!selectedLibrary || !window.confirm(t("Delete {name}? Papers shared with other libraries are kept.", { name: `“${selectedLibrary.name}”` }))) return;
     await bridge.deleteLibrary(selectedLibrary.id);
     setSelectedLibraryId(null);
     setPapers([]);
@@ -245,7 +246,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   }
 
   async function removePaper() {
-    if (!selectedLibrary || !selectedPaper || !window.confirm(`Remove "${selectedPaper.title}" from this library?`)) return;
+    if (!selectedLibrary || !selectedPaper || !window.confirm(t("Remove {name} from this library?", { name: `“${selectedPaper.title}”` }))) return;
     await bridge.removeLibraryPaper(selectedLibrary.id, selectedPaper.id);
     await Promise.all([loadPapers(selectedLibrary.id, localQuery), loadLibraries()]);
   }
@@ -266,18 +267,18 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   if (!selectedLibrary) {
     return <section className="library-page">
       <header className="library-page-header">
-        <div><span className="eyebrow">Knowledge base</span><h1>Literature library</h1><p>Curated research directions with searchable, reusable paper records.</p></div>
-        <button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button>
+        <div><span className="eyebrow">{t("Knowledge base")}</span><h1>{t("Literature library")}</h1><p>{t("Curated research directions with searchable, reusable paper records.")}</p></div>
+        <button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />{t("New library")}</button>
       </header>
       {error && <div className="library-error">{error}</div>}
       {loading && !libraries.length ? <LoadingState /> : <div className="library-card-grid">
         {libraries.map((library) => <button className="library-card" key={library.id} onClick={() => setSelectedLibraryId(library.id)}>
           <LibraryGlyph name={library.name} />
           <span className="library-card-copy">
-            <span className="library-card-title"><strong>{library.name}</strong><span className="library-color-dot" style={{ background: library.color }} aria-hidden="true" /></span>
-            <small>{library.description}</small>
+            <span className="library-card-title"><strong>{t(library.name)}</strong><span className="library-color-dot" style={{ background: library.color }} aria-hidden="true" /></span>
+            <small>{t(library.description)}</small>
           </span>
-          <span className="library-card-meta"><b>{library.paper_count}</b> papers<ExternalLink size={13} /></span>
+          <span className="library-card-meta"><b>{library.paper_count}</b> {t("papers")}<ExternalLink size={13} /></span>
         </button>)}
       </div>}
       <LibraryEditor editor={libraryEditor} onClose={() => setLibraryEditor(null)} onSave={saveLibrary} />
@@ -300,17 +301,17 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 
   return <section className="library-page library-detail-page">
     <header className="library-detail-header">
-      <button className="icon-button" onClick={() => setSelectedLibraryId(null)} title="All libraries"><ArrowLeft size={17} /></button>
+      <button className="icon-button" onClick={() => setSelectedLibraryId(null)} title={t("All libraries")}><ArrowLeft size={17} /></button>
       <LibraryGlyph name={selectedLibrary.name} size={19} />
-      <div><span className="eyebrow">Literature library</span><h1 className="library-detail-title"><span>{selectedLibrary.name}</span><span className="library-color-dot" style={{ background: selectedLibrary.color }} aria-hidden="true" /></h1></div>
+      <div><span className="eyebrow">{t("Literature library")}</span><h1 className="library-detail-title"><span>{t(selectedLibrary.name)}</span><span className="library-color-dot" style={{ background: selectedLibrary.color }} aria-hidden="true" /></h1></div>
       <div className="library-header-actions">
-        <button className="icon-button" onClick={() => setLibraryEditor(selectedLibrary)} title="Edit library"><Pencil size={15} /></button>
-        <button className="icon-button danger" onClick={() => void deleteLibrary()} title="Delete library"><Trash2 size={15} /></button>
-        <button className="primary-button" onClick={() => setImportOpen(true)}><Plus size={15} />Import paper</button>
+        <button className="icon-button" onClick={() => setLibraryEditor(selectedLibrary)} title={t("Edit library")}><Pencil size={15} /></button>
+        <button className="icon-button danger" onClick={() => void deleteLibrary()} title={t("Delete library")}><Trash2 size={15} /></button>
+        <button className="primary-button" onClick={() => setImportOpen(true)}><Plus size={15} />{t("Import paper")}</button>
       </div>
     </header>
-    <div className="library-description">{selectedLibrary.description}</div>
-    <div className="library-toolbar"><Search size={15} /><input value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder="Search title, author, abstract, or venue" /><span>{papers.length} papers</span></div>
+    <div className="library-description">{t(selectedLibrary.description)}</div>
+    <div className="library-toolbar"><Search size={15} /><input value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder={t("Search title, author, abstract, or venue")} /><span>{papers.length} {t("papers")}</span></div>
     {error && <div className="library-error">{error}</div>}
     <div className="library-split">
       <div className="library-paper-list">
@@ -318,7 +319,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
           <span className="paper-row-year">{paper.year ?? "—"}</span>
           <span><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")}{paper.authors.length > 3 ? " et al." : ""}</small></span>
           {paper.starred && <Star size={13} fill="currentColor" />}
-        </button>) : <div className="empty-library"><BookOpen size={22} /><strong>No matching papers</strong><span>Import a paper or change the search query.</span></div>}
+        </button>) : <div className="empty-library"><BookOpen size={22} /><strong>{t("No matching papers")}</strong><span>{t("Import a paper or change the search query.")}</span></div>}
       </div>
       <PaperInspector paper={selectedPaper} onUpdate={updatePaper} onRemove={removePaper} onRead={() => selectedPaper && setReaderPaperId(selectedPaper.id)} />
     </div>
@@ -328,19 +329,20 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 }
 
 function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void }) {
+  const { t } = useUISettings();
   const [notes, setNotes] = useState("");
   useEffect(() => setNotes(paper?.notes ?? ""), [paper]);
-  if (!paper) return <div className="paper-inspector empty"><BookOpen size={24} /><span>Select a paper to inspect its record.</span></div>;
+  if (!paper) return <div className="paper-inspector empty"><BookOpen size={24} /><span>{t("Select a paper to inspect its record.")}</span></div>;
   return <article className="paper-inspector">
-    <div className="paper-inspector-kicker"><span>{paper.venue || "Research paper"}</span><span>{paper.year ?? "Year unknown"}</span></div>
-    <div className="paper-inspector-title"><h2>{paper.title}</h2><button className={paper.starred ? "icon-button starred" : "icon-button"} onClick={() => void onUpdate({ starred: !paper.starred })} title={paper.starred ? "Unstar" : "Star"}><Star size={17} fill={paper.starred ? "currentColor" : "none"} /></button></div>
-    <p className="paper-authors">{paper.authors.join(", ") || "Authors unavailable"}</p>
-    {paper.conference && <div className="conference-saved-metadata"><span>{paper.conference.presentation === "unknown" ? "Unclassified" : paper.conference.presentation === "oral" ? "Oral" : paper.conference.presentation === "spotlight" ? "Spotlight" : "Poster"}</span><a href={paper.conference.presentation_source_url || paper.conference.source_url} target="_blank" rel="noreferrer">Official conference record</a></div>}
-    <p className="paper-abstract">{paper.abstract || "No abstract was returned by the metadata provider."}</p>
-    <div className="paper-record-row"><label>Reading status<select value={paper.reading_status} onChange={(event) => void onUpdate({ reading_status: event.target.value as ReadingStatus })}><option value="unread">Unread</option><option value="reading">Reading</option><option value="read">Read</option></select></label>{publicPaperRecordUrl(paper) && <a className="outline-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open source</a>}</div>
-    <button className="paper-reader-launch" onClick={onRead}><BookOpen size={15} /><span><strong>Open reading workspace</strong><small>Notes, evidence, and paper structure</small></span><ChevronRight size={16} /></button>
-    <label className="paper-notes">My notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={6} placeholder="Why is this paper useful? What should you verify?" /></label>
-    <div className="paper-inspector-actions"><button className="secondary-button danger-text" onClick={() => void onRemove()}><Trash2 size={14} />Remove</button><button className="primary-button" onClick={() => void onUpdate({ notes })}><Save size={14} />Save notes</button></div>
+    <div className="paper-inspector-kicker"><span>{paper.venue || t("Research paper")}</span><span>{paper.year ?? t("Year unknown")}</span></div>
+    <div className="paper-inspector-title"><h2>{paper.title}</h2><button className={paper.starred ? "icon-button starred" : "icon-button"} onClick={() => void onUpdate({ starred: !paper.starred })} title={paper.starred ? t("Unstar") : t("Star")}><Star size={17} fill={paper.starred ? "currentColor" : "none"} /></button></div>
+    <p className="paper-authors">{paper.authors.join(", ") || t("Authors unavailable")}</p>
+    {paper.conference && <div className="conference-saved-metadata"><span>{paper.conference.presentation === "unknown" ? t("Unclassified") : paper.conference.presentation === "oral" ? t("Oral") : paper.conference.presentation === "spotlight" ? t("Spotlight") : t("Poster")}</span><a href={paper.conference.presentation_source_url || paper.conference.source_url} target="_blank" rel="noreferrer">{t("Official conference record")}</a></div>}
+    <p className="paper-abstract">{paper.abstract || t("No abstract was returned by the metadata provider.")}</p>
+    <div className="paper-record-row"><label>{t("Reading status")}<select value={paper.reading_status} onChange={(event) => void onUpdate({ reading_status: event.target.value as ReadingStatus })}><option value="unread">{t("Unread")}</option><option value="reading">{t("Reading")}</option><option value="read">{t("Read (status)")}</option></select></label>{publicPaperRecordUrl(paper) && <a className="outline-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer"><ExternalLink size={14} />{t("Open source")}</a>}</div>
+    <button className="paper-reader-launch" onClick={onRead}><BookOpen size={15} /><span><strong>{t("Open reading workspace")}</strong><small>{t("Notes, evidence, and paper structure")}</small></span><ChevronRight size={16} /></button>
+    <label className="paper-notes">{t("My notes")}<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={6} placeholder={t("Why is this paper useful? What should you verify?")} /></label>
+    <div className="paper-inspector-actions"><button className="secondary-button danger-text" onClick={() => void onRemove()}><Trash2 size={14} />{t("Remove")}</button><button className="primary-button" onClick={() => void onUpdate({ notes })}><Save size={14} />{t("Save notes")}</button></div>
   </article>;
 }
 
@@ -863,7 +865,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         {readerView !== "review" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}<span>{t("Ask AI")}</span></button>}
       </div>
     </header>
-    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />{t("Original paper")}</button><button className={readerView === "review" ? "active" : ""} role="tab" aria-selected={readerView === "review"} onClick={() => { setReaderView("review"); setChatOpen(false); }}><BookOpen size={16} />{t("Review")}</button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
+    <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />{t("Original paper")}</button><button className={readerView === "review" ? "active" : ""} role="tab" aria-selected={readerView === "review"} onClick={() => { setReaderView("review"); setChatOpen(false); }}><BookOpen size={16} />{t("Review")}</button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={16} />{t("Project")}</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />{t("Codebase")}</button>}</div>
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
       {readerView === "review" ? <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} /> : readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
         {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
@@ -2061,6 +2063,7 @@ function normalizePaperMathLine(line: string) {
 }
 
 function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | "new" | null; onClose: () => void; onSave: (input: { name: string; description: string; color: string }) => Promise<void> }) {
+  const { t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(Boolean(editor), onClose);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -2077,16 +2080,17 @@ function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | 
     setBusy(true);
     try { await onSave({ name: name.trim(), description: description.trim(), color }); } finally { setBusy(false); }
   }
-  return <div className="modal-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal" role="dialog" aria-modal="true" aria-label={editor === "new" ? "New library" : "Edit library"} onMouseDown={(event) => event.stopPropagation()}>
-    <div className="modal-header"><div><span className="eyebrow">Knowledge base</span><h2>{editor === "new" ? "New literature library" : "Edit library"}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
-    <label>Library name<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Agentic RAG" /></label>
-    <label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="What belongs in this research direction?" /></label>
-    <div className="color-picker" aria-label="Library color">{LIBRARY_COLORS.map((swatch) => <button key={swatch} className={color === swatch ? "color-swatch selected" : "color-swatch"} style={{ background: swatch }} onClick={() => setColor(swatch)} title={swatch}>{color === swatch && <Check size={13} />}</button>)}</div>
-    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !name.trim()} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{editor === "new" ? "Create library" : "Save changes"}</button></div>
+  return <div className="modal-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal" role="dialog" aria-modal="true" aria-label={editor === "new" ? t("New library") : t("Edit library")} onMouseDown={(event) => event.stopPropagation()}>
+    <div className="modal-header"><div><span className="eyebrow">{t("Knowledge base")}</span><h2>{editor === "new" ? t("New literature library") : t("Edit library")}</h2></div><button className="icon-button" onClick={onClose} title={t("Close")}><X size={16} /></button></div>
+    <label>{t("Library name")}<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Agentic RAG" /></label>
+    <label>{t("Description")}<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder={t("What belongs in this research direction?")} /></label>
+    <div className="color-picker" aria-label={t("Library color")}>{LIBRARY_COLORS.map((swatch) => <button key={swatch} className={color === swatch ? "color-swatch selected" : "color-swatch"} style={{ background: swatch }} onClick={() => setColor(swatch)} title={swatch}>{color === swatch && <Check size={13} />}</button>)}</div>
+    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="primary-button" disabled={busy || !name.trim()} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{editor === "new" ? t("Create library") : t("Save changes")}</button></div>
   </section></div>;
 }
 
 function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: boolean; bridge: ResearchDeskBridge; library: ResearchLibrary; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void> }) {
+  const { t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AcademicSearchResult[]>([]);
@@ -2123,16 +2127,16 @@ function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: 
       setAdding(null);
     }
   }
-  return <div className="modal-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal paper-import-modal" role="dialog" aria-modal="true" aria-label="Import paper" onMouseDown={(event) => event.stopPropagation()}>
-    <div className="modal-header"><div><span className="eyebrow">Import into {library.name}</span><h2>Find academic papers</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
-    <p>Search by title, topic, DOI, arXiv URL, or arXiv ID. arXiv links are resolved directly; other queries use Semantic Scholar and OpenAlex.</p>
-    <div className="external-search-box"><Search size={16} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void search()} placeholder="e.g. adaptive retrieval or 2401.18059" /><button className="primary-button" disabled={searching || !query.trim()} onClick={() => void search()}>{searching ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div>
+  return <div className="modal-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal paper-import-modal" role="dialog" aria-modal="true" aria-label={t("Import paper")} onMouseDown={(event) => event.stopPropagation()}>
+    <div className="modal-header"><div><span className="eyebrow">{t("Import into {name}", { name: library.name })}</span><h2>{t("Find academic papers")}</h2></div><button className="icon-button" onClick={onClose} title={t("Close")}><X size={16} /></button></div>
+    <p>{t("Search by title, topic, DOI, arXiv URL, or arXiv ID. arXiv links are resolved directly; other queries use Semantic Scholar and OpenAlex.")}</p>
+    <div className="external-search-box"><Search size={16} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void search()} placeholder={t("e.g. adaptive retrieval or 2401.18059")} /><button className="primary-button" disabled={searching || !query.trim()} onClick={() => void search()}>{searching ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}{t("Search")}</button></div>
     {error && <div className="library-error" role="alert">{error}</div>}
     <div className="external-results">{results.map((paper) => {
       const key = paper.external_id || paper.title;
       const isImported = imported.has(key);
       const isAdding = adding === key;
-      return <article className="external-paper" key={key}><div><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")} · {paper.year ?? "n.d."} · {paper.venue || paper.source}</small></div><button className={isImported ? "secondary-button imported" : "outline-button"} disabled={isImported || Boolean(adding)} onClick={() => void add(paper)}>{isImported ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isImported ? "Added" : isAdding ? "Adding" : "Add"}</button></article>;
+      return <article className="external-paper" key={key}><div><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")} · {paper.year ?? t("n.d.")} · {paper.venue || paper.source}</small></div><button className={isImported ? "secondary-button imported" : "outline-button"} disabled={isImported || Boolean(adding)} onClick={() => void add(paper)}>{isImported ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isImported ? t("Added") : isAdding ? t("Adding") : t("Add")}</button></article>;
     })}</div>
   </section></div>;
 }

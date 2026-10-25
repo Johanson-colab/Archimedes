@@ -1886,6 +1886,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   composerRequest: { id: string; text: string } | null;
   onComposerRequestApplied: (id: string) => void;
 }) {
+  const { t } = useUISettings();
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
   const [contextLengthMenuOpen, setContextLengthMenuOpen] = useState(false);
@@ -1938,7 +1939,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   );
   const contextUsage = estimatedContextCharacters / contextCharacterLimit;
   const contextUsageState = contextUsage >= 0.9 ? "critical" : contextUsage >= 0.7 ? "warning" : "normal";
-  const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${contextCharacterLimit.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
+  const contextUsageTitle = t("Estimated context usage: {percent}%", { percent: Math.round(contextUsage * 100) });
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
   const availableThinkingEfforts = reasoningEfforts.filter((effort) => modelCapabilities.thinkingEfforts.includes(effort.id));
   const availableContextLengths = contextLengths.filter((length) => modelCapabilities.contextLengths.includes(length.id));
@@ -2082,13 +2083,15 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
     const nextStage = researchStages[currentIndex + 1];
     setAcceptedStages((current) => current.includes(activeStage.id) ? current : [...current, activeStage.id]);
     setStaleStages((current) => current.filter((id) => id !== activeStage.id));
-    setJourneyNotice(`${activeStage.checkpoint} accepted${nextStage ? `. Archimedes will route new work toward ${nextStage.label}.` : ". Research cycle complete."}`);
+    setJourneyNotice(nextStage
+      ? t("{checkpoint} accepted. Archimedes will route new work toward {stage}.", { checkpoint: t(activeStage.checkpoint), stage: t(nextStage.label) })
+      : t("{checkpoint} accepted. Research cycle complete.", { checkpoint: t(activeStage.checkpoint) }));
     setSelectedStage(null);
     if (nextStage) onResearchMode(nextStage.mode);
   }
 
   function requestCheckpointChanges() {
-    setPrompt(`Revise the current ${activeStage.checkpoint.toLowerCase()}. Preserve the accepted evidence, explain what changed, and prepare a new checkpoint for review.`);
+    setPrompt(t("Revise the current {checkpoint}. Preserve the accepted evidence, explain what changed, and prepare a new checkpoint for review.", { checkpoint: t(activeStage.checkpoint) }));
     setSelectedStage(null);
     requestAnimationFrame(() => composerRef.current?.focus());
   }
@@ -2096,7 +2099,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   function branchFromCheckpoint() {
     const nextBranch = branchCount + 1;
     setBranchCount(nextBranch);
-    setJourneyNotice(`Created branch B${nextBranch} from ${activeStage.label}. The accepted branch remains available.`);
+    setJourneyNotice(t("Created branch B{branch} from {stage}. The accepted branch remains available.", { branch: nextBranch, stage: t(activeStage.label) }));
     setSelectedStage(null);
   }
 
@@ -2104,7 +2107,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
     const targetIndex = researchStages.findIndex((candidate) => candidate.id === stage.id);
     const downstream = researchStages.slice(targetIndex + 1).map((candidate) => candidate.id);
     setStaleStages((current) => Array.from(new Set([...current, ...downstream.filter((id) => acceptedStages.includes(id))])));
-    setJourneyNotice(`Returned to ${stage.label}. Downstream accepted work is preserved and marked stale until revalidated.`);
+    setJourneyNotice(t("Returned to {stage}. Downstream accepted work is preserved and marked stale until revalidated.", { stage: t(stage.label) }));
     setSelectedStage(null);
     onResearchMode(stage.mode);
   }
@@ -2118,12 +2121,12 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   }
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout has-journey"}>
-    {!welcomeVisible && <section className="research-journey" aria-label="Research progress">
+    {!welcomeVisible && <section className="research-journey" aria-label={t("Research progress")}>
       <header className="research-journey-header">
-        <div><span>Research path</span><strong>AI routed · {activeStage.label}</strong></div>
+        <div><span>{t("Research path")}</span><strong>{t("AI routed")} · {t(activeStage.label)}</strong></div>
         <div className="research-journey-actions">
           {journeyNotice && <span className="research-journey-notice">{journeyNotice}</span>}
-          <button onClick={() => setSelectedStage((current) => current === activeStage.id ? null : activeStage.id)}><Flag size={13} />Review checkpoint</button>
+          <button onClick={() => setSelectedStage((current) => current === activeStage.id ? null : activeStage.id)}><Flag size={13} />{t("Review checkpoint")}</button>
         </div>
       </header>
       <div className="research-stage-track">
@@ -2135,7 +2138,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
           return <div className="research-stage-segment" key={stage.id}>
             <button className={`research-stage ${status} ${selectedStage === stage.id ? "selected" : ""}`} onClick={() => setSelectedStage((current) => current === stage.id ? null : stage.id)} aria-current={active ? "step" : undefined}>
               <span className="research-stage-node">{accepted && !stale ? <Check size={12} /> : index + 1}</span>
-              <span><strong>{stage.label}</strong><small>{stale ? "Needs revalidation" : accepted ? "Accepted" : active ? agentBusy ? "Running" : "Current focus" : "Planned"}</small></span>
+              <span><strong>{t(stage.label)}</strong><small>{t(stale ? "Needs revalidation" : accepted ? "Accepted" : active ? agentBusy ? "Running" : "Current focus" : "Planned")}</small></span>
             </button>
             {index < researchStages.length - 1 && <span className={`research-stage-line ${accepted && !stale ? "complete" : ""}`} />}
           </div>;
@@ -2145,12 +2148,12 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
         const stage = researchStages.find((candidate) => candidate.id === selectedStage) ?? activeStage;
         const isActive = stage.id === activeStage.id;
         return <div className="research-checkpoint-panel">
-          <div><span>{isActive ? "Next checkpoint" : stage.label}</span><strong>{stage.checkpoint}</strong><p>{stage.description}</p></div>
+          <div><span>{isActive ? t("Next checkpoint") : t(stage.label)}</span><strong>{t(stage.checkpoint)}</strong><p>{t(stage.description)}</p></div>
           <div className="research-checkpoint-actions">
-            {isActive && <button className="journey-primary" onClick={acceptCurrentCheckpoint}><Check size={13} />Accept & advance</button>}
-            {isActive && <button onClick={requestCheckpointChanges}><RefreshCw size={13} />Request changes</button>}
-            {isActive && <button onClick={branchFromCheckpoint}><Blocks size={13} />Create branch</button>}
-            {!isActive && <button onClick={() => returnToStage(stage)}><RefreshCw size={13} />Return here</button>}
+            {isActive && <button className="journey-primary" onClick={acceptCurrentCheckpoint}><Check size={13} />{t("Accept & advance")}</button>}
+            {isActive && <button onClick={requestCheckpointChanges}><RefreshCw size={13} />{t("Request changes")}</button>}
+            {isActive && <button onClick={branchFromCheckpoint}><Blocks size={13} />{t("Create branch")}</button>}
+            {!isActive && <button onClick={() => returnToStage(stage)}><RefreshCw size={13} />{t("Return here")}</button>}
           </div>
         </div>;
       })()}
@@ -2159,7 +2162,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
     <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
       {welcomeVisible ? <ResearchWelcome onSelect={selectWelcomeWorkflow} /> : <div className="conversation-thread">
         {hiddenMessageCount > 0 && <button className="conversation-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - HISTORY_MESSAGE_PAGE_SIZE))}>
-          Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount) === 1 ? "message" : "messages"}
+          {t("Show {count} earlier {unit}", { count: Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount), unit: t(Math.min(HISTORY_MESSAGE_PAGE_SIZE, hiddenMessageCount) === 1 ? "message" : "messages") })}
         </button>}
         {visibleMessages.slice(0, lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
 
@@ -2173,14 +2176,14 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
           <section className="conversation-approval">
             <div className="approval-icon">{pendingAction.kind === "write" ? <FileText size={16} /> : <SquareTerminal size={16} />}</div>
             <div className="approval-content">
-              <span>{pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval"}</span>
+              <span>{t(pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval")}</span>
               <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
               {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
               {pendingAction.kind === "write" && pendingAction.payload.content && <pre className="proposal-preview">{pendingAction.payload.content.slice(0, 260)}</pre>}
-              <p>{pendingAction.kind === "write" ? "This will write a file inside the selected workspace." : "This will run in the selected workspace and record its output."}</p>
+              <p>{t(pendingAction.kind === "write" ? "This will write a file inside the selected workspace." : "This will run in the selected workspace and record its output.")}</p>
               <div className="approval-actions">
-                <button className="secondary-button" onClick={onReject}><X size={14} />Dismiss</button>
-                <button className="primary-button" onClick={onApprove}>{pendingAction.kind === "write" ? <Check size={14} /> : <Play size={14} />}{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
+                <button className="secondary-button" onClick={onReject}><X size={14} />{t("Dismiss")}</button>
+                <button className="primary-button" onClick={onApprove}>{pendingAction.kind === "write" ? <Check size={14} /> : <Play size={14} />}{t(pendingAction.kind === "write" ? "Apply" : "Run")}</button>
               </div>
             </div>
           </section>
@@ -2191,9 +2194,9 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
       followOutputRef.current = true;
       setFollowingOutput(true);
       scrollToLatest();
-    }} title="Jump to latest message">
+    }} title={t("Jump to latest message")}>
       <ArrowDown size={15} />
-      <span>Latest</span>
+      <span>{t("Latest")}</span>
     </button>}
     </div>
 
@@ -2204,39 +2207,39 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
             event.preventDefault();
             submitCurrentPrompt();
           }
-        }} placeholder={activeMode.placeholder} rows={3} />
+        }} placeholder={t(activeMode.placeholder)} rows={3} />
         <ContextChips items={contextItems} onRemove={onRemoveContext} />
         {composerMenu && <div className="composer-context-menu" role="menu" style={{ left: composerMenu.x, top: composerMenu.y }} onClick={(event) => event.stopPropagation()}>
-          <button role="menuitem" onClick={() => void copySelection(true)} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd}>Cut</button>
-          <button role="menuitem" onClick={() => void copySelection()} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd}>Copy</button>
-          <button role="menuitem" onClick={() => void pasteFromSystemClipboard()}>Paste</button>
+          <button role="menuitem" onClick={() => void copySelection(true)} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd}>{t("Cut")}</button>
+          <button role="menuitem" onClick={() => void copySelection()} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd}>{t("Copy")}</button>
+          <button role="menuitem" onClick={() => void pasteFromSystemClipboard()}>{t("Paste")}</button>
         </div>}
         {composerError && <div className="composer-attachment-error" role="alert">{composerError}</div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} items={contextItems} onAdd={onAddContext} />
           <div className="reasoning-effort-picker" ref={reasoningMenuRef}>
-            <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setReasoningMenuOpen((open) => !open); setContextLengthMenuOpen(false); }} title={availableThinkingEfforts.length ? `Thinking effort: ${reasoningEffort}` : "Thinking effort is not exposed by this model"} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>
-              <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>Thinking effort · {availableThinkingEfforts.length ? reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1) : "Unavailable"}</span><ChevronDown size={13} />
+            <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setReasoningMenuOpen((open) => !open); setContextLengthMenuOpen(false); }} title={availableThinkingEfforts.length ? t("Thinking effort: {effort}", { effort: t(reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1)) }) : t("Thinking effort is not exposed by this model")} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>
+              <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>{t("Thinking effort")} · {availableThinkingEfforts.length ? t(reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1)) : t("Unavailable")}</span><ChevronDown size={13} />
             </button>
-            {reasoningMenuOpen && <div className="reasoning-effort-menu" role="menu" aria-label="Thinking effort">
-              <div className="reasoning-effort-heading"><strong>Thinking effort</strong></div>
+            {reasoningMenuOpen && <div className="reasoning-effort-menu" role="menu" aria-label={t("Thinking effort")}>
+              <div className="reasoning-effort-heading"><strong>{t("Thinking effort")}</strong></div>
               {availableThinkingEfforts.map((effort) => <button key={effort.id} className={effort.id === reasoningEffort ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>
                 <span className="reasoning-effort-copy"><strong>{effort.label}</strong></span>
                 <span className="reasoning-option-mark" aria-hidden="true" />
               </button>)}
               <div className="reasoning-settings-divider" />
               <button className={contextLengthMenuOpen ? "context-length-menu-trigger active" : "context-length-menu-trigger"} role="menuitem" aria-haspopup="menu" aria-expanded={contextLengthMenuOpen} onClick={() => setContextLengthMenuOpen((open) => !open)}>
-                <span>Context length</span><span>{contextLength === "extra-long" ? "Extra Long" : "Standard"}</span><ChevronRight size={13} />
+                <span>{t("Context length")}</span><span>{t(contextLength === "extra-long" ? "Extra Long" : "Standard")}</span><ChevronRight size={13} />
               </button>
-              {contextLengthMenuOpen && <div className="context-length-menu-options" role="menu" aria-label="Context length">
+              {contextLengthMenuOpen && <div className="context-length-menu-options" role="menu" aria-label={t("Context length")}>
                 {availableContextLengths.map((length) => <button key={length.id} className={length.id === contextLength ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setContextLengthMenuOpen(false); }}>
-                  <span className="reasoning-effort-copy"><strong>{length.label}</strong></span>
+                  <span className="reasoning-effort-copy"><strong>{t(length.label)}</strong></span>
                   <span className="reasoning-option-mark" aria-hidden="true" />
                 </button>)}
               </div>}
             </div>}
           </div>
-          <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
+          <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : t("No workspace")}</span></div>
           <div
             className={`context-usage ${contextUsageState}`}
             data-context-usage={contextUsageLabel}
@@ -2249,24 +2252,25 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
               aria-hidden="true"
             />
           </div>
-          <button className="conversation-send" onClick={agentBusy ? onInterrupt : submitCurrentPrompt} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? interrupting ? "Stopping task" : "Stop" : "Send"}>
+          <button className="conversation-send" onClick={agentBusy ? onInterrupt : submitCurrentPrompt} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={t(agentBusy ? interrupting ? "Stopping task" : "Stop" : "Send")}>
             {agentBusy ? <Square size={14} fill="currentColor" /> : <SendHorizontal size={16} />}
           </button>
         </div>
       </div>
-      <p className="composer-note">Archimedes can make mistakes. Review sources and workspace changes.</p>
+      <p className="composer-note">{t("Archimedes can make mistakes. Review sources and workspace changes.")}</p>
     </div>
   </div>;
 }
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
+  const { t } = useUISettings();
   return <article className={`conversation-message ${message.role}`}>
     <div className="conversation-message-copy">
-      <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
+      <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : t("You")}</div>
       {message.role === "assistant"
         ? streaming ? <StreamingMarkdownMessage content={message.text} /> : <MarkdownMessage content={message.text} />
         : <p>{message.text}</p>}
-      {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
+      {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label={t("Sources read by Archimedes")}>
         {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
           <FileText size={12} /><span>{source.startPage ? `${new URL(source.url).hostname} · pp. ${source.startPage}${source.endPage !== source.startPage ? `-${source.endPage}` : ""}` : source.title}</span>
         </a>)}

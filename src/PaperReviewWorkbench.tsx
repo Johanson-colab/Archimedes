@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AlertTriangle, BookOpenCheck, Check, ChevronDown, ChevronUp, FileSearch, FlaskConical, Lightbulb, LoaderCircle, RefreshCw, ScanSearch, Sparkles } from "lucide-react";
+import { useUISettings } from "./i18n";
 
 type ReviewAgentId = "related" | "method" | "experiments" | "limitations";
 type ReviewStatus = "idle" | "working" | "complete" | "error";
@@ -32,10 +33,11 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   ready: boolean;
   onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
 }) {
+  const { language, t } = useUISettings();
   const [runs, setRuns] = useState<Record<ReviewAgentId, ReviewRun>>(initialRuns);
   const [summary, setSummary] = useState<ReviewRun>({ status: "idle", response: "", error: "" });
-  const [audit, setAudit] = useState("The evidence audit will check citations, overclaims, and disagreements before synthesis.");
-  const [stage, setStage] = useState("Ready for a source-grounded review.");
+  const [audit, setAudit] = useState(() => t("The evidence audit will check citations, overclaims, and disagreements before synthesis."));
+  const [stage, setStage] = useState(() => t("Ready for a source-grounded review."));
   const [running, setRunning] = useState(false);
   const [expanded, setExpanded] = useState<Set<ReviewAgentId>>(new Set());
   const runIdRef = useRef<string | null>(null);
@@ -50,9 +52,24 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
 
   useEffect(() => bridge.onPaperReviewEvent((event) => {
     if (!runIdRef.current || event.clientRunId !== runIdRef.current) return;
-    setStage(event.detail);
-    if (event.stage === "supervisor" || event.stage === "repair") setAudit(event.detail);
-  }), [bridge]);
+    const localizedStage = event.stage === "specialists" ? t("Related work, method, experiments, and limitations are reading the source in parallel.")
+      : event.stage === "specialist_started" ? t("Checking the original PDF for page-cited evidence.")
+        : event.stage === "specialist_complete" ? t("An independent evidence note is ready.")
+          : event.stage === "supervisor" ? t("Checking citations, overclaims, and conflicts before synthesis.")
+            : event.stage === "repair" ? t("Targeted specialist notes are being checked against the PDF again.")
+              : event.stage === "summary" ? t("Combining audited evidence while retaining uncertainty and disagreements.")
+                : event.stage === "complete" ? t("The evidence-audited review is ready to read.")
+                  : event.detail;
+    setStage(localizedStage);
+    if (event.stage === "supervisor" || event.stage === "repair") setAudit(localizedStage);
+  }), [bridge, t]);
+
+  useEffect(() => {
+    if (!running && summary.status === "idle") {
+      setAudit(t("The evidence audit will check citations, overclaims, and disagreements before synthesis."));
+      setStage(t("Ready for a source-grounded review."));
+    }
+  }, [language, running, summary.status, t]);
 
   useEffect(() => {
     let mounted = true;
@@ -73,8 +90,8 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     runIdRef.current = clientRunId;
     setRunning(true);
     setExpanded(new Set());
-    setStage("Four independent readings are starting from the indexed original PDF.");
-    setAudit("The evidence audit will begin after the independent readings finish.");
+    setStage(t("Four independent readings are starting from the indexed original PDF."));
+    setAudit(t("The evidence audit will begin after the independent readings finish."));
     setRuns(Object.fromEntries(REVIEWERS.map((reviewer) => [reviewer.id, { status: "working", response: "", error: "" }])) as Record<ReviewAgentId, ReviewRun>);
     setSummary({ status: "working", response: "", error: "" });
 
@@ -88,6 +105,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         contextLength: "extra-long",
         contextItems: paperContext,
         clientRunId,
+        language,
       });
       const nextRuns = initialRuns();
       for (const report of result.specialists) {
@@ -95,10 +113,10 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       }
       setRuns(nextRuns);
       setAudit(result.supervisor.repairTargets.length
-        ? `${result.supervisor.reason} A targeted repair was completed for ${result.supervisor.repairTargets.join(" and ")}.`
+        ? t("{reason} A targeted repair was completed for {targets}.", { reason: result.supervisor.reason, targets: result.supervisor.repairTargets.map((id) => t(REVIEWERS.find((reviewer) => reviewer.id === id)?.title || id)).join(t(" and ")) })
         : result.supervisor.reason);
       setSummary({ status: "complete", response: result.summary.response, error: "" });
-      setStage("The review memorandum is ready. Open any reading to inspect its evidence trail.");
+      setStage(t("The review memorandum is ready. Open any reading to inspect its evidence trail."));
     } catch (error) {
       const message = reviewError(error);
       setSummary({ status: "error", response: "", error: message });
@@ -120,26 +138,26 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   return <main className="paper-review-workbench">
     <header className="paper-review-heading">
       <div>
-        <p className="paper-review-kicker">Evidence review</p>
-        <h1>Read the paper against its own record.</h1>
-        <p className="paper-review-intro">Four independent readings are audited for evidence before one concise research memorandum is written.</p>
+        <p className="paper-review-kicker">{t("Evidence review")}</p>
+        <h1>{t("Read the paper against its own record.")}</h1>
+        <p className="paper-review-intro">{t("Four independent readings are audited for evidence before one concise research memorandum is written.")}</p>
       </div>
       <button className="paper-review-run" onClick={() => void runReview()} disabled={running || !ready || !workspace}>
         {running ? <LoaderCircle className="spin" size={16} /> : completeCount || errorCount || summary.status === "complete" ? <RefreshCw size={16} /> : <Sparkles size={16} />}
-        {running ? "Reviewing" : completeCount || errorCount || summary.status === "complete" ? "Review again" : "Run review"}
+        {running ? t("Reviewing") : completeCount || errorCount || summary.status === "complete" ? t("Review again") : t("Run review")}
       </button>
     </header>
 
-    {!ready && <div className="paper-review-notice"><AlertTriangle size={17} /><div><strong>Prepare the paper first</strong><span>The review agents need the locally indexed PDF so their findings can point back to the original pages.</span></div></div>}
-    {!workspace && <div className="paper-review-notice"><AlertTriangle size={17} /><div><strong>Choose a workspace first</strong><span>A workspace keeps this review and its supporting source reads inside Archimedes.</span></div></div>}
+    {!ready && <div className="paper-review-notice"><AlertTriangle size={17} /><div><strong>{t("Prepare the paper first")}</strong><span>{t("The review agents need the locally indexed PDF so their findings can point back to the original pages.")}</span></div></div>}
+    {!workspace && <div className="paper-review-notice"><AlertTriangle size={17} /><div><strong>{t("Choose a workspace first")}</strong><span>{t("A workspace keeps this review and its supporting source reads inside Archimedes.")}</span></div></div>}
 
-    <section className="paper-review-route" aria-label="Review process">
-      <div><span>Independent readings</span><strong>{completeCount || (running ? "In progress" : "Awaiting run")}</strong></div>
-      <div><span>Evidence audit</span><strong>{running ? "Checking" : summary.status === "complete" ? "Completed" : "Pending"}</strong></div>
-      <div><span>Research memorandum</span><strong>{summary.status === "complete" ? "Ready" : running ? "Drafting" : "Pending"}</strong></div>
+    <section className="paper-review-route" aria-label={t("Review process")}>
+      <div><span>{t("Independent readings")}</span><strong>{completeCount || (running ? t("In progress") : t("Awaiting run"))}</strong></div>
+      <div><span>{t("Evidence audit")}</span><strong>{running ? t("Checking") : summary.status === "complete" ? t("Completed") : t("Pending")}</strong></div>
+      <div><span>{t("Research memorandum")}</span><strong>{summary.status === "complete" ? t("Ready") : running ? t("Drafting") : t("Pending")}</strong></div>
     </section>
 
-    <section className="paper-review-readings" aria-label="Specialist readings">
+    <section className="paper-review-readings" aria-label={t("Specialist readings")}>
       {REVIEWERS.map((reviewer) => {
         const run = runs[reviewer.id];
         const Icon = reviewer.icon;
@@ -147,15 +165,15 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         return <article className={`paper-review-reading ${run.status}`} key={reviewer.id}>
           <header>
             <Icon size={19} strokeWidth={1.7} />
-            <div><h2>{reviewer.title}</h2><p>{reviewer.subtitle}</p></div>
-            <span className={`paper-review-status ${run.status}`} aria-label={run.status}>{run.status === "working" ? <LoaderCircle className="spin" size={14} /> : run.status === "complete" ? <Check size={15} /> : run.status === "error" ? <AlertTriangle size={15} /> : null}</span>
+            <div><h2>{t(reviewer.title)}</h2><p>{t(reviewer.subtitle)}</p></div>
+            <span className={`paper-review-status ${run.status}`} aria-label={t(run.status === "idle" ? "Idle" : run.status === "working" ? "Working" : run.status === "complete" ? "Completed" : "Error")}>{run.status === "working" ? <LoaderCircle className="spin" size={14} /> : run.status === "complete" ? <Check size={15} /> : run.status === "error" ? <AlertTriangle size={15} /> : null}</span>
           </header>
-          {run.status === "idle" && <p className="paper-review-reading-copy">Waiting for the complete PDF review to begin.</p>}
-          {run.status === "working" && <p className="paper-review-reading-copy">Reading source pages and preparing a page-cited assessment…</p>}
+          {run.status === "idle" && <p className="paper-review-reading-copy">{t("Waiting for the complete PDF review to begin.")}</p>}
+          {run.status === "working" && <p className="paper-review-reading-copy">{t("Reading source pages and preparing a page-cited assessment…")}</p>}
           {run.status === "error" && <p className="paper-review-reading-error">{run.error}</p>}
           {run.status === "complete" && <>
             <button className="paper-review-expand" onClick={() => toggleExpanded(reviewer.id)} aria-expanded={isExpanded}>
-              <span>{run.repaired ? "Read repaired evidence note" : "Read evidence note"}</span>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              <span>{run.repaired ? t("Read repaired evidence note") : t("Read evidence note")}</span>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </button>
             {isExpanded && <div className="paper-review-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{run.response}</ReactMarkdown></div>}
           </>}
@@ -165,12 +183,12 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
 
     <section className={summary.status === "complete" ? "paper-review-audit complete" : "paper-review-audit"}>
       <div className="paper-review-audit-mark"><BookOpenCheck size={19} strokeWidth={1.65} /></div>
-      <div><h2>Evidence audit</h2><p>{audit}</p></div>
+      <div><h2>{t("Evidence audit")}</h2><p>{audit}</p></div>
     </section>
 
     <section className={`paper-review-summary ${summary.status}`}>
-      <header><div><p className="paper-review-kicker">Research memorandum</p><h2>One note, with the uncertainty left in.</h2></div>{summary.status === "working" && <span><LoaderCircle className="spin" size={14} />{stage}</span>}</header>
-      {summary.status === "idle" && <p>Run the review to collect independent readings before Archimedes writes the final memorandum.</p>}
+      <header><div><p className="paper-review-kicker">{t("Research memorandum")}</p><h2>{t("One note, with the uncertainty left in.")}</h2></div>{summary.status === "working" && <span><LoaderCircle className="spin" size={14} />{stage}</span>}</header>
+      {summary.status === "idle" && <p>{t("Run the review to collect independent readings before Archimedes writes the final memorandum.")}</p>}
       {summary.status === "working" && <p>{stage}</p>}
       {summary.status === "error" && <p className="paper-review-summary-error">{summary.error}</p>}
       {summary.status === "complete" && <div className="paper-review-markdown paper-review-final-note"><ReactMarkdown remarkPlugins={[remarkGfm]}>{summary.response}</ReactMarkdown></div>}

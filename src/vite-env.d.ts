@@ -693,6 +693,7 @@ interface PaperReviewInput {
   contextLength?: ContextLength;
   contextItems?: ContextAttachment[];
   clientRunId?: string;
+  language?: "en" | "zh";
 }
 
 interface PaperReviewAgentResult {

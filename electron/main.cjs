@@ -998,6 +998,7 @@ app.whenReady().then(() => {
       reasoningEffort,
       contextLength,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
+      language: input.language === "zh" ? "zh" : "en",
       emit,
     });
   });
