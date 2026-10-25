@@ -13,7 +13,7 @@ function userBlocks(content) {
   });
 }
 
-function toAnthropicRequest(config, messages, { allowTools = true, availableTools = [] } = {}) {
+function toAnthropicRequest(config, messages, { allowTools = true, availableTools = [], maxOutputTokens } = {}) {
   const system = [];
   const converted = [];
   for (const message of messages) {
@@ -34,7 +34,7 @@ function toAnthropicRequest(config, messages, { allowTools = true, availableTool
     if (converted.at(-1)?.role === role) converted.at(-1).content.push(...content);
     else converted.push({ role, content });
   }
-  const request = { model: config.model, max_tokens: 4096, stream: true, messages: converted };
+  const request = { model: config.model, max_tokens: Number.isFinite(Number(maxOutputTokens)) && Number(maxOutputTokens) > 0 ? Math.max(64, Math.min(8192, Math.round(Number(maxOutputTokens)))) : 4096, stream: true, messages: converted };
   if (system.length) request.system = system.join("\n\n");
   if (allowTools && availableTools.length) request.tools = availableTools.map((tool) => ({
     name: tool.function.name, description: tool.function.description || "", input_schema: tool.function.parameters,
@@ -52,11 +52,11 @@ function normalizeBlocks(blocks) {
   };
 }
 
-async function completeAnthropic(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = [] }) {
+async function completeAnthropic(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = [], maxOutputTokens }) {
   const response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify(toAnthropicRequest(config, messages, { allowTools, availableTools })),
+    body: JSON.stringify(toAnthropicRequest(config, messages, { allowTools, availableTools, maxOutputTokens })),
     signal,
   });
   if (!response.ok) throw new Error(`Model request failed (${response.status}): ${(await response.text()).slice(0, 500)}`);

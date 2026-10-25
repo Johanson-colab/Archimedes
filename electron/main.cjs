@@ -12,6 +12,8 @@ const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
 const journeySettings = require("./journey-settings.cjs");
+const journeySnapshots = require("./journey-snapshots.cjs");
+const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -492,12 +494,15 @@ async function sanitizeAgentContext(items, workspace) {
   return sanitized;
 }
 
+const journeySummariesInFlight = new Map();
+
 app.whenReady().then(() => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
   terminalSettings.initialize(app.getPath("userData"));
   journeySettings.initialize(app.getPath("userData"));
+  journeySnapshots.initialize(app.getPath("userData"));
   installApplicationMenu();
   protocol.handle("archimedes-file", (request) => {
     try {
@@ -688,7 +693,9 @@ app.whenReady().then(() => {
 
   ipcMain.handle("research-thread:delete", (_event, input = {}) => {
     if (typeof input.id !== "string") throw new Error("A research thread ID is required.");
-    return store.deleteResearchThread(input.id);
+    const result = store.deleteResearchThread(input.id);
+    journeySnapshots.remove(input.id);
+    return result;
   });
 
   ipcMain.handle("model-config:get", () => modelConfig.getPublicModelConfig());
@@ -1100,6 +1107,23 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
+  ipcMain.handle("journey:get-summary", (_event, threadId) => journeySnapshots.get(String(threadId || "")));
+  ipcMain.handle("journey:clear-summary", (_event, threadId) => { journeySnapshots.remove(String(threadId || "")); return { cleared: true }; });
+  ipcMain.handle("journey:summarize", async (_event, input = {}) => {
+    const threadId = String(input.threadId || "").trim();
+    if (!threadId) throw new Error("A thread is required to summarize a journey.");
+    const inFlight = journeySummariesInFlight.get(threadId);
+    if (inFlight) return inFlight;
+    const settings = journeySettings.journeySettings();
+    const previous = journeySnapshots.get(threadId);
+    if (!settings.liveSummaries && !input.force) return previous;
+    if (previous && Number(previous.coversTo) === Number(input.coversTo) && !input.force) return previous;
+    const task = journeySummarizer.summarizeJourney({ input: { ...input, threadId }, settings, previous })
+      .then((snapshot) => journeySnapshots.save(snapshot))
+      .finally(() => journeySummariesInFlight.delete(threadId));
+    journeySummariesInFlight.set(threadId, task);
+    return task;
+  });
   ipcMain.handle("journey:save-settings", (_event, input = {}) => journeySettings.saveJourneySettings(input));
   ipcMain.handle("journey:reset-settings", () => journeySettings.resetJourneySettings());
 

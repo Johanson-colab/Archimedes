@@ -77,6 +77,9 @@ interface ResearchDeskBridge {
     getJourneySettings: () => Promise<JourneySettings>;
     saveJourneySettings: (input: Partial<JourneySettings>) => Promise<JourneySettings>;
     resetJourneySettings: () => Promise<JourneySettings>;
+    getJourneySummary: (threadId: string) => Promise<JourneySummarySnapshot | null>;
+    summarizeJourney: (input: JourneySummaryInput) => Promise<JourneySummarySnapshot | null>;
+    clearJourneySummary: (threadId: string) => Promise<{ cleared: boolean }>;
     getTerminalSettings: () => Promise<TerminalSettings>;
     saveTerminalSettings: (input: Partial<TerminalSettings>) => Promise<TerminalSettings>;
     openExternalTerminal: (input: { cwd?: string; externalTerminal?: TerminalExternalTerminal }) => Promise<{ opened: boolean; app: string; error?: string }>;
@@ -221,6 +224,57 @@ type JourneyMapMode = "auto" | "always" | "off";
 type JourneySummaryLength = "concise" | "standard" | "detailed";
 type JourneySummaryModel = "current" | "economy";
 type JourneyChapterDetection = "ai" | "turns";
+
+interface JourneySummaryEpisodeInput {
+  id: string;
+  title: string;
+  outcome: string;
+  status: string;
+  steps: number;
+}
+
+interface JourneySummaryChapterInput {
+  id: string;
+  title: string;
+  summary: string;
+  status: string;
+  steps: number;
+  episodes: JourneySummaryEpisodeInput[];
+}
+
+interface JourneySummaryInput {
+  threadId: string;
+  threadTitle: string;
+  brief: string;
+  coversTo: number;
+  force?: boolean;
+  chapters: JourneySummaryChapterInput[];
+}
+
+interface JourneySummaryEpisode {
+  id: string;
+  title: string;
+  outcome: string;
+}
+
+interface JourneySummaryChapter {
+  id: string;
+  title: string;
+  summary: string;
+  episodes: JourneySummaryEpisode[];
+}
+
+interface JourneySummarySnapshot {
+  threadId: string;
+  brief: string;
+  nextMove: string;
+  coversTo: number;
+  updatedAt: string;
+  model: string;
+  source: "ai" | "preview";
+  summaryLength?: JourneySummaryLength;
+  chapters: JourneySummaryChapter[];
+}
 
 interface JourneySettings {
   defaultView: JourneyDefaultView;

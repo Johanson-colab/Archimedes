@@ -547,6 +547,33 @@ const previewBridge = {
     window.localStorage.removeItem("archimedes-journey-settings");
     return defaultJourneySettings;
   },
+  getJourneySummary: async (threadId: string) => {
+    try { return JSON.parse(window.localStorage.getItem(`archimedes-journey-summary:${threadId}`) || "null"); }
+    catch { return null; }
+  },
+  summarizeJourney: async (input: JourneySummaryInput) => {
+    const snapshot: JourneySummarySnapshot = {
+      threadId: input.threadId,
+      brief: input.brief,
+      nextMove: "Review the current chapter, then continue.",
+      coversTo: input.coversTo,
+      updatedAt: new Date().toISOString(),
+      model: "preview",
+      source: "preview",
+      chapters: input.chapters.map((chapter) => ({
+        id: chapter.id,
+        title: chapter.title,
+        summary: chapter.summary,
+        episodes: chapter.episodes.map((episode) => ({ id: episode.id, title: episode.title, outcome: episode.outcome })),
+      })),
+    };
+    window.localStorage.setItem(`archimedes-journey-summary:${input.threadId}`, JSON.stringify(snapshot));
+    return snapshot;
+  },
+  clearJourneySummary: async (threadId: string) => {
+    window.localStorage.removeItem(`archimedes-journey-summary:${threadId}`);
+    return { cleared: true };
+  },
   getTerminalSettings: async () => previewTerminalSettings,
   saveTerminalSettings: async (input: Partial<TerminalSettings>) => {
     previewTerminalSettings = { ...previewTerminalSettings, ...input };
@@ -871,6 +898,21 @@ function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!agentBusy || !activeThreadId) return;
+    let cancelled = false;
+    const refresh = () => {
+      void desktopBridge.getResearchThread(activeThreadId, workspace)
+        .then((thread) => {
+          if (cancelled || activeThreadIdRef.current !== thread.id) return;
+          setTrajectoryEvents(thread.events ?? []);
+        })
+        .catch(() => undefined);
+    };
+    const timer = window.setInterval(refresh, 8_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [activeThreadId, agentBusy, workspace]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1822,11 +1864,14 @@ function App() {
           onWidthChange={(width) => setWorkbenchWidth(clampWorkbenchWidth(width))}
           onOpenTerminalSettings={() => { setSettingsSection("terminal"); setSettingsOpen(true); }}
           journey={<JourneyView
+            bridge={desktopBridge}
             thread={activeThread ?? null}
             events={trajectoryEvents}
             modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
             settings={journeySettings}
             pendingAction={pendingAction}
+            agentBusy={agentBusy}
+            active={workbenchOpen && workbenchTab === "journey"}
             onOpenTrajectory={() => setWorkbenchTab("trajectory")}
             onOpenSettings={() => { setSettingsSection("journey"); setSettingsOpen(true); }}
             onReviewPending={reviewPendingAction}
