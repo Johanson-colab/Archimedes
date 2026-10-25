@@ -74,6 +74,9 @@ interface ResearchDeskBridge {
     rejectAgentAction: (actionId: string) => Promise<AgentAction>;
     runTerminal: (input: { command: string; cwd?: string; actionId?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
     stopTerminal: (sessionId: string) => Promise<void>;
+    getJourneySettings: () => Promise<JourneySettings>;
+    saveJourneySettings: (input: Partial<JourneySettings>) => Promise<JourneySettings>;
+    resetJourneySettings: () => Promise<JourneySettings>;
     getTerminalSettings: () => Promise<TerminalSettings>;
     saveTerminalSettings: (input: Partial<TerminalSettings>) => Promise<TerminalSettings>;
     openExternalTerminal: (input: { cwd?: string; externalTerminal?: TerminalExternalTerminal }) => Promise<{ opened: boolean; app: string; error?: string }>;
@@ -212,6 +215,38 @@ interface TerminalSessionInfo {
 
 type TerminalShellProfile = "auto" | "pwsh" | "powershell" | "cmd" | "zsh" | "fish" | "bash" | "custom";
 type TerminalExternalTerminal = "auto" | "windows-terminal" | "ghostty" | "wezterm" | "tabby" | "terminal" | "none";
+
+type JourneyDefaultView = "story" | "outline";
+type JourneyMapMode = "auto" | "always" | "off";
+type JourneySummaryLength = "concise" | "standard" | "detailed";
+type JourneySummaryModel = "current" | "economy";
+type JourneyChapterDetection = "ai" | "turns";
+
+interface JourneySettings {
+  defaultView: JourneyDefaultView;
+  mapMode: JourneyMapMode;
+  mapChapters: number;
+  mapSteps: number;
+  sinceYouLeft: boolean;
+  followLive: boolean;
+  maxChapters: number;
+  autoMerge: boolean;
+  collapseCompleted: boolean;
+  targetEpisodes: number;
+  liveSummaries: boolean;
+  episodeCadence: number;
+  idleDelay: number;
+  briefInterval: number;
+  summaryLength: JourneySummaryLength;
+  summaryModel: JourneySummaryModel;
+  updateOnTurnEnd: boolean;
+  updateOnApproval: boolean;
+  evidenceLedger: boolean;
+  openClaims: boolean;
+  maxPinned: number;
+  chapterDetection: JourneyChapterDetection;
+  summaryTokenBudget: number;
+}
 
 interface TerminalSettings {
   shell: TerminalShellProfile;

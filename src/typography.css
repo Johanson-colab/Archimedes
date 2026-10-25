@@ -375,25 +375,27 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 /* Right workbench. */
 .workbench-tab { font-size: 12px; font-weight: 600; }
 .workbench-tab-badge { font-size: 10px; }
-.journey-intro span { font-size: 11px; }
-.journey-intro strong { font-size: 14px; font-weight: 600; }
-.journey-status { font-size: 11px; }
-.journey-goal-head span,
-.journey-goal-head strong { font-size: 11px; }
-.journey-goal p { font-size: 13px; line-height: 1.55; }
-.journey-progress-meta { font-size: 11px; }
-.journey-block-title { font-size: 12px; }
-.journey-block-title-row button,
-.journey-footer button { font-size: 11px; }
-.journey-phase strong { font-size: 12px; }
-.journey-phase small { font-size: 11px; }
-.journey-signals span { font-size: 11px; }
-.journey-signals strong { font-size: 13px; }
-.journey-milestones strong { font-size: 12px; }
-.journey-milestones small,
-.journey-empty { font-size: 11px; }
-.journey-note { font-size: 12px; line-height: 1.55; }
-.journey-footer { font-size: 11px; }
+.journey-kicker,
+.journey-views button,
+.journey-status-line,
+.journey-scrubber-meta,
+.journey-since,
+.journey-section-head h2,
+.journey-section-actions span,
+.journey-chapter-index,
+.journey-chapter-meta,
+.journey-episode-meta,
+.journey-evidence dt,
+.journey-dock-head,
+.journey-ghost { font-size: 11px; }
+.journey-header h1 { font-size: 15px; font-weight: 600; }
+.journey-brief p,
+.journey-dock p { font-size: 13px; line-height: 1.55; }
+.journey-chapter-title,
+.journey-episode-title { font-size: 12.5px; }
+.journey-episode-outcome { font-size: 11px; }
+.journey-evidence dd { font-size: 13px; }
+.journey-primary { font-size: 12px; }
 .trajectory-view { font-size: 12px; }
 .trajectory-stat span,
 .trajectory-section-title { font-size: 11px; }
@@ -554,27 +556,27 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
    metadata. Labels are 12px/400, values 13-14px/500. */
 .workbench-tab { font-size: 13px; font-weight: 500; }
 .workbench-tab-badge { font-size: 10px; }
-.journey-intro span { font-size: 12px; }
-.journey-intro strong { font-size: 15px; font-weight: 500; }
-.journey-status { font-size: 12px; font-weight: 400; }
-.journey-goal-head span,
-.journey-goal-head strong { font-size: 12px; }
-.journey-goal-head span { font-weight: 400; }
-.journey-goal-head strong { font-weight: 500; }
-.journey-goal p { font-size: 14px; }
-.journey-progress-meta { font-size: 12px; }
-.journey-block-title { font-size: 12px; }
-.journey-block-title-row button,
-.journey-footer button { font-size: 12px; }
-.journey-phase strong { font-size: 13px; font-weight: 500; }
-.journey-phase small { font-size: 12px; }
-.journey-signals span { font-size: 12px; }
-.journey-signals strong { font-size: 14px; font-weight: 500; }
-.journey-milestones strong { font-size: 13px; font-weight: 500; }
-.journey-milestones small,
-.journey-empty { font-size: 12px; }
-.journey-note { font-size: 13px; }
-.journey-footer { font-size: 12px; }
+.journey-kicker,
+.journey-views button,
+.journey-status-line,
+.journey-scrubber-meta,
+.journey-since,
+.journey-section-head h2,
+.journey-section-actions span,
+.journey-chapter-index,
+.journey-chapter-meta,
+.journey-episode-meta,
+.journey-evidence dt,
+.journey-dock-head,
+.journey-ghost { font-size: 12px; }
+.journey-header h1 { font-size: 15px; font-weight: 500; }
+.journey-brief p { font-size: 14px; }
+.journey-chapter-title { font-size: 13px; font-weight: 500; }
+.journey-episode-title { font-size: 13px; font-weight: 500; }
+.journey-episode-outcome { font-size: 12px; }
+.journey-evidence dd { font-size: 14px; font-weight: 500; }
+.journey-dock p { font-size: 13px; }
+.journey-primary { font-size: 12px; }
 
 .trajectory-stat span,
 .trajectory-section-title { font-size: 12px; }

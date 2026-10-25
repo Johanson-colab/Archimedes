@@ -170,11 +170,15 @@ test("terminal settings expose platform shell, font and external terminal contro
 });
 
 test("agent journey is derived from raw trajectory events", () => {
-  assert.match(journey, /Derived from \{events\.length\} raw events/);
-  assert.match(journey, /from trajectory event #\{event\.sequence\}/);
-  assert.match(journey, /const phases = \[/);
-  assert.match(journey, /View raw/);
+  assert.match(journey, /function buildChapters/);
+  assert.match(journey, /function buildEpisodes/);
+  assert.match(journey, /function buildBrief/);
+  assert.match(journey, /journey-scrubber/);
+  assert.match(journey, /journey-chapters/);
+  assert.match(journey, /journey-dock/);
   assert.match(journey, /Open trajectory/);
+  assert.doesNotMatch(journey, /const phases = \[/);
+  assert.doesNotMatch(journey, /derived progress/i);
   assert.match(css, /\.trajectory-json \{[^}]*white-space: pre-wrap/);
   assert.match(css, /\.theme-paper \.right-workbench \{[^}]*background: #f6f4f1/);
 });

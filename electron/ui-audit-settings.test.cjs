@@ -15,7 +15,7 @@ const terminal = fs.readFileSync(path.join(root, "src", "TerminalSettingsModal.t
 
 test("global settings is a single dialog with app-level sections", () => {
   assert.match(app, /<SettingsModal/);
-  assert.match(settings, /type SettingsSection = "general" \| "appearance" \| "models" \| "web" \| "terminal" \| "workspace" \| "about"/);
+  assert.match(settings, /type SettingsSection = "general" \| "journey" \| "appearance" \| "models" \| "web" \| "terminal" \| "workspace" \| "about"/);
   assert.match(settings, /className="settings-modal"/);
   assert.match(settings, /settings-nav/);
   assert.match(settings, /t\("General"\)/);
