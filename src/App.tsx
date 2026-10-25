@@ -566,6 +566,7 @@ const previewBridge = {
         summary: chapter.summary,
         episodes: chapter.episodes.map((episode) => ({ id: episode.id, title: episode.title, outcome: episode.outcome })),
       })),
+      claims: [],
     };
     window.localStorage.setItem(`archimedes-journey-summary:${input.threadId}`, JSON.stringify(snapshot));
     return snapshot;

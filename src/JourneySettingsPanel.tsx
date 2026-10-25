@@ -123,11 +123,11 @@ export default function JourneySettingsPanel({ settings, onChange, onReset, onOp
     <section className="settings-section">
       <h3 className="settings-section-title">{t("Evidence and pins")}</h3>
       <div className="settings-group">
-        <Row title={t("Evidence ledger")} description={t("Show sources, files, artifacts, and open items.")}>
+        <Row title={t("Evidence ledger")} description={t("Show sources, files, artifacts, and pending items.")}>
           <Toggle checked={settings.evidenceLedger} label={t("Evidence ledger")} onChange={(evidenceLedger) => save({ evidenceLedger })} />
         </Row>
-        <Row title={t("Open items")} description={t("Show approvals and errors that still need attention.")}>
-          <Toggle checked={settings.openClaims} label={t("Open items")} onChange={(openClaims) => save({ openClaims })} />
+        <Row title={t("Show claims")} description={t("Show claims and their evidence status.")}>
+          <Toggle checked={settings.openClaims} label={t("Show claims")} onChange={(openClaims) => save({ openClaims })} />
         </Row>
         <Row title={t("Max pinned items")} description={t("Keep key chapters and episodes at the top.")}>
           <Stepper value={settings.maxPinned} unit={t("items")} min={3} max={10} label={t("Max pinned items")} onChange={(maxPinned) => save({ maxPinned })} />

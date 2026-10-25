@@ -41,7 +41,8 @@ function buildPrompt(input, settings, previous) {
     "Use only the supplied ids. Preserve every chapter and episode id.",
     "Be specific about what was read, what was produced, and what remains open. If evidence is missing, say so.",
     "Write in the same language as the thread title and chapter text.",
-    "JSON shape: {\"brief\":\"...\",\"nextMove\":\"...\",\"chapters\":[{\"id\":\"...\",\"title\":\"...\",\"summary\":\"...\",\"episodes\":[{\"id\":\"...\",\"title\":\"...\",\"outcome\":\"...\"}]}]}",
+    "JSON shape: {\"brief\":\"...\",\"nextMove\":\"...\",\"chapters\":[{\"id\":\"...\",\"title\":\"...\",\"summary\":\"...\",\"episodes\":[{\"id\":\"...\",\"title\":\"...\",\"outcome\":\"...\"}]}],\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"status\":\"supported|open|contradicted\",\"sourceIds\":[\"source-id\"]}]}",
+    "Only cite source ids from the supplied sources; use each source's id field, not eventId. If no supplied source supports or contradicts a claim, use status open and an empty sourceIds array. Maximum 8 claims.",
     "Titles should be short. Outcomes should be one line. Do not add markdown fences.",
     instructionForLength(settings.summaryLength),
     `Keep the response within roughly ${settings.summaryTokenBudget} tokens.`,
@@ -50,6 +51,7 @@ function buildPrompt(input, settings, previous) {
     threadTitle: input.threadTitle || "Research thread",
     previousBrief: previous?.brief || "",
     brief: input.brief || "",
+    sources: (input.sources || []).slice(0, 40),
     chapters: (input.chapters || []).map((chapter) => ({
       id: chapter.id,
       title: chapter.title,
@@ -69,6 +71,26 @@ function buildPrompt(input, settings, previous) {
     { role: "system", content: system },
     { role: "user", content: JSON.stringify(payload) },
   ];
+}
+
+function normalizeClaims(rawClaims, input, previous) {
+  const sourceIds = new Set((input.sources || []).map((source) => source.id));
+  const sourceClaims = Array.isArray(rawClaims) ? rawClaims : null;
+  if (!sourceClaims) return Array.isArray(previous?.claims) ? normalizeClaims(previous.claims, input, null) : [];
+  const seen = new Set();
+  const claims = [];
+  for (const [index, claim] of sourceClaims.slice(0, 8).entries()) {
+    const content = text(claim?.text, 500);
+    if (!content) continue;
+    let id = text(claim?.id, 80) || `claim-${index + 1}`;
+    if (seen.has(id)) id = `${id}-${index + 1}`;
+    seen.add(id);
+    const ids = Array.isArray(claim?.sourceIds) ? [...new Set(claim.sourceIds.filter((value) => typeof value === "string" && sourceIds.has(value)))] : [];
+    let status = claim?.status === "supported" || claim?.status === "contradicted" || claim?.status === "open" ? claim.status : "open";
+    if (!ids.length) status = "open";
+    claims.push({ id, text: content, status, sourceIds: ids });
+  }
+  return claims;
 }
 
 function validateSummary(raw, input, previous, config, settings) {
@@ -107,6 +129,7 @@ function validateSummary(raw, input, previous, config, settings) {
     updatedAt: new Date().toISOString(),
     model: config?.model || config?.provider || "unknown",
     chapters: normalized,
+    claims: normalizeClaims(raw?.claims, input, previous),
     source: "ai",
     summaryLength: settings.summaryLength,
   };
