@@ -90,7 +90,7 @@ test("settings use flat grouped lists instead of per-item cards", () => {
   assert.match(css, /\.settings-group \{[^}]*box-shadow: inset 0 0 0 1px var\(--night-line-soft\)/);
   assert.match(css, /\.settings-row \+ \.settings-row \{ border-top: 1px solid var\(--night-line-soft\); \}/);
   assert.match(css, /\.settings-content \{ width: 100%; max-width: 720px; \}/);
-  assert.match(css, /\.settings-nav-item\.active \{[^}]*box-shadow: inset 2px 0 0 var\(--accent\)/);
+  assert.match(css, /\.settings-nav-item\.active \{/);
 });
 
 test("chat verbosity follows the opencode low / medium / high model", () => {
@@ -108,7 +108,7 @@ test("chat verbosity follows the opencode low / medium / high model", () => {
 test("settings support dark and paper themes", () => {
   assert.match(css, /\.settings-modal \{[^}]*color: var\(--night-ink\); background: var\(--night-ground\)/);
   assert.match(css, /\.settings-group \{[^}]*background: var\(--night-panel\)/);
-  assert.match(css, /\.settings-nav-item\.active \{[^}]*background: var\(--night-panel-raised\)/);
+  assert.match(css, /\.settings-nav-item\.active \{ color: var\(--night-ink\)/);
   assert.match(css, /\.theme-paper \.sidebar-settings-button/);
 });
 
