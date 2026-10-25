@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   getLibraryPaperReader: (paperId, workspace) => ipcRenderer.invoke("library:get-reader", { paperId, workspace }),
   getLibraryPaperChatThread: (paperId, workspace) => ipcRenderer.invoke("library:get-paper-chat-thread", { paperId, workspace }),
   setLibraryPaperChatThread: (paperId, threadId, workspace) => ipcRenderer.invoke("library:set-paper-chat-thread", { paperId, threadId, workspace }),
+  getLibraryPaperReview: (paperId, workspace) => ipcRenderer.invoke("library:get-paper-review", { paperId, workspace }),
+  setLibraryPaperReview: (paperId, review, workspace) => ipcRenderer.invoke("library:set-paper-review", { paperId, review, workspace }),
   prepareLibraryPaperReader: (paperId, workspace) => ipcRenderer.invoke("library:prepare-reader", { paperId, workspace }),
   attachLibraryPaperPdf: (paperId, workspace) => ipcRenderer.invoke("library:attach-reader-pdf", { paperId, workspace }),
   findLibraryPaperPassages: (paperId, query, workspace) => ipcRenderer.invoke("library:find-passages", { paperId, query, workspace }),

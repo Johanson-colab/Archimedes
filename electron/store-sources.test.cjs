@@ -119,6 +119,29 @@ test("restores the research thread linked to a paper", () => {
   }
 });
 
+test("persists a completed paper review independently from transient review workers", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-"));
+  try {
+    store.openWorkspace(workspace);
+    const library = store.createLibrary({ name: "Review" });
+    const paper = store.addPaper(library.id, { title: "Persistent Paper Review", authors: [], source: "manual" });
+    store.setPaperReview(paper.id, {
+      specialists: [{ id: "method", title: "Method", status: "complete", response: "Mechanism evidence (p. 3).", error: "", repaired: false }],
+      supervisor: { verdict: "ready", repairTargets: [], reason: "Citations checked." },
+      summary: { response: "# Review memorandum\nSaved evidence." },
+    });
+    store.openWorkspace(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-switch-")));
+    store.openWorkspace(workspace);
+    const restored = store.getPaperReview(paper.id);
+    assert.equal(restored.specialists[0].response, "Mechanism evidence (p. 3).");
+    assert.equal(restored.summary.response, "# Review memorandum\nSaved evidence.");
+    assert.equal(restored.supervisor.reason, "Citations checked.");
+  } finally {
+    store.openWorkspace(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-close-")));
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test("permanently deletes an archived research chat and its turns", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-thread-delete-"));
   try {

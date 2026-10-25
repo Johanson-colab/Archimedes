@@ -813,6 +813,18 @@ app.whenReady().then(() => {
     return store.setPaperChatThread(paperId, threadId);
   });
 
+  ipcMain.handle("library:get-paper-review", (_event, { paperId, workspace } = {}) => {
+    if (typeof paperId !== "string") throw new Error("A paper is required.");
+    store.openWorkspace(resolveWorkspace(workspace));
+    return store.getPaperReview(paperId);
+  });
+
+  ipcMain.handle("library:set-paper-review", (_event, { paperId, review, workspace } = {}) => {
+    if (typeof paperId !== "string" || !review || typeof review !== "object") throw new Error("A paper and review snapshot are required.");
+    store.openWorkspace(resolveWorkspace(workspace));
+    return store.setPaperReview(paperId, review);
+  });
+
   ipcMain.handle("library:prepare-reader", async (event, { paperId, workspace } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));

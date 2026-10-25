@@ -51,6 +51,8 @@ interface ResearchDeskBridge {
     getLibraryPaperReader: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
     getLibraryPaperChatThread: (paperId: string, workspace?: string) => Promise<ResearchThreadDetail | null>;
     setLibraryPaperChatThread: (paperId: string, threadId: string, workspace?: string) => Promise<ResearchThreadDetail | null>;
+    getLibraryPaperReview: (paperId: string, workspace?: string) => Promise<PaperReviewSnapshot | null>;
+    setLibraryPaperReview: (paperId: string, review: PaperReviewSnapshot, workspace?: string) => Promise<PaperReviewSnapshot>;
     prepareLibraryPaperReader: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
     attachLibraryPaperPdf: (paperId: string, workspace?: string) => Promise<PaperReaderState>;
     findLibraryPaperPassages: (paperId: string, query: string, workspace?: string) => Promise<PaperPassage[]>;
@@ -711,6 +713,13 @@ interface PaperReviewResult {
   supervisor: { verdict: "ready" | "repair"; repairTargets: string[]; reason: string; run: AgentRunResult | null };
   summary: { response: string; error?: string; run: AgentRunResult | null };
   agentRuns: AgentRunResult[];
+}
+
+interface PaperReviewSnapshot {
+  specialists: Array<Pick<PaperReviewAgentResult, "id" | "title" | "status" | "response" | "error" | "repaired">>;
+  supervisor: { verdict: "ready" | "repair"; repairTargets: string[]; reason: string };
+  summary: { response: string; error?: string };
+  updatedAt?: string;
 }
 
 interface PaperReviewEvent {

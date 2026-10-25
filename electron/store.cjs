@@ -180,6 +180,13 @@ function schema(db) {
       updated_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS paper_reviews (
+      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      review_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
       cache_key TEXT PRIMARY KEY NOT NULL,
       response_json TEXT NOT NULL,
@@ -191,6 +198,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_paper_reader_pages_paper ON paper_reader_pages(paper_id, page_number);
     CREATE INDEX IF NOT EXISTS idx_paper_highlights_paper ON paper_highlights(paper_id, page_number, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_paper_chat_threads_thread ON paper_chat_threads(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_paper_reviews_updated ON paper_reviews(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
@@ -566,6 +574,68 @@ function setPaperChatThread(paperId, threadId) {
   // Paper-reader chats are private to their paper and should not crowd the project sidebar.
   db.prepare("UPDATE research_threads SET project_id = NULL, updated_at = ? WHERE id = ?").run(now, threadId);
   return getPaperChatThread(paperId);
+}
+
+function reviewText(value, limit = 32_000) {
+  return typeof value === "string" ? value.slice(0, limit) : "";
+}
+
+function reviewSpecialist(value) {
+  const validIds = new Set(["related", "method", "experiments", "limitations"]);
+  if (!value || !validIds.has(value.id)) return null;
+  return {
+    id: value.id,
+    title: reviewText(value.title, 160),
+    status: value.status === "complete" ? "complete" : "error",
+    response: reviewText(value.response),
+    error: reviewText(value.error, 2_000),
+    repaired: Boolean(value.repaired),
+  };
+}
+
+function normalizePaperReview(review) {
+  if (!review || typeof review !== "object") throw new Error("A paper review snapshot is required.");
+  const specialists = Array.isArray(review.specialists)
+    ? review.specialists.map(reviewSpecialist).filter(Boolean).slice(0, 4)
+    : [];
+  const supervisor = review.supervisor && typeof review.supervisor === "object" ? review.supervisor : {};
+  const summary = review.summary && typeof review.summary === "object" ? review.summary : {};
+  return {
+    specialists,
+    supervisor: {
+      verdict: supervisor.verdict === "repair" ? "repair" : "ready",
+      repairTargets: Array.isArray(supervisor.repairTargets)
+        ? supervisor.repairTargets.filter((id) => ["related", "method", "experiments", "limitations"].includes(id)).slice(0, 2)
+        : [],
+      reason: reviewText(supervisor.reason, 4_000),
+    },
+    summary: { response: reviewText(summary.response, 48_000), error: reviewText(summary.error, 4_000) },
+  };
+}
+
+function getPaperReview(paperId) {
+  const db = requireDatabase();
+  const row = db.prepare("SELECT review_json, updated_at FROM paper_reviews WHERE paper_id = ?").get(paperId);
+  if (!row) return null;
+  try { return { ...normalizePaperReview(JSON.parse(row.review_json)), updatedAt: row.updated_at }; }
+  catch {
+    db.prepare("DELETE FROM paper_reviews WHERE paper_id = ?").run(paperId);
+    return null;
+  }
+}
+
+function setPaperReview(paperId, review) {
+  const db = requireDatabase();
+  if (!db.prepare("SELECT 1 FROM papers WHERE id = ?").get(paperId)) throw new Error("Paper not found.");
+  const normalized = normalizePaperReview(review);
+  const serialized = JSON.stringify(normalized);
+  if (serialized.length > 180_000) throw new Error("The paper review is too large to save.");
+  const now = timestamp();
+  db.prepare(`INSERT INTO paper_reviews (paper_id, review_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(paper_id) DO UPDATE SET review_json = excluded.review_json, updated_at = excluded.updated_at`)
+    .run(paperId, serialized, now, now);
+  return { ...normalized, updatedAt: now };
 }
 
 function addPaper(libraryId, paper) {
@@ -1126,6 +1196,7 @@ module.exports = {
   getDailyFeedCache,
   getPaper,
   getPaperChatThread,
+  getPaperReview,
   getPaperReader,
   getAction,
   getResearchThread,
@@ -1147,6 +1218,7 @@ module.exports = {
   saveTask,
   setPaperReaderFailed,
   setPaperChatThread,
+  setPaperReview,
   setDailyFeedCache,
   startCommand,
   startResearchTurn,

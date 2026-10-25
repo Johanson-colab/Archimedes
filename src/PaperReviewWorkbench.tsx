@@ -24,6 +24,14 @@ function reviewError(error: unknown) {
   return error instanceof Error ? error.message : String(error || "The review could not be completed.");
 }
 
+function snapshotFromResult(result: PaperReviewResult): PaperReviewSnapshot {
+  return {
+    specialists: result.specialists.map(({ id, title, status, response, error, repaired }) => ({ id, title, status, response, error, repaired })),
+    supervisor: { verdict: result.supervisor.verdict, repairTargets: result.supervisor.repairTargets, reason: result.supervisor.reason },
+    summary: { response: result.summary.response, ...(result.summary.error ? { error: result.summary.error } : {}) },
+  };
+}
+
 export default function PaperReviewWorkbench({ bridge, workspace, projectId, paper, pageCount, ready, onInternalReviewThreadsDeleted }: {
   bridge: ResearchDeskBridge;
   workspace: string;
@@ -70,6 +78,31 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       }));
     }
   }), [bridge, t]);
+
+  useEffect(() => {
+    let active = true;
+    setRuns(initialRuns());
+    setSummary({ status: "idle", response: "", error: "" });
+    void bridge.getLibraryPaperReview(paper.id, workspace).then((saved) => {
+      if (!active || !saved || runIdRef.current) return;
+      const restored = initialRuns();
+      for (const report of saved.specialists) {
+        restored[report.id] = { status: report.status, response: report.response, error: report.error, repaired: report.repaired };
+      }
+      setRuns(restored);
+      setAudit(saved.supervisor.reason || t("The evidence audit will check citations, overclaims, and disagreements before synthesis."));
+      if (saved.summary.error) {
+        setSummary({ status: "error", response: "", error: saved.summary.error });
+        setStage(saved.summary.error);
+      } else if (saved.summary.response) {
+        setSummary({ status: "complete", response: saved.summary.response, error: "" });
+        setStage(t("The review memorandum is ready. Open any reading to inspect its evidence trail."));
+      }
+    }).catch(() => {
+      // A missing or older workspace has no saved review yet.
+    });
+    return () => { active = false; };
+  }, [bridge, paper.id, t, workspace]);
 
   useEffect(() => {
     if (!running && summary.status === "idle") {
@@ -119,6 +152,8 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         nextRuns[report.id] = { status: report.status, response: report.response, error: report.error, repaired: report.repaired };
       }
       setRuns(nextRuns);
+      try { await bridge.setLibraryPaperReview(paper.id, snapshotFromResult(result), workspace); }
+      catch (saveError) { setStage(reviewError(saveError)); }
       if (result.summary.error) {
         setAudit(result.supervisor.reason);
         setSummary({ status: "error", response: "", error: result.summary.error });
