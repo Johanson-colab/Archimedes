@@ -1,11 +1,12 @@
-﻿import { Code2, FolderOpen, Globe2, Info, Languages, MessageSquareText, Monitor, Moon, Orbit, Palette, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
+﻿import { Code2, FolderOpen, Globe2, Info, Languages, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
+import JourneySettingsPanel from "./JourneySettingsPanel";
 import ModelSettingsModal from "./ModelSettingsModal";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
-export type SettingsSection = "general" | "appearance" | "models" | "web" | "terminal" | "workspace" | "about";
+export type SettingsSection = "general" | "journey" | "appearance" | "models" | "web" | "terminal" | "workspace" | "about";
 
 type SettingsModalProps = {
   open: boolean;
@@ -21,6 +22,10 @@ type SettingsModalProps = {
   workspaceReady: boolean;
   agentBusy: boolean;
   onChooseWorkspace: () => void;
+  journeySettings: JourneySettings;
+  onSaveJourneySettings: (patch: Partial<JourneySettings>) => Promise<void>;
+  onResetJourneySettings: () => Promise<void>;
+  onOpenModels: () => void;
   terminalSettings: TerminalSettings | null;
   onSaveTerminalSettings: (patch: Partial<TerminalSettings>) => Promise<void>;
   onOpenExternalTerminal: (terminal: TerminalExternalTerminal) => Promise<void>;
@@ -28,6 +33,7 @@ type SettingsModalProps = {
 
 const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNode }> = [
   { id: "general", label: "General", icon: <SlidersHorizontal size={15} /> },
+  { id: "journey", label: "Journey", icon: <Route size={15} /> },
   { id: "appearance", label: "Appearance", icon: <Palette size={15} /> },
   { id: "models", label: "Models", icon: <Orbit size={15} /> },
   { id: "web", label: "Web search", icon: <Globe2 size={15} /> },
@@ -64,6 +70,10 @@ export default function SettingsModal({
   workspaceReady,
   agentBusy,
   onChooseWorkspace,
+  journeySettings,
+  onSaveJourneySettings,
+  onResetJourneySettings,
+  onOpenModels,
   terminalSettings,
   onSaveTerminalSettings,
   onOpenExternalTerminal,
@@ -80,6 +90,7 @@ export default function SettingsModal({
 
   const sectionHeadings: Record<SettingsSection, { title: string; description: string }> = {
     general: { title: t("General"), description: t("Preferences that apply across Archimedes.") },
+    journey: { title: t("Journey"), description: t("How the AI summarizes long runs and when the map appears.") },
     appearance: { title: t("Appearance"), description: t("Theme and fonts") },
     models: { title: t("Models"), description: t("Default model and providers") },
     web: { title: t("Web search"), description: t("Search provider and API keys") },
@@ -176,7 +187,14 @@ export default function SettingsModal({
               </section>
             </div>}
 
-            {section === "appearance" && <div className="settings-sections">
+            {section === "journey" && <JourneySettingsPanel
+            settings={journeySettings}
+            onChange={onSaveJourneySettings}
+            onReset={onResetJourneySettings}
+            onOpenModels={onOpenModels}
+          />}
+
+          {section === "appearance" && <div className="settings-sections">
               <section className="settings-section">
                 <h3 className="settings-section-title">{t("Theme")}</h3>
                 <div className="settings-group">

@@ -33,6 +33,7 @@ import SkillsView from "./SkillsView";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth, type WorkbenchTab } from "./RightWorkbench";
 import ChatActivityTimeline from "./ChatActivityTimeline";
 import JourneyView from "./JourneyView";
+import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
 import TrajectoryView from "./TrajectoryView";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
@@ -531,6 +532,21 @@ const previewBridge = {
   stopTerminal: async (sessionId: string) => {
     for (const listener of previewListeners) listener({ sessionId, data: "[process stopped]\n" });
   },
+  getJourneySettings: async () => {
+    try { return normalizeJourneySettings(JSON.parse(window.localStorage.getItem("archimedes-journey-settings") || "{}")); }
+    catch { return defaultJourneySettings; }
+  },
+  saveJourneySettings: async (input: Partial<JourneySettings>) => {
+    let current: JourneySettings = defaultJourneySettings;
+    try { current = normalizeJourneySettings(JSON.parse(window.localStorage.getItem("archimedes-journey-settings") || "{}")); } catch { /* use defaults */ }
+    const next = normalizeJourneySettings({ ...current, ...input });
+    window.localStorage.setItem("archimedes-journey-settings", JSON.stringify(next));
+    return next;
+  },
+  resetJourneySettings: async () => {
+    window.localStorage.removeItem("archimedes-journey-settings");
+    return defaultJourneySettings;
+  },
   getTerminalSettings: async () => previewTerminalSettings,
   saveTerminalSettings: async (input: Partial<TerminalSettings>) => {
     previewTerminalSettings = { ...previewTerminalSettings, ...input };
@@ -725,6 +741,7 @@ function App() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("trajectory");
+  const [journeySettings, setJourneySettings] = useState<JourneySettings>(defaultJourneySettings);
   const [terminalSettings, setTerminalSettings] = useState<TerminalSettings | null>(null);
   const [terminalSettingsOpen, setTerminalSettingsOpen] = useState(false);
   const [terminalSettingsMode, setTerminalSettingsMode] = useState<"settings" | "onboarding">("settings");
@@ -854,6 +871,36 @@ function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void desktopBridge.getJourneySettings()
+      .then((settings) => { if (!cancelled) setJourneySettings(normalizeJourneySettings(settings)); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  async function saveJourneySettings(patch: Partial<JourneySettings>) {
+    const optimistic = normalizeJourneySettings({ ...journeySettings, ...patch });
+    setJourneySettings(optimistic);
+    try {
+      const saved = await desktopBridge.saveJourneySettings(patch);
+      setJourneySettings(normalizeJourneySettings(saved));
+    } catch {
+      void desktopBridge.getJourneySettings()
+        .then((settings) => setJourneySettings(normalizeJourneySettings(settings)))
+        .catch(() => undefined);
+    }
+  }
+
+  async function resetJourneySettings() {
+    try {
+      const next = await desktopBridge.resetJourneySettings();
+      setJourneySettings(normalizeJourneySettings(next));
+    } catch {
+      setJourneySettings(defaultJourneySettings);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -1593,6 +1640,12 @@ function App() {
     }
   }
 
+  function reviewPendingAction() {
+    requestAnimationFrame(() => {
+      document.querySelector(".approval-card")?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }
+
   async function rejectPendingAction() {
     const action = pendingAction;
     if (!action) return;
@@ -1772,7 +1825,11 @@ function App() {
             thread={activeThread ?? null}
             events={trajectoryEvents}
             modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
+            settings={journeySettings}
+            pendingAction={pendingAction}
             onOpenTrajectory={() => setWorkbenchTab("trajectory")}
+            onOpenSettings={() => { setSettingsSection("journey"); setSettingsOpen(true); }}
+            onReviewPending={reviewPendingAction}
           />}
           trajectory={<TrajectoryView
             thread={activeThread ?? null}
@@ -1845,6 +1902,10 @@ function App() {
         workspaceReady={workspaceReady}
         agentBusy={agentBusy}
         onChooseWorkspace={() => void chooseWorkspace()}
+        journeySettings={journeySettings}
+        onSaveJourneySettings={saveJourneySettings}
+        onResetJourneySettings={resetJourneySettings}
+        onOpenModels={() => setSettingsSection("models")}
         terminalSettings={terminalSettings}
         onSaveTerminalSettings={saveTerminalSettings}
         onOpenExternalTerminal={openExternalTerminal}

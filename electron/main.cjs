@@ -11,6 +11,7 @@ const { runPaperReview } = require("./paper-review-orchestrator.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
+const journeySettings = require("./journey-settings.cjs");
 const modelConfig = require("./model-config.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -496,6 +497,7 @@ app.whenReady().then(() => {
   modelConfig.initializeModelConfig(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
   terminalSettings.initialize(app.getPath("userData"));
+  journeySettings.initialize(app.getPath("userData"));
   installApplicationMenu();
   protocol.handle("archimedes-file", (request) => {
     try {
@@ -1096,6 +1098,10 @@ app.whenReady().then(() => {
     const session = commandSessions.get(sessionId);
     if (session?.senderId === event.sender.id) session.process.kill("SIGTERM");
   });
+
+  ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
+  ipcMain.handle("journey:save-settings", (_event, input = {}) => journeySettings.saveJourneySettings(input));
+  ipcMain.handle("journey:reset-settings", () => journeySettings.resetJourneySettings());
 
   ipcMain.handle("terminal:get-settings", () => terminalSettings.terminalSettings());
   ipcMain.handle("terminal:save-settings", (_event, input = {}) => terminalSettings.saveTerminalSettings(input));

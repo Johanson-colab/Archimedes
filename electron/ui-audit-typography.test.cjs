@@ -68,12 +68,12 @@ test("settings metadata no longer drops below 11px", () => {
 
 test("right workbench metadata moves above the 10px floor", () => {
   assert.match(typography, /\.workbench-tab \{ font-size: 13px; font-weight: 500; \}/);
-  assert.match(typography, /\.journey-intro strong \{ font-size: 15px; font-weight: 500; \}/);
-  assert.match(typography, /\.journey-goal p \{ font-size: 14px; \}/);
-  assert.match(typography, /\.journey-progress-meta \{ font-size: 12px; \}/);
-  assert.match(typography, /\.journey-phase small \{ font-size: 12px; \}/);
-  assert.match(typography, /\.journey-signals span \{ font-size: 12px; \}/);
-  assert.match(typography, /\.journey-note \{ font-size: 13px; \}/);
+  assert.match(typography, /\.journey-header h1 \{ font-size: 15px; font-weight: 500; \}/);
+  assert.match(typography, /\.journey-brief p \{ font-size: 14px; \}/);
+  assert.match(typography, /\.journey-chapter-title \{ font-size: 13px; font-weight: 500; \}/);
+  assert.match(typography, /\.journey-episode-outcome \{ font-size: 12px; \}/);
+  assert.match(typography, /\.journey-dock p \{ font-size: 13px; \}/);
+  assert.match(typography, /\.journey-evidence dd \{ font-size: 14px; font-weight: 500; \}/);
   assert.match(typography, /\.trajectory-stat span,\s*\.trajectory-section-title \{ font-size: 12px; \}/);
   assert.match(typography, /\.trajectory-event-copy small,\s*\.trajectory-event-time,\s*\.trajectory-event-meta \{ font-size: 12px; \}/);
   assert.match(typography, /\.trajectory-json \{ font-size: 12px; \}/);
