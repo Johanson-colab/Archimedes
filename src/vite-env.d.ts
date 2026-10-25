@@ -281,6 +281,13 @@ interface JourneySummaryChapter {
   episodes: JourneySummaryEpisode[];
 }
 
+interface JourneyChapterPlan {
+  id: string;
+  title: string;
+  summary: string;
+  chapterIds: string[];
+}
+
 interface JourneySummarySnapshot {
   threadId: string;
   brief: string;
@@ -292,6 +299,7 @@ interface JourneySummarySnapshot {
   summaryLength?: JourneySummaryLength;
   chapters: JourneySummaryChapter[];
   claims: JourneyClaim[];
+  chapterPlan?: JourneyChapterPlan[];
 }
 
 interface JourneySettings {
@@ -311,6 +319,7 @@ interface JourneySettings {
   briefInterval: number;
   summaryLength: JourneySummaryLength;
   summaryModel: JourneySummaryModel;
+  economyModel: string;
   updateOnTurnEnd: boolean;
   updateOnApproval: boolean;
   evidenceLedger: boolean;

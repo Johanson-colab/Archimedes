@@ -41,8 +41,11 @@ function buildPrompt(input, settings, previous) {
     "Use only the supplied ids. Preserve every chapter and episode id.",
     "Be specific about what was read, what was produced, and what remains open. If evidence is missing, say so.",
     "Write in the same language as the thread title and chapter text.",
-    "JSON shape: {\"brief\":\"...\",\"nextMove\":\"...\",\"chapters\":[{\"id\":\"...\",\"title\":\"...\",\"summary\":\"...\",\"episodes\":[{\"id\":\"...\",\"title\":\"...\",\"outcome\":\"...\"}]}],\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"status\":\"supported|open|contradicted\",\"sourceIds\":[\"source-id\"]}]}",
+    "JSON shape: {\"brief\":\"...\",\"nextMove\":\"...\",\"chapters\":[{\"id\":\"...\",\"title\":\"...\",\"summary\":\"...\",\"episodes\":[{\"id\":\"...\",\"title\":\"...\",\"outcome\":\"...\"}]}],\"claims\":[{\"id\":\"claim-1\",\"text\":\"...\",\"status\":\"supported|open|contradicted\",\"sourceIds\":[\"source-id\"]}],\"chapterPlan\":[{\"id\":\"plan-1\",\"title\":\"...\",\"summary\":\"...\",\"chapterIds\":[\"chapter-1\",\"chapter-2\"]}]}",
     "Only cite source ids from the supplied sources; use each source's id field, not eventId. If no supplied source supports or contradicts a claim, use status open and an empty sourceIds array. Maximum 8 claims.",
+    settings.chapterDetection === "ai"
+      ? `Group the supplied chapter ids into at most ${settings.maxChapters || 10} narrative chapters using chapterPlan. Each chapter id must appear at most once, and each group must be contiguous in the supplied order. Use [] to keep one chapter per id.`
+      : "Return an empty chapterPlan array.",
     "Titles should be short. Outcomes should be one line. Do not add markdown fences.",
     instructionForLength(settings.summaryLength),
     `Keep the response within roughly ${settings.summaryTokenBudget} tokens.`,
@@ -51,6 +54,8 @@ function buildPrompt(input, settings, previous) {
     threadTitle: input.threadTitle || "Research thread",
     previousBrief: previous?.brief || "",
     brief: input.brief || "",
+    chapterDetection: settings.chapterDetection || "ai",
+    maxChapters: settings.maxChapters || 10,
     sources: (input.sources || []).slice(0, 40),
     chapters: (input.chapters || []).map((chapter) => ({
       id: chapter.id,
@@ -93,6 +98,48 @@ function normalizeClaims(rawClaims, input, previous) {
   return claims;
 }
 
+function normalizeChapterPlan(rawPlan, input, settings) {
+  if (settings?.chapterDetection !== "ai") return [];
+  const chapters = Array.isArray(input.chapters) ? input.chapters : [];
+  const ids = chapters.map((chapter) => chapter.id);
+  if (!Array.isArray(rawPlan) || ids.length < 2) return [];
+  const indexById = new Map(ids.map((id, index) => [id, index]));
+  const used = new Set();
+  const groups = [];
+  for (const candidate of rawPlan.slice(0, 16)) {
+    const candidateIds = Array.isArray(candidate?.chapterIds) ? candidate.chapterIds.filter((id) => typeof id === "string") : [];
+    const indexes = [...new Set(candidateIds.map((id) => indexById.get(id)).filter((index) => Number.isInteger(index)))].sort((a, b) => a - b);
+    if (indexes.length < 2) continue;
+    if (indexes.some((value, index) => index > 0 && value !== indexes[index - 1] + 1)) continue;
+    if (indexes.some((index) => used.has(index))) continue;
+    for (const index of indexes) used.add(index);
+    groups.push({ start: indexes[0], end: indexes.at(-1), title: text(candidate?.title, 140), summary: text(candidate?.summary, 600) });
+  }
+  if (!groups.length) return [];
+  groups.sort((a, b) => a.start - b.start);
+  const expanded = [];
+  let cursor = 0;
+  for (const group of groups) {
+    while (cursor < group.start) { expanded.push({ start: cursor, end: cursor, title: "", summary: "" }); cursor += 1; }
+    expanded.push(group);
+    cursor = group.end + 1;
+  }
+  while (cursor < ids.length) { expanded.push({ start: cursor, end: cursor, title: "", summary: "" }); cursor += 1; }
+  const maxGroups = Math.max(1, Number(settings?.maxChapters) || 10);
+  while (expanded.length > maxGroups) {
+    const first = expanded.shift();
+    const second = expanded.shift();
+    expanded.unshift({ start: first.start, end: second.end, title: first.title, summary: first.summary });
+  }
+  if (!expanded.some((group) => group.end > group.start)) return [];
+  return expanded.map((group, index) => ({
+    id: `plan-${index + 1}`,
+    title: group.title,
+    summary: group.summary,
+    chapterIds: ids.slice(group.start, group.end + 1),
+  }));
+}
+
 function validateSummary(raw, input, previous, config, settings) {
   const chapters = Array.isArray(input.chapters) ? input.chapters : [];
   const aiChapters = Array.isArray(raw?.chapters) ? raw.chapters : [];
@@ -130,6 +177,7 @@ function validateSummary(raw, input, previous, config, settings) {
     model: config?.model || config?.provider || "unknown",
     chapters: normalized,
     claims: normalizeClaims(raw?.claims, input, previous),
+    chapterPlan: normalizeChapterPlan(raw?.chapterPlan, input, settings),
     source: "ai",
     summaryLength: settings.summaryLength,
   };
@@ -137,8 +185,9 @@ function validateSummary(raw, input, previous, config, settings) {
 
 async function summarizeJourney({ input, settings, previous, complete: completeFn, config } = {}) {
   if (!input?.threadId) throw new Error("A thread is required to summarize a journey.");
-  const resolvedSettings = { summaryLength: "standard", summaryTokenBudget: 500, targetEpisodes: 4, ...(settings || {}) };
-  const runtimeConfig = config || getActiveModelConfig();
+  const resolvedSettings = { summaryLength: "standard", summaryTokenBudget: 500, targetEpisodes: 4, maxChapters: 10, chapterDetection: "ai", summaryModel: "current", economyModel: "", ...(settings || {}) };
+  const runtimeConfig = { ...(config || getActiveModelConfig()) };
+  if (resolvedSettings.summaryModel === "economy" && resolvedSettings.economyModel) runtimeConfig.model = resolvedSettings.economyModel;
   if (!runtimeConfig?.apiKey && runtimeConfig?.provider !== "openrouter") {
     throw new Error("Configure a model with an API key in Settings → Models before enabling AI summaries.");
   }

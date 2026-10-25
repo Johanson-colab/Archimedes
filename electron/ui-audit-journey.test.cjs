@@ -15,6 +15,7 @@ const preload = fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const summarizer = fs.readFileSync(path.join(root, "electron", "journey-summarizer.cjs"), "utf8");
 const snapshots = fs.readFileSync(path.join(root, "electron", "journey-snapshots.cjs"), "utf8");
+const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
 
 test("journey has a dedicated settings section with all controls", () => {
   assert.match(settingsModal, /type SettingsSection = "general" \| "journey"/);
@@ -33,6 +34,8 @@ test("journey has a dedicated settings section with all controls", () => {
   assert.match(panel, /Summary length/);
   assert.match(panel, /Summary model/);
   assert.match(panel, /Reset Journey settings/);
+  assert.match(panel, /Economy model name/);
+  assert.match(panel, /Chapter detection/);
   assert.match(css, /\.settings-toggle\.on/);
   assert.match(css, /\.settings-stepper/);
 });
@@ -50,6 +53,7 @@ test("journey defaults are shared by the renderer and the electron store", () =>
     assert.match(source, /briefInterval: 5/);
     assert.match(source, /maxPinned: 5/);
     assert.match(source, /summaryTokenBudget: 500/);
+    assert.match(source, /economyModel: ""/);
   }
   assert.match(main, /journey:get-settings/);
   assert.match(main, /journey:save-settings/);
@@ -71,6 +75,13 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(journey, /journey-dock/);
   assert.match(journey, /journey-views/);
   assert.match(journey, /journey-map/);
+  assert.match(journey, /applyChapterPlan/);
+  assert.match(journey, /chapterEvidence/);
+  assert.match(journey, /chapterPinIds/);
+  assert.match(journey, /onOpenTrajectoryAt/);
+  assert.match(journey, /journey-status-text/);
+  assert.match(journey, /journey-map-zoom/);
+  assert.doesNotMatch(journey, /journey-status-dot/);
   assert.match(journey, /mapAvailable/);
   assert.match(journey, /settings\.mapMode/);
   assert.match(journey, /settings\.mapChapters/);
@@ -80,6 +91,10 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.doesNotMatch(journey, /derived progress/i);
   assert.match(css, /\.journey-scrubber/);
   assert.match(css, /\.journey-map-scrim/);
+  assert.match(css, /\.journey-status-text\.running/);
+  assert.match(css, /@keyframes journey-running-sheen/);
+  assert.doesNotMatch(css, /\.journey-status-dot/);
+  assert.match(css, /--workbench-ground: #1b1b1b/);
 });
 
 test("journey settings control view, merging, cadence, and pins", () => {
@@ -109,6 +124,8 @@ test("journey summaries are loaded, updated on cadence, and stored per thread", 
   assert.match(journey, /getJourneySummary\(thread\.id\)/);
   assert.match(journey, /summarizeJourney\(/);
   assert.match(journey, /summaryUpdating/);
+  assert.match(journey, /pendingSummaryRefreshRef/);
+  assert.match(journey, /chapterPlan/);
   assert.match(journey, /summaryError/);
   assert.match(journey, /settings\.episodeCadence/);
   assert.match(journey, /settings\.idleDelay/);
@@ -123,10 +140,15 @@ test("journey summaries are loaded, updated on cadence, and stored per thread", 
   assert.match(summarizer, /parseSummary/);
   assert.match(summarizer, /validateSummary/);
   assert.match(summarizer, /normalizeClaims/);
+  assert.match(summarizer, /normalizeChapterPlan/);
+  assert.match(summarizer, /chapterPlan/);
+  assert.match(summarizer, /economyModel/);
   assert.match(summarizer, /sourceIds/);
   assert.match(summarizer, /Never invent/);
   assert.match(snapshots, /journey-summaries/);
   assert.match(snapshots, /module\.exports/);
+  assert.match(trajectory, /data-trajectory-sequence/);
+  assert.match(trajectory, /focusSequence/);
 });
 
 test("claims and manual chapter titles are first-class journey data", () => {
@@ -138,12 +160,16 @@ test("claims and manual chapter titles are first-class journey data", () => {
   assert.match(journey, /No claims extracted yet\./);
   assert.match(journey, /readTitles/);
   assert.match(journey, /saveRename/);
+  assert.match(journey, /readUngrouped/);
+  assert.match(journey, /planned: true/);
+  assert.match(journey, /Split chapter group/);
   assert.match(journey, /Rename chapter/);
   assert.match(panel, /Show claims/);
   assert.match(panel, /Show claims and their evidence status/);
   assert.match(css, /\.journey-claim-dot\.supported/);
   assert.match(css, /\.journey-chapter-editor/);
   assert.match(app, /claims: \[\]/);
+  assert.match(app, /focusSequence=\{trajectoryFocusSequence\}/);
 });
 
 test("manual merge and split persist by event range", () => {
@@ -155,7 +181,7 @@ test("manual merge and split persist by event range", () => {
   assert.match(journey, /function splitChapter/);
   assert.match(journey, /viewKey\("merges"/);  assert.match(journey, /manual: true/);
   assert.match(journey, /Merge with next chapter/);
-  assert.match(journey, /Split merged chapter/);
+  assert.match(journey, /function splitChapter/);
   assert.match(css, /\.journey-chapter-actions/);
   assert.match(css, /\.journey-chapter-index\.pinned/);
 });
