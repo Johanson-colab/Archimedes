@@ -122,7 +122,40 @@ test("journey summaries are loaded, updated on cadence, and stored per thread", 
   assert.match(summarizer, /maxOutputTokens/);
   assert.match(summarizer, /parseSummary/);
   assert.match(summarizer, /validateSummary/);
+  assert.match(summarizer, /normalizeClaims/);
+  assert.match(summarizer, /sourceIds/);
   assert.match(summarizer, /Never invent/);
   assert.match(snapshots, /journey-summaries/);
   assert.match(snapshots, /module\.exports/);
+});
+
+test("claims and manual chapter titles are first-class journey data", () => {
+  assert.match(journey, /summary\?\.claims/);
+  assert.match(journey, /journey-claims-section/);
+  assert.match(journey, /journey-claim-dot/);
+  assert.match(journey, /claimStatusLabel/);
+  assert.match(journey, /Needs evidence/);
+  assert.match(journey, /No claims extracted yet\./);
+  assert.match(journey, /readTitles/);
+  assert.match(journey, /saveRename/);
+  assert.match(journey, /Rename chapter/);
+  assert.match(panel, /Show claims/);
+  assert.match(panel, /Show claims and their evidence status/);
+  assert.match(css, /\.journey-claim-dot\.supported/);
+  assert.match(css, /\.journey-chapter-editor/);
+  assert.match(app, /claims: \[\]/);
+});
+
+test("manual merge and split persist by event range", () => {
+  assert.match(journey, /type JourneyMergeRange/);
+  assert.match(journey, /function manualChapterId/);
+  assert.match(journey, /function readMerges/);
+  assert.match(journey, /function applyMergeRanges/);
+  assert.match(journey, /function mergeWithNext/);
+  assert.match(journey, /function splitChapter/);
+  assert.match(journey, /viewKey\("merges"/);  assert.match(journey, /manual: true/);
+  assert.match(journey, /Merge with next chapter/);
+  assert.match(journey, /Split merged chapter/);
+  assert.match(css, /\.journey-chapter-actions/);
+  assert.match(css, /\.journey-chapter-index\.pinned/);
 });

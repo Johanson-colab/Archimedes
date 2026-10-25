@@ -242,12 +242,29 @@ interface JourneySummaryChapterInput {
   episodes: JourneySummaryEpisodeInput[];
 }
 
+interface JourneySourceInput {
+  id: string;
+  title: string;
+  url?: string;
+  eventId: number;
+}
+
+type JourneyClaimStatus = "supported" | "open" | "contradicted";
+
+interface JourneyClaim {
+  id: string;
+  text: string;
+  status: JourneyClaimStatus;
+  sourceIds: string[];
+}
+
 interface JourneySummaryInput {
   threadId: string;
   threadTitle: string;
   brief: string;
   coversTo: number;
   force?: boolean;
+  sources?: JourneySourceInput[];
   chapters: JourneySummaryChapterInput[];
 }
 
@@ -274,6 +291,7 @@ interface JourneySummarySnapshot {
   source: "ai" | "preview";
   summaryLength?: JourneySummaryLength;
   chapters: JourneySummaryChapter[];
+  claims: JourneyClaim[];
 }
 
 interface JourneySettings {

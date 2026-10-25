@@ -8,6 +8,7 @@ const input = {
   threadTitle: "Retrieval budget controls",
   brief: "Rule-based brief.",
   coversTo: 42,
+  sources: [{ id: "source-1", title: "Retrieval budget paper", url: "https://example.test/paper", eventId: 12 }],
   chapters: [
     {
       id: "chapter-1",
@@ -83,6 +84,52 @@ test("summarizer parses fenced JSON and validates ids", async () => {
   assert.equal(capturedOptions.reasoningEffort, "low");
 });
 
+test("claims are validated against supplied sources", async () => {
+  const snapshot = await summarizeJourney({
+    input,
+    settings,
+    previous: null,
+    config,
+    complete: async () => response({
+      brief: "Brief",
+      nextMove: "Continue",
+      chapters: [],
+      claims: [
+        { id: "claim-1", text: "Adaptive stopping preserves recall.", status: "supported", sourceIds: ["source-1"] },
+        { id: "claim-2", text: "Reranking is cheaper on multi-hop.", status: "contradicted", sourceIds: ["source-404"] },
+        { id: "claim-3", text: "Budget-aware reranking helps.", status: "open", sourceIds: [] },
+        { id: "claim-4", text: "   ", status: "supported", sourceIds: ["source-1"] },
+      ],
+    }),
+  });
+  assert.equal(snapshot.claims.length, 3);
+  assert.equal(snapshot.claims[0].status, "supported");
+  assert.deepEqual(snapshot.claims[0].sourceIds, ["source-1"]);
+  assert.equal(snapshot.claims[1].status, "open");
+  assert.deepEqual(snapshot.claims[1].sourceIds, []);
+});
+
+test("claims fall back to the previous snapshot when the model omits them", async () => {
+  const snapshot = await summarizeJourney({
+    input,
+    settings,
+    previous: {
+      brief: "Old brief.",
+      claims: [
+        { id: "claim-1", text: "Adaptive stopping preserves recall.", status: "supported", sourceIds: ["source-1"] },
+        { id: "claim-2", text: "A stale claim.", status: "supported", sourceIds: ["source-404"] },
+      ],
+    },
+    config,
+    complete: async () => response({ brief: "Brief", nextMove: "Continue", chapters: [] }),
+  });
+  assert.equal(snapshot.claims.length, 2);
+  assert.equal(snapshot.claims[0].status, "supported");
+  assert.deepEqual(snapshot.claims[0].sourceIds, ["source-1"]);
+  assert.equal(snapshot.claims[1].status, "open");
+  assert.deepEqual(snapshot.claims[1].sourceIds, []);
+});
+
 test("summarizer retries once when the model returns invalid JSON", async () => {
   let calls = 0;
   const snapshot = await summarizeJourney({
@@ -149,6 +196,7 @@ test("prompt includes ids, length guidance, and token budget", () => {
   assert.match(messages[0].content, /500 tokens/);
   const payload = JSON.parse(messages[1].content);
   assert.equal(payload.chapters[0].id, "chapter-1");
+  assert.equal(payload.sources[0].id, "source-1");
   assert.equal(payload.chapters[0].episodes[0].id, "episode-1");
   assert.equal(payload.previousBrief, "Old brief.");
 });
