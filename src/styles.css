@@ -1038,7 +1038,9 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-section { padding: 14px 0; border-bottom: 1px solid var(--night-line-soft); }
 .journey-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .journey-section-head h2 { margin: 0; color: var(--night-muted); font-size: 11px; font-weight: 550; }
-.journey-section-head > span { color: var(--night-faint); font-size: 11px; }
+.journey-section-head > span { max-width: 64%; overflow: hidden; color: var(--night-faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.journey-summary-note { margin: 7px 0 0; color: var(--night-warning); font-size: 11px; line-height: 1.45; }
+.journey-summary-note button { padding: 0 0 0 4px; color: var(--accent); background: transparent; font-size: 11px; }
 .journey-section-actions { display: flex; align-items: baseline; gap: 10px; }
 .journey-section-actions span { color: var(--night-faint); font-size: 11px; }
 .journey-section-actions button { padding: 0; color: var(--night-muted); background: transparent; font-size: 11px; }

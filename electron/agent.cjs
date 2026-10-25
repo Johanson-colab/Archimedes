@@ -687,10 +687,12 @@ function applyDelta(accumulator, delta, onTextDelta) {
   }
 }
 
-async function complete(config, messages, { signal, onTextDelta, allowTools = true, availableTools = tools, reasoningEffort }) {
-  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools });
+async function complete(config, messages, { signal, onTextDelta, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens }) {
+  const tokenLimit = Number.isFinite(Number(maxOutputTokens)) ? Math.max(64, Math.min(8192, Math.round(Number(maxOutputTokens)))) : 0;
+  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens: tokenLimit });
   const nativeReasoning = openAiReasoningOptions(config, reasoningEffort);
   const request = { model: config.model, messages, stream: true, ...nativeReasoning };
+  if (tokenLimit) request.max_tokens = tokenLimit;
   if (allowTools && availableTools.length) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
   const requestCompletion = (body) => fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
@@ -922,4 +924,4 @@ function interruptAgent(threadId) {
   return true;
 }
 
-module.exports = { interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, translatePaperSelection };
+module.exports = { complete, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, translatePaperSelection };

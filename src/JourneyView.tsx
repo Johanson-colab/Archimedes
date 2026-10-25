@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useUISettings } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
 type JourneyViewProps = {
+  bridge: ResearchDeskBridge;
   thread: ResearchThread | null;
   events: ResearchEvent[];
   modeLabel: string;
   settings: JourneySettings;
   pendingAction: AgentAction | null;
+  agentBusy: boolean;
+  active: boolean;
   onOpenTrajectory: () => void;
   onOpenSettings: () => void;
   onReviewPending: () => void;
@@ -376,6 +379,35 @@ function readSeen(threadId: string | null): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function mergeSummaryChapters(chapters: JourneyChapter[], summary: JourneySummarySnapshot | null): JourneyChapter[] {
+  if (!summary?.chapters?.length) return chapters;
+  const chaptersById = new Map(summary.chapters.map((chapter) => [chapter.id, chapter]));
+  return chapters.map((chapter) => {
+    const ai = chaptersById.get(chapter.id);
+    if (!ai) return chapter;
+    const episodesById = new Map((ai.episodes || []).map((episode) => [episode.id, episode]));
+    return {
+      ...chapter,
+      title: ai.title || chapter.title,
+      summary: ai.summary || chapter.summary,
+      episodes: chapter.episodes.map((episode) => {
+        const aiEpisode = episodesById.get(episode.id);
+        return aiEpisode ? { ...episode, title: aiEpisode.title || episode.title, outcome: aiEpisode.outcome || episode.outcome } : episode;
+      }),
+    };
+  });
+}
+
+function relativeTime(value: string, t: (key: string, values?: Record<string, string | number>) => string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return t("just now");
+  const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000));
+  if (minutes < 1) return t("just now");
+  if (minutes < 60) return t("{minutes}m ago", { minutes });
+  const hours = Math.floor(minutes / 60);
+  return t("{hours}h ago", { hours });
+}
+
 function statusLabel(status: JourneyData["status"]): string {
   if (status === "waiting") return "Waiting for review";
   if (status === "running") return "Running";
@@ -392,7 +424,7 @@ function chapterStatusLabel(status: JourneyChapter["status"]): string {
   return "done";
 }
 
-export default function JourneyView({ thread, events, modeLabel, settings, pendingAction, onOpenTrajectory, onOpenSettings, onReviewPending }: JourneyViewProps) {
+export default function JourneyView({ bridge, thread, events, modeLabel, settings, pendingAction, agentBusy, active, onOpenTrajectory, onOpenSettings, onReviewPending }: JourneyViewProps) {
   const { t } = useUISettings();
   const [view, setView] = useState<"story" | "outline">(settings.defaultView);
   const [mapOpen, setMapOpen] = useState(false);
@@ -406,10 +438,19 @@ export default function JourneyView({ thread, events, modeLabel, settings, pendi
   const [showAllEpisodes, setShowAllEpisodes] = useState<Set<string>>(new Set());
   const [outlineFilter, setOutlineFilter] = useState<"all" | "open" | "pinned">("all");
   const [dismissedSince, setDismissedSince] = useState(false);
+  const [summary, setSummary] = useState<JourneySummarySnapshot | null>(null);
+  const [summaryUpdating, setSummaryUpdating] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
+  const summaryBusyRef = useRef(false);
+  const lastSummaryAtRef = useRef(0);
+  const summaryThreadRef = useRef<string | null>(thread?.id ?? null);
+  const previousBusyRef = useRef(agentBusy);
+  const previousPendingRef = useRef<string | null>(pendingAction?.id ?? null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const mapDialogRef = useDialogFocus<HTMLElement>(mapOpen, () => setMapOpen(false));
 
-  const chapters = useMemo(() => buildChapters(events, settings, pendingAction, thread, t), [events, pendingAction, settings, thread, t]);
+  const sourceChapters = useMemo(() => buildChapters(events, settings, pendingAction, thread, t), [events, pendingAction, settings, thread, t]);
+  const chapters = useMemo(() => mergeSummaryChapters(sourceChapters, summary), [sourceChapters, summary]);
   const evidence = useMemo(() => buildEvidence(events, pendingAction), [events, pendingAction]);
   const steps = events.length;
   const firstTime = timeValue(events[0]?.created_at) || timeValue(thread?.created_at);
@@ -417,8 +458,10 @@ export default function JourneyView({ thread, events, modeLabel, settings, pendi
   const duration = formatDuration(firstTime, lastTime, t);
   const hasErrors = events.some(eventHasError);
   const status: JourneyData["status"] = !steps ? "not-started" : pendingAction ? "waiting" : thread?.status === "running" ? "running" : hasErrors ? "attention" : chapters.every((chapter) => chapter.status === "done") ? "complete" : "attention";
-  const brief = useMemo(() => buildBrief({ steps, chapters, evidence, events, pendingAction, thread, settings }, t), [chapters, events, evidence, pendingAction, settings, steps, thread, t]);
-  const nextMove = buildNextMove({ pendingAction, thread, evidence, steps }, t);
+  const ruleBrief = useMemo(() => buildBrief({ steps, chapters: sourceChapters, evidence, events, pendingAction, thread, settings }, t), [events, evidence, pendingAction, settings, sourceChapters, steps, thread, t]);
+  const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps }, t);
+  const brief = summary?.brief || ruleBrief;
+  const nextMove = summary?.nextMove || ruleNextMove;
   const pinnedChapters = chapters.filter((chapter) => pins.includes(chapter.id));
   const mapAvailable = steps > 0 && settings.mapMode !== "off" && (settings.mapMode === "always" || chapters.length >= settings.mapChapters || steps >= settings.mapSteps);
   const lastSequence = events.at(-1)?.sequence ?? 0;
@@ -456,7 +499,27 @@ export default function JourneyView({ thread, events, modeLabel, settings, pendi
     setDismissedSince(false);
     setMapOpen(false);
     setMapSelected(null);
+    setSummary(null);
+    setSummaryError("");
+    setSummaryUpdating(false);
+    summaryThreadRef.current = thread?.id ?? null;
+    previousBusyRef.current = agentBusy;
+    previousPendingRef.current = pendingAction?.id ?? null;
+    lastSummaryAtRef.current = 0;
   }, [thread?.id]);
+
+  useEffect(() => {
+    if (!thread?.id) return;
+    let cancelled = false;
+    void bridge.getJourneySummary(thread.id)
+      .then((snapshot) => {
+        if (cancelled || summaryThreadRef.current !== thread.id) return;
+        setSummary(snapshot);
+        lastSummaryAtRef.current = snapshot ? Date.parse(snapshot.updatedAt) || 0 : 0;
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [bridge, thread?.id]);
 
   useEffect(() => {
     if (!thread?.id || !steps || seen !== null) return;
@@ -518,6 +581,99 @@ export default function JourneyView({ thread, events, modeLabel, settings, pendi
     requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(`[data-journey-chapter="${id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
   }
 
+  async function requestSummary(force = false) {
+    const threadId = thread?.id;
+    if (!threadId || !sourceChapters.length || summaryBusyRef.current) return;
+    if (!force && !settings.liveSummaries) return;
+    if (!force && summary && summary.coversTo >= lastSequence) return;
+    if (!force && Date.now() - lastSummaryAtRef.current < settings.briefInterval * 60_000) return;
+    summaryBusyRef.current = true;
+    setSummaryUpdating(true);
+    setSummaryError("");
+    try {
+      const next = await bridge.summarizeJourney({
+        threadId,
+        threadTitle: thread?.title || "Research thread",
+        brief: ruleBrief,
+        coversTo: lastSequence,
+        force,
+        chapters: sourceChapters.map((chapter) => ({
+          id: chapter.id,
+          title: chapter.title,
+          summary: chapter.summary,
+          status: chapter.status,
+          steps: chapter.steps,
+          episodes: chapter.episodes.slice(0, settings.targetEpisodes).map((episode) => ({
+            id: episode.id,
+            title: episode.title,
+            outcome: episode.outcome,
+            status: episode.status,
+            steps: episode.steps,
+          })),
+        })),
+      });
+      if (summaryThreadRef.current !== threadId) return;
+      if (next) {
+        setSummary(next);
+        lastSummaryAtRef.current = Date.now();
+      }
+    } catch (error) {
+      if (summaryThreadRef.current === threadId) setSummaryError(String(error).replace(/^Error:\s*/, ""));
+    } finally {
+      summaryBusyRef.current = false;
+      if (summaryThreadRef.current === threadId) setSummaryUpdating(false);
+    }
+  }
+
+  useEffect(() => {
+    const triggered = settings.liveSummaries || settings.updateOnTurnEnd || (settings.updateOnApproval && Boolean(pendingAction));
+    if (!active || !triggered || !thread?.id || summary || summaryError || !sourceChapters.length) return;
+    const force = !settings.liveSummaries;
+    const timer = window.setTimeout(() => { void requestSummary(force); }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [active, pendingAction, settings.liveSummaries, settings.updateOnApproval, settings.updateOnTurnEnd, sourceChapters.length, summary, summaryError, thread?.id]);
+
+  useEffect(() => {
+    if (!active || !thread?.id || !settings.liveSummaries || !sourceChapters.length) return;
+    const newSteps = steps - (summary?.coversTo ?? 0);
+    if (newSteps <= 0) return;
+    const throttle = Math.max(0, settings.briefInterval * 60_000 - (Date.now() - lastSummaryAtRef.current));
+    const due = newSteps >= settings.episodeCadence ? 800 : settings.idleDelay * 1000;
+    const timer = window.setTimeout(() => { void requestSummary(false); }, Math.max(due, throttle + 200));
+    return () => window.clearTimeout(timer);
+  }, [active, settings.briefInterval, settings.episodeCadence, settings.idleDelay, settings.liveSummaries, sourceChapters.length, steps, summary?.coversTo, thread?.id]);
+
+  useEffect(() => {
+    if (!active || !summary || settings.liveSummaries || summary.coversTo >= lastSequence) return;
+    if (!settings.updateOnTurnEnd && !(settings.updateOnApproval && pendingAction)) return;
+    const timer = window.setTimeout(() => { void requestSummary(true); }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [active, lastSequence, pendingAction, settings.liveSummaries, settings.updateOnApproval, settings.updateOnTurnEnd, summary, thread?.id]);
+
+  useEffect(() => {
+    const wasBusy = previousBusyRef.current;
+    previousBusyRef.current = agentBusy;
+    if (active && wasBusy && !agentBusy && settings.updateOnTurnEnd) void requestSummary(true);
+  }, [active, agentBusy, settings.updateOnTurnEnd]);
+
+  useEffect(() => {
+    const id = pendingAction?.id ?? null;
+    const previous = previousPendingRef.current;
+    previousPendingRef.current = id;
+    if (active && id && id !== previous && settings.updateOnApproval) void requestSummary(true);
+  }, [active, pendingAction?.id, settings.updateOnApproval]);
+
+  const summarySignature = `${settings.summaryLength}|${settings.summaryModel}|${settings.summaryTokenBudget}|${settings.targetEpisodes}|${settings.maxChapters}|${settings.autoMerge}`;
+  const previousSummarySignatureRef = useRef(summarySignature);
+  useEffect(() => {
+    if (!active) return;
+    const previous = previousSummarySignatureRef.current;
+    previousSummarySignatureRef.current = summarySignature;
+    if (previous === summarySignature || !thread?.id || !sourceChapters.length) return;
+    const timer = window.setTimeout(() => { void requestSummary(true); }, 700);
+    return () => window.clearTimeout(timer);
+  }, [active, sourceChapters.length, summarySignature, thread?.id]);
+
   function renderChapter(chapter: JourneyChapter, index: number, dense = false) {
     const isExpanded = expandedIds.has(chapter.id);
     const isPinned = pins.includes(chapter.id);
@@ -553,6 +709,14 @@ export default function JourneyView({ thread, events, modeLabel, settings, pendi
     <div className="journey-since-head"><span>{t("Since your last visit")}</span><button onClick={dismissSince}>{t("Dismiss")}</button></div>
     <p>{plural(digest.steps, t("step"))}{digest.sources ? ` · ${plural(digest.sources, t("new source"), t("new sources"))}` : ""}{digest.approval ? ` · ${t("{count} approval waiting", { count: digest.approval })}` : ""}</p>
   </aside> : null;
+
+  const summaryLabel = summary ? (summary.source === "preview" ? t("Preview summary") : t("AI brief")) : t("Rule-based brief");
+  const summaryBehind = summary ? Math.max(0, steps - summary.coversTo) : 0;
+  const summaryMeta = summaryUpdating
+    ? t("updating…")
+    : summary
+      ? `${relativeTime(summary.updatedAt, t)} · #1–#${summary.coversTo}${summaryBehind ? ` · +${summaryBehind}` : ""}`
+      : `${modeLabel} · ${t("from {count} events", { count: steps })}`;
 
   const header = <header className="journey-header">
     <div className="journey-topline">
@@ -606,12 +770,13 @@ export default function JourneyView({ thread, events, modeLabel, settings, pendi
     {since}
     {view === "story" ? <div className="journey-story">
       <section className="journey-brief">
-        <div className="journey-section-head"><h2>{t("Brief")}</h2><span>{modeLabel} · {t("from {count} events", { count: steps })}</span></div>
+        <div className="journey-section-head"><h2>{summaryLabel}</h2><span>{summaryMeta}</span></div>
         <p>{brief}</p>
+        {summaryError && <p className="journey-summary-note" title={summaryError}>{summary ? t("Summary update failed. Showing the previous AI brief.") : t("AI summary unavailable. Showing the rule-based brief.")} <button onClick={() => void requestSummary(true)}>{t("Retry")}</button></p>}
         <button className="journey-text-action" onClick={onOpenTrajectory}>{t("View events #1–#{count}", { count: steps })} →</button>
       </section>
       <section className="journey-section">
-        <div className="journey-section-head"><h2>{t("Chapters")}</h2><div className="journey-section-actions"><span>{plural(chapters.length, t("chapter"))}</span>{mapAvailable && <button onClick={() => setMapOpen(true)}>{t("Open map")}</button>}</div></div>
+        <div className="journey-section-head"><h2>{t("Chapters")}</h2><div className="journey-section-actions"><span>{t("{count} total", { count: chapters.length })}</span>{mapAvailable && <button onClick={() => setMapOpen(true)}>{t("Open map")}</button>}</div></div>
         {pinnedChapters.length > 0 && <div className="journey-pinned"><span className="journey-mini-label">{t("Pinned")}</span>{pinnedChapters.map((chapter) => <button key={chapter.id} onClick={() => jumpToChapter(chapter.id)}>{chapter.title}<span>{plural(chapter.steps, "step")}</span></button>)}</div>}
         {hiddenChapterCount > 0 && <button className="journey-earlier" onClick={() => setShowAllChapters(true)}>{t("Earlier chapters ({count})", { count: hiddenChapterCount })} ↑</button>}
         <div className="journey-chapters">{visibleChapters.map((chapter) => renderChapter(chapter, chapters.indexOf(chapter)))}</div>
@@ -674,8 +839,9 @@ export default function JourneyView({ thread, events, modeLabel, settings, pendi
             </> : <p className="journey-map-empty">{t("Select a chapter to inspect it.")}</p>}
           </aside>
         </div>
-        <footer className="journey-map-footer"><span>{t("Click a chapter to inspect. Hover a row to see its event range.")}</span><span>{t("Rule-based brief")} · {plural(steps, t("step"))}</span></footer>
+        <footer className="journey-map-footer"><span>{t("Click a chapter to inspect. Hover a row to see its event range.")}</span><span>{summaryLabel} · {plural(steps, t("step"))}</span></footer>
       </section>
     </div>}
   </section>;
 }
+

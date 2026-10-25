@@ -13,6 +13,8 @@ const store = fs.readFileSync(path.join(root, "electron", "journey-settings.cjs"
 const main = fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8");
 const preload = fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
+const summarizer = fs.readFileSync(path.join(root, "electron", "journey-summarizer.cjs"), "utf8");
+const snapshots = fs.readFileSync(path.join(root, "electron", "journey-snapshots.cjs"), "utf8");
 
 test("journey has a dedicated settings section with all controls", () => {
   assert.match(settingsModal, /type SettingsSection = "general" \| "journey"/);
@@ -97,4 +99,30 @@ test("journey settings control view, merging, cadence, and pins", () => {
   assert.match(panel, /\{ value: "concise", label: t\("Concise"\) \}/);
   assert.match(panel, /value="current">\{t\("Current chat model"\)\}/);
   assert.match(panel, /Economy model · not configured/);
+});
+
+test("journey summaries are loaded, updated on cadence, and stored per thread", () => {
+  assert.match(main, /journey:summarize/);
+  assert.match(main, /journey:get-summary/);
+  assert.match(preload, /summarizeJourney/);
+  assert.match(preload, /getJourneySummary/);
+  assert.match(journey, /getJourneySummary\(thread\.id\)/);
+  assert.match(journey, /summarizeJourney\(/);
+  assert.match(journey, /summaryUpdating/);
+  assert.match(journey, /summaryError/);
+  assert.match(journey, /settings\.episodeCadence/);
+  assert.match(journey, /settings\.idleDelay/);
+  assert.match(journey, /settings\.briefInterval/);
+  assert.match(journey, /settings\.liveSummaries/);
+  assert.match(journey, /settings\.updateOnTurnEnd/);
+  assert.match(journey, /settings\.updateOnApproval/);
+  assert.match(journey, /settings\.targetEpisodes/);
+  assert.match(journey, /AI brief/);
+  assert.match(journey, /Preview summary/);
+  assert.match(summarizer, /maxOutputTokens/);
+  assert.match(summarizer, /parseSummary/);
+  assert.match(summarizer, /validateSummary/);
+  assert.match(summarizer, /Never invent/);
+  assert.match(snapshots, /journey-summaries/);
+  assert.match(snapshots, /module\.exports/);
 });

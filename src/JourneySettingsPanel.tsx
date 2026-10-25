@@ -38,7 +38,7 @@ export default function JourneySettingsPanel({ settings, onChange, onReset, onOp
   const save = (patch: Partial<JourneySettings>) => { void onChange(patch); };
 
   return <div className="settings-sections">
-    <p className="settings-group-note">{t("These settings control how much the AI summarizes and when the map appears. The current build uses a rule-based brief; the AI summarizer will use these values when it is enabled.")}</p>
+    <p className="settings-group-note">{t("These settings control how much the AI summarizes and when the map appears. Higher frequency increases model calls.")}</p>
 
     <section className="settings-section">
       <h3 className="settings-section-title">{t("View")}</h3>
@@ -85,7 +85,7 @@ export default function JourneySettingsPanel({ settings, onChange, onReset, onOp
 
     <section className="settings-section">
       <h3 className="settings-section-title">{t("Summaries")}</h3>
-      <p className="settings-group-note">{t("AI summaries are the next phase. These values are saved now and will drive cadence, length, and model choice.")}</p>
+      <p className="settings-group-note">{t("Changes apply to the next summary. Cadence and length affect model cost.")}</p>
       <div className="settings-group">
         <Row title={t("Live summaries")} description={t("Update while the agent is running. Off updates only at turn end.")}>
           <Toggle checked={settings.liveSummaries} label={t("Live summaries")} onChange={(liveSummaries) => save({ liveSummaries })} />
@@ -137,7 +137,7 @@ export default function JourneySettingsPanel({ settings, onChange, onReset, onOp
 
     <section className="settings-section">
       <h3 className="settings-section-title">{t("Advanced")}</h3>
-      <p className="settings-group-note">{t("This build groups chapters by turns. AI grouping uses this setting when the summarizer is enabled.")}</p>
+      <p className="settings-group-note">{t("Chapter boundaries still follow turns in this build. The setting is saved for AI grouping.")}</p>
       <div className="settings-group">
         <Row title={t("Chapter detection")} description={t("AI groups by intent. Turns group by conversation turn.")}>
           <Choice value={settings.chapterDetection} label={t("Chapter detection")} onChange={(chapterDetection) => save({ chapterDetection })} options={[{ value: "ai", label: t("AI") }, { value: "turns", label: t("Turns") }]} />
