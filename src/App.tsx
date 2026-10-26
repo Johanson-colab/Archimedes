@@ -35,6 +35,7 @@ import ChatActivityTimeline from "./ChatActivityTimeline";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
 import TrajectoryView from "./TrajectoryView";
+import TurnRail from "./TurnRail";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import { useUISettings } from "./i18n";
@@ -106,6 +107,7 @@ type Message = {
   role: "user" | "assistant";
   text: string;
   sources?: ResearchSource[];
+  created_at?: string;
 };
 
 type TimelineEvent = {
@@ -1453,7 +1455,7 @@ function App() {
     clearPendingAssistantDeltas();
     setAgentBusy(true);
     setInterrupting(false);
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt }]);
+    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt, created_at: new Date().toISOString() }]);
     setEvents([{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
@@ -2304,6 +2306,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
         )}
       </div>}
     </div>
+    <TurnRail messages={visibleMessages} scrollRef={scrollRef} />
     {!followingOutput && <button className="conversation-jump-latest" onClick={() => {
       followOutputRef.current = true;
       setFollowingOutput(true);
@@ -2377,7 +2380,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
 }
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
-  return <article className={`conversation-message ${message.role}`}>
+  return <article className={`conversation-message ${message.role}`} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
