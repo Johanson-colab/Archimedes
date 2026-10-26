@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Check, ChevronDown, FolderOpen, MessageSquarePlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, ChevronDown, FolderOpen, MessageSquarePlus, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -46,12 +46,14 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<WorkFilter>("all");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [projectMenu, setProjectMenu] = useState<{ project: ResearchProject } | null>(null);
   const [showArchivedProjects, setShowArchivedProjects] = useState(true);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState("");
   const filterRef = useRef<HTMLDivElement | null>(null);
+  const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const renameInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -79,6 +81,22 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [filterOpen]);
+
+  useEffect(() => {
+    if (!projectMenu) return;
+    function handlePointerDown(event: PointerEvent) {
+      if (!projectMenuRef.current?.contains(event.target as Node)) setProjectMenu(null);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setProjectMenu(null);
+    }
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [projectMenu]);
 
   function toggleProject(id: string) {
     setExpanded((current) => {
@@ -186,8 +204,10 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
         {visibleProjects.map((project) => {
           const projectThreads = visibleThreads.filter((thread) => thread.project_id === project.id);
           const isExpanded = expanded.has(project.id) || filter !== "all";
+          const isActiveProject = activeProjectId === project.id && !activeThreadId;
+          const menuOpen = projectMenu?.project.id === project.id;
           return <div className="project-node" key={project.id}>
-            <div className={activeProjectId === project.id ? "project-tree-row active" : "project-tree-row"}>
+            <div className={isActiveProject ? "project-tree-row active" : "project-tree-row"}>
               {editingProjectId === project.id
                 ? <span className="project-rename-field"><input autoFocus value={projectNameDraft} aria-label={t("Project name")} maxLength={100} disabled={renaming} onChange={(event) => setProjectNameDraft(event.target.value)} onBlur={() => void finishRename(project)} onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -203,11 +223,15 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                 : <button className="project-select" onClick={() => toggleProject(project.id)} title={`${project.name}${project.workspace_path ? ` · ${project.workspace_path}` : ""}`} aria-expanded={isExpanded}><span className="project-name">{project.name}</span>{projectThreads.length > 0 && <small>{projectThreads.length}</small>}</button>}
               <span className="project-row-actions">
                 <button onClick={() => onNewChat(project.id)} title={t("New chat in {name}", { name: project.name })} disabled={disabled}><MessageSquarePlus size={13} /></button>
-                <button onClick={() => onChangeProjectWorkspace(project)} title={t("Change project folder")} disabled={disabled}><FolderOpen size={12} /></button>
-                <button onClick={() => beginRename(project)} title={t("Rename {name}", { name: project.name })} disabled={disabled}><Pencil size={12} /></button>
-                <button onClick={() => onArchiveProject(project, true)} title={t("Archive {name}", { name: project.name })} disabled={disabled}><Archive size={12} /></button>
-                <button onClick={() => onRemoveProject(project)} title={t("Remove {name}", { name: project.name })} disabled={disabled}><Trash2 size={12} /></button>
+                <button className={menuOpen ? "project-more-button active" : "project-more-button"} onClick={() => setProjectMenu((current) => current?.project.id === project.id ? null : { project })} title={t("More project actions")} aria-label={t("More project actions")} aria-haspopup="menu" aria-expanded={menuOpen} disabled={disabled}><MoreVertical size={14} /></button>
               </span>
+              {menuOpen && <div className="project-more-menu" ref={projectMenuRef} role="menu" aria-label={t("Project actions")}>
+                <button role="menuitem" onClick={() => { setProjectMenu(null); onChangeProjectWorkspace(project); }} disabled={disabled}><FolderOpen size={13} /><span>{t("Change project folder")}</span></button>
+                <button role="menuitem" onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}><Pencil size={13} /><span>{t("Rename")}</span></button>
+                <button role="menuitem" onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}><Archive size={13} /><span>{t("Archive")}</span></button>
+                <div className="project-more-divider" />
+                <button className="danger" role="menuitem" onClick={() => { setProjectMenu(null); onRemoveProject(project); }} disabled={disabled}><Trash2 size={13} /><span>{t("Remove")}</span></button>
+              </div>}
             </div>
             {isExpanded && <div className="project-chat-list">
               {projectThreads.map((thread) => {
