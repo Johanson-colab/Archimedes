@@ -60,6 +60,25 @@ test("Work rows are text-only with a folded filter and state labels", () => {
   assert.match(sidebar, /className="work-status failed"/);
 });
 
+test("a selected session does not keep its project highlighted", () => {
+  assert.match(sidebar, /const isActiveProject = activeProjectId === project\.id && !activeThreadId/);
+  assert.match(sidebar, /className=\{isActiveProject \? "project-tree-row active" : "project-tree-row"\}/);
+});
+
+test("project overflow actions collapse into one vertical menu", () => {
+  assert.match(sidebar, /<MoreVertical size=\{14\} \/>/);
+  assert.match(sidebar, /className="project-more-menu"[^>]*role="menu"/);
+  assert.match(sidebar, /Change project folder/);
+  assert.match(sidebar, /className="project-more-divider"/);
+  assert.match(sidebar, /button className="danger" role="menuitem"/);
+});
+
+test("Work row typography matches the Knowledge items", () => {
+  assert.match(css, /\.work-group \.project-select \.project-name \{ font-size: 14px; font-weight: 400/);
+  assert.match(css, /\.work-group \.project-chat-open \{[^}]*font-size: 14px; font-weight: 400/);
+  assert.doesNotMatch(css, /\.work-group \.project-chat-open \{[^}]*font-size: 11px/);
+});
+
 test("running uses the Journey-style sheen and review keeps an open ring", () => {
   assert.match(css, /@keyframes sidebar-running-sheen/);
   assert.match(css, /animation: sidebar-running-sheen 2\.1s linear infinite/);

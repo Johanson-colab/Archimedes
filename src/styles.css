@@ -4319,22 +4319,24 @@ html:not([data-theme="paper"]) .codex-sidebar {
 .work-filter-option small { margin-left: auto; color: var(--sb-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
 .work-filter-check { display: grid; width: 13px; height: 13px; flex: 0 0 auto; place-items: center; color: var(--accent); }
 .work-tree { flex: 1; min-height: 0; overflow: auto; padding-bottom: 6px; }
-.work-group .project-tree-row { height: 30px; border-radius: 5px; }
+.work-group .project-tree-row { position: relative; height: 30px; border-radius: 5px; }
 .work-group .project-tree-row:hover { color: var(--night-ink); background: var(--sb-hover); }
 .work-group .project-tree-row.active { color: var(--night-ink); background: var(--sb-active); }
-.work-group .project-select { height: 100%; gap: 0; padding: 0 8px; color: var(--sb-ink); }
-.work-group .project-select .project-name { font-size: 12px; font-weight: 600; letter-spacing: -.005em; }
+.work-group .project-select { height: 100%; gap: 0; padding: 0 8px; color: var(--sb-muted); }
+.work-group .project-select .project-name { font-size: 14px; font-weight: 400; letter-spacing: 0; }
+.work-group .project-tree-row:hover .project-select { color: var(--night-ink-soft); }
 .work-group .project-tree-row.active .project-select { color: var(--night-ink); }
-.work-group .project-tree-row.active .project-select span { font-weight: 650; }
+.work-group .project-tree-row.active .project-select span { font-weight: 400; }
 .work-group .project-select small { color: var(--sb-faint); font-size: 9px; }
 .work-group .project-rename-field { height: 100%; }
 .work-group .project-chat-list { margin-left: 0; padding: 2px 0 5px 14px; border-left: 0; }
 .work-group .project-chat-row { height: 28px; }
 .work-group .project-chat-row:hover, .work-group .project-chat-row.active { background: var(--sb-hover); }
 .work-group .project-chat-row.active { background: var(--sb-active); }
-.work-group .project-chat-open { display: flex; height: 100%; min-width: 0; flex: 1; align-items: center; gap: 8px; padding: 0 8px; overflow: hidden; color: var(--sb-ink); background: transparent; font-size: 11px; text-align: left; }
+.work-group .project-chat-open { display: flex; height: 100%; min-width: 0; flex: 1; align-items: center; gap: 8px; padding: 0 8px; overflow: hidden; color: var(--sb-muted); background: transparent; font-size: 14px; font-weight: 400; text-align: left; }
 .work-group .project-chat-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.work-group .project-chat-row.active .project-chat-open { color: var(--night-ink); font-weight: 600; }
+.work-group .project-chat-row:hover .project-chat-open { color: var(--night-ink-soft); }
+.work-group .project-chat-row.active .project-chat-open { color: var(--night-ink); font-size: 14px; font-weight: 400; }
 .work-group .project-chat-archive { flex: 0 0 auto; }
 .work-group .project-chat-empty { color: var(--sb-faint); }
 .work-subheading { display: flex; height: 28px; align-items: center; padding: 0 8px; color: var(--sb-faint); font-size: 8px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
@@ -4487,3 +4489,15 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
    strip is absent; otherwise the PDF page changes an auto row on first render. */
 .original-paper-reader > .paper-search-results { grid-row: 2; }
 .original-paper-reader > .arch-pdf-stage { grid-row: 3; }
+
+/* Project row overflow actions live behind one vertical menu. */
+.work-group .project-more-button { display: grid; width: 23px; height: 24px; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border-radius: 4px; }
+.work-group .project-more-button:hover, .work-group .project-more-button.active { color: var(--night-ink); background: var(--sb-hover); }
+.project-more-menu { position: absolute; z-index: 45; top: 27px; right: 2px; display: grid; width: 184px; gap: 1px; padding: 4px; background: var(--sb-panel); border: 1px solid var(--night-line); border-radius: 6px; box-shadow: 0 13px 32px rgba(0, 0, 0, .34); }
+.project-more-menu button { display: flex; height: 29px; align-items: center; gap: 8px; padding: 0 7px; color: var(--sb-ink); background: transparent; border-radius: 4px; font-size: 10px; font-weight: 500; text-align: left; }
+.project-more-menu button:hover { color: var(--night-ink); background: var(--sb-hover); }
+.project-more-menu button > svg { flex: 0 0 auto; color: var(--sb-muted); }
+.project-more-menu button.danger { color: var(--night-danger); }
+.project-more-menu button.danger > svg { color: var(--night-danger); }
+.project-more-menu button.danger:hover { color: #ffb4b4; background: color-mix(in srgb, var(--night-danger) 12%, transparent); }
+.project-more-divider { height: 1px; margin: 3px 2px; background: var(--sb-line); }
