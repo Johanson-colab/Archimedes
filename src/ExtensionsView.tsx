@@ -38,16 +38,9 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
   ];
 
   return <section className="skills-page extensions-page">
-    <header className="extensions-header">
-      <div className="extensions-heading">
-        <span className="page-kicker">Knowledge</span>
-        <h1>Extensions</h1>
-        <p>Everything that changes what the Agent can do: reusable skills, MCP servers, and installed plugins.</p>
-      </div>
-      <div className="extensions-tabs" role="tablist" aria-label="Extensions">
-        {tabs.map((item) => <button key={item.id} role="tab" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} onClick={() => onTabChange(item.id)}>{item.label}</button>)}
-      </div>
-    </header>
+    <div className="extensions-tabs" role="tablist" aria-label="Extensions">
+      {tabs.map((item) => <button key={item.id} role="tab" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} onClick={() => onTabChange(item.id)}>{item.label}</button>)}
+    </div>
 
     {tab === "skills" && <SkillsView bridge={bridge} workspace={workspace} attachedIds={attachedIds} onAttach={onAttach} embedded />}
 

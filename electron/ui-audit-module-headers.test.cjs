@@ -10,6 +10,7 @@ const gallery = fs.readFileSync(path.join(root, "src", "GalleryView.tsx"), "utf8
 const benchmark = fs.readFileSync(path.join(root, "src", "BenchmarkRadarView.tsx"), "utf8");
 const library = fs.readFileSync(path.join(root, "src", "LibraryView.tsx"), "utf8");
 const typography = fs.readFileSync(path.join(root, "src", "typography.css"), "utf8");
+const extensions = fs.readFileSync(path.join(root, "src", "ExtensionsView.tsx"), "utf8");
 
 test("module actions share the main toolbar slot", () => {
   assert.match(app, /id="module-toolbar-actions" className="module-toolbar-actions"/);
@@ -24,6 +25,15 @@ test("module-specific title headers are removed", () => {
   assert.doesNotMatch(gallery, /className="gallery-header"/);
   assert.doesNotMatch(benchmark, /className="benchmark-header"/);
   assert.match(library, /className="library-page daily-page">\s*<div className="daily-feed-toolbar/);
+});
+
+test("library and extensions rely on the toolbar instead of a second title block", () => {
+  assert.doesNotMatch(library, /Knowledge base<\/span><h1>Literature library/);
+  assert.doesNotMatch(library, /Curated research directions/);
+  assert.doesNotMatch(library, /className="library-page-header"/);
+  assert.match(library, /<ToolbarActions><button className="primary-button"[^>]*>.*New library/);
+  assert.doesNotMatch(extensions, /extensions-heading/);
+  assert.doesNotMatch(extensions, /Everything that changes what the Agent can do/);
 });
 
 test("toolbar carries the knowledge module subtitle", () => {
