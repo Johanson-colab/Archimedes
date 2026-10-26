@@ -807,7 +807,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-s
 
   try {
     const context = prepareConversation({
-      thread: transient ? { id: thread.id, title: thread.title, mode, context_summary: "", turns: [] } : store.getResearchThreadContext(thread.id),
+      // Internal review workers are intentionally not persisted, but their
+      // active turn still has to be present for the normal context builder.
+      thread: transient ? { id: thread.id, title: thread.title, mode, context_summary: "", turns: [turn] } : store.getResearchThreadContext(thread.id),
       currentTurnId: turn.id,
       attachmentManifest: attachedContextManifest(contextItems),
       mode,
