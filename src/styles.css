@@ -4318,6 +4318,9 @@ html:not([data-theme="paper"]) .project-folder-field input { color: #e9e9e9; }
 
 /* Compact paper reader bar: back, tabs, and actions share one row. */
 .paper-workbench-page { grid-template-rows: 44px minmax(0, 1fr); }
+/* Keep the reader in an explicit row. An implicit auto row lets the PDF page
+   grow the stage after the first render, which reads as a vertical jump. */
+.paper-reader-layout { grid-template-rows: minmax(0, 1fr); }
 .paper-reader-bar { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 18px; background: #fff; border-bottom: 1px solid #dfe1dc; }
 .paper-reader-bar .reader-back-button { flex: 0 0 auto; padding: 4px 7px; }
 .paper-reader-bar .paper-reader-tabs { display: flex; min-width: 0; flex: 1; align-items: center; gap: 1px; padding: 0; overflow: hidden; background: transparent; border: 0; }
@@ -4347,3 +4350,13 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
   .paper-reader-bar { padding-inline: 8px; gap: 4px; }
   .paper-reader-bar .paper-reader-tabs button { padding-inline: 6px; }
 }
+
+.knowledge-main .paper-workbench-page { grid-template-rows: 44px minmax(0, 1fr); }
+@media (max-width: 680px) {
+  .knowledge-main .paper-workbench-page { grid-template-rows: 42px minmax(0, 1fr); }
+}
+
+/* The reader stage must own the flexible row even when the optional search
+   strip is absent; otherwise the PDF page changes an auto row on first render. */
+.original-paper-reader > .paper-search-results { grid-row: 2; }
+.original-paper-reader > .arch-pdf-stage { grid-row: 3; }
