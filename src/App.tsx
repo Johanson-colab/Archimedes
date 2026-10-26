@@ -29,7 +29,9 @@ import BenchmarkRadarView from "./BenchmarkRadarView";
 import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
-import SkillsView from "./SkillsView";
+import ExtensionsView, { type ExtensionsTab } from "./ExtensionsView";
+import CommandPalette, { type PaletteCommand } from "./CommandPalette";
+import { sidebarEntries, type MainSection, type SidebarEntry } from "./sidebar-registry";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth, type WorkbenchTab } from "./RightWorkbench";
 import ChatActivityTimeline from "./ChatActivityTimeline";
 import JourneyView from "./JourneyView";
@@ -54,6 +56,7 @@ import {
   CalendarDays,
   Check,
   CircleDot,
+  Cloud,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -65,13 +68,16 @@ import {
   Folder,
   FolderOpen,
   FlaskConical,
+  ImagePlus,
   Images,
+  Laptop,
   Lightbulb,
   LoaderCircle,
   Maximize2,
   MessageCircle,
   MessageSquareText,
   PanelLeftClose,
+  Puzzle,
   PanelLeftOpen,
   PanelRight,
   PanelRightClose,
@@ -271,7 +277,7 @@ let previewTerminalSettings: TerminalSettings = {
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
 const previewFileContents = new Map<string, string>();
 const previewTasks: SavedTask[] = [];
-const previewProjects: ResearchProject[] = [{ id: "preview-general", name: "General", description: "Default research project", chat_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, last_chat_at: null }];
+const previewProjects: ResearchProject[] = [{ id: "preview-general", name: "General", description: "Default research project", workspace_path: DEFAULT_WORKSPACE || null, chat_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, last_chat_at: null }];
 const previewArchivedProjects: ResearchProject[] = [];
 const previewThreads: ResearchThreadDetail[] = [];
 const previewArchivedThreads: ResearchThreadDetail[] = [];
@@ -318,6 +324,8 @@ const previewBridge = {
   ...previewLibraryBridge,
   getInitialWorkspace: async () => null,
   chooseWorkspace: async () => DEFAULT_WORKSPACE || "Browser preview workspace",
+  watchWorkspace: async (workspace: string) => workspace,
+  revealWorkspace: async () => ({ opened: true }),
   chooseContextPaths: async () => { throw new Error("Use the desktop app to choose local files and folders."); },
   listContextResources: async (kind: "plugin" | "skill") => kind === "skill" ? previewSkills.map((skill) => ({ id: `skill:${skill.path}`, type: "skill" as const, name: skill.name, path: skill.path, detail: `${skill.collectionName} · ${skill.category}` })) : [],
   listSkillCollections: async () => structuredClone(previewSkillCollections),
@@ -327,6 +335,7 @@ const previewBridge = {
     if (!skill) throw new Error("Skill not found.");
     return structuredClone(skill);
   },
+  getResearchSnapshot: async () => previewSnapshot(),
   openWorkspace: async (workspacePath?: string) => {
     previewWorkspace = workspacePath || previewWorkspace;
     return previewSnapshot();
@@ -374,9 +383,9 @@ const previewBridge = {
     previewTasks.push(task);
     return task;
   },
-  createResearchProject: async ({ name, description = "" }: { name: string; description?: string }) => {
+  createResearchProject: async ({ name, description = "", workspacePath = "" }: { name: string; description?: string; workspacePath?: string }) => {
     const now = new Date().toISOString();
-    const project = { id: crypto.randomUUID(), name, description, chat_count: 0, created_at: now, updated_at: now, archived_at: null, last_chat_at: null };
+    const project = { id: crypto.randomUUID(), name, description, workspace_path: workspacePath || previewWorkspace, chat_count: 0, created_at: now, updated_at: now, archived_at: null, last_chat_at: null };
     previewProjects.unshift(project);
     return structuredClone(project);
   },
@@ -386,6 +395,13 @@ const previewBridge = {
     const project = previewProjects.find((candidate) => candidate.id === id);
     if (!project) throw new Error("Research project not found.");
     project.name = normalizedName;
+    project.updated_at = new Date().toISOString();
+    return structuredClone(project);
+  },
+  setResearchProjectWorkspace: async (id: string, workspacePath: string) => {
+    const project = previewProjects.find((candidate) => candidate.id === id) || previewArchivedProjects.find((candidate) => candidate.id === id);
+    if (!project) throw new Error("Research project not found.");
+    project.workspace_path = workspacePath;
     project.updated_at = new Date().toISOString();
     return structuredClone(project);
   },
@@ -447,12 +463,13 @@ const previewBridge = {
   readClipboardText: async () => "",
   writeClipboardText: async () => undefined,
   readClipboardImage: async () => null,
-  runAgent: async ({ prompt, threadId, projectId, mode, reasoningEffort = "medium", contextLength = "standard", contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[] }) => {
+  runAgent: async ({ prompt, workspace, threadId, projectId, mode, reasoningEffort = "medium", contextLength = "standard", contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[] }) => {
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
       const resolvedProjectId = projectId || previewProjects[0]?.id || "preview-general";
-      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, title: prompt.slice(0, 72), mode, status: "running", context_summary: "", turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
+      const projectWorkspace = previewProjects.find((candidate) => candidate.id === resolvedProjectId)?.workspace_path;
+      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, title: prompt.slice(0, 72), mode, status: "running", context_summary: "", workspace_path: workspace || projectWorkspace || previewWorkspace, pending_actions: 0, turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
       previewThreads.unshift(thread);
     }
     const turnId = crypto.randomUUID();
@@ -493,6 +510,7 @@ const previewBridge = {
     appendPreviewEvent("assistant_message", { text: response, status: "completed", model: "gpt-4.1-mini" });
     thread.mode = mode;
     thread.status = "idle";
+    thread.pending_actions = previewActions.filter((candidate) => candidate.status === "pending" && thread!.turns.some((turn) => turn.task_id === candidate.task_id)).length;
     thread.turn_count = thread.turns.length;
     thread.updated_at = completedAt;
     thread.last_turn_at = completedAt;
@@ -505,8 +523,10 @@ const previewBridge = {
     if (!action) throw new Error("Agent action not found.");
     action.status = "approved";
     action.resolved_at = new Date().toISOString();
+    const approvedThread = previewThreads.find((candidate) => candidate.turns.some((turn) => turn.task_id === action.task_id));
+    if (approvedThread) approvedThread.pending_actions = Math.max(0, (approvedThread.pending_actions ?? 0) - 1);
     if (action.payload.change) {
-      const thread = previewThreads.find((candidate) => candidate.turns.some((turn) => turn.task_id === action.task_id));
+      const thread = approvedThread;
       const changeSet: WorkspaceChangeSet = { id: action.id, actionId: action.id, taskId: action.task_id, threadId: thread?.id, kind: action.kind, changes: [action.payload.change], createdAt: action.created_at };
       if (thread) thread.changeSets.push(changeSet);
       for (const listener of previewChangeSetListeners) listener(changeSet);
@@ -518,6 +538,8 @@ const previewBridge = {
     if (!action) throw new Error("Agent action not found.");
     action.status = "rejected";
     action.resolved_at = new Date().toISOString();
+    const rejectedThread = previewThreads.find((candidate) => candidate.turns.some((turn) => turn.task_id === action.task_id));
+    if (rejectedThread) rejectedThread.pending_actions = Math.max(0, (rejectedThread.pending_actions ?? 0) - 1);
     return action;
   },
   runTerminal: async ({ command }: { command: string; cwd?: string }) => {
@@ -698,11 +720,10 @@ function contextImageFromData(image: ContextImage): ContextAttachment {
   };
 }
 
-type MainSection = "chat" | "skills" | "library" | "daily" | "benchmark-radar" | "gallery" | "artifacts" | "writing";
 type AppTheme = "charcoal" | "paper";
 type ThemePreference = AppTheme | "system";
 
-const SIDEBAR_DEFAULT_WIDTH = 252;
+const SIDEBAR_DEFAULT_WIDTH = 280;
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 420;
 
@@ -754,6 +775,9 @@ function App() {
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
+  const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("skills");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [runtimeMenuOpen, setRuntimeMenuOpen] = useState(false);
   const [galleryOpened, setGalleryOpened] = useState(false);
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
@@ -804,6 +828,9 @@ function App() {
   const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectWorkspace, setNewProjectWorkspace] = useState("");
+  const [newProjectError, setNewProjectError] = useState("");
+  const [projectFolderError, setProjectFolderError] = useState("");
   const [projectToRemove, setProjectToRemove] = useState<ResearchProject | null>(null);
   const [threadToRemove, setThreadToRemove] = useState<ResearchThread | null>(null);
   const [threadRemoveError, setThreadRemoveError] = useState("");
@@ -825,6 +852,17 @@ function App() {
   const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
   const mainWorkspaceRef = useRef<HTMLDivElement | null>(null);
+  const runtimeMenuRef = useRef<HTMLDivElement | null>(null);
+  const threadsRef = useRef<ResearchThread[]>([]);
+  const refreshingThreadsRef = useRef(false);
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
+  const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? null;
+  // Research data lives in the primary workspace. Agent tools, files, terminal,
+  // and paper writing operate inside the session folder: session snapshot →
+  // project folder → primary workspace.
+  const executionWorkspace = activeThread?.workspace_path || activeProject?.workspace_path || workspace;
+  const executionWorkspaceName = executionWorkspace ? executionWorkspace.split(/[\\/]/).filter(Boolean).at(-1) ?? executionWorkspace : "";
+  threadsRef.current = threads;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -985,7 +1023,7 @@ function App() {
   }
 
   async function openExternalTerminal(externalTerminal: TerminalExternalTerminal) {
-    const result = await desktopBridge.openExternalTerminal({ cwd: workspace, externalTerminal });
+    const result = await desktopBridge.openExternalTerminal({ cwd: executionWorkspace, externalTerminal });
     if (!result.opened) throw new Error(result.error || `${result.app} could not be opened.`);
   }
 
@@ -997,10 +1035,30 @@ function App() {
   }
 
   useEffect(() => {
+    if (!runtimeMenuOpen) return;
+    function handlePointerDown(event: PointerEvent) {
+      if (!runtimeMenuRef.current?.contains(event.target as Node)) setRuntimeMenuOpen(false);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setRuntimeMenuOpen(false);
+    }
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [runtimeMenuOpen]);
+
+  useEffect(() => {
     const handleWorkbenchShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "`") {
         event.preventDefault();
         toggleWorkbench();
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
       }
     };
     window.addEventListener("keydown", handleWorkbenchShortcut);
@@ -1010,6 +1068,14 @@ function App() {
   function openWorkbench(tab: WorkbenchTab) {
     setWorkbenchTab(tab);
     setWorkbenchOpen(true);
+  }
+
+  function activateSidebarEntry(entry: SidebarEntry) {
+    if (entry.disabled) return;
+    const section = entry.destination.section;
+    if (section === "daily") setDailyStartMode("latest");
+    if (section === "gallery") setGalleryOpened(true);
+    setMainSection(section);
   }
 
   function openTrajectoryAt(sequence?: number) {
@@ -1149,6 +1215,21 @@ function App() {
           activeThreadIdRef.current = event.threadId;
           setActiveThreadId(event.threadId);
         }
+        // A new chat exists in the database before its first turn finishes.
+        // Pull one snapshot so its Work row can show the live Running state.
+        if (!threadsRef.current.some((thread) => thread.id === event.threadId) && !refreshingThreadsRef.current) {
+          refreshingThreadsRef.current = true;
+          void desktopBridge.getResearchSnapshot?.().then((snapshot) => {
+            setProjects(snapshot.projects);
+            setArchivedProjects(snapshot.archivedProjects ?? []);
+            setThreads(snapshot.threads);
+            setArchivedThreads(snapshot.archivedThreads ?? []);
+            const runningThread = snapshot.threads.find((thread) => thread.id === event.threadId);
+            if (runningThread?.workspace_path) void desktopBridge.watchWorkspace?.(runningThread.workspace_path).catch(() => undefined);
+          }).catch(() => undefined).finally(() => {
+            refreshingThreadsRef.current = false;
+          });
+        }
       }
       if (event.type === "assistant_delta" && event.turnId && event.delta) {
         if (event.threadId && activeThreadIdRef.current !== event.threadId) return;
@@ -1161,6 +1242,7 @@ function App() {
       }
       if (event.type === "approval" && event.action && (!event.threadId || activeThreadIdRef.current === event.threadId)) {
         setPendingAction({ ...event.action, source: "agent" });
+        if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
       const state = event.type === "complete" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "interrupted" ? "waiting" : "active";
       setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
@@ -1170,19 +1252,30 @@ function App() {
 
   useEffect(() => {
     const unsubscribeFiles = desktopBridge.onWorkspaceFilesChanged(() => {
-      if (workspace) void refreshWorkspaceFiles();
+      if (executionWorkspace) void refreshWorkspaceFiles();
     });
     const unsubscribeChanges = desktopBridge.onWorkspaceChangeSet((changeSet) => {
       if (!changeSet.threadId || activeThreadIdRef.current === changeSet.threadId) {
         setChangeSets((current) => upsertChangeSet(current, changeSet));
       }
-      if (workspace) void refreshWorkspaceFiles();
+      if (executionWorkspace) void refreshWorkspaceFiles();
     });
     return () => {
       unsubscribeFiles();
       unsubscribeChanges();
     };
-  }, [workspace, selectedFilePath]);
+  }, [executionWorkspace, selectedFilePath]);
+
+  useEffect(() => {
+    if (!workspaceReady || !executionWorkspace) return;
+    void desktopBridge.watchWorkspace?.(executionWorkspace).catch(() => undefined);
+    openFilesRef.current = [];
+    setOpenFiles([]);
+    setSelectedFilePath(null);
+    setSelectedFile(null);
+    setFileError("");
+    void refreshWorkspaceFiles();
+  }, [executionWorkspace, workspaceReady]);
 
   useEffect(() => {
     void desktopBridge.getInitialWorkspace().then((initialWorkspace) => loadWorkspace(initialWorkspace ?? DEFAULT_WORKSPACE));
@@ -1275,31 +1368,35 @@ function App() {
   }
 
   async function refreshWorkspaceFiles() {
-    if (!workspace) return;
-    const nextTree = await desktopBridge.listWorkspaceFiles(workspace);
-    setFileTree(nextTree);
-    const currentOpenFiles = openFilesRef.current;
-    if (currentOpenFiles.length) {
-      const refreshedFiles = await Promise.all(currentOpenFiles.map(async (file) => {
-        try {
-          return await desktopBridge.readWorkspaceFile(workspace, file.path);
-        } catch {
-          return file;
-        }
-      }));
-      const merged = mergeRefreshedArtifactFiles(currentOpenFiles, refreshedFiles, artifactDraftsRef.current, artifactSavingRef.current);
-      openFilesRef.current = merged.files;
-      setOpenFiles(merged.files);
-      setArtifactConflicts(merged.conflicts);
-      if (selectedFilePath) setSelectedFile(merged.files.find((file) => file.path === selectedFilePath) ?? null);
+    if (!executionWorkspace) return;
+    try {
+      const nextTree = await desktopBridge.listWorkspaceFiles(executionWorkspace);
+      setFileTree(nextTree);
+      const currentOpenFiles = openFilesRef.current;
+      if (currentOpenFiles.length) {
+        const refreshedFiles = await Promise.all(currentOpenFiles.map(async (file) => {
+          try {
+            return await desktopBridge.readWorkspaceFile(executionWorkspace, file.path);
+          } catch {
+            return file;
+          }
+        }));
+        const merged = mergeRefreshedArtifactFiles(currentOpenFiles, refreshedFiles, artifactDraftsRef.current, artifactSavingRef.current);
+        openFilesRef.current = merged.files;
+        setOpenFiles(merged.files);
+        setArtifactConflicts(merged.conflicts);
+        if (selectedFilePath) setSelectedFile(merged.files.find((file) => file.path === selectedFilePath) ?? null);
+      }
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : String(error));
     }
   }
 
   async function loadWorkspaceDirectory(directory: string) {
-    if (!workspace || !directory) return;
+    if (!executionWorkspace || !directory) return;
     setLoadingDirectories((current) => new Set(current).add(directory));
     try {
-      const listing = await desktopBridge.listWorkspaceFiles(workspace, directory);
+      const listing = await desktopBridge.listWorkspaceFiles(executionWorkspace, directory);
       setFileTree((current) => ({ ...current, entries: setDirectoryChildren(current.entries, directory, listing.entries) }));
     } catch {
       setFileTree((current) => ({ ...current, entries: setDirectoryChildren(current.entries, directory, []) }));
@@ -1354,14 +1451,45 @@ function App() {
     }
   }
 
+  function openNewProject() {
+    if (agentBusy) return;
+    setNewProjectName("");
+    setNewProjectWorkspace(activeProject?.workspace_path || workspace);
+    setNewProjectError("");
+    setNewProjectOpen(true);
+  }
+
+  async function chooseNewProjectFolder() {
+    const selected = await desktopBridge.chooseWorkspace();
+    if (selected) setNewProjectWorkspace(selected);
+  }
+
   async function createProject() {
     const name = newProjectName.trim();
     if (!name || agentBusy) return;
-    const project = await desktopBridge.createResearchProject({ name });
-    setProjects((current) => [project, ...current]);
-    setNewProjectName("");
-    setNewProjectOpen(false);
-    startNewTask(project.id);
+    try {
+      const project = await desktopBridge.createResearchProject({ name, workspacePath: newProjectWorkspace || workspace });
+      setProjects((current) => [project, ...current]);
+      setNewProjectName("");
+      setNewProjectError("");
+      setNewProjectOpen(false);
+      startNewTask(project.id);
+    } catch (error) {
+      setNewProjectError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function changeProjectWorkspace(project: ResearchProject) {
+    if (agentBusy) return;
+    const selected = await desktopBridge.chooseWorkspace();
+    if (!selected) return;
+    try {
+      const updated = await desktopBridge.setResearchProjectWorkspace(project.id, selected);
+      setProjects((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
+      setProjectFolderError("");
+    } catch (error) {
+      setProjectFolderError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   async function renameProject(projectId: string, name: string) {
@@ -1474,7 +1602,7 @@ function App() {
     setEvents([{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
@@ -1521,7 +1649,7 @@ function App() {
     if (!trimmedCommand || runningSession) return;
     openWorkbench("terminal");
     try {
-      const { sessionId } = await desktopBridge.runTerminal({ command: trimmedCommand, cwd: workspace, actionId });
+      const { sessionId } = await desktopBridge.runTerminal({ command: trimmedCommand, cwd: executionWorkspace, actionId });
       setRunningSession(sessionId);
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `The command could not start: ${String(error)}` }]);
@@ -1535,7 +1663,7 @@ function App() {
     setFileLoading(true);
     setFileError("");
     try {
-      const file = await desktopBridge.readWorkspaceFile(workspace, filePath);
+      const file = await desktopBridge.readWorkspaceFile(executionWorkspace, filePath);
       ensureArtifactDraft(file);
       setSelectedFile(file);
       setOpenFiles((current) => {
@@ -1566,7 +1694,7 @@ function App() {
   }
 
   function askAIAboutPaper(filePath: string) {
-    const absolutePath = `${workspace.replace(/[\\/]$/, "")}/${filePath.replace(/^\/+/, "")}`;
+    const absolutePath = `${executionWorkspace.replace(/[\\/]$/, "")}/${filePath.replace(/^\/+/, "")}`;
     const attachment: ContextAttachment = { id: `file:${absolutePath}`, type: "file", name: filePath.split("/").at(-1) || filePath, path: absolutePath, detail: `LaTeX paper source · ${filePath}` };
     setContextItems((current) => current.some((item) => item.id === attachment.id) ? current : [...current, attachment].slice(0, 12));
     setResearchMode("paper-generation");
@@ -1616,7 +1744,7 @@ function App() {
     setArtifactSavingPath(filePath, true);
     setArtifactErrors((current) => withoutKey(current, filePath));
     try {
-      const saved = await desktopBridge.writeWorkspaceFile(workspace, filePath, prepareArtifactContent(draft));
+      const saved = await desktopBridge.writeWorkspaceFile(executionWorkspace, filePath, prepareArtifactContent(draft));
       const savedContent = toEditorText(saved.content ?? contentAtSave);
       const latest = artifactDraftsRef.current[filePath];
       if (latest) {
@@ -1641,7 +1769,7 @@ function App() {
 
   async function reloadArtifact(filePath: string) {
     try {
-      const file = await desktopBridge.readWorkspaceFile(workspace, filePath);
+      const file = await desktopBridge.readWorkspaceFile(executionWorkspace, filePath);
       const draft = createArtifactDraft(file);
       const nextDrafts = { ...artifactDraftsRef.current };
       if (draft) nextDrafts[filePath] = draft;
@@ -1675,7 +1803,7 @@ function App() {
     const name = artifactName.trim();
     if (!name) return;
     const normalizedName = name.endsWith(".md") ? name : `${name}.md`;
-    await desktopBridge.writeWorkspaceFile(workspace, normalizedName, `# ${normalizedName.split("/").at(-1)?.replace(/\.md$/, "")}\n\n`);
+    await desktopBridge.writeWorkspaceFile(executionWorkspace, normalizedName, `# ${normalizedName.split("/").at(-1)?.replace(/\.md$/, "")}\n\n`);
     setArtifactName("");
     setModal(null);
     await refreshWorkspaceFiles();
@@ -1691,12 +1819,19 @@ function App() {
     setModal(null);
   }
 
+  function clearThreadPendingAction() {
+    const threadId = activeThreadIdRef.current;
+    if (!threadId) return;
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, pending_actions: Math.max(0, (thread.pending_actions ?? 0) - 1) } : thread));
+  }
+
   async function approvePendingAction() {
     const action = pendingAction;
     if (!action) return;
     try {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
       setPendingAction(null);
+      clearThreadPendingAction();
       if (action.kind === "command" && action.payload.command) {
         await runCommand(action.payload.command, action.id);
       } else if (action.kind === "write" && action.payload.path) {
@@ -1718,6 +1853,7 @@ function App() {
     if (!action) return;
     if (action.source === "agent") await desktopBridge.rejectAgentAction(action.id);
     setPendingAction(null);
+    clearThreadPendingAction();
   }
 
   function openWelcomeWorkflow(action: ResearchWelcomeAction) {
@@ -1738,10 +1874,35 @@ function App() {
     setMainSection("gallery");
   }
 
-  const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const dirtyArtifactPaths = useMemo(() => new Set(Object.values(artifactDrafts).filter(isDraftDirty).map((draft) => draft.path)), [artifactDrafts]);
-  const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "skills" ? t("Skills") : mainSection === "library" ? t("Literature library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "gallery" ? t("Gallery") : mainSection === "writing" ? t("Paper writing") : t("Artifacts");
-  const mainSubtitle = mainSection === "gallery" ? t("Visual research index") : mainSection === "writing" ? t("LaTeX workspace") : mainSection === "daily" ? t("Live research feed") : mainSection === "benchmark-radar" ? t("Benchmark intelligence") : workspaceReady ? t("Workspace connected") : t("Opening workspace");
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "extensions" ? t("Extensions") : mainSection === "library" ? t("Library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "gallery" ? t("Gallery") : mainSection === "writing" ? t("Paper writing") : t("Artifacts");
+  const mainSubtitle = mainSection === "gallery" ? t("Visual research index") : mainSection === "writing" ? t("LaTeX workspace") : mainSection === "daily" ? t("Live research feed") : mainSection === "benchmark-radar" ? t("Benchmark intelligence") : workspaceReady ? t("Local · {folder}", { folder: executionWorkspaceName || t("Workspace") }) : t("Opening workspace");
+  const moduleCommands: PaletteCommand[] = (["knowledge", "create"] as const).flatMap((section) =>
+    sidebarEntries(section)
+      .filter((entry) => !entry.disabled)
+      .map((entry) => ({
+        id: entry.commandId,
+        group: t(section === "knowledge" ? "Knowledge" : "Create"),
+        label: t(entry.labelKey),
+        icon: entry.icon,
+        run: () => activateSidebarEntry(entry),
+      })),
+  );
+  const paletteCommands: PaletteCommand[] = [
+    { id: "new-research", group: t("Work"), label: t("New research task"), detail: t("Start a chat in the current project"), shortcut: "Ctrl N", icon: <Plus size={15} />, run: () => startNewTask() },
+    { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
+    { id: "open-chat", group: t("Work"), label: t("Open current chat"), icon: <MessageCircle size={15} />, run: () => setMainSection("chat") },
+    ...moduleCommands,
+    { id: "extensions-skills", group: t("Extensions"), label: t("Skills"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("skills"); setMainSection("extensions"); } },
+    { id: "extensions-mcp", group: t("Extensions"), label: t("MCP servers"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("mcp"); setMainSection("extensions"); } },
+    { id: "extensions-plugins", group: t("Extensions"), label: t("Plugins"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("plugins"); setMainSection("extensions"); } },
+    { id: "files", group: t("Panels"), label: t("Files"), detail: t("Open the workbench file browser"), icon: <FolderOpen size={15} />, run: () => openWorkbench("files") },
+    { id: "terminal", group: t("Panels"), label: t("Terminal"), detail: executionWorkspace, icon: <SquareTerminal size={15} />, run: () => openWorkbench("terminal") },
+    { id: "journey", group: t("Panels"), label: t("Journey"), icon: <Flag size={15} />, run: () => openWorkbench("journey") },
+    { id: "reveal-folder", group: t("System"), label: t("Show working folder"), detail: executionWorkspace, icon: <FolderOpen size={15} />, run: () => void desktopBridge.revealWorkspace?.(executionWorkspace).catch(() => undefined) },
+    { id: "settings", group: t("System"), label: t("Settings"), shortcut: "Ctrl ,", icon: <Settings size={15} />, run: () => { setSettingsSection("general"); setSettingsOpen(true); } },
+    { id: "toggle-sidebar", group: t("System"), label: sidebarHidden ? t("Show sidebar") : t("Hide sidebar"), icon: <PanelLeftOpen size={15} />, run: () => setSidebarHidden((hidden) => !hidden) },
+  ];
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
@@ -1749,41 +1910,23 @@ function App() {
         <div className="codex-brand">
           <ArchimedesMark className="codex-brand-symbol" size={24} variant="small" />
           <ArchimedesWordmark className="codex-brand-wordmark" />
+          <button className="sidebar-search-button" onClick={() => setPaletteOpen(true)} title={`${t("Search or run a command")} (Ctrl K)`} aria-label={t("Search or run a command")}><Search size={15} /></button>
           <button className="sidebar-collapse-button" onClick={() => setSidebarHidden(true)} title={t("Hide sidebar")} aria-label={t("Hide sidebar")}><PanelLeftClose size={16} /></button>
         </div>
 
         <button className="new-task-button" onClick={() => startNewTask()} title={t("New research task")} disabled={agentBusy}>
           <Plus size={17} />
-          <span>{t("New")}</span>
+          <span>{t("New research")}</span>
         </button>
 
-        <nav className="sidebar-nav" aria-label={t("Primary")}>
-          <button className={mainSection === "artifacts" || (workbenchOpen && workbenchTab === "files") ? "codex-nav-item active" : "codex-nav-item"} onClick={() => openWorkbench("files")} title={t("Files")}>
-            <Folder size={16} /><span>{t("Files")}</span>
-          </button>
-          <button className={mainSection === "skills" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("skills")} title={t("Browse skills")}>
-            <Blocks size={16} /><span>{t("Skills")}</span>
-          </button>
+        <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
+          {(["knowledge", "create"] as const).map((section) => <section className={`sidebar-group ${section}-group`} key={section}>
+            <div className="codex-sidebar-label">{t(section === "knowledge" ? "Knowledge" : "Create")}</div>
+            {sidebarEntries(section).map((entry) => <button className={mainSection === entry.destination.section ? "codex-nav-item active" : "codex-nav-item"} key={entry.id} onClick={() => activateSidebarEntry(entry)} title={entry.disabled ? t("Image creation is coming soon") : t(entry.labelKey)} disabled={entry.disabled}>
+              {entry.icon}<span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
+            </button>)}
+          </section>)}
         </nav>
-
-        <section className="sidebar-group knowledge-group">
-          <div className="codex-sidebar-label">{t("Knowledge")}</div>
-          <button className={mainSection === "library" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("library")} title={t("Open literature library")}>
-            <BookOpen size={16} /><span>{t("Literature library")}</span>
-          </button>
-          <button className={mainSection === "daily" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setDailyStartMode("latest"); setMainSection("daily"); }} title={t("Open daily papers")}>
-            <CalendarDays size={16} /><span>{t("Daily papers")}</span>
-          </button>
-          <button className={mainSection === "benchmark-radar" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("benchmark-radar")} title={t("Open Benchmark Radar")}>
-            <Radar size={16} /><span>{t("Benchmark Radar")}</span>
-          </button>
-          <button className={mainSection === "gallery" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => { setGalleryOpened(true); setMainSection("gallery"); }} title={t("Open gallery")}>
-            <Images size={16} /><span>{t("Gallery")}</span>
-          </button>
-          <button className={mainSection === "writing" ? "codex-nav-item active" : "codex-nav-item"} onClick={() => setMainSection("writing")} title={t("Open paper writing")}>
-            <FilePenLine size={16} /><span>{t("Paper writing")}</span>
-          </button>
-        </section>
 
         <ProjectSidebar
           projects={projects}
@@ -1792,24 +1935,42 @@ function App() {
           archivedThreads={archivedThreads}
           activeProjectId={activeProjectId}
           activeThreadId={activeThreadId}
+          runningThreadId={runningThreadId}
           disabled={agentBusy}
-          onNewProject={() => setNewProjectOpen(true)}
+          onNewProject={openNewProject}
           onNewChat={(projectId) => startNewTask(projectId)}
           onRenameProject={(projectId, name) => renameProject(projectId, name)}
           onArchiveProject={(project, archived) => void archiveProject(project, archived)}
           onRemoveProject={setProjectToRemove}
+          onChangeProjectWorkspace={(project) => void changeProjectWorkspace(project)}
           onOpenThread={(thread) => void openResearchThread(thread)}
           onArchiveThread={(thread, archived) => void archiveThread(thread, archived)}
           onRemoveThread={(thread) => { setThreadRemoveError(""); setThreadToRemove(thread); }}
+          filterError={projectFolderError}
         />
 
-        <div className="sidebar-workspace">
-          <button className="workspace-button" onClick={chooseWorkspace} title={t("Choose workspace")} disabled={agentBusy}>
-            <span className="workspace-icon"><FolderOpen size={15} /></span>
-            <span className="workspace-copy"><strong>{workspace ? workspace.split(/[\\/]/).filter(Boolean).at(-1) : t("Choose workspace")}</strong><small>{workspaceReady ? threads.length ? t("{count} research chats", { count: threads.length }) : t("Ready for a new task") : t("Opening workspace")}</small></span>
-            <ChevronDown size={14} />
+        <div className="sidebar-runtime" ref={runtimeMenuRef}>
+          <button className={runtimeMenuOpen ? "runtime-button open" : "runtime-button"} onClick={() => setRuntimeMenuOpen((open) => !open)} title={t("Runtime location")} aria-haspopup="menu" aria-expanded={runtimeMenuOpen}>
+            <span className="runtime-icon"><Laptop size={14} /></span>
+            <span className="runtime-copy"><strong>{t("Local")}</strong><small>{t("On this device")}</small></span>
+            <ChevronDown size={12} />
           </button>
           <button className="sidebar-settings-button" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}><Settings size={15} strokeWidth={1.7} /></button>
+          {runtimeMenuOpen && <div className="runtime-menu" role="menu" aria-label={t("Runtime location")}>
+            <div className="runtime-menu-label">{t("Runtime")}</div>
+            <button className="runtime-option active" role="menuitemradio" aria-checked="true" onClick={() => setRuntimeMenuOpen(false)}>
+              <Laptop size={15} /><span><strong>{t("Local")}</strong><small>{t("Files and models run on this device")}</small></span><Check size={13} />
+            </button>
+            <button className="runtime-option" role="menuitemradio" aria-checked="false" disabled>
+              <Cloud size={15} /><span><strong>{t("Cloud")}</strong><small>{t("Coming in a later update")}</small></span><span className="runtime-soon">{t("Soon")}</span>
+            </button>
+            <div className="runtime-divider" />
+            <div className="runtime-folder">
+              <span>{t("Primary folder")}</span>
+              <strong title={workspace}>{workspace || t("Not connected")}</strong>
+              <button onClick={() => void desktopBridge.revealWorkspace?.(workspace).catch(() => undefined)} title={t("Show primary folder")} aria-label={t("Show primary folder")} disabled={!workspace}><FolderOpen size={13} /></button>
+            </div>
+          </div>}
         </div>
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>
@@ -1834,7 +1995,7 @@ function App() {
               messages={messages}
               events={events}
               trajectoryEvents={trajectoryEvents}
-              workspace={workspace}
+              workspace={executionWorkspace}
               agentBusy={agentBusy}
               interrupting={interrupting}
               pendingAction={pendingAction}
@@ -1867,12 +2028,12 @@ function App() {
           {mainSection === "daily" && workspaceReady && <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} />}
           {mainSection === "benchmark-radar" && <BenchmarkRadarView />}
           {galleryOpened && <div className={mainSection === "gallery" ? "gallery-view-cache" : "gallery-view-cache hidden"} aria-hidden={mainSection !== "gallery"}><GalleryView active={mainSection === "gallery"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} /></div>}
-          {mainSection === "skills" && <SkillsView bridge={desktopBridge} workspace={workspace} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
+          {mainSection === "extensions" && <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "artifacts" && (
-            <ArtifactsView workspace={workspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath, "page")} onSelectOpenFile={(file) => selectOpenArtifact(file, "page")} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} onAddComment={addArtifactComment} />
+            <ArtifactsView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath, "page")} onSelectOpenFile={(file) => selectOpenArtifact(file, "page")} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} onAddComment={addArtifactComment} />
           )}
           <div className={mainSection === "writing" ? "paper-writing-view-cache" : "paper-writing-view-cache hidden"} aria-hidden={mainSection !== "writing"}>
-            {workspaceReady && <PaperWritingView active={mainSection === "writing"} bridge={desktopBridge} workspace={workspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
+            {workspaceReady && <PaperWritingView active={mainSection === "writing"} bridge={desktopBridge} workspace={executionWorkspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
           </div>
         </div>
         </div>
@@ -1880,7 +2041,7 @@ function App() {
           bridge={desktopBridge}
           open={workbenchOpen}
           theme={theme}
-          workspace={workspace}
+          workspace={executionWorkspace}
           width={workbenchWidth}
           activeTab={workbenchTab}
           terminalSettings={terminalSettings}
@@ -1916,7 +2077,7 @@ function App() {
           files={<ArtifactsView
             compact
             compactWidth={workbenchWidth}
-            workspace={workspace}
+            workspace={executionWorkspace}
             tree={fileTree}
             openFiles={openFiles}
             selectedPath={selectedFilePath}
@@ -1960,7 +2121,7 @@ function App() {
         onCreateArtifact={() => void createArtifact()}
         onAddEvidence={addEvidence}
       />
-      <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={workspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
+      <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={executionWorkspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
       <SettingsModal
         open={settingsOpen}
         section={settingsSection}
@@ -1983,7 +2144,18 @@ function App() {
         onSaveTerminalSettings={saveTerminalSettings}
         onOpenExternalTerminal={openExternalTerminal}
       />
-      <NewProjectModal open={newProjectOpen} name={newProjectName} onName={setNewProjectName} onClose={() => { setNewProjectOpen(false); setNewProjectName(""); }} onCreate={() => void createProject()} />
+      <NewProjectModal
+        open={newProjectOpen}
+        name={newProjectName}
+        onName={setNewProjectName}
+        workspacePath={newProjectWorkspace}
+        onWorkspacePath={setNewProjectWorkspace}
+        onChooseFolder={() => void chooseNewProjectFolder()}
+        onClose={() => { setNewProjectOpen(false); setNewProjectName(""); setNewProjectError(""); }}
+        onCreate={() => void createProject()}
+        error={newProjectError}
+      />
+      <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
       <ThreadRemoveModal thread={threadToRemove} error={threadRemoveError} onClose={() => { setThreadRemoveError(""); setThreadToRemove(null); }} onRemove={() => threadToRemove && void removeThread(threadToRemove)} />
     </main>

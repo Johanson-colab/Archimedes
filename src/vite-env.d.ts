@@ -6,6 +6,8 @@ interface ResearchDeskBridge {
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
     chooseWorkspace: () => Promise<string | null>;
+    watchWorkspace: (workspace: string) => Promise<string>;
+    revealWorkspace: (workspace: string) => Promise<{ opened: boolean }>;
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
     listSkillCollections: (workspace?: string) => Promise<SkillCollection[]>;
@@ -22,8 +24,10 @@ interface ResearchDeskBridge {
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
-    createResearchProject: (input: { name: string; description?: string }) => Promise<ResearchProject>;
+    getResearchSnapshot: () => Promise<WorkspaceSnapshot>;
+    createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
+    setResearchProjectWorkspace: (id: string, workspacePath: string) => Promise<ResearchProject>;
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
@@ -675,6 +679,7 @@ interface ResearchProject {
   id: string;
   name: string;
   description: string;
+  workspace_path: string | null;
   chat_count: number;
   created_at: string;
   updated_at: string;
@@ -689,6 +694,8 @@ interface ResearchThread {
   mode: ResearchMode;
   status: string;
   context_summary: string;
+  workspace_path: string | null;
+  pending_actions?: number;
   turn_count: number;
   created_at: string;
   updated_at: string;

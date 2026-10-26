@@ -36,6 +36,7 @@ function schema(db) {
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
+      workspace_path TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT
@@ -48,6 +49,7 @@ function schema(db) {
       mode TEXT NOT NULL,
       status TEXT NOT NULL,
       context_summary TEXT NOT NULL DEFAULT '',
+      workspace_path TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT
@@ -198,6 +200,8 @@ function schema(db) {
 
   ensureColumn(db, "research_threads", "project_id", "TEXT");
   ensureColumn(db, "research_threads", "archived_at", "TEXT");
+  ensureColumn(db, "research_projects", "workspace_path", "TEXT");
+  ensureColumn(db, "research_threads", "workspace_path", "TEXT");
   ensureColumn(db, "papers", "conference_json", "TEXT NOT NULL DEFAULT 'null'");
   ensureColumn(db, "papers", "github_url", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "papers", "github_stars", "INTEGER NOT NULL DEFAULT 0");
@@ -220,15 +224,24 @@ function ensureDefaultProject(db) {
   const id = randomUUID();
   const now = timestamp();
   db.prepare(`
-    INSERT INTO research_projects (id, name, description, created_at, updated_at)
-    VALUES (?, 'General', 'Default research project', ?, ?)
-  `).run(id, now, now);
+    INSERT INTO research_projects (id, name, description, workspace_path, created_at, updated_at)
+    VALUES (?, 'General', 'Default research project', ?, ?, ?)
+  `).run(id, activeWorkspace ?? null, now, now);
   return id;
 }
 
 function requireDatabase() {
   if (!database) throw new Error("Open a workspace before accessing its research data.");
   return database;
+}
+
+function normalizeWorkspacePath(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const resolved = path.resolve(value.trim());
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+    throw new Error("The project folder does not exist or is not a directory.");
+  }
+  return resolved;
 }
 
 function openWorkspace(workspacePath) {
@@ -260,6 +273,11 @@ function openWorkspace(workspacePath) {
     INSERT INTO workspace_meta (key, value, updated_at) VALUES (?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
   `).run("workspace_path", workspacePath, updatedAt);
+
+  // Legacy projects were implicit children of the workspace they lived in.
+  // Bind them once so the new project-folder model has a stable default.
+  database.prepare("UPDATE research_projects SET workspace_path = ? WHERE workspace_path IS NULL OR workspace_path = ''")
+    .run(workspacePath);
 
   return getSnapshot();
 }
@@ -669,17 +687,40 @@ function listResearchProjects({ archived = false } = {}) {
   `).all(archived ? 1 : 0, archived ? 1 : 0);
 }
 
-function createResearchProject({ name, description = "" }) {
+function createResearchProject({ name, description = "", workspacePath = "" }) {
   const db = requireDatabase();
   const normalizedName = String(name || "").replace(/\s+/g, " ").trim();
   if (!normalizedName || normalizedName.length > 100) throw new Error("A project name of at most 100 characters is required.");
   const now = timestamp();
-  const project = { id: randomUUID(), name: normalizedName, description: String(description || "").slice(0, 500), created_at: now, updated_at: now, archived_at: null, chat_count: 0, last_chat_at: null };
+  const resolvedWorkspace = normalizeWorkspacePath(workspacePath) || activeWorkspace;
+  const project = {
+    id: randomUUID(),
+    name: normalizedName,
+    description: String(description || "").slice(0, 500),
+    workspace_path: resolvedWorkspace,
+    created_at: now,
+    updated_at: now,
+    archived_at: null,
+    chat_count: 0,
+    last_chat_at: null,
+  };
   db.prepare(`
-    INSERT INTO research_projects (id, name, description, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(project.id, project.name, project.description, project.created_at, project.updated_at);
+    INSERT INTO research_projects (id, name, description, workspace_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.description, project.workspace_path, project.created_at, project.updated_at);
   return project;
+}
+
+function setResearchProjectWorkspace(id, workspacePath) {
+  const db = requireDatabase();
+  const resolvedWorkspace = normalizeWorkspacePath(workspacePath);
+  if (!resolvedWorkspace) throw new Error("A project folder is required.");
+  const now = timestamp();
+  const result = db.prepare("UPDATE research_projects SET workspace_path = ?, updated_at = ? WHERE id = ?")
+    .run(resolvedWorkspace, now, id);
+  if (!result.changes) throw new Error("Research project not found.");
+  return listResearchProjects().find((project) => project.id === id)
+    || listResearchProjects({ archived: true }).find((project) => project.id === id);
 }
 
 function renameResearchProject(id, name) {
@@ -741,7 +782,10 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
   return db.prepare(`
     SELECT research_threads.*,
       COUNT(research_turns.id) AS turn_count,
-      COALESCE(MAX(research_turns.created_at), research_threads.created_at) AS last_turn_at
+      COALESCE(MAX(research_turns.created_at), research_threads.created_at) AS last_turn_at,
+      (SELECT COUNT(*) FROM agent_actions
+        JOIN research_turns pending_turn ON pending_turn.task_id = agent_actions.task_id
+        WHERE pending_turn.thread_id = research_threads.id AND agent_actions.status = 'pending') AS pending_actions
     FROM research_threads
     LEFT JOIN research_turns ON research_turns.thread_id = research_threads.id
     LEFT JOIN paper_chat_threads ON paper_chat_threads.thread_id = research_threads.id
@@ -754,12 +798,19 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
   `).all(archived ? 1 : 0, projectId, projectId);
 }
 
-function createResearchThread({ prompt, mode, projectId }) {
+function createResearchThread({ prompt, mode, projectId, workspacePath = "" }) {
   const db = requireDatabase();
   const selectedProject = projectId
-    ? db.prepare("SELECT id FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId)
+    ? db.prepare("SELECT id, workspace_path FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId)
     : null;
   const resolvedProjectId = selectedProject?.id || ensureDefaultProject(db);
+  const projectWorkspace = selectedProject?.workspace_path
+    || db.prepare("SELECT workspace_path FROM research_projects WHERE id = ?").get(resolvedProjectId)?.workspace_path;
+  // A session inherits its project's folder by default. Passing an explicit
+  // path only snapshots that default; it is not a required binding step.
+  const resolvedWorkspace = normalizeWorkspacePath(workspacePath)
+    || projectWorkspace
+    || activeWorkspace;
   const now = timestamp();
   const thread = {
     id: randomUUID(),
@@ -768,14 +819,15 @@ function createResearchThread({ prompt, mode, projectId }) {
     mode,
     status: "idle",
     context_summary: "",
+    workspace_path: resolvedWorkspace,
     created_at: now,
     updated_at: now,
     archived_at: null,
   };
   db.prepare(`
-    INSERT INTO research_threads (id, project_id, title, mode, status, context_summary, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(thread.id, thread.project_id, thread.title, thread.mode, thread.status, thread.context_summary, thread.created_at, thread.updated_at);
+    INSERT INTO research_threads (id, project_id, title, mode, status, context_summary, workspace_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(thread.id, thread.project_id, thread.title, thread.mode, thread.status, thread.context_summary, thread.workspace_path, thread.created_at, thread.updated_at);
   db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, resolvedProjectId);
   return { ...thread, turn_count: 0, last_turn_at: now };
 }
@@ -924,8 +976,14 @@ function getResearchThread(id) {
       createdAt: action.created_at,
     }] : [];
   });
+  const pendingActions = db.prepare(`
+    SELECT COUNT(*) AS count FROM agent_actions
+    JOIN research_turns ON research_turns.task_id = agent_actions.task_id
+    WHERE research_turns.thread_id = ? AND agent_actions.status = 'pending'
+  `).get(id).count;
   return {
     ...thread,
+    pending_actions: pendingActions,
     turn_count: turns.length,
     last_turn_at: turns.at(-1)?.created_at || thread.created_at,
     turns,
@@ -1114,6 +1172,7 @@ module.exports = {
   createAction,
   createResearchProject,
   renameResearchProject,
+  setResearchProjectWorkspace,
   createResearchThread,
   deleteLibrary,
   deleteInternalPaperReviewThreads,
