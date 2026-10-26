@@ -24,4 +24,11 @@ test("width updates only on meaningful changes and use the stage content box", (
   assert.match(library, /Math\.abs\(current - next\) < 1 \? current : next/);
   assert.match(library, /\(width - 4\) \/ baseViewport\.width/);
   assert.doesNotMatch(library, /\(width - 72\) \/ baseViewport\.width/);
+  assert.match(library, /window\.setTimeout\(updateWidth, 80\)/);
+});
+
+test("the PDF stage keeps its flexible row before and after the first page", () => {
+  assert.match(css, /\.paper-reader-layout \{ grid-template-rows: minmax\(0, 1fr\); \}/);
+  assert.match(css, /\.original-paper-reader > \.arch-pdf-stage \{ grid-row: 3; \}/);
+  assert.match(css, /\.knowledge-main \.paper-workbench-page \{ grid-template-rows: 44px minmax\(0, 1fr\); \}/);
 });

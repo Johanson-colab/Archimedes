@@ -175,4 +175,16 @@ export const previewLibraryBridge = {
     refreshCount(libraryId);
     return { removed };
   },
+  // The browser preview has no PDF cache or research store. Keep the reading
+  // workspace open in its empty state instead of throwing from a missing bridge.
+  getLibraryPaperReader: async (paperId: string): Promise<PaperReaderState> => ({ asset: null, pages: [], highlights: [] }),
+  getLibraryPaperChatThread: async (): Promise<ResearchThreadDetail | null> => null,
+  setLibraryPaperChatThread: async (): Promise<ResearchThreadDetail | null> => null,
+  prepareLibraryPaperReader: async (paperId: string): Promise<PaperReaderState> => ({ asset: null, pages: [], highlights: [] }),
+  attachLibraryPaperPdf: async (paperId: string): Promise<PaperReaderState> => ({ asset: null, pages: [], highlights: [] }),
+  findLibraryPaperPassages: async (): Promise<PaperPassage[]> => [],
+  createLibraryPaperHighlight: async (): Promise<PaperHighlight | null> => null,
+  deleteLibraryPaperHighlight: async (): Promise<{ deleted: boolean }> => ({ deleted: true }),
+  getLibraryGithubRepositoryCheckout: async (): Promise<RepositoryCheckout | null> => null,
+  cloneLibraryGithubRepository: async (): Promise<RepositoryCheckout> => { throw new Error("Clone repositories in the Archimedes desktop app."); },
 };

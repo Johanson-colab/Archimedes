@@ -4464,3 +4464,48 @@ html:not([data-theme="paper"]) .project-folder-field input { color: #e9e9e9; }
   .runtime-icon { width: 28px; height: 28px; }
   .runtime-menu { right: auto; left: 0; width: 232px; }
 }
+
+/* Compact paper reader bar: back, tabs, and actions share one row. */
+.paper-workbench-page { grid-template-rows: 44px minmax(0, 1fr); }
+/* Keep the reader in an explicit row. An implicit auto row lets the PDF page
+   grow the stage after the first render, which reads as a vertical jump. */
+.paper-reader-layout { grid-template-rows: minmax(0, 1fr); }
+.paper-reader-bar { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 18px; background: #fff; border-bottom: 1px solid #dfe1dc; }
+.paper-reader-bar .reader-back-button { flex: 0 0 auto; padding: 4px 7px; }
+.paper-reader-bar .paper-reader-tabs { display: flex; min-width: 0; flex: 1; align-items: center; gap: 1px; padding: 0; overflow: hidden; background: transparent; border: 0; }
+.paper-reader-bar .paper-reader-tabs button { height: 43px; gap: 5px; padding: 0 9px; font-size: 11px; white-space: nowrap; }
+.paper-reader-bar .paper-reader-tabs button > svg { width: 14px; height: 14px; }
+.paper-reader-bar .reader-header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 3px; margin-left: auto; }
+.paper-reader-bar .reader-icon-button { width: 26px; height: 26px; }
+.paper-reader-bar .reader-ask-button { min-height: 27px; padding: 0 8px; }
+html:not([data-theme="paper"]) .paper-reader-bar { background: var(--night-panel); border-color: var(--night-line); }
+html:not([data-theme="paper"]) .paper-reader-bar .reader-back-button { color: var(--night-ink-soft); }
+html:not([data-theme="paper"]) .paper-reader-bar .reader-back-button:hover { color: var(--night-ink); background: var(--night-panel-soft); }
+html:not([data-theme="paper"]) .paper-reader-bar .reader-icon-button { color: var(--night-muted); }
+html:not([data-theme="paper"]) .paper-reader-bar .reader-icon-button:hover { color: var(--night-ink); background: var(--night-panel-soft); }
+html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button { color: var(--night-ink-soft); background: var(--night-panel-raised); border-color: var(--night-line); }
+html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button:hover,
+html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { color: var(--night-ink); background: var(--night-panel-soft); border-color: var(--night-line-strong, var(--night-line)); }
+.theme-paper .paper-reader-bar { background: #fffefd; }
+.theme-paper .paper-reader-bar .reader-icon-button { color: #6f6a63; }
+.theme-paper .paper-reader-bar .reader-icon-button:hover { color: #252422; background: #efede9; }
+.theme-paper .paper-reader-bar .reader-back-button { color: #5f5a54; }
+.theme-paper .paper-reader-bar .reader-back-button:hover { color: #252422; background: #efede9; }
+.theme-paper .paper-reader-bar .reader-ask-button { color: #5f5a54; background: #f3f1ed; border-color: #e2ddd6; }
+.theme-paper .paper-reader-bar .reader-ask-button:hover,
+.theme-paper .paper-reader-bar .reader-ask-button.active { color: #3a332a; background: #ebe7e0; border-color: #d8d1c7; }
+@media (max-width: 680px) {
+  .paper-workbench-page { grid-template-rows: 42px minmax(0, 1fr); }
+  .paper-reader-bar { padding-inline: 8px; gap: 4px; }
+  .paper-reader-bar .paper-reader-tabs button { padding-inline: 6px; }
+}
+
+.knowledge-main .paper-workbench-page { grid-template-rows: 44px minmax(0, 1fr); }
+@media (max-width: 680px) {
+  .knowledge-main .paper-workbench-page { grid-template-rows: 42px minmax(0, 1fr); }
+}
+
+/* The reader stage must own the flexible row even when the optional search
+   strip is absent; otherwise the PDF page changes an auto row on first render. */
+.original-paper-reader > .paper-search-results { grid-row: 2; }
+.original-paper-reader > .arch-pdf-stage { grid-row: 3; }
