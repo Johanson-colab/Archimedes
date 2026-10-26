@@ -17,9 +17,8 @@ test("paper review reports individual specialist failures instead of leaving spi
 test("paper review streams completed notes and renders failure states in the process route", () => {
   assert.match(orchestrator, /stage: "specialist_complete"[\s\S]*?response: result\.response/);
   assert.match(review, /event\.stage === "specialist_complete" && event\.response/);
-  assert.match(review, /\$\{errorCount\} failed/);
-  assert.match(review, /summary\.status === "error" \? "Not completed"/);
-  assert.match(review, /summary\.status === "error" \? "Failed"/);
+  assert.match(review, /summary\.status === "error" \? summary\.error/);
+  assert.match(review, /summary\.status === "error" \? "Try review again"/);
 });
 
 test("all-specialist failure preserves the original errors for the workbench", () => {
@@ -38,10 +37,11 @@ test("completed reviews are saved and restored when the review tab remounts", ()
   assert.match(review, /Saved review restored/);
 });
 
-test("completed reviews have an interactive visual evidence atlas instead of only raw text", () => {
-  assert.match(review, /function evidenceFragments/);
-  assert.match(review, /paper-review-atlas/);
-  assert.match(review, /role="tablist"/);
-  assert.match(review, /selectLens\(reviewer\.id\)/);
-  assert.match(review, /paper-review-gallery-output/);
+test("completed reviews render a presentable slide deck with source PDF visuals", () => {
+  assert.match(review, /function PaperSlideVisual/);
+  assert.match(review, /paper-review-deck/);
+  assert.match(review, /requestFullscreen/);
+  assert.match(review, /ArrowRight/);
+  assert.match(review, /SLIDE_NAMES\.map/);
+  assert.match(review, /pdfUrl\s*=/);
 });
