@@ -83,6 +83,7 @@ const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
 const PAPER_CHAT_DEFAULT_WIDTH = 354;
 const PAPER_CHAT_MIN_WIDTH = 280;
 const PAPER_CHAT_MAX_WIDTH = 640;
+const PDF_VIEWPORT_WIDTH_STEP = 16;
 
 function clampPaperChatWidth(value: number) {
   return Math.min(PAPER_CHAT_MAX_WIDTH, Math.max(PAPER_CHAT_MIN_WIDTH, Math.round(value)));
@@ -1687,7 +1688,11 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     const updateWidth = () => {
       const styles = window.getComputedStyle(stage);
       const horizontalPadding = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
-      const next = Math.max(320, Math.floor(stage.clientWidth - horizontalPadding));
+      // A native scrollbar and fractional device-pixel rounding can make the
+      // reported width alternate by a few pixels. Quantize the fit width so
+      // that tiny observer fluctuations cannot trigger a complete PDF repaint.
+      const usableWidth = stage.clientWidth - horizontalPadding;
+      const next = Math.max(320, Math.floor(usableWidth / PDF_VIEWPORT_WIDTH_STEP) * PDF_VIEWPORT_WIDTH_STEP);
       setWidth((current) => Math.abs(current - next) < 1 ? current : next);
     };
     updateWidth();
