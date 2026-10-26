@@ -184,9 +184,7 @@ function schema(db) {
 
     CREATE TABLE IF NOT EXISTS paper_reviews (
       paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
-      specialists_json TEXT NOT NULL,
-      audit TEXT NOT NULL,
-      summary TEXT NOT NULL,
+      review_json TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     ) STRICT;
@@ -506,9 +504,22 @@ function normalizePaperReview(review) {
 
 function getPaperReview(paperId) {
   const db = requireDatabase();
-  const row = db.prepare("SELECT specialists_json, audit, summary, created_at, updated_at FROM paper_reviews WHERE paper_id = ?").get(paperId);
+  const row = db.prepare("SELECT * FROM paper_reviews WHERE paper_id = ?").get(paperId);
   if (!row) return null;
   try {
+    // Version 0.1.0 originally stored the complete review as review_json.
+    // Continue to read it so an upgrade never discards an already completed review.
+    if (typeof row.review_json === "string") {
+      const legacy = JSON.parse(row.review_json);
+      const normalized = normalizePaperReview({
+        specialists: legacy.specialists,
+        supervisor: { reason: legacy.audit ?? legacy.supervisor?.reason },
+        summary: { response: typeof legacy.summary === "string" ? legacy.summary : legacy.summary?.response },
+      });
+      return { ...normalized, created_at: row.created_at, updated_at: row.updated_at };
+    }
+    // Some short-lived development builds used split columns. Keep them readable
+    // rather than making a workspace's existing reviews disappear on upgrade.
     const specialists = JSON.parse(row.specialists_json);
     if (!Array.isArray(specialists)) throw new Error("Invalid specialist review data.");
     return {
@@ -529,6 +540,20 @@ function savePaperReview(paperId, review) {
   if (!db.prepare("SELECT 1 FROM papers WHERE id = ?").get(paperId)) throw new Error("Paper not found.");
   const normalized = normalizePaperReview(review);
   const now = timestamp();
+  const columns = db.prepare("PRAGMA table_info(paper_reviews)").all().map((column) => column.name);
+  if (columns.includes("review_json")) {
+    const serialized = JSON.stringify({
+      specialists: normalized.specialists,
+      supervisor: { reason: normalized.audit },
+      summary: { response: normalized.summary },
+    });
+    db.prepare(`
+      INSERT INTO paper_reviews (paper_id, review_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(paper_id) DO UPDATE SET review_json = excluded.review_json, updated_at = excluded.updated_at
+    `).run(paperId, serialized, now, now);
+    return getPaperReview(paperId);
+  }
   db.prepare(`
     INSERT INTO paper_reviews (paper_id, specialists_json, audit, summary, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)

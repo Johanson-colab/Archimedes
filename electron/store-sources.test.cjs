@@ -144,6 +144,27 @@ test("persists a completed paper review when reopening the workspace", () => {
   }
 });
 
+test("keeps reviews written by the original review_json schema", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-legacy-"));
+  try {
+    store.openWorkspace(workspace);
+    const library = store.createLibrary({ name: "Legacy review shelf" });
+    const paper = store.addPaper(library.id, { title: "Legacy review", authors: [], source: "manual" });
+    store.savePaperReview(paper.id, {
+      specialists: [{ id: "related", title: "Related work", status: "complete", response: "Saved in JSON.", error: "", repaired: false }],
+      supervisor: { reason: "The original schema remains readable." },
+      summary: { response: "## Existing memorandum" },
+    });
+    const restored = store.getPaperReview(paper.id);
+    assert.equal(restored.summary, "## Existing memorandum");
+    assert.equal(restored.audit, "The original schema remains readable.");
+    assert.equal(restored.specialists[0].response, "Saved in JSON.");
+  } finally {
+    store.openWorkspace(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-legacy-close-")));
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test("permanently deletes an archived research chat and its turns", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-thread-delete-"));
   try {
