@@ -20,3 +20,12 @@ test("paper review streams completed notes and renders failure states in the pro
   assert.match(review, /summary\.status === "error" \? "Not completed"/);
   assert.match(review, /summary\.status === "error" \? "Failed"/);
 });
+
+test("all-specialist failure preserves the original errors for the workbench", () => {
+  assert.match(orchestrator, /if \(!usable\.length\) \{/);
+  assert.match(orchestrator, /specialists: settled\.map/);
+  assert.match(orchestrator, /summary: null,/);
+  assert.match(orchestrator, /error,/);
+  assert.match(review, /if \(result\.error \|\| !result\.summary\) \{/);
+  assert.match(review, /error: report\.error/);
+});

@@ -824,7 +824,8 @@ interface PaperReviewAgentResult {
 interface PaperReviewResult {
   specialists: PaperReviewAgentResult[];
   supervisor: { verdict: "ready" | "repair"; repairTargets: string[]; reason: string; run: AgentRunResult | null };
-  summary: { response: string; run: AgentRunResult };
+  summary: { response: string; run: AgentRunResult } | null;
+  error?: string;
   agentRuns: AgentRunResult[];
 }
 

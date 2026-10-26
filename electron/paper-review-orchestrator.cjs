@@ -86,10 +86,17 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
   }));
 
   const usable = settled.filter((result) => result.status === "complete");
-  if (!usable.length) {
-    throw new Error("No specialist completed a page-cited reading, so Archimedes cannot produce a reliable review memorandum.");
-  }
   const agentRuns = settled.map((result) => result.run).filter(Boolean);
+  if (!usable.length) {
+    const error = "No specialist completed a page-cited reading, so Archimedes cannot produce a reliable review memorandum.";
+    return {
+      specialists: settled.map(({ id, title, status, response, error: specialistError, repaired, run }) => ({ id, title, status, response, error: specialistError, repaired: Boolean(repaired), run })),
+      supervisor: { verdict: "ready", repairTargets: [], reason: "The evidence audit did not start because no independent reading completed.", run: null },
+      summary: null,
+      error,
+      agentRuns,
+    };
+  }
 
   emitStage(emit, { stage: "supervisor", title: "Evidence audit", detail: "Checking citations, overclaims, and conflicts before synthesis." });
   let supervisorRun = null;

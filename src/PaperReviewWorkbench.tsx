@@ -118,6 +118,13 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         nextRuns[report.id] = { status: report.status, response: report.response, error: report.error, repaired: report.repaired };
       }
       setRuns(nextRuns);
+      if (result.error || !result.summary) {
+        const message = result.error || "The review ended before a research memorandum could be written.";
+        setAudit(result.supervisor.reason);
+        setSummary({ status: "error", response: "", error: message });
+        setStage(message);
+        return;
+      }
       setAudit(result.supervisor.repairTargets.length
         ? `${result.supervisor.reason} A targeted repair was completed for ${result.supervisor.repairTargets.join(" and ")}.`
         : result.supervisor.reason);
