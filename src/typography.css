@@ -216,7 +216,6 @@ html:not([data-theme="paper"]) .main-toolbar { background: #141110; border-color
 html:not([data-theme="paper"]) .right-workbench { background: #181513; border-color: var(--night-line); }
 html:not([data-theme="paper"]) .workbench-header { background: #141110; border-color: var(--night-line); }
 html:not([data-theme="paper"]) .workbench-tab:hover { background: #24201d; }
-html:not([data-theme="paper"]) .workbench-tab.active { background: #2a2622; box-shadow: inset 0 0 0 1px #453d31; }
 html:not([data-theme="paper"]) .settings-modal { background: #181513; border-color: #3a332f; }
 html:not([data-theme="paper"]) .settings-sidebar { background: #141110; border-color: #2d2825; }
 html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-color: #3a332f; }
