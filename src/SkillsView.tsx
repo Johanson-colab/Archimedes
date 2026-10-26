@@ -35,11 +35,12 @@ function markdownBody(content: string) {
   return content.replace(/^---\s*\r?\n[\s\S]*?\r?\n---\s*(?:\r?\n)?/, "");
 }
 
-export default function SkillsView({ bridge, workspace, attachedIds, onAttach }: {
+export default function SkillsView({ bridge, workspace, attachedIds, onAttach, embedded = false }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   attachedIds: Set<string>;
   onAttach: (item: ContextAttachment) => void;
+  embedded?: boolean;
 }) {
   const [collections, setCollections] = useState<SkillCollection[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<SkillCollection | null>(null);
@@ -114,11 +115,11 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach }:
   }, [filteredSkills]);
 
   if (!selectedCollection) {
-    return <section className="skills-page">
-      <header className="skills-page-header">
-        <div><span className="page-kicker">Capabilities</span><h1>Skills</h1><p>Browse reusable research instructions and attach the ones you need to an Archimedes conversation.</p></div>
+    return <section className={embedded ? "skills-page skills-embedded" : "skills-page"}>
+      {!embedded && <header className="skills-page-header">
+        <div><span className="page-kicker">Extensions</span><h1>Skills</h1><p>Browse reusable research instructions and attach the ones you need to an Archimedes conversation.</p></div>
         <span className="skills-total"><strong>{collections.reduce((total, collection) => total + collection.skillCount, 0)}</strong> indexed skills</span>
-      </header>
+      </header>}
       {loading && <div className="skills-state"><LoaderCircle className="spin" size={18} />Indexing local skills...</div>}
       {!loading && <div className="skill-collection-grid">
         {collections.map((collection) => {
@@ -126,7 +127,7 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach }:
           return <button key={collection.id} className="skill-collection-card" onClick={() => void openCollection(collection)}>
             <span className={`skill-collection-icon ${appearance.tone}`}>{appearance.icon}</span>
             <span className="skill-collection-copy"><strong>{collection.name}</strong><small>{collection.description}</small></span>
-            <span className="skill-collection-count">{collection.skillCount} skills</span>
+            <span className="skill-collection-count">{collection.skillCount} {collection.skillCount === 1 ? "skill" : "skills"}</span>
             <ChevronRight size={15} />
           </button>;
         })}
@@ -141,7 +142,7 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach }:
       <button className="skills-back" onClick={() => { setSelectedCollection(null); setSelectedSkill(null); setError(""); }} title="Back to skill collections"><ArrowLeft size={16} /></button>
       <span className={`skill-collection-icon ${appearance.tone}`}>{appearance.icon}</span>
       <div><span className="page-kicker">Skill collection</span><h1>{selectedCollection.name}</h1><p>{selectedCollection.description}</p></div>
-      <span className="skills-total"><strong>{skills.length}</strong> skills</span>
+      <span className="skills-total"><strong>{skills.length}</strong> {skills.length === 1 ? "skill" : "skills"}</span>
     </header>
 
     <div className="skills-explorer">

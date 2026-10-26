@@ -26,5 +26,6 @@ test("zero counts and empty archived groups are hidden", () => {
   assert.match(sidebar, /projectThreads\.length > 0 && <small>/);
   assert.match(sidebar, /archivedProjects\.length > 0 && <>/);
   assert.match(sidebar, /archivedThreads\.length > 0 && <>/);
-  assert.match(app, /"Ready for a new task"/);
+  assert.match(app, /"sidebar-runtime"/);
+  assert.doesNotMatch(app, />Choose workspace</);
 });

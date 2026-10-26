@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -100,6 +100,18 @@ function stopWorkspaceWatcher(senderId) {
 
 function setWindowWorkspace(senderId, workspace) {
   windowWorkspaces.set(senderId, workspace);
+  let token = windowPreviewTokens.get(senderId);
+  if (!token) {
+    token = randomUUID();
+    windowPreviewTokens.set(senderId, token);
+  }
+  previewTokenWorkspaces.set(token, workspace);
+  return token;
+}
+
+function createPreviewToken(senderId, workspace) {
+  // Execution folders (project directories) can differ from the window's data
+  // workspace. Preview tokens must not move the window's primary workspace.
   let token = windowPreviewTokens.get(senderId);
   if (!token) {
     token = randomUUID();
@@ -250,9 +262,11 @@ function resolveWorkspace(value) {
   const expanded = requested === "~" || requested.startsWith("~/")
     ? path.join(app.getPath("home"), requested.slice(2))
     : requested;
-  return expanded && fs.existsSync(expanded) && fs.statSync(expanded).isDirectory()
-    ? expanded
-    : app.getPath("home");
+  if (!expanded) return app.getPath("home");
+  if (fs.existsSync(expanded) && fs.statSync(expanded).isDirectory()) return expanded;
+  // Do not silently fall back to the home folder when a project folder was
+  // deleted or moved; the user needs to rebind the project instead.
+  throw new Error(`The folder "${expanded}" is no longer available. Rebind the project folder and try again.`);
 }
 
 function focusedWindow() {
@@ -546,6 +560,19 @@ app.whenReady().then(() => {
     return chooseFolderForWindow(BrowserWindow.fromWebContents(event.sender), "Choose a research workspace");
   });
 
+  ipcMain.handle("workspace:watch", (event, requestedWorkspace) => {
+    const workspace = resolveWorkspace(requestedWorkspace);
+    watchWorkspace(event.sender, workspace);
+    return workspace;
+  });
+
+  ipcMain.handle("workspace:reveal", async (_event, requestedWorkspace) => {
+    if (!validWorkspace(requestedWorkspace)) throw new Error("The folder is no longer available.");
+    const error = await shell.openPath(path.resolve(requestedWorkspace));
+    if (error) throw new Error(error);
+    return { opened: true };
+  });
+
   ipcMain.handle("context:choose-paths", async (event, input = {}) => {
     const kind = input.kind === "folder" ? "folder" : "file";
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
@@ -599,7 +626,7 @@ app.whenReady().then(() => {
     const workspace = resolveWorkspace(input.workspace);
     const file = workspaceFiles.readWorkspaceFile(workspace, input.path);
     if (file.kind === "pdf" || file.kind === "image") {
-      const token = setWindowWorkspace(event.sender.id, workspace);
+      const token = createPreviewToken(event.sender.id, workspace);
       const encodedPath = file.path.split("/").map(encodeURIComponent).join("/");
       return { ...file, previewUrl: `archimedes-file://${token}/${encodedPath}` };
     }
@@ -655,7 +682,7 @@ app.whenReady().then(() => {
     const workspace = resolveWorkspace(input.workspace);
     const result = await latexWorkspace.compileLatexDocument(workspace, input.path);
     if (!result.pdf_path) return result;
-    const token = setWindowWorkspace(event.sender.id, workspace);
+    const token = createPreviewToken(event.sender.id, workspace);
     const encodedPath = result.pdf_path.split("/").map(encodeURIComponent).join("/");
     return { ...result, preview_url: `archimedes-file://${token}/${encodedPath}?v=${Date.now()}` };
   });
@@ -667,6 +694,8 @@ app.whenReady().then(() => {
     return store.getResearchThread(input.threadId);
   });
 
+  ipcMain.handle("research:snapshot", () => store.getSnapshot());
+
   ipcMain.handle("research-project:create", (_event, input = {}) => {
     return store.createResearchProject(input);
   });
@@ -674,6 +703,11 @@ app.whenReady().then(() => {
   ipcMain.handle("research-project:rename", (_event, input = {}) => {
     if (typeof input.id !== "string") throw new Error("A research project ID is required.");
     return store.renameResearchProject(input.id, input.name);
+  });
+
+  ipcMain.handle("research-project:set-workspace", (_event, input = {}) => {
+    if (typeof input.id !== "string") throw new Error("A research project ID is required.");
+    return store.setResearchProjectWorkspace(input.id, input.workspacePath);
   });
 
   ipcMain.handle("research-project:archive", (_event, input = {}) => {
@@ -957,7 +991,10 @@ app.whenReady().then(() => {
     const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = normalizeContextLength(config, input.contextLength);
     const workspace = resolveWorkspace(input.workspace);
-    store.openWorkspace(workspace);
+    // Research data stays in the window's primary workspace, while the Agent
+    // operates inside the project/session folder.
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
+    store.openWorkspace(dataWorkspace);
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
     return agent.runAgent({
@@ -979,7 +1016,8 @@ app.whenReady().then(() => {
       throw new Error("A paper record is required to run an evidence review.");
     }
     const workspace = resolveWorkspace(input.workspace);
-    store.openWorkspace(workspace);
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
+    store.openWorkspace(dataWorkspace);
     const config = modelConfig.getActiveModelConfig();
     const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort || "high");
     const contextLength = normalizeContextLength(config, input.contextLength || "extra-long");
