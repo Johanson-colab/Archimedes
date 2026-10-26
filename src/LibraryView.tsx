@@ -30,6 +30,7 @@ import { findPdfHorizontalRules, findRuledTableRect, findTextTableRect } from ".
 import { isDensePdfProse, mergePdfVisualRegions, pdfCaptionKind } from "./pdf-visual-regions";
 import { useUISettings, type Language } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
+import ToolbarActions from "./ToolbarActions";
 import {
   AlignLeft,
   ArrowLeft,
@@ -266,10 +267,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 
   if (!selectedLibrary) {
     return <section className="library-page">
-      <header className="library-page-header">
-        <div><span className="eyebrow">Knowledge base</span><h1>Literature library</h1><p>Curated research directions with searchable, reusable paper records.</p></div>
-        <button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button>
-      </header>
+      <ToolbarActions><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button></ToolbarActions>
       {error && <div className="library-error">{error}</div>}
       {loading && !libraries.length ? <LoadingState /> : <div className="library-card-grid">
         {libraries.map((library) => <button className="library-card" key={library.id} onClick={() => setSelectedLibraryId(library.id)}>

@@ -4249,6 +4249,7 @@ html:not([data-theme="paper"]) .codex-sidebar {
 
 /* Extensions page */
 .extensions-page { gap: 0; }
+.extensions-tabs { border-bottom: 1px solid var(--night-line); }
 .extensions-header { display: flex; flex: 0 0 auto; flex-direction: column; gap: 15px; padding-bottom: 14px; border-bottom: 1px solid var(--night-line); }
 .extensions-heading h1 { margin: 5px 0 0; color: var(--night-ink); font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
 .extensions-heading p { max-width: 640px; margin: 6px 0 0; color: var(--night-muted); font-size: 10px; line-height: 1.55; }
