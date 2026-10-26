@@ -37,3 +37,11 @@ test("completed reviews are saved and restored when the review tab remounts", ()
   assert.match(review, /bridge\.getPaperReview\(paper\.id, workspace\)/);
   assert.match(review, /Saved review restored/);
 });
+
+test("completed reviews have an interactive visual evidence atlas instead of only raw text", () => {
+  assert.match(review, /function evidenceFragments/);
+  assert.match(review, /paper-review-atlas/);
+  assert.match(review, /role="tablist"/);
+  assert.match(review, /selectLens\(reviewer\.id\)/);
+  assert.match(review, /paper-review-gallery-output/);
+});

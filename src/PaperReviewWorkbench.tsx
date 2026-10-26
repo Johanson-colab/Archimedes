@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { AlertTriangle, BookOpenCheck, Check, ChevronDown, ChevronUp, FileSearch, FlaskConical, Lightbulb, LoaderCircle, RefreshCw, ScanSearch, Sparkles } from "lucide-react";
 
 type ReviewAgentId = "related" | "method" | "experiments" | "limitations";
+type ReviewLensId = "overview" | ReviewAgentId;
 type ReviewStatus = "idle" | "working" | "complete" | "error";
 type ReviewRun = { status: ReviewStatus; response: string; error: string; repaired?: boolean };
 type ReviewPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
@@ -27,6 +28,17 @@ function reviewError(error: unknown) {
   return error instanceof Error ? error.message : String(error || "The review could not be completed.");
 }
 
+function evidenceFragments(markdown: string, limit = 3) {
+  const fragments = markdown
+    .replace(/```[\s\S]*?```/g, "")
+    .split(/\n\s*\n|\n(?=[*-]\s|\d+\.\s)/)
+    .map((line) => line.replace(/^#{1,6}\s+|^[-*]\s+|^\d+\.\s+/gm, "").replace(/[*_`]/g, "").replace(/\s+/g, " ").trim())
+    .filter((line) => line.length > 28)
+    .slice(0, limit)
+    .map((line) => line.length > 190 ? `${line.slice(0, 187).trimEnd()}…` : line);
+  return fragments;
+}
+
 export default function PaperReviewWorkbench({ bridge, workspace, projectId, paper, pageCount, ready, onInternalReviewThreadsDeleted }: {
   bridge: ResearchDeskBridge;
   workspace: string;
@@ -42,6 +54,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   const [stage, setStage] = useState("Ready for a source-grounded review.");
   const [running, setRunning] = useState(false);
   const [expanded, setExpanded] = useState<Set<ReviewAgentId>>(new Set());
+  const [lens, setLens] = useState<ReviewLensId>("overview");
   const runIdRef = useRef<string | null>(null);
   const restoreIdRef = useRef(0);
 
@@ -116,6 +129,15 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   const independentReadingStatus = completeCount || errorCount
     ? [completeCount ? `${completeCount} completed` : "", errorCount ? `${errorCount} failed` : ""].filter(Boolean).join(" · ")
     : running ? "In progress" : "Awaiting run";
+  const selectedReviewer = lens === "overview" ? null : REVIEWERS.find((reviewer) => reviewer.id === lens) ?? null;
+  const selectedRun = selectedReviewer ? visibleRuns[selectedReviewer.id] : null;
+  const selectedFragments = selectedRun?.status === "complete"
+    ? (evidenceFragments(selectedRun.response).length ? evidenceFragments(selectedRun.response) : [selectedRun.response.slice(0, 190)])
+    : [];
+  const overviewFragments = REVIEWERS.flatMap((reviewer) => {
+    const run = visibleRuns[reviewer.id];
+    return run.status === "complete" ? evidenceFragments(run.response, 1).map((text) => ({ reviewer, text })) : [];
+  });
 
   async function runReview() {
     if (running || !workspace || !ready) return;
@@ -180,10 +202,16 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     });
   }
 
+  function selectLens(nextLens: ReviewLensId) {
+    setLens(nextLens);
+    if (nextLens !== "overview" && visibleRuns[nextLens].status === "complete") {
+      setExpanded((current) => new Set(current).add(nextLens));
+    }
+  }
+
   return <main className="paper-review-workbench">
     <header className="paper-review-heading">
       <div>
-        <p className="paper-review-kicker">Evidence review</p>
         <h1>Read the paper against its own record.</h1>
         <p className="paper-review-intro">Four independent readings are audited for evidence before one concise research memorandum is written.</p>
       </div>
@@ -200,6 +228,47 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       <div><span>Independent readings</span><strong>{independentReadingStatus}</strong></div>
       <div><span>Evidence audit</span><strong>{running ? "Checking" : summary.status === "complete" ? "Completed" : summary.status === "error" ? "Not completed" : "Pending"}</strong></div>
       <div><span>Research memorandum</span><strong>{summary.status === "complete" ? "Ready" : running ? "Drafting" : summary.status === "error" ? "Failed" : "Pending"}</strong></div>
+    </section>
+
+    <section className={`paper-review-atlas ${summary.status}`} aria-label="Interactive paper review">
+      <div className="paper-review-atlas-copy">
+        <h2>The paper, arranged as evidence.</h2>
+        <p>{summary.status === "complete"
+          ? "Choose a lens to turn the review into a visual reading of the paper’s claims, mechanism, evidence, and open edges."
+          : "When the review is ready, its four readings will become a navigable evidence composition here."}</p>
+        <div className="paper-review-lens-list" role="tablist" aria-label="Review lenses">
+          <button type="button" role="tab" aria-selected={lens === "overview"} className={lens === "overview" ? "active" : ""} onClick={() => selectLens("overview")}>All signals</button>
+          {REVIEWERS.map((reviewer) => <button type="button" role="tab" key={reviewer.id} aria-selected={lens === reviewer.id} className={lens === reviewer.id ? "active" : ""} onClick={() => selectLens(reviewer.id)}>{reviewer.title}</button>)}
+        </div>
+      </div>
+
+      <div className="paper-review-atlas-figure" data-ui>
+        <div className="paper-review-atlas-paper"><span>{paper.title}</span><small>{paper.year ?? "Undated"} · {paper.venue || "Research paper"}</small></div>
+        <div className="paper-review-atlas-orbit" aria-hidden="true" />
+        {REVIEWERS.map((reviewer, index) => {
+          const run = visibleRuns[reviewer.id];
+          const Icon = reviewer.icon;
+          return <button type="button" key={reviewer.id} className={`paper-review-atlas-node node-${index} ${run.status} ${lens === reviewer.id ? "selected" : ""}`} onClick={() => selectLens(reviewer.id)} aria-label={`View ${reviewer.title}`}>
+            <Icon size={18} strokeWidth={1.6} /><span>{reviewer.title}</span><b>{run.status === "complete" ? "Read" : run.status === "error" ? "Needs attention" : run.status === "working" ? "Reading" : "Waiting"}</b>
+          </button>;
+        })}
+        <div className="paper-review-atlas-caption"><strong>{completeCount} readings complete</strong><span>{summary.status === "complete" ? "Evidence map is ready to explore." : stage}</span></div>
+      </div>
+    </section>
+
+    <section className="paper-review-gallery" aria-live="polite">
+      <div className="paper-review-gallery-title">
+        <p>{selectedReviewer ? selectedReviewer.title : "The editorial view"}</p>
+        <h2>{selectedReviewer ? selectedReviewer.subtitle : "Four readings, one research picture."}</h2>
+      </div>
+      <div className="paper-review-gallery-output" data-ui>
+        {lens === "overview" && (overviewFragments.length
+          ? overviewFragments.slice(0, 4).map(({ reviewer, text }) => <button type="button" className="paper-review-fragment" key={reviewer.id} onClick={() => selectLens(reviewer.id)}><span>{reviewer.title}</span><strong>{text}</strong></button>)
+          : <p className="paper-review-gallery-empty">Independent readings will surface their strongest observations here as they complete.</p>)}
+        {selectedReviewer && selectedRun?.status === "complete" && selectedFragments.map((text, index) => <div className="paper-review-fragment selected" key={`${selectedReviewer.id}-${index}`}><span>{index === 0 ? "Main observation" : "Evidence thread"}</span><strong>{text}</strong></div>)}
+        {selectedReviewer && selectedRun?.status !== "complete" && <p className="paper-review-gallery-empty">{selectedRun?.status === "error" ? selectedRun.error : "This lens will fill when its source-grounded reading is complete."}</p>}
+      </div>
+      {selectedReviewer && selectedRun?.status === "complete" && <button className="paper-review-gallery-open" type="button" onClick={() => toggleExpanded(selectedReviewer.id)}>{expanded.has(selectedReviewer.id) ? "Close full reading" : "Open the full evidence reading"}</button>}
     </section>
 
     <section className="paper-review-readings" aria-label="Specialist readings">
@@ -232,7 +301,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     </section>
 
     <section className={`paper-review-summary ${summary.status}`}>
-      <header><div><p className="paper-review-kicker">Research memorandum</p><h2>One note, with the uncertainty left in.</h2></div>{summary.status === "working" && <span><LoaderCircle className="spin" size={14} />{stage}</span>}</header>
+      <header><div><h2>One note, with the uncertainty left in.</h2></div>{summary.status === "working" && <span><LoaderCircle className="spin" size={14} />{stage}</span>}</header>
       {summary.status === "idle" && <p>Run the review to collect independent readings before Archimedes writes the final memorandum.</p>}
       {summary.status === "working" && <p>{stage}</p>}
       {summary.status === "error" && <p className="paper-review-summary-error">{summary.error}</p>}
