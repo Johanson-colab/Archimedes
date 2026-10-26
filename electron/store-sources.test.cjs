@@ -165,6 +165,47 @@ test("keeps reviews written by the original review_json schema", () => {
   }
 });
 
+test("persists presentations separately from their source review", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-presentation-"));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-presentation-close-"));
+  try {
+    store.openWorkspace(workspace);
+    const library = store.createLibrary({ name: "Presentation shelf" });
+    const paper = store.addPaper(library.id, { title: "Saved presentation", authors: [], source: "manual" });
+    const review = store.savePaperReview(paper.id, {
+      specialists: [{ id: "method", title: "Method", status: "complete", response: "PDF p. 2 explains the mechanism.", error: "", repaired: false }],
+      supervisor: { reason: "Evidence checked." },
+      summary: { response: "## Memorandum\nThe source review stays independent." },
+    });
+    const sections = ["background", "related_work", "method", "experiments", "limitations"];
+    store.savePaperPresentation(paper.id, {
+      skill: { id: "paper-presentation", name: "Paper presentation", description: "Downstream deck", version: 1 },
+      title: paper.title,
+      subtitle: "A compact deck",
+      slides: sections.map((section, index) => ({
+        section,
+        title: section,
+        summary: `${section} summary`,
+        bullets: [`${section} point one`, `${section} point two`],
+        takeaway: `${section} takeaway`,
+        page: index + 1,
+      })),
+    }, review.updated_at);
+    store.openWorkspace(other);
+    store.openWorkspace(workspace);
+    const restoredReview = store.getPaperReview(paper.id);
+    const restoredPresentation = store.getPaperPresentation(paper.id);
+    assert.equal(restoredReview.summary, "## Memorandum\nThe source review stays independent.");
+    assert.equal(restoredPresentation.title, paper.title);
+    assert.equal(restoredPresentation.source_review_updated_at, review.updated_at);
+    assert.deepEqual(restoredPresentation.slides.map((slide) => slide.section), sections);
+  } finally {
+    store.openWorkspace(other);
+    fs.rmSync(workspace, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  }
+});
+
 test("permanently deletes an archived research chat and its turns", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-thread-delete-"));
   try {

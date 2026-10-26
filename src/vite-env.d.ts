@@ -73,6 +73,8 @@ interface ResearchDeskBridge {
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string }) => Promise<AgentRunResult>;
     runPaperReview: (input: PaperReviewInput) => Promise<PaperReviewResult>;
     getPaperReview: (paperId: string, workspace?: string) => Promise<StoredPaperReview | null>;
+    runPaperPresentation: (input: PaperPresentationInput) => Promise<StoredPaperPresentation>;
+    getPaperPresentation: (paperId: string, workspace?: string) => Promise<StoredPaperPresentation | null>;
     cleanupPaperReviewRuns: (workspace?: string) => Promise<{ threadIds: string[] }>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
@@ -843,6 +845,40 @@ interface StoredPaperReview {
   summary: string;
   created_at: string;
   updated_at: string;
+}
+
+type PaperPresentationSection = "background" | "related_work" | "method" | "experiments" | "limitations";
+
+interface PaperPresentationSlide {
+  section: PaperPresentationSection;
+  title: string;
+  summary: string;
+  bullets: string[];
+  takeaway: string;
+  page: number;
+}
+
+interface PaperPresentation {
+  skill: { id: "paper-presentation" | string; name: string; description: string; version: number };
+  title: string;
+  subtitle: string;
+  slides: PaperPresentationSlide[];
+}
+
+interface StoredPaperPresentation extends PaperPresentation {
+  source_review_updated_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PaperPresentationInput {
+  paper: Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
+  pageCount: number;
+  workspace: string;
+  projectId?: string | null;
+  reasoningEffort?: ReasoningEffort;
+  contextLength?: ContextLength;
+  contextItems?: ContextAttachment[];
 }
 
 interface PaperReviewEvent {

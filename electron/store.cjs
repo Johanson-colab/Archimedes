@@ -189,6 +189,14 @@ function schema(db) {
       updated_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS paper_presentations (
+      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      presentation_json TEXT NOT NULL,
+      source_review_updated_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
       cache_key TEXT PRIMARY KEY NOT NULL,
       response_json TEXT NOT NULL,
@@ -201,6 +209,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_paper_highlights_paper ON paper_highlights(paper_id, page_number, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_paper_chat_threads_thread ON paper_chat_threads(thread_id);
     CREATE INDEX IF NOT EXISTS idx_paper_reviews_updated ON paper_reviews(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_paper_presentations_updated ON paper_presentations(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
@@ -561,6 +570,71 @@ function savePaperReview(paperId, review) {
       summary = excluded.summary, updated_at = excluded.updated_at
   `).run(paperId, JSON.stringify(normalized.specialists), normalized.audit, normalized.summary, now, now);
   return getPaperReview(paperId);
+}
+
+const PAPER_PRESENTATION_SECTIONS = ["background", "related_work", "method", "experiments", "limitations"];
+
+function normalizePaperPresentation(presentation) {
+  if (!presentation || typeof presentation !== "object") throw new Error("A completed paper presentation is required.");
+  const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
+  const normalizedSlides = PAPER_PRESENTATION_SECTIONS.map((section) => {
+    const slide = slides.find((candidate) => candidate?.section === section);
+    if (!slide) throw new Error(`The paper presentation is missing its ${section} slide.`);
+    const bullets = Array.isArray(slide.bullets)
+      ? slide.bullets.map((bullet) => paperReviewText(bullet, 1_000)).filter(Boolean).slice(0, 4)
+      : [];
+    if (bullets.length < 2) throw new Error(`The ${section} slide needs at least two points.`);
+    return {
+      section,
+      title: paperReviewText(slide.title, 1_000),
+      summary: paperReviewText(slide.summary, 4_000),
+      bullets,
+      takeaway: paperReviewText(slide.takeaway, 2_000),
+      page: Math.max(1, Math.min(5_000, Number(slide.page) || 1)),
+    };
+  });
+  return {
+    skill: {
+      id: paperReviewText(presentation.skill?.id || "paper-presentation", 200),
+      name: paperReviewText(presentation.skill?.name || "Paper presentation", 500),
+      description: paperReviewText(presentation.skill?.description, 2_000),
+      version: Math.max(1, Number(presentation.skill?.version) || 1),
+    },
+    title: paperReviewText(presentation.title, 2_000),
+    subtitle: paperReviewText(presentation.subtitle, 4_000),
+    slides: normalizedSlides,
+  };
+}
+
+function getPaperPresentation(paperId) {
+  const db = requireDatabase();
+  const row = db.prepare("SELECT * FROM paper_presentations WHERE paper_id = ?").get(paperId);
+  if (!row) return null;
+  try {
+    return {
+      ...normalizePaperPresentation(JSON.parse(row.presentation_json)),
+      source_review_updated_at: row.source_review_updated_at,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function savePaperPresentation(paperId, presentation, sourceReviewUpdatedAt) {
+  const db = requireDatabase();
+  if (!db.prepare("SELECT 1 FROM papers WHERE id = ?").get(paperId)) throw new Error("Paper not found.");
+  if (!String(sourceReviewUpdatedAt || "").trim()) throw new Error("The source review timestamp is required.");
+  const normalized = normalizePaperPresentation(presentation);
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO paper_presentations (paper_id, presentation_json, source_review_updated_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(paper_id) DO UPDATE SET presentation_json = excluded.presentation_json,
+      source_review_updated_at = excluded.source_review_updated_at, updated_at = excluded.updated_at
+  `).run(paperId, JSON.stringify(normalized), sourceReviewUpdatedAt, now, now);
+  return getPaperPresentation(paperId);
 }
 
 function replacePaperReaderAsset(paperId, asset) {
@@ -1284,6 +1358,7 @@ module.exports = {
   getPaperChatThread,
   getPaperReader,
   getPaperReview,
+  getPaperPresentation,
   getAction,
   getResearchThread,
   getResearchThreadIdForTask,
@@ -1303,6 +1378,7 @@ module.exports = {
   replacePaperReaderAsset,
   saveTask,
   savePaperReview,
+  savePaperPresentation,
   setPaperReaderFailed,
   setPaperChatThread,
   setDailyFeedCache,

@@ -8,6 +8,7 @@ const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { runPaperReview } = require("./paper-review-orchestrator.cjs");
+const { runPaperPresentation } = require("./paper-presentation-skill.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
@@ -1057,6 +1058,51 @@ app.whenReady().then(() => {
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
     return store.getPaperReview(paperId);
+  });
+
+  ipcMain.handle("paper-presentation:run", async (event, input) => {
+    if (!input?.paper || typeof input.paper.id !== "string" || typeof input.paper.title !== "string") {
+      throw new Error("A paper record is required to generate a presentation.");
+    }
+    const workspace = resolveWorkspace(input.workspace);
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
+    store.openWorkspace(dataWorkspace);
+    const review = store.getPaperReview(input.paper.id);
+    if (!review) throw new Error("Finish and save the text review before generating its presentation.");
+    const config = modelConfig.getActiveModelConfig();
+    const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort || "high");
+    const contextLength = normalizeContextLength(config, input.contextLength || "extra-long");
+    const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
+    const paper = {
+      id: input.paper.id,
+      title: input.paper.title.slice(0, 1_000),
+      authors: Array.isArray(input.paper.authors) ? input.paper.authors.slice(0, 50).map((author) => String(author).slice(0, 300)) : [],
+      year: Number.isInteger(input.paper.year) ? input.paper.year : null,
+      venue: String(input.paper.venue || "").slice(0, 1_000),
+      abstract: String(input.paper.abstract || "").slice(0, 12_000),
+      url: String(input.paper.url || "").slice(0, 4_000),
+      pdf_url: String(input.paper.pdf_url || "").slice(0, 4_000),
+    };
+    const result = await runPaperPresentation({
+      paper,
+      review,
+      pageCount: Math.max(0, Math.min(5_000, Number(input.pageCount) || 0)),
+      workspace,
+      projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
+      contextItems,
+      reasoningEffort,
+      contextLength,
+      browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
+    });
+    return store.savePaperPresentation(paper.id, result.presentation, review.updated_at);
+  });
+
+  ipcMain.handle("paper-presentation:get", (event, { paperId, workspace } = {}) => {
+    if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to restore a presentation.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
+    store.openWorkspace(dataWorkspace);
+    return store.getPaperPresentation(paperId);
   });
 
   ipcMain.handle("paper-review:cleanup-internal-runs", (event, { workspace } = {}) => {

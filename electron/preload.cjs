@@ -73,6 +73,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   runAgent: (input) => ipcRenderer.invoke("agent:run", input),
   runPaperReview: (input) => ipcRenderer.invoke("paper-review:run", input),
   getPaperReview: (paperId, workspace) => ipcRenderer.invoke("paper-review:get", { paperId, workspace }),
+  runPaperPresentation: (input) => ipcRenderer.invoke("paper-presentation:run", input),
+  getPaperPresentation: (paperId, workspace) => ipcRenderer.invoke("paper-presentation:get", { paperId, workspace }),
   cleanupPaperReviewRuns: (workspace) => ipcRenderer.invoke("paper-review:cleanup-internal-runs", { workspace }),
   interruptAgent: (threadId) => ipcRenderer.invoke("agent:interrupt", threadId),
   approveAgentAction: (actionId) => ipcRenderer.invoke("agent:approve-action", actionId),
