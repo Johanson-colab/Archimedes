@@ -15,6 +15,10 @@ const REVIEWERS: Array<{ id: ReviewAgentId; title: string; subtitle: string; ico
   { id: "limitations", title: "Limitations", subtitle: "Locates scope boundaries, failure modes, and the next falsification test.", icon: Lightbulb },
 ];
 
+function isReviewAgentId(value: string | undefined): value is ReviewAgentId {
+  return REVIEWERS.some((reviewer) => reviewer.id === value);
+}
+
 function initialRuns(): Record<ReviewAgentId, ReviewRun> {
   return Object.fromEntries(REVIEWERS.map((reviewer) => [reviewer.id, { status: "idle", response: "", error: "" }])) as Record<ReviewAgentId, ReviewRun>;
 }
@@ -51,6 +55,12 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   useEffect(() => bridge.onPaperReviewEvent((event) => {
     if (!runIdRef.current || event.clientRunId !== runIdRef.current) return;
     setStage(event.detail);
+    if (isReviewAgentId(event.reviewerId) && event.stage === "specialist_complete" && event.response) {
+      setRuns((current) => ({ ...current, [event.reviewerId!]: { status: "complete", response: event.response!, error: "" } }));
+    }
+    if (isReviewAgentId(event.reviewerId) && event.stage === "specialist_failed") {
+      setRuns((current) => ({ ...current, [event.reviewerId!]: { status: "error", response: "", error: event.detail } }));
+    }
     if (event.stage === "supervisor" || event.stage === "repair") setAudit(event.detail);
   }), [bridge]);
 
@@ -64,8 +74,22 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     return () => { mounted = false; };
   }, [bridge, onInternalReviewThreadsDeleted, workspace]);
 
-  const completeCount = REVIEWERS.filter((reviewer) => runs[reviewer.id].status === "complete").length;
-  const errorCount = REVIEWERS.filter((reviewer) => runs[reviewer.id].status === "error").length;
+  // A failure can arrive after an older renderer has lost the per-specialist
+  // event. Never leave those stale cards visually "running" once the overall
+  // review has already failed.
+  const visibleRuns = summary.status === "error"
+    ? Object.fromEntries(REVIEWERS.map((reviewer) => {
+      const run = runs[reviewer.id];
+      return [reviewer.id, run.status === "working"
+        ? { status: "error" as const, response: "", error: `Review stopped before this reading completed. ${summary.error}` }
+        : run];
+    })) as Record<ReviewAgentId, ReviewRun>
+    : runs;
+  const completeCount = REVIEWERS.filter((reviewer) => visibleRuns[reviewer.id].status === "complete").length;
+  const errorCount = REVIEWERS.filter((reviewer) => visibleRuns[reviewer.id].status === "error").length;
+  const independentReadingStatus = completeCount || errorCount
+    ? [completeCount ? `${completeCount} completed` : "", errorCount ? `${errorCount} failed` : ""].filter(Boolean).join(" · ")
+    : running ? "In progress" : "Awaiting run";
 
   async function runReview() {
     if (running || !workspace || !ready) return;
@@ -101,6 +125,12 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       setStage("The review memorandum is ready. Open any reading to inspect its evidence trail.");
     } catch (error) {
       const message = reviewError(error);
+      setRuns((current) => Object.fromEntries(REVIEWERS.map((reviewer) => {
+        const run = current[reviewer.id];
+        return [reviewer.id, run.status === "working"
+          ? { status: "error" as const, response: "", error: `Review stopped before this reading completed. ${message}` }
+          : run];
+      })) as Record<ReviewAgentId, ReviewRun>);
       setSummary({ status: "error", response: "", error: message });
       setStage(message);
     } finally {
@@ -134,14 +164,14 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     {!workspace && <div className="paper-review-notice"><AlertTriangle size={17} /><div><strong>Choose a workspace first</strong><span>A workspace keeps this review and its supporting source reads inside Archimedes.</span></div></div>}
 
     <section className="paper-review-route" aria-label="Review process">
-      <div><span>Independent readings</span><strong>{completeCount || (running ? "In progress" : "Awaiting run")}</strong></div>
-      <div><span>Evidence audit</span><strong>{running ? "Checking" : summary.status === "complete" ? "Completed" : "Pending"}</strong></div>
-      <div><span>Research memorandum</span><strong>{summary.status === "complete" ? "Ready" : running ? "Drafting" : "Pending"}</strong></div>
+      <div><span>Independent readings</span><strong>{independentReadingStatus}</strong></div>
+      <div><span>Evidence audit</span><strong>{running ? "Checking" : summary.status === "complete" ? "Completed" : summary.status === "error" ? "Not completed" : "Pending"}</strong></div>
+      <div><span>Research memorandum</span><strong>{summary.status === "complete" ? "Ready" : running ? "Drafting" : summary.status === "error" ? "Failed" : "Pending"}</strong></div>
     </section>
 
     <section className="paper-review-readings" aria-label="Specialist readings">
       {REVIEWERS.map((reviewer) => {
-        const run = runs[reviewer.id];
+        const run = visibleRuns[reviewer.id];
         const Icon = reviewer.icon;
         const isExpanded = expanded.has(reviewer.id);
         return <article className={`paper-review-reading ${run.status}`} key={reviewer.id}>

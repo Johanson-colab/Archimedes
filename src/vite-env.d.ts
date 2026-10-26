@@ -834,6 +834,7 @@ interface PaperReviewEvent {
   reviewerId?: "related" | "method" | "experiments" | "limitations";
   title: string;
   detail: string;
+  response?: string;
   clientRunId?: string;
 }
 

@@ -76,7 +76,7 @@ async function runPaperReview({ paper, pageCount, workspace, projectId, contextI
     try {
       const result = await runAgent({ ...common, prompt: specialistPrompt(specialist, paper, pageCount) });
       if (result.status !== "completed") throw new Error(result.response || "The specialist did not complete its reading.");
-      emitStage(emit, { stage: "specialist_complete", reviewerId: specialist.id, title: `${specialist.title} completed`, detail: "Its independent evidence note is ready." });
+      emitStage(emit, { stage: "specialist_complete", reviewerId: specialist.id, title: `${specialist.title} completed`, detail: "Its independent evidence note is ready.", response: result.response });
       return { ...specialist, status: "complete", response: result.response, error: "", run: result };
     } catch (error) {
       const message = error?.message || String(error);

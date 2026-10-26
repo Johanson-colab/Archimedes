@@ -1,0 +1,22 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+
+const root = path.resolve(__dirname, "..");
+const review = fs.readFileSync(path.join(root, "src", "PaperReviewWorkbench.tsx"), "utf8");
+const orchestrator = fs.readFileSync(path.join(root, "electron", "paper-review-orchestrator.cjs"), "utf8");
+
+test("paper review reports individual specialist failures instead of leaving spinners active", () => {
+  assert.match(review, /event\.stage === "specialist_failed"/);
+  assert.match(review, /status: "error", response: "", error: event\.detail/);
+  assert.match(review, /Review stopped before this reading completed/);
+});
+
+test("paper review streams completed notes and renders failure states in the process route", () => {
+  assert.match(orchestrator, /stage: "specialist_complete"[\s\S]*?response: result\.response/);
+  assert.match(review, /event\.stage === "specialist_complete" && event\.response/);
+  assert.match(review, /\$\{errorCount\} failed/);
+  assert.match(review, /summary\.status === "error" \? "Not completed"/);
+  assert.match(review, /summary\.status === "error" \? "Failed"/);
+});
