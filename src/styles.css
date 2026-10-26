@@ -4369,32 +4369,12 @@ html:not([data-theme="paper"]) .codex-sidebar {
 }
 
 /* Runtime footer replaces the workspace switcher. */
-.sidebar-runtime { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 3px; padding-top: 8px; border-top: 1px solid var(--sb-line); }
-.runtime-button { display: flex; min-width: 0; height: 42px; flex: 1; align-items: center; gap: 8px; padding: 0 8px; color: var(--sb-ink); background: transparent; border-radius: 6px; text-align: left; }
-.runtime-button:hover, .runtime-button.open { background: var(--sb-hover); }
-.runtime-icon { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; color: var(--sb-muted); background: color-mix(in srgb, var(--night-ink) 5%, transparent); border: 1px solid var(--sb-line); border-radius: 5px; }
-.runtime-copy { display: grid; min-width: 0; flex: 1; gap: 2px; }
-.runtime-copy strong { overflow: hidden; color: var(--night-ink); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.runtime-copy small { overflow: hidden; color: var(--sb-faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.runtime-button > svg { flex: 0 0 auto; color: var(--sb-faint); }
-.runtime-menu { position: absolute; z-index: 35; right: 0; bottom: calc(100% + 7px); left: 0; display: grid; gap: 1px; padding: 5px; background: var(--sb-panel); border: 1px solid var(--night-line); border-radius: 7px; box-shadow: 0 -4px 30px rgba(0, 0, 0, .28); }
-.runtime-menu-label { padding: 4px 8px 5px; color: var(--sb-faint); font-size: 8px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-.runtime-option { display: grid; grid-template-columns: 17px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 8px; color: var(--sb-ink); background: transparent; border-radius: 5px; text-align: left; }
-.runtime-option:hover:not(:disabled) { background: var(--sb-hover); }
-.runtime-option.active { color: var(--night-ink); background: var(--sb-active); }
-.runtime-option:disabled { cursor: default; opacity: .52; }
-.runtime-option > svg { color: var(--sb-muted); }
-.runtime-option span { display: grid; min-width: 0; gap: 2px; }
-.runtime-option strong { font-size: 10px; font-weight: 600; }
-.runtime-option small { color: var(--sb-faint); font-size: 8px; }
-.runtime-option > svg:last-child { color: var(--accent); }
-.runtime-soon { padding: 2px 5px; color: var(--sb-faint) !important; background: color-mix(in srgb, var(--night-ink) 5%, transparent); border-radius: 3px; font-size: 7px !important; }
-.runtime-divider { height: 1px; margin: 4px 3px; background: var(--sb-line); }
-.runtime-folder { display: grid; grid-template-columns: minmax(0, 1fr) 22px; gap: 2px 6px; padding: 5px 8px 6px; }
-.runtime-folder > span { grid-column: 1 / -1; color: var(--sb-faint); font-size: 8px; font-weight: 650; }
-.runtime-folder > strong { overflow: hidden; color: var(--sb-muted); font-size: 8px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.runtime-folder > button { display: grid; width: 20px; height: 20px; place-items: center; color: var(--sb-muted); background: transparent; border-radius: 3px; }
-.runtime-folder > button:hover { color: var(--night-ink); background: var(--sb-hover); }
+.sidebar-runtime { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; padding-top: 8px; border-top: 1px solid var(--sb-line); }
+.runtime-tabs { display: flex; min-width: 0; flex: 1; align-items: center; gap: 13px; padding: 0 8px; }
+.runtime-tab { padding: 5px 0; color: var(--sb-faint); background: transparent; border: 0; font-size: 10px; font-weight: 550; }
+.runtime-tab.active { color: var(--accent); }
+.runtime-tab.coming { cursor: default; }
+.runtime-tab.coming span { margin-left: 4px; color: var(--sb-faint); font-size: 7px; font-weight: 500; }
 
 /* Extensions page */
 .extensions-page { gap: 0; }
@@ -4458,11 +4438,9 @@ html:not([data-theme="paper"]) .project-folder-field input { color: #e9e9e9; }
 
 @media (max-width: 860px) {
   .work-group { display: none; }
-  .sidebar-runtime .runtime-copy, .sidebar-runtime .runtime-button > svg { display: none; }
   .sidebar-runtime { flex-direction: column; gap: 2px; }
-  .runtime-button { height: 34px; justify-content: center; padding: 0; }
-  .runtime-icon { width: 28px; height: 28px; }
-  .runtime-menu { right: auto; left: 0; width: 232px; }
+  .runtime-tabs { justify-content: center; padding: 0; }
+  .runtime-tab.coming span { display: none; }
 }
 
 /* Compact paper reader bar: back, tabs, and actions share one row. */
