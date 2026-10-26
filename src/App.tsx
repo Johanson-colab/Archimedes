@@ -1949,28 +1949,12 @@ function App() {
           filterError={projectFolderError}
         />
 
-        <div className="sidebar-runtime" ref={runtimeMenuRef}>
-          <button className={runtimeMenuOpen ? "runtime-button open" : "runtime-button"} onClick={() => setRuntimeMenuOpen((open) => !open)} title={t("Runtime location")} aria-haspopup="menu" aria-expanded={runtimeMenuOpen}>
-            <span className="runtime-icon"><Laptop size={14} /></span>
-            <span className="runtime-copy"><strong>{t("Local")}</strong><small>{t("On this device")}</small></span>
-            <ChevronDown size={12} />
-          </button>
+        <div className="sidebar-runtime">
+          <div className="runtime-tabs" role="group" aria-label={t("Runtime location")}>
+            <button className="runtime-tab active" aria-pressed="true">{t("Local")}</button>
+            <button className="runtime-tab coming" aria-pressed="false" disabled title={t("Coming in a later update")}>{t("Cloud")}<span>{t("Soon")}</span></button>
+          </div>
           <button className="sidebar-settings-button" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}><Settings size={15} strokeWidth={1.7} /></button>
-          {runtimeMenuOpen && <div className="runtime-menu" role="menu" aria-label={t("Runtime location")}>
-            <div className="runtime-menu-label">{t("Runtime")}</div>
-            <button className="runtime-option active" role="menuitemradio" aria-checked="true" onClick={() => setRuntimeMenuOpen(false)}>
-              <Laptop size={15} /><span><strong>{t("Local")}</strong><small>{t("Files and models run on this device")}</small></span><Check size={13} />
-            </button>
-            <button className="runtime-option" role="menuitemradio" aria-checked="false" disabled>
-              <Cloud size={15} /><span><strong>{t("Cloud")}</strong><small>{t("Coming in a later update")}</small></span><span className="runtime-soon">{t("Soon")}</span>
-            </button>
-            <div className="runtime-divider" />
-            <div className="runtime-folder">
-              <span>{t("Primary folder")}</span>
-              <strong title={workspace}>{workspace || t("Not connected")}</strong>
-              <button onClick={() => void desktopBridge.revealWorkspace?.(workspace).catch(() => undefined)} title={t("Show primary folder")} aria-label={t("Show primary folder")} disabled={!workspace}><FolderOpen size={13} /></button>
-            </div>
-          </div>}
         </div>
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>

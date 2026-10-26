@@ -77,12 +77,15 @@ test("Extensions exposes one entry with Skills, MCP servers, and Plugins tabs", 
   assert.match(app, /<ExtensionsView[^>]*workspace=\{executionWorkspace\}/);
 });
 
-test("runtime footer shows Local and future Cloud instead of a workspace switcher", () => {
-  assert.match(app, /className=\{runtimeMenuOpen \? "runtime-button open" : "runtime-button"\}/);
-  assert.match(app, /<Laptop size=\{14\} \/><\/span>/);
-  assert.match(app, /<strong>\{t\("Local"\)\}<\/strong><small>\{t\("On this device"\)\}<\/small>/);
-  assert.match(app, /<Cloud size=\{15\} \/><span><strong>\{t\("Cloud"\)\}<\/strong>/);
-  assert.match(app, /t\("Primary folder"\)/);
+test("runtime footer stays a simple Local / Cloud text switch", () => {
+  assert.match(app, /className="sidebar-runtime"/);
+  assert.match(app, /className="runtime-tabs" role="group" aria-label=\{t\("Runtime location"\)\}/);
+  assert.match(app, /className="runtime-tab active" aria-pressed="true">\{t\("Local"\)\}<\/button>/);
+  assert.match(app, /className="runtime-tab coming"[^>]*>\{t\("Cloud"\)\}<span>\{t\("Soon"\)\}<\/span>/);
+  assert.doesNotMatch(app, /runtime-menu|runtime-button|runtime-folder/);
+  assert.doesNotMatch(app, /Primary folder/);
+  assert.match(css, /\.runtime-tabs \{ display: flex;/);
+  assert.match(css, /\.runtime-tab\.active \{ color: var\(--accent\); \}/);
   assert.match(i18n, /"Local": "本地"/);
   assert.match(i18n, /"Cloud": "云端"/);
 });
