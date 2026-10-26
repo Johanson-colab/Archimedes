@@ -1672,18 +1672,26 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
   const highlightsRef = useRef(highlights);
   const searchQueryRef = useRef(searchQuery);
   const onFigureCaptureRef = useRef(onFigureCapture);
-  const [width, setWidth] = useState(880);
+  const onProjectLinkRef = useRef(onProjectLink);
+  const onProjectDetectedRef = useRef(onProjectDetected);
+  const translateRef = useRef(t);
+  const [width, setWidth] = useState(0);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    // Observe the scroll container, not the surface. The surface width changes
-    // when a scrollbar appears, which used to feed a fit-to-width render loop.
-    const observer = new ResizeObserver(([entry]) => {
-      const next = Math.max(320, Math.floor(entry.contentRect.width));
+    // Measure the usable viewport, not the rendered surface. The surface grows
+    // with the PDF and can make fit-to-width feed back into itself. Reserving
+    // the vertical gutter in CSS keeps this value unchanged as the PDF arrives.
+    const updateWidth = () => {
+      const styles = window.getComputedStyle(stage);
+      const horizontalPadding = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
+      const next = Math.max(320, Math.floor(stage.clientWidth - horizontalPadding));
       setWidth((current) => Math.abs(current - next) < 1 ? current : next);
-    });
+    };
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
     observer.observe(stage);
     return () => observer.disconnect();
   }, []);
@@ -1698,6 +1706,9 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     if (textLayer) applyPdfSearchHighlights(textLayer, searchQuery);
   }, [searchQuery]);
   useEffect(() => { onFigureCaptureRef.current = onFigureCapture; }, [onFigureCapture]);
+  useEffect(() => { onProjectLinkRef.current = onProjectLink; }, [onProjectLink]);
+  useEffect(() => { onProjectDetectedRef.current = onProjectDetected; }, [onProjectDetected]);
+  useEffect(() => { translateRef.current = t; }, [t]);
   useEffect(() => {
     if (activeSelection) return;
     clearActivePdfSelection(hostRef.current);
@@ -1710,7 +1721,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     let cancelled = false;
     let destroyLoadingTask: (() => void) | undefined;
     const host = hostRef.current;
-    if (!host || !url) return;
+    if (!host || !url || width <= 0) return;
     const renderHost = host;
     async function render() {
       const hasVisiblePage = Boolean(renderHost.querySelector(".arch-pdf-page"));
@@ -1767,7 +1778,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
             const tightened = tightenPdfVisualRect(canvas, page, rect);
             return { rect: tightened, nearbyText: pdfNearbyText(pdfTextLines(page, textLayer), tightened), kind: "figure" as const, source: "image" as const };
           });
-        installPdfInteractiveRegions(page, canvas, mergePdfInteractiveRegions([...equationRegions, ...captionRegions, ...uncaptionedImages]), pageNumber, (capture) => onFigureCaptureRef.current(capture), { equation: t("Explain this equation"), table: t("Explain this table"), figure: t("Explain this image") });
+        installPdfInteractiveRegions(page, canvas, mergePdfInteractiveRegions([...equationRegions, ...captionRegions, ...uncaptionedImages]), pageNumber, (capture) => onFigureCaptureRef.current(capture), { equation: translateRef.current("Explain this equation"), table: translateRef.current("Explain this table"), figure: translateRef.current("Explain this image") });
         const annotations = await pdfPage.getAnnotations();
         for (const annotation of annotations) {
           const targetUrl = typeof annotation.url === "string" ? annotation.url : "";
@@ -1785,8 +1796,8 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
           link.style.height = `${Math.abs(secondY - firstY)}px`;
           link.title = isProjectLink ? "Open linked project alongside this paper" : "Open link";
           if (isProjectLink) {
-            onProjectDetected(targetUrl);
-            link.addEventListener("click", (event) => { event.preventDefault(); onProjectLink(targetUrl); });
+            onProjectDetectedRef.current(targetUrl);
+            link.addEventListener("click", (event) => { event.preventDefault(); onProjectLinkRef.current(targetUrl); });
           }
           page.append(link);
         }
@@ -1798,7 +1809,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     }
     void render();
     return () => { cancelled = true; destroyLoadingTask?.(); };
-  }, [onProjectDetected, onProjectLink, pageNumber, t, url, width, zoom]);
+  }, [pageNumber, url, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.currentTarget;
     const selection = window.getSelection();
