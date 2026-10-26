@@ -822,6 +822,7 @@ function App() {
   const artifactSavingRef = useRef<Set<string>>(new Set());
   const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
+  const mainWorkspaceRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -900,6 +901,20 @@ function App() {
     const handleResize = () => setWorkbenchWidth((width) => clampWorkbenchWidth(width));
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // The workbench can leave the reading pane around 440px wide, which is well
+  // below the viewport breakpoints used by the knowledge views. Tag the pane
+  // itself so those views can reflow without container containment (which
+  // would trap the fixed-position dialogs they render).
+  useEffect(() => {
+    const element = mainWorkspaceRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      element.toggleAttribute("data-narrow", entry.contentRect.width < 560);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -1809,7 +1824,7 @@ function App() {
           </div>
         </header>
 
-        <div className="main-workspace">
+        <div className="main-workspace" ref={mainWorkspaceRef}>
         <div className={mainSection === "chat" ? "main-view chat-main" : "main-view knowledge-main"}>
           {mainSection === "chat" && (
             <ConversationView
