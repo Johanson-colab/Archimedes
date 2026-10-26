@@ -43,6 +43,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   const [running, setRunning] = useState(false);
   const [expanded, setExpanded] = useState<Set<ReviewAgentId>>(new Set());
   const runIdRef = useRef<string | null>(null);
+  const restoreIdRef = useRef(0);
 
   const paperContext = useMemo<ContextAttachment[]>(() => [{
     id: `paper:${paper.id}`,
@@ -73,6 +74,31 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     });
     return () => { mounted = false; };
   }, [bridge, onInternalReviewThreadsDeleted, workspace]);
+
+  useEffect(() => {
+    let mounted = true;
+    const restoreId = ++restoreIdRef.current;
+    void bridge.getPaperReview(paper.id, workspace).then((saved) => {
+      if (!mounted || restoreId !== restoreIdRef.current || runIdRef.current || !saved) return;
+      const restoredRuns = initialRuns();
+      for (const report of saved.specialists) {
+        if (!isReviewAgentId(report.id)) continue;
+        restoredRuns[report.id] = {
+          status: report.status,
+          response: report.response,
+          error: report.error,
+          repaired: report.repaired,
+        };
+      }
+      setRuns(restoredRuns);
+      setAudit(saved.audit || "The saved evidence audit did not include a written rationale.");
+      setSummary({ status: "complete", response: saved.summary, error: "" });
+      setStage("Saved review restored. Run the review again to replace it.");
+    }).catch(() => {
+      // A missing or older workspace should behave like a paper that has not been reviewed yet.
+    });
+    return () => { mounted = false; };
+  }, [bridge, paper.id, workspace]);
 
   // A failure can arrive after an older renderer has lost the per-specialist
   // event. Never leave those stale cards visually "running" once the overall

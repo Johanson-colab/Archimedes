@@ -72,6 +72,7 @@ interface ResearchDeskBridge {
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string }) => Promise<AgentRunResult>;
     runPaperReview: (input: PaperReviewInput) => Promise<PaperReviewResult>;
+    getPaperReview: (paperId: string, workspace?: string) => Promise<StoredPaperReview | null>;
     cleanupPaperReviewRuns: (workspace?: string) => Promise<{ threadIds: string[] }>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
@@ -834,6 +835,14 @@ interface PaperReviewResult {
   summary: { response: string; run: AgentRunResult } | null;
   error?: string;
   agentRuns: AgentRunResult[];
+}
+
+interface StoredPaperReview {
+  specialists: Array<Pick<PaperReviewAgentResult, "id" | "title" | "status" | "response" | "error" | "repaired">>;
+  audit: string;
+  summary: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface PaperReviewEvent {

@@ -182,6 +182,15 @@ function schema(db) {
       updated_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS paper_reviews (
+      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      specialists_json TEXT NOT NULL,
+      audit TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
       cache_key TEXT PRIMARY KEY NOT NULL,
       response_json TEXT NOT NULL,
@@ -193,6 +202,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_paper_reader_pages_paper ON paper_reader_pages(paper_id, page_number);
     CREATE INDEX IF NOT EXISTS idx_paper_highlights_paper ON paper_highlights(paper_id, page_number, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_paper_chat_threads_thread ON paper_chat_threads(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_paper_reviews_updated ON paper_reviews(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
@@ -464,6 +474,68 @@ function getPaperReader(paperId) {
   const pages = db.prepare("SELECT page_number, text FROM paper_reader_pages WHERE paper_id = ? ORDER BY page_number ASC").all(paperId);
   const highlights = db.prepare("SELECT * FROM paper_highlights WHERE paper_id = ? ORDER BY page_number ASC, created_at DESC").all(paperId);
   return { asset: asset ? { ...asset, truncated: Boolean(asset.truncated) } : null, pages, highlights };
+}
+
+const PAPER_REVIEWER_IDS = new Set(["related", "method", "experiments", "limitations"]);
+
+function paperReviewText(value, limit = OUTPUT_LIMIT) {
+  return String(value || "").slice(0, limit);
+}
+
+function normalizePaperReview(review) {
+  if (!review || typeof review !== "object") throw new Error("A completed paper review is required.");
+  const summary = paperReviewText(review.summary?.response);
+  if (!summary.trim()) throw new Error("A completed research memorandum is required to save a paper review.");
+  const specialists = Array.isArray(review.specialists) ? review.specialists
+    .filter((report) => report && PAPER_REVIEWER_IDS.has(report.id))
+    .map((report) => ({
+      id: report.id,
+      title: paperReviewText(report.title, 500),
+      status: report.status === "complete" ? "complete" : "error",
+      response: paperReviewText(report.response),
+      error: paperReviewText(report.error, 10_000),
+      repaired: Boolean(report.repaired),
+    })) : [];
+  if (!specialists.length) throw new Error("At least one specialist reading is required to save a paper review.");
+  return {
+    specialists,
+    audit: paperReviewText(review.supervisor?.reason, 20_000),
+    summary,
+  };
+}
+
+function getPaperReview(paperId) {
+  const db = requireDatabase();
+  const row = db.prepare("SELECT specialists_json, audit, summary, created_at, updated_at FROM paper_reviews WHERE paper_id = ?").get(paperId);
+  if (!row) return null;
+  try {
+    const specialists = JSON.parse(row.specialists_json);
+    if (!Array.isArray(specialists)) throw new Error("Invalid specialist review data.");
+    return {
+      specialists,
+      audit: String(row.audit || ""),
+      summary: String(row.summary || ""),
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  } catch {
+    // A malformed legacy row should not prevent opening the paper reader.
+    return null;
+  }
+}
+
+function savePaperReview(paperId, review) {
+  const db = requireDatabase();
+  if (!db.prepare("SELECT 1 FROM papers WHERE id = ?").get(paperId)) throw new Error("Paper not found.");
+  const normalized = normalizePaperReview(review);
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO paper_reviews (paper_id, specialists_json, audit, summary, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(paper_id) DO UPDATE SET specialists_json = excluded.specialists_json, audit = excluded.audit,
+      summary = excluded.summary, updated_at = excluded.updated_at
+  `).run(paperId, JSON.stringify(normalized.specialists), normalized.audit, normalized.summary, now, now);
+  return getPaperReview(paperId);
 }
 
 function replacePaperReaderAsset(paperId, asset) {
@@ -1186,6 +1258,7 @@ module.exports = {
   getPaper,
   getPaperChatThread,
   getPaperReader,
+  getPaperReview,
   getAction,
   getResearchThread,
   getResearchThreadIdForTask,
@@ -1204,6 +1277,7 @@ module.exports = {
   resolveAction,
   replacePaperReaderAsset,
   saveTask,
+  savePaperReview,
   setPaperReaderFailed,
   setPaperChatThread,
   setDailyFeedCache,

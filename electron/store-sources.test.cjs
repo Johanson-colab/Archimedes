@@ -119,6 +119,31 @@ test("restores the research thread linked to a paper", () => {
   }
 });
 
+test("persists a completed paper review when reopening the workspace", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-"));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-close-"));
+  try {
+    store.openWorkspace(workspace);
+    const library = store.createLibrary({ name: "Review shelf" });
+    const paper = store.addPaper(library.id, { title: "Saved review", authors: [], source: "manual" });
+    store.savePaperReview(paper.id, {
+      specialists: [{ id: "method", title: "Method", status: "complete", response: "Page 2 explains the method.", error: "", repaired: true }],
+      supervisor: { reason: "The evidence is ready for synthesis." },
+      summary: { response: "## Memorandum\n\nThe method is saved." },
+    });
+    store.openWorkspace(other);
+    store.openWorkspace(workspace);
+    const restored = store.getPaperReview(paper.id);
+    assert.equal(restored.summary, "## Memorandum\n\nThe method is saved.");
+    assert.equal(restored.audit, "The evidence is ready for synthesis.");
+    assert.deepEqual(restored.specialists, [{ id: "method", title: "Method", status: "complete", response: "Page 2 explains the method.", error: "", repaired: true }]);
+  } finally {
+    store.openWorkspace(other);
+    fs.rmSync(workspace, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  }
+});
+
 test("permanently deletes an archived research chat and its turns", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-thread-delete-"));
   try {

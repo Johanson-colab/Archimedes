@@ -6,6 +6,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const review = fs.readFileSync(path.join(root, "src", "PaperReviewWorkbench.tsx"), "utf8");
 const orchestrator = fs.readFileSync(path.join(root, "electron", "paper-review-orchestrator.cjs"), "utf8");
+const main = fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8");
 
 test("paper review reports individual specialist failures instead of leaving spinners active", () => {
   assert.match(review, /event\.stage === "specialist_failed"/);
@@ -28,4 +29,11 @@ test("all-specialist failure preserves the original errors for the workbench", (
   assert.match(orchestrator, /error,/);
   assert.match(review, /if \(result\.error \|\| !result\.summary\) \{/);
   assert.match(review, /error: report\.error/);
+});
+
+test("completed reviews are saved and restored when the review tab remounts", () => {
+  assert.match(main, /store\.savePaperReview\(paper\.id, result\)/);
+  assert.match(main, /ipcMain\.handle\("paper-review:get"/);
+  assert.match(review, /bridge\.getPaperReview\(paper\.id, workspace\)/);
+  assert.match(review, /Saved review restored/);
 });

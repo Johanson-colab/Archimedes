@@ -1036,7 +1036,7 @@ app.whenReady().then(() => {
     const emit = (payload) => {
       if (!event.sender.isDestroyed()) event.sender.send("paper-review:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) });
     };
-    return runPaperReview({
+    const result = await runPaperReview({
       paper,
       pageCount: Math.max(0, Math.min(5_000, Number(input.pageCount) || 0)),
       workspace,
@@ -1047,6 +1047,16 @@ app.whenReady().then(() => {
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit,
     });
+    if (!result.error && result.summary?.response) store.savePaperReview(paper.id, result);
+    return result;
+  });
+
+  ipcMain.handle("paper-review:get", (event, { paperId, workspace } = {}) => {
+    if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to restore an evidence review.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
+    store.openWorkspace(dataWorkspace);
+    return store.getPaperReview(paperId);
   });
 
   ipcMain.handle("paper-review:cleanup-internal-runs", (event, { workspace } = {}) => {
