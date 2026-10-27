@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FileStack, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FileStack, FolderOpen, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 
 type PresentationPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
 type LoadState = "loading" | "ready" | "error";
@@ -13,7 +13,7 @@ const SECTION_LABELS: Record<PaperPresentationSection, string> = {
   limitations: "Limitations",
 };
 
-const KIMI_SLIDES_PRESENTATION_VERSION = 1;
+const KIMI_SLIDES_PRESENTATION_VERSION = 2;
 const KIMI_SLIDES_MIN_CONTENT_SLIDES = 12;
 
 const FOCUS_RECTS: Record<SourceFocus, { x: number; y: number; width: number; height: number }> = {
@@ -206,6 +206,59 @@ function PresentationSourceVisual({ url, source, label, compact = false }: {
   </figure>;
 }
 
+function PptdRenderedPage({ url, pageNumber }: { url: string; pageNumber: number }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [state, setState] = useState<LoadState>("loading");
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const observer = new ResizeObserver(([entry]) => setSize({ width: Math.round(entry.contentRect.width), height: Math.round(entry.contentRect.height) }));
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!url || !size.width || !size.height) return;
+    let cancelled = false;
+    let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
+    setState("loading");
+    void (async () => {
+      try {
+        const [{ pdfjs }, bytes] = await Promise.all([import("./pdf-runtime"), loadPdfBytes(url)]);
+        if (cancelled) return;
+        const document = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+        const page = await document.getPage(Math.min(Math.max(1, pageNumber), document.numPages));
+        const base = page.getViewport({ scale: 1 });
+        const density = Math.min(2, window.devicePixelRatio || 1);
+        const scale = Math.max(.2, Math.min(size.width / base.width, size.height / base.height) * density);
+        const viewport = page.getViewport({ scale });
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext("2d");
+        if (!canvas || !context || cancelled) return;
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        renderTask = page.render({ canvas, canvasContext: context, viewport });
+        await renderTask.promise;
+        if (!cancelled) setState("ready");
+        page.cleanup();
+        await document.destroy();
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    })();
+    return () => { cancelled = true; renderTask?.cancel(); };
+  }, [url, pageNumber, size.width, size.height]);
+
+  return <div className="paper-presentation-pptd-page" ref={hostRef}>
+    <canvas ref={canvasRef} aria-label={`Rendered PPTD slide ${pageNumber}`} />
+    {state === "loading" && <span className="paper-presentation-page-state"><LoaderCircle className="spin" size={17} />Rendering slide</span>}
+    {state === "error" && <span className="paper-presentation-page-state"><AlertTriangle size={17} />Rendered slide unavailable</span>}
+  </div>;
+}
+
 function SlideHeader({ index, slide, sourceNote = "" }: { index: number; slide: PaperPresentationSlide; sourceNote?: string }) {
   return <header className="paper-presentation-slide-header">
     <p><span>{String(index).padStart(2, "0")} · {SECTION_LABELS[slide.section]}</span>{sourceNote && <em>{sourceNote}</em>}</p>
@@ -325,8 +378,14 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   const [restoring, setRestoring] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState("");
   const [activeSlide, setActiveSlide] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
+  const runIdRef = useRef("");
+
+  useEffect(() => bridge.onPaperPresentationEvent((event) => {
+    if (event.paperId === paper.id && event.clientRunId === runIdRef.current) setProgress(event.detail);
+  }), [bridge, paper.id]);
 
   const paperContext = useMemo<ContextAttachment[]>(() => [{
     id: `paper:${paper.id}`,
@@ -357,7 +416,8 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   const legacyPresentation = Boolean(presentation && (
     presentation.skill?.id !== "kimi-slides" ||
     Number(presentation.skill?.version || 1) < KIMI_SLIDES_PRESENTATION_VERSION ||
-    presentation.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES
+    presentation.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES ||
+    presentation.artifact?.kind !== "pptd" || presentation.artifact.missing || !presentation.artifact.preview_url
   ));
   const active = slides[activeSlide];
 
@@ -383,10 +443,13 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     if (!reviewReady || generating || !workspace) return;
     setGenerating(true);
     setError("");
+    setProgress("Preparing the PPTD run…");
+    runIdRef.current = crypto.randomUUID();
     try {
-      const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext });
-      if (saved.skill?.id !== "kimi-slides" || Number(saved.skill?.version || 1) < KIMI_SLIDES_PRESENTATION_VERSION || saved.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES) {
-        throw new Error("The presentation backend returned an outdated or incomplete deck instead of a Kimi Slides academic presentation.");
+      const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext, clientRunId: runIdRef.current });
+      if (saved.skill?.id !== "kimi-slides" || Number(saved.skill?.version || 1) < KIMI_SLIDES_PRESENTATION_VERSION ||
+          saved.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES || saved.artifact?.kind !== "pptd" || !saved.artifact.preview_url) {
+        throw new Error("The presentation backend did not return a validated, rendered PPTD deck.");
       }
       setPresentation(saved);
       setActiveSlide(0);
@@ -394,49 +457,60 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
       setError(generationError instanceof Error ? generationError.message : String(generationError));
     } finally {
       setGenerating(false);
+      setProgress("");
+      runIdRef.current = "";
     }
+  }
+
+  async function reveal() {
+    try { await bridge.revealPaperPresentation(paper.id, workspace); }
+    catch (revealError) { setError(revealError instanceof Error ? revealError.message : String(revealError)); }
   }
 
   if (restoring) return <section className="paper-presentation-empty"><LoaderCircle className="spin" size={20} /><h2>Restoring presentation</h2><p>The saved deck is kept separately from the evidence review.</p></section>;
 
   if (!presentation) return <section className="paper-presentation-empty">
     <div className="paper-presentation-empty-mark"><FileStack size={28} strokeWidth={1.45} /></div>
-    <p className="paper-review-kicker">Built-in Kimi Slides adapter</p>
-    <h2>Turn the paper into a structured academic lab-meeting deck.</h2>
-    <p>Kimi Slides plans the whole narrative, re-reads the paper, and composes dense evidence pages. The saved text review stays untouched.</p>
+    <p className="paper-review-kicker">Kimi PPTD presentation</p>
+    <h2>Build a source-grounded lab-meeting deck.</h2>
+    <p>Each slide is authored as PPTD, checked with Kimi's converter, and rendered for presentation. The saved text review stays untouched.</p>
+    {generating && <p className="paper-presentation-progress" role="status">{progress}</p>}
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
       {generating ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-      {generating ? "Planning and composing the deck" : reviewReady ? "Generate with Kimi Slides" : "Finish the review first"}
+      {generating ? "Creating PPTD slides" : reviewReady ? "Generate PPTD presentation" : "Finish the review first"}
     </button>
   </section>;
 
   if (legacyPresentation) return <section className="paper-presentation-empty paper-presentation-legacy">
     <div className="paper-presentation-empty-mark"><RefreshCw size={28} strokeWidth={1.45} /></div>
     <p className="paper-review-kicker">Legacy presentation detected</p>
-    <h2>This saved deck uses the previous presentation generator.</h2>
-    <p>It remains stored safely. Upgrade it to create a Kimi Slides academic deck with an outline, denser evidence pages, and the original paper figures.</p>
+    <h2>This saved deck was not rendered from PPTD.</h2>
+    <p>It remains stored safely. Generate a new PPTD deck; the text review will stay untouched.</p>
+    {generating && <p className="paper-presentation-progress" role="status">{progress}</p>}
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
       {generating ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}
-      {generating ? "Planning and rebuilding" : "Upgrade with Kimi Slides"}
+      {generating ? "Creating PPTD slides" : "Generate PPTD presentation"}
     </button>
   </section>;
 
   return <section className="paper-presentation-workbench">
     <header className="paper-presentation-toolbar">
-      <div><span><Check size={14} />Saved independently · {presentation.source_sufficiency || "review-grounded"}</span>{stale && <em>The text review changed after this deck was generated.</em>}</div>
+      <div><span><Check size={14} />Validated PPTD · {presentation.source_sufficiency || "review-grounded"}</span>{stale && <em>The text review changed after this deck was generated.</em>}</div>
       <div>
+        <button onClick={() => void reveal()}><FolderOpen size={15} />Open PPTX</button>
         <button onClick={() => void generate()} disabled={!reviewReady || generating}>{generating ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}{generating ? "Regenerating" : "Regenerate"}</button>
         <button onClick={() => void stageRef.current?.requestFullscreen()}><Expand size={15} />Present</button>
       </div>
     </header>
 
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
+    {generating && <p className="paper-presentation-progress" role="status">{progress}</p>}
 
     <div className="paper-presentation-stage" ref={stageRef}>
       <div className="paper-presentation-frame">
-        {activeSlide === 0 ? <article className="paper-presentation-slide cover">
+        {presentation.artifact?.preview_url ? <PptdRenderedPage url={presentation.artifact.preview_url} pageNumber={activeSlide + 1} /> : activeSlide === 0 ? <article className="paper-presentation-slide cover">
           <div className="paper-presentation-cover-rail"><b>组会</b><span>论文分享</span><small>Kimi Slides</small></div>
           <div className="paper-presentation-cover-copy">
             <p>Kimi Slides · Academic research</p>

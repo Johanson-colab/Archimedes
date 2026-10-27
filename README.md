@@ -54,6 +54,12 @@ The long-term goal is an integrated research environment in the spirit of an all
 
 The table describes implemented product behavior, not a promise that every external source will always be reachable. Conference sites, project pages, provider APIs, and public archives can impose access restrictions or publish incomplete metadata; Archimedes surfaces those limitations instead of silently inventing results.
 
+### Paper presentations (macOS)
+
+After saving a text review and caching the original PDF, the **Presentation** tab can create a separate 15-page lab-meeting deck. Archimedes plans the evidence arc, authors `.pptd`/`.page` files, checks and converts them with the PPTD tool packaged in the locally installed Kimi Desktop app, then renders the resulting `.pptx` to PDF with LibreOffice for the in-app viewer. The editable PPTX, PPTD source, and preview PDF are kept under the selected workspace's `.archimedes/presentations/`; **Open PPTX** reveals the saved file. Regeneration does not change the text review or replace a saved deck unless the complete new deck passes validation.
+
+This requires Kimi Desktop, LibreOffice, and a configured model provider. On first use, Python dependencies for Kimi's local converter are installed in Archimedes's application data directory. This invokes Kimi's PPTD checker/converter, not Kimi Desktop's private slide-generation model or its editor.
+
 ## Product Principles
 
 - **Evidence before fluency.** A polished answer is not treated as evidence. The agent keeps discovery leads separate from pages, excerpts, PDF pages, files, and repository contents it actually read.

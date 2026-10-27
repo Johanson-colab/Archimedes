@@ -8,7 +8,8 @@ const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { runPaperReview } = require("./paper-review-orchestrator.cjs");
-const { runKimiSlidesPresentation } = require("./kimi-slides-skill.cjs");
+const { runKimiSlidesPlan } = require("./kimi-slides-skill.cjs");
+const { ensureTool, generateKimiPptd } = require("./kimi-pptd.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
@@ -1087,7 +1088,19 @@ app.whenReady().then(() => {
       url: String(input.paper.url || "").slice(0, 4_000),
       pdf_url: String(input.paper.pdf_url || "").slice(0, 4_000),
     };
-    const result = await runKimiSlidesPresentation({
+    const reader = store.getPaperReader(paper.id);
+    if (reader.asset?.status !== "ready" || !reader.asset.relative_path) {
+      throw new Error("Prepare or attach the original paper PDF before generating a PPTD presentation.");
+    }
+    const sourcePdfPath = workspaceFiles.workspacePath(dataWorkspace, reader.asset.relative_path);
+    const clientRunId = typeof input.clientRunId === "string" ? input.clientRunId.slice(0, 100) : "";
+    const emitPresentation = (detail) => {
+      if (!event.sender.isDestroyed()) event.sender.send("paper-presentation:event", { paperId: paper.id, clientRunId, detail });
+    };
+    emitPresentation("Checking Kimi PPTD and rendering tools…");
+    await ensureTool(app.getPath("userData"), emitPresentation);
+    emitPresentation("Reading the paper and planning the presentation…");
+    const result = await runKimiSlidesPlan({
       paper,
       review,
       pageCount: Math.max(0, Math.min(5_000, Number(input.pageCount) || 0)),
@@ -1098,7 +1111,12 @@ app.whenReady().then(() => {
       contextLength,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
     });
-    return store.savePaperPresentation(paper.id, result.presentation, review.updated_at);
+    const artifact = await generateKimiPptd({ paper, plan: result.presentation, workspace: dataWorkspace,
+      sourcePdfPath, runtimeRoot: app.getPath("userData"), modelConfig: config, emit: emitPresentation });
+    const saved = store.savePaperPresentation(paper.id, { ...result.presentation, artifact }, review.updated_at);
+    const token = createPreviewToken(event.sender.id, dataWorkspace);
+    return { ...saved, artifact: { ...saved.artifact,
+      preview_url: `archimedes-file://${token}/${saved.artifact.pdf_path.split("/").map(encodeURIComponent).join("/")}?v=${Date.now()}` } };
   });
 
   ipcMain.handle("paper-presentation:get", (event, { paperId, workspace } = {}) => {
@@ -1106,7 +1124,28 @@ app.whenReady().then(() => {
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
-    return store.getPaperPresentation(paperId);
+    const saved = store.getPaperPresentation(paperId);
+    if (!saved?.artifact || saved.artifact.kind !== "pptd") return saved;
+    try {
+      workspaceFiles.workspacePath(dataWorkspace, saved.artifact.pdf_path);
+      const token = createPreviewToken(event.sender.id, dataWorkspace);
+      return { ...saved, artifact: { ...saved.artifact,
+        preview_url: `archimedes-file://${token}/${saved.artifact.pdf_path.split("/").map(encodeURIComponent).join("/")}?v=${Date.now()}` } };
+    } catch {
+      return { ...saved, artifact: { ...saved.artifact, missing: true } };
+    }
+  });
+
+  ipcMain.handle("paper-presentation:reveal", (event, { paperId, workspace } = {}) => {
+    if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to locate a presentation.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
+    store.openWorkspace(dataWorkspace);
+    const artifact = store.getPaperPresentation(paperId)?.artifact;
+    if (artifact?.kind !== "pptd") throw new Error("This paper has no saved PPTD presentation.");
+    const pptxPath = workspaceFiles.workspacePath(dataWorkspace, artifact.pptx_path);
+    if (!fs.existsSync(pptxPath)) throw new Error("The saved presentation file is missing.");
+    shell.showItemInFolder(pptxPath);
   });
 
   ipcMain.handle("paper-review:cleanup-internal-runs", (event, { workspace } = {}) => {

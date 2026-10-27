@@ -638,6 +638,29 @@ function normalizePaperPresentation(presentation) {
   for (const section of PAPER_PRESENTATION_SECTIONS) {
     if (!normalizedSlides.some((slide) => slide.section === section)) throw new Error(`The paper presentation is missing its ${section} section.`);
   }
+  let artifact;
+  if (presentation.artifact?.kind === "pptd") {
+    const safePath = (value, extension) => {
+      const text = String(value || "").replaceAll("\\", "/");
+      if (!/^\.archimedes\/presentations\/[a-z0-9-]+\/[a-z0-9-]+\/[a-z0-9.-]+$/i.test(text) ||
+          !text.endsWith(extension) || text.split("/").includes("..")) {
+        throw new Error("The presentation artifact path is invalid.");
+      }
+      return text;
+    };
+    const pageCount = Number(presentation.artifact.page_count);
+    if (pageCount !== normalizedSlides.length + 1 || presentation.artifact.validation !== "passed") {
+      throw new Error("The PPTD artifact is not a validated, complete presentation.");
+    }
+    artifact = {
+      kind: "pptd",
+      pptd_path: safePath(presentation.artifact.pptd_path, ".pptd"),
+      pptx_path: safePath(presentation.artifact.pptx_path, ".pptx"),
+      pdf_path: safePath(presentation.artifact.pdf_path, ".pdf"),
+      page_count: pageCount,
+      validation: "passed",
+    };
+  }
   return {
     skill: {
       id: paperReviewText(presentation.skill?.id || "paper-presentation", 200),
@@ -651,6 +674,7 @@ function normalizePaperPresentation(presentation) {
       ? presentation.source_sufficiency
       : "review-grounded",
     slides: normalizedSlides,
+    ...(artifact ? { artifact } : {}),
   };
 }
 

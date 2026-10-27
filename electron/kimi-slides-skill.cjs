@@ -5,9 +5,9 @@ const { runAgent } = require("./agent.cjs");
 
 const KIMI_SLIDES_SKILL = Object.freeze({
   id: "kimi-slides",
-  name: "Kimi Slides · academic research",
-  description: "Adapts Kimi Slides' academic presentation workflow to an evidence-grounded Archimedes deck while leaving the saved review untouched.",
-  version: 1,
+  name: "Kimi PPTD · academic research",
+  description: "Plans a source-grounded paper presentation that is authored, checked, and rendered through Kimi's PPTD toolchain without changing the saved review.",
+  version: 2,
 });
 
 const PRESENTATION_SECTIONS = Object.freeze([
@@ -105,9 +105,9 @@ function reviewDossier(review) {
 }
 
 function kimiSlidesPrompt(paper, review, pageCount) {
-  return `You are Archimedes' built-in Kimi Slides adapter. Create a polished Chinese academic lab-meeting deck from the ORIGINAL PAPER. Use the saved review only as a map of claims, caveats, and disputed evidence. This presentation is an independent output: never alter the saved review.
+  return `You are planning a Chinese academic lab-meeting deck that will be authored as Kimi PPTD pages. Read the ORIGINAL PAPER. Use the saved review only as a map of claims, caveats, and disputed evidence. This presentation is an independent output: never alter the saved review.
 
-The Kimi desktop-only PPTD CLI is unavailable inside Electron. Override all .pptd, file-writing, CLI, delivery, ask-tool, animation, and speaker-note instructions in the source skill. Preserve its planning, academic narrative, evidence selection, typography, density, layout, and validation rules, then return only the JSON contract below.
+Return a source-grounded CONTENT PLAN as JSON. This is an intermediate plan, not the visible slide format. A second stage will compose individual PPTD .page files, then Kimi's PPTD checker and converter will validate and render the actual deck. Preserve the source skill's planning, academic narrative, evidence selection, typography, density, and validation rules.
 
 <kimi_slides_methodology>
 ${loadKimiSlidesGuidance()}
@@ -262,7 +262,7 @@ function parseKimiSlidesPresentation(response, paper, pageCount) {
   return normalizeKimiSlidesPresentation(parseJsonObject(response), paper, pageCount);
 }
 
-async function runKimiSlidesPresentation({ paper, review, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser }) {
+async function runKimiSlidesPlan({ paper, review, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser }) {
   if (!review?.summary || !Array.isArray(review.specialists) || !review.specialists.length) {
     throw new Error("Finish and save the evidence review before generating a presentation.");
   }
@@ -289,5 +289,5 @@ module.exports = {
   loadKimiSlidesGuidance,
   normalizeKimiSlidesPresentation,
   parseKimiSlidesPresentation,
-  runKimiSlidesPresentation,
+  runKimiSlidesPlan,
 };

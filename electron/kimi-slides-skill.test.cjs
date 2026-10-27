@@ -18,10 +18,10 @@ const review = {
   ],
 };
 
-test("Kimi Slides adapter loads academic guidance and overrides the desktop-only file contract", () => {
+test("Kimi Slides planner prepares source-grounded content for PPTD authoring", () => {
   const prompt = kimiSlidesPrompt(paper, review, 24);
-  assert.match(prompt, /built-in Kimi Slides adapter/);
-  assert.match(prompt, /PPTD CLI is unavailable inside Electron/);
+  assert.match(prompt, /Kimi PPTD pages/);
+  assert.match(prompt, /intermediate plan, not the visible slide format/);
   assert.match(prompt, /exactly 14 CONTENT slides/);
   assert.match(prompt, /Reading the titles alone must tell the full paper story/);
   assert.match(prompt, /inspect_pdf_page on every page/);
@@ -49,7 +49,7 @@ test("Kimi Slides adapter normalizes a 15-page academic deck with an outline", (
     })),
   }, paper, 24);
   assert.equal(presentation.skill.id, "kimi-slides");
-  assert.equal(presentation.skill.version, 1);
+  assert.equal(presentation.skill.version, 2);
   assert.equal(presentation.slides.length, 14);
   assert.equal(presentation.slides[0].layout, "outline");
   assert.equal(presentation.slides[5].layout, "editorial");

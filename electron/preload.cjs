@@ -75,6 +75,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   getPaperReview: (paperId, workspace) => ipcRenderer.invoke("paper-review:get", { paperId, workspace }),
   runPaperPresentation: (input) => ipcRenderer.invoke("paper-presentation:run", input),
   getPaperPresentation: (paperId, workspace) => ipcRenderer.invoke("paper-presentation:get", { paperId, workspace }),
+  revealPaperPresentation: (paperId, workspace) => ipcRenderer.invoke("paper-presentation:reveal", { paperId, workspace }),
   cleanupPaperReviewRuns: (workspace) => ipcRenderer.invoke("paper-review:cleanup-internal-runs", { workspace }),
   interruptAgent: (threadId) => ipcRenderer.invoke("agent:interrupt", threadId),
   approveAgentAction: (actionId) => ipcRenderer.invoke("agent:approve-action", actionId),
@@ -125,6 +126,11 @@ contextBridge.exposeInMainWorld("researchDesk", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("paper-review:event", listener);
     return () => ipcRenderer.removeListener("paper-review:event", listener);
+  },
+  onPaperPresentationEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("paper-presentation:event", listener);
+    return () => ipcRenderer.removeListener("paper-presentation:event", listener);
   },
   onMenuNewChat: (callback) => {
     const listener = () => callback();
