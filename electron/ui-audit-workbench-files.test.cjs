@@ -28,6 +28,11 @@ test("view actions are plain text and code defaults are larger", () => {
 
 test("file icons have tones and a monochrome setting", () => {
   assert.match(app, /function workspaceFileTone/);
+  assert.match(app, /<FileJson size=\{14\} \/>/);
+  assert.match(app, /<FileTerminal size=\{14\} \/>/);
+  assert.match(app, /<FileImage size=\{14\} \/>/);
+  assert.match(app, /<FileCog size=\{14\} \/>/);
+  assert.match(app, /workspaceFileIcon\(\{ type: "file", kind: openFile\.kind, path: openFile\.path \}\)/);
   assert.match(app, /className=\{`tree-file-icon tone-\$\{workspaceFileTone\(entry\)\}`\}/);
   assert.match(css, /\.tree-file-icon\.tone-folder \{/);
   assert.match(css, /html\[data-file-icons="monochrome"\] \.tree-file-icon/);
