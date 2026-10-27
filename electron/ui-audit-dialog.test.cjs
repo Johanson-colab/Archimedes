@@ -36,3 +36,11 @@ test("welcome composer and resizers have explicit focus styling", () => {
   assert.match(css, /\.sidebar-resizer:focus-visible \{ outline: 2px solid/);
   assert.match(css, /\.paper-pane-resizer:focus-visible \{ outline: 2px solid/);
 });
+
+test("paper project dialog is dismissible before a project exists", () => {
+  const paper = read("src/PaperWritingView.tsx");
+  assert.match(paper, /useDialogFocus<HTMLElement>\(chooserOpen, \(\) => setChooserOpen\(false\)\)/);
+  assert.match(paper, /event\.target === event\.currentTarget\) setChooserOpen\(false\)/);
+  assert.doesNotMatch(paper, /activeProject && <button[^>]*aria-label="Close project chooser"/);
+  assert.match(paper, /<button className="reader-icon-button" onClick=\{\(\) => setChooserOpen\(false\)\} aria-label="Close project chooser">/);
+});
