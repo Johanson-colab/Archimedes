@@ -4980,3 +4980,69 @@ html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
 .paper-project-dialog > header .reader-icon-button:hover { color: #f4f4f4; background: #2e2e2e; }
 .theme-paper .paper-project-dialog > header .reader-icon-button { color: #6f6a63; }
 .theme-paper .paper-project-dialog > header .reader-icon-button:hover { color: #252422; background: #efede9; }
+/* Interactive and selection accents follow the theme accent.
+   Success / state greens (Saved, compile success, reading progress status) stay semantic. */
+.library-card-meta b,
+.library-toolbar > span,
+.paper-inspector-kicker,
+.paper-reader-launch,
+.paper-reader-launch strong,
+.paper-reader-launch small,
+.paper-reader-launch > svg:last-child,
+.daily-paper-title a,
+.reader-document-kicker,
+.reader-section-number,
+.reader-paper-glyph,
+.reader-brief-icon,
+.reader-notebook-header > svg,
+.skill-preview-header > div > span,
+.skill-added,
+.skills-total strong,
+.paper-project-tab,
+.reader-icon-button:hover,
+.reader-tool-button:hover,
+.paper-browser-toggle:hover,
+.paper-browser-actions button:hover,
+.reader-question-grid button:hover,
+.reader-progress-top strong,
+.reader-progress-card button,
+.reader-progress-card button:hover,
+.codex-nav-item.active > svg,
+.project-tree-row.active .project-select > svg,
+.quiet-icon-button.active,
+.reader-section-nav button.active,
+.reader-outline button.active,
+.skill-index-row.active,
+.skill-index-row.active .skill-index-icon,
+.workspace-tree-row.active,
+.paper-tree-row.active,
+.daily-search-kind button.active,
+.daily-mode-tabs button.active,
+.daily-range-control button.active { color: var(--accent) !important; }
+
+.paper-reader-launch,
+.reader-paper-glyph,
+.reader-brief-icon,
+.reader-question-grid button:hover,
+.workspace-tree-row.active,
+.paper-tree-row.active,
+.skill-index-row.active,
+.reader-section-nav button.active,
+.reader-outline button.active,
+.conversation-sources a {
+  background: color-mix(in srgb, var(--accent) 12%, var(--night-panel)) !important;
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--night-line)) !important;
+}
+.workspace-tree-row.active .tree-file-icon,
+.paper-tree-row.active > svg,
+.reader-paper-glyph > svg { color: var(--accent) !important; }
+.conversation-sources a { color: var(--accent) !important; }
+.reader-selection-action { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-ink) !important; }
+.daily-topic-filter button.active { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-ink) !important; }
+.artifact-tab.active { box-shadow: inset 0 2px var(--accent) !important; }
+.terminal-tab.active { box-shadow: inset 0 -2px var(--accent) !important; }
+.reader-progress-track span { background: var(--accent) !important; }
+.quiet-icon-button.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent) !important;
+}
