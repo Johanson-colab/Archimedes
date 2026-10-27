@@ -146,3 +146,10 @@ test("Geist Sans and Geist Mono are bundled locally", () => {
   assert.match(library, /fontFamily: "var\(--font-mono\)"/);
   assert.match(editor, /fontFamily: "var\(--font-mono\)"/);
 });
+
+test("paper writing file list matches the Files rail type scale", () => {
+  assert.match(typography, /\.paper-tree-row \{ height: 30px; grid-template-columns: 14px 17px minmax\(0, 1fr\); \}/);
+  assert.match(typography, /\.paper-tree-row strong \{ font-size: 12px; font-weight: 400; \}/);
+  assert.match(typography, /\.paper-main-document select \{ font-size: 11px; \}/);
+  assert.match(typography, /\.paper-save-state,[\s\S]*?\.paper-compile-state \{ font-size: 10px; \}/);
+});
