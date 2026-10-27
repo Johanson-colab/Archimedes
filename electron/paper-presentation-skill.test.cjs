@@ -21,6 +21,7 @@ test("presentation skill reuses Paper2PPT while preserving the saved review", ()
   assert.match(prompt, /Background -> Related work -> Method -> Experiments -> Limitations/);
   assert.match(prompt, /11-15 CONTENT slides/);
   assert.match(prompt, /default 12-16 slides total/);
+  assert.match(prompt, /MUST include a visually inspected source\.crop tightly bounded/);
   assert.match(prompt, /Closest prior work appears on PDF p\. 3/);
   assert.match(loadPaper2PptGuidance(), /# Paper2PPT/);
   assert.match(loadPaper2PptGuidance(), /claim-to-source/i);
@@ -52,6 +53,27 @@ test("presentation skill normalizes an adaptive evidence-led narrative", () => {
   assert.equal(presentation.source_sufficiency, "full-paper");
   assert.equal(presentation.skill.id, "paper-presentation");
   assert.equal(presentation.skill.version, 3);
+});
+
+test("presentation source labels do not repeat figure names or generic panels", () => {
+  const sections = ["background", "background", "related_work", "related_work", "method", "method", "method", "experiments", "experiments", "experiments", "limitations"];
+  const presentation = normalizePaperPresentation({
+    title: "A careful paper",
+    slides: sections.map((section, index) => ({
+      section,
+      title: section,
+      source: {
+        page: index + 1,
+        label: index === 9 ? "PDF p. 23 · Fig. 8; p. 24 · Fig. 9" : `PDF p. ${index + 1} · Fig. ${index + 1} · §${index + 1} Source`,
+        kind: "figure",
+        figure: `Fig. ${index + 1}`,
+        panel: index === 9 ? "全图" : "a",
+      },
+    })),
+  }, paper, 30);
+  assert.equal(presentation.slides[9].source.label, "PDF pp. 23–24");
+  assert.equal(presentation.slides[9].source.panel, "");
+  assert.equal(presentation.slides[0].source.label, "PDF p. 1 · §1 Source");
 });
 
 test("presentation skill refuses incomplete or out-of-order evidence arcs", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FileStack, LoaderCircle, NotebookText, RefreshCw, Sparkles } from "lucide-react";
 
 type PresentationPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
@@ -43,9 +43,72 @@ function legacySource(slide: PaperPresentationSlide) {
   return slide.source || { page, label: `PDF p. ${page}`, kind: "page" as const, figure: "", panel: "", focus: "full" as const };
 }
 
+type PresentationSource = NonNullable<PaperPresentationSlide["source"]>;
+
+/**
+ * The model is asked for a page/section label, but it often repeats the
+ * figure/table and writes “全图” or a multi-page citation. Build the visible
+ * caption from structured fields so the same source is not printed twice.
+ */
+function sourceReference(source: PresentationSource, includeLabelRange = true) {
+  const raw = String(source.label || "").replace(/\s+/g, " ").trim();
+  const section = raw.match(/§\s*[^·;|]+/)?.[0]?.trim() || "";
+  const pages = [...raw.matchAll(/(?:PDF\s*)?pp?\.\s*(\d+)(?:\s*[–-]\s*(\d+))?/gi)];
+  let first = Math.max(1, Number(source.page) || 1);
+  let last = first;
+  if (includeLabelRange && pages.length) {
+    first = Math.max(1, Number(pages[0][1]) || first);
+    const finalPage = pages.at(-1)!;
+    last = Math.max(first, Number(finalPage[2] || finalPage[1]) || first);
+  }
+  const pageLabel = last > first ? `PDF pp. ${first}–${last}` : `PDF p. ${first}`;
+  return [pageLabel, section].filter(Boolean).join(" · ");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function tightenToInk(canvas: HTMLCanvasElement, crop: { x: number; y: number; width: number; height: number }) {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return null;
+  const sx = Math.max(0, Math.floor(crop.x * canvas.width));
+  const sy = Math.max(0, Math.floor(crop.y * canvas.height));
+  const sw = Math.max(1, Math.min(canvas.width - sx, Math.floor(crop.width * canvas.width)));
+  const sh = Math.max(1, Math.min(canvas.height - sy, Math.floor(crop.height * canvas.height)));
+  const pixels = context.getImageData(sx, sy, sw, sh).data;
+  const stride = Math.max(1, Math.floor(Math.min(sw, sh) / 720));
+  let left = sw;
+  let top = sh;
+  let right = -1;
+  let bottom = -1;
+  for (let y = 0; y < sh; y += stride) {
+    for (let x = 0; x < sw; x += stride) {
+      const offset = (y * sw + x) * 4;
+      if (pixels[offset + 3] < 24) continue;
+      if (pixels[offset] > 246 && pixels[offset + 1] > 246 && pixels[offset + 2] > 246) continue;
+      left = Math.min(left, x);
+      top = Math.min(top, y);
+      right = Math.max(right, x);
+      bottom = Math.max(bottom, y);
+    }
+  }
+  if (right < left || bottom < top) return null;
+  const inkWidth = right - left + 1;
+  const inkHeight = bottom - top + 1;
+  if (inkWidth < sw * .08 || inkHeight < sh * .08) return null;
+  const padX = Math.max(10, Math.round(inkWidth * .035));
+  const padY = Math.max(10, Math.round(inkHeight * .045));
+  left = Math.max(0, left - padX);
+  top = Math.max(0, top - padY);
+  right = Math.min(sw - 1, right + padX);
+  bottom = Math.min(sh - 1, bottom + padY);
+  return { sx: sx + left, sy: sy + top, sw: right - left + 1, sh: bottom - top + 1 };
+}
+
 function PresentationSourceVisual({ url, source, label, compact = false }: {
   url: string;
-  source: NonNullable<PaperPresentationSlide["source"]>;
+  source: PresentationSource;
   label: string;
   compact?: boolean;
 }) {
@@ -74,10 +137,31 @@ function PresentationSourceVisual({ url, source, label, compact = false }: {
         const pdfDocument = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
         const pdfPage = await pdfDocument.getPage(Math.min(Math.max(1, source.page), pdfDocument.numPages));
         const base = pdfPage.getViewport({ scale: 1 });
-        const crop = source.crop || FOCUS_RECTS[source.focus] || FOCUS_RECTS.full;
+        let crop = source.crop || FOCUS_RECTS[source.focus] || FOCUS_RECTS.full;
+        if (!source.crop && (source.kind === "figure" || source.kind === "table") && source.figure) {
+          const number = source.figure.match(/\d+(?:\.\d+)?/)?.[0];
+          if (number) {
+            const prefix = source.kind === "table" ? "table" : "(?:figure|fig\\.)";
+            const captionPattern = new RegExp(`^${prefix}\\s*${escapeRegExp(number)}\\b`, "i");
+            const text = await pdfPage.getTextContent();
+            const caption = text.items.find((item) => {
+              const candidate = item as { str?: string };
+              return captionPattern.test(String(candidate.str || "").trim());
+            }) as { transform?: number[]; height?: number } | undefined;
+            const baseline = Number(caption?.transform?.[5]);
+            const captionHeight = Number(caption?.height || caption?.transform?.[3]);
+            if (Number.isFinite(baseline) && Number.isFinite(captionHeight)) {
+              const captionTop = Math.max(0, Math.min(1, 1 - ((baseline + captionHeight) / base.height)));
+              const cropTop = source.kind === "table" ? Math.max(.015, captionTop - .025) : Math.max(.015, captionTop - .5);
+              crop = source.kind === "table"
+                ? { x: .055, y: cropTop, width: .89, height: Math.min(.58, .975 - cropTop) }
+                : { x: .055, y: cropTop, width: .89, height: Math.min(.54, captionTop + .045 - cropTop) };
+            }
+          }
+        }
         const density = Math.min(2, window.devicePixelRatio || 1);
         const targetWidth = Math.max(1, Math.floor(size.width * density));
-        const targetHeight = Math.max(1, Math.floor((size.height - 28) * density));
+        const targetHeight = Math.max(1, Math.floor(size.height * density));
         const scale = Math.min(2.4, Math.max(targetWidth / (base.width * crop.width), targetHeight / (base.height * crop.height), .35));
         const viewport = pdfPage.getViewport({ scale });
         const sourceCanvas = window.document.createElement("canvas");
@@ -92,12 +176,12 @@ function PresentationSourceVisual({ url, source, label, compact = false }: {
         if (!canvas || !context || cancelled) return;
         canvas.width = targetWidth;
         canvas.height = targetHeight;
-        context.fillStyle = "#fff";
-        context.fillRect(0, 0, targetWidth, targetHeight);
-        const sx = Math.floor(crop.x * sourceCanvas.width);
-        const sy = Math.floor(crop.y * sourceCanvas.height);
-        const sw = Math.max(1, Math.floor(crop.width * sourceCanvas.width));
-        const sh = Math.max(1, Math.floor(crop.height * sourceCanvas.height));
+        context.clearRect(0, 0, targetWidth, targetHeight);
+        const tightened = tightenToInk(sourceCanvas, crop);
+        const sx = tightened?.sx ?? Math.floor(crop.x * sourceCanvas.width);
+        const sy = tightened?.sy ?? Math.floor(crop.y * sourceCanvas.height);
+        const sw = tightened?.sw ?? Math.max(1, Math.floor(crop.width * sourceCanvas.width));
+        const sh = tightened?.sh ?? Math.max(1, Math.floor(crop.height * sourceCanvas.height));
         const fit = Math.min(targetWidth / sw, targetHeight / sh);
         const drawWidth = sw * fit;
         const drawHeight = sh * fit;
@@ -113,20 +197,18 @@ function PresentationSourceVisual({ url, source, label, compact = false }: {
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [source.crop?.height, source.crop?.width, source.crop?.x, source.crop?.y, source.focus, source.page, size.height, size.width, url]);
+  }, [source.crop?.height, source.crop?.width, source.crop?.x, source.crop?.y, source.figure, source.focus, source.kind, source.page, size.height, size.width, url]);
 
-  const anchor = [source.figure, source.panel].filter(Boolean).join(" ");
   return <figure className={`paper-presentation-source${compact ? " compact" : ""}`} ref={hostRef}>
     <canvas ref={canvasRef} aria-label={`${label}, PDF page ${source.page}`} />
     {state === "loading" && <span className="paper-presentation-page-state"><LoaderCircle className="spin" size={17} />Rendering evidence</span>}
     {state === "error" && <span className="paper-presentation-page-state"><AlertTriangle size={17} />Source evidence unavailable</span>}
-    <figcaption><span>{anchor || source.kind}</span>{source.label || `PDF p. ${source.page}`}</figcaption>
   </figure>;
 }
 
-function SlideHeader({ index, slide }: { index: number; slide: PaperPresentationSlide }) {
+function SlideHeader({ index, slide, sourceNote = "" }: { index: number; slide: PaperPresentationSlide; sourceNote?: string }) {
   return <header className="paper-presentation-slide-header">
-    <p>{String(index).padStart(2, "0")} · {SECTION_LABELS[slide.section]}</p>
+    <p><span>{String(index).padStart(2, "0")} · {SECTION_LABELS[slide.section]}</span>{sourceNote && <em>{sourceNote}</em>}</p>
     <h2>{slide.title}</h2>
   </header>;
 }
@@ -146,7 +228,11 @@ function StructuredVisual({ slide }: { slide: PaperPresentationSlide }) {
   const items = visualItems(slide);
   const kind = slide.visual?.kind || slide.layout || "source";
   if (!items.length || kind === "source") return null;
-  return <div className={`paper-presentation-structured ${kind}`}>
+  const columns = kind === "process"
+    ? Math.min(4, Math.max(1, items.length))
+    : items.length <= 3 ? Math.max(1, items.length) : items.length === 4 ? 2 : 3;
+  const style = { [kind === "process" ? "--process-columns" : "--structured-columns"]: columns } as CSSProperties;
+  return <div className={`paper-presentation-structured ${kind}`} style={style}>
     {items.map((item, index) => <div key={`${item.label}-${index}`}>
       <span>{String(index + 1).padStart(2, "0")}</span>
       <section><strong>{item.label}</strong>{item.value && <b>{item.value}</b>}<p>{item.detail}</p></section>
@@ -177,21 +263,26 @@ function ContentSlide({ slide, index, pdfUrl }: { slide: PaperPresentationSlide;
   }
 
   if (["process", "comparison", "metrics", "boundaries"].includes(layout)) {
+    // A full, uncropped page is not evidence at thumbnail scale. It also steals
+    // width from the structured argument, so only show a visual when the model
+    // supplied an inspected crop.
+    const showSource = Boolean(source.crop);
     return <article className={`paper-presentation-slide layout-${layout}`}>
-      <SlideHeader index={index} slide={slide} />
+      <SlideHeader index={index} slide={slide} sourceNote={showSource ? "" : sourceReference(source)} />
       {lead && <p className="paper-presentation-lead">{lead}</p>}
-      <div className="paper-presentation-structured-body">
+      <div className={`paper-presentation-structured-body${showSource ? "" : " no-source"}`}>
         <StructuredVisual slide={slide} />
-        <PresentationSourceVisual url={pdfUrl} source={source} label={slide.title} compact />
+        {showSource && <PresentationSourceVisual url={pdfUrl} source={source} label={slide.title} compact />}
       </div>
       <Takeaway slide={slide} />
     </article>;
   }
 
+  const showSplitSource = Boolean(source.crop) || source.kind === "figure" || source.kind === "table";
   return <article className="paper-presentation-slide layout-split">
-    <SlideHeader index={index} slide={slide} />
-    <div className="paper-presentation-split">
-      <PresentationSourceVisual url={pdfUrl} source={source} label={slide.title} />
+    <SlideHeader index={index} slide={slide} sourceNote={showSplitSource ? "" : sourceReference(source)} />
+    <div className={`paper-presentation-split${showSplitSource ? "" : " no-source"}`}>
+      {showSplitSource && <PresentationSourceVisual url={pdfUrl} source={source} label={slide.title} />}
       <div className="paper-presentation-copy">{lead && <p className="paper-presentation-lead">{lead}</p>}<BulletList bullets={slide.bullets} /></div>
     </div>
     <Takeaway slide={slide} />

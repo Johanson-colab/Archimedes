@@ -66,6 +66,20 @@ test("saved presentations render as a keyboard-navigable academic deck with PDF 
   assert.match(review, /pdfUrl\s*=/);
 });
 
+test("presentation slides keep source captions concise and structured grids contained", () => {
+  assert.match(presentation, /function sourceReference/);
+  assert.match(presentation, /function tightenToInk/);
+  assert.match(presentation, /pdfPage\.getTextContent/);
+  assert.doesNotMatch(presentation, /<figcaption/);
+  assert.match(presentation, /--structured-columns/);
+  assert.match(presentation, /paper-presentation-structured-body\$\{showSource/);
+  assert.match(styles, /\.paper-presentation-structured\.comparison[\s\S]*?grid-template-columns: repeat\(var\(--structured-columns/);
+  assert.match(styles, /\.paper-presentation-structured-body\.no-source/);
+  assert.match(styles, /\.paper-presentation-split\.no-source/);
+  assert.match(styles, /-webkit-line-clamp: 3/);
+  assert.doesNotMatch(styles, /\.paper-presentation-source figcaption/);
+});
+
 test("expanded evidence notes stay in the reading card column", () => {
   const readingRules = styles.match(/\.paper-review-reading \{[^}]*\}/g) ?? [];
   const activeRule = readingRules.find((rule) => /min-height: 154px;/.test(rule));

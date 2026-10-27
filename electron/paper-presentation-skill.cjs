@@ -57,6 +57,32 @@ function clampPage(value, pageCount) {
   return Math.min(Math.max(1, Number.isFinite(page) ? page : 1), Math.max(1, Number(pageCount) || 1));
 }
 
+const GENERIC_SOURCE_PANELS = /^(?:全[图表]|整[图表]|full(?:\s+(?:figure|table|page))?|all|entire|whole(?:\s+(?:figure|table))?)$/i;
+
+function cleanSourcePanel(value) {
+  const panel = clipped(value, 28);
+  return GENERIC_SOURCE_PANELS.test(panel) ? "" : panel;
+}
+
+/**
+ * Keep the visible source caption unique and machine-readable:
+ * "PDF p. 23 · Fig. 8" becomes "PDF p. 23"; a label spanning two pages becomes
+ * "PDF pp. 23–24". Figure/table names belong in their dedicated fields.
+ */
+function cleanSourceLabel(value, page) {
+  const raw = String(value || "").replace(/\s+/g, " ").trim();
+  const section = raw.match(/§\s*[^·;|]+/)?.[0]?.trim() || "";
+  const pages = [...raw.matchAll(/(?:PDF\s*)?pp?\.\s*(\d+)(?:\s*[–-]\s*(\d+))?/gi)];
+  let first = Math.max(1, Number(page) || 1);
+  let last = first;
+  if (pages.length) {
+    first = Math.max(1, Number(pages[0][1]) || first);
+    const finalPage = pages.at(-1);
+    last = Math.max(first, Number(finalPage[2] || finalPage[1]) || first);
+  }
+  return clipped([last > first ? `PDF pp. ${first}–${last}` : `PDF p. ${first}`, section].filter(Boolean).join(" · "), 120);
+}
+
 function reviewDossier(review) {
   const reports = Array.isArray(review?.specialists) ? review.specialists : [];
   return [
@@ -101,6 +127,9 @@ Adaptive layout contract:
 - Do not repeat one layout more than twice in succession.
 - source.focus is a coarse fallback: full, top, middle, bottom, left, or right.
 - After inspecting a decisive page, source.crop may give a normalized figure/table rectangle {x,y,width,height}, each from 0 to 1. Never guess a precise crop without visual inspection.
+- source.label is a page/section reference only, e.g. \`PDF p. 5 · §1 Introduction\`. Do not repeat the figure/table name in the label, and never use \`全图\`/\`全表\` as the panel.
+- One source visual must resolve to one page or one contiguous page range. If a figure spans pages, cite the page containing the selected panel and put the other page in speaker notes.
+- Every figure or table used as a visual MUST include a visually inspected source.crop tightly bounded to the evidence itself. Exclude PDF page margins, surrounding body text, headers, footers, and page numbers.
 
 Return ONLY valid JSON:
 {"title":"paper title","subtitle":"one-line contribution","source_sufficiency":"full-paper|partial-paper|review-grounded","slides":[
@@ -176,10 +205,10 @@ function normalizeSlide(input, pageCount, index) {
     speaker_notes: clipped(input.speaker_notes, 520),
     source: {
       page,
-      label: clipped(source.label || `PDF p. ${page}`, 120),
+      label: cleanSourceLabel(source.label, page),
       kind: SOURCE_KINDS.has(source.kind) ? source.kind : "page",
       figure: clipped(source.figure, 42),
-      panel: clipped(source.panel, 28),
+      panel: cleanSourcePanel(source.panel),
       focus: SOURCE_FOCUS.has(source.focus) ? source.focus : "full",
       crop: normalizeCrop(source.crop),
     },
