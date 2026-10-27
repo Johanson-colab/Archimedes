@@ -5046,3 +5046,72 @@ html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
   background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent) !important;
 }
+
+/* Files workbench: file tabs and view actions share one row. */
+.artifact-editor-pane.compact { position: relative; }
+.artifact-workbench-body .artifact-editor-pane.compact .artifact-tabs { min-height: 38px; padding-right: 258px; }
+.artifact-workbench-body .artifact-editor-pane.compact .artifact-editor-header.compact {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
+  background: #f3f3f0;
+  border-bottom: 0;
+}
+html:not([data-theme="paper"]) .artifact-workbench-body .artifact-editor-pane.compact .artifact-editor-header.compact { background: #10121a; }
+.theme-paper .artifact-workbench-body .artifact-editor-pane.compact .artifact-editor-header.compact { background: #f3f3f0; }
+.artifact-editor-header.compact .artifact-editor-actions { gap: 8px; }
+.artifact-editor-header.compact .artifact-view-toggle { height: auto; gap: 8px; padding: 0; background: transparent; border-radius: 0; }
+.artifact-editor-header.compact .artifact-view-toggle button { height: 24px; padding: 0; color: var(--rail-row-muted); background: transparent; border-radius: 0; box-shadow: none; font-size: 11px; font-weight: 550; }
+.artifact-editor-header.compact .artifact-view-toggle button.active { color: var(--accent); background: transparent; box-shadow: none; font-weight: 650; }
+.artifact-editor-header.compact .artifact-save-button,
+.artifact-editor-header.compact .artifact-comment-button { min-height: 24px; padding: 0 3px !important; color: var(--rail-row-muted) !important; background: transparent !important; border: 0 !important; box-shadow: none !important; font-size: 11px; font-weight: 550; }
+.artifact-editor-header.compact .artifact-save-button:not(:disabled) { color: var(--accent) !important; }
+.artifact-editor-header.compact .artifact-save-button svg,
+.artifact-editor-header.compact .artifact-comment-button svg { display: none; }
+.artifact-editor-header.compact .artifact-save-state { font-size: 10px; }
+.artifact-workbench-body .artifact-editor-pane.compact .artifact-preview-surface { min-height: 0; }
+
+/* File-tree icon tones. The setting switches the whole tree to monochrome. */
+:root {
+  --file-tone-folder: #d3a64d;
+  --file-tone-tex: #e09a6b;
+  --file-tone-config: #d9b65c;
+  --file-tone-code: #8fb4e8;
+  --file-tone-style: #d99ab5;
+  --file-tone-markdown: #8fc3df;
+  --file-tone-image: #e094a8;
+  --file-tone-pdf: #e58a80;
+  --file-tone-shell: #9cc9a8;
+  --file-tone-file: #b0a9a3;
+}
+.theme-paper {
+  --file-tone-folder: #a87522;
+  --file-tone-tex: #a35a2d;
+  --file-tone-config: #8f6a15;
+  --file-tone-code: #35679e;
+  --file-tone-style: #9b4a6a;
+  --file-tone-markdown: #2f6f8f;
+  --file-tone-image: #a74f70;
+  --file-tone-pdf: #a5443a;
+  --file-tone-shell: #3f7a55;
+  --file-tone-file: #6f6862;
+}
+.tree-file-icon.tone-folder { color: var(--file-tone-folder) !important; }
+.tree-file-icon.tone-tex { color: var(--file-tone-tex) !important; }
+.tree-file-icon.tone-config { color: var(--file-tone-config) !important; }
+.tree-file-icon.tone-code { color: var(--file-tone-code) !important; }
+.tree-file-icon.tone-style { color: var(--file-tone-style) !important; }
+.tree-file-icon.tone-markdown { color: var(--file-tone-markdown) !important; }
+.tree-file-icon.tone-image { color: var(--file-tone-image) !important; }
+.tree-file-icon.tone-pdf { color: var(--file-tone-pdf) !important; }
+.tree-file-icon.tone-shell { color: var(--file-tone-shell) !important; }
+.tree-file-icon.tone-file { color: var(--file-tone-file) !important; }
+html[data-file-icons="monochrome"] .tree-file-icon { color: var(--rail-row-muted) !important; }
+
+/* The compact tab strip is a single row; the actions sit above it, so hide its scrollbar chrome. */
+.artifact-editor-pane.compact .artifact-tabs { scrollbar-width: none; }
+.artifact-editor-pane.compact .artifact-tabs::-webkit-scrollbar { display: none; height: 0; }

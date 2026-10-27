@@ -4,12 +4,14 @@ export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
 export type InterfaceFont = "system" | "geist";
 export type MonoFont = "system" | "geist-mono";
+export type FileIconStyle = "colorful" | "monochrome";
 export type ChatVerbosity = "low" | "medium" | "high";
 
 const LANGUAGE_STORAGE_KEY = "archimedes-language";
 const TEXT_SIZE_STORAGE_KEY = "archimedes-text-size";
 const INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";
 const MONO_FONT_STORAGE_KEY = "archimedes-mono-font";
+const FILE_ICON_STYLE_STORAGE_KEY = "archimedes-file-icon-style";
 const CHAT_VERBOSITY_STORAGE_KEY = "archimedes-chat-verbosity";
 const TEXT_SCALE: Record<TextSize, number> = { smaller: 1, small: 1.05, default: 1.1, large: 1.15, larger: 1.2 };
 
@@ -380,6 +382,10 @@ const translations: Record<string, string> = {
   "Use paper theme": "使用纸张主题",
   "Interface font": "界面字体",
   "Code font": "代码字体",
+  "File icons": "文件图标",
+  "Use colored icons in file trees.": "在文件树中使用彩色图标。",
+  "Colorful": "彩色",
+  "Monochrome": "单色",
   "Geist Sans": "Geist Sans",
   "Geist Mono": "Geist Mono",
   "System mono": "系统等宽字体",
@@ -592,6 +598,8 @@ type UISettings = {
   setInterfaceFont: (font: InterfaceFont) => void;
   monoFont: MonoFont;
   setMonoFont: (font: MonoFont) => void;
+  fileIconStyle: FileIconStyle;
+  setFileIconStyle: (style: FileIconStyle) => void;
   chatVerbosity: ChatVerbosity;
   setChatVerbosity: (verbosity: ChatVerbosity) => void;
   t: (key: string, values?: Record<string, string | number>) => string;
@@ -620,6 +628,11 @@ function readMonoFont(): MonoFont {
   return window.localStorage.getItem(MONO_FONT_STORAGE_KEY) === "system" ? "system" : "geist-mono";
 }
 
+function readFileIconStyle(): FileIconStyle {
+  if (typeof window === "undefined") return "colorful";
+  return window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY) === "monochrome" ? "monochrome" : "colorful";
+}
+
 function readChatVerbosity(): ChatVerbosity {
   if (typeof window === "undefined") return "medium";
   const stored = window.localStorage.getItem(CHAT_VERBOSITY_STORAGE_KEY);
@@ -631,6 +644,7 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
   const [textSize, setTextSize] = useState<TextSize>(readTextSize);
   const [interfaceFont, setInterfaceFont] = useState<InterfaceFont>(readInterfaceFont);
   const [monoFont, setMonoFont] = useState<MonoFont>(readMonoFont);
+  const [fileIconStyle, setFileIconStyle] = useState<FileIconStyle>(readFileIconStyle);
   const [chatVerbosity, setChatVerbosity] = useState<ChatVerbosity>(readChatVerbosity);
 
   useEffect(() => {
@@ -663,6 +677,11 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
   }, [monoFont]);
 
   useEffect(() => {
+    window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, fileIconStyle);
+    document.documentElement.dataset.fileIcons = fileIconStyle;
+  }, [fileIconStyle]);
+
+  useEffect(() => {
     window.localStorage.setItem(CHAT_VERBOSITY_STORAGE_KEY, chatVerbosity);
     document.documentElement.dataset.chatVerbosity = chatVerbosity;
   }, [chatVerbosity]);
@@ -676,8 +695,9 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
   const value = useMemo(() => ({
     language, setLanguage, textSize, setTextSize,
     interfaceFont, setInterfaceFont, monoFont, setMonoFont,
+    fileIconStyle, setFileIconStyle,
     chatVerbosity, setChatVerbosity, t,
-  }), [chatVerbosity, interfaceFont, language, monoFont, t, textSize]);
+  }), [chatVerbosity, fileIconStyle, interfaceFont, language, monoFont, t, textSize]);
 
   return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;
 }

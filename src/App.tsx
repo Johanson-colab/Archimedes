@@ -61,9 +61,20 @@ import {
   ChevronLeft,
   ChevronRight,
   File,
+  FileArchive,
+  FileAudio,
+  FileBraces,
+  FileCode,
   FileCode2,
+  FileCog,
   FileImage,
+  FileJson,
+  FileLock,
+  FileSpreadsheet,
+  FileTerminal,
   FileText,
+  FileType,
+  FileVideo,
   Flag,
   Folder,
   FolderOpen,
@@ -2692,12 +2703,42 @@ const WorkspaceChangesCard = memo(function WorkspaceChangesCard({ changeSet, onO
   </section>;
 });
 
-function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind">) {
+function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
   if (entry.type === "directory") return <Folder size={14} />;
-  if (entry.kind === "pdf" || entry.kind === "markdown") return <FileText size={14} />;
-  if (entry.kind === "image") return <FileImage size={14} />;
-  if (entry.kind === "text") return <FileCode2 size={14} />;
+  const name = entry.path.split("/").at(-1)?.toLowerCase() || "";
+  const extension = name.includes(".") ? name.split(".").at(-1) || "" : "";
+  if (entry.kind === "image" || ["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "svg", "avif"].includes(extension)) return <FileImage size={14} />;
+  if (["mp4", "mov", "webm", "mkv", "avi"].includes(extension)) return <FileVideo size={14} />;
+  if (["mp3", "wav", "ogg", "flac", "m4a"].includes(extension)) return <FileAudio size={14} />;
+  if (["zip", "tar", "gz", "tgz", "rar", "7z", "bz2"].includes(extension)) return <FileArchive size={14} />;
+  if (["csv", "tsv", "xls", "xlsx"].includes(extension)) return <FileSpreadsheet size={14} />;
+  if (["json", "jsonl"].includes(extension)) return <FileJson size={14} />;
+  if (["yaml", "yml", "toml", "ini", "cfg", "conf", "env"].includes(extension) || /^(dockerfile|makefile)$/.test(name)) return <FileCog size={14} />;
+  if (extension === "bib") return <BookOpen size={14} />;
+  if (["tex", "latex", "cls", "sty", "bst"].includes(extension)) return <FileType size={14} />;
+  if (["md", "mdx", "txt", "rst", "pdf"].includes(extension) || entry.kind === "pdf" || entry.kind === "markdown") return <FileText size={14} />;
+  if (["sh", "zsh", "bash", "fish"].includes(extension)) return <FileTerminal size={14} />;
+  if (["ts", "tsx"].includes(extension)) return <FileCode2 size={14} />;
+  if (["js", "jsx", "mjs", "cjs"].includes(extension)) return <FileBraces size={14} />;
+  if (["py", "go", "rs", "java", "c", "cc", "cpp", "h", "hpp", "ipynb"].includes(extension)) return <FileCode size={14} />;
+  if (["css", "scss", "less", "html", "htm", "xml"].includes(extension)) return <FileCode2 size={14} />;
+  if (extension === "lock") return <FileLock size={14} />;
   return <File size={14} />;
+}
+
+function workspaceFileTone(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
+  if (entry.type === "directory") return "folder";
+  if (entry.kind === "image") return "image";
+  if (entry.kind === "pdf") return "pdf";
+  if (entry.kind === "markdown") return "markdown";
+  const name = entry.path.split("/").at(-1)?.toLowerCase() || "";
+  const extension = name.includes(".") ? name.split(".").at(-1) || "" : "";
+  if (["tex", "latex", "bib", "cls", "sty", "bst"].includes(extension)) return "tex";
+  if (["json", "yaml", "yml", "toml", "ini", "cfg"].includes(extension)) return "config";
+  if (["ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rs", "java", "c", "cc", "cpp", "h", "hpp"].includes(extension)) return "code";
+  if (["css", "scss", "less", "html", "htm", "xml", "svg"].includes(extension)) return "style";
+  if (["sh", "zsh", "bash", "fish"].includes(extension)) return "shell";
+  return "file";
 }
 
 function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirectories, onToggle, onLoadDirectory, onOpenFile }: {
@@ -2719,7 +2760,7 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
   return <div className="workspace-tree-node">
     <button className={entry.path === selectedPath ? "workspace-tree-row active" : "workspace-tree-row"} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
       <span className="tree-disclosure">{isLoading ? <RefreshCw className="spin" size={11} /> : isDirectory ? isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}</span>
-      <span className="tree-file-icon">{workspaceFileIcon(entry)}</span>
+      <span className={`tree-file-icon tone-${workspaceFileTone(entry)}`}>{workspaceFileIcon(entry)}</span>
       <strong>{entry.name}</strong>
     </button>
     {isExpanded && entry.children?.map((child) => <WorkspaceTreeNode key={child.path} entry={child} depth={depth + 1} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={onToggle} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
@@ -2775,7 +2816,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   return <section className="artifact-editor">
     <div className="artifact-editor-top">
       {(editable || !compact) && <div className={compact ? "artifact-editor-header compact" : "artifact-editor-header"}>
-        {!compact && <><span>{workspaceFileIcon({ type: "file", kind: file.kind })}</span>
+        {!compact && <><span>{workspaceFileIcon({ type: "file", kind: file.kind, path: file.path })}</span>
         <strong>{file.path}</strong>
         <small>{formatFileSize(file.size)}</small></>}
         {editable && <div className="artifact-editor-actions">
@@ -2850,7 +2891,7 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
       wrapLongLines={false}
       lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", textAlign: "right", userSelect: "none" }}
       lineProps={{ className: "syntax-line" }}
-      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "11px", lineHeight: 1.65, tabSize: 2 }}
+      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "13px", lineHeight: 1.65, tabSize: 2 }}
       codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
     >{content || " "}</SyntaxHighlighter>
   </div>;
@@ -3002,12 +3043,12 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const editor = <div className={compact && openFiles.length <= 1 ? "artifact-editor-pane no-tabs" : "artifact-editor-pane"}>
-    {(!compact || openFiles.length > 1) && <div className="artifact-tabs" role="tablist" aria-label="Open files">
+  const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
+    {(compact || openFiles.length > 1) && <div className="artifact-tabs" role="tablist" aria-label="Open files">
       {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
         <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
           {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
-          {workspaceFileIcon({ type: "file", kind: openFile.kind })}<span>{openFile.name}</span>
+          {workspaceFileIcon({ type: "file", kind: openFile.kind, path: openFile.path })}<span>{openFile.name}</span>
         </button>
         <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
       </div>)}
