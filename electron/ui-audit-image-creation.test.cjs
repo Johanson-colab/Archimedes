@@ -1,0 +1,59 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+
+const root = path.resolve(__dirname, "..");
+const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
+const registry = fs.readFileSync(path.join(root, "src", "sidebar-registry.tsx"), "utf8");
+const view = fs.readFileSync(path.join(root, "src", "ImageCreationView.tsx"), "utf8");
+const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
+const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
+
+test("Gallery is a view inside Image creation, not a second Create destination", () => {
+  assert.match(registry, /id: "image-creation"[^\n]*labelKey: "Image creation"[^\n]*destination: \{ type: "section", section: "image-creation" \}/);
+  assert.doesNotMatch(registry, /id: "gallery"/);
+  assert.doesNotMatch(registry, /id: "image-creation"[^\n]*disabled/);
+  assert.doesNotMatch(registry, /id: "image-creation"[^\n]*badge/);
+  assert.match(app, /<ImageCreationView active=\{mainSection === "image-creation"\}/);
+  assert.match(app, /mainSection === "image-creation" \? t\("Image creation"\)/);
+  assert.match(i18n, /"Generate and remix research figures"/);
+});
+
+test("the page keeps Gallery and Templates in one tab row with the module actions", () => {
+  assert.match(view, /className="image-creation-tabs" role="tablist"/);
+  assert.match(view, />\s*Gallery <small>/);
+  assert.match(view, />\s*Templates <small>/);
+  assert.match(view, /className="image-creation-actions"/);
+  assert.match(view, /className="image-creation-sort"/);
+  assert.match(view, /Browse full proceedings/);
+  assert.doesNotMatch(view, /ToolbarActions/);
+  assert.match(view, /useDialogFocus/);
+});
+
+test("images lead and text is a single secondary line", () => {
+  assert.match(css, /\.image-creation-grid \{ display: grid; grid-template-columns: repeat\(auto-fill, minmax\(260px, 1fr\)\)/);
+  assert.match(css, /\.image-creation-card-image \{[^}]*aspect-ratio: 4 \/ 3/);
+  assert.match(css, /\.image-creation-card-image img \{[^}]*object-fit: cover/);
+  assert.match(css, /\.image-creation-card-venue \{[^}]*position: absolute/);
+  assert.match(css, /\.image-creation-card-title \{[^}]*white-space: nowrap/);
+  assert.match(css, /\.image-creation-card-use \{[^}]*opacity: 0/);
+  assert.match(view, /Use as template/);
+  assert.match(view, /setComposerText\("Adapt this figure for "\)/);
+});
+
+test("filter facets fold into one popover instead of a permanent block", () => {
+  assert.match(view, /className=\{filterOpen \? "image-creation-filter-button active" : "image-creation-filter-button"\}/);
+  assert.match(view, /image-creation-filter-panel" role="dialog"/);
+  assert.match(view, /Clear all/);
+  assert.match(css, /\.image-creation-filter-panel \{[^}]*position: absolute/);
+});
+
+test("the composer is present but does not pretend image generation is shipped", () => {
+  assert.match(view, /className="image-creation-composer-dock"/);
+  assert.match(view, /Describe an image, or start from a published figure/);
+  assert.match(view, /Image model · Soon/);
+  assert.match(view, /disabled title="Image generation is coming soon"/);
+  assert.match(css, /\.image-creation-composer-dock \{[^}]*position: fixed/);
+  assert.match(css, /\.image-creation-fade \{[^}]*position: fixed/);
+});

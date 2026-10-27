@@ -22,7 +22,7 @@ test("all modal surfaces use the shared dialog contract", () => {
     "src/LibraryView.tsx",
     "src/ProjectSidebar.tsx",
     "src/PaperWritingView.tsx",
-    "src/GalleryView.tsx",
+    "src/ImageCreationView.tsx",
   ]) {
     const source = read(file);
     assert.match(source, /useDialogFocus/, `${file} should use useDialogFocus`);

@@ -167,6 +167,7 @@ type LibraryViewProps = {
   mode: "library" | "daily";
   initialDailyMode?: DailyDiscoveryMode | "conference";
   workspace?: string;
+  active?: boolean;
   projectId?: string | null;
   libraryRefreshVersion?: number;
   onLibraryImported?: () => void;
@@ -174,7 +175,7 @@ type LibraryViewProps = {
   onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
 };
 
-export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted }: LibraryViewProps) {
+export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted }: LibraryViewProps) {
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -267,7 +268,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 
   if (!selectedLibrary) {
     return <section className="library-page">
-      <ToolbarActions><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button></ToolbarActions>
+      <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button></ToolbarActions>
       {error && <div className="library-error">{error}</div>}
       {loading && !libraries.length ? <LoadingState /> : <div className="library-card-grid">
         {libraries.map((library) => <button className="library-card" key={library.id} onClick={() => setSelectedLibraryId(library.id)}>

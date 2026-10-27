@@ -14,9 +14,9 @@ It runs as an Electron desktop application. Research data stays in the selected 
 | --- | --- |
 | ![Daily papers with discovery modes, time ranges, topic filters, and saved-paper controls](docs/assets/daily-papers-preview.png) | ![Literature reader showing a paper, its project tab, and source-grounded AI discussion](docs/assets/literature-reader-preview.png) |
 
-**Visual research index**
+**Image creation**
 
-![Gallery for searching and filtering figures from peer-reviewed conference papers](docs/assets/gallery-preview.png)
+![Image creation gallery for searching and filtering figures from peer-reviewed conference papers](docs/assets/image-creation-gallery.png)
 
 ## Brand
 
@@ -49,7 +49,7 @@ The long-term goal is an integrated research environment in the spirit of an all
 | **Paper plus project** | Linked GitHub repositories and project websites open in a dedicated **Project** tab beside the paper. Repository snapshots can be attached to paper discussions so the agent can reason over paper, code, and available data references together. |
 | **Research radar** | Daily papers with Latest and Trending views, 7/30/90-day ranges, keyword search, topical filters, and save-to-library workflows. |
 | **Conference search** | Search official catalogs for ICML, ICLR, NeurIPS, CVPR, ICCV, ECCV, ACL, EMNLP, and AAAI for 2023–2026. Filters cover title, author, topic, and official presentation labels when those labels are published. |
-| **Visual research index** | A Gallery for browsing figures from peer-reviewed conference papers by venue, year, presentation, and figure type. |
+| **Image creation** | The conference figure gallery, browsable by venue, year, presentation, and figure type. A compose dock is scaffolded for the image-model backend; generation is not wired up yet. |
 | **Workspace execution** | An interactive terminal connected to the active workspace, auditable tool calls, and approval gates before the agent writes files or runs commands. |
 
 The table describes implemented product behavior, not a promise that every external source will always be reachable. Conference sites, project pages, provider APIs, and public archives can impose access restrictions or publish incomplete metadata; Archimedes surfaces those limitations instead of silently inventing results.
@@ -123,7 +123,7 @@ Keep that terminal open. Vite starts first, then Electron opens the Archimedes d
 
 1. Choose or open a local folder as the research workspace when prompted.
 2. Create a project in the sidebar and start a new task.
-3. Use **Daily papers**, **Literature library**, or **Gallery** to collect sources.
+3. Use **Daily papers**, **Literature library**, or **Image creation** to collect sources.
 4. Attach papers, files, folders, code repositories, or pasted images to the conversation before asking the agent to analyze them.
 
 ### First-run troubleshooting
@@ -188,7 +188,7 @@ Presentation labels are never inferred by the model. They are shown only where a
 
 | Path | Purpose |
 | --- | --- |
-| `src/` | React application: chat, library, reader, Daily papers, Gallery, project and workspace views. |
+| `src/` | React application: chat, library, reader, Daily papers, Image creation, project and workspace views. |
 | `electron/` | Electron main process, preload bridge, SQLite store, agent runtime, PDF, search, and repository adapters. |
 | `scripts/` | Data and gallery maintenance utilities. |
 | `public/` | Static assets and generated gallery resources. |
