@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
 const review = fs.readFileSync(path.join(root, "src", "PaperReviewWorkbench.tsx"), "utf8");
+const styles = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const presentation = fs.readFileSync(path.join(root, "src", "PaperPresentationDeck.tsx"), "utf8");
 const orchestrator = fs.readFileSync(path.join(root, "electron", "paper-review-orchestrator.cjs"), "utf8");
 const presentationSkill = fs.readFileSync(path.join(root, "electron", "paper-presentation-skill.cjs"), "utf8");
@@ -57,4 +58,23 @@ test("saved presentations render as a keyboard-navigable academic deck with PDF 
   assert.match(presentation, /ArrowRight/);
   assert.match(presentation, /SECTION_LABELS/);
   assert.match(review, /pdfUrl\s*=/);
+});
+
+test("expanded evidence notes stay in the reading card column", () => {
+  const readingRules = styles.match(/\.paper-review-reading \{[^}]*\}/g) ?? [];
+  const activeRule = readingRules.find((rule) => /min-height: 154px;/.test(rule));
+  assert.match(activeRule, /display: block;/);
+  assert.doesNotMatch(activeRule, /display: grid;/);
+  assert.match(activeRule, /padding: 22px;/);
+  assert.match(styles, /\.paper-review-markdown \{ padding: 20px 0 0 36px;/);
+});
+
+test("research memorandum fills the width of its summary section", () => {
+  const noteRules = styles.match(/\.paper-review-final-note \{[^}]*\}/g) ?? [];
+  const activeRule = noteRules.find((rule) => /padding: 25px;/.test(rule));
+  assert.match(activeRule, /max-width: none;/);
+
+  const headingRules = styles.match(/\.paper-review-final-note h2 \{[^}]*\}/g) ?? [];
+  const activeHeading = headingRules.find((rule) => /font-size: 13px;/.test(rule));
+  assert.match(activeHeading, /max-width: none;/);
 });
