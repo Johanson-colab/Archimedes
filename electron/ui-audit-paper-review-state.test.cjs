@@ -9,6 +9,7 @@ const styles = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const presentation = fs.readFileSync(path.join(root, "src", "PaperPresentationDeck.tsx"), "utf8");
 const orchestrator = fs.readFileSync(path.join(root, "electron", "paper-review-orchestrator.cjs"), "utf8");
 const presentationSkill = fs.readFileSync(path.join(root, "electron", "paper-presentation-skill.cjs"), "utf8");
+const kimiSlidesSkill = fs.readFileSync(path.join(root, "electron", "kimi-slides-skill.cjs"), "utf8");
 const main = fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8");
 
 test("paper review reports individual specialist failures instead of leaving spinners active", () => {
@@ -47,18 +48,22 @@ test("text review and generated presentation remain independent outputs", () => 
   assert.match(main, /store\.getPaperReview\(input\.paper\.id\)/);
   assert.match(main, /store\.savePaperPresentation/);
   assert.match(main, /ipcMain\.handle\("paper-presentation:get"/);
-  assert.match(presentationSkill, /never alter the saved review/);
-  assert.match(presentationSkill, /claim-to-source ledger/);
-  assert.match(presentationSkill, /Background -> Related work -> Method -> Experiments -> Limitations/);
+  assert.match(kimiSlidesSkill, /never alter the saved review/);
+  assert.match(kimiSlidesSkill, /claim-to-source ledger/);
+  assert.match(kimiSlidesSkill, /Background -> Related work -> Method -> Experiments -> Limitations/);
+  assert.match(main, /runKimiSlidesPresentation/);
+  assert.match(presentationSkill, /Paper2PPT/);
 });
 
 test("saved presentations render as a keyboard-navigable academic deck with PDF visuals", () => {
   assert.match(presentation, /function PresentationSourceVisual/);
   assert.match(presentation, /FOCUS_RECTS/);
   assert.match(presentation, /layout-figure-led/);
+  assert.match(presentation, /layout-outline/);
+  assert.match(presentation, /layout-editorial/);
   assert.match(presentation, /paper-presentation-structured/);
   assert.match(presentation, /Legacy presentation detected/);
-  assert.match(presentation, /12-16 slides/);
+  assert.match(presentation, /Generate with Kimi Slides/);
   assert.match(presentation, /paper-presentation-stage/);
   assert.match(presentation, /requestFullscreen/);
   assert.match(presentation, /ArrowRight/);

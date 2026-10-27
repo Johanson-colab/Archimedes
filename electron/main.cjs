@@ -8,7 +8,7 @@ const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { runPaperReview } = require("./paper-review-orchestrator.cjs");
-const { runPaperPresentation } = require("./paper-presentation-skill.cjs");
+const { runKimiSlidesPresentation } = require("./kimi-slides-skill.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
@@ -1087,7 +1087,7 @@ app.whenReady().then(() => {
       url: String(input.paper.url || "").slice(0, 4_000),
       pdf_url: String(input.paper.pdf_url || "").slice(0, 4_000),
     };
-    const result = await runPaperPresentation({
+    const result = await runKimiSlidesPresentation({
       paper,
       review,
       pageCount: Math.max(0, Math.min(5_000, Number(input.pageCount) || 0)),

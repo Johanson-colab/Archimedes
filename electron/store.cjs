@@ -573,8 +573,8 @@ function savePaperReview(paperId, review) {
 }
 
 const PAPER_PRESENTATION_SECTIONS = ["background", "related_work", "method", "experiments", "limitations"];
-const PAPER_PRESENTATION_LAYOUTS = new Set(["figure-led", "split", "process", "comparison", "metrics", "boundaries"]);
-const PAPER_PRESENTATION_VISUAL_KINDS = new Set(["source", "process", "comparison", "metrics", "boundaries"]);
+const PAPER_PRESENTATION_LAYOUTS = new Set(["outline", "editorial", "figure-led", "split", "process", "comparison", "metrics", "boundaries"]);
+const PAPER_PRESENTATION_VISUAL_KINDS = new Set(["source", "outline", "process", "comparison", "metrics", "boundaries"]);
 const PAPER_PRESENTATION_SOURCE_KINDS = new Set(["figure", "table", "diagram", "text", "page"]);
 const PAPER_PRESENTATION_SOURCE_FOCUS = new Set(["full", "top", "middle", "bottom", "left", "right"]);
 
@@ -600,7 +600,7 @@ function normalizePaperPresentationSlide(slide, index) {
     summary: paperReviewText(slide.summary, 4_000),
     lead: paperReviewText(slide.lead ?? slide.summary, 4_000),
     bullets: Array.isArray(slide.bullets)
-      ? slide.bullets.map((bullet) => paperReviewText(bullet, 1_000)).filter(Boolean).slice(0, 4)
+      ? slide.bullets.map((bullet) => paperReviewText(bullet, 1_000)).filter(Boolean).slice(0, 5)
       : [],
     takeaway: paperReviewText(slide.takeaway, 2_000),
     speaker_notes: paperReviewText(slide.speaker_notes, 6_000),

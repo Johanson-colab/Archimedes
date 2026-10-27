@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FileStack, LoaderCircle, NotebookText, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FileStack, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 
 type PresentationPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
 type LoadState = "loading" | "ready" | "error";
@@ -13,8 +13,8 @@ const SECTION_LABELS: Record<PaperPresentationSection, string> = {
   limitations: "Limitations",
 };
 
-const PAPER2PPT_PRESENTATION_VERSION = 3;
-const PAPER2PPT_MIN_CONTENT_SLIDES = 11;
+const KIMI_SLIDES_PRESENTATION_VERSION = 1;
+const KIMI_SLIDES_MIN_CONTENT_SLIDES = 12;
 
 const FOCUS_RECTS: Record<SourceFocus, { x: number; y: number; width: number; height: number }> = {
   full: { x: 0, y: 0, width: 1, height: 1 },
@@ -228,7 +228,7 @@ function StructuredVisual({ slide }: { slide: PaperPresentationSlide }) {
   const items = visualItems(slide);
   const kind = slide.visual?.kind || slide.layout || "source";
   if (!items.length || kind === "source") return null;
-  const columns = kind === "process"
+  const columns = kind === "outline" ? 1 : kind === "process"
     ? Math.min(4, Math.max(1, items.length))
     : items.length <= 3 ? Math.max(1, items.length) : items.length === 4 ? 2 : 3;
   const style = { [kind === "process" ? "--process-columns" : "--structured-columns"]: columns } as CSSProperties;
@@ -250,6 +250,28 @@ function ContentSlide({ slide, index, pdfUrl }: { slide: PaperPresentationSlide;
   const layout = slide.layout || (slide.section === "method" ? "process" : slide.section === "experiments" ? "figure-led" : slide.section === "limitations" ? "boundaries" : "split");
   const source = legacySource(slide);
   const lead = slide.lead || slide.summary || "";
+
+  if (layout === "outline") {
+    return <article className="paper-presentation-slide layout-outline">
+      <SlideHeader index={index} slide={slide} />
+      <div className="paper-presentation-outline-body">
+        <StructuredVisual slide={slide} />
+        <aside><span>Core thread</span><p>{lead || slide.takeaway}</p></aside>
+      </div>
+    </article>;
+  }
+
+  if (layout === "editorial") {
+    return <article className="paper-presentation-slide layout-editorial">
+      <SlideHeader index={index} slide={slide} />
+      {lead && <p className="paper-presentation-lead">{lead}</p>}
+      <div className="paper-presentation-editorial-body">
+        <StructuredVisual slide={slide} />
+        <BulletList bullets={slide.bullets} />
+      </div>
+      <Takeaway slide={slide} />
+    </article>;
+  }
 
   if (layout === "figure-led") {
     return <article className="paper-presentation-slide layout-figure-led">
@@ -304,7 +326,6 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
   const [activeSlide, setActiveSlide] = useState(0);
-  const [showNotes, setShowNotes] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
 
   const paperContext = useMemo<ContextAttachment[]>(() => [{
@@ -334,8 +355,9 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   const slides = presentation ? [null, ...presentation.slides] : [];
   const stale = Boolean(presentation && reviewUpdatedAt && presentation.source_review_updated_at !== reviewUpdatedAt);
   const legacyPresentation = Boolean(presentation && (
-    Number(presentation.skill?.version || 1) < PAPER2PPT_PRESENTATION_VERSION ||
-    presentation.slides.length < PAPER2PPT_MIN_CONTENT_SLIDES
+    presentation.skill?.id !== "kimi-slides" ||
+    Number(presentation.skill?.version || 1) < KIMI_SLIDES_PRESENTATION_VERSION ||
+    presentation.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES
   ));
   const active = slides[activeSlide];
 
@@ -363,12 +385,11 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     setError("");
     try {
       const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext });
-      if (Number(saved.skill?.version || 1) < PAPER2PPT_PRESENTATION_VERSION || saved.slides.length < PAPER2PPT_MIN_CONTENT_SLIDES) {
-        throw new Error("The presentation backend returned an outdated or incomplete deck instead of Paper2PPT's 12-16 slides.");
+      if (saved.skill?.id !== "kimi-slides" || Number(saved.skill?.version || 1) < KIMI_SLIDES_PRESENTATION_VERSION || saved.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES) {
+        throw new Error("The presentation backend returned an outdated or incomplete deck instead of a Kimi Slides academic presentation.");
       }
       setPresentation(saved);
       setActiveSlide(0);
-      setShowNotes(false);
     } catch (generationError) {
       setError(generationError instanceof Error ? generationError.message : String(generationError));
     } finally {
@@ -380,25 +401,25 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
   if (!presentation) return <section className="paper-presentation-empty">
     <div className="paper-presentation-empty-mark"><FileStack size={28} strokeWidth={1.45} /></div>
-    <p className="paper-review-kicker">Built-in Paper2PPT skill</p>
-    <h2>Turn the finished review into an evidence-led lab-meeting deck.</h2>
-    <p>Paper2PPT re-reads the paper, maps each claim to its source, and chooses a figure-led layout. The saved text review stays untouched.</p>
+    <p className="paper-review-kicker">Built-in Kimi Slides adapter</p>
+    <h2>Turn the paper into a structured academic lab-meeting deck.</h2>
+    <p>Kimi Slides plans the whole narrative, re-reads the paper, and composes dense evidence pages. The saved text review stays untouched.</p>
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
       {generating ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-      {generating ? "Reading paper and designing slides" : reviewReady ? "Generate with Paper2PPT" : "Finish the review first"}
+      {generating ? "Planning and composing the deck" : reviewReady ? "Generate with Kimi Slides" : "Finish the review first"}
     </button>
   </section>;
 
   if (legacyPresentation) return <section className="paper-presentation-empty paper-presentation-legacy">
     <div className="paper-presentation-empty-mark"><RefreshCw size={28} strokeWidth={1.45} /></div>
     <p className="paper-review-kicker">Legacy presentation detected</p>
-    <h2>This saved deck predates the full Paper2PPT pipeline.</h2>
-    <p>It remains stored safely, but it is no longer shown as a current presentation. Upgrade it to create a new evidence-led 12–16 slide deck.</p>
+    <h2>This saved deck uses the previous presentation generator.</h2>
+    <p>It remains stored safely. Upgrade it to create a Kimi Slides academic deck with an outline, denser evidence pages, and the original paper figures.</p>
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
       {generating ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}
-      {generating ? "Reading paper and rebuilding" : "Upgrade with Paper2PPT"}
+      {generating ? "Planning and rebuilding" : "Upgrade with Kimi Slides"}
     </button>
   </section>;
 
@@ -406,7 +427,6 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     <header className="paper-presentation-toolbar">
       <div><span><Check size={14} />Saved independently · {presentation.source_sufficiency || "review-grounded"}</span>{stale && <em>The text review changed after this deck was generated.</em>}</div>
       <div>
-        <button onClick={() => setShowNotes((value) => !value)} className={showNotes ? "active" : ""} disabled={!active}><NotebookText size={15} />Notes</button>
         <button onClick={() => void generate()} disabled={!reviewReady || generating}>{generating ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}{generating ? "Regenerating" : "Regenerate"}</button>
         <button onClick={() => void stageRef.current?.requestFullscreen()}><Expand size={15} />Present</button>
       </div>
@@ -417,25 +437,25 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     <div className="paper-presentation-stage" ref={stageRef}>
       <div className="paper-presentation-frame">
         {activeSlide === 0 ? <article className="paper-presentation-slide cover">
+          <div className="paper-presentation-cover-rail"><b>组会</b><span>论文分享</span><small>Kimi Slides</small></div>
           <div className="paper-presentation-cover-copy">
-            <p>Paper2PPT · evidence-led presentation</p>
+            <p>Kimi Slides · Academic research</p>
             <h2>{presentation.title || paper.title}</h2>
             <h3>{presentation.subtitle}</h3>
             <dl><div><dt>Authors</dt><dd>{paper.authors.slice(0, 5).join(", ") || "Unknown"}{paper.authors.length > 5 ? " et al." : ""}</dd></div><div><dt>Source</dt><dd>{paper.venue || "Paper"} · {paper.year || "n.d."}</dd></div></dl>
           </div>
-          <div className="paper-presentation-cover-object"><PresentationSourceVisual url={pdfUrl} source={{ page: 1, label: "Original paper · PDF p. 1", kind: "page", figure: "", panel: "", focus: "top" }} label={paper.title} compact /><span>Evidence</span><span>Review</span></div>
+          <div className="paper-presentation-cover-object"><PresentationSourceVisual url={pdfUrl} source={{ page: 1, label: "Original paper · PDF p. 1", kind: "page", figure: "", panel: "", focus: "top" }} label={paper.title} compact /></div>
         </article> : active && <ContentSlide slide={active} index={activeSlide} pdfUrl={pdfUrl} />}
       </div>
 
       <nav className="paper-presentation-index" aria-label="Presentation slides">
-        {slides.map((slide, index) => <button key={slide?.id || index} className={index === activeSlide ? "active" : ""} onClick={() => { setActiveSlide(index); setShowNotes(false); }}><span>{String(index + 1).padStart(2, "0")}</span><b>{index === 0 ? "Cover" : SECTION_LABELS[slide!.section]}</b>{slide && <small>{slide.title}</small>}</button>)}
+        {slides.map((slide, index) => <button key={slide?.id || index} className={index === activeSlide ? "active" : ""} onClick={() => setActiveSlide(index)}><span>{String(index + 1).padStart(2, "0")}</span><b>{index === 0 ? "Cover" : SECTION_LABELS[slide!.section]}</b>{slide && <small>{slide.title}</small>}</button>)}
       </nav>
       <div className="paper-presentation-controls">
         <button onClick={() => setActiveSlide((current) => Math.max(0, current - 1))} disabled={activeSlide === 0} aria-label="Previous slide"><ArrowLeft size={17} /></button>
         <span>{activeSlide + 1} / {slides.length}</span>
         <button onClick={() => setActiveSlide((current) => Math.min(slides.length - 1, current + 1))} disabled={activeSlide === slides.length - 1} aria-label="Next slide"><ArrowRight size={17} /></button>
       </div>
-      {showNotes && active && <aside className="paper-presentation-notes"><strong>Speaker notes</strong><p>{active.speaker_notes || "No speaker notes were stored for this legacy slide. Regenerate it with Paper2PPT."}</p></aside>}
     </div>
   </section>;
 }

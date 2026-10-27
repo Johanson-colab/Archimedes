@@ -855,7 +855,7 @@ interface StoredPaperReview {
 
 type PaperPresentationSection = "background" | "related_work" | "method" | "experiments" | "limitations";
 
-type PaperPresentationLayout = "figure-led" | "split" | "process" | "comparison" | "metrics" | "boundaries";
+type PaperPresentationLayout = "outline" | "editorial" | "figure-led" | "split" | "process" | "comparison" | "metrics" | "boundaries";
 
 interface PaperPresentationVisualItem {
   label: string;
@@ -883,7 +883,7 @@ interface PaperPresentationSlide {
     crop?: { x: number; y: number; width: number; height: number } | null;
   };
   visual?: {
-    kind: "source" | "process" | "comparison" | "metrics" | "boundaries";
+    kind: "source" | "outline" | "process" | "comparison" | "metrics" | "boundaries";
     items: PaperPresentationVisualItem[];
   };
   page: number;

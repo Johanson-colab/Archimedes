@@ -106,7 +106,7 @@
   padding: clamp(40px, 7vw, 82px);
   color: #342f29;
   background: #f8f5ee;
-  border-left: 8px solid #913e32;
+  border-left: 8px solid #1f6652;
 }
 .paper-presentation-empty-mark { display: grid; width: 54px; height: 54px; place-items: center; color: #6f5b49; background: #e8dfd1; }
 .paper-presentation-empty h2 { max-width: 15ch; margin: 0; font: 500 clamp(28px, 4vw, 42px)/1.05 Georgia, "Times New Roman", serif; letter-spacing: -.035em; }
@@ -127,20 +127,22 @@
   font-weight: 740;
 }
 .paper-presentation-empty > button { margin-top: 9px; }
-.paper-presentation-empty > button:hover:not(:disabled), .paper-presentation-toolbar button:hover:not(:disabled) { background: #913e32; }
+.paper-presentation-empty > button:hover:not(:disabled), .paper-presentation-toolbar button:hover:not(:disabled) { background: #1f6652; }
 .paper-presentation-empty > button:disabled, .paper-presentation-toolbar button:disabled { cursor: not-allowed; opacity: .42; }
 .paper-presentation-error { display: flex; align-items: center; gap: 8px; margin: 0; color: #9c4337; font-size: 12px; line-height: 1.5; }
 
 .paper-presentation-workbench {
-  --presentation-paper: #f8f5ee;
-  --presentation-paper-2: #ede5d7;
-  --presentation-ink: #2f2a24;
-  --presentation-muted: #777066;
-  --presentation-accent: #913e32;
-  --presentation-rule: #c7b89f;
+  --presentation-paper: #f8f5eb;
+  --presentation-paper-2: #ece5d7;
+  --presentation-ink: #272923;
+  --presentation-muted: #73766e;
+  --presentation-accent: #1f6652;
+  --presentation-accent-2: #bd7429;
+  --presentation-rule: #c9cabc;
   max-width: 1460px;
   margin: 0 auto;
   padding: 22px clamp(18px, 3vw, 42px) 48px;
+  font-family: "MiSans", "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif;
 }
 .paper-presentation-toolbar {
   display: flex;
@@ -153,7 +155,7 @@
 .paper-presentation-toolbar > div:first-child { align-items: flex-start; flex-direction: column; }
 .paper-presentation-toolbar span { display: inline-flex; align-items: center; gap: 6px; color: #5f584f; font-size: 11px; font-weight: 700; }
 .paper-presentation-toolbar em { color: #9b4a3e; font-size: 10px; font-style: normal; }
-.paper-presentation-toolbar button { min-height: 34px; padding-inline: 12px; background: #4a4238; }
+.paper-presentation-toolbar button { min-height: 34px; padding-inline: 12px; background: #34362f; }
 
 .paper-presentation-stage {
   position: relative;
@@ -162,7 +164,7 @@
   grid-template-columns: minmax(0, 1fr) 174px;
   gap: 16px;
   padding: 14px;
-  background: #d8d1c7;
+  background: #d5d3ca;
 }
 .paper-presentation-stage:fullscreen { width: 100vw; height: 100vh; align-content: center; padding: 28px; background: #24211d; }
 .paper-presentation-stage:fullscreen .paper-presentation-frame { max-height: calc(100vh - 56px); }
@@ -180,27 +182,27 @@
   height: 100%;
   box-sizing: border-box;
   flex-direction: column;
-  padding: clamp(28px, 4vw, 62px) clamp(34px, 5vw, 76px) clamp(24px, 3.5vw, 52px);
+  padding: clamp(24px, 3.1vw, 46px) clamp(30px, 4.1vw, 60px) clamp(21px, 2.8vw, 40px);
   background: var(--presentation-paper);
 }
-.paper-presentation-slide-header { flex: 0 0 auto; padding-bottom: clamp(12px, 1.6vw, 23px); border-bottom: 1px solid var(--presentation-rule); }
+.paper-presentation-slide-header { flex: 0 0 auto; padding-bottom: clamp(10px, 1.25vw, 18px); border-bottom: 1px solid var(--presentation-rule); }
 .paper-presentation-slide-header p,
-.paper-presentation-cover-copy > p { margin: 0 0 10px; color: var(--presentation-accent); font-size: clamp(10px, 1vw, 14px); font-weight: 760; letter-spacing: .16em; text-transform: uppercase; }
+.paper-presentation-cover-copy > p { margin: 0 0 9px; color: var(--presentation-accent); font-size: clamp(9px, .78vw, 11px); font-weight: 760; letter-spacing: .14em; text-transform: uppercase; }
 .paper-presentation-slide-header p { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .paper-presentation-slide-header p em { overflow: hidden; color: var(--presentation-muted); font-size: clamp(9px, .72vw, 11px); font-style: normal; font-weight: 600; letter-spacing: .04em; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
-.paper-presentation-slide-header h2 { max-width: 92%; margin: 0; color: var(--presentation-ink); font: 520 clamp(20px, 2.35vw, 32px)/1.1 Georgia, "Times New Roman", serif; letter-spacing: -.02em; text-wrap: balance; }
+.paper-presentation-slide-header h2 { max-width: 94%; margin: 0; color: var(--presentation-ink); font-size: clamp(19px, 2vw, 28px); font-weight: 720; line-height: 1.16; letter-spacing: -.018em; text-wrap: balance; }
 .paper-presentation-summary { margin: 0; color: #4b453e; font-size: clamp(12px, 1.18vw, 17px); line-height: 1.55; text-wrap: pretty; }
 .paper-presentation-split { display: grid; min-height: 0; flex: 1 1 auto; grid-template-columns: minmax(0, 1.15fr) minmax(250px, .85fr); gap: clamp(24px, 4vw, 62px); padding-top: clamp(18px, 2vw, 31px); overflow: hidden; }
 .paper-presentation-split.no-source { grid-template-columns: minmax(0, 1fr); }
 .paper-presentation-split.no-source .paper-presentation-copy { max-width: 88ch; }
 .paper-presentation-copy { min-height: 0; align-self: center; overflow: hidden; }
-.paper-presentation-copy ol { display: grid; gap: clamp(10px, 1.4vw, 20px); margin: clamp(18px, 2.2vw, 34px) 0 0; padding: 0; list-style: none; }
+.paper-presentation-copy ol { display: grid; gap: clamp(8px, 1.05vw, 15px); margin: clamp(13px, 1.6vw, 24px) 0 0; padding: 0; list-style: none; }
 .paper-presentation-copy li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
-.paper-presentation-copy li span { color: var(--presentation-accent); font: 700 clamp(10px, .9vw, 13px)/1.5 Georgia, serif; }
+.paper-presentation-copy li span { color: var(--presentation-accent-2); font-size: clamp(9px, .82vw, 12px); font-weight: 780; line-height: 1.5; }
 .paper-presentation-copy li p { margin: 0; color: #3e3933; font-size: clamp(11px, 1.05vw, 15px); line-height: 1.52; }
 .paper-presentation-page-state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 7px; color: #746d64; background: #e2dbcf; font-size: 11px; }
-.paper-presentation-takeaway { display: grid; flex: 0 0 auto; grid-template-columns: minmax(95px, .26fr) minmax(0, 1fr); gap: 18px; margin: clamp(13px, 1.8vw, 26px) 0 0; padding: clamp(10px, 1.1vw, 15px) 16px; color: #3d3832; background: var(--presentation-paper-2); font-size: clamp(10px, .98vw, 14px); line-height: 1.45; }
-.paper-presentation-takeaway strong { color: var(--presentation-accent); }
+.paper-presentation-takeaway { display: grid; flex: 0 0 auto; grid-template-columns: minmax(92px, .2fr) minmax(0, 1fr); gap: 16px; margin: clamp(10px, 1.35vw, 19px) 0 0; padding: clamp(8px, .8vw, 11px) 0 0; color: #3d4039; border-top: 1px solid var(--presentation-rule); font-size: clamp(9px, .9vw, 13px); line-height: 1.45; }
+.paper-presentation-takeaway strong { color: var(--presentation-accent-2); }
 
 .paper-presentation-slide.related-work > .paper-presentation-summary { max-width: 76ch; margin-top: clamp(15px, 1.8vw, 25px); }
 .paper-presentation-related-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr); gap: clamp(22px, 3vw, 48px); padding-top: clamp(14px, 1.7vw, 24px); }
@@ -216,37 +218,45 @@
 .paper-presentation-limit b { color: var(--presentation-accent); font: 700 clamp(11px, 1vw, 14px)/1.5 Georgia, serif; }
 .paper-presentation-limit p { margin: 0; color: #3f3933; font-size: clamp(10px, 1vw, 14px); line-height: 1.48; }
 
-.paper-presentation-slide.cover { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(280px, .88fr); gap: clamp(35px, 6vw, 90px); align-items: center; padding-left: clamp(52px, 8vw, 116px); border-left: 9px solid var(--presentation-accent); }
-.paper-presentation-cover-copy h2 { max-width: 18ch; margin: 0; color: var(--presentation-ink); font: 520 clamp(28px, 3.4vw, 48px)/1.07 Georgia, "Times New Roman", serif; letter-spacing: -.03em; text-wrap: balance; }
-.paper-presentation-cover-copy h3 { max-width: 40ch; margin: clamp(14px, 2vw, 27px) 0 0; color: #7a7066; font: 500 clamp(14px, 1.5vw, 21px)/1.4 Georgia, "Times New Roman", serif; }
+.paper-presentation-slide.cover { display: grid; grid-template-columns: minmax(150px, .42fr) minmax(0, 1.08fr) minmax(250px, .72fr); gap: clamp(24px, 3.8vw, 56px); align-items: center; padding: 0 clamp(34px, 4.4vw, 66px) 0 0; }
+.paper-presentation-cover-rail { display: flex; height: 100%; box-sizing: border-box; flex-direction: column; justify-content: space-between; padding: clamp(30px, 4vw, 58px) clamp(19px, 2.6vw, 38px); color: #f5f0e5; background: var(--presentation-accent); }
+.paper-presentation-cover-rail b { font-size: clamp(10px, .85vw, 13px); letter-spacing: .28em; }
+.paper-presentation-cover-rail span { writing-mode: vertical-rl; font-size: clamp(11px, 1vw, 15px); letter-spacing: .22em; }
+.paper-presentation-cover-rail small { color: #d4e1d8; font-size: clamp(8px, .7vw, 10px); }
+.paper-presentation-cover-copy h2 { max-width: 18ch; margin: 0; color: var(--presentation-ink); font-size: clamp(27px, 3vw, 42px); font-weight: 740; line-height: 1.12; letter-spacing: -.035em; text-wrap: balance; }
+.paper-presentation-cover-copy h3 { max-width: 42ch; margin: clamp(13px, 1.8vw, 24px) 0 0; color: #6d7168; font-size: clamp(12px, 1.2vw, 17px); font-weight: 520; line-height: 1.48; }
 .paper-presentation-cover-copy dl { display: grid; gap: 9px; margin: clamp(25px, 4vw, 54px) 0 0; }
 .paper-presentation-cover-copy dl > div { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 15px; }
-.paper-presentation-cover-copy dt { color: #8e3e33; font-size: clamp(9px, .8vw, 11px); font-weight: 760; text-transform: uppercase; }
+.paper-presentation-cover-copy dt { color: var(--presentation-accent-2); font-size: clamp(8px, .7vw, 10px); font-weight: 760; text-transform: uppercase; }
 .paper-presentation-cover-copy dd { margin: 0; color: #5e574f; font-size: clamp(9px, .86vw, 12px); line-height: 1.4; }
 .paper-presentation-cover-object { position: relative; align-self: stretch; min-height: 0; }
-.paper-presentation-cover-object .paper-presentation-source { position: absolute; z-index: 2; width: 64%; height: 72%; top: 14%; left: 18%; background: #ded6c8; transform: rotate(-1.2deg); }
-.paper-presentation-cover-object > span { position: absolute; display: grid; width: clamp(78px, 9vw, 128px); aspect-ratio: 1; place-items: center; color: #4c453e; border: 1px solid #4c453e; border-radius: 50%; font: 600 clamp(10px, 1vw, 14px)/1 Georgia, serif; }
-.paper-presentation-cover-object > span:nth-of-type(1) { top: 8%; right: 2%; }
-.paper-presentation-cover-object > span:nth-of-type(2) { right: 2%; bottom: 8%; }
+.paper-presentation-cover-object .paper-presentation-source { position: absolute; z-index: 2; inset: 17% 0 12%; background: #eee9dc; }
 
 .paper-presentation-index { display: grid; max-height: 100%; align-content: start; gap: 4px; overflow: auto; }
 .paper-presentation-index button { display: grid; min-height: 48px; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; padding: 7px 8px; color: #6f675e; background: #e7e1d8; border: 0; border-left: 3px solid transparent; font-size: 10px; text-align: left; }
 .paper-presentation-index button span { color: #9a8d7c; font: 700 9px Georgia, serif; }
 .paper-presentation-index button b { font-size: 10px; }
 .paper-presentation-index button small { grid-column: 2; overflow: hidden; color: #92887b; font-size: 8px; font-weight: 500; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.paper-presentation-index button:hover, .paper-presentation-index button.active { color: #2f2a24; background: #f4efe6; border-left-color: #913e32; }
+.paper-presentation-index button:hover, .paper-presentation-index button.active { color: #272923; background: #f4f0e6; border-left-color: var(--presentation-accent); }
 .paper-presentation-controls { position: absolute; right: 14px; bottom: 14px; display: grid; width: 128px; grid-template-columns: 34px 1fr 34px; align-items: center; color: #5d564e; background: #eee8df; }
 .paper-presentation-controls button { display: grid; width: 34px; height: 34px; place-items: center; color: #433c35; background: transparent; border: 0; }
 .paper-presentation-controls button:disabled { opacity: .28; }
 .paper-presentation-controls span { text-align: center; font: 700 10px Georgia, serif; }
 
-/* Paper2PPT adapter: evidence determines the layout; the established ivory theme remains unchanged. */
-.paper-presentation-toolbar button.active { background: #913e32; }
+/* Kimi Slides adapter: dense academic pages on a fixed warm-paper skeleton. */
+.paper-presentation-toolbar button.active { background: var(--presentation-accent); }
 .paper-presentation-lead { max-width: 72ch; margin: 0; color: #4b453e; font-size: clamp(11px, 1.05vw, 15px); line-height: 1.52; text-wrap: pretty; }
 .paper-presentation-bullets { display: grid; gap: clamp(8px, 1.1vw, 15px); margin: clamp(14px, 1.7vw, 24px) 0 0; padding: 0; list-style: none; }
 .paper-presentation-bullets li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
 .paper-presentation-bullets li span { color: var(--presentation-accent); font: 700 clamp(9px, .82vw, 12px)/1.55 Georgia, serif; }
 .paper-presentation-bullets li p { margin: 0; color: #3e3933; font-size: clamp(10px, .94vw, 13px); line-height: 1.48; }
+.paper-presentation-outline-body { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr); gap: clamp(32px, 5vw, 72px); padding-top: clamp(16px, 2vw, 28px); overflow: hidden; }
+.paper-presentation-outline-body aside { align-self: center; padding-left: clamp(18px, 2.2vw, 30px); border-left: 2px solid var(--presentation-accent); }
+.paper-presentation-outline-body aside span { color: var(--presentation-accent); font-size: clamp(9px, .72vw, 11px); font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
+.paper-presentation-outline-body aside p { margin: 12px 0 0; color: #363a33; font-size: clamp(12px, 1.25vw, 17px); font-weight: 620; line-height: 1.55; }
+.paper-presentation-editorial-body { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1.12fr) minmax(240px, .88fr); gap: clamp(28px, 4vw, 58px); padding-top: clamp(13px, 1.6vw, 22px); overflow: hidden; }
+.paper-presentation-editorial-body > .paper-presentation-bullets { align-content: start; margin-top: 0; padding-left: clamp(18px, 2vw, 28px); border-left: 1px solid var(--presentation-rule); }
+.paper-presentation-editorial-body > .paper-presentation-structured { grid-template-columns: minmax(0, 1fr); }
 .paper-presentation-source { position: relative; display: grid; min-width: 0; min-height: 0; align-self: stretch; overflow: hidden; margin: 0; place-items: center; background: transparent; }
 .paper-presentation-source canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
 .paper-presentation-source.compact { min-height: 0; }
@@ -263,24 +273,30 @@
 .paper-presentation-structured strong { color: #332e28; font-size: clamp(10px, .98vw, 14px); }
 .paper-presentation-structured b { color: var(--presentation-accent); font: 600 clamp(13px, 1.4vw, 20px)/1 Georgia, serif; }
 .paper-presentation-structured p { grid-column: 1 / -1; margin: 0; color: #756d63; font-size: clamp(8px, .78vw, 11px); line-height: 1.4; }
+.paper-presentation-structured.outline { grid-template-columns: minmax(0, 1fr); align-content: center; }
+.paper-presentation-structured.outline > div { grid-template-columns: 36px minmax(0, 1fr); padding: clamp(8px, 1vw, 14px) 0; }
+.paper-presentation-structured.outline > div > span { color: var(--presentation-accent-2); font-size: clamp(11px, 1vw, 14px); }
+.paper-presentation-structured.outline section { grid-template-columns: minmax(120px, .38fr) minmax(0, 1fr); align-items: baseline; }
+.paper-presentation-structured.outline strong { font-size: clamp(11px, 1.05vw, 15px); }
+.paper-presentation-structured.outline p { grid-column: 2; font-size: clamp(9px, .83vw, 12px); }
 .paper-presentation-structured.process { grid-template-columns: repeat(var(--process-columns, 3), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); align-items: stretch; gap: 0; }
-.paper-presentation-structured.process > div { position: relative; display: flex; flex-direction: column; justify-content: center; min-height: 0; padding: 16px 15px; overflow: visible; border: 1px solid #cbbda6; border-right: 0; }
-.paper-presentation-structured.process > div:last-child { border-right: 1px solid #cbbda6; }
-.paper-presentation-structured.process > div:not(:last-child)::after { position: absolute; z-index: 2; top: 50%; right: -7px; width: 12px; height: 12px; content: ""; background: var(--presentation-paper); border-top: 1px solid #a28d70; border-right: 1px solid #a28d70; transform: translateY(-50%) rotate(45deg); }
+.paper-presentation-structured.process > div { position: relative; display: flex; flex-direction: column; justify-content: center; min-height: 0; padding: 16px 18px; overflow: visible; border-top: 2px solid var(--presentation-accent); border-bottom: 1px solid var(--presentation-rule); }
+.paper-presentation-structured.process > div + div { border-left: 1px solid var(--presentation-rule); }
+.paper-presentation-structured.process > div:not(:last-child)::after { position: absolute; z-index: 2; top: -5px; right: -4px; width: 8px; height: 8px; content: ""; background: var(--presentation-accent-2); }
 .paper-presentation-structured.process > div > span { display: block; margin-bottom: 12px; }
 .paper-presentation-structured.process section { display: block; }
 .paper-presentation-structured.process b { display: block; margin: 8px 0 4px; }
-.paper-presentation-structured.comparison, .paper-presentation-structured.metrics, .paper-presentation-structured.boundaries { grid-template-columns: repeat(var(--structured-columns, 3), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); align-content: stretch; gap: 14px; }
-.paper-presentation-structured.comparison > div, .paper-presentation-structured.metrics > div, .paper-presentation-structured.boundaries > div { display: flex; min-height: 0; flex-direction: column; justify-content: center; padding: clamp(12px, 1.4vw, 19px); overflow: hidden; border: 0; border-top: 3px solid #a35447; background: #f1eadf; }
+.paper-presentation-structured.comparison, .paper-presentation-structured.metrics, .paper-presentation-structured.boundaries { grid-template-columns: repeat(var(--structured-columns, 3), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); align-content: stretch; gap: clamp(12px, 1.6vw, 22px); }
+.paper-presentation-structured.comparison > div, .paper-presentation-structured.metrics > div, .paper-presentation-structured.boundaries > div { display: flex; min-height: 0; flex-direction: column; justify-content: center; padding: clamp(10px, 1.1vw, 16px) 0; overflow: hidden; border: 0; border-top: 2px solid var(--presentation-accent); border-bottom: 1px solid var(--presentation-rule); background: transparent; }
 .paper-presentation-structured.comparison section, .paper-presentation-structured.metrics section, .paper-presentation-structured.boundaries section { display: block; }
 .paper-presentation-structured.comparison b, .paper-presentation-structured.metrics b, .paper-presentation-structured.boundaries b { display: block; margin: clamp(10px, 1.1vw, 16px) 0 6px; }
-.paper-presentation-structured.metrics b { font-size: clamp(18px, 2.2vw, 32px); }
+.paper-presentation-structured.metrics b { color: var(--presentation-accent-2); font-size: clamp(18px, 2.15vw, 30px); }
 .paper-presentation-structured strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .paper-presentation-structured b { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow-wrap: anywhere; }
 .paper-presentation-structured.metrics b { -webkit-line-clamp: 2; }
 .paper-presentation-structured p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow-wrap: anywhere; }
-.paper-presentation-structured.boundaries > div:nth-child(2) { border-top-color: #7d7063; }
-.paper-presentation-structured.boundaries > div:nth-child(3) { border-top-color: #b99053; }
+.paper-presentation-structured.boundaries > div:nth-child(2) { border-top-color: #777b72; }
+.paper-presentation-structured.boundaries > div:nth-child(3) { border-top-color: var(--presentation-accent-2); }
 .paper-presentation-notes { position: absolute; z-index: 5; right: 204px; bottom: 14px; left: 14px; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 15px; padding: 13px 16px; color: #eee7dc; background: rgba(45, 40, 34, .95); box-shadow: 0 8px 24px rgba(31, 25, 19, .22); }
 .paper-presentation-notes strong { color: #ddb09e; font-size: 10px; text-transform: uppercase; }
 .paper-presentation-notes p { margin: 0; font-size: 10px; line-height: 1.5; }
@@ -295,7 +311,7 @@ html:not([data-theme="paper"]) .paper-presentation-toolbar span { color: #c7beb4
   .paper-presentation-stage { grid-template-columns: 1fr; padding-bottom: 60px; }
   .paper-presentation-index { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .paper-presentation-index button { min-height: 38px; grid-template-columns: 1fr; gap: 1px; border-bottom: 3px solid transparent; border-left: 0; text-align: center; }
-  .paper-presentation-index button.active { border-bottom-color: #913e32; border-left: 0; }
+  .paper-presentation-index button.active { border-bottom-color: #1f6652; border-left: 0; }
   .paper-presentation-controls { right: 14px; bottom: 14px; width: 118px; }
 }
 
@@ -309,7 +325,8 @@ html:not([data-theme="paper"]) .paper-presentation-toolbar span { color: #c7beb4
   .paper-presentation-slide { padding: 18px 20px 16px; }
   .paper-presentation-slide-header h2 { font-size: 20px; }
   .paper-presentation-split, .paper-presentation-related-grid, .paper-presentation-limit-grid { grid-template-columns: 1fr 1fr; gap: 16px; }
-  .paper-presentation-slide.cover { grid-template-columns: 1.15fr .85fr; gap: 20px; padding-left: 28px; border-left-width: 6px; }
+  .paper-presentation-slide.cover { grid-template-columns: 92px 1.15fr .85fr; gap: 16px; padding-right: 22px; }
+  .paper-presentation-cover-rail { padding: 22px 14px; }
   .paper-presentation-cover-copy h2 { font-size: 26px; }
   .paper-presentation-cover-copy h3 { font-size: 12px; }
   .paper-presentation-cover-copy dl { margin-top: 18px; }
