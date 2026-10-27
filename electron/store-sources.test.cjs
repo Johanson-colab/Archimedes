@@ -177,17 +177,24 @@ test("persists presentations separately from their source review", () => {
       supervisor: { reason: "Evidence checked." },
       summary: { response: "## Memorandum\nThe source review stays independent." },
     });
-    const sections = ["background", "related_work", "method", "experiments", "limitations"];
+    const sections = ["background", "background", "related_work", "related_work", "method", "method", "method", "experiments", "experiments", "experiments", "limitations"];
     store.savePaperPresentation(paper.id, {
-      skill: { id: "paper-presentation", name: "Paper presentation", description: "Downstream deck", version: 1 },
+      skill: { id: "paper-presentation", name: "Paper presentation", description: "Downstream deck", version: 3 },
       title: paper.title,
       subtitle: "A compact deck",
+      source_sufficiency: "full-paper",
       slides: sections.map((section, index) => ({
+        id: `${section}-${index}`,
         section,
+        layout: section === "method" ? "process" : "split",
         title: section,
         summary: `${section} summary`,
+        lead: `${section} lead`,
         bullets: [`${section} point one`, `${section} point two`],
         takeaway: `${section} takeaway`,
+        speaker_notes: `${section} notes`,
+        source: { page: index + 1, label: `PDF p. ${index + 1}`, kind: "figure", figure: `Fig. ${index + 1}`, panel: "a", focus: "top", crop: { x: .1, y: .2, width: .8, height: .5 } },
+        visual: { kind: section === "method" ? "process" : "source", items: [{ label: "Result", value: "42", detail: "Verified" }] },
         page: index + 1,
       })),
     }, review.updated_at);
@@ -198,7 +205,14 @@ test("persists presentations separately from their source review", () => {
     assert.equal(restoredReview.summary, "## Memorandum\nThe source review stays independent.");
     assert.equal(restoredPresentation.title, paper.title);
     assert.equal(restoredPresentation.source_review_updated_at, review.updated_at);
+    assert.equal(restoredPresentation.skill.version, 3);
+    assert.equal(restoredPresentation.source_sufficiency, "full-paper");
+    assert.equal(restoredPresentation.slides.length, 11);
     assert.deepEqual(restoredPresentation.slides.map((slide) => slide.section), sections);
+    assert.equal(restoredPresentation.slides[4].layout, "process");
+    assert.equal(restoredPresentation.slides[4].speaker_notes, "method notes");
+    assert.equal(restoredPresentation.slides[4].visual.items[0].value, "42");
+    assert.deepEqual(restoredPresentation.slides[4].source.crop, { x: .1, y: .2, width: .8, height: .5 });
   } finally {
     store.openWorkspace(other);
     fs.rmSync(workspace, { recursive: true, force: true });

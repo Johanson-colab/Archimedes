@@ -13,6 +13,9 @@ const SECTION_LABELS: Record<PaperPresentationSection, string> = {
   limitations: "Limitations",
 };
 
+const PAPER2PPT_PRESENTATION_VERSION = 3;
+const PAPER2PPT_MIN_CONTENT_SLIDES = 11;
+
 const FOCUS_RECTS: Record<SourceFocus, { x: number; y: number; width: number; height: number }> = {
   full: { x: 0, y: 0, width: 1, height: 1 },
   top: { x: 0, y: 0, width: 1, height: .58 },
@@ -239,7 +242,10 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
   const slides = presentation ? [null, ...presentation.slides] : [];
   const stale = Boolean(presentation && reviewUpdatedAt && presentation.source_review_updated_at !== reviewUpdatedAt);
-  const legacyPresentation = Boolean(presentation && (Number(presentation.skill?.version || 1) < 2 || presentation.slides.length < 7));
+  const legacyPresentation = Boolean(presentation && (
+    Number(presentation.skill?.version || 1) < PAPER2PPT_PRESENTATION_VERSION ||
+    presentation.slides.length < PAPER2PPT_MIN_CONTENT_SLIDES
+  ));
   const active = slides[activeSlide];
 
   useEffect(() => {
@@ -266,8 +272,8 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     setError("");
     try {
       const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext });
-      if (Number(saved.skill?.version || 1) < 2 || saved.slides.length < 7) {
-        throw new Error("The Electron main process is still using the legacy six-slide generator. Fully stop npm run dev, start it again, then regenerate.");
+      if (Number(saved.skill?.version || 1) < PAPER2PPT_PRESENTATION_VERSION || saved.slides.length < PAPER2PPT_MIN_CONTENT_SLIDES) {
+        throw new Error("The presentation backend returned an outdated or incomplete deck instead of Paper2PPT's 12-16 slides.");
       }
       setPresentation(saved);
       setActiveSlide(0);
@@ -296,8 +302,8 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   if (legacyPresentation) return <section className="paper-presentation-empty paper-presentation-legacy">
     <div className="paper-presentation-empty-mark"><RefreshCw size={28} strokeWidth={1.45} /></div>
     <p className="paper-review-kicker">Legacy presentation detected</p>
-    <h2>This saved six-slide deck predates Paper2PPT.</h2>
-    <p>It remains stored safely, but it is no longer shown as a current presentation. Regenerate after fully restarting the Electron app to create the new evidence-led 8–12 page deck.</p>
+    <h2>This saved deck predates the full Paper2PPT pipeline.</h2>
+    <p>It remains stored safely, but it is no longer shown as a current presentation. Upgrade it to create a new evidence-led 12–16 slide deck.</p>
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
       {generating ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}

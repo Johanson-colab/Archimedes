@@ -573,26 +573,71 @@ function savePaperReview(paperId, review) {
 }
 
 const PAPER_PRESENTATION_SECTIONS = ["background", "related_work", "method", "experiments", "limitations"];
+const PAPER_PRESENTATION_LAYOUTS = new Set(["figure-led", "split", "process", "comparison", "metrics", "boundaries"]);
+const PAPER_PRESENTATION_VISUAL_KINDS = new Set(["source", "process", "comparison", "metrics", "boundaries"]);
+const PAPER_PRESENTATION_SOURCE_KINDS = new Set(["figure", "table", "diagram", "text", "page"]);
+const PAPER_PRESENTATION_SOURCE_FOCUS = new Set(["full", "top", "middle", "bottom", "left", "right"]);
+
+function normalizedPresentationCrop(crop) {
+  if (!crop || typeof crop !== "object") return null;
+  const values = [crop.x, crop.y, crop.width, crop.height].map(Number);
+  if (!values.every(Number.isFinite)) return null;
+  const [x, y, width, height] = values;
+  if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) return null;
+  return { x, y, width, height };
+}
+
+function normalizePaperPresentationSlide(slide, index) {
+  const section = PAPER_PRESENTATION_SECTIONS.includes(slide?.section) ? slide.section : "";
+  if (!section) throw new Error(`Slide ${index + 1} has an unsupported presentation section.`);
+  const sourceInput = slide.source && typeof slide.source === "object" ? slide.source : null;
+  const page = Math.max(1, Math.min(5_000, Number(sourceInput?.page ?? slide.page) || 1));
+  const visualInput = slide.visual && typeof slide.visual === "object" ? slide.visual : null;
+  const normalized = {
+    id: paperReviewText(slide.id || `${section}-${index + 1}`, 200),
+    section,
+    title: paperReviewText(slide.title, 1_000),
+    summary: paperReviewText(slide.summary, 4_000),
+    lead: paperReviewText(slide.lead ?? slide.summary, 4_000),
+    bullets: Array.isArray(slide.bullets)
+      ? slide.bullets.map((bullet) => paperReviewText(bullet, 1_000)).filter(Boolean).slice(0, 4)
+      : [],
+    takeaway: paperReviewText(slide.takeaway, 2_000),
+    speaker_notes: paperReviewText(slide.speaker_notes, 6_000),
+    page,
+  };
+  if (PAPER_PRESENTATION_LAYOUTS.has(slide.layout)) normalized.layout = slide.layout;
+  if (sourceInput) {
+    normalized.source = {
+      page,
+      label: paperReviewText(sourceInput.label || `PDF p. ${page}`, 1_000),
+      kind: PAPER_PRESENTATION_SOURCE_KINDS.has(sourceInput.kind) ? sourceInput.kind : "page",
+      figure: paperReviewText(sourceInput.figure, 300),
+      panel: paperReviewText(sourceInput.panel, 200),
+      focus: PAPER_PRESENTATION_SOURCE_FOCUS.has(sourceInput.focus) ? sourceInput.focus : "full",
+      crop: normalizedPresentationCrop(sourceInput.crop),
+    };
+  }
+  if (visualInput) {
+    normalized.visual = {
+      kind: PAPER_PRESENTATION_VISUAL_KINDS.has(visualInput.kind) ? visualInput.kind : "source",
+      items: Array.isArray(visualInput.items) ? visualInput.items.slice(0, 6).map((item) => ({
+        label: paperReviewText(item?.label, 500),
+        value: paperReviewText(item?.value, 500),
+        detail: paperReviewText(item?.detail, 2_000),
+      })).filter((item) => item.label || item.value || item.detail) : [],
+    };
+  }
+  return normalized;
+}
 
 function normalizePaperPresentation(presentation) {
   if (!presentation || typeof presentation !== "object") throw new Error("A completed paper presentation is required.");
   const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
-  const normalizedSlides = PAPER_PRESENTATION_SECTIONS.map((section) => {
-    const slide = slides.find((candidate) => candidate?.section === section);
-    if (!slide) throw new Error(`The paper presentation is missing its ${section} slide.`);
-    const bullets = Array.isArray(slide.bullets)
-      ? slide.bullets.map((bullet) => paperReviewText(bullet, 1_000)).filter(Boolean).slice(0, 4)
-      : [];
-    if (bullets.length < 2) throw new Error(`The ${section} slide needs at least two points.`);
-    return {
-      section,
-      title: paperReviewText(slide.title, 1_000),
-      summary: paperReviewText(slide.summary, 4_000),
-      bullets,
-      takeaway: paperReviewText(slide.takeaway, 2_000),
-      page: Math.max(1, Math.min(5_000, Number(slide.page) || 1)),
-    };
-  });
+  const normalizedSlides = slides.slice(0, 15).map(normalizePaperPresentationSlide);
+  for (const section of PAPER_PRESENTATION_SECTIONS) {
+    if (!normalizedSlides.some((slide) => slide.section === section)) throw new Error(`The paper presentation is missing its ${section} section.`);
+  }
   return {
     skill: {
       id: paperReviewText(presentation.skill?.id || "paper-presentation", 200),
@@ -602,6 +647,9 @@ function normalizePaperPresentation(presentation) {
     },
     title: paperReviewText(presentation.title, 2_000),
     subtitle: paperReviewText(presentation.subtitle, 4_000),
+    source_sufficiency: ["full-paper", "partial-paper", "review-grounded"].includes(presentation.source_sufficiency)
+      ? presentation.source_sufficiency
+      : "review-grounded",
     slides: normalizedSlides,
   };
 }

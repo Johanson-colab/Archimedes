@@ -6,7 +6,7 @@ const PAPER_PRESENTATION_SKILL = Object.freeze({
   id: "paper-presentation",
   name: "Paper2PPT presentation",
   description: "Applies Paper2PPT's evidence-first workflow to a saved review and the original paper without changing the review itself.",
-  version: 2,
+  version: 3,
 });
 
 const PRESENTATION_SECTIONS = Object.freeze([
@@ -84,7 +84,7 @@ Required evidence workflow:
 
 Narrative contract:
 - Keep this section order: Background -> Related work -> Method -> Experiments -> Limitations.
-- Produce 7-11 CONTENT slides in that order; the UI adds the cover separately.
+- Produce 11-15 CONTENT slides in that order; the UI adds the cover separately, for Paper2PPT's default 12-16 slides total.
 - Every section appears at least once. Use 2-4 Experiments slides when evidence warrants it.
 - One main claim per slide. Use conclusion-style titles, not section labels.
 - Prefer a source figure/table over prose. Do not select a text-heavy PDF page merely because it contains the cited sentence.
@@ -190,8 +190,8 @@ function normalizeSlide(input, pageCount, index) {
 
 function normalizePaperPresentation(value, paper, pageCount) {
   if (!value || typeof value !== "object") throw new Error("A presentation object is required.");
-  const inputSlides = Array.isArray(value.slides) ? value.slides.slice(0, 12) : [];
-  if (inputSlides.length < 7) throw new Error("Paper2PPT returned too few slides to cover the evidence arc.");
+  const inputSlides = Array.isArray(value.slides) ? value.slides.slice(0, 15) : [];
+  if (inputSlides.length < 11) throw new Error("Paper2PPT returned fewer than 11 content slides (12 total with the cover).");
   const slides = inputSlides.map((slide, index) => normalizeSlide(slide, pageCount, index));
   const order = new Map(PRESENTATION_SECTIONS.map((section, index) => [section.id, index]));
   let previous = -1;
