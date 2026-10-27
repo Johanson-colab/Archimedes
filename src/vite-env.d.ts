@@ -849,12 +849,37 @@ interface StoredPaperReview {
 
 type PaperPresentationSection = "background" | "related_work" | "method" | "experiments" | "limitations";
 
+type PaperPresentationLayout = "figure-led" | "split" | "process" | "comparison" | "metrics" | "boundaries";
+
+interface PaperPresentationVisualItem {
+  label: string;
+  value: string;
+  detail: string;
+}
+
 interface PaperPresentationSlide {
+  id?: string;
   section: PaperPresentationSection;
+  layout?: PaperPresentationLayout;
   title: string;
-  summary: string;
+  lead?: string;
+  summary?: string;
   bullets: string[];
   takeaway: string;
+  speaker_notes?: string;
+  source?: {
+    page: number;
+    label: string;
+    kind: "figure" | "table" | "diagram" | "text" | "page";
+    figure: string;
+    panel: string;
+    focus: "full" | "top" | "middle" | "bottom" | "left" | "right";
+    crop?: { x: number; y: number; width: number; height: number } | null;
+  };
+  visual?: {
+    kind: "source" | "process" | "comparison" | "metrics" | "boundaries";
+    items: PaperPresentationVisualItem[];
+  };
   page: number;
 }
 
@@ -862,6 +887,7 @@ interface PaperPresentation {
   skill: { id: "paper-presentation" | string; name: string; description: string; version: number };
   title: string;
   subtitle: string;
+  source_sufficiency?: "full-paper" | "partial-paper" | "review-grounded";
   slides: PaperPresentationSlide[];
 }
 

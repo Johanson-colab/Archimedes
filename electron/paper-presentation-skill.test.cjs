@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { normalizePaperPresentation, paperPresentationPrompt } = require("./paper-presentation-skill.cjs");
+const { loadPaper2PptGuidance, normalizePaperPresentation, paperPresentationPrompt } = require("./paper-presentation-skill.cjs");
 
 const paper = { title: "A careful paper", authors: ["A. Author"], venue: "TestConf", year: 2026 };
 const review = {
@@ -13,35 +13,50 @@ const review = {
   ],
 };
 
-test("presentation skill is explicitly downstream of the saved review", () => {
+test("presentation skill reuses Paper2PPT while preserving the saved review", () => {
   const prompt = paperPresentationPrompt(paper, review, 12);
-  assert.match(prompt, /second-stage transformation/);
-  assert.match(prompt, /do not review the paper again/);
+  assert.match(prompt, /built-in Paper2PPT adapter/);
+  assert.match(prompt, /read_attached_paper_pdf repeatedly/);
+  assert.match(prompt, /claim-to-source ledger/);
   assert.match(prompt, /Background -> Related work -> Method -> Experiments -> Limitations/);
   assert.match(prompt, /Closest prior work appears on PDF p\. 3/);
+  assert.match(loadPaper2PptGuidance(), /# Paper2PPT/);
+  assert.match(loadPaper2PptGuidance(), /claim-to-source/i);
 });
 
-test("presentation skill normalizes exactly the fixed five-slide narrative", () => {
-  const sections = ["background", "related_work", "method", "experiments", "limitations"];
+test("presentation skill normalizes an adaptive evidence-led narrative", () => {
+  const sections = ["background", "related_work", "method", "experiments", "experiments", "experiments", "limitations"];
   const presentation = normalizePaperPresentation({
     title: "A careful paper",
     subtitle: "A compact, evidence-grounded contribution.",
+    source_sufficiency: "full-paper",
     slides: sections.map((section, index) => ({
       section,
+      layout: section === "method" ? "process" : section === "experiments" ? "metrics" : "split",
       title: section,
-      summary: `Summary for ${section}`,
+      lead: `Framing for ${section}`,
       bullets: [`First point for ${section}`, `Second point for ${section}`],
       takeaway: `Takeaway for ${section}`,
-      page: index === 4 ? 99 : index + 1,
+      speaker_notes: `Evidence and qualifier for ${section}.`,
+      source: { page: index === 6 ? 99 : index + 1, label: `PDF p. ${index + 1}`, kind: "figure", figure: `Fig. ${index + 1}`, panel: "a", focus: "top", crop: { x: .1, y: .2, width: .8, height: .5 } },
+      visual: { kind: section === "method" ? "process" : "metrics", items: [{ label: "Result", value: "42", detail: "Verified value" }] },
     })),
   }, paper, 12);
   assert.deepEqual(presentation.slides.map((slide) => slide.section), sections);
-  assert.equal(presentation.slides.at(-1).page, 12);
+  assert.equal(presentation.slides.at(-1).source.page, 12);
+  assert.equal(presentation.slides[2].layout, "process");
+  assert.equal(presentation.slides[3].visual.items[0].value, "42");
+  assert.deepEqual(presentation.slides[3].source.crop, { x: .1, y: .2, width: .8, height: .5 });
+  assert.equal(presentation.source_sufficiency, "full-paper");
   assert.equal(presentation.skill.id, "paper-presentation");
+  assert.equal(presentation.skill.version, 2);
 });
 
-test("presentation skill refuses incomplete slide sequences", () => {
+test("presentation skill refuses incomplete or out-of-order evidence arcs", () => {
   assert.throws(() => normalizePaperPresentation({
     slides: [{ section: "background", title: "Only one", bullets: ["a", "b"] }],
-  }, paper, 12), /missing its Related work slide/);
+  }, paper, 12), /too few slides/);
+  assert.throws(() => normalizePaperPresentation({
+    slides: ["background", "method", "method", "related_work", "experiments", "experiments", "limitations"].map((section) => ({ section, title: section })),
+  }, paper, 12), /outside the required evidence order/);
 });

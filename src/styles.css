@@ -159,7 +159,7 @@
   position: relative;
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) 128px;
+  grid-template-columns: minmax(0, 1fr) 174px;
   gap: 16px;
   padding: 14px;
   background: #d8d1c7;
@@ -186,7 +186,7 @@
 .paper-presentation-slide-header { flex: 0 0 auto; padding-bottom: clamp(12px, 1.6vw, 23px); border-bottom: 1px solid var(--presentation-rule); }
 .paper-presentation-slide-header p,
 .paper-presentation-cover-copy > p { margin: 0 0 10px; color: var(--presentation-accent); font-size: clamp(10px, 1vw, 14px); font-weight: 760; letter-spacing: .16em; text-transform: uppercase; }
-.paper-presentation-slide-header h2 { max-width: 88%; margin: 0; color: var(--presentation-ink); font: 520 clamp(22px, 2.7vw, 38px)/1.08 Georgia, "Times New Roman", serif; letter-spacing: -.025em; text-wrap: balance; }
+.paper-presentation-slide-header h2 { max-width: 92%; margin: 0; color: var(--presentation-ink); font: 520 clamp(20px, 2.35vw, 32px)/1.1 Georgia, "Times New Roman", serif; letter-spacing: -.02em; text-wrap: balance; }
 .paper-presentation-summary { margin: 0; color: #4b453e; font-size: clamp(12px, 1.18vw, 17px); line-height: 1.55; text-wrap: pretty; }
 .paper-presentation-split { display: grid; min-height: 0; flex: 1 1 auto; grid-template-columns: minmax(0, 1.15fr) minmax(250px, .85fr); gap: clamp(24px, 4vw, 62px); padding-top: clamp(18px, 2vw, 31px); }
 .paper-presentation-copy { align-self: center; }
@@ -219,26 +219,70 @@
 .paper-presentation-limit p { margin: 0; color: #3f3933; font-size: clamp(10px, 1vw, 14px); line-height: 1.48; }
 
 .paper-presentation-slide.cover { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(280px, .88fr); gap: clamp(35px, 6vw, 90px); align-items: center; padding-left: clamp(52px, 8vw, 116px); border-left: 9px solid var(--presentation-accent); }
-.paper-presentation-cover-copy h2 { max-width: 16ch; margin: 0; color: var(--presentation-ink); font: 520 clamp(30px, 4vw, 57px)/1.05 Georgia, "Times New Roman", serif; letter-spacing: -.035em; text-wrap: balance; }
+.paper-presentation-cover-copy h2 { max-width: 18ch; margin: 0; color: var(--presentation-ink); font: 520 clamp(28px, 3.4vw, 48px)/1.07 Georgia, "Times New Roman", serif; letter-spacing: -.03em; text-wrap: balance; }
 .paper-presentation-cover-copy h3 { max-width: 40ch; margin: clamp(14px, 2vw, 27px) 0 0; color: #7a7066; font: 500 clamp(14px, 1.5vw, 21px)/1.4 Georgia, "Times New Roman", serif; }
 .paper-presentation-cover-copy dl { display: grid; gap: 9px; margin: clamp(25px, 4vw, 54px) 0 0; }
 .paper-presentation-cover-copy dl > div { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 15px; }
 .paper-presentation-cover-copy dt { color: #8e3e33; font-size: clamp(9px, .8vw, 11px); font-weight: 760; text-transform: uppercase; }
 .paper-presentation-cover-copy dd { margin: 0; color: #5e574f; font-size: clamp(9px, .86vw, 12px); line-height: 1.4; }
 .paper-presentation-cover-object { position: relative; align-self: stretch; min-height: 0; }
-.paper-presentation-cover-object .paper-presentation-page { position: absolute; z-index: 2; width: 56%; height: 70%; top: 15%; left: 23%; background: #ded6c8; transform: rotate(-1.6deg); }
+.paper-presentation-cover-object .paper-presentation-source { position: absolute; z-index: 2; width: 64%; height: 72%; top: 14%; left: 18%; background: #ded6c8; transform: rotate(-1.2deg); }
 .paper-presentation-cover-object > span { position: absolute; display: grid; width: clamp(78px, 9vw, 128px); aspect-ratio: 1; place-items: center; color: #4c453e; border: 1px solid #4c453e; border-radius: 50%; font: 600 clamp(10px, 1vw, 14px)/1 Georgia, serif; }
 .paper-presentation-cover-object > span:nth-of-type(1) { top: 8%; right: 2%; }
 .paper-presentation-cover-object > span:nth-of-type(2) { right: 2%; bottom: 8%; }
 
-.paper-presentation-index { display: grid; align-content: start; gap: 4px; }
-.paper-presentation-index button { display: grid; min-height: 42px; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 7px; padding: 7px 8px; color: #6f675e; background: #e7e1d8; border: 0; border-left: 3px solid transparent; font-size: 10px; text-align: left; }
+.paper-presentation-index { display: grid; max-height: 100%; align-content: start; gap: 4px; overflow: auto; }
+.paper-presentation-index button { display: grid; min-height: 48px; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; padding: 7px 8px; color: #6f675e; background: #e7e1d8; border: 0; border-left: 3px solid transparent; font-size: 10px; text-align: left; }
 .paper-presentation-index button span { color: #9a8d7c; font: 700 9px Georgia, serif; }
+.paper-presentation-index button b { font-size: 10px; }
+.paper-presentation-index button small { grid-column: 2; overflow: hidden; color: #92887b; font-size: 8px; font-weight: 500; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .paper-presentation-index button:hover, .paper-presentation-index button.active { color: #2f2a24; background: #f4efe6; border-left-color: #913e32; }
 .paper-presentation-controls { position: absolute; right: 14px; bottom: 14px; display: grid; width: 128px; grid-template-columns: 34px 1fr 34px; align-items: center; color: #5d564e; background: #eee8df; }
 .paper-presentation-controls button { display: grid; width: 34px; height: 34px; place-items: center; color: #433c35; background: transparent; border: 0; }
 .paper-presentation-controls button:disabled { opacity: .28; }
 .paper-presentation-controls span { text-align: center; font: 700 10px Georgia, serif; }
+
+/* Paper2PPT adapter: evidence determines the layout; the established ivory theme remains unchanged. */
+.paper-presentation-toolbar button.active { background: #913e32; }
+.paper-presentation-lead { max-width: 72ch; margin: 0; color: #4b453e; font-size: clamp(11px, 1.05vw, 15px); line-height: 1.52; text-wrap: pretty; }
+.paper-presentation-bullets { display: grid; gap: clamp(8px, 1.1vw, 15px); margin: clamp(14px, 1.7vw, 24px) 0 0; padding: 0; list-style: none; }
+.paper-presentation-bullets li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
+.paper-presentation-bullets li span { color: var(--presentation-accent); font: 700 clamp(9px, .82vw, 12px)/1.55 Georgia, serif; }
+.paper-presentation-bullets li p { margin: 0; color: #3e3933; font-size: clamp(10px, .94vw, 13px); line-height: 1.48; }
+.paper-presentation-source { position: relative; min-width: 0; min-height: 0; align-self: stretch; overflow: hidden; margin: 0; background: #fff; border: 1px solid #d4cab9; }
+.paper-presentation-source canvas { display: block; width: 100%; height: calc(100% - 28px); object-fit: contain; }
+.paper-presentation-source figcaption { position: absolute; right: 0; bottom: 0; left: 0; display: flex; min-height: 28px; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; color: #6e665d; background: #e7dfd2; font-size: clamp(7px, .66vw, 9px); }
+.paper-presentation-source figcaption span { color: var(--presentation-accent); font-weight: 750; text-transform: capitalize; }
+.paper-presentation-source.compact { min-height: 0; }
+.paper-presentation-figure-led-body { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1.8fr) minmax(210px, .72fr); gap: clamp(18px, 2.5vw, 36px); padding-top: clamp(16px, 1.8vw, 26px); }
+.paper-presentation-figure-led-body aside { align-self: center; }
+.paper-presentation-structured-body { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1.58fr) minmax(190px, .42fr); gap: clamp(18px, 2.4vw, 34px); padding-top: clamp(14px, 1.6vw, 22px); }
+.paper-presentation-slide[class*="layout-"] > .paper-presentation-lead { margin-top: clamp(13px, 1.5vw, 20px); }
+.paper-presentation-structured { display: grid; min-width: 0; min-height: 0; align-content: center; gap: 0; }
+.paper-presentation-structured > div { display: grid; min-width: 0; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: clamp(8px, .9vw, 12px) 0; border-top: 1px solid #d2c7b6; }
+.paper-presentation-structured > div:last-child { border-bottom: 1px solid #d2c7b6; }
+.paper-presentation-structured > div > span { color: var(--presentation-accent); font: 700 clamp(9px, .8vw, 12px)/1.55 Georgia, serif; }
+.paper-presentation-structured section { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; }
+.paper-presentation-structured strong { color: #332e28; font-size: clamp(10px, .98vw, 14px); }
+.paper-presentation-structured b { color: var(--presentation-accent); font: 600 clamp(13px, 1.4vw, 20px)/1 Georgia, serif; }
+.paper-presentation-structured p { grid-column: 1 / -1; margin: 0; color: #756d63; font-size: clamp(8px, .78vw, 11px); line-height: 1.4; }
+.paper-presentation-structured.process { grid-template-columns: repeat(var(--process-columns, 3), minmax(0, 1fr)); align-items: stretch; gap: 0; }
+.paper-presentation-structured.process > div { position: relative; display: block; padding: 16px 15px; border: 1px solid #cbbda6; border-right: 0; }
+.paper-presentation-structured.process > div:last-child { border-right: 1px solid #cbbda6; }
+.paper-presentation-structured.process > div:not(:last-child)::after { position: absolute; z-index: 2; top: 50%; right: -7px; width: 12px; height: 12px; content: ""; background: var(--presentation-paper); border-top: 1px solid #a28d70; border-right: 1px solid #a28d70; transform: translateY(-50%) rotate(45deg); }
+.paper-presentation-structured.process > div > span { display: block; margin-bottom: 12px; }
+.paper-presentation-structured.process section { display: block; }
+.paper-presentation-structured.process b { display: block; margin: 8px 0 4px; }
+.paper-presentation-structured.comparison, .paper-presentation-structured.metrics, .paper-presentation-structured.boundaries { grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: stretch; gap: 14px; }
+.paper-presentation-structured.comparison > div, .paper-presentation-structured.metrics > div, .paper-presentation-structured.boundaries > div { display: block; padding: clamp(12px, 1.4vw, 19px); border: 0; border-top: 3px solid #a35447; background: #f1eadf; }
+.paper-presentation-structured.comparison section, .paper-presentation-structured.metrics section, .paper-presentation-structured.boundaries section { display: block; }
+.paper-presentation-structured.comparison b, .paper-presentation-structured.metrics b, .paper-presentation-structured.boundaries b { display: block; margin: clamp(10px, 1.1vw, 16px) 0 6px; }
+.paper-presentation-structured.metrics b { font-size: clamp(18px, 2.2vw, 32px); }
+.paper-presentation-structured.boundaries > div:nth-child(2) { border-top-color: #7d7063; }
+.paper-presentation-structured.boundaries > div:nth-child(3) { border-top-color: #b99053; }
+.paper-presentation-notes { position: absolute; z-index: 5; right: 204px; bottom: 14px; left: 14px; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 15px; padding: 13px 16px; color: #eee7dc; background: rgba(45, 40, 34, .95); box-shadow: 0 8px 24px rgba(31, 25, 19, .22); }
+.paper-presentation-notes strong { color: #ddb09e; font-size: 10px; text-transform: uppercase; }
+.paper-presentation-notes p { margin: 0; font-size: 10px; line-height: 1.5; }
 
 html:not([data-theme="paper"]) .paper-review-shell { background: #191815; }
 html:not([data-theme="paper"]) .paper-review-view-switch { color: #aaa198; background: rgba(25, 24, 21, .96); border-bottom-color: #39352f; }

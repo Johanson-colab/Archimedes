@@ -47,12 +47,16 @@ test("text review and generated presentation remain independent outputs", () => 
   assert.match(main, /store\.getPaperReview\(input\.paper\.id\)/);
   assert.match(main, /store\.savePaperPresentation/);
   assert.match(main, /ipcMain\.handle\("paper-presentation:get"/);
-  assert.match(presentationSkill, /SAVED, COMPLETED evidence review/);
+  assert.match(presentationSkill, /never alter the saved review/);
+  assert.match(presentationSkill, /claim-to-source ledger/);
   assert.match(presentationSkill, /Background -> Related work -> Method -> Experiments -> Limitations/);
 });
 
 test("saved presentations render as a keyboard-navigable academic deck with PDF visuals", () => {
-  assert.match(presentation, /function PresentationPageVisual/);
+  assert.match(presentation, /function PresentationSourceVisual/);
+  assert.match(presentation, /FOCUS_RECTS/);
+  assert.match(presentation, /layout-figure-led/);
+  assert.match(presentation, /paper-presentation-structured/);
   assert.match(presentation, /paper-presentation-stage/);
   assert.match(presentation, /requestFullscreen/);
   assert.match(presentation, /ArrowRight/);

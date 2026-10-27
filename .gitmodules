@@ -1,0 +1,3 @@
+[submodule "paper2ppt"]
+	path = paper2ppt
+	url = https://github.com/wp-a/paper2ppt.git
