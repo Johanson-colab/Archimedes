@@ -20,8 +20,9 @@ test("sidebar keeps Work below stable Knowledge and Create modules", () => {
   assert.match(registry, /id: "library"[^\n]*labelKey: "Library"/);
   assert.match(registry, /id: "extensions"[^\n]*labelKey: "Extensions"/);
   assert.match(registry, /id: "writing"[^\n]*labelKey: "Paper writing"/);
-  assert.match(registry, /id: "image-creation"[^\n]*badge: "Soon"[^\n]*disabled: true/);
-  assert.match(registry, /id: "gallery"[^\n]*labelKey: "Gallery"/);
+  assert.match(registry, /id: "image-creation"[^\n]*labelKey: "Image creation"/);
+  assert.doesNotMatch(registry, /id: "gallery"/);
+  assert.doesNotMatch(registry, /badge: "Soon"[^\n]*disabled: true/);
   assert.match(app, /sidebarEntries\(section\)\.map/);
 });
 
