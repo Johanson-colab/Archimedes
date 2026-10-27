@@ -301,16 +301,13 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   return <section className="library-page library-detail-page">
     <header className="library-detail-header">
       <button className="icon-button" onClick={() => setSelectedLibraryId(null)} title="All libraries"><ArrowLeft size={17} /></button>
-      <LibraryGlyph name={selectedLibrary.name} size={19} />
-      <div><span className="eyebrow">Literature library</span><h1 className="library-detail-title"><span>{selectedLibrary.name}</span><span className="library-color-dot" style={{ background: selectedLibrary.color }} aria-hidden="true" /></h1></div>
+      <div className="library-toolbar"><Search size={15} /><input value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder="Search title, author, abstract, or venue" /><span>{papers.length} papers</span></div>
       <div className="library-header-actions">
         <button className="icon-button" onClick={() => setLibraryEditor(selectedLibrary)} title="Edit library"><Pencil size={15} /></button>
         <button className="icon-button danger" onClick={() => void deleteLibrary()} title="Delete library"><Trash2 size={15} /></button>
         <button className="primary-button" onClick={() => setImportOpen(true)}><Plus size={15} />Import paper</button>
       </div>
     </header>
-    <div className="library-description">{selectedLibrary.description}</div>
-    <div className="library-toolbar"><Search size={15} /><input value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder="Search title, author, abstract, or venue" /><span>{papers.length} papers</span></div>
     {error && <div className="library-error">{error}</div>}
     <div className="library-split">
       <div className="library-paper-list">
