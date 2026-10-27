@@ -15,8 +15,10 @@ const extensions = fs.readFileSync(path.join(root, "src", "ExtensionsView.tsx"),
 
 test("module actions share the main toolbar slot", () => {
   assert.match(app, /id="module-toolbar-actions" className="module-toolbar-actions"/);
-  assert.match(app, /active=\{mainSection === "writing"\}/);
-  assert.match(paper, /<ToolbarActions active=\{active\}>/);
+  assert.doesNotMatch(app, /active=\{mainSection === "writing"\}/);
+  assert.doesNotMatch(paper, /ToolbarActions/);
+  assert.match(paper, /className="paper-pane-actions"/);
+  assert.match(paper, /paper-pane-action/);
   assert.doesNotMatch(imageCreation, /ToolbarActions/);
   assert.match(imageCreation, /className="image-creation-actions"/);
   assert.match(benchmark, /<ToolbarActions>/);

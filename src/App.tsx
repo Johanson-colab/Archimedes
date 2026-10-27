@@ -2017,7 +2017,7 @@ function App() {
             <ArtifactsView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={artifactDrafts} dirtyFiles={dirtyArtifactPaths} savingFiles={artifactSaving} conflicts={artifactConflicts} saveErrors={artifactErrors} onOpenFile={(filePath) => void openArtifact(filePath, "page")} onSelectOpenFile={(file) => selectOpenArtifact(file, "page")} onCloseFile={closeArtifact} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewArtifact={() => setModal("artifact")} onDraftChange={updateArtifactDraft} onSave={(filePath) => void saveArtifact(filePath)} onReload={(filePath) => void reloadArtifact(filePath)} onDismissConflict={dismissArtifactConflict} onAddComment={addArtifactComment} />
           )}
           <div className={mainSection === "writing" ? "paper-writing-view-cache" : "paper-writing-view-cache hidden"} aria-hidden={mainSection !== "writing"}>
-            {workspaceReady && <PaperWritingView active={mainSection === "writing"} bridge={desktopBridge} workspace={executionWorkspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
+            {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
           </div>
         </div>
         </div>
