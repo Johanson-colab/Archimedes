@@ -4975,3 +4975,8 @@ html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
   .paper-pane-action span { display: none; }
   .paper-pane-action { padding: 0 6px; }
 }
+/* The project chooser is dismissible in both themes, including first run. */
+.paper-project-dialog > header .reader-icon-button { color: #c2c2c2; }
+.paper-project-dialog > header .reader-icon-button:hover { color: #f4f4f4; background: #2e2e2e; }
+.theme-paper .paper-project-dialog > header .reader-icon-button { color: #6f6a63; }
+.theme-paper .paper-project-dialog > header .reader-icon-button:hover { color: #252422; background: #efede9; }
