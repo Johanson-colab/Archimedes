@@ -239,6 +239,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
   const slides = presentation ? [null, ...presentation.slides] : [];
   const stale = Boolean(presentation && reviewUpdatedAt && presentation.source_review_updated_at !== reviewUpdatedAt);
+  const legacyPresentation = Boolean(presentation && (Number(presentation.skill?.version || 1) < 2 || presentation.slides.length < 7));
   const active = slides[activeSlide];
 
   useEffect(() => {
@@ -265,6 +266,9 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     setError("");
     try {
       const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext });
+      if (Number(saved.skill?.version || 1) < 2 || saved.slides.length < 7) {
+        throw new Error("The Electron main process is still using the legacy six-slide generator. Fully stop npm run dev, start it again, then regenerate.");
+      }
       setPresentation(saved);
       setActiveSlide(0);
       setShowNotes(false);
@@ -286,6 +290,18 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
       {generating ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
       {generating ? "Reading paper and designing slides" : reviewReady ? "Generate with Paper2PPT" : "Finish the review first"}
+    </button>
+  </section>;
+
+  if (legacyPresentation) return <section className="paper-presentation-empty paper-presentation-legacy">
+    <div className="paper-presentation-empty-mark"><RefreshCw size={28} strokeWidth={1.45} /></div>
+    <p className="paper-review-kicker">Legacy presentation detected</p>
+    <h2>This saved six-slide deck predates Paper2PPT.</h2>
+    <p>It remains stored safely, but it is no longer shown as a current presentation. Regenerate after fully restarting the Electron app to create the new evidence-led 8–12 page deck.</p>
+    {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
+    <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
+      {generating ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}
+      {generating ? "Reading paper and rebuilding" : "Upgrade with Paper2PPT"}
     </button>
   </section>;
 

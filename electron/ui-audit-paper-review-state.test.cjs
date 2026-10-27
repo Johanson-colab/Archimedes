@@ -57,6 +57,8 @@ test("saved presentations render as a keyboard-navigable academic deck with PDF 
   assert.match(presentation, /FOCUS_RECTS/);
   assert.match(presentation, /layout-figure-led/);
   assert.match(presentation, /paper-presentation-structured/);
+  assert.match(presentation, /Legacy presentation detected/);
+  assert.match(presentation, /legacy six-slide generator/);
   assert.match(presentation, /paper-presentation-stage/);
   assert.match(presentation, /requestFullscreen/);
   assert.match(presentation, /ArrowRight/);
