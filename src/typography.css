@@ -605,3 +605,11 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
   font-size: 12px;
   font-weight: 400;
 }
+
+/* Paper writing file list follows the main Files rail scale. */
+.paper-tree-row { height: 30px; grid-template-columns: 14px 17px minmax(0, 1fr); }
+.paper-tree-row strong { font-size: 12px; font-weight: 400; }
+.paper-main-document { font-size: 10px; }
+.paper-main-document select { font-size: 11px; }
+.paper-save-state,
+.paper-compile-state { font-size: 10px; }
