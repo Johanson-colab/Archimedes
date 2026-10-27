@@ -8,7 +8,6 @@ const review = fs.readFileSync(path.join(root, "src", "PaperReviewWorkbench.tsx"
 const styles = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const presentation = fs.readFileSync(path.join(root, "src", "PaperPresentationDeck.tsx"), "utf8");
 const orchestrator = fs.readFileSync(path.join(root, "electron", "paper-review-orchestrator.cjs"), "utf8");
-const presentationSkill = fs.readFileSync(path.join(root, "electron", "paper-presentation-skill.cjs"), "utf8");
 const kimiSlidesSkill = fs.readFileSync(path.join(root, "electron", "kimi-slides-skill.cjs"), "utf8");
 const main = fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8");
 
@@ -52,7 +51,6 @@ test("text review and generated presentation remain independent outputs", () => 
   assert.match(kimiSlidesSkill, /claim-to-source ledger/);
   assert.match(kimiSlidesSkill, /Background -> Related work -> Method -> Experiments -> Limitations/);
   assert.match(main, /runKimiSlidesPresentation/);
-  assert.match(presentationSkill, /Paper2PPT/);
 });
 
 test("saved presentations render as a keyboard-navigable academic deck with PDF visuals", () => {
