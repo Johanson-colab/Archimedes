@@ -2700,6 +2700,21 @@ function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind">) {
   return <File size={14} />;
 }
 
+function workspaceFileTone(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
+  if (entry.type === "directory") return "folder";
+  if (entry.kind === "image") return "image";
+  if (entry.kind === "pdf") return "pdf";
+  if (entry.kind === "markdown") return "markdown";
+  const name = entry.path.split("/").at(-1)?.toLowerCase() || "";
+  const extension = name.includes(".") ? name.split(".").at(-1) || "" : "";
+  if (["tex", "latex", "bib", "cls", "sty", "bst"].includes(extension)) return "tex";
+  if (["json", "yaml", "yml", "toml", "ini", "cfg"].includes(extension)) return "config";
+  if (["ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "rs", "java", "c", "cc", "cpp", "h", "hpp"].includes(extension)) return "code";
+  if (["css", "scss", "less", "html", "htm", "xml", "svg"].includes(extension)) return "style";
+  if (["sh", "zsh", "bash", "fish"].includes(extension)) return "shell";
+  return "file";
+}
+
 function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirectories, onToggle, onLoadDirectory, onOpenFile }: {
   entry: WorkspaceFileEntry;
   depth: number;
@@ -2719,7 +2734,7 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
   return <div className="workspace-tree-node">
     <button className={entry.path === selectedPath ? "workspace-tree-row active" : "workspace-tree-row"} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
       <span className="tree-disclosure">{isLoading ? <RefreshCw className="spin" size={11} /> : isDirectory ? isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}</span>
-      <span className="tree-file-icon">{workspaceFileIcon(entry)}</span>
+      <span className={`tree-file-icon tone-${workspaceFileTone(entry)}`}>{workspaceFileIcon(entry)}</span>
       <strong>{entry.name}</strong>
     </button>
     {isExpanded && entry.children?.map((child) => <WorkspaceTreeNode key={child.path} entry={child} depth={depth + 1} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={onToggle} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
@@ -2850,7 +2865,7 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
       wrapLongLines={false}
       lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", textAlign: "right", userSelect: "none" }}
       lineProps={{ className: "syntax-line" }}
-      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "11px", lineHeight: 1.65, tabSize: 2 }}
+      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "13px", lineHeight: 1.65, tabSize: 2 }}
       codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
     >{content || " "}</SyntaxHighlighter>
   </div>;
@@ -3002,8 +3017,8 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const editor = <div className={compact && openFiles.length <= 1 ? "artifact-editor-pane no-tabs" : "artifact-editor-pane"}>
-    {(!compact || openFiles.length > 1) && <div className="artifact-tabs" role="tablist" aria-label="Open files">
+  const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
+    {(compact || openFiles.length > 1) && <div className="artifact-tabs" role="tablist" aria-label="Open files">
       {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
         <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
           {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}

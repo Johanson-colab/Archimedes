@@ -23,7 +23,7 @@ const highlightStyle = HighlightStyle.define([
 ]);
 
 const editorTheme = EditorView.theme({
-  "&": { height: "100%", color: "var(--code-fg)", backgroundColor: "var(--code-bg)", fontSize: "11px" },
+  "&": { height: "100%", color: "var(--code-fg)", backgroundColor: "var(--code-bg)", fontSize: "13px" },
   ".cm-scroller": {
     overflow: "auto",
     fontFamily: "var(--font-mono)",

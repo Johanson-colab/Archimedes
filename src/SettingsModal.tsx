@@ -78,7 +78,7 @@ export default function SettingsModal({
   onSaveTerminalSettings,
   onOpenExternalTerminal,
 }: SettingsModalProps) {
-  const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, chatVerbosity, setChatVerbosity, t } = useUISettings();
+  const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   if (!open) return null;
 
@@ -239,6 +239,24 @@ export default function SettingsModal({
                         <option value="geist-mono">{t("Geist Mono")}</option>
                         <option value="system">{t("System mono")}</option>
                       </select>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Files")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("File icons")}</span>
+                      <p className="settings-row-description">{t("Use colored icons in file trees.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("File icons")}>
+                        <button className={fileIconStyle === "colorful" ? "active" : ""} aria-pressed={fileIconStyle === "colorful"} onClick={() => setFileIconStyle("colorful")}>{t("Colorful")}</button>
+                        <button className={fileIconStyle === "monochrome" ? "active" : ""} aria-pressed={fileIconStyle === "monochrome"} onClick={() => setFileIconStyle("monochrome")}>{t("Monochrome")}</button>
+                      </div>
                     </div>
                   </div>
                 </div>
