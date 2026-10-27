@@ -4959,3 +4959,19 @@ html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
 .main-workspace[data-narrow] .image-creation-composer-dock { padding-inline: 10px; }
 .main-workspace[data-narrow] .image-creation-composer-box { gap: 6px; padding-left: 6px; }
 .main-workspace[data-narrow] .image-creation-composer-note { padding-inline: 4px; }
+
+/* Paper writing actions belong to the editor toolbar, not the global toolbar. */
+.paper-pane-actions { display: flex; min-width: 0; align-items: center; gap: 4px; margin-left: auto; }
+.paper-pane-action { display: inline-flex; height: 24px; align-items: center; justify-content: center; gap: 4px; padding: 0 7px; color: #c2c2c2; background: #242424; border: 1px solid #363636; border-radius: 4px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.paper-pane-action:hover:not(:disabled) { color: #f4f4f4; background: #2e2e2e; }
+.paper-pane-action:disabled { cursor: not-allowed; opacity: .45; }
+.paper-pane-action.icon { width: 26px; padding: 0; }
+.paper-pane-action.primary { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.paper-pane-action.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.theme-paper .paper-pane-action { color: #625d56; background: #fffefd; border-color: #ded8d0; }
+.theme-paper .paper-pane-action:hover:not(:disabled) { color: #24211e; background: #f2efeb; }
+.theme-paper .paper-pane-action.primary { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+@media (max-width: 1100px) {
+  .paper-pane-action span { display: none; }
+  .paper-pane-action { padding: 0 6px; }
+}
