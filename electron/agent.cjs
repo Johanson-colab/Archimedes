@@ -700,15 +700,32 @@ async function complete(config, messages, { signal, onTextDelta, allowTools = tr
     body: JSON.stringify(body),
     signal,
   });
-  let response = await requestCompletion(request);
-  if (!response.ok && Object.keys(nativeReasoning).length && [400, 422].includes(response.status)) {
-    await response.text();
-    delete request.reasoning_effort;
-    delete request.reasoning;
+  let response;
+  let detail = "";
+  // OpenAI-compatible servers disagree on the completion-limit field. Retry only
+  // when the server explicitly asks for the newer name, then separately fall
+  // back from native reasoning controls when that is the rejected parameter.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     response = await requestCompletion(request);
+    if (response.ok) break;
+    detail = (await response.text()).slice(0, 500);
+    const canUseCompletionTokens = tokenLimit && Object.hasOwn(request, "max_tokens") &&
+      /(?:unsupported parameter|not supported)[^\n]{0,180}max_tokens|max_tokens[^\n]{0,180}(?:unsupported|not supported)/i.test(detail) &&
+      /max_completion_tokens/i.test(detail);
+    if (canUseCompletionTokens) {
+      delete request.max_tokens;
+      request.max_completion_tokens = tokenLimit;
+      continue;
+    }
+    const hasNativeReasoning = Object.hasOwn(request, "reasoning_effort") || Object.hasOwn(request, "reasoning");
+    if (hasNativeReasoning && [400, 422].includes(response.status)) {
+      delete request.reasoning_effort;
+      delete request.reasoning;
+      continue;
+    }
+    break;
   }
   if (!response.ok) {
-    const detail = (await response.text()).slice(0, 500);
     throw new Error(`Model request failed (${response.status}): ${detail}`);
   }
 
