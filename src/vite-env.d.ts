@@ -82,6 +82,12 @@ interface ResearchDeskBridge {
     runTerminal: (input: { command: string; cwd?: string; actionId?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
     stopTerminal: (sessionId: string) => Promise<void>;
     getJourneySettings: () => Promise<JourneySettings>;
+    getWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
+    saveWorkbenchSettings: (input: { version?: number; order: string[]; hidden: string[] }) => Promise<{ version: number; order: string[]; hidden: string[] }>;
+    resetWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
+    getWorkbenchNote: (key: string) => Promise<{ content: string; updatedAt: string | null }>;
+    saveWorkbenchNote: (key: string, content: string) => Promise<{ content: string; updatedAt: string | null }>;
+    deleteWorkbenchNote: (key: string) => Promise<{ deleted: boolean }>;
     saveJourneySettings: (input: Partial<JourneySettings>) => Promise<JourneySettings>;
     resetJourneySettings: () => Promise<JourneySettings>;
     getJourneySummary: (threadId: string) => Promise<JourneySummarySnapshot | null>;

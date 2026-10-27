@@ -14,6 +14,8 @@ const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
 const journeySettings = require("./journey-settings.cjs");
 const journeySnapshots = require("./journey-snapshots.cjs");
+const workbenchSettings = require("./workbench-settings.cjs");
+const workbenchNotes = require("./workbench-notes.cjs");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
@@ -518,6 +520,8 @@ app.whenReady().then(() => {
   terminalSettings.initialize(app.getPath("userData"));
   journeySettings.initialize(app.getPath("userData"));
   journeySnapshots.initialize(app.getPath("userData"));
+  workbenchSettings.initialize(app.getPath("userData"));
+  workbenchNotes.initialize(app.getPath("userData"));
   installApplicationMenu();
   protocol.handle("archimedes-file", (request) => {
     try {
@@ -1201,6 +1205,12 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
+  ipcMain.handle("workbench:get-settings", () => workbenchSettings.workbenchSettings());
+  ipcMain.handle("workbench:save-settings", (_event, input = {}) => workbenchSettings.saveWorkbenchSettings(input));
+  ipcMain.handle("workbench:reset-settings", () => workbenchSettings.resetWorkbenchSettings());
+  ipcMain.handle("workbench:get-note", (_event, key) => workbenchNotes.getNote(key));
+  ipcMain.handle("workbench:save-note", (_event, input = {}) => workbenchNotes.saveNote(input.key, input.content));
+  ipcMain.handle("workbench:delete-note", (_event, key) => workbenchNotes.deleteNote(key));
   ipcMain.handle("journey:get-summary", (_event, threadId) => journeySnapshots.get(String(threadId || "")));
   ipcMain.handle("journey:clear-summary", (_event, threadId) => { journeySnapshots.remove(String(threadId || "")); return { cleared: true }; });
   ipcMain.handle("journey:summarize", async (_event, input = {}) => {

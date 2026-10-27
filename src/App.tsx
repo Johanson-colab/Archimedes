@@ -32,12 +32,16 @@ import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal 
 import ExtensionsView, { type ExtensionsTab } from "./ExtensionsView";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { sidebarEntries, type MainSection, type SidebarEntry } from "./sidebar-registry";
-import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth, type WorkbenchTab } from "./RightWorkbench";
+import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
+import ChangesView from "./ChangesView";
+import NotesView from "./NotesView";
+import { DEFAULT_WORKBENCH_PREFERENCES, normalizeWorkbenchPreferences, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ChatActivityTimeline from "./ChatActivityTimeline";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
 import TrajectoryView from "./TrajectoryView";
 import TurnRail from "./TurnRail";
+import TerminalPanel from "./TerminalPanel";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import { useUISettings } from "./i18n";
@@ -76,6 +80,8 @@ import {
   FileType,
   FileVideo,
   Flag,
+  GitCompareArrows,
+  NotebookPen,
   Folder,
   FolderOpen,
   FlaskConical,
@@ -582,6 +588,34 @@ const previewBridge = {
     window.localStorage.removeItem("archimedes-journey-settings");
     return defaultJourneySettings;
   },
+  getWorkbenchSettings: async () => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem("archimedes-workbench-settings") || "null");
+      return saved && typeof saved === "object" ? saved : { version: 1, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
+    } catch {
+      return { version: 1, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
+    }
+  },
+  saveWorkbenchSettings: async (input: { version?: number; order: string[]; hidden: string[] }) => {
+    const next = { version: 1, order: [...input.order], hidden: [...input.hidden] };
+    window.localStorage.setItem("archimedes-workbench-settings", JSON.stringify(next));
+    return next;
+  },
+  resetWorkbenchSettings: async () => {
+    window.localStorage.removeItem("archimedes-workbench-settings");
+    return { version: 1, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
+  },
+  getWorkbenchNote: async (key: string) => ({ content: window.localStorage.getItem(`archimedes-workbench-note:${key}`) || "", updatedAt: null }),
+  saveWorkbenchNote: async (key: string, content: string) => {
+    if (content.trim()) window.localStorage.setItem(`archimedes-workbench-note:${key}`, content);
+    else window.localStorage.removeItem(`archimedes-workbench-note:${key}`);
+    return { content, updatedAt: content.trim() ? new Date().toISOString() : null };
+  },
+  deleteWorkbenchNote: async (key: string) => {
+    const existed = window.localStorage.getItem(`archimedes-workbench-note:${key}`) !== null;
+    window.localStorage.removeItem(`archimedes-workbench-note:${key}`);
+    return { deleted: existed };
+  },
   getJourneySummary: async (threadId: string) => {
     try { return JSON.parse(window.localStorage.getItem(`archimedes-journey-summary:${threadId}`) || "null"); }
     catch { return null; }
@@ -806,7 +840,12 @@ function App() {
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
-  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("trajectory");
+  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTabId>("trajectory");
+  const [workbenchPreferences, setWorkbenchPreferences] = useState<WorkbenchTabPreferences>(DEFAULT_WORKBENCH_PREFERENCES);
+  const [noteValues, setNoteValues] = useState<Record<string, string>>({});
+  const [noteLoadedKey, setNoteLoadedKey] = useState<string | null>(null);
+  const [noteSaveState, setNoteSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [seenChangeSetIds, setSeenChangeSetIds] = useState<Set<string>>(new Set());
   const [trajectoryFocusSequence, setTrajectoryFocusSequence] = useState<number | null>(null);
   const [journeySettings, setJourneySettings] = useState<JourneySettings>(defaultJourneySettings);
   const [terminalSettings, setTerminalSettings] = useState<TerminalSettings | null>(null);
@@ -850,7 +889,7 @@ function App() {
   const [artifactSaving, setArtifactSaving] = useState<Set<string>>(new Set());
   const [artifactConflicts, setArtifactConflicts] = useState<Record<string, string>>({});
   const [artifactErrors, setArtifactErrors] = useState<Record<string, string>>({});
-  const [composerRequest, setComposerRequest] = useState<{ id: string; text: string } | null>(null);
+  const [composerRequest, setComposerRequest] = useState<{ id: string; text: string; mode?: "append" | "replace" } | null>(null);
   const [evidenceTitle, setEvidenceTitle] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("retrieval budget reasoning");
@@ -860,6 +899,8 @@ function App() {
   const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
   const artifactDraftsRef = useRef<Record<string, ArtifactDraft>>({});
   const artifactSavingRef = useRef<Set<string>>(new Set());
+  const noteValuesRef = useRef<Record<string, string>>({});
+  const noteKeyRef = useRef("draft");
   const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
   const mainWorkspaceRef = useRef<HTMLDivElement | null>(null);
@@ -873,6 +914,11 @@ function App() {
   // project folder → primary workspace.
   const executionWorkspace = activeThread?.workspace_path || activeProject?.workspace_path || workspace;
   const executionWorkspaceName = executionWorkspace ? executionWorkspace.split(/[\\/]/).filter(Boolean).at(-1) ?? executionWorkspace : "";
+  const draftNoteKey = `draft:${workspace || "workspace"}`;
+  const noteKey = activeThreadId ?? draftNoteKey;
+  const noteValue = noteLoadedKey === noteKey ? noteValues[noteKey] ?? "" : "";
+  noteKeyRef.current = noteKey;
+  noteValuesRef.current = noteValues;
   threadsRef.current = threads;
 
   useEffect(() => {
@@ -991,6 +1037,49 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void desktopBridge.getWorkbenchSettings()
+      .then((settings) => { if (!cancelled) setWorkbenchPreferences(normalizeWorkbenchPreferences(settings)); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setNoteLoadedKey(null);
+    setNoteSaveState("idle");
+    void desktopBridge.getWorkbenchNote(noteKey)
+      .then((note) => {
+        if (cancelled) return;
+        setNoteValues((current) => ({ ...current, [noteKey]: note.content }));
+        setNoteLoadedKey(noteKey);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setNoteValues((current) => ({ ...current, [noteKey]: "" }));
+        setNoteLoadedKey(noteKey);
+      });
+    return () => { cancelled = true; };
+  }, [noteKey]);
+
+  useEffect(() => {
+    if (noteLoadedKey !== noteKey) return;
+    const content = noteValues[noteKey] ?? "";
+    setNoteSaveState("saving");
+    const timer = window.setTimeout(() => {
+      void desktopBridge.saveWorkbenchNote(noteKey, content)
+        .then(() => { if (noteKeyRef.current === noteKey) setNoteSaveState("saved"); })
+        .catch(() => { if (noteKeyRef.current === noteKey) setNoteSaveState("idle"); });
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [noteKey, noteLoadedKey, noteValues]);
+
+  useEffect(() => {
+    if (workbenchTab !== "changes") return;
+    setSeenChangeSetIds(new Set(changeSets.map((changeSet) => changeSet.id)));
+  }, [changeSets, workbenchTab]);
+
   async function saveJourneySettings(patch: Partial<JourneySettings>) {
     const optimistic = normalizeJourneySettings({ ...journeySettings, ...patch });
     setJourneySettings(optimistic);
@@ -1011,6 +1100,28 @@ function App() {
     } catch {
       setJourneySettings(defaultJourneySettings);
     }
+  }
+
+  function updateWorkbenchPreferences(next: WorkbenchTabPreferences) {
+    const normalized = normalizeWorkbenchPreferences(next);
+    setWorkbenchPreferences(normalized);
+    void desktopBridge.saveWorkbenchSettings(normalized).catch(() => undefined);
+  }
+
+  async function resetWorkbenchPreferences() {
+    try {
+      const next = await desktopBridge.resetWorkbenchSettings();
+      setWorkbenchPreferences(normalizeWorkbenchPreferences(next));
+    } catch {
+      setWorkbenchPreferences(DEFAULT_WORKBENCH_PREFERENCES);
+    }
+  }
+
+  function sendNoteToChat(text: string, mode: "append" | "replace") {
+    const content = text.trim();
+    if (!content) return;
+    setComposerRequest({ id: crypto.randomUUID(), text: content, mode });
+    if (mainSection !== "chat") setMainSection("chat");
   }
 
   useEffect(() => {
@@ -1076,7 +1187,7 @@ function App() {
     return () => window.removeEventListener("keydown", handleWorkbenchShortcut);
   }, [workbenchOpen]);
 
-  function openWorkbench(tab: WorkbenchTab) {
+  function openWorkbench(tab: WorkbenchTabId) {
     setWorkbenchTab(tab);
     setWorkbenchOpen(true);
   }
@@ -1615,6 +1726,16 @@ function App() {
     try {
       const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
+      if (submittedThreadId === null) {
+        const draftNote = noteValuesRef.current[draftNoteKey] ?? "";
+        if (draftNote.trim()) {
+          try {
+            await desktopBridge.saveWorkbenchNote(result.threadId, draftNote);
+            await desktopBridge.deleteWorkbenchNote(draftNoteKey);
+            setNoteValues((current) => ({ ...current, [result.threadId]: draftNote, [draftNoteKey]: "" }));
+          } catch { /* Keep the draft so it can be recovered. */ }
+        }
+      }
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
       if (stillViewingSubmittedThread) {
@@ -1886,6 +2007,7 @@ function App() {
   }
 
   const dirtyArtifactPaths = useMemo(() => new Set(Object.values(artifactDrafts).filter(isDraftDirty).map((draft) => draft.path)), [artifactDrafts]);
+  const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "extensions" ? t("Extensions") : mainSection === "library" ? t("Library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "image-creation" ? t("Image creation") : mainSection === "writing" ? t("Paper writing") : t("Artifacts");
   const mainSubtitle = mainSection === "image-creation" ? t("Generate and remix research figures") : mainSection === "writing" ? t("LaTeX workspace") : mainSection === "daily" ? t("Live research feed") : mainSection === "benchmark-radar" ? t("Benchmark intelligence") : workspaceReady ? t("Local · {folder}", { folder: executionWorkspaceName || t("Workspace") }) : t("Opening workspace");
   const moduleCommands: PaletteCommand[] = (["knowledge", "create"] as const).flatMap((section) =>
@@ -1910,6 +2032,8 @@ function App() {
     { id: "files", group: t("Panels"), label: t("Files"), detail: t("Open the workbench file browser"), icon: <FolderOpen size={15} />, run: () => openWorkbench("files") },
     { id: "terminal", group: t("Panels"), label: t("Terminal"), detail: executionWorkspace, icon: <SquareTerminal size={15} />, run: () => openWorkbench("terminal") },
     { id: "journey", group: t("Panels"), label: t("Journey"), icon: <Flag size={15} />, run: () => openWorkbench("journey") },
+    { id: "changes", group: t("Panels"), label: t("Changes"), icon: <GitCompareArrows size={15} />, run: () => openWorkbench("changes") },
+    { id: "notes", group: t("Panels"), label: t("Notes"), icon: <NotebookPen size={15} />, run: () => openWorkbench("notes") },
     { id: "reveal-folder", group: t("System"), label: t("Show working folder"), detail: executionWorkspace, icon: <FolderOpen size={15} />, run: () => void desktopBridge.revealWorkspace?.(executionWorkspace).catch(() => undefined) },
     { id: "settings", group: t("System"), label: t("Settings"), shortcut: "Ctrl ,", icon: <Settings size={15} />, run: () => { setSettingsSection("general"); setSettingsOpen(true); } },
     { id: "toggle-sidebar", group: t("System"), label: sidebarHidden ? t("Show sidebar") : t("Hide sidebar"), icon: <PanelLeftOpen size={15} />, run: () => setSidebarHidden((hidden) => !hidden) },
@@ -2033,71 +2157,90 @@ function App() {
         </div>
         </div>
         <RightWorkbench
-          bridge={desktopBridge}
           open={workbenchOpen}
-          theme={theme}
-          workspace={executionWorkspace}
           width={workbenchWidth}
           activeTab={workbenchTab}
-          terminalSettings={terminalSettings}
-          dirtyFileCount={dirtyArtifactPaths.size}
+          preferences={workbenchPreferences}
+          badges={{ changes: changesBadge, files: dirtyArtifactPaths.size }}
           onTabChange={setWorkbenchTab}
+          onPreferencesChange={updateWorkbenchPreferences}
+          onOpenSettings={() => { setSettingsSection("workbench"); setSettingsOpen(true); }}
           onWidthChange={(width) => setWorkbenchWidth(clampWorkbenchWidth(width))}
-          onOpenTerminalSettings={() => { setSettingsSection("terminal"); setSettingsOpen(true); }}
-          journey={<JourneyView
-            bridge={desktopBridge}
-            thread={activeThread ?? null}
-            events={trajectoryEvents}
-            modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
-            settings={journeySettings}
-            pendingAction={pendingAction}
-            agentBusy={agentBusy && Boolean(activeThreadId) && runningThreadId === activeThreadId}
-            active={workbenchOpen && workbenchTab === "journey"}
-            onOpenTrajectory={() => openTrajectoryAt()}
-            onOpenTrajectoryAt={openTrajectoryAt}
-            onOpenSettings={() => { setSettingsSection("journey"); setSettingsOpen(true); }}
-            onReviewPending={reviewPendingAction}
-          />}
-          trajectory={<TrajectoryView
-            thread={activeThread ?? null}
-            events={trajectoryEvents}
-            provider={activeModelConfig?.provider}
-            model={activeModelConfig?.model}
-            modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
-            onCopy={(text) => desktopBridge.writeClipboardText(text)}
-            onOpenJourney={() => setWorkbenchTab("journey")}
-            focusSequence={trajectoryFocusSequence}
-            onFocusApplied={() => setTrajectoryFocusSequence(null)}
-          />}
-          files={<ArtifactsView
-            compact
-            compactWidth={workbenchWidth}
-            workspace={executionWorkspace}
-            tree={fileTree}
-            openFiles={openFiles}
-            selectedPath={selectedFilePath}
-            file={selectedFile}
-            loading={fileLoading}
-            error={fileError}
-            loadingDirectories={loadingDirectories}
-            drafts={artifactDrafts}
-            dirtyFiles={dirtyArtifactPaths}
-            savingFiles={artifactSaving}
-            conflicts={artifactConflicts}
-            saveErrors={artifactErrors}
-            onOpenFile={(filePath) => void openArtifact(filePath)}
-            onSelectOpenFile={(file) => selectOpenArtifact(file)}
-            onCloseFile={closeArtifact}
-            onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)}
-            onRefresh={() => void refreshWorkspaceFiles()}
-            onNewArtifact={() => setModal("artifact")}
-            onDraftChange={updateArtifactDraft}
-            onSave={(filePath) => void saveArtifact(filePath)}
-            onReload={(filePath) => void reloadArtifact(filePath)}
-            onDismissConflict={dismissArtifactConflict}
-            onAddComment={addArtifactComment}
-            onOpenFull={() => { setMainSection("artifacts"); setWorkbenchOpen(false); }}
-          />}
+          panels={{
+            journey: <JourneyView
+              bridge={desktopBridge}
+              thread={activeThread ?? null}
+              events={trajectoryEvents}
+              modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
+              settings={journeySettings}
+              pendingAction={pendingAction}
+              agentBusy={agentBusy && Boolean(activeThreadId) && runningThreadId === activeThreadId}
+              active={workbenchOpen && workbenchTab === "journey"}
+              onOpenTrajectory={() => openTrajectoryAt()}
+              onOpenTrajectoryAt={openTrajectoryAt}
+              onOpenSettings={() => { setSettingsSection("journey"); setSettingsOpen(true); }}
+              onReviewPending={reviewPendingAction}
+            />,
+            trajectory: <TrajectoryView
+              thread={activeThread ?? null}
+              events={trajectoryEvents}
+              provider={activeModelConfig?.provider}
+              model={activeModelConfig?.model}
+              modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
+              onCopy={(text) => desktopBridge.writeClipboardText(text)}
+              onOpenJourney={() => setWorkbenchTab("journey")}
+              focusSequence={trajectoryFocusSequence}
+              onFocusApplied={() => setTrajectoryFocusSequence(null)}
+            />,
+            files: <ArtifactsView
+              compact
+              compactWidth={workbenchWidth}
+              workspace={executionWorkspace}
+              tree={fileTree}
+              openFiles={openFiles}
+              selectedPath={selectedFilePath}
+              file={selectedFile}
+              loading={fileLoading}
+              error={fileError}
+              loadingDirectories={loadingDirectories}
+              drafts={artifactDrafts}
+              dirtyFiles={dirtyArtifactPaths}
+              savingFiles={artifactSaving}
+              conflicts={artifactConflicts}
+              saveErrors={artifactErrors}
+              onOpenFile={(filePath) => void openArtifact(filePath)}
+              onSelectOpenFile={(file) => selectOpenArtifact(file)}
+              onCloseFile={closeArtifact}
+              onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)}
+              onRefresh={() => void refreshWorkspaceFiles()}
+              onNewArtifact={() => setModal("artifact")}
+              onDraftChange={updateArtifactDraft}
+              onSave={(filePath) => void saveArtifact(filePath)}
+              onReload={(filePath) => void reloadArtifact(filePath)}
+              onDismissConflict={dismissArtifactConflict}
+              onAddComment={addArtifactComment}
+              onOpenFull={() => { setMainSection("artifacts"); setWorkbenchOpen(false); }}
+            />,
+            changes: <ChangesView changeSets={changeSets} hasThread={Boolean(activeThreadId)} onOpenFile={openChangedFile} />,
+            notes: <NotesView
+              value={noteValue}
+              loading={noteLoadedKey !== noteKey}
+              saveState={noteSaveState}
+              contextLabel={activeThreadId ? t("Conversation notes") : t("New conversation notes")}
+              onChange={(content) => setNoteValues((current) => ({ ...current, [noteKey]: content }))}
+              onSend={sendNoteToChat}
+            />,
+            terminal: <TerminalPanel
+              bridge={desktopBridge}
+              open={workbenchOpen && workbenchTab === "terminal"}
+              theme={theme}
+              workspace={executionWorkspace}
+              settings={terminalSettings}
+              orientation="right"
+              onClose={() => setWorkbenchTab("journey")}
+              onOpenSettings={() => { setSettingsSection("terminal"); setSettingsOpen(true); }}
+            />,
+          }}
         />
       </section>
 
@@ -2138,6 +2281,9 @@ function App() {
         terminalSettings={terminalSettings}
         onSaveTerminalSettings={saveTerminalSettings}
         onOpenExternalTerminal={openExternalTerminal}
+        workbenchPreferences={workbenchPreferences}
+        onChangeWorkbenchPreferences={updateWorkbenchPreferences}
+        onResetWorkbenchPreferences={() => void resetWorkbenchPreferences()}
       />
       <NewProjectModal
         open={newProjectOpen}
@@ -2184,7 +2330,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   onOpenFile: (filePath: string) => void;
   showWelcome: boolean;
   onWelcomeAction: (action: ResearchWelcomeAction) => void;
-  composerRequest: { id: string; text: string } | null;
+  composerRequest: { id: string; text: string; mode?: "append" | "replace" } | null;
   onComposerRequestApplied: (id: string) => void;
 }) {
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
@@ -2214,7 +2360,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   useEffect(() => {
     if (!composerRequest || appliedComposerRequestRef.current === composerRequest.id) return;
     appliedComposerRequestRef.current = composerRequest.id;
-    setPrompt((current) => current.trim() ? `${current.trim()}\n\n${composerRequest.text}` : composerRequest.text);
+    setPrompt((current) => composerRequest.mode === "replace" ? composerRequest.text : current.trim() ? `${current.trim()}\n\n${composerRequest.text}` : composerRequest.text);
     onComposerRequestApplied(composerRequest.id);
     requestAnimationFrame(() => composerRef.current?.focus());
   }, [composerRequest, onComposerRequestApplied]);
