@@ -290,4 +290,6 @@ module.exports = {
   normalizeKimiSlidesPresentation,
   parseKimiSlidesPresentation,
   runKimiSlidesPlan,
+  // Kept for extension code that still imports the older function name.
+  runKimiSlidesPresentation: runKimiSlidesPlan,
 };
