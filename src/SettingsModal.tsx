@@ -1,12 +1,14 @@
-﻿import { Code2, FolderOpen, Globe2, Info, Languages, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
+﻿import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, SquareTerminal, Sun, Type, X } from "lucide-react";
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ModelSettingsModal from "./ModelSettingsModal";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
+import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
+import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
-export type SettingsSection = "general" | "journey" | "appearance" | "models" | "web" | "terminal" | "workspace" | "about";
+export type SettingsSection = "general" | "journey" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
 
 type SettingsModalProps = {
   open: boolean;
@@ -29,12 +31,16 @@ type SettingsModalProps = {
   terminalSettings: TerminalSettings | null;
   onSaveTerminalSettings: (patch: Partial<TerminalSettings>) => Promise<void>;
   onOpenExternalTerminal: (terminal: TerminalExternalTerminal) => Promise<void>;
+  workbenchPreferences: WorkbenchTabPreferences;
+  onChangeWorkbenchPreferences: (preferences: WorkbenchTabPreferences) => void;
+  onResetWorkbenchPreferences: () => void;
 };
 
 const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNode }> = [
   { id: "general", label: "General", icon: <SlidersHorizontal size={15} /> },
   { id: "journey", label: "Journey", icon: <Route size={15} /> },
   { id: "appearance", label: "Appearance", icon: <Palette size={15} /> },
+  { id: "workbench", label: "Workbench", icon: <LayoutPanelTop size={15} /> },
   { id: "models", label: "Models", icon: <Orbit size={15} /> },
   { id: "web", label: "Web search", icon: <Globe2 size={15} /> },
   { id: "terminal", label: "Terminal", icon: <SquareTerminal size={15} /> },
@@ -77,6 +83,9 @@ export default function SettingsModal({
   terminalSettings,
   onSaveTerminalSettings,
   onOpenExternalTerminal,
+  workbenchPreferences,
+  onChangeWorkbenchPreferences,
+  onResetWorkbenchPreferences,
 }: SettingsModalProps) {
   const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
@@ -92,6 +101,7 @@ export default function SettingsModal({
     general: { title: t("General"), description: t("Preferences that apply across Archimedes.") },
     journey: { title: t("Journey"), description: t("How the AI summarizes long runs and when the map appears.") },
     appearance: { title: t("Appearance"), description: t("Theme and fonts") },
+    workbench: { title: t("Workbench"), description: t("Choose the tabs that appear in the right rail.") },
     models: { title: t("Models"), description: t("Default model and providers") },
     web: { title: t("Web search"), description: t("Search provider and API keys") },
     terminal: { title: t("Terminal"), description: t("Shell, font, and external terminal") },
@@ -262,6 +272,8 @@ export default function SettingsModal({
                 </div>
               </section>
             </div>}
+
+            {section === "workbench" && <WorkbenchSettingsPanel preferences={workbenchPreferences} onChange={onChangeWorkbenchPreferences} onReset={onResetWorkbenchPreferences} />}
 
             {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} />}
             {section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}

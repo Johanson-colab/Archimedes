@@ -8,6 +8,7 @@ const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const terminal = fs.readFileSync(path.join(root, "src", "TerminalPanel.tsx"), "utf8");
 const workbench = fs.readFileSync(path.join(root, "src", "RightWorkbench.tsx"), "utf8");
+const tabs = fs.readFileSync(path.join(root, "src", "workbench-tabs.tsx"), "utf8");
 const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
 const jsonCode = fs.readFileSync(path.join(root, "src", "JsonCode.tsx"), "utf8");
 const journey = fs.readFileSync(path.join(root, "src", "JourneyView.tsx"), "utf8");
@@ -18,8 +19,8 @@ test("terminal lives in the right workbench instead of the bottom panel", () => 
   assert.match(app, /<RightWorkbench[\s\S]*?onWidthChange/);
   assert.match(app, /<PanelRight size=\{18\}/);
   assert.doesNotMatch(app, /PanelBottom/);
-  assert.doesNotMatch(app, /<TerminalPanel/);
-  assert.match(workbench, /<TerminalPanel[\s\S]*?orientation="right"/);
+  assert.match(app, /terminal: <TerminalPanel[\s\S]*?orientation="right"/);
+  assert.match(workbench, /\{panels\[id\]\}/);
 });
 
 test("workbench shares the sidebar top edge and overlays only on narrow screens", () => {
@@ -46,9 +47,9 @@ test("workbench supports keyboard toggle and resizing", () => {
 });
 
 test("files use a compact workbench pane with drill-down and split modes", () => {
-  assert.match(workbench, /FolderTree/);
+  assert.match(tabs, /FolderTree/);
   assert.match(workbench, /workbench-tab-badge/);
-  assert.match(workbench, /activeTab === "files"/);
+  assert.match(workbench, /activeTab === id/);
   assert.match(app, /openWorkbench\("files"\)/);
   assert.match(app, /<ArtifactsView[\s\S]*?compact[\s\S]*?compactWidth=\{workbenchWidth\}/);
   assert.match(app, /const split = compactWidth >= 560/);
@@ -85,7 +86,7 @@ test("files collapse the redundant title row and hide the saved label", () => {
 
 test("terminal is a workbench tab with no dock or duplicate close controls", () => {
   assert.match(workbench, /workbench-terminal-panel/);
-  assert.match(workbench, /activeTab === "terminal"/);
+  assert.match(workbench, /id === "terminal"/);
   assert.doesNotMatch(workbench, /PanelBottom|terminalDock|workbench-dock-divider|workbench-close/);
   assert.doesNotMatch(app, /workbench-dock-divider/);
   assert.doesNotMatch(css, /\.workbench-body\.terminal-dock|\.workbench-dock-divider|\.workbench-close/);
@@ -110,7 +111,7 @@ test("files and trajectory share one row token system", () => {
 });
 
 test("terminal settings sit in the terminal tab row with a distinct icon", () => {
-  assert.match(workbench, /onOpenSettings=\{onOpenTerminalSettings\}/);
+  assert.match(app, /terminal: <TerminalPanel[\s\S]*?onOpenSettings/);
   assert.match(terminal, /SlidersHorizontal/);
   assert.match(terminal, /className="terminal-settings-button"/);
   assert.match(terminal, /function terminalTabLabel/);
@@ -124,10 +125,9 @@ test("dirty file changes are protected when the workbench closes", () => {
 });
 
 test("agent trajectory mirrors the OpenCode context structure", () => {
-  assert.match(workbench, /activeTab === "journey"/);
-  assert.match(workbench, /activeTab === "trajectory"/);
-  assert.match(workbench, />Journey<\/span>/);
-  assert.match(workbench, />Trajectory<\/span>/);
+  assert.match(tabs, /id: "journey"[^\n]*labelKey: "Journey"/);
+  assert.match(tabs, /id: "trajectory"[^\n]*labelKey: "Trajectory"/);
+  assert.match(workbench, /\{tab\.icon\}<span>\{t\(tab\.labelKey\)\}<\/span>/);
   assert.match(trajectory, /trajectory-stats/);
   assert.match(trajectory, /Session ID/);
   assert.match(trajectory, /Raw events/);
