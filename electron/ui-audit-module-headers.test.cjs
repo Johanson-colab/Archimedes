@@ -39,6 +39,13 @@ test("library and extensions rely on the toolbar instead of a second title block
   assert.doesNotMatch(extensions, /Everything that changes what the Agent can do/);
 });
 
+test("library detail relies on the toolbar instead of repeating the library name", () => {
+  assert.doesNotMatch(library, /className="library-detail-title"/);
+  assert.doesNotMatch(library, /<span className="eyebrow">Literature library<\/span>/);
+  assert.doesNotMatch(library, /library-detail-header[\s\S]{0,400}<h1/);
+  assert.match(library, /library-detail-header[\s\S]{0,200}title="All libraries"/);
+});
+
 test("toolbar carries the knowledge module subtitle", () => {
   assert.match(app, /mainSection === "image-creation" \? t\("Generate and remix research figures"\)/);
   assert.match(app, /mainSection === "writing" \? t\("LaTeX workspace"\)/);

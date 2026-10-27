@@ -302,7 +302,6 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
     <header className="library-detail-header">
       <button className="icon-button" onClick={() => setSelectedLibraryId(null)} title="All libraries"><ArrowLeft size={17} /></button>
       <LibraryGlyph name={selectedLibrary.name} size={19} />
-      <div><span className="eyebrow">Literature library</span><h1 className="library-detail-title"><span>{selectedLibrary.name}</span><span className="library-color-dot" style={{ background: selectedLibrary.color }} aria-hidden="true" /></h1></div>
       <div className="library-header-actions">
         <button className="icon-button" onClick={() => setLibraryEditor(selectedLibrary)} title="Edit library"><Pencil size={15} /></button>
         <button className="icon-button danger" onClick={() => void deleteLibrary()} title="Delete library"><Trash2 size={15} /></button>
