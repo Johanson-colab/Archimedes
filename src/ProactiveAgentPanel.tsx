@@ -145,8 +145,15 @@ export default function ProactiveAgentPanel({
     const close = (event: PointerEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
     document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
   }, [menuOpen]);
 
   return <div className="proactive-panel dock-panel">

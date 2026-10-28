@@ -80,6 +80,7 @@ test("proactive cards always carry evidence, why-now, and one primary action", (
   assert.match(proactive, /proactive-status-text/);
   assert.doesNotMatch(proactive, /proactive-status-dot/);
   assert.match(proactive, /proactive-menu/);
+  assert.match(proactive, /closeOnEscape/);
   assert.doesNotMatch(proactive, /SourceIcon/);
   assert.doesNotMatch(proactive, /window\.open|shell\.open|exec\(/);
 });
