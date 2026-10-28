@@ -283,11 +283,11 @@ export default function SettingsModal({
                   <div className="settings-row">
                     <div className="settings-row-copy">
                       <span className="settings-row-title">{t("File icons")}</span>
-                      <p className="settings-row-description">{t("Use colored icons in file trees.")}</p>
+                      <p className="settings-row-description">{t("Choose the icon palette for file trees.")}</p>
                     </div>
                     <div className="settings-row-control">
                       <div className="settings-choice" role="group" aria-label={t("File icons")}>
-                        <button className={fileIconStyle === "colorful" ? "active" : ""} aria-pressed={fileIconStyle === "colorful"} onClick={() => setFileIconStyle("colorful")}>{t("Colorful")}</button>
+                        <button className={fileIconStyle === "city-lights" ? "active" : ""} aria-pressed={fileIconStyle === "city-lights"} onClick={() => setFileIconStyle("city-lights")}>{t("City Lights")}</button>
                         <button className={fileIconStyle === "monochrome" ? "active" : ""} aria-pressed={fileIconStyle === "monochrome"} onClick={() => setFileIconStyle("monochrome")}>{t("Monochrome")}</button>
                       </div>
                     </div>
