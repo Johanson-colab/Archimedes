@@ -9,10 +9,9 @@ test("composer textarea no longer paints its own focus outline", () => {
   assert.match(css, /\.conversation-composer textarea:focus-visible \{ outline: none; \}/);
 });
 
-test("composer focus ring is applied to the container after the graphite reset", () => {
-  const reset = css.search(/\.conversation-composer, \.conversation-composer:focus-within \{ box-shadow: none; \}/);
-  const ring = css.search(/\.conversation-composer:focus-within \{\s*border-color: var\(--focus-ring\);\s*box-shadow: 0 0 0 2px/);
-  assert.ok(reset >= 0, "graphite box-shadow reset is missing");
-  assert.ok(ring >= 0, "composer focus ring rule is missing");
-  assert.ok(ring > reset, "focus ring must override the graphite reset");
+test("composer focus no longer changes the container border", () => {
+  assert.doesNotMatch(css, /\.conversation-composer:focus-within/);
+  assert.doesNotMatch(css, /\.theme-paper \.conversation-composer:focus-within/);
+  assert.doesNotMatch(css, /\.has-welcome \.conversation-composer:focus-within/);
+  assert.doesNotMatch(css, /border-color: var\(--focus-ring\)/);
 });
