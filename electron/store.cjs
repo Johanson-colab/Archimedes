@@ -675,6 +675,7 @@ function normalizePaperPresentation(presentation) {
     source_sufficiency: ["full-paper", "partial-paper", "review-grounded"].includes(presentation.source_sufficiency)
       ? presentation.source_sufficiency
       : "review-grounded",
+    generation_mode: presentation.generation_mode === "paper" ? "paper" : "review",
     slides: normalizedSlides,
     ...(artifact ? { artifact } : {}),
   };

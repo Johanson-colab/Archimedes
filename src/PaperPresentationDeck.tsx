@@ -5,7 +5,7 @@ import { useUISettings, type Language } from "./i18n";
 type PresentationPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
 type LoadState = "loading" | "ready" | "error";
 type SourceFocus = NonNullable<PaperPresentationSlide["source"]>["focus"];
-type LivePresentation = Pick<PaperPresentation, "title" | "subtitle" | "source_sufficiency" | "slides"> & {
+type LivePresentation = Pick<PaperPresentation, "title" | "subtitle" | "source_sufficiency" | "generation_mode" | "slides"> & {
   previewUrls: string[];
   total: number;
 };
@@ -375,8 +375,10 @@ const EMPTY_PRESENTATION_COPY = {
     generatingTitle: "Building a deck you can inspect live",
     legacyTitle: "Create a new presentation for this paper review",
     readyTitle: "Turn this paper review into a presentation you can deliver",
+    directTitle: "Create a presentation directly from the original paper",
     generatingDescription: "Each page appears here as soon as it is rendered, so you can review the deck while it is being built.",
     readyDescription: "The saved review becomes a concise academic presentation, with a live preview for every completed page.",
+    directDescription: "No saved review is required. The planner reads the original PDF, maps its evidence, and builds the same editable deck with live previews.",
     question: "Research question",
     questionTitle: "Why does long history slow inference?",
     questionCaption: "Problem framing · evidence mapping",
@@ -393,16 +395,18 @@ const EMPTY_PRESENTATION_COPY = {
     generatePages: "Generate slides",
     saveDeck: "Save deck",
     generatingButton: "Building slides",
-    generateButton: "Generate presentation",
-    reviewRequiredButton: "Complete the text review first",
+    reviewButton: "Use saved text review",
+    paperButton: "Read original paper",
   },
   zh: {
     kicker: "学术演示稿",
     generatingTitle: "正在搭建可实时查看的演示稿",
     legacyTitle: "为这份论文复盘生成新版演示稿",
     readyTitle: "把论文复盘组织成一份可讲清的演示稿",
+    directTitle: "直接从原论文生成一份可讲述的演示稿",
     generatingDescription: "每一页完成渲染后会立即显示在这里；你可以边生成边翻阅。",
     readyDescription: "系统会将已保存的 Review 转换为一套可讲述的学术演示稿，并逐页提供实时预览。",
+    directDescription: "无需先完成 Review。系统会读取原论文 PDF、定位证据，并以同一套可编辑演示稿链路逐页生成预览。",
     question: "研究问题",
     questionTitle: "为什么长历史会拖慢推理？",
     questionCaption: "问题定义 · 证据定位",
@@ -419,8 +423,8 @@ const EMPTY_PRESENTATION_COPY = {
     generatePages: "逐页生成",
     saveDeck: "保存演示稿",
     generatingButton: "正在生成页面",
-    generateButton: "生成演示稿",
-    reviewRequiredButton: "请先完成文字 Review",
+    reviewButton: "使用已保存的 Review",
+    paperButton: "直接读取原论文",
   },
 } as const;
 
@@ -506,7 +510,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     return () => { mounted = false; };
   }, [bridge, paper.id, workspace]);
 
-  const stale = Boolean(presentation && reviewUpdatedAt && presentation.source_review_updated_at !== reviewUpdatedAt);
+  const stale = Boolean(presentation && presentation.generation_mode !== "paper" && reviewUpdatedAt && presentation.source_review_updated_at !== reviewUpdatedAt);
   const legacyPresentation = Boolean(presentation && (
     presentation.skill?.id !== "paper-presentation" ||
     Number(presentation.skill?.version || 1) < PAPER_PRESENTATION_VERSION ||
@@ -536,15 +540,15 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     return () => window.removeEventListener("keydown", navigate);
   }, [slides.length]);
 
-  async function generate() {
-    if (!reviewReady || generating || !workspace) return;
+  async function generate(sourceMode: "review" | "paper") {
+    if ((sourceMode === "review" && !reviewReady) || generating || !workspace) return;
     setGenerating(true);
     setError("");
     setLivePresentation(null);
-    setProgress("Planning the presentation…");
+    setProgress(sourceMode === "paper" ? "Reading the original paper…" : "Reading the saved review and paper…");
     runIdRef.current = crypto.randomUUID();
     try {
-      const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext, language, clientRunId: runIdRef.current });
+      const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext, language, sourceMode, clientRunId: runIdRef.current });
       if (saved.skill?.id !== "paper-presentation" || Number(saved.skill?.version || 1) < PAPER_PRESENTATION_VERSION ||
           saved.slides.length < PAPER_PRESENTATION_MIN_CONTENT_SLIDES || saved.artifact?.kind !== "pptx" || !saved.artifact.preview_url) {
         throw new Error("The presentation backend did not return a complete rendered PowerPoint deck.");
@@ -572,18 +576,24 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     <div className="paper-presentation-empty-main">
       <div>
         <p className="paper-review-kicker">{emptyCopy.kicker}</p>
-        <h2>{generating ? emptyCopy.generatingTitle : legacyPresentation ? emptyCopy.legacyTitle : emptyCopy.readyTitle}</h2>
-        {!legacyPresentation && <p>{generating ? emptyCopy.generatingDescription : emptyCopy.readyDescription}</p>}
+        <h2>{generating ? emptyCopy.generatingTitle : legacyPresentation ? emptyCopy.legacyTitle : reviewReady ? emptyCopy.readyTitle : emptyCopy.directTitle}</h2>
+        {!legacyPresentation && <p>{generating ? emptyCopy.generatingDescription : reviewReady ? emptyCopy.readyDescription : emptyCopy.directDescription}</p>}
       </div>
     </div>
     <PresentationExamples copy={emptyCopy} />
     <div className="paper-presentation-empty-flow" aria-label="Presentation generation stages"><span className={generating ? "active" : ""}>{emptyCopy.mapClaims}</span><span className={generating ? "active" : ""}>{emptyCopy.generatePages}</span><span>{emptyCopy.saveDeck}</span></div>
     {generating && <p className="paper-presentation-progress" role="status"><LoaderCircle className="spin" size={15} />{progress}</p>}
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
-    <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
-      {generating ? <LoaderCircle className="spin" size={16} /> : legacyPresentation ? <RefreshCw size={16} /> : <Sparkles size={16} />}
-      {generating ? emptyCopy.generatingButton : reviewReady ? emptyCopy.generateButton : emptyCopy.reviewRequiredButton}
-    </button>
+    <div className="paper-presentation-entry-actions">
+      {reviewReady && <button onClick={() => void generate("review")} disabled={generating || !workspace}>
+        {generating ? <LoaderCircle className="spin" size={16} /> : legacyPresentation ? <RefreshCw size={16} /> : <Sparkles size={16} />}
+        {generating ? emptyCopy.generatingButton : emptyCopy.reviewButton}
+      </button>}
+      <button className={reviewReady ? "secondary" : ""} onClick={() => void generate("paper")} disabled={generating || !workspace}>
+        {generating ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+        {generating ? emptyCopy.generatingButton : emptyCopy.paperButton}
+      </button>
+    </div>
   </section>;
 
   return <section className="paper-presentation-workbench">
@@ -591,7 +601,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
       <div><span>{livePresentation ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}{livePresentation ? `${livePresentation.previewUrls.filter(Boolean).length} / ${livePresentation.total} pages ready to view` : `Editable PowerPoint · ${activePresentation.source_sufficiency || "review-grounded"}`}</span>{stale && !livePresentation && <em>The text review changed after this deck was generated.</em>}</div>
       <div>
         <button onClick={() => void reveal()} disabled={Boolean(livePresentation)}><FolderOpen size={15} />Open PPTX</button>
-        <button onClick={() => void generate()} disabled={!reviewReady || generating}>{generating ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}{generating ? "Regenerating" : "Regenerate"}</button>
+        <button onClick={() => void generate(activePresentation.generation_mode === "paper" || !reviewReady ? "paper" : "review")} disabled={generating}>{generating ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}{generating ? "Regenerating" : "Regenerate"}</button>
         <button onClick={() => void stageRef.current?.requestFullscreen()} disabled={Boolean(livePresentation)}><Expand size={15} />Present</button>
       </div>
     </header>

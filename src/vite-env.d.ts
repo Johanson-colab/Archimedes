@@ -896,6 +896,7 @@ interface PaperPresentation {
   title: string;
   subtitle: string;
   source_sufficiency?: "full-paper" | "partial-paper" | "review-grounded";
+  generation_mode?: "review" | "paper";
   slides: PaperPresentationSlide[];
   artifact?: {
     kind: "pptd" | "pptx";
@@ -925,6 +926,7 @@ interface PaperPresentationInput {
   contextLength?: ContextLength;
   contextItems?: ContextAttachment[];
   language?: "en" | "zh";
+  sourceMode?: "review" | "paper";
   clientRunId?: string;
 }
 
@@ -941,7 +943,7 @@ interface PaperPresentationEvent {
     validation: "passed" | "rendered";
     preview_url: string;
   };
-  presentation?: Pick<PaperPresentation, "title" | "subtitle" | "source_sufficiency" | "slides">;
+  presentation?: Pick<PaperPresentation, "title" | "subtitle" | "source_sufficiency" | "generation_mode" | "slides">;
 }
 
 interface PaperReviewEvent {

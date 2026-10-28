@@ -51,6 +51,8 @@ test("text review and generated presentation remain independent outputs", () => 
   assert.match(kimiSlidesSkill, /claim-to-source ledger/);
   assert.match(kimiSlidesSkill, /Background -> Related work -> Method -> Experiments -> Limitations/);
   assert.match(main, /runKimiSlidesPlan/);
+  assert.match(main, /runPaperPresentationPlan/);
+  assert.match(main, /input\.sourceMode === "paper"/);
   assert.match(main, /generateNativePptx/);
 });
 
@@ -62,7 +64,9 @@ test("saved presentations render as a keyboard-navigable academic deck with PDF 
   assert.match(presentation, /layout-editorial/);
   assert.match(presentation, /paper-presentation-structured/);
   assert.match(presentation, /PAPER_PRESENTATION_VERSION/);
-  assert.match(presentation, /Generate presentation/);
+  assert.match(presentation, /Use saved text review/);
+  assert.match(presentation, /Read original paper/);
+  assert.match(presentation, /sourceMode/);
   assert.match(presentation, /RenderedPresentationPage/);
   assert.match(presentation, /Editable PowerPoint/);
   assert.match(presentation, /paper-presentation-stage/);
@@ -86,21 +90,29 @@ test("presentation slides keep source captions concise and structured grids cont
   assert.doesNotMatch(styles, /\.paper-presentation-source figcaption/);
 });
 
-test("expanded evidence notes stay in the reading card column", () => {
+test("expanded evidence notes render as readable full-width cards", () => {
   const readingRules = styles.match(/\.paper-review-reading \{[^}]*\}/g) ?? [];
-  const activeRule = readingRules.find((rule) => /min-height: 154px;/.test(rule));
+  const activeRule = readingRules.find((rule) => /min-height: 176px;/.test(rule));
   assert.match(activeRule, /display: block;/);
   assert.doesNotMatch(activeRule, /display: grid;/);
-  assert.match(activeRule, /padding: 22px;/);
-  assert.match(styles, /\.paper-review-markdown \{ padding: 20px 0 0 36px;/);
+  assert.match(activeRule, /padding: 23px 25px 22px;/);
+  assert.match(styles, /\.paper-review-reading\.expanded \{ grid-column: 1 \/ -1;/);
+  assert.match(styles, /\.paper-review-reading \.paper-review-markdown \{ max-width: 86ch; margin: 23px 0 0; padding: 25px 0 2px;/);
+});
+
+test("review markdown renders TeX delimiters with KaTeX", () => {
+  assert.match(review, /normalizeReviewMath/);
+  assert.match(review, /remarkPlugins=\{\[remarkGfm, remarkMath\]\}/);
+  assert.match(review, /rehypePlugins=\{\[\[rehypeKatex/);
+  assert.match(styles, /\.paper-review-markdown \.katex-display/);
 });
 
 test("research memorandum fills the width of its summary section", () => {
   const noteRules = styles.match(/\.paper-review-final-note \{[^}]*\}/g) ?? [];
-  const activeRule = noteRules.find((rule) => /padding: 25px;/.test(rule));
+  const activeRule = noteRules.find((rule) => /border-top: 3px solid var\(--review-accent\);/.test(rule));
   assert.match(activeRule, /max-width: none;/);
 
   const headingRules = styles.match(/\.paper-review-final-note h2 \{[^}]*\}/g) ?? [];
-  const activeHeading = headingRules.find((rule) => /font-size: 13px;/.test(rule));
+  const activeHeading = headingRules.find((rule) => /margin-top: 29px;/.test(rule));
   assert.match(activeHeading, /max-width: none;/);
 });

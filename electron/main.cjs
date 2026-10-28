@@ -10,6 +10,7 @@ const agent = require("./agent.cjs");
 const { runPaperReview } = require("./paper-review-orchestrator.cjs");
 const kimiSlidesSkill = require("./kimi-slides-skill.cjs");
 const runKimiSlidesPlan = kimiSlidesSkill.runKimiSlidesPlan || kimiSlidesSkill.runKimiSlidesPresentation;
+const runPaperPresentationPlan = kimiSlidesSkill.runPaperPresentationPlan || runKimiSlidesPlan;
 const { generateNativePptx } = require("./native-pptx.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
@@ -1073,8 +1074,11 @@ app.whenReady().then(() => {
     const workspace = resolveWorkspace(input.workspace);
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
     store.openWorkspace(dataWorkspace);
+    const requestedSourceMode = input.sourceMode === "paper" ? "paper" : "review";
     const review = store.getPaperReview(input.paper.id);
-    if (!review) throw new Error("Finish and save the text review before generating its presentation.");
+    if (requestedSourceMode === "review" && !review) {
+      throw new Error("Finish and save the text review, or choose Generate from original paper.");
+    }
     const config = modelConfig.getActiveModelConfig();
     const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort || "high");
     const contextLength = normalizeContextLength(config, input.contextLength || "extra-long");
@@ -1099,10 +1103,10 @@ app.whenReady().then(() => {
     const emitPresentation = (detail, extra = {}) => {
       if (!event.sender.isDestroyed()) event.sender.send("paper-presentation:event", { paperId: paper.id, clientRunId, detail, ...extra });
     };
-    emitPresentation("Reading the paper and planning the presentation…");
-    const result = await runKimiSlidesPlan({
+    emitPresentation(requestedSourceMode === "paper" ? "Reading the original paper and planning the presentation…" : "Reading the paper and saved review to plan the presentation…");
+    const result = await (requestedSourceMode === "paper" ? runPaperPresentationPlan : runKimiSlidesPlan)({
       paper,
-      review,
+      review: requestedSourceMode === "review" ? review : null,
       pageCount: Math.max(0, Math.min(5_000, Number(input.pageCount) || 0)),
       workspace,
       projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
@@ -1112,7 +1116,8 @@ app.whenReady().then(() => {
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       language: presentationLanguage,
     });
-    const artifact = await generateNativePptx({ paper, plan: result.presentation, workspace: dataWorkspace,
+    const presentationPlan = { ...result.presentation, generation_mode: requestedSourceMode };
+    const artifact = await generateNativePptx({ paper, plan: presentationPlan, workspace: dataWorkspace,
       sourcePdfPath, emit: emitPresentation,
       onPage: async (page) => {
         const token = createPreviewToken(event.sender.id, dataWorkspace);
@@ -1121,14 +1126,18 @@ app.whenReady().then(() => {
           kind: "page-ready",
           page: { ...page, preview_url: previewUrl },
           presentation: {
-            title: result.presentation.title,
-            subtitle: result.presentation.subtitle,
-            source_sufficiency: result.presentation.source_sufficiency,
-            slides: result.presentation.slides,
+            title: presentationPlan.title,
+            subtitle: presentationPlan.subtitle,
+            source_sufficiency: presentationPlan.source_sufficiency,
+            generation_mode: presentationPlan.generation_mode,
+            slides: presentationPlan.slides,
           },
         });
       } });
-    const saved = store.savePaperPresentation(paper.id, { ...result.presentation, artifact }, review.updated_at);
+    const sourceMarker = requestedSourceMode === "review"
+      ? review.updated_at
+      : `paper:${reader.asset.updated_at || reader.asset.sha256 || "prepared"}`;
+    const saved = store.savePaperPresentation(paper.id, { ...presentationPlan, artifact }, sourceMarker);
     const token = createPreviewToken(event.sender.id, dataWorkspace);
     return { ...saved, artifact: { ...saved.artifact,
       preview_url: `archimedes-file://${token}/${saved.artifact.pdf_path.split("/").map(encodeURIComponent).join("/")}?v=${Date.now()}` } };

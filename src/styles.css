@@ -161,7 +161,7 @@
 .paper-presentation-empty-flow span:last-child::after { display: none; }
 .paper-presentation-empty-flow span.active { color: #9a4838; }
 .paper-presentation-empty-flow span.active::after { background: #cf9b73; }
-.paper-presentation-empty > button,
+.paper-presentation-entry-actions button,
 .paper-presentation-toolbar button {
   display: inline-flex;
   min-height: 38px;
@@ -176,9 +176,11 @@
   font-size: 12px;
   font-weight: 740;
 }
-.paper-presentation-empty > button { justify-self: start; margin-top: 0; }
-.paper-presentation-empty > button:hover:not(:disabled), .paper-presentation-toolbar button:hover:not(:disabled) { background: #9a4838; }
-.paper-presentation-empty > button:disabled, .paper-presentation-toolbar button:disabled { cursor: not-allowed; opacity: .42; }
+.paper-presentation-entry-actions { display: flex; align-items: center; gap: 10px; justify-self: start; margin-top: 0; }
+.paper-presentation-entry-actions button.secondary { color: #3e3931; background: transparent; border: 1px solid #b8ac9a; }
+.paper-presentation-entry-actions button:hover:not(:disabled), .paper-presentation-toolbar button:hover:not(:disabled) { background: #9a4838; }
+.paper-presentation-entry-actions button.secondary:hover:not(:disabled) { color: #f8f3ea; border-color: #9a4838; }
+.paper-presentation-entry-actions button:disabled, .paper-presentation-toolbar button:disabled { cursor: not-allowed; opacity: .42; }
 .paper-presentation-error { display: flex; align-items: center; gap: 8px; margin: 0; color: #9c4337; font-size: 12px; line-height: 1.5; }
 .paper-presentation-progress { display: flex; align-items: center; gap: 7px; margin: 0; color: #1f6652; font-size: 12px; line-height: 1.5; }
 .paper-presentation-rendered-page { position: relative; display: grid; width: 100%; height: 100%; place-items: center; background: #f8f4ea; }

@@ -104,9 +104,20 @@ function reviewDossier(review) {
   ].join("\n\n");
 }
 
+function hasUsableReview(review) {
+  return Boolean(review?.summary && Array.isArray(review.specialists) && review.specialists.length);
+}
+
 function kimiSlidesPrompt(paper, review, pageCount, language = "zh") {
   const presentationLanguage = language === "en" ? "English" : "Simplified Chinese";
-  return `You are planning a ${presentationLanguage} academic lab-meeting deck that will be generated as an editable PowerPoint file. Read the ORIGINAL PAPER. Use the saved review only as a map of claims, caveats, and disputed evidence. This presentation is an independent output: never alter the saved review. Write all titles, leads, bullets, takeaways, and speaker notes in ${presentationLanguage}.
+  const reviewAvailable = hasUsableReview(review);
+  const planningSource = reviewAvailable
+    ? "A saved review is available. Use it only as a map of claims, caveats, and disputed evidence; it is never a substitute for the original paper."
+    : "No saved review is available. Build the evidence map directly from the original paper PDF. Do not infer an audit, critique, or result that the paper itself does not support.";
+  const reviewContext = reviewAvailable
+    ? `SAVED REVIEW (planning aid only; never alter it):\n${reviewDossier(review)}`
+    : "SAVED REVIEW: none. The original paper PDF is the only source of evidence for this deck.";
+  return `You are planning a ${presentationLanguage} academic lab-meeting deck that will be generated as an editable PowerPoint file. Read the ORIGINAL PAPER. ${planningSource} This presentation is an independent output: never alter the saved review. Write all titles, leads, bullets, takeaways, and speaker notes in ${presentationLanguage}.
 
 Return a source-grounded CONTENT PLAN as JSON. This is an intermediate plan, not the visible slide format. A native renderer will apply the academic templates, crop original evidence, and build the editable deck. Preserve the source skill's planning, academic narrative, evidence selection, typography, density, and validation rules.
 
@@ -158,8 +169,7 @@ Authors: ${(paper.authors || []).join(", ") || "Unknown"}
 Venue/year: ${paper.venue || "Unknown"} · ${paper.year || "n.d."}
 Indexed PDF pages: ${pageCount || "unknown"}
 
-SAVED REVIEW:
-${reviewDossier(review)}`;
+${reviewContext}`;
 }
 
 function parseJsonObject(response) {
@@ -263,10 +273,7 @@ function parseKimiSlidesPresentation(response, paper, pageCount) {
   return normalizeKimiSlidesPresentation(parseJsonObject(response), paper, pageCount);
 }
 
-async function runKimiSlidesPlan({ paper, review, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser, language = "zh" }) {
-  if (!review?.summary || !Array.isArray(review.specialists) || !review.specialists.length) {
-    throw new Error("Finish and save the evidence review before generating a presentation.");
-  }
+async function runPaperPresentationPlan({ paper, review = null, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser, language = "zh" }) {
   const run = await runAgent({
     prompt: kimiSlidesPrompt(paper, review, pageCount, language),
     workspace,
@@ -280,7 +287,14 @@ async function runKimiSlidesPlan({ paper, review, pageCount, workspace, projectI
     emit: () => {},
   });
   if (run.status !== "completed") throw new Error(run.response || "Kimi Slides did not complete.");
-  return { presentation: parseKimiSlidesPresentation(run.response, paper, pageCount), run };
+  return { presentation: parseKimiSlidesPresentation(run.response, paper, pageCount), run, sourceMode: hasUsableReview(review) ? "review" : "paper" };
+}
+
+async function runKimiSlidesPlan(args) {
+  if (!hasUsableReview(args?.review)) {
+    throw new Error("Finish and save the evidence review before using the review-grounded presentation path.");
+  }
+  return runPaperPresentationPlan(args);
 }
 
 module.exports = {
@@ -290,6 +304,7 @@ module.exports = {
   loadKimiSlidesGuidance,
   normalizeKimiSlidesPresentation,
   parseKimiSlidesPresentation,
+  runPaperPresentationPlan,
   runKimiSlidesPlan,
   // Kept for extension code that still imports the older function name.
   runKimiSlidesPresentation: runKimiSlidesPlan,

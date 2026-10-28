@@ -183,6 +183,7 @@ test("persists presentations separately from their source review", () => {
       title: paper.title,
       subtitle: "A compact deck",
       source_sufficiency: "full-paper",
+      generation_mode: "paper",
       artifact: {
         kind: "pptd",
         pptd_path: ".archimedes/presentations/a1b2c3d4/123e4567-e89b-12d3-a456-426614174000/presentation.pptd",
@@ -215,6 +216,7 @@ test("persists presentations separately from their source review", () => {
     assert.equal(restoredPresentation.source_review_updated_at, review.updated_at);
     assert.equal(restoredPresentation.skill.version, 3);
     assert.equal(restoredPresentation.source_sufficiency, "full-paper");
+    assert.equal(restoredPresentation.generation_mode, "paper");
     assert.equal(restoredPresentation.artifact.kind, "pptd");
     assert.equal(restoredPresentation.artifact.page_count, 12);
     assert.match(restoredPresentation.artifact.pptx_path, /presentation\.pptx$/);

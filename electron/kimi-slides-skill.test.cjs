@@ -29,6 +29,9 @@ test("presentation planner prepares source-grounded content for native PowerPoin
   assert.match(loadKimiSlidesGuidance(), /Kimi Slides|Academic Research|academic workflow/i);
   assert.equal(KIMI_SLIDES_SKILL.id, "paper-presentation");
   assert.match(kimiSlidesPrompt(paper, review, 24, "en"), /English academic lab-meeting deck/);
+  const directPrompt = kimiSlidesPrompt(paper, null, 24, "en");
+  assert.match(directPrompt, /No saved review is available/);
+  assert.match(directPrompt, /original paper PDF is the only source of evidence/);
 });
 
 test("Kimi Slides adapter normalizes a 15-page academic deck with an outline", () => {
