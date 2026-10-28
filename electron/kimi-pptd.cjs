@@ -292,7 +292,16 @@ function fallbackPageSpec({ paper, slide, index, evidence }) {
     { type: "text", x: 110, y: 500, w: 880, h: 90, text: wrapped(`${paper.authors?.slice(0, 5).join(", ") || "Unknown authors"}\n${paper.venue || "Paper"}${paper.year ? ` · ${paper.year}` : ""}`, 70), fontSize: 20, color: INK },
   ] }, { title, hasEvidence: false, pageType });
 
-  const lead = wrapped(slide?.lead || slide?.takeaway || "Evidence from the original paper is summarized on this page.", 46);
+  const rawLead = slide?.lead || slide?.takeaway || "Evidence from the original paper is summarized on this page.";
+  // PPTD treats both overflow and a largely empty text box as layout errors.
+  // Bound the prose to the available column, then size its box from the
+  // resulting line count instead of giving every lead a fixed-height box.
+  const lead = wrapped(rawLead, evidence ? 18 : 34)
+    .split("\n").slice(0, evidence ? 3 : 2).join("\n");
+  const leadLines = Math.max(1, lead.split("\n").length);
+  const leadHeight = evidence
+    ? Math.max(44, leadLines * 32 + 12)
+    : Math.max(48, leadLines * 36 + 12);
   const bullets = (slide?.bullets || []).slice(0, 3).map((item, bulletIndex) => `${String(bulletIndex + 1).padStart(2, "0")}  ${wrapped(item, evidence ? 34 : 64)}`).join("\n\n");
   const shared = [
     { type: "text", x: 70, y: 52, w: 1080, h: 100, text: titleText, fontSize: 38, color: INK, bold: true },
@@ -300,12 +309,12 @@ function fallbackPageSpec({ paper, slide, index, evidence }) {
   ];
   const elements = evidence ? [...shared,
     { type: "image", x: 70, y: 215, w: 570, h: 340, fit: "contain" },
-    { type: "text", x: 700, y: 215, w: 460, h: 105, text: lead, fontSize: 24, color: INK, bold: true },
+    { type: "text", x: 700, y: 215, w: 460, h: leadHeight, text: lead, fontSize: 24, color: INK, bold: true },
     { type: "text", x: 700, y: 350, w: 460, h: 210, text: bullets || "01  See the source figure for the supporting evidence.", fontSize: 20, color: INK },
     { type: "shape", shape: "rect", x: 70, y: 600, w: 1140, h: 56, fill: "#E9E0D0" },
     { type: "text", x: 92, y: 614, w: 1080, h: 26, text: wrapped(slide?.takeaway || lead, 105), fontSize: 17, color: INK, bold: true },
   ] : [...shared,
-    { type: "text", x: 110, y: 225, w: 960, h: 92, text: lead, fontSize: 27, color: INK, bold: true },
+    { type: "text", x: 110, y: 225, w: 960, h: leadHeight, text: lead, fontSize: 27, color: INK, bold: true },
     { type: "shape", shape: "rect", x: 110, y: 350, w: 920, h: 2, fill: GREEN },
     { type: "text", x: 110, y: 385, w: 960, h: 180, text: bullets || "01  The paper's evidence is summarized in this section.", fontSize: 22, color: INK },
     { type: "shape", shape: "rect", x: 110, y: 610, w: 960, h: 42, fill: "#E9E0D0" },

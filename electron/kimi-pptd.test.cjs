@@ -95,5 +95,24 @@ test("Kimi desktop checker and converter accept generated PPTD files", { skip: !
     fs.writeFileSync(fallbackContentEntry, mainYaml(fallbackPaper.title, 1, ["pages/fallback-content.page"]));
     const checkedContent = await convertAndRender({ python, pyz: process.env.KIMI_PPTD_TEST_PYZ, env }, fallbackContentEntry, directory, "fallback-content");
     assert.equal(checkedContent.check.error_count, 0);
+
+    // A short Chinese lead previously left the old fixed-height box at 39%
+    // fill, which the Kimi converter treats as a failed layout.  This mirrors
+    // the actual review narrative and guards the adaptive-height calculation.
+    const chineseFallback = fallbackPageSpec({
+      paper: fallbackPaper,
+      slide: {
+        title: "MemT-1.0 将从记忆问题走向架构、训练与证据",
+        lead: "本次汇报沿着问题定义、相关路线、模型机制、实验结果与边界条件展开。",
+        bullets: ["背景：长历史如何在不保留原文的情况下持续影响模型行为", "相关工作：文本记忆、参数化记忆与代理经验复用", "方法：原生记忆块、稳定 token 级更新与两阶段训练"],
+        takeaway: "核心线索：该论文支持原生记忆的系统集成与规模化，而非普遍替代所有记忆范式。",
+      },
+      index: 1,
+    });
+    fs.writeFileSync(path.join(directory, "pages", "fallback-chinese.page"), pageYaml(chineseFallback));
+    const chineseEntry = path.join(directory, "fallback-chinese.pptd");
+    fs.writeFileSync(chineseEntry, mainYaml(fallbackPaper.title, 1, ["pages/fallback-chinese.page"]));
+    const checkedChinese = await convertAndRender({ python, pyz: process.env.KIMI_PPTD_TEST_PYZ, env }, chineseEntry, directory, "fallback-chinese");
+    assert.equal(checkedChinese.check.error_count, 0);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
