@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { convertAndRender, mainYaml, normalizePageSpec, pageYaml, parseObject } = require("./kimi-pptd.cjs");
+const { convertAndRender, fallbackPageSpec, mainYaml, normalizePageSpec, pageYaml, parseObject } = require("./kimi-pptd.cjs");
 
 test("PPTD pages are authored with safe geometry and Kimi's page file contract", () => {
   const page = normalizePageSpec({ elements: [
@@ -25,6 +25,20 @@ test("PPTD slide normalization rejects missing evidence and malformed model outp
     { type: "shape", x: 10, y: 60, w: 200, h: 2 },
   ] }, { title: "Title", hasEvidence: true }), /omitted the source figure/);
   assert.throws(() => parseObject("No page content"), /did not return a page specification/);
+  assert.deepEqual(parseObject('Draft follows. {"elements":[]} Extra explanation with {braces}.'), { elements: [] });
+});
+
+test("a verified fallback page keeps a malformed single-page response from failing the deck", () => {
+  const input = {
+    paper: { title: "Paper title", authors: ["A. Author"], venue: "TestConf", year: 2026 },
+    slide: { title: "Method evidence", lead: "A compact statement of the mechanism.", bullets: ["First source-grounded point."], takeaway: "The evidence supports a bounded conclusion." },
+    index: 12,
+    evidence: { width: 1000, height: 700 },
+  };
+  const page = fallbackPageSpec(input);
+  assert.equal(page.pageType, "content");
+  assert.ok(page.elements.some((element) => element.type === "image"));
+  assert.ok(page.elements.some((element) => element.type === "text" && element.text.includes("Method evidence")));
 });
 
 test("Kimi desktop checker and converter accept generated PPTD files", { skip: !process.env.KIMI_PPTD_TEST_PYZ }, async () => {

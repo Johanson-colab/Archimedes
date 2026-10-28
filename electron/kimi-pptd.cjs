@@ -24,12 +24,35 @@ function number(value, fallback, min, max) {
 }
 function relativeArtifactPath(workspace, absolute) { return path.relative(workspace, absolute).split(path.sep).join("/"); }
 
-function parseObject(response) {
-  const raw = clean(response, 80_000).replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+function firstJsonObject(raw) {
   const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("The slide designer did not return a page specification.");
-  try { return JSON.parse(raw.slice(start, end + 1)); }
+  if (start < 0) return "";
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+  for (let index = start; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'") { quote = char; continue; }
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return raw.slice(start, index + 1);
+    }
+  }
+  return "";
+}
+
+function parseObject(response) {
+  const raw = clean(response, 80_000).replace(/```(?:json)?/gi, "");
+  const object = firstJsonObject(raw);
+  if (!object) throw new Error("The slide designer did not return a page specification.");
+  try { return JSON.parse(object); }
   catch { throw new Error("The slide designer returned invalid JSON."); }
 }
 
@@ -232,18 +255,75 @@ function slidePrompt({ paper, slide, index, total, evidence }) {
     `For an image, reserve enough area for the source to be legible. Keep figures aspect-correct with contain. Include the exact title as one text element. Use at least 3 elements, no more than 30. Do not output a src or external URL.`;
 }
 
+function wrapped(value, characters = 36) {
+  const text = clean(value, 1_600);
+  if (text.length <= characters) return text;
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length > 1) {
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+      if (line && `${line} ${word}`.length > characters) { lines.push(line); line = word; }
+      else line = line ? `${line} ${word}` : word;
+    }
+    if (line) lines.push(line);
+    return lines.slice(0, 3).join("\n");
+  }
+  return Array.from(text).reduce((lines, char, index) => {
+    const line = Math.floor(index / characters);
+    lines[line] = `${lines[line] || ""}${char}`;
+    return lines;
+  }, []).slice(0, 3).join("\n");
+}
+
+function fallbackPageSpec({ paper, slide, index, evidence }) {
+  const title = slide?.title || paper.title;
+  const pageType = index === 0 ? "cover" : "content";
+  const titleText = wrapped(title, index === 0 ? 30 : 34);
+  if (index === 0) return normalizePageSpec({ elements: [
+    { type: "shape", shape: "rect", x: 62, y: 62, w: 10, h: 580, fill: GREEN },
+    { type: "text", x: 110, y: 115, w: 870, h: 34, text: "PAPER PRESENTATION · 组会汇报", fontSize: 17, color: GREEN, bold: true },
+    { type: "text", x: 110, y: 180, w: 900, h: 260, text: titleText, fontSize: 48, color: INK, bold: true },
+    { type: "shape", shape: "rect", x: 110, y: 468, w: 900, h: 2, fill: OCHRE },
+    { type: "text", x: 110, y: 500, w: 880, h: 90, text: wrapped(`${paper.authors?.slice(0, 5).join(", ") || "Unknown authors"}\n${paper.venue || "Paper"}${paper.year ? ` · ${paper.year}` : ""}`, 70), fontSize: 20, color: INK },
+  ] }, { title, hasEvidence: false, pageType });
+
+  const lead = wrapped(slide?.lead || slide?.takeaway || "Evidence from the original paper is summarized on this page.", 46);
+  const bullets = (slide?.bullets || []).slice(0, 3).map((item, bulletIndex) => `${String(bulletIndex + 1).padStart(2, "0")}  ${wrapped(item, evidence ? 34 : 64)}`).join("\n\n");
+  const shared = [
+    { type: "text", x: 70, y: 52, w: 1080, h: 100, text: titleText, fontSize: 38, color: INK, bold: true },
+    { type: "shape", shape: "rect", x: 70, y: 166, w: 1140, h: 2, fill: OCHRE },
+  ];
+  const elements = evidence ? [...shared,
+    { type: "image", x: 70, y: 215, w: 570, h: 340, fit: "contain" },
+    { type: "text", x: 700, y: 215, w: 460, h: 105, text: lead, fontSize: 24, color: INK, bold: true },
+    { type: "text", x: 700, y: 350, w: 460, h: 210, text: bullets || "01  See the source figure for the supporting evidence.", fontSize: 20, color: INK },
+    { type: "shape", shape: "rect", x: 70, y: 600, w: 1140, h: 56, fill: "#E9E0D0" },
+    { type: "text", x: 92, y: 614, w: 1080, h: 26, text: wrapped(slide?.takeaway || lead, 105), fontSize: 17, color: INK, bold: true },
+  ] : [...shared,
+    { type: "text", x: 110, y: 225, w: 960, h: 92, text: lead, fontSize: 27, color: INK, bold: true },
+    { type: "shape", shape: "rect", x: 110, y: 350, w: 920, h: 2, fill: GREEN },
+    { type: "text", x: 110, y: 385, w: 960, h: 180, text: bullets || "01  The paper's evidence is summarized in this section.", fontSize: 22, color: INK },
+    { type: "shape", shape: "rect", x: 110, y: 610, w: 960, h: 42, fill: "#E9E0D0" },
+    { type: "text", x: 132, y: 620, w: 910, h: 22, text: wrapped(slide?.takeaway || lead, 105), fontSize: 16, color: INK, bold: true },
+  ];
+  return normalizePageSpec({ elements }, { title, hasEvidence: Boolean(evidence), pageType });
+}
+
 async function composePage(config, input) {
   let lastError = "";
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const message = await complete(config, [
-      { role: "system", content: "You are the Kimi PPTD page author. Output a precise slide geometry JSON object only. Every factual sentence must come from the provided page facts." },
-      { role: "user", content: `${slidePrompt(input)}${lastError ? `\nPrevious attempt failed: ${lastError}. Repair that issue.` : ""}` },
-    ], { allowTools: false, reasoningEffort: "high", maxOutputTokens: 4096, onTextDelta: () => {} });
-    try { return normalizePageSpec(parseObject(message.content), { title: input.slide?.title || input.paper.title,
-      hasEvidence: Boolean(input.evidence), pageType: input.index === 0 ? "cover" : "content" }); }
-    catch (error) { lastError = error.message || String(error); }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const message = await complete(config, [
+        { role: "system", content: "You are the Kimi PPTD page author. Output a precise slide geometry JSON object only. Every factual sentence must come from the provided page facts." },
+        { role: "user", content: `${slidePrompt(input)}${lastError ? `\nPrevious attempt failed: ${lastError}. Repair that issue. Return only balanced strict JSON; escape every quote and newline in text values.` : ""}` },
+      ], { allowTools: false, reasoningEffort: "high", maxOutputTokens: 4096, onTextDelta: () => {} });
+      return normalizePageSpec(parseObject(message.content), { title: input.slide?.title || input.paper.title,
+        hasEvidence: Boolean(input.evidence), pageType: input.index === 0 ? "cover" : "content" });
+    } catch (error) { lastError = error.message || String(error); }
   }
-  throw new Error(`Page ${input.index + 1} could not be composed: ${lastError}`);
+  input.emit?.(`Page ${input.index + 1} used the verified fallback layout after the designer response could not be parsed.`);
+  return fallbackPageSpec(input);
 }
 
 async function convertAndRender(tool, entry, outputDirectory) {
@@ -284,7 +364,7 @@ async function generateKimiPptd({ paper, plan, workspace, sourcePdfPath, runtime
     const slide = index === 0 ? null : plan.slides[index - 1];
     const evidence = images.get(index - 1);
     emit(`Designing PPTD page ${index + 1} of ${total}…`);
-    const page = await composePage(modelConfig, { paper, slide, index, total, evidence });
+    const page = await composePage(modelConfig, { paper, slide, index, total, evidence, emit });
     const file = path.join(pagesDirectory, `slide-${String(index + 1).padStart(2, "0")}.page`);
     fs.writeFileSync(file, pageYaml(page, evidence?.path));
   }
@@ -303,4 +383,4 @@ async function generateKimiPptd({ paper, plan, workspace, sourcePdfPath, runtime
   };
 }
 
-module.exports = { convertAndRender, ensureTool, generateKimiPptd, mainYaml, normalizePageSpec, pageYaml, parseObject, renderEvidenceImages, runProcess, toolPaths };
+module.exports = { composePage, convertAndRender, ensureTool, fallbackPageSpec, firstJsonObject, generateKimiPptd, mainYaml, normalizePageSpec, pageYaml, parseObject, renderEvidenceImages, runProcess, toolPaths };
