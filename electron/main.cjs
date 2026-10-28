@@ -10,7 +10,7 @@ const agent = require("./agent.cjs");
 const { runPaperReview } = require("./paper-review-orchestrator.cjs");
 const kimiSlidesSkill = require("./kimi-slides-skill.cjs");
 const runKimiSlidesPlan = kimiSlidesSkill.runKimiSlidesPlan || kimiSlidesSkill.runKimiSlidesPresentation;
-const { ensureTool, generateKimiPptd } = require("./kimi-pptd.cjs");
+const { generateNativePptx } = require("./native-pptx.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
@@ -1079,6 +1079,7 @@ app.whenReady().then(() => {
     const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort || "high");
     const contextLength = normalizeContextLength(config, input.contextLength || "extra-long");
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
+    const presentationLanguage = input.language === "en" ? "en" : "zh";
     const paper = {
       id: input.paper.id,
       title: input.paper.title.slice(0, 1_000),
@@ -1091,15 +1092,13 @@ app.whenReady().then(() => {
     };
     const reader = store.getPaperReader(paper.id);
     if (reader.asset?.status !== "ready" || !reader.asset.relative_path) {
-      throw new Error("Prepare or attach the original paper PDF before generating a PPTD presentation.");
+      throw new Error("Prepare or attach the original paper PDF before generating a presentation.");
     }
     const sourcePdfPath = workspaceFiles.workspacePath(dataWorkspace, reader.asset.relative_path);
     const clientRunId = typeof input.clientRunId === "string" ? input.clientRunId.slice(0, 100) : "";
     const emitPresentation = (detail, extra = {}) => {
       if (!event.sender.isDestroyed()) event.sender.send("paper-presentation:event", { paperId: paper.id, clientRunId, detail, ...extra });
     };
-    emitPresentation("Checking Kimi PPTD and rendering tools…");
-    await ensureTool(app.getPath("userData"), emitPresentation);
     emitPresentation("Reading the paper and planning the presentation…");
     const result = await runKimiSlidesPlan({
       paper,
@@ -1111,9 +1110,10 @@ app.whenReady().then(() => {
       reasoningEffort,
       contextLength,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
+      language: presentationLanguage,
     });
-    const artifact = await generateKimiPptd({ paper, plan: result.presentation, workspace: dataWorkspace,
-      sourcePdfPath, runtimeRoot: app.getPath("userData"), modelConfig: config, emit: emitPresentation,
+    const artifact = await generateNativePptx({ paper, plan: result.presentation, workspace: dataWorkspace,
+      sourcePdfPath, emit: emitPresentation,
       onPage: async (page) => {
         const token = createPreviewToken(event.sender.id, dataWorkspace);
         const previewUrl = `archimedes-file://${token}/${page.pdfPath.split("/").map(encodeURIComponent).join("/")}?v=${Date.now()}`;
@@ -1140,7 +1140,7 @@ app.whenReady().then(() => {
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
     const saved = store.getPaperPresentation(paperId);
-    if (!saved?.artifact || saved.artifact.kind !== "pptd") return saved;
+    if (!saved?.artifact || !["pptd", "pptx"].includes(saved.artifact.kind)) return saved;
     try {
       workspaceFiles.workspacePath(dataWorkspace, saved.artifact.pdf_path);
       const token = createPreviewToken(event.sender.id, dataWorkspace);
@@ -1157,7 +1157,7 @@ app.whenReady().then(() => {
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
     const artifact = store.getPaperPresentation(paperId)?.artifact;
-    if (artifact?.kind !== "pptd") throw new Error("This paper has no saved PPTD presentation.");
+    if (!artifact || !["pptd", "pptx"].includes(artifact.kind)) throw new Error("This paper has no saved presentation.");
     const pptxPath = workspaceFiles.workspacePath(dataWorkspace, artifact.pptx_path);
     if (!fs.existsSync(pptxPath)) throw new Error("The saved presentation file is missing.");
     shell.showItemInFolder(pptxPath);

@@ -639,7 +639,7 @@ function normalizePaperPresentation(presentation) {
     if (!normalizedSlides.some((slide) => slide.section === section)) throw new Error(`The paper presentation is missing its ${section} section.`);
   }
   let artifact;
-  if (presentation.artifact?.kind === "pptd") {
+  if (["pptd", "pptx"].includes(presentation.artifact?.kind)) {
     const safePath = (value, extension) => {
       const text = String(value || "").replaceAll("\\", "/");
       if (!/^\.archimedes\/presentations\/[a-z0-9-]+\/[a-z0-9-]+\/[a-z0-9.-]+$/i.test(text) ||
@@ -649,16 +649,18 @@ function normalizePaperPresentation(presentation) {
       return text;
     };
     const pageCount = Number(presentation.artifact.page_count);
-    if (pageCount !== normalizedSlides.length + 1 || presentation.artifact.validation !== "passed") {
-      throw new Error("The PPTD artifact is not a validated, complete presentation.");
+    const isPptd = presentation.artifact.kind === "pptd";
+    const expectedValidation = isPptd ? "passed" : "rendered";
+    if (pageCount !== normalizedSlides.length + 1 || presentation.artifact.validation !== expectedValidation) {
+      throw new Error("The presentation artifact is not a complete rendered deck.");
     }
     artifact = {
-      kind: "pptd",
-      pptd_path: safePath(presentation.artifact.pptd_path, ".pptd"),
+      kind: presentation.artifact.kind,
       pptx_path: safePath(presentation.artifact.pptx_path, ".pptx"),
       pdf_path: safePath(presentation.artifact.pdf_path, ".pdf"),
       page_count: pageCount,
-      validation: "passed",
+      validation: expectedValidation,
+      ...(isPptd ? { pptd_path: safePath(presentation.artifact.pptd_path, ".pptd") } : { renderer: "native-pptx" }),
     };
   }
   return {
