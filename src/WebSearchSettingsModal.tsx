@@ -50,8 +50,61 @@ export default function WebSearchSettingsModal({ bridge, open, onClose, embedded
   }
 
   if (!open) return null;
+
+  if (embedded) return <div className="settings-sections">
+    <p className="settings-group-note">{t("Choose the search service Archimedes uses. Your own API key stays on this device.")}</p>
+
+    <section className="settings-section">
+      <h3 className="settings-section-title">{t("Provider")}</h3>
+      <div className="settings-group">
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span className="settings-row-title">{t("Search provider")}</span>
+            <p className="settings-row-description">{t("Used for web search and page discovery in new Agent turns.")}</p>
+            <span className="settings-row-hint">{t(selected.description)}</span>
+          </div>
+          <div className="settings-row-control">
+            <select className="settings-select" value={provider} aria-label={t("Search provider")} onChange={(event) => { setProvider(event.target.value as WebSearchProviderId); setApiKey(""); setFeedback(""); }}>
+              {providers.map((item) => <option key={item.id} value={item.id}>{item.name}{configured.includes(item.id) ? ` · ${t("configured")}` : ""}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span className="settings-row-title">{t("Provider console")}</span>
+            <p className="settings-row-description">{t("Create or rotate a key in the provider dashboard.")}</p>
+          </div>
+          <div className="settings-row-control">
+            <a className="settings-link" href={selected.link} target="_blank" rel="noreferrer">{t("Get a {provider} API key", { provider: selected.name })}<ExternalLink size={12} /></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section className="settings-section">
+      <h3 className="settings-section-title">{t("API key")}</h3>
+      <div className="settings-group">
+        <div className="settings-row settings-row-stacked">
+          <div className="settings-row-copy">
+            <span className="settings-row-title"><KeyRound size={13} />{selected.name}</span>
+            <p className="settings-row-description">{hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })}</p>
+          </div>
+          <div className="settings-row-control">
+            <input className="settings-text-input settings-text-input-wide" id="web-search-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })} autoComplete="off" spellCheck={false} />
+          </div>
+        </div>
+      </div>
+      <p className="settings-group-note">{t("Keys are stored in Electron user data and never included in Agent messages. Search queries are sent directly to the selected provider.")}</p>
+    </section>
+
+    <div className="settings-form-actions">
+      <span className={feedback ? "settings-form-status" : "settings-form-status muted"} role="status">{feedback || (hasSelectedKey ? t("{provider} key saved", { provider: selected.name }) : t("Add a key to activate this provider"))}</span>
+      <button className="primary-button" onClick={() => void save()} disabled={saving || (!apiKey.trim() && !hasSelectedKey)}><Save size={14} />{saving ? t("Saving…") : t("Save key")}</button>
+    </div>
+  </div>;
+
   const content = <>
-      {!embedded && <header className="model-settings-header"><div><span>Agent tools</span><h2>Web data</h2><p>Choose the search service Archimedes uses. Your own API key stays on this device.</p></div><button className="quiet-icon-button" onClick={onClose} title="Close web data settings"><X size={17} /></button></header>}
+      <header className="model-settings-header"><div><span>Agent tools</span><h2>Web data</h2><p>Choose the search service Archimedes uses. Your own API key stays on this device.</p></div><button className="quiet-icon-button" onClick={onClose} title="Close web data settings"><X size={17} /></button></header>
       <div className="web-data-layout">
         <nav className="web-data-provider-list" aria-label="Web data providers">
           {providers.map((item) => <button key={item.id} type="button" className={`web-data-provider${provider === item.id ? " active" : ""}`} onClick={() => { setProvider(item.id); setApiKey(""); setFeedback(""); }}>
@@ -66,9 +119,8 @@ export default function WebSearchSettingsModal({ bridge, open, onClose, embedded
           {feedback && <p className="web-data-feedback" role="status">{feedback}</p>}
         </div>
       </div>
-      <footer className="model-settings-footer"><span>{hasSelectedKey ? t("{provider} key saved", { provider: selected.name }) : t("Add a key to activate this provider")}</span><div>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Close")}</button>}<button className="primary-button" onClick={() => void save()} disabled={saving || (!apiKey.trim() && !hasSelectedKey)}><Save size={14} />{t("Use {provider}", { provider: selected.name })}</button></div></footer>
+      <footer className="model-settings-footer"><span>{hasSelectedKey ? t("{provider} key saved", { provider: selected.name }) : t("Add a key to activate this provider")}</span><div><button className="secondary-button" onClick={onClose}>{t("Close")}</button><button className="primary-button" onClick={() => void save()} disabled={saving || (!apiKey.trim() && !hasSelectedKey)}><Save size={14} />{t("Use {provider}", { provider: selected.name })}</button></div></footer>
     </>;
-  if (embedded) return <section className="settings-embedded web-search-modal" aria-label="Web search settings">{content}</section>;
   return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
     <section ref={dialogRef} tabIndex={-1} className="web-search-modal" role="dialog" aria-modal="true" aria-label="Web search settings" onMouseDown={(event) => event.stopPropagation()}>{content}</section>
   </div>;
