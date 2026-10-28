@@ -30,9 +30,9 @@ test("all modal surfaces use the shared dialog contract", () => {
   }
 });
 
-test("welcome composer and resizers have explicit focus styling", () => {
+test("welcome composer stays quiet while resizers keep explicit focus styling", () => {
   const css = read("src/styles.css");
-  assert.match(css, /\.has-welcome \.conversation-composer:focus-within[\s\S]*?box-shadow: 0 0 0 2px var\(--welcome-bronze\)/);
+  assert.doesNotMatch(css, /\.has-welcome \.conversation-composer:focus-within/);
   assert.match(css, /\.sidebar-resizer:focus-visible \{ outline: 2px solid/);
   assert.match(css, /\.paper-pane-resizer:focus-visible \{ outline: 2px solid/);
 });
