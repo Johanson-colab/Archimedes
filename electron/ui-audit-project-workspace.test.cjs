@@ -56,9 +56,9 @@ test("new projects choose a folder and existing projects can rebind it", () => {
   assert.match(app, /setResearchProjectWorkspace\(project\.id, selected\)/);
 });
 
-test("the header and composer surface the effective working folder", () => {
-  assert.match(app, /t\("Local · \{folder\}", \{ folder: executionWorkspaceName/);
+test("the composer surfaces the effective working folder", () => {
   assert.match(app, /workspace=\{executionWorkspace\}\s+agentBusy=/);
+  assert.match(app, /className="composer-context"><ShieldCheck size=\{13\} \/><span>\{workspace \? workspace\.split/);
 });
 
 test("folder previews and watches do not move the window's primary workspace", () => {

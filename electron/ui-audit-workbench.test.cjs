@@ -17,7 +17,7 @@ const store = fs.readFileSync(path.join(root, "electron", "store.cjs"), "utf8");
 
 test("terminal lives in the right workbench instead of the bottom panel", () => {
   assert.match(app, /<RightWorkbench[\s\S]*?onWidthChange/);
-  assert.match(app, /<PanelRight size=\{18\}/);
+  assert.match(app, /<PanelRight size=\{17\}/);
   assert.doesNotMatch(app, /PanelBottom/);
   assert.match(app, /terminal: <TerminalPanel[\s\S]*?orientation="right"/);
   assert.match(workbench, /\{panels\[id\]\}/);
@@ -25,7 +25,7 @@ test("terminal lives in the right workbench instead of the bottom panel", () => 
 
 test("workbench shares the sidebar top edge and overlays only on narrow screens", () => {
   assert.match(css, /\.codex-main \{[^}]*grid-template-columns: minmax\(0, 1fr\) var\(--workbench-width, 0px\)/);
-  assert.match(css, /\.right-workbench \{[^}]*grid-column: 2;[^}]*grid-row: 1 \/ span 2;[^}]*grid-template-rows: 52px minmax\(0, 1fr\)/);
+  assert.match(css, /\.right-workbench \{[^}]*grid-column: 2;[^}]*grid-row: 1 \/ -1;[^}]*grid-template-rows: 44px minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 1280px\) \{[\s\S]*?\.codex-main \{ grid-template-columns: minmax\(0, 1fr\); \}[\s\S]*?\.main-toolbar \{ padding-right: calc\(var\(--workbench-width, 0px\) \+ 18px\); \}[\s\S]*?\.right-workbench \{[^}]*position: absolute/);
 });
 
