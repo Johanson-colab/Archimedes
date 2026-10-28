@@ -76,6 +76,7 @@ import {
   FileBraces,
   FileCode,
   FileCode2,
+  ArrowUp,
   FileCog,
   FileImage,
   FileJson,
@@ -113,7 +114,6 @@ import {
   Route,
   Save,
   Search,
-  SendHorizontal,
   Settings,
   ShieldCheck,
   ScanSearch,
@@ -2772,7 +2772,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
             />
           </div>
           <button className="conversation-send" onClick={agentBusy ? onInterrupt : submitCurrentPrompt} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? interrupting ? "Stopping task" : "Stop" : "Send"}>
-            {agentBusy ? <Square size={14} fill="currentColor" /> : <SendHorizontal size={16} />}
+            {agentBusy ? <Square size={13} fill="currentColor" /> : <ArrowUp size={16} strokeWidth={2.4} />}
           </button>
         </div>
       </div>

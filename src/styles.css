@@ -1271,7 +1271,6 @@ body.sidebar-resizing * { cursor: col-resize !important; }
   box-shadow: 0 5px 18px rgba(25, 25, 22, .08);
 }
 
-.conversation-composer:focus-within { border-color: #aaa9a2; box-shadow: 0 5px 20px rgba(25, 25, 22, .1); }
 .conversation-composer textarea { display: block; width: 100%; min-height: 72px; padding: 13px 14px 5px; resize: none; color: #2b2b28; background: transparent; border: 0; outline: 0; font-size: 13px; line-height: 1.5; }
 .conversation-composer textarea::placeholder { color: #9b9b95; }
 .conversation-composer-footer { display: flex; min-height: 39px; align-items: center; gap: 8px; padding: 4px 6px 6px; }
@@ -2331,7 +2330,6 @@ body.paper-pane-resizing * { cursor: col-resize !important; }
 /* Keep the paper follow-up composer compact while allowing longer questions to grow naturally. */
 .paper-ai-compose { align-items: end; padding: 8px 10px; }
 .paper-ai-compose-input { min-width: 0; background: #fafbf9; border: 1px solid #d6ddd6; border-radius: 5px; }
-.paper-ai-compose-input:focus-within { border-color: #8fb6a0; box-shadow: 0 0 0 3px rgba(50, 117, 87, .1); }
 .paper-ai-code-attachments { display: flex; flex-wrap: wrap; gap: 5px; max-height: 86px; padding: 7px 7px 0; overflow-y: auto; }
 .paper-ai-code-attachment { display: flex; min-width: 0; max-width: 100%; height: 25px; align-items: center; gap: 5px; padding: 0 4px 0 7px; color: #496153; background: #eef3ef; border: 1px solid #d3e1d7; border-radius: 4px; font: 9px/1.2 "SFMono-Regular", Consolas, monospace; }
 .paper-ai-code-attachment > svg { flex: 0 0 auto; color: #347358; }
@@ -2487,7 +2485,6 @@ html:not([data-theme="paper"]) .quiet-icon-button.active { color: #fff; backgrou
 
 .conversation-composer-wrap { width: min(100%, 860px); padding-bottom: 16px; }
 .conversation-composer { background: #232323; border-color: #414141; border-radius: 8px; box-shadow: 0 14px 45px rgba(0, 0, 0, .28); }
-.conversation-composer:focus-within { border-color: #666; box-shadow: 0 14px 45px rgba(0, 0, 0, .33); }
 .conversation-composer textarea { min-height: 76px; color: #efedf5; }
 .conversation-composer textarea::placeholder { color: #6e7180; }
 .conversation-composer-footer { color: var(--night-muted); }
@@ -2496,9 +2493,6 @@ html:not([data-theme="paper"]) .quiet-icon-button.active { color: #fff; backgrou
 .mode-trigger svg:last-child { color: #747788; }
 .composer-context { color: #6f7282; }
 .context-usage-ring::after { background: #232323; }
-.conversation-send { color: var(--accent-ink); background: var(--accent); border-radius: var(--radius-control); }
-.conversation-send:hover { color: var(--accent-ink); background: var(--accent-hover); }
-.conversation-send:disabled { color: #666978; background: #292b35; }
 .composer-note { color: #595c6a; }
 
 .context-picker-menu, .research-mode-menu, .composer-context-menu,
@@ -2913,7 +2907,7 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
 .gallery-results-bar strong, .gallery-results-bar a, .gallery-credit a { color: #9e98e9; }
 
 .codex-sidebar, .main-toolbar { border-color: transparent; }
-.conversation-composer, .conversation-composer:focus-within { box-shadow: none; }
+.conversation-composer { box-shadow: none; }
 .conversation-message.assistant .conversation-message-copy { max-width: 60ch; }
 .codex-sidebar-label, .projects-heading { color: #858797; }
 .workspace-copy small, .composer-note { color: #7d7f8e; }
@@ -3369,7 +3363,6 @@ html[data-theme="paper"] .paper-create-backdrop {
 .theme-paper .message-markdown a, .theme-paper .conversation-sources a { color: #4f4a43; text-decoration-color: #aaa39a; }
 .theme-paper .conversation-sources a { background: #f3f1ed; border-color: #e2ddd6; }
 .theme-paper .conversation-composer { background: #fffefd; border-color: #e1ddd6; }
-.theme-paper .conversation-composer:focus-within { border-color: #b9b1a6; box-shadow: 0 0 0 2px rgba(57, 53, 47, .16); }
 .theme-paper .conversation-composer textarea:focus-visible { outline: none; }
 .theme-paper .conversation-composer textarea, .theme-paper .paper-ai-compose textarea { color: #292722; }
 .theme-paper .conversation-composer textarea::placeholder { color: #aaa49c; }
@@ -3999,7 +3992,6 @@ html:not([data-theme="paper"]) .research-workflow:hover .research-workflow-image
 .research-workflow-replication .research-workflow-copy > span, .research-workflow-illustration .research-workflow-copy > span { padding-right: 22px; }
 .has-welcome .conversation-composer-wrap { padding-top: 38px; background: linear-gradient(180deg, transparent 0%, var(--welcome-ground) 30%); }
 .has-welcome .conversation-composer, .theme-paper .has-welcome .conversation-composer { color: var(--welcome-ink); background: var(--welcome-paper); border: 1px solid var(--welcome-line); border-radius: 8px; box-shadow: 0 10px 30px rgba(60, 50, 35, .10); }
-.has-welcome .conversation-composer:focus-within, .theme-paper .has-welcome .conversation-composer:focus-within { border-color: var(--welcome-bronze); box-shadow: 0 0 0 2px var(--welcome-bronze); outline: none; }
 .has-welcome .conversation-composer textarea, .theme-paper .has-welcome .conversation-composer textarea { color: var(--welcome-ink); }
 .has-welcome .conversation-composer textarea:focus-visible { outline: none; }
 .has-welcome .conversation-composer textarea::placeholder, .theme-paper .has-welcome .conversation-composer textarea::placeholder { color: var(--welcome-muted); }
@@ -4007,7 +3999,6 @@ html:not([data-theme="paper"]) .research-workflow:hover .research-workflow-image
 .has-welcome .context-usage { --context-usage-color: var(--welcome-muted); color: var(--welcome-muted); }
 .has-welcome .context-usage-ring { background: conic-gradient(from -90deg, var(--context-usage-color) 0 var(--context-usage-progress), var(--welcome-line) var(--context-usage-progress) 100%); }
 .has-welcome .context-usage-ring::after { background: var(--welcome-paper); }
-.has-welcome .conversation-send { color: var(--welcome-send-ink); background: var(--welcome-bronze); }
 .has-welcome .composer-note { color: var(--welcome-muted); }
 .codex-shell:has(.has-welcome) .theme-switcher button.active { box-shadow: none; }
 .codex-shell:has(.has-welcome) :is(.codex-sidebar-label, .projects-heading, .project-chat-empty, .archived-toggle, .workspace-copy small, .conversation-title strong, .conversation-title span, .composer-note) { font-size: 13px; }
@@ -4268,14 +4259,8 @@ html:not([data-theme="paper"]) .sidebar-settings-button:hover { color: #f0f0f0; 
 .theme-paper .sidebar-settings-button { color: #6f6a63; }
 .theme-paper .sidebar-settings-button:hover { color: #282622; background: #e5e1da; }
 
-/* Focus belongs to the whole composer, not just its textarea. The global
-   textarea focus ring would otherwise draw a gold box around the upper input
-   area while the footer sits outside it. */
+/* The composer keeps its resting border while typing. */
 .conversation-composer textarea:focus-visible { outline: none; }
-.conversation-composer:focus-within {
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 55%, transparent);
-}
 
 /* Review is a paper dossier: graphite, linen, and brass—never a generic AI dashboard. */
 .paper-review-workbench {
@@ -5655,4 +5640,49 @@ html[data-file-icons="monochrome"] .tree-file-icon { color: var(--rail-row-muted
   .research-path-stage { gap: 5px; padding-right: 3px; }
   .research-path-line { min-width: 8px; margin: 0 2px; }
   .research-path-label { font-size: 9px; }
+}
+
+/* The chat send control is a neutral filled circle with an upward arrow. */
+:root {
+  --chat-send-bg: #2f2e2a;
+  --chat-send-bg-hover: #3b3933;
+  --chat-send-ink: #f4f2ec;
+  --chat-send-disabled-bg: #e5e5e1;
+  --chat-send-disabled-ink: #9b9b95;
+}
+html:not([data-theme="paper"]) {
+  --chat-send-bg: #34332f;
+  --chat-send-bg-hover: #41403a;
+  --chat-send-ink: #f7f5ef;
+  --chat-send-disabled-bg: #292b35;
+  --chat-send-disabled-ink: #666978;
+}
+.theme-paper {
+  --chat-send-bg: #34312c;
+  --chat-send-bg-hover: #423e37;
+  --chat-send-ink: #fbfaf7;
+  --chat-send-disabled-bg: #e9e5df;
+  --chat-send-disabled-ink: #aaa49c;
+}
+.conversation-send,
+.theme-paper .conversation-send,
+.has-welcome .conversation-send {
+  width: 30px;
+  height: 30px;
+  color: var(--chat-send-ink);
+  background: var(--chat-send-bg);
+  border-radius: 50%;
+  box-shadow: none;
+}
+.conversation-send:hover,
+.theme-paper .conversation-send:hover,
+.has-welcome .conversation-send:hover {
+  color: var(--chat-send-ink);
+  background: var(--chat-send-bg-hover);
+}
+.conversation-send:disabled,
+.theme-paper .conversation-send:disabled,
+.has-welcome .conversation-send:disabled {
+  color: var(--chat-send-disabled-ink);
+  background: var(--chat-send-disabled-bg);
 }
