@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FileStack, FolderOpen, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FolderOpen, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 
 type PresentationPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
 type LoadState = "loading" | "ready" | "error";
@@ -368,6 +368,29 @@ function ContentSlide({ slide, index, pdfUrl }: { slide: PaperPresentationSlide;
   </article>;
 }
 
+function PresentationExamples() {
+  return <section className="paper-presentation-showcase" aria-label="Academic presentation examples">
+    <article className="paper-presentation-example example-question">
+      <p>Research question</p>
+      <h3>为什么长历史会拖慢推理？</h3>
+      <div className="example-question-plot"><i /><i /><i /><b /></div>
+      <small>问题定义 · 证据定位</small>
+    </article>
+    <article className="paper-presentation-example example-method">
+      <p>Method</p>
+      <h3>把历史压缩成持续更新的状态</h3>
+      <div className="example-method-flow"><span>Input</span><i /><span>State</span><i /><span>Output</span></div>
+      <small>机制图 · 一页一个论点</small>
+    </article>
+    <article className="paper-presentation-example example-evidence">
+      <p>Evidence</p>
+      <h3>效率提高，但保真度仍需检验</h3>
+      <div className="example-evidence-chart"><i /><i /><i /><i /></div>
+      <small>实验图表 · 结论与边界</small>
+    </article>
+  </section>;
+}
+
 export default function PaperPresentationDeck({ bridge, workspace, projectId, paper, pageCount, pdfUrl, reviewReady, reviewUpdatedAt }: {
   bridge: ResearchDeskBridge;
   workspace: string;
@@ -489,19 +512,19 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
   if (!activePresentation) return <section className="paper-presentation-empty">
     <div className="paper-presentation-empty-main">
-      <div className="paper-presentation-empty-mark"><FileStack size={24} strokeWidth={1.45} /></div>
       <div>
-        <p className="paper-review-kicker">PPTD presentation</p>
-        <h2>{generating ? "Preparing a live deck" : legacyPresentation ? "Update this deck to PPTD" : "Turn the review into a working deck"}</h2>
-        <p>{generating ? "The first validated page will appear here as soon as it is rendered. You can inspect each following page before the final PPTX is assembled." : legacyPresentation ? "The saved deck is retained, but it was made before the PPTD pipeline. Generate a new version without changing the text review." : "PPTD turns the saved review into an academic presentation. Every page is checked, rendered, and made visible as it finishes."}</p>
+        <p className="paper-review-kicker">Academic presentation</p>
+        <h2>{generating ? "正在搭建可实时查看的演示稿" : legacyPresentation ? "为这份论文复盘生成新版演示稿" : "把论文复盘组织成一份可讲清的演示稿"}</h2>
+        <p>{generating ? "每一页通过 PPTD 校验并完成渲染后，会立即显示在这里；你可以边生成边翻阅。" : legacyPresentation ? "已保存的文字 Review 会保留不变。新版演示稿将从论文证据出发，按组会汇报的节奏重新组织。" : "系统会将已保存的 Review 转换为一套可讲述的学术演示稿，并逐页提供实时预览。"}</p>
       </div>
     </div>
-    <div className="paper-presentation-empty-flow" aria-label="Presentation generation stages"><span className={generating ? "active" : ""}>Plan</span><span className={generating ? "active" : ""}>Design pages</span><span>Save deck</span></div>
+    <PresentationExamples />
+    <div className="paper-presentation-empty-flow" aria-label="Presentation generation stages"><span className={generating ? "active" : ""}>梳理论点</span><span className={generating ? "active" : ""}>逐页生成</span><span>保存演示稿</span></div>
     {generating && <p className="paper-presentation-progress" role="status"><LoaderCircle className="spin" size={15} />{progress}</p>}
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
       {generating ? <LoaderCircle className="spin" size={16} /> : legacyPresentation ? <RefreshCw size={16} /> : <Sparkles size={16} />}
-      {generating ? "Building pages" : reviewReady ? legacyPresentation ? "Create PPTD version" : "Generate presentation" : "Finish the review first"}
+      {generating ? "正在生成页面" : reviewReady ? "生成演示稿" : "请先完成文字 Review"}
     </button>
   </section>;
 
