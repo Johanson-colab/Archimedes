@@ -14,7 +14,26 @@ test("conversation composers keep their resting border while focused", () => {
   assert.doesNotMatch(css, /\.theme-paper \.conversation-composer:focus-within/);
   assert.doesNotMatch(css, /\.has-welcome \.conversation-composer:focus-within/);
   assert.doesNotMatch(css, /\.paper-ai-compose-input:focus-within/);
+  assert.doesNotMatch(css, /\.paper-ai-compose textarea:focus \{ border-color: #8fb6a0/);
+  assert.doesNotMatch(css, /\.reader-notebook-section textarea:focus \{ border-color: #8fb6a0/);
   assert.match(css, /\.conversation-composer textarea:focus-visible \{ outline: none; \}/);
+});
+
+test("chat-like side inputs share the quiet focus contract", () => {
+  for (const selector of [
+    ".paper-ai-compose textarea:focus",
+    ".paper-ai-compose textarea:focus-visible",
+    ".paper-comment-composer textarea:focus",
+    ".paper-comment-composer textarea:focus-visible",
+    ".artifact-comment-box textarea:focus",
+    ".artifact-comment-box textarea:focus-visible",
+    ".reader-notebook-section textarea:focus",
+    ".reader-notebook-section textarea:focus-visible",
+    ".notes-editor:focus",
+    ".notes-editor:focus-visible",
+  ]) {
+    assert.ok(css.includes(selector), `${selector} should be included in the quiet focus reset`);
+  }
 });
 
 test("the chat send control is a neutral circular up-arrow", () => {
