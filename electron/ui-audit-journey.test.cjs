@@ -70,7 +70,7 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(journey, /function buildEpisodes/);
   assert.match(journey, /function buildEvidence/);
   assert.match(journey, /isUnresolvedError/);
-  assert.match(journey, /latestAnswerSequence/);
+  assert.match(journey, /latestAnswerOrdinal/);
   assert.match(journey, /hasErrors = evidence\.open/);
   assert.match(eventState, /export function isUnresolvedError/);
   assert.match(eventState, /status === "completed"/);
@@ -100,6 +100,15 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(css, /\.journey-status-text\.running/);
   assert.match(css, /@keyframes journey-running-sheen/);
   assert.doesNotMatch(css, /\.journey-status-dot/);
+  assert.match(journey, /chatOnly/);
+  assert.match(journey, /attentionLabel/);
+  assert.match(journey, /reviewOpenSteps/);
+  assert.match(journey, /Jump to first new/);
+  assert.match(journey, /journey-inline-status/);
+  assert.match(css, /journey-status-text\.chat-only/);
+  assert.match(css, /journey-open-chip/);
+  assert.match(css, /journey-evidence-empty/);
+  assert.match(css, /compact-tabs \.journey-chapter-sources/);
   assert.match(css, /--workbench-ground: #1b1b1b/);
 });
 
@@ -154,7 +163,8 @@ test("journey summaries are loaded, updated on cadence, and stored per thread", 
   assert.match(snapshots, /journey-summaries/);
   assert.match(snapshots, /module\.exports/);
   assert.match(trajectory, /data-trajectory-sequence/);
-  assert.match(trajectory, /focusSequence/);
+  assert.match(trajectory, /focusOrdinal/);
+  assert.match(trajectory, /data-trajectory-ordinal/);
 });
 
 test("claims and manual chapter titles are first-class journey data", () => {
@@ -175,7 +185,7 @@ test("claims and manual chapter titles are first-class journey data", () => {
   assert.match(css, /\.journey-claim-dot\.supported/);
   assert.match(css, /\.journey-chapter-editor/);
   assert.match(app, /claims: \[\]/);
-  assert.match(app, /focusSequence=\{trajectoryFocusSequence\}/);
+  assert.match(app, /focusOrdinal=\{trajectoryFocusOrdinal\}/);
 });
 
 test("manual merge and split persist by event range", () => {

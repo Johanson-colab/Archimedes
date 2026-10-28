@@ -1,4 +1,4 @@
-﻿import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
+import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -838,7 +838,7 @@ function App() {
   const [noteLoadedKey, setNoteLoadedKey] = useState<string | null>(null);
   const [noteSaveState, setNoteSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [seenChangeSetIds, setSeenChangeSetIds] = useState<Set<string>>(new Set());
-  const [trajectoryFocusSequence, setTrajectoryFocusSequence] = useState<number | null>(null);
+  const [trajectoryFocusOrdinal, setTrajectoryFocusOrdinal] = useState<number | null>(null);
   const [journeySettings, setJourneySettings] = useState<JourneySettings>(defaultJourneySettings);
   const [terminalSettings, setTerminalSettings] = useState<TerminalSettings | null>(null);
   const [terminalSettingsOpen, setTerminalSettingsOpen] = useState(false);
@@ -1233,8 +1233,8 @@ function App() {
     setMainSection(section);
   }
 
-  function openTrajectoryAt(sequence?: number) {
-    setTrajectoryFocusSequence(typeof sequence === "number" ? sequence : null);
+  function openTrajectoryAt(ordinal?: number) {
+    setTrajectoryFocusOrdinal(typeof ordinal === "number" ? ordinal : null);
     setWorkbenchTab("trajectory");
   }
 
@@ -2320,6 +2320,7 @@ function App() {
               onOpenTrajectoryAt={openTrajectoryAt}
               onOpenSettings={() => { setSettingsSection("journey"); setSettingsOpen(true); }}
               onReviewPending={reviewPendingAction}
+              onStartResearch={() => startNewTask()}
             />,
             trajectory: <TrajectoryView
               thread={activeThread ?? null}
@@ -2329,8 +2330,8 @@ function App() {
               modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
               onCopy={(text) => desktopBridge.writeClipboardText(text)}
               onOpenJourney={() => setWorkbenchTab("journey")}
-              focusSequence={trajectoryFocusSequence}
-              onFocusApplied={() => setTrajectoryFocusSequence(null)}
+              focusOrdinal={trajectoryFocusOrdinal}
+              onFocusApplied={() => setTrajectoryFocusOrdinal(null)}
             />,
             files: <ArtifactsView
               compact

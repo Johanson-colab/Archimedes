@@ -1186,18 +1186,22 @@ function getResearchThread(id) {
     } catch { /* Tool errors and older event formats do not contain source records. */ }
   }
   const events = db.prepare(`
-    SELECT id, turn_id, sequence, type, payload_json, created_at
-    FROM research_events
-    WHERE thread_id = ?
-    ORDER BY turn_id ASC, sequence ASC
-  `).all(id).map((event) => {
+    SELECT e.id, e.turn_id, e.sequence, e.type, e.payload_json, e.created_at
+    FROM research_events e
+    JOIN research_turns t ON t.id = e.turn_id
+    WHERE e.thread_id = ?
+    ORDER BY t.created_at ASC, t.rowid ASC, e.sequence ASC
+  `).all(id).map((event, index) => {
     let payload;
     try {
       payload = JSON.parse(event.payload_json);
     } catch {
       payload = event.payload_json;
     }
-    return { id: event.id, turn_id: event.turn_id, sequence: event.sequence, type: event.type, payload, created_at: event.created_at };
+    // `sequence` is scoped to a turn (every turn starts at 1). Journey,
+    // Trajectory focus, summary coverage, and seen markers need one stable
+    // order across the whole thread, so expose a thread-wide ordinal.
+    return { id: event.id, turn_id: event.turn_id, sequence: event.sequence, ordinal: index + 1, type: event.type, payload, created_at: event.created_at };
   });
   const changeSets = db.prepare(`
     SELECT agent_actions.id, agent_actions.task_id, agent_actions.kind, agent_actions.payload_json,
