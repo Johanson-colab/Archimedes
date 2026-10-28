@@ -1,4 +1,4 @@
-import { Blocks, Check, ChevronUp, Flag, RefreshCw, Route } from "lucide-react";
+import { Blocks, Check, ChevronUp, RefreshCw } from "lucide-react";
 import { useUISettings } from "./i18n";
 import type { ResearchStage, ResearchStageId } from "./research-path";
 
@@ -45,7 +45,6 @@ export default function ResearchPathPanel({
   return <div className="research-path-panel dock-panel">
     <header className="research-path-head dock-panel-head">
       <div className="research-path-heading">
-        <Route size={13} />
         <span>{t("Research path")}</span>
         <small>{activeIndex + 1} / {stages.length}</small>
       </div>
@@ -56,7 +55,6 @@ export default function ResearchPathPanel({
           onClick={() => onSelectStage(selectedStage === activeStage.id ? null : activeStage.id)}
           aria-expanded={selectedIsActive}
         >
-          <Flag size={12} />
           <span>{t("Review checkpoint")}</span>
         </button>
         <button className="dock-panel-collapse" onClick={onCollapse} title={t("Collapse Research path")} aria-label={t("Collapse Research path")}><ChevronUp size={14} /></button>

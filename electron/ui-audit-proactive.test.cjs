@@ -77,7 +77,10 @@ test("proactive cards always carry evidence, why-now, and one primary action", (
   assert.match(proactive, /Not now/);
   assert.match(proactive, /Suggestion history/);
   assert.match(proactive, /Observe once/);
-  assert.match(proactive, /Local only · L0/);
+  assert.match(proactive, /proactive-status-text/);
+  assert.doesNotMatch(proactive, /proactive-status-dot/);
+  assert.match(proactive, /proactive-menu/);
+  assert.doesNotMatch(proactive, /SourceIcon/);
   assert.doesNotMatch(proactive, /window\.open|shell\.open|exec\(/);
 });
 
@@ -145,6 +148,19 @@ test("proactive settings expose mode, budget, quiet hours, and L0 sources", () =
   assert.match(settingsPanel, /Uncited claims/);
   assert.match(settingsPanel, /No screenshots/);
   assert.match(settingsPanel, /3 dismissals/);
+});
+
+test("the proactive header is text-led and the status sheen loops seamlessly", () => {
+  assert.match(proactive, /proactive-panel-name/);
+  assert.match(proactive, /proactive-status-text/);
+  assert.match(proactive, /proactive-budget/);
+  assert.doesNotMatch(proactive, /proactive-status-dot/);
+  assert.doesNotMatch(proactive, /SourceIcon/);
+  assert.doesNotMatch(researchPath, /<Route|<Flag/);
+  assert.match(css, /background-size: 200% 100%/);
+  assert.match(css, /@keyframes sidebar-running-sheen \{[\s\S]*?from \{ background-position: 0% 50%; \}[\s\S]*?to \{ background-position: 200% 50%; \}/);
+  assert.doesNotMatch(css, /background-position: 180% 50%/);
+  assert.match(css, /\.proactive-status-text\.active/);
 });
 
 test("the dock layout leaves the work surface a stable row on both themes", () => {

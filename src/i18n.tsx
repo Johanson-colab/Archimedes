@@ -671,6 +671,11 @@ const translations: Record<string, string> = {
   // Proactive agent
   "Proactive agent": "主动助手",
   "Proactive settings": "主动助手设置",
+  "More actions": "更多操作",
+  "Proactive actions": "主动助手操作",
+  "Suggestion history filter": "建议历史筛选",
+  "Undo": "撤销",
+  "{count} of {total} auto suggestions today": "今日自动建议 {count} / {total}",
   "Research dock": "研究停靠栏",
   "Review the current context once": "立即审阅当前上下文",
   "Observe once": "观察一次",
