@@ -2320,7 +2320,31 @@ body.paper-pane-resizing * { cursor: col-resize !important; }
 .paper-ai-markdown pre code { padding: 0; background: transparent; }
 .paper-ai-markdown blockquote { padding-left: 8px; color: #63756a; border-left: 2px solid #9ec6ab; }
 .paper-ai-markdown a { color: #217258; text-decoration: underline; }
+.paper-ai-markdown .paper-code-path {
+  display: inline;
+  margin: 0;
+  padding: 1px 4px;
+  color: #426452;
+  background: #edf2ed;
+  border: 1px solid #dbe6dd;
+  border-radius: 3px;
+  font: 9px/1.55 "SFMono-Regular", Consolas, monospace;
+  text-align: left;
+  text-decoration: underline dotted rgba(66, 100, 82, .5);
+  text-underline-offset: 2px;
+  vertical-align: baseline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.paper-ai-markdown .paper-code-path:hover { color: #284b3b; background: #e2ece5; border-color: #c2d7c9; text-decoration-style: solid; }
+.paper-ai-markdown .paper-code-path:focus-visible { outline: 2px solid rgba(57, 116, 91, .35); outline-offset: 1px; }
+html:not([data-theme="paper"]) .paper-ai-markdown .paper-code-path { color: #c5d6c8; background: #202a23; border-color: #34463a; text-decoration-color: rgba(197, 214, 200, .45); }
+html:not([data-theme="paper"]) .paper-ai-markdown .paper-code-path:hover { color: #edf5ee; background: #2a382e; border-color: #496353; }
+.theme-paper .paper-ai-markdown .paper-code-path { color: #4e5f53; background: #eef1ed; border-color: #dfe5df; text-decoration-color: rgba(78, 95, 83, .42); }
+.theme-paper .paper-ai-markdown .paper-code-path:hover { color: #2e3f35; background: #e5ebe5; border-color: #cbd8cd; }
 .paper-ai-markdown .katex-display { overflow-x: auto; overflow-y: hidden; }
+.codebase-source .code-target-line { background: rgba(82, 122, 99, .12); box-shadow: inset 3px 0 0 #6f927e; }
+html:not([data-theme="paper"]) .codebase-source .code-target-line { background: rgba(201, 162, 39, .11); box-shadow: inset 3px 0 0 #c9a227; }
 .paper-ai-header-actions { display: flex; gap: 3px; }
 .paper-ai-header-actions .reader-icon-button:disabled { cursor: wait; opacity: .45; }
 .paper-ai-suggestions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }

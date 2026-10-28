@@ -12,6 +12,7 @@ const tabs = fs.readFileSync(path.join(root, "src", "workbench-tabs.tsx"), "utf8
 const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
 const jsonCode = fs.readFileSync(path.join(root, "src", "JsonCode.tsx"), "utf8");
 const journey = fs.readFileSync(path.join(root, "src", "JourneyView.tsx"), "utf8");
+const library = fs.readFileSync(path.join(root, "src", "LibraryView.tsx"), "utf8");
 const terminalSettings = fs.readFileSync(path.join(root, "src", "TerminalSettingsModal.tsx"), "utf8");
 const store = fs.readFileSync(path.join(root, "electron", "store.cjs"), "utf8");
 
@@ -168,6 +169,18 @@ test("terminal settings expose platform shell, font and external terminal contro
   assert.match(terminal, /settings\?\.fontSize/);
   assert.match(terminal, /settings\?\.scrollback/);
   assert.match(css, /\.terminal-settings-modal/);
+});
+
+test("paper chat code paths jump to the exact codebase lines", () => {
+  assert.match(library, /function remarkCodePaths/);
+  assert.match(library, /function parseCodePath/);
+  assert.match(library, /paper-code-path/);
+  assert.match(library, /openCodePath/);
+  assert.match(library, /openFilePath/);
+  assert.match(library, /navigationTarget/);
+  assert.match(library, /code-target-line/);
+  assert.match(css, /\.paper-ai-markdown \.paper-code-path/);
+  assert.match(css, /\.codebase-source \.code-target-line/);
 });
 
 test("agent journey is derived from raw trajectory events", () => {

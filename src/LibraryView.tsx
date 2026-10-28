@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { visit } from "unist-util-visit";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
 import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
 import c from "react-syntax-highlighter/dist/esm/languages/prism/c";
@@ -352,6 +353,49 @@ type PaperChatComposerCommand = { id: number; draft?: string };
 type SelectionAnchor = { x: number; y: number };
 type TranslationPopover = { source: string; translation: string; anchor: SelectionAnchor; error?: string };
 type ReaderLibraryPaper = LibraryPaper & { github_url?: string; github_stars?: number };
+type CodePathLocation = { path: string; startLine: number; endLine: number };
+type CodeNavigationTarget = CodePathLocation & { nonce: number };
+
+const CODE_PATH_EXTENSIONS = "py|pyi|ts|tsx|js|jsx|mjs|cjs|json|jsonl|yaml|yml|toml|md|mdx|sh|bash|zsh|r|cpp|cc|cxx|c|h|hpp|ipynb|txt|csv";
+const CODE_PATH_TOKEN = new RegExp(`(?<![A-Za-z0-9_./:-])((?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+\\.(?:${CODE_PATH_EXTENSIONS}))(?::(\\d+)(?:\\s*[-–]\\s*(\\d+))?)?`, "gi");
+const CODE_PATH_EXACT = new RegExp(`^((?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+\\.(?:${CODE_PATH_EXTENSIONS}))(?::(\\d+)(?:\\s*[-–]\\s*(\\d+))?)?$`, "i");
+
+function parseCodePath(value: string): CodePathLocation | null {
+  const match = String(value || "").trim().match(CODE_PATH_EXACT);
+  if (!match) return null;
+  const startLine = Math.max(1, Number(match[2]) || 1);
+  return {
+    path: match[1].replace(/\\/g, "/"),
+    startLine,
+    endLine: Math.max(startLine, Number(match[3]) || startLine),
+  };
+}
+
+/**
+ * Turn bare repository paths in prose into inline-code nodes, so the same
+ * renderer can make them clickable without touching fenced code or URLs.
+ */
+function remarkCodePaths() {
+  return (tree: unknown) => {
+    visit(tree as never, "text", ((node: { value?: string }, index: number | undefined, parent: { type?: string; children?: unknown[] } | undefined) => {
+      if (!parent?.children || index == null || parent.type === "link" || parent.type === "linkReference") return;
+      const text = String(node.value || "");
+      const matches = [...text.matchAll(CODE_PATH_TOKEN)];
+      if (!matches.length) return;
+      const children: Array<{ type: string; value: string }> = [];
+      let cursor = 0;
+      for (const match of matches) {
+        const offset = match.index ?? 0;
+        if (offset > cursor) children.push({ type: "text", value: text.slice(cursor, offset) });
+        children.push({ type: "inlineCode", value: match[0] });
+        cursor = offset + match[0].length;
+      }
+      if (cursor < text.length) children.push({ type: "text", value: text.slice(cursor) });
+      parent.children.splice(index, 1, ...children);
+      return index + children.length;
+    }) as never);
+  };
+}
 const PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT = 60;
 const PAPER_CHAT_HISTORY_PAGE_SIZE = 40;
 const PAPER_BRIEFING_REQUEST_EN = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise English Markdown with exactly these sections:\n\n## Key terms\nList 4-8 essential terms, each with a one-line explanation.\n\n## Three-sentence summary\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## Paper map\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## Limitations and open questions\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
@@ -376,16 +420,32 @@ const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: stri
   { value: "green", label: "Green" },
 ];
 
-const PaperChatMarkdown = memo(function PaperChatMarkdown({ text }: { text: string }) {
-  return <div className="paper-ai-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizePaperMathDelimiters(text)}</ReactMarkdown></div>;
+const PaperChatMarkdown = memo(function PaperChatMarkdown({ text, onOpenCodePath }: { text: string; onOpenCodePath: (target: CodePathLocation) => void }) {
+  return <div className="paper-ai-markdown"><ReactMarkdown
+    remarkPlugins={[remarkGfm, remarkMath, remarkCodePaths]}
+    rehypePlugins={[rehypeKatex]}
+    components={{
+      code: (({ className, children }: { className?: string; children?: React.ReactNode }) => {
+        const value = String(children ?? "").replace(/\n$/, "");
+        const target = !className && !value.includes("\n") ? parseCodePath(value) : null;
+        if (!target) return <code className={className}>{children}</code>;
+        return <button
+          type="button"
+          className="paper-code-path"
+          title={`Open ${target.path}${target.startLine > 1 ? `:${target.startLine}${target.endLine > target.startLine ? `-${target.endLine}` : ""}` : ""} in Codebase`}
+          onClick={() => onOpenCodePath(target)}
+        >{value}</button>;
+      }) as never,
+    }}
+  >{normalizePaperMathDelimiters(text)}</ReactMarkdown></div>;
 });
 
-const PaperChatMessageRow = memo(function PaperChatMessageRow({ message, streaming = false }: { message: PaperChatMessage; streaming?: boolean }) {
-  return <article className={`${message.role}${streaming ? " streaming" : ""}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <PaperChatMarkdown text={message.text || "…"} /> : <p>{message.text}</p>}{streaming && <i className="paper-ai-stream-cursor" aria-label="Generating response" />}</article>;
+const PaperChatMessageRow = memo(function PaperChatMessageRow({ message, streaming = false, onOpenCodePath }: { message: PaperChatMessage; streaming?: boolean; onOpenCodePath: (target: CodePathLocation) => void }) {
+  return <article className={`${message.role}${streaming ? " streaming" : ""}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <PaperChatMarkdown text={message.text || "…"} onOpenCodePath={onOpenCodePath} /> : <p>{message.text}</p>}{streaming && <i className="paper-ai-stream-cursor" aria-label="Generating response" />}</article>;
 });
 
-const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, streamingText, onAsk }: {
-  messages: PaperChatMessage[]; busy: boolean; aiMode: PaperAiMode; streamingText: string | null; onAsk: (prompt: string) => void;
+const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, streamingText, onAsk, onOpenCodePath }: {
+  messages: PaperChatMessage[]; busy: boolean; aiMode: PaperAiMode; streamingText: string | null; onAsk: (prompt: string) => void; onOpenCodePath: (target: CodePathLocation) => void;
 }) {
   const { language, t } = useUISettings();
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT));
@@ -412,9 +472,9 @@ const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, 
   return <div className="paper-ai-thread">
     {messages.length ? <>
       {hiddenMessageCount > 0 && <button className="paper-ai-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - PAPER_CHAT_HISTORY_PAGE_SIZE))}>Show {Math.min(PAPER_CHAT_HISTORY_PAGE_SIZE, hiddenMessageCount)} earlier messages</button>}
-      {visibleMessages.map((message, index) => <PaperChatMessageRow key={`${message.role}-${index + historyStart}`} message={message} />)}
+      {visibleMessages.map((message, index) => <PaperChatMessageRow key={`${message.role}-${index + historyStart}`} message={message} onOpenCodePath={onOpenCodePath} />)}
     </> : streamingText === null && <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}
-    {streamingText !== null && <PaperChatMessageRow message={{ role: "assistant", text: streamingText }} streaming />}
+    {streamingText !== null && <PaperChatMessageRow message={{ role: "assistant", text: streamingText }} streaming onOpenCodePath={onOpenCodePath} />}
     {busy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{messages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}
     {hasAssistantMessage && !busy && <div className="paper-ai-suggestions">
       <button onClick={prompt(zh ? "请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。" : "Verify which files and functions implement the paper's core method, and build an evidence chain.", zh ? "这篇论文最核心的贡献是什么？请结合全文说明。" : "What is the paper's core contribution? Explain it using the full text.")}>{aiMode === "audit" ? t("Verify method") : t("Core contribution")}</button>
@@ -499,6 +559,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
   const [readerView, setReaderView] = useState<"paper" | "review" | "project" | "codebase">("paper");
   const [codebaseVisited, setCodebaseVisited] = useState(false);
+  const [codeNavigationTarget, setCodeNavigationTarget] = useState<CodeNavigationTarget | null>(null);
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
   const [checkout, setCheckout] = useState<RepositoryCheckout | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -722,6 +783,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setReaderView("codebase");
     ensureRepositorySnapshot(url);
   }, [ensureRepositorySnapshot]);
+  const openCodePath = useCallback((target: CodePathLocation) => {
+    if (!projectUrl || !isGithubRepositoryLink(projectUrl)) return;
+    openCodebase(projectUrl);
+    setCodeNavigationTarget({ ...target, nonce: Date.now() });
+  }, [openCodebase, projectUrl]);
   useEffect(() => {
     if (!projectUrl || !isGithubRepositoryLink(projectUrl) || !workspace) { setCheckout(null); return; }
     let active = true;
@@ -951,12 +1017,12 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         </>}
       </main>}
       {codebaseVisited && projectUrl && isGithubRepositoryLink(projectUrl) && <main key={projectUrl} className={readerView === "codebase" ? "codebase-reader" : "codebase-reader codebase-reader-inactive"} aria-hidden={readerView !== "codebase"}>
-        <RepositoryCodebaseView bridge={bridge} url={projectUrl} workspace={workspace} checkout={checkout} loading={checkoutLoading} error={checkoutError} onClone={cloneForAudit} onAddToChat={addCodeSelectionToChat} />
+        <RepositoryCodebaseView bridge={bridge} url={projectUrl} workspace={workspace} checkout={checkout} loading={checkoutLoading} error={checkoutError} onClone={cloneForAudit} onAddToChat={addCodeSelectionToChat} navigationTarget={codeNavigationTarget} />
       </main>}
       {chatOpen && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
       <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>{t("Paper chat")}</h2><div className="paper-ai-mode-toggle" role="group" aria-label="Evidence mode"><button className={aiMode === "brief" ? "active" : ""} onClick={() => setAiMode("brief")}>{t("Paper briefing")}</button><button className={aiMode === "audit" ? "active" : ""} onClick={() => checkout ? setAiMode("audit") : projectUrl && openCodebase(projectUrl)} title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>{t("Code audit")}</button></div></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title={t("Read the full paper again")}><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")}><X size={16} /></button></div></header>
-        <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={(prompt) => void askAI(prompt)} />
+        <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={(prompt) => void askAI(prompt)} onOpenCodePath={openCodePath} />
         {selection && <div className="paper-ai-context"><span>{t("p. {page} selection", { page: pageNumber })}</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
@@ -1028,7 +1094,7 @@ function LinkedProjectView({ url }: { url: string }) {
   </div>;
 }
 
-const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, error, onClone, onAddToChat }: {
+const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, url, workspace, checkout, loading, error, onClone, onAddToChat, navigationTarget }: {
   bridge: ResearchDeskBridge;
   url: string;
   workspace: string;
@@ -1037,6 +1103,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
   error: string;
   onClone: () => void;
   onAddToChat: (file: RepositoryCheckoutFile, snippet: string, startLine: number) => void;
+  navigationTarget: CodeNavigationTarget | null;
 }) {
   const [tree, setTree] = useState<Record<string, RepositoryCheckoutEntry[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set([""]));
@@ -1045,6 +1112,8 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
   const [fileLoading, setFileLoading] = useState(false);
   const [snippet, setSnippet] = useState("");
   const [snippetLine, setSnippetLine] = useState(1);
+  const [activeRange, setActiveRange] = useState<{ start: number; end: number } | null>(null);
+  const editorRef = useRef<HTMLElement>(null);
 
   const loadDirectory = useCallback(async (directory = "") => {
     if (!checkout) return;
@@ -1060,6 +1129,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
     setExpanded(new Set([""]));
     setActiveFile(null);
     setSnippet("");
+    setActiveRange(null);
     if (checkout) void loadDirectory("");
   }, [checkout?.commit, loadDirectory]);
 
@@ -1075,12 +1145,37 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
   async function openFile(entry: RepositoryCheckoutEntry) {
     setFileLoading(true);
     setSnippet("");
+    setActiveRange(null);
     try {
       const file = await bridge.readLibraryGithubRepositoryCheckoutFile(url, workspace, entry.path);
       setActiveFile(file);
       setBrowserError("");
     } catch (loadError) { setBrowserError(readableError(loadError, "Could not open this repository file.")); }
     finally { setFileLoading(false); }
+  }
+  async function openFilePath(target: CodePathLocation) {
+    setFileLoading(true);
+    setSnippet("");
+    setBrowserError("");
+    try {
+      const directoryParts = target.path.split("/").slice(0, -1);
+      const directories = directoryParts.map((_, index) => directoryParts.slice(0, index + 1).join("/"));
+      if (directories.length) {
+        const listings = await Promise.all(directories.map(async (directory) => {
+          const listing = await bridge.listLibraryGithubRepositoryCheckout(url, workspace, directory);
+          return [directory, listing.entries] as const;
+        }));
+        setTree((current) => ({ ...current, ...Object.fromEntries(listings) }));
+        setExpanded((current) => new Set([...current, "", ...directories]));
+      }
+      const file = await bridge.readLibraryGithubRepositoryCheckoutFile(url, workspace, target.path);
+      setActiveFile(file);
+      setActiveRange({ start: target.startLine, end: target.endLine });
+    } catch (loadError) {
+      setBrowserError(readableError(loadError, `Could not open ${target.path} at line ${target.startLine}.`));
+    } finally {
+      setFileLoading(false);
+    }
   }
   function captureSelection(event: ReactMouseEvent<HTMLElement>) {
     if (!activeFile) return;
@@ -1110,13 +1205,27 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
     });
   }
 
+  useEffect(() => {
+    if (!checkout || !navigationTarget) return;
+    void openFilePath(navigationTarget);
+  }, [checkout?.commit, navigationTarget?.nonce]);
+
+  useEffect(() => {
+    if (!activeFile || !activeRange) return;
+    const frame = requestAnimationFrame(() => {
+      const line = editorRef.current?.querySelector<HTMLElement>(`[data-code-line="${activeRange.start}"]`);
+      line?.scrollIntoView({ block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeFile?.path, activeRange?.start, activeRange?.end, fileLoading]);
+
   if (!checkout) return <div className="codebase-empty"><span className="paper-reader-empty-icon"><ShieldCheck size={24} /></span><h2>Start a strict code audit</h2><p>Clone this public repository locally to inspect the full file tree, select code, and verify paper claims against the implementation. The checkout is read-only here and no repository code is executed.</p>{error && <div className="reader-runtime-error">{error}</div>}<button className="primary-button" disabled={loading || !workspace} onClick={onClone}>{loading ? <LoaderCircle className="spin" size={15} /> : <GitBranch size={15} />}{loading ? "Cloning repository…" : "Clone for code audit"}</button>{!workspace && <small>Choose a workspace before cloning a repository.</small>}</div>;
 
   return <div className="codebase-workspace">
     <header className="codebase-toolbar"><span><GitBranch size={14} />{checkout.owner}/{checkout.repo}</span><span>{checkout.branch} · {checkout.commit.slice(0, 8)} · {checkout.file_count.toLocaleString()} files</span></header>
     <div className="codebase-layout">
       <aside className="codebase-explorer"><header><span>Explorer</span><button className="reader-icon-button" title="Reload file tree" onClick={() => void loadDirectory("")}><RefreshCw size={13} /></button></header><div className="codebase-tree">{renderEntries()}</div></aside>
-      <section className="codebase-editor">
+      <section className="codebase-editor" ref={editorRef}>
         {activeFile ? <>
           <header><span><FileCode2 size={14} />{activeFile.path}</span><small>{activeFile.line_count.toLocaleString()} lines</small></header>
           {activeFile.content.length <= 300_000 ? <SyntaxHighlighter
@@ -1126,7 +1235,10 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
             showLineNumbers
             wrapLines
             wrapLongLines={false}
-            lineProps={(lineNumber: number) => ({ className: "syntax-line", "data-code-line": lineNumber })}
+            lineProps={(lineNumber: number) => ({
+              className: `syntax-line${activeRange && lineNumber >= activeRange.start && lineNumber <= activeRange.end ? " code-target-line" : ""}`,
+              "data-code-line": lineNumber,
+            })}
             lineNumberStyle={{ minWidth: "38px", paddingRight: "12px", textAlign: "right", userSelect: "none" }}
             customStyle={{ minWidth: 0, minHeight: 0, margin: 0, padding: "15px 18px 56px 0", border: 0, fontSize: "11px", lineHeight: 1.65, overflow: "auto" }}
             codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
