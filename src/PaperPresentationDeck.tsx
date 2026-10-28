@@ -4,6 +4,10 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FileStack, FolderO
 type PresentationPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
 type LoadState = "loading" | "ready" | "error";
 type SourceFocus = NonNullable<PaperPresentationSlide["source"]>["focus"];
+type LivePresentation = Pick<PaperPresentation, "title" | "subtitle" | "source_sufficiency" | "slides"> & {
+  previewUrls: string[];
+  total: number;
+};
 
 const SECTION_LABELS: Record<PaperPresentationSection, string> = {
   background: "Background",
@@ -380,11 +384,20 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
   const [activeSlide, setActiveSlide] = useState(0);
+  const [livePresentation, setLivePresentation] = useState<LivePresentation | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const runIdRef = useRef("");
 
   useEffect(() => bridge.onPaperPresentationEvent((event) => {
-    if (event.paperId === paper.id && event.clientRunId === runIdRef.current) setProgress(event.detail);
+    if (event.paperId !== paper.id || event.clientRunId !== runIdRef.current) return;
+    setProgress(event.detail);
+    if (event.kind !== "page-ready" || !event.page || !event.presentation) return;
+    setLivePresentation((current) => {
+      const previewUrls = Array.from({ length: event.page!.total }, (_, index) =>
+        index === event.page!.index ? event.page!.preview_url : current?.previewUrls[index] || "");
+      return { ...event.presentation!, previewUrls, total: event.page!.total };
+    });
+    setActiveSlide((current) => current === 0 || current === event.page!.index - 1 ? event.page!.index : current);
   }), [bridge, paper.id]);
 
   const paperContext = useMemo<ContextAttachment[]>(() => [{
@@ -402,6 +415,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     void bridge.getPaperPresentation(paper.id, workspace).then((saved) => {
       if (!mounted) return;
       setPresentation(saved);
+      setLivePresentation(null);
       setActiveSlide(0);
     }).catch((restoreError) => {
       if (mounted) setError(restoreError instanceof Error ? restoreError.message : String(restoreError));
@@ -411,7 +425,6 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     return () => { mounted = false; };
   }, [bridge, paper.id, workspace]);
 
-  const slides = presentation ? [null, ...presentation.slides] : [];
   const stale = Boolean(presentation && reviewUpdatedAt && presentation.source_review_updated_at !== reviewUpdatedAt);
   const legacyPresentation = Boolean(presentation && (
     presentation.skill?.id !== "kimi-slides" ||
@@ -419,7 +432,10 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     presentation.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES ||
     presentation.artifact?.kind !== "pptd" || presentation.artifact.missing || !presentation.artifact.preview_url
   ));
+  const activePresentation = livePresentation || (legacyPresentation ? null : presentation);
+  const slides = activePresentation ? [null, ...activePresentation.slides] : [];
   const active = slides[activeSlide];
+  const storedPreviewUrl = livePresentation ? "" : presentation?.artifact?.preview_url || "";
 
   useEffect(() => {
     function navigate(event: KeyboardEvent) {
@@ -443,6 +459,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     if (!reviewReady || generating || !workspace) return;
     setGenerating(true);
     setError("");
+    setLivePresentation(null);
     setProgress("Preparing the PPTD run…");
     runIdRef.current = crypto.randomUUID();
     try {
@@ -452,6 +469,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
         throw new Error("The presentation backend did not return a validated, rendered PPTD deck.");
       }
       setPresentation(saved);
+      setLivePresentation(null);
       setActiveSlide(0);
     } catch (generationError) {
       setError(generationError instanceof Error ? generationError.message : String(generationError));
@@ -469,39 +487,31 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
   if (restoring) return <section className="paper-presentation-empty"><LoaderCircle className="spin" size={20} /><h2>Restoring presentation</h2><p>The saved deck is kept separately from the evidence review.</p></section>;
 
-  if (!presentation) return <section className="paper-presentation-empty">
-    <div className="paper-presentation-empty-mark"><FileStack size={28} strokeWidth={1.45} /></div>
-    <p className="paper-review-kicker">Kimi PPTD presentation</p>
-    <h2>Build a source-grounded lab-meeting deck.</h2>
-    <p>Each slide is authored as PPTD, checked with Kimi's converter, and rendered for presentation. The saved text review stays untouched.</p>
-    {generating && <p className="paper-presentation-progress" role="status">{progress}</p>}
+  if (!activePresentation) return <section className="paper-presentation-empty">
+    <div className="paper-presentation-empty-main">
+      <div className="paper-presentation-empty-mark"><FileStack size={24} strokeWidth={1.45} /></div>
+      <div>
+        <p className="paper-review-kicker">PPTD presentation</p>
+        <h2>{generating ? "Preparing a live deck" : legacyPresentation ? "Update this deck to PPTD" : "Turn the review into a working deck"}</h2>
+        <p>{generating ? "The first validated page will appear here as soon as it is rendered. You can inspect each following page before the final PPTX is assembled." : legacyPresentation ? "The saved deck is retained, but it was made before the PPTD pipeline. Generate a new version without changing the text review." : "PPTD turns the saved review into an academic presentation. Every page is checked, rendered, and made visible as it finishes."}</p>
+      </div>
+    </div>
+    <div className="paper-presentation-empty-flow" aria-label="Presentation generation stages"><span className={generating ? "active" : ""}>Plan</span><span className={generating ? "active" : ""}>Design pages</span><span>Save deck</span></div>
+    {generating && <p className="paper-presentation-progress" role="status"><LoaderCircle className="spin" size={15} />{progress}</p>}
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
-      {generating ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-      {generating ? "Creating PPTD slides" : reviewReady ? "Generate PPTD presentation" : "Finish the review first"}
-    </button>
-  </section>;
-
-  if (legacyPresentation) return <section className="paper-presentation-empty paper-presentation-legacy">
-    <div className="paper-presentation-empty-mark"><RefreshCw size={28} strokeWidth={1.45} /></div>
-    <p className="paper-review-kicker">Legacy presentation detected</p>
-    <h2>This saved deck was not rendered from PPTD.</h2>
-    <p>It remains stored safely. Generate a new PPTD deck; the text review will stay untouched.</p>
-    {generating && <p className="paper-presentation-progress" role="status">{progress}</p>}
-    {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
-    <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
-      {generating ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}
-      {generating ? "Creating PPTD slides" : "Generate PPTD presentation"}
+      {generating ? <LoaderCircle className="spin" size={16} /> : legacyPresentation ? <RefreshCw size={16} /> : <Sparkles size={16} />}
+      {generating ? "Building pages" : reviewReady ? legacyPresentation ? "Create PPTD version" : "Generate presentation" : "Finish the review first"}
     </button>
   </section>;
 
   return <section className="paper-presentation-workbench">
     <header className="paper-presentation-toolbar">
-      <div><span><Check size={14} />Validated PPTD · {presentation.source_sufficiency || "review-grounded"}</span>{stale && <em>The text review changed after this deck was generated.</em>}</div>
+      <div><span>{livePresentation ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}{livePresentation ? `${livePresentation.previewUrls.filter(Boolean).length} / ${livePresentation.total} pages ready to view` : `Validated PPTD · ${activePresentation.source_sufficiency || "review-grounded"}`}</span>{stale && !livePresentation && <em>The text review changed after this deck was generated.</em>}</div>
       <div>
-        <button onClick={() => void reveal()}><FolderOpen size={15} />Open PPTX</button>
+        <button onClick={() => void reveal()} disabled={Boolean(livePresentation)}><FolderOpen size={15} />Open PPTX</button>
         <button onClick={() => void generate()} disabled={!reviewReady || generating}>{generating ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}{generating ? "Regenerating" : "Regenerate"}</button>
-        <button onClick={() => void stageRef.current?.requestFullscreen()}><Expand size={15} />Present</button>
+        <button onClick={() => void stageRef.current?.requestFullscreen()} disabled={Boolean(livePresentation)}><Expand size={15} />Present</button>
       </div>
     </header>
 
@@ -510,20 +520,25 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
     <div className="paper-presentation-stage" ref={stageRef}>
       <div className="paper-presentation-frame">
-        {presentation.artifact?.preview_url ? <PptdRenderedPage url={presentation.artifact.preview_url} pageNumber={activeSlide + 1} /> : activeSlide === 0 ? <article className="paper-presentation-slide cover">
+        {livePresentation?.previewUrls[activeSlide] ? <PptdRenderedPage url={livePresentation.previewUrls[activeSlide]} pageNumber={1} /> : storedPreviewUrl ? <PptdRenderedPage url={storedPreviewUrl} pageNumber={activeSlide + 1} /> : <article className="paper-presentation-live-placeholder">
+          <LoaderCircle className="spin" size={24} />
+          <strong>{activeSlide === 0 ? "Cover" : active?.title || "Preparing this slide"}</strong>
+          <p>{livePresentation ? "This page will appear here immediately after PPTD validation." : "The saved presentation has no renderable preview."}</p>
+        </article>}
+        {!livePresentation && !storedPreviewUrl && activeSlide === 0 ? <article className="paper-presentation-slide cover">
           <div className="paper-presentation-cover-rail"><b>组会</b><span>论文分享</span><small>Kimi Slides</small></div>
           <div className="paper-presentation-cover-copy">
             <p>Kimi Slides · Academic research</p>
-            <h2>{presentation.title || paper.title}</h2>
-            <h3>{presentation.subtitle}</h3>
+            <h2>{activePresentation.title || paper.title}</h2>
+            <h3>{activePresentation.subtitle}</h3>
             <dl><div><dt>Authors</dt><dd>{paper.authors.slice(0, 5).join(", ") || "Unknown"}{paper.authors.length > 5 ? " et al." : ""}</dd></div><div><dt>Source</dt><dd>{paper.venue || "Paper"} · {paper.year || "n.d."}</dd></div></dl>
           </div>
           <div className="paper-presentation-cover-object"><PresentationSourceVisual url={pdfUrl} source={{ page: 1, label: "Original paper · PDF p. 1", kind: "page", figure: "", panel: "", focus: "top" }} label={paper.title} compact /></div>
-        </article> : active && <ContentSlide slide={active} index={activeSlide} pdfUrl={pdfUrl} />}
+        </article> : !livePresentation && !storedPreviewUrl && active && <ContentSlide slide={active} index={activeSlide} pdfUrl={pdfUrl} />}
       </div>
 
       <nav className="paper-presentation-index" aria-label="Presentation slides">
-        {slides.map((slide, index) => <button key={slide?.id || index} className={index === activeSlide ? "active" : ""} onClick={() => setActiveSlide(index)}><span>{String(index + 1).padStart(2, "0")}</span><b>{index === 0 ? "Cover" : SECTION_LABELS[slide!.section]}</b>{slide && <small>{slide.title}</small>}</button>)}
+        {slides.map((slide, index) => <button key={slide?.id || index} className={`${index === activeSlide ? "active" : ""}${livePresentation && !livePresentation.previewUrls[index] ? " queued" : ""}`} onClick={() => setActiveSlide(index)}><span>{String(index + 1).padStart(2, "0")}</span><b>{index === 0 ? "Cover" : SECTION_LABELS[slide!.section]}</b>{slide && <small>{livePresentation && !livePresentation.previewUrls[index] ? "Rendering…" : slide.title}</small>}</button>)}
       </nav>
       <div className="paper-presentation-controls">
         <button onClick={() => setActiveSlide((current) => Math.max(0, current - 1))} disabled={activeSlide === 0} aria-label="Previous slide"><ArrowLeft size={17} /></button>

@@ -76,7 +76,7 @@ interface ResearchDeskBridge {
     runPaperPresentation: (input: PaperPresentationInput) => Promise<StoredPaperPresentation>;
     getPaperPresentation: (paperId: string, workspace?: string) => Promise<StoredPaperPresentation | null>;
     revealPaperPresentation: (paperId: string, workspace?: string) => Promise<void>;
-    onPaperPresentationEvent: (callback: (payload: { paperId: string; clientRunId: string; detail: string }) => void) => () => void;
+    onPaperPresentationEvent: (callback: (payload: PaperPresentationEvent) => void) => () => void;
     cleanupPaperReviewRuns: (workspace?: string) => Promise<{ threadIds: string[] }>;
     interruptAgent: (threadId: string) => Promise<{ interrupted: boolean }>;
     approveAgentAction: (actionId: string) => Promise<AgentAction>;
@@ -924,6 +924,22 @@ interface PaperPresentationInput {
   contextLength?: ContextLength;
   contextItems?: ContextAttachment[];
   clientRunId?: string;
+}
+
+interface PaperPresentationEvent {
+  paperId: string;
+  clientRunId: string;
+  detail: string;
+  kind?: "page-ready";
+  page?: {
+    index: number;
+    total: number;
+    pdfPath: string;
+    pptxPath: string;
+    validation: "passed";
+    preview_url: string;
+  };
+  presentation?: Pick<PaperPresentation, "title" | "subtitle" | "source_sufficiency" | "slides">;
 }
 
 interface PaperReviewEvent {

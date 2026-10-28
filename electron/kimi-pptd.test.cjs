@@ -17,6 +17,7 @@ test("PPTD pages are authored with safe geometry and Kimi's page file contract",
   assert.match(yaml, /src: "\/safe\/evidence.png"/);
   assert.doesNotMatch(yaml, /etc\/passwd/);
   assert.match(mainYaml("论文", 2), /pages\/slide-02\.page/);
+  assert.match(mainYaml("论文", 1, ["pages/slide-07.page"]), /pages\/slide-07\.page/);
 });
 
 test("PPTD slide normalization rejects missing evidence and malformed model output", () => {
@@ -60,5 +61,12 @@ test("Kimi desktop checker and converter accept generated PPTD files", { skip: !
     assert.equal(result.pageCount, 1);
     assert.ok(fs.statSync(result.pptx).size > 1_000);
     assert.ok(fs.statSync(result.pdf).size > 1_000);
+    const previewDirectory = path.join(directory, "previews");
+    fs.mkdirSync(previewDirectory);
+    const liveEntry = path.join(directory, "live-01.pptd");
+    fs.writeFileSync(liveEntry, mainYaml("研究方法", 1, ["pages/slide-01.page"]));
+    const live = await convertAndRender({ python, pyz: process.env.KIMI_PPTD_TEST_PYZ, env }, liveEntry, previewDirectory, "live-01");
+    assert.equal(live.pageCount, 1);
+    assert.match(live.pdf, /previews[\\/]live-01\.pdf$/);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

@@ -124,11 +124,14 @@ function pageYaml(page, evidencePath = "") {
   return `${lines.join("\n")}\n`;
 }
 
-function mainYaml(title, count) {
+function mainYaml(title, count, pageFiles = null) {
+  const pages = Array.isArray(pageFiles) && pageFiles.length
+    ? pageFiles
+    : Array.from({ length: count }, (_, index) => `pages/slide-${String(index + 1).padStart(2, "0")}.page`);
   return [`title: ${quoted(title)}`, `size: [${SLIDE_SIZE.join(", ")}]`, "theme:", "  colors:", `    paper: ${quoted(PAPER)}`,
     `    ink: ${quoted(INK)}`, `    green: ${quoted(GREEN)}`, `    ochre: ${quoted(OCHRE)}`, "  textStyles:",
     `    body: {fontFamily: ${quoted(FONT)}, fontSize: 22, color: ${quoted(INK)}}`, "pages:",
-    ...Array.from({ length: count }, (_, index) => `  - pages/slide-${String(index + 1).padStart(2, "0")}.page`), ""].join("\n");
+    ...pages.map((page) => `  - ${page}`), ""].join("\n");
 }
 
 function runProcess(command, args, { env = process.env, timeoutMs = 180_000 } = {}) {
@@ -326,15 +329,16 @@ async function composePage(config, input) {
   return fallbackPageSpec(input);
 }
 
-async function convertAndRender(tool, entry, outputDirectory) {
+async function convertAndRender(tool, entry, outputDirectory, fileStem = "presentation") {
   const checkOutput = await runProcess(tool.python, [tool.pyz, "check", entry, "--json"], { env: tool.env, timeoutMs: 180_000 });
   const start = checkOutput.indexOf("{");
   const report = start < 0 ? null : JSON.parse(checkOutput.slice(start));
   if (!report || report.error_count || report.issues?.some((issue) => /TextOverflow|TextOcclusion|BoundsOutside/.test(JSON.stringify(issue)))) {
     throw new Error(`Kimi PPTD validation failed: ${JSON.stringify(report?.issues || checkOutput).slice(0, 1_500)}`);
   }
-  const pptx = path.join(outputDirectory, "presentation.pptx");
-  const pdf = path.join(outputDirectory, "presentation.pdf");
+  const safeStem = String(fileStem).replace(/[^a-z0-9_-]/gi, "-") || "presentation";
+  const pptx = path.join(outputDirectory, `${safeStem}.pptx`);
+  const pdf = path.join(outputDirectory, `${safeStem}.pdf`);
   await runProcess(tool.python, [tool.pyz, "convert", entry, "-o", pptx], { env: tool.env, timeoutMs: 240_000 });
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-soffice-"));
   try {
@@ -348,15 +352,17 @@ async function convertAndRender(tool, entry, outputDirectory) {
   return { pptx, pdf, pageCount, check: report };
 }
 
-async function generateKimiPptd({ paper, plan, workspace, sourcePdfPath, runtimeRoot, modelConfig, emit = () => {} }) {
+async function generateKimiPptd({ paper, plan, workspace, sourcePdfPath, runtimeRoot, modelConfig, emit = () => {}, onPage = async () => {} }) {
   if (!sourcePdfPath || !fs.existsSync(sourcePdfPath)) throw new Error("The original paper PDF must be cached before making a PPTD presentation.");
   const tool = await ensureTool(runtimeRoot, emit);
   const paperKey = createHash("sha256").update(String(paper.id)).digest("hex").slice(0, 20);
   const outputDirectory = path.join(workspace, ".archimedes", "presentations", paperKey, randomUUID());
   const pagesDirectory = path.join(outputDirectory, "pages");
   const mediaDirectory = path.join(outputDirectory, "media");
+  const previewsDirectory = path.join(outputDirectory, "previews");
   fs.mkdirSync(pagesDirectory, { recursive: true });
   fs.mkdirSync(mediaDirectory, { recursive: true });
+  fs.mkdirSync(previewsDirectory, { recursive: true });
   emit("Extracting original paper figures and tables…");
   const images = await renderEvidenceImages(sourcePdfPath, plan.slides, mediaDirectory);
   const total = plan.slides.length + 1;
@@ -367,6 +373,24 @@ async function generateKimiPptd({ paper, plan, workspace, sourcePdfPath, runtime
     const page = await composePage(modelConfig, { paper, slide, index, total, evidence, emit });
     const file = path.join(pagesDirectory, `slide-${String(index + 1).padStart(2, "0")}.page`);
     fs.writeFileSync(file, pageYaml(page, evidence?.path));
+    // A live preview is intentionally a one-page PPTD deck.  This avoids
+    // repeatedly converting every prior slide while still showing the exact
+    // Kimi-validated layout the user will receive in the final deck.
+    const previewStem = `live-${String(index + 1).padStart(2, "0")}`;
+    const previewEntry = path.join(outputDirectory, `${previewStem}.pptd`);
+    const pageFile = `pages/slide-${String(index + 1).padStart(2, "0")}.page`;
+    fs.writeFileSync(previewEntry, mainYaml(plan.title || paper.title, 1, [pageFile]));
+    emit(`Validating and rendering page ${index + 1} for live preview…`);
+    const preview = await convertAndRender(tool, previewEntry, previewsDirectory, previewStem);
+    if (preview.pageCount !== 1) throw new Error(`Live preview ${index + 1} rendered ${preview.pageCount} pages instead of one.`);
+    await onPage({
+      index,
+      total,
+      pdfPath: relativeArtifactPath(workspace, preview.pdf),
+      pptxPath: relativeArtifactPath(workspace, preview.pptx),
+      validation: "passed",
+    });
+    emit(`Page ${index + 1} of ${total} is ready to view.`);
   }
   const entry = path.join(outputDirectory, "presentation.pptd");
   fs.writeFileSync(entry, mainYaml(plan.title || paper.title, total));

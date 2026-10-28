@@ -1095,8 +1095,8 @@ app.whenReady().then(() => {
     }
     const sourcePdfPath = workspaceFiles.workspacePath(dataWorkspace, reader.asset.relative_path);
     const clientRunId = typeof input.clientRunId === "string" ? input.clientRunId.slice(0, 100) : "";
-    const emitPresentation = (detail) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper-presentation:event", { paperId: paper.id, clientRunId, detail });
+    const emitPresentation = (detail, extra = {}) => {
+      if (!event.sender.isDestroyed()) event.sender.send("paper-presentation:event", { paperId: paper.id, clientRunId, detail, ...extra });
     };
     emitPresentation("Checking Kimi PPTD and rendering tools…");
     await ensureTool(app.getPath("userData"), emitPresentation);
@@ -1113,7 +1113,21 @@ app.whenReady().then(() => {
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
     });
     const artifact = await generateKimiPptd({ paper, plan: result.presentation, workspace: dataWorkspace,
-      sourcePdfPath, runtimeRoot: app.getPath("userData"), modelConfig: config, emit: emitPresentation });
+      sourcePdfPath, runtimeRoot: app.getPath("userData"), modelConfig: config, emit: emitPresentation,
+      onPage: async (page) => {
+        const token = createPreviewToken(event.sender.id, dataWorkspace);
+        const previewUrl = `archimedes-file://${token}/${page.pdfPath.split("/").map(encodeURIComponent).join("/")}?v=${Date.now()}`;
+        emitPresentation(`Page ${page.index + 1} of ${page.total} is ready to view.`, {
+          kind: "page-ready",
+          page: { ...page, preview_url: previewUrl },
+          presentation: {
+            title: result.presentation.title,
+            subtitle: result.presentation.subtitle,
+            source_sufficiency: result.presentation.source_sufficiency,
+            slides: result.presentation.slides,
+          },
+        });
+      } });
     const saved = store.savePaperPresentation(paper.id, { ...result.presentation, artifact }, review.updated_at);
     const token = createPreviewToken(event.sender.id, dataWorkspace);
     return { ...saved, artifact: { ...saved.artifact,
