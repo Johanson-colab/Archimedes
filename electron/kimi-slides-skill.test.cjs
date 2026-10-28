@@ -18,16 +18,17 @@ const review = {
   ],
 };
 
-test("Kimi Slides planner prepares source-grounded content for PPTD authoring", () => {
+test("presentation planner prepares source-grounded content for native PowerPoint authoring", () => {
   const prompt = kimiSlidesPrompt(paper, review, 24);
-  assert.match(prompt, /Kimi PPTD pages/);
+  assert.match(prompt, /editable PowerPoint file/);
   assert.match(prompt, /intermediate plan, not the visible slide format/);
   assert.match(prompt, /exactly 14 CONTENT slides/);
   assert.match(prompt, /Reading the titles alone must tell the full paper story/);
   assert.match(prompt, /inspect_pdf_page on every page/);
   assert.match(prompt, /Background -> Related work -> Method -> Experiments -> Limitations/);
   assert.match(loadKimiSlidesGuidance(), /Kimi Slides|Academic Research|academic workflow/i);
-  assert.equal(KIMI_SLIDES_SKILL.id, "kimi-slides");
+  assert.equal(KIMI_SLIDES_SKILL.id, "paper-presentation");
+  assert.match(kimiSlidesPrompt(paper, review, 24, "en"), /English academic lab-meeting deck/);
 });
 
 test("Kimi Slides adapter normalizes a 15-page academic deck with an outline", () => {
@@ -48,8 +49,8 @@ test("Kimi Slides adapter normalizes a 15-page academic deck with an outline", (
       visual: { kind: index === 0 ? "outline" : section === "method" ? "comparison" : "source", items: [{ label: "Result", value: "42", detail: "Verified value" }] },
     })),
   }, paper, 24);
-  assert.equal(presentation.skill.id, "kimi-slides");
-  assert.equal(presentation.skill.version, 2);
+  assert.equal(presentation.skill.id, "paper-presentation");
+  assert.equal(presentation.skill.version, 3);
   assert.equal(presentation.slides.length, 14);
   assert.equal(presentation.slides[0].layout, "outline");
   assert.equal(presentation.slides[5].layout, "editorial");
