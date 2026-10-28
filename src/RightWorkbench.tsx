@@ -15,6 +15,7 @@ const WORKBENCH_MIN_WIDTH = 320;
 const WORKBENCH_MAX_WIDTH = 1200;
 const WORKBENCH_DEFAULT_RATIO = 0.5;
 const WORKBENCH_MIN_MAIN_WIDTH = 560;
+const COMPACT_TABS_WIDTH = 680;
 
 export function maxWorkbenchWidth() {
   const viewport = typeof window === "undefined" ? 1440 : window.innerWidth;
@@ -161,7 +162,7 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
     setDropTarget(null);
   }
 
-  return <aside className={`${open ? "right-workbench open" : "right-workbench"}${width < 520 ? " compact-tabs" : ""}`} aria-label={t("Workbench")} aria-hidden={!open} inert={!open}>
+  return <aside className={`${open ? "right-workbench open" : "right-workbench"}${width < COMPACT_TABS_WIDTH ? " compact-tabs" : ""}`} aria-label={t("Workbench")} aria-hidden={!open} inert={!open}>
     <div className="workbench-resize-handle" role="separator" aria-orientation="vertical" aria-label={t("Resize workbench")} aria-valuemin={WORKBENCH_MIN_WIDTH} aria-valuemax={maxWorkbenchWidth()} aria-valuenow={width} tabIndex={0} onPointerDown={startResize} onDoubleClick={() => onWidthChange(defaultWorkbenchWidth())} onKeyDown={handleResizeKey}><span /></div>
     <header className="workbench-header">
       <div className="workbench-tabs" role="tablist" aria-label={t("Workbench panels")}>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, FileCode2, ListTree, Wrench } from "lucide-react";
 import JsonCode from "./JsonCode";
+import { eventOrdinal } from "./journeyEventState";
 
 type TrajectoryViewProps = {
   thread: ResearchThread | null;
@@ -10,7 +11,7 @@ type TrajectoryViewProps = {
   modeLabel: string;
   onCopy: (text: string) => Promise<void> | void;
   onOpenJourney: () => void;
-  focusSequence?: number | null;
+  focusOrdinal?: number | null;
   onFocusApplied?: () => void;
 };
 
@@ -47,7 +48,7 @@ function isToolCall(event: ResearchEvent) {
   return event.type === "tool_call" || event.type === "tool.result" || event.type === "tool_result";
 }
 
-export default function TrajectoryView({ thread, events, provider, model, modeLabel, onCopy, onOpenJourney, focusSequence, onFocusApplied }: TrajectoryViewProps) {
+export default function TrajectoryView({ thread, events, provider, model, modeLabel, onCopy, onOpenJourney, focusOrdinal, onFocusApplied }: TrajectoryViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState("");
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -63,16 +64,46 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
   const allExpanded = events.length > 0 && events.every((event) => expanded.has(event.id));
 
   useEffect(() => {
-    if (focusSequence == null) return;
-    const target = events.find((event) => event.sequence >= focusSequence);
-    if (!target) { focusAppliedRef.current?.(); return; }
+    if (focusOrdinal == null) return;
+    const targetIndex = events.findIndex((event, index) => eventOrdinal(event, index) >= focusOrdinal);
+    if (targetIndex < 0) { focusAppliedRef.current?.(); return; }
+    const target = events[targetIndex];
     setExpanded((current) => current.has(target.id) ? current : new Set(current).add(target.id));
-    const timer = window.setTimeout(() => {
-      sectionRef.current?.querySelector<HTMLElement>(`[data-trajectory-sequence="${target.sequence}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [events, focusOrdinal]);
+
+  useEffect(() => {
+    if (focusOrdinal == null) return;
+    const targetIndex = events.findIndex((event, index) => eventOrdinal(event, index) >= focusOrdinal);
+    if (targetIndex < 0) return;
+    const targetOrdinal = eventOrdinal(events[targetIndex], targetIndex);
+    let cancelled = false;
+    let frame = 0;
+    const reveal = (attempt = 0) => {
+      if (cancelled) return;
+      const container = sectionRef.current;
+      const element = container?.querySelector<HTMLElement>(`[data-trajectory-ordinal="${targetOrdinal}"]`);
+      if (!container || !element || container.clientHeight === 0) {
+        // The target's body is rendered one commit after it is expanded, and
+        // the workbench panel can still be hidden during the tab transition.
+        if (attempt < 120) frame = requestAnimationFrame(() => reveal(attempt + 1));
+        else focusAppliedRef.current?.();
+        return;
+      }
+      const delta = element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      const desired = Math.max(0, container.scrollTop + delta - container.clientHeight / 2 + element.offsetHeight / 2);
+      container.scrollTop = desired;
+      if (Math.abs(container.scrollTop - desired) > 2 && attempt < 120) {
+        frame = requestAnimationFrame(() => reveal(attempt + 1));
+        return;
+      }
       focusAppliedRef.current?.();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [events, focusSequence]);
+    };
+    frame = requestAnimationFrame(() => reveal());
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [events, expanded, focusOrdinal]);
 
   function toggle(id: string) {
     setExpanded((current) => {
@@ -127,10 +158,10 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
       </div>
 
       {events.length > 0 ? <div className="trajectory-event-list">
-        {events.map((event) => {
+        {events.map((event, index) => {
           const open = expanded.has(event.id);
           const payload = payloadObject(event.payload);
-          return <article className={open ? "trajectory-event open" : "trajectory-event"} key={event.id} data-trajectory-sequence={event.sequence}>
+          return <article className={open ? "trajectory-event open" : "trajectory-event"} key={event.id} data-trajectory-sequence={event.sequence} data-trajectory-ordinal={eventOrdinal(event, index)}>
             <button className="trajectory-event-head" onClick={() => toggle(event.id)} aria-expanded={open}>
               <span className="trajectory-event-icon">{isToolCall(event) ? <Wrench size={12} /> : event.type === "assistant_message" || event.type === "user_message" ? <FileCode2 size={12} /> : <ListTree size={12} />}</span>
               <span className="trajectory-event-copy"><strong>{event.type}</strong><small>#{event.sequence} · {event.id}</small></span>

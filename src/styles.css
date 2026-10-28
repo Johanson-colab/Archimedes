@@ -1532,11 +1532,14 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-views button:hover { color: var(--night-ink); }
 .journey-views button.active { color: var(--accent); }
 .journey-header h1 { margin: 5px 0 0; color: var(--night-ink); font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
-.journey-status-line { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--night-faint); font-size: 11px; }
+.journey-status-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; color: var(--night-faint); font-size: 11px; }
 .journey-status-line strong { color: var(--night-ink-soft); font-weight: 500; }
 .journey-status-text.waiting { color: var(--accent); }
 .journey-status-text.attention { color: var(--night-danger); }
 .journey-status-text.complete { color: var(--night-ink-soft); }
+.journey-status-text.chat-only { color: var(--night-muted); }
+.journey-open-chip { margin-left: 2px; padding: 1px 6px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 999px; font-family: inherit; font-size: 9px; font-weight: 550; cursor: pointer; }
+.journey-open-chip:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .journey-status-text.not-started { color: var(--night-faint); }
 .journey-status-text.running {
   color: transparent;
@@ -1562,7 +1565,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-dot-sep { color: var(--night-faint); }
 .journey-scrubber { flex: 0 0 auto; padding: 12px 20px 0; }
 .journey-scrubber-bars { position: relative; display: flex; gap: 2px; height: 4px; }
-.journey-scrubber-bars > button { display: block; min-width: 2px; height: 4px; padding: 0; background: var(--night-line); border-radius: 2px; }
+.journey-scrubber-bars > button { display: block; min-width: 16px; height: 4px; padding: 0; background: var(--night-line); border-radius: 2px; }
 .journey-scrubber-bars > button.done { background: var(--night-faint); }
 .journey-scrubber-bars > button.current { background: var(--accent); }
 .journey-scrubber-bars > button.error { background: var(--night-danger); }
@@ -1576,6 +1579,8 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-since { flex: 0 0 auto; margin: 14px 20px 0; padding: 10px 12px; background: var(--night-panel); border-left: 2px solid var(--accent); border-radius: 0 6px 6px 0; }
 .journey-since-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--night-muted); font-size: 11px; }
 .journey-since-head button { padding: 0; color: var(--night-faint); background: transparent; font-size: 11px; }
+.journey-since-actions { display: flex; align-items: baseline; gap: 10px; }
+.journey-since-actions button:first-child { color: var(--accent); }
 .journey-since p { margin: 4px 0 0; color: var(--night-ink-soft); font-size: 12px; line-height: 1.45; }
 .journey-story,
 .journey-outline { display: flex; min-height: 0; flex: 1; flex-direction: column; padding: 0 20px; }
@@ -1584,6 +1589,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .journey-section-head h2 { margin: 0; color: var(--night-muted); font-size: 11px; font-weight: 550; }
 .journey-section-head > span { max-width: 64%; overflow: hidden; color: var(--night-faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.journey-inline-status { padding: 1px 6px; color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent); border-radius: 999px; font-family: inherit; font-size: 9px; font-weight: 500; cursor: pointer; }
 .journey-summary-note { margin: 7px 0 0; color: var(--night-warning); font-size: 11px; line-height: 1.45; }
 .journey-summary-note button { padding: 0 0 0 4px; color: var(--accent); background: transparent; font-size: 11px; }
 .journey-section-actions { display: flex; align-items: baseline; gap: 10px; }
@@ -1597,16 +1603,19 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-earlier:hover { color: var(--night-ink); }
 .journey-chapters { display: grid; }
 .journey-chapter { border-top: 1px solid var(--night-line-soft); }
+.journey-chapter.current { background: color-mix(in srgb, var(--accent) 4%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+.journey-chapter.current .journey-chapter-index { color: var(--accent); }
 .journey-chapter:first-child { border-top: 0; }
 .journey-chapter-row { position: relative; display: flex; align-items: baseline; gap: 4px; }
 .journey-chapter-toggle { display: flex; min-width: 0; flex: 1; align-items: baseline; gap: 8px; padding: 9px 0; color: var(--night-ink-soft); background: transparent; text-align: left; }
 .journey-chevron { width: 10px; flex: 0 0 auto; color: var(--night-faint); font-size: 11px; }
 .journey-chapter-index { width: 20px; flex: 0 0 auto; color: var(--night-faint); font-family: var(--font-mono); font-size: 11px; }
 .journey-chapter-index.pinned { color: var(--accent); }
-.journey-chapter-title { min-width: 0; flex: 1; color: var(--night-ink-soft); font-size: 12.5px; line-height: 1.35; }
+.journey-chapter-title { min-width: 0; overflow: hidden; flex: 1; color: var(--night-ink-soft); font-size: 12.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .journey-chapter-toggle:hover .journey-chapter-title,
 .journey-chapter-toggle:focus-visible .journey-chapter-title { color: var(--night-ink); }
 .journey-chapter-meta { flex: 0 0 auto; color: var(--night-faint); font-size: 11px; white-space: nowrap; }
+.right-workbench.compact-tabs .journey-chapter-sources { display: none; }
 .journey-chapter-actions { position: absolute; top: 7px; right: 0; display: flex; align-items: baseline; gap: 8px; padding-left: 14px; background: linear-gradient(90deg, transparent, var(--workbench-ground) 22%); opacity: 0; pointer-events: none; z-index: 2; }
 .journey-row-action { padding: 0; color: var(--night-faint); background: transparent; font-size: 11px; }
 .journey-pin { flex: 0 0 auto; padding: 0; color: var(--night-faint); background: transparent; font-size: 11px; }
@@ -1638,6 +1647,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-pinned button { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; color: var(--night-ink-soft); background: transparent; font-size: 12px; text-align: left; }
 .journey-pinned button:hover { color: var(--night-ink); }
 .journey-pinned button span { color: var(--night-faint); font-size: 11px; }
+.journey-evidence-empty { margin: 0; color: var(--night-faint); font-size: 11px; line-height: 1.5; }
 .journey-evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0; }
 .journey-evidence div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--night-line-soft); }
 .journey-evidence dt { color: var(--night-muted); font-size: 11px; }
@@ -1659,7 +1669,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--night-faint); font-size: 11px; }
 .journey-dock-head strong { color: var(--night-muted); font-size: 11px; font-weight: 550; }
 .journey-dock p { margin: 5px 0 9px; color: var(--night-ink-soft); font-size: 12.5px; line-height: 1.5; }
-.journey-dock-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.journey-dock-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; row-gap: 6px; }
 .journey-primary { min-height: 30px; padding: 0 11px; color: var(--accent-ink); background: var(--accent); border-radius: 6px; font-size: 12px; font-weight: 560; }
 .journey-primary:hover { background: var(--accent-hover); }
 .journey-ghost { padding: 0; color: var(--night-muted); background: transparent; font-size: 11px; }

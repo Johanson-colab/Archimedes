@@ -775,6 +775,7 @@ interface ResearchEvent {
   id: string;
   turn_id: string;
   sequence: number;
+  ordinal?: number;
   type: string;
   payload: unknown;
   created_at: string;

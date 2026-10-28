@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { eventHasError, isUnresolvedError, latestAnswerSequence } = require("../src/journeyEventState.ts");
+const { eventHasError, isUnresolvedError, latestAnswerOrdinal } = require("../src/journeyEventState.ts");
 
 function event(sequence, type, payload = {}) {
   return { id: `event-${sequence}`, turn_id: "turn-1", sequence, type, payload, created_at: "2026-10-25T00:00:00.000Z" };
@@ -24,10 +24,10 @@ test("uses the latest assistant response as the resolution boundary", () => {
     event(5, "tool_result", { call_id: "call-2", content: "paper text" }),
     event(6, "assistant_message", { text: "The paper was read after retrying." }),
   ];
-  const latest = latestAnswerSequence(events);
+  const latest = latestAnswerOrdinal(events);
   assert.equal(latest, 6);
   assert.equal(isUnresolvedError(events[2], latest), false);
-  assert.equal(events.filter((item) => isUnresolvedError(item, latest)).length, 0);
+  assert.equal(events.filter((item, index) => isUnresolvedError(item, latest, index)).length, 0);
 });
 
 test("keeps errors after the latest answer or in failed turns unresolved", () => {
@@ -36,18 +36,18 @@ test("keeps errors after the latest answer or in failed turns unresolved", () =>
     event(2, "tool_call", { call_id: "call-1", name: "run_command" }),
     event(3, "tool_result", { call_id: "call-1", content: JSON.stringify({ error: "exit 1" }) }),
   ];
-  const latest = latestAnswerSequence(afterAnswer);
+  const latest = latestAnswerOrdinal(afterAnswer);
   assert.equal(latest, 1);
-  assert.equal(isUnresolvedError(afterAnswer[2], latest), true);
+  assert.equal(isUnresolvedError(afterAnswer[2], latest, 2), true);
 
   const failedTurn = [
     event(1, "user_message", { text: "run it" }),
     event(2, "tool_call", { call_id: "call-1", name: "run_command" }),
     event(3, "tool_result", { call_id: "call-1", content: JSON.stringify({ error: "exit 1" }) }),
   ];
-  const failedLatest = latestAnswerSequence(failedTurn);
+  const failedLatest = latestAnswerOrdinal(failedTurn);
   assert.equal(failedLatest, 0);
-  assert.equal(isUnresolvedError(failedTurn[2], failedLatest), true);
+  assert.equal(isUnresolvedError(failedTurn[2], failedLatest, 2), true);
 });
 
 test("failed or interrupted answers do not resolve earlier errors", () => {
@@ -56,9 +56,9 @@ test("failed or interrupted answers do not resolve earlier errors", () => {
     event(2, "tool_result", { content: JSON.stringify({ error: "exit 1" }) }),
     event(3, "assistant_message", { text: "turn failed", status: "failed" }),
   ];
-  const latest = latestAnswerSequence(events);
+  const latest = latestAnswerOrdinal(events);
   assert.equal(latest, 1);
-  assert.equal(isUnresolvedError(events[1], latest), true);
+  assert.equal(isUnresolvedError(events[1], latest, 1), true);
 });
 
 test("an error on the final assistant response stays unresolved", () => {
@@ -66,7 +66,19 @@ test("an error on the final assistant response stays unresolved", () => {
     event(1, "assistant_message", { text: "earlier answer" }),
     event(2, "assistant_message", { error: "final response failed" }),
   ];
-  const latest = latestAnswerSequence(events);
+  const latest = latestAnswerOrdinal(events);
   assert.equal(latest, 2);
-  assert.equal(isUnresolvedError(events[1], latest), true);
+  assert.equal(isUnresolvedError(events[1], latest, 1), true);
+});
+
+
+test("uses thread-wide ordinals when turns restart their sequences", () => {
+  const events = [
+    { id: "a1", turn_id: "turn-a", sequence: 1, ordinal: 1, type: "assistant_message", payload: { text: "first turn" }, created_at: "2026-10-25T00:00:00.000Z" },
+    { id: "b1", turn_id: "turn-b", sequence: 1, ordinal: 2, type: "tool_result", payload: { content: JSON.stringify({ error: "ENOENT" }) }, created_at: "2026-10-25T00:01:00.000Z" },
+    { id: "b2", turn_id: "turn-b", sequence: 2, ordinal: 3, type: "assistant_message", payload: { text: "second turn" }, created_at: "2026-10-25T00:02:00.000Z" },
+  ];
+  assert.equal(latestAnswerOrdinal(events), 3);
+  assert.equal(isUnresolvedError(events[1], 3, 1), false);
+  assert.equal(isUnresolvedError(events[1], latestAnswerOrdinal(events.slice(0, 2)), 1), true);
 });

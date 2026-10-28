@@ -1,6 +1,7 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useUISettings } from "./i18n";
-import { eventHasError, isUnresolvedError, latestAnswerSequence } from "./journeyEventState";
+import { eventHasError, eventOrdinal, isUnresolvedError, latestAnswerOrdinal } from "./journeyEventState";
 import { useDialogFocus } from "./useDialogFocus";
 
 type JourneyViewProps = {
@@ -13,9 +14,10 @@ type JourneyViewProps = {
   agentBusy: boolean;
   active: boolean;
   onOpenTrajectory: () => void;
-  onOpenTrajectoryAt?: (sequence: number) => void;
+  onOpenTrajectoryAt?: (ordinal: number) => void;
   onOpenSettings: () => void;
   onReviewPending: () => void;
+  onStartResearch?: () => void;
 };
 
 type JourneyEpisode = {
@@ -66,7 +68,7 @@ type JourneyData = {
   evidence: JourneyEvidence;
   brief: string;
   nextMove: string;
-  status: "waiting" | "running" | "attention" | "complete" | "not-started";
+  status: "waiting" | "running" | "attention" | "complete" | "chat-only" | "not-started";
   steps: number;
   duration: string;
 };
@@ -81,9 +83,27 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
 }
 
+// Model output and tool text can contain markdown. Journey is a reading
+// surface, not a markdown renderer, so flatten it before it reaches a label.
+function plainText(value: unknown): string {
+  return text(value)
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/(^|\s)[*_]{1,2}([^*_]+)[*_]{1,2}/g, "$1$2")
+    .replace(/^[#>\-\s]+/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function truncate(value: string, length: number): string {
-  if (value.length <= length) return value;
-  return `${value.slice(0, Math.max(0, length - 1)).trimEnd()}…`;
+  const cleaned = plainText(value);
+  if (cleaned.length <= length) return cleaned;
+  const cut = cleaned.slice(0, Math.max(0, length - 1));
+  const boundary = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("; "), cut.lastIndexOf(", "), cut.lastIndexOf(" "));
+  const trimmed = boundary > length * 0.55 ? cut.slice(0, boundary) : cut;
+  return `${trimmed.trimEnd()}…`;
 }
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
@@ -147,12 +167,13 @@ function collectSources(payload: unknown, sources: Set<string>): void {
 
 function collectSummarySources(events: ResearchEvent[]): JourneySourceInput[] {
   const sources = new Map<string, JourneySourceInput>();
-  for (const event of events) {
-    if (event.type !== "source_evidence") continue;
+  events.forEach((event, index) => {
+    if (event.type !== "source_evidence") return;
     const payload = record(event.payload);
-    const title = text(payload.title) || text(payload.url) || text(payload.doi) || `Source ${event.sequence}`;
-    sources.set(event.id, { id: event.id, title: truncate(title, 160), url: text(payload.url), eventId: event.sequence });
-  }
+    const ordinal = eventOrdinal(event, index);
+    const title = text(payload.title) || text(payload.url) || text(payload.doi) || `Source ${ordinal}`;
+    sources.set(event.id, { id: event.id, title: truncate(title, 160), url: text(payload.url), eventId: ordinal });
+  });
   return [...sources.values()].slice(-40);
 }
 
@@ -176,6 +197,8 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 function buildEpisodes(events: ResearchEvent[]): JourneyEpisode[] {
   const results = new Map<string, ResearchEvent>();
+  const ordinals = new Map<string, number>();
+  events.forEach((event, index) => ordinals.set(event.id, eventOrdinal(event, index)));
   for (const event of events) {
     const callId = text(record(event.payload).call_id);
     if (callId && (event.type === "tool_result" || event.type === "tool.result")) results.set(callId, event);
@@ -183,10 +206,11 @@ function buildEpisodes(events: ResearchEvent[]): JourneyEpisode[] {
   const episodes: JourneyEpisode[] = [];
   let index = 0;
   for (const event of events) {
+    const ordinal = ordinals.get(event.id) ?? index + 1;
     if (event.type === "user_message") {
       const value = eventText(event);
       if (!value) continue;
-      episodes.push({ id: `${event.id}:request`, title: index === 0 ? "Framed the request" : "Follow-up request", outcome: truncate(value, 140), status: "done", start: event.sequence, end: event.sequence, steps: 1 });
+      episodes.push({ id: `${event.id}:request`, title: index === 0 ? "Framed the request" : "Follow-up request", outcome: truncate(value, 140), status: "done", start: ordinal, end: ordinal, steps: 1 });
       index += 1;
       continue;
     }
@@ -201,8 +225,8 @@ function buildEpisodes(events: ResearchEvent[]): JourneyEpisode[] {
         title: humanize(name),
         outcome: detail || resultText || "Workspace tool",
         status: result && eventHasError(result) ? "error" : result ? "done" : "open",
-        start: event.sequence,
-        end: result?.sequence ?? event.sequence,
+        start: ordinal,
+        end: result ? ordinals.get(result.id) ?? ordinal : ordinal,
         steps: result ? 2 : 1,
       });
       index += 1;
@@ -211,23 +235,36 @@ function buildEpisodes(events: ResearchEvent[]): JourneyEpisode[] {
     if (event.type === "assistant_message") {
       const value = eventText(event);
       if (!value) continue;
-      episodes.push({ id: `${event.id}:answer`, title: "Drafted the answer", outcome: truncate(value, 140), status: "done", start: event.sequence, end: event.sequence, steps: 1 });
+      episodes.push({ id: `${event.id}:answer`, title: "Drafted the answer", outcome: truncate(value, 140), status: "done", start: ordinal, end: ordinal, steps: 1 });
       index += 1;
     }
   }
   if (!episodes.length) {
-    episodes.push({ id: "thread:empty", title: "Research step", outcome: "The event range has not produced a readable step yet.", status: "open", start: events[0]?.sequence ?? 0, end: events.at(-1)?.sequence ?? 0, steps: events.length });
+    const first = events[0] ? eventOrdinal(events[0], 0) : 0;
+    const last = events.at(-1) ? eventOrdinal(events.at(-1)!, events.length - 1) : 0;
+    episodes.push({ id: "thread:empty", title: "Research step", outcome: "The event range has not produced a readable step yet.", status: "open", start: first, end: last, steps: events.length });
   }
   return episodes;
 }
 
+function isTrivialPrompt(value: string): boolean {
+  const cleaned = value.replace(/[`"'“”‘’]/g, "").trim();
+  return !cleaned || cleaned.length < 3 || /^(hi|hello|hey|yo|test|ok|okay|thanks|thank you|1|m|hmm|mm)[.!?]*$/i.test(cleaned);
+}
+
+function chapterTitle(firstUser: ResearchEvent | undefined, index: number, t: (key: string, values?: Record<string, string | number>) => string): string {
+  const raw = firstUser ? eventText(firstUser) : "";
+  if (/^(hi|hello|hey|yo)[.!?]*$/i.test(raw.replace(/[`"'“”‘’]/g, "").trim())) return t("Greeting");
+  if (!raw || isTrivialPrompt(raw)) return t("Follow-up {index}", { index: index + 1 });
+  return truncate(raw, 58);
+}
+
 function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: boolean, t: (key: string, values?: Record<string, string | number>) => string): JourneyChapter {
-  const sorted = [...events].sort((a, b) => a.sequence - b.sequence);
+  const sorted = [...events].sort((a, b) => (a.ordinal ?? a.sequence) - (b.ordinal ?? b.sequence));
   const sources = new Set<string>();
   const files = new Set<string>();
   const artifacts = new Set<string>();
   let toolCalls = 0;
-  let lastAnswer = "";
   let hasAnswer = false;
   for (const event of sorted) {
     if (event.type === "tool_call") {
@@ -240,26 +277,22 @@ function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: 
     }
     if (event.type === "source_evidence") for (const source of eventSources(event)) sources.add(source);
     for (const file of eventFiles(event)) files.add(file);
-    if (event.type === "assistant_message") {
-      const value = eventText(event);
-      if (value) { lastAnswer = value; hasAnswer = true; }
-    }
+    if (event.type === "assistant_message" && eventText(event)) hasAnswer = true;
   }
   const firstUser = sorted.find((event) => event.type === "user_message");
-  const title = firstOfTurn && firstUser ? truncate(eventText(firstUser), 58) : `Continued research ${index + 1}`;
+  const title = firstOfTurn && firstUser ? chapterTitle(firstUser, index, t) : `Continued research ${index + 1}`;
   const summaryParts = [plural(sorted.length, t("step"))];
   if (toolCalls) summaryParts.push(plural(toolCalls, t("tool call")));
   if (sources.size) summaryParts.push(plural(sources.size, t("source")));
   if (files.size) summaryParts.push(plural(files.size, t("file")));
   if (artifacts.size) summaryParts.push(plural(artifacts.size, t("artifact")));
-  const summary = `${summaryParts.join(" · ")}${lastAnswer ? ` · ${truncate(lastAnswer, 150)}` : ""}`;
   return {
     id: `${sorted[0]?.turn_id || "thread"}:${sorted[0]?.sequence ?? index}:${index}`,
     title: title || `Research chapter ${index + 1}`,
-    summary,
+    summary: summaryParts.join(" · "),
     status: hasAnswer ? "done" : "open",
-    start: sorted[0]?.sequence ?? 0,
-    end: sorted.at(-1)?.sequence ?? 0,
+    start: sorted[0] ? eventOrdinal(sorted[0], 0) : 0,
+    end: sorted.at(-1) ? eventOrdinal(sorted.at(-1)!, sorted.length - 1) : 0,
     steps: sorted.length,
     episodes: buildEpisodes(sorted),
   };
@@ -312,8 +345,17 @@ function applyMergeRanges(chapters: JourneyChapter[], ranges: JourneyMergeRange[
   return next;
 }
 
+function dedupeChapterTitles(chapters: JourneyChapter[]): JourneyChapter[] {
+  const counts = new Map<string, number>();
+  return chapters.map((chapter) => {
+    const count = counts.get(chapter.title) || 0;
+    counts.set(chapter.title, count + 1);
+    return count ? { ...chapter, title: `${chapter.title} · ${count + 1}` } : chapter;
+  });
+}
+
 function buildChapters(events: ResearchEvent[], settings: JourneySettings, pendingAction: AgentAction | null, thread: ResearchThread | null, t: (key: string, values?: Record<string, string | number>) => string, mergeRanges: JourneyMergeRange[] = []): JourneyChapter[] {
-  const sorted = [...events].sort((a, b) => a.sequence - b.sequence);
+  const sorted = [...events].sort((a, b) => (a.ordinal ?? a.sequence) - (b.ordinal ?? b.sequence));
   const groups = new Map<string, ResearchEvent[]>();
   for (const event of sorted) {
     const key = event.turn_id || "thread";
@@ -341,7 +383,7 @@ function buildChapters(events: ResearchEvent[], settings: JourneySettings, pendi
     const merged = mergeChapters(chapters, 0, chapters.length - keep, t);
     chapters = [merged, ...chapters.slice(chapters.length - keep)];
   }
-  return applyMergeRanges(chapters, mergeRanges, t);
+  return dedupeChapterTitles(applyMergeRanges(chapters, mergeRanges, t));
 }
 
 function formatDuration(first: number, last: number, t: (key: string, values?: Record<string, string | number>) => string): string {
@@ -364,52 +406,63 @@ function buildEvidence(events: ResearchEvent[], pendingAction: AgentAction | nul
   const sources = new Set<string>();
   const artifacts = new Set<string>();
   let open = pendingAction ? 1 : 0;
-  const latestAnswer = latestAnswerSequence(events);
-  for (const event of events) {
+  const latestAnswer = latestAnswerOrdinal(events);
+  events.forEach((event, index) => {
     for (const source of eventSources(event)) sources.add(source);
     for (const file of eventFiles(event)) files.add(file);
-    if (isUnresolvedError(event, latestAnswer)) open += 1;
+    if (isUnresolvedError(event, latestAnswer, index)) open += 1;
     if (event.type === "tool_call" && (toolName(event) === "write_file" || toolName(event) === "write_artifact")) {
       const path = text(record(record(event.payload).arguments).path) || text(record(record(event.payload).arguments).file_path);
       if (path) artifacts.add(path);
     }
-  }
+  });
   return { sources: sources.size, files: files.size, artifacts: artifacts.size, open };
 }
 
-function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence: JourneyEvidence; events: ResearchEvent[]; pendingAction: AgentAction | null; thread: ResearchThread | null; settings: JourneySettings }, t: (key: string, values?: Record<string, string | number>) => string): string {
-  const { steps, chapters, evidence, events, pendingAction, thread, settings } = data;
+function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence: JourneyEvidence; pendingAction: AgentAction | null; thread: ResearchThread | null; openChapters: number }, t: (key: string, values?: Record<string, string | number>) => string): string {
+  const { steps, chapters, evidence, openChapters } = data;
   if (!steps) return t("No research activity yet. Start a task and the journey will take shape here.");
-  const answer = [...events].reverse().find((event) => event.type === "assistant_message");
-  const answerText = answer ? truncate(eventText(answer), settings.summaryLength === "concise" ? 110 : settings.summaryLength === "detailed" ? 260 : 170) : "";
+  const hasResearch = evidence.sources + evidence.files + evidence.artifacts > 0;
   const facts = t("This thread has {steps} across {chapters}, with {sources} and {files} touched.", {
     steps: plural(steps, t("step")),
     chapters: plural(chapters.length, t("chapter")),
     sources: plural(evidence.sources, t("source")),
     files: plural(evidence.files, t("file")),
   });
-  if (pendingAction) {
-    return `${facts} ${t("It is waiting for review on {kind} before it can continue.", { kind: t(pendingAction.kind === "write" ? "a file write" : "a command") })}`;
+  if (data.pendingAction) {
+    return `${facts} ${t("It is waiting for review on {kind} before it can continue.", { kind: t(data.pendingAction.kind === "write" ? "a file write" : "a command") })}`;
   }
-  if (thread?.status === "running") {
-    return `${facts} ${t("The agent is working through the current chapter.")}${answerText ? ` ${t("Latest response: {answer}", { answer: answerText })}` : ""}`;
+  if (data.thread?.status === "running") {
+    return `${facts} ${t("The agent is working through the current chapter.")}`;
   }
   if (evidence.open > 0) {
-    return `${facts} ${t("Some steps need attention before the chapter can be considered closed.")}`;
+    return `${facts} ${t("{count} steps still need attention before the chapter can be considered closed.", { count: evidence.open })}`;
   }
-  return `${facts}${answerText ? ` ${t("Latest response: {answer}", { answer: answerText })}` : ""}`;
+  if (openChapters > 0) {
+    return `${facts} ${t("{count} chapters still need a closer look.", { count: openChapters })}`;
+  }
+  if (!hasResearch) {
+    return `${facts} ${t("No sources or artifacts yet. This is conversation only — ask a research question or attach a paper to start collecting evidence.")}`;
+  }
+  const latestChapter = chapters.at(-1)?.title;
+  return latestChapter ? `${facts} ${t("Latest chapter: {title}.", { title: latestChapter })}` : facts;
 }
 
-function buildNextMove(data: { pendingAction: AgentAction | null; thread: ResearchThread | null; evidence: JourneyEvidence; steps: number }, t: (key: string, values?: Record<string, string | number>) => string): string {
+function buildNextMove(data: { pendingAction: AgentAction | null; thread: ResearchThread | null; evidence: JourneyEvidence; steps: number; openChapters: number }, t: (key: string, values?: Record<string, string | number>) => string): string {
   if (data.pendingAction) return t("Review the pending {kind}, then continue.", { kind: t(data.pendingAction.kind === "write" ? "file write" : "command") });
   if (data.thread?.status === "running") return t("Let the agent finish the current chapter, then audit the result.");
-  if (data.evidence.open > 0) return t("Resolve the failed step before continuing.");
+  if (data.evidence.open > 0) return t("Resolve {count} open steps, or continue with a follow-up question.", { count: data.evidence.open });
+  if (data.openChapters > 0) return t("Review {count} open chapters, or continue with a follow-up question.", { count: data.openChapters });
   if (!data.steps) return t("Start a research task to build a journey.");
-  return t("Audit the event range or continue with a follow-up question.");
+  if (!data.evidence.sources && !data.evidence.files && !data.evidence.artifacts) return t("Ask a research question or attach a paper to start collecting evidence.");
+  return t("Review the evidence or draft the next section.");
 }
 
 function viewKey(kind: "pins" | "seen" | "titles" | "merges" | "ungrouped", threadId: string | null): string {
-  return `archimedes-journey-${kind}:${threadId || "new"}`;
+  // Ordinal ranges replaced per-turn sequence ranges. Old seen/merge values
+  // would point at the wrong event, so give those two a one-time v2 namespace.
+  const version = kind === "seen" || kind === "merges" ? ":v2" : "";
+  return `archimedes-journey-${kind}${version}:${threadId || "new"}`;
 }
 
 function readPins(threadId: string | null): string[] {
@@ -471,11 +524,11 @@ function mergeSummaryChapters(chapters: JourneyChapter[], summary: JourneySummar
     const episodesById = new Map((ai.episodes || []).map((episode) => [episode.id, episode]));
     return {
       ...chapter,
-      title: ai.title || chapter.title,
-      summary: ai.summary || chapter.summary,
+      title: plainText(ai.title) || chapter.title,
+      summary: plainText(ai.summary) || chapter.summary,
       episodes: chapter.episodes.map((episode) => {
         const aiEpisode = episodesById.get(episode.id);
-        return aiEpisode ? { ...episode, title: aiEpisode.title || episode.title, outcome: aiEpisode.outcome || episode.outcome } : episode;
+        return aiEpisode ? { ...episode, title: plainText(aiEpisode.title) || episode.title, outcome: plainText(aiEpisode.outcome) || episode.outcome } : episode;
       }),
     };
   });
@@ -505,8 +558,8 @@ function applyChapterPlan(chapters: JourneyChapter[], plan: JourneyChapterPlan[]
     const steps = parts.reduce((total, part) => total + part.steps, 0);
     result.push({
       id: parts[0].id,
-      title: group.title || parts[0].title,
-      summary: group.summary || `${plural(parts.length, t("chapter"))} · ${plural(steps, t("step"))}`,
+      title: plainText(group.title) || parts[0].title,
+      summary: plainText(group.summary) || `${plural(parts.length, t("chapter"))} · ${plural(steps, t("step"))}`,
       status: parts.some((part) => part.status === "error") ? "error" : parts.some((part) => part.status === "waiting") ? "waiting" : parts.some((part) => part.status === "running") ? "running" : parts.some((part) => part.status === "open") ? "open" : "done",
       start: parts[0].start,
       end: parts.at(-1)?.end ?? parts[0].end,
@@ -534,6 +587,7 @@ function statusLabel(status: JourneyData["status"]): string {
   if (status === "waiting") return "Waiting for review";
   if (status === "running") return "Running";
   if (status === "attention") return "Needs attention";
+  if (status === "chat-only") return "Chat only";
   if (status === "complete") return "Complete";
   return "Not started";
 }
@@ -556,9 +610,13 @@ function chapterPinIds(chapter: JourneyChapter): string[] {
   return [...new Set([chapter.id, ...(chapter.memberIds ?? [])])];
 }
 
-export default function JourneyView({ bridge, thread, events, modeLabel, settings, pendingAction, agentBusy, active, onOpenTrajectory, onOpenTrajectoryAt, onOpenSettings, onReviewPending }: JourneyViewProps) {
+export default function JourneyView({ bridge, thread, events, modeLabel, settings, pendingAction, agentBusy, active, onOpenTrajectory, onOpenTrajectoryAt, onOpenSettings, onReviewPending, onStartResearch }: JourneyViewProps) {
   const { t } = useUISettings();
   const [view, setView] = useState<"story" | "outline">(settings.defaultView);
+  const [atLatest, setAtLatest] = useState(true);
+  const [readProgress, setReadProgress] = useState(0);
+  const scrollPositionsRef = useRef<Record<"story" | "outline", number>>({ story: 0, outline: 0 });
+  const pendingChapterJumpRef = useRef<string | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [mapQuery, setMapQuery] = useState("");
   const [mapZoom, setMapZoom] = useState(1);
@@ -598,39 +656,52 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     return custom ? { ...chapter, title: custom } : chapter;
   }), [groupedChapters, titles]);
   const evidence = useMemo(() => buildEvidence(events, pendingAction), [events, pendingAction]);
-  const chapterEvidence = useMemo(() => new Map(chapters.map((chapter) => [chapter.id, buildEvidence(events.filter((event) => event.sequence >= chapter.start && event.sequence <= chapter.end), null)])), [chapters, events]);
+  const chapterEvidence = useMemo(() => new Map(chapters.map((chapter) => [chapter.id, buildEvidence(events.filter((event, index) => {
+    const ordinal = eventOrdinal(event, index);
+    return ordinal >= chapter.start && ordinal <= chapter.end;
+  }), null)])), [chapters, events]);
   const sourceInfo = useMemo(() => new Map(collectSummarySources(events).map((source) => [source.id, { title: source.title, eventId: source.eventId }])), [events]);
   const steps = events.length;
   const firstTime = timeValue(events[0]?.created_at) || timeValue(thread?.created_at);
   const lastTime = timeValue(events.at(-1)?.created_at) || timeValue(thread?.updated_at) || Date.now();
   const duration = formatDuration(firstTime, lastTime, t);
   const hasErrors = evidence.open > (pendingAction ? 1 : 0);
-  const status: JourneyData["status"] = !steps ? "not-started" : pendingAction ? "waiting" : agentBusy || thread?.status === "running" ? "running" : hasErrors ? "attention" : chapters.every((chapter) => chapter.status === "done") ? "complete" : "attention";
-  const ruleBrief = useMemo(() => buildBrief({ steps, chapters: sourceChapters, evidence, events, pendingAction, thread, settings }, t), [events, evidence, pendingAction, settings, sourceChapters, steps, thread, t]);
-  const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps }, t);
-  const brief = summary?.brief || ruleBrief;
-  const nextMove = summary?.nextMove || ruleNextMove;
+  const hasResearch = evidence.sources + evidence.files + evidence.artifacts > 0;
+  const allDone = chapters.every((chapter) => chapter.status === "done");
+  const openChapterCount = chapters.filter((chapter) => chapter.status !== "done").length;
+  const attentionLabel = openChapterCount > 0
+    ? plural(openChapterCount, t("open chapter"), t("open chapters"))
+    : evidence.open > 0
+      ? plural(evidence.open, t("open step"), t("open steps"))
+      : "";
+  const chatOnly = steps > 0 && !hasResearch && !pendingAction && !hasErrors && allDone;
+  const hasOpenChapters = openChapterCount > 0;
+  const status: JourneyData["status"] = !steps ? "not-started" : pendingAction ? "waiting" : agentBusy || thread?.status === "running" ? "running" : hasErrors ? "attention" : chatOnly ? "chat-only" : allDone ? "complete" : "attention";
+  const ruleBrief = useMemo(() => buildBrief({ steps, chapters, evidence, pendingAction, thread, openChapters: openChapterCount }, t), [chapters, evidence, openChapterCount, pendingAction, steps, thread, t]);
+  const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps, openChapters: openChapterCount }, t);
+  const brief = summary?.brief ? plainText(summary.brief) : ruleBrief;
+  const nextMove = summary?.nextMove ? plainText(summary.nextMove) : ruleNextMove;
   const pinnedChapters = chapters.filter((chapter) => chapterPinIds(chapter).some((id) => pins.includes(id)));
   const mapAvailable = steps > 0 && settings.mapMode !== "off" && (settings.mapMode === "always" || chapters.length >= settings.mapChapters || steps >= settings.mapSteps);
-  const lastSequence = events.at(-1)?.sequence ?? 0;
-  const newEvents = seen === null ? [] : events.filter((event) => event.sequence > seen);
+  const lastOrdinal = events.length ? eventOrdinal(events.at(-1)!, events.length - 1) : 0;
+  const newEvents = seen === null ? [] : events.filter((event, index) => eventOrdinal(event, index) > seen);
   const digest = useMemo(() => {
     if (!newEvents.length) return null;
     const sources = new Set<string>();
     for (const event of newEvents) for (const source of eventSources(event)) sources.add(source);
-    return { steps: newEvents.length, sources: sources.size, approval: pendingAction ? 1 : 0 };
+    return { steps: newEvents.length, sources: sources.size, approval: pendingAction ? 1 : 0, firstOrdinal: newEvents[0] ? eventOrdinal(newEvents[0], 0) : 0 };
   }, [newEvents, pendingAction]);
   const visibleChapters = showAllChapters || chapters.length <= 4 ? chapters : chapters.slice(-4);
   const hiddenChapterCount = chapters.length - visibleChapters.length;
   const activeChapter = chapters.at(-1);
   const defaultExpanded = useMemo(() => {
     const next = new Set<string>();
-    for (const chapter of chapters) {
-      if (chapter.status === "running" || chapter.status === "waiting" || chapter.status === "open" || chapter.status === "error") next.add(chapter.id);
-      else if (!settings.collapseCompleted) next.add(chapter.id);
+    if (activeChapter) next.add(activeChapter.id);
+    if (!settings.collapseCompleted) {
+      for (const chapter of chapters) next.add(chapter.id);
     }
     return next;
-  }, [chapters, settings.collapseCompleted]);
+  }, [activeChapter, chapters, settings.collapseCompleted]);
   const expandedIds = touchedExpanded ? expanded : defaultExpanded;
 
   useEffect(() => {
@@ -653,6 +724,10 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     setDismissedSince(false);
     setMapOpen(false);
     setMapSelected(null);
+    setAtLatest(true);
+    setReadProgress(0);
+    scrollPositionsRef.current = { story: 0, outline: 0 };
+    pendingChapterJumpRef.current = null;
     setTitles(readTitles(thread?.id ?? null));
     setMerges(readMerges(thread?.id ?? null));
     setUngrouped(readUngrouped(thread?.id ?? null));
@@ -669,6 +744,19 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   }, [thread?.id]);
 
   useEffect(() => {
+    const frame = requestAnimationFrame(() => updateScrollState());
+    return () => cancelAnimationFrame(frame);
+  }, [steps, view, chapters.length]);
+
+  useEffect(() => {
+    if (!showAllChapters || !pendingChapterJumpRef.current) return;
+    const id = pendingChapterJumpRef.current;
+    pendingChapterJumpRef.current = null;
+    const frame = requestAnimationFrame(() => jumpToChapter(id));
+    return () => cancelAnimationFrame(frame);
+  }, [showAllChapters]);
+
+  useEffect(() => {
     if (!thread?.id) return;
     let cancelled = false;
     void bridge.getJourneySummary(thread.id)
@@ -683,10 +771,10 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
 
   useEffect(() => {
     if (!thread?.id || !steps || seen !== null) return;
-    const next = lastSequence;
+    const next = lastOrdinal;
     localStorage.setItem(viewKey("seen", thread.id), String(next));
     setSeen(next);
-  }, [lastSequence, seen, steps, thread?.id]);
+  }, [lastOrdinal, seen, steps, thread?.id]);
 
   useEffect(() => {
     if (!mapOpen) return;
@@ -700,7 +788,10 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   useEffect(() => {
     const element = scrollRef.current;
     if (!element || !settings.followLive) return;
-    if (element.scrollHeight - element.scrollTop - element.clientHeight < 40) element.scrollTop = element.scrollHeight;
+    if (element.scrollHeight - element.scrollTop - element.clientHeight < 40) {
+      element.scrollTop = element.scrollHeight;
+      requestAnimationFrame(() => updateScrollState());
+    }
   }, [settings.followLive, steps]);
 
   function toggleChapter(id: string) {
@@ -729,18 +820,70 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
 
   function dismissSince() {
     if (!thread?.id) return;
-    localStorage.setItem(viewKey("seen", thread.id), String(lastSequence));
-    setSeen(lastSequence);
+    localStorage.setItem(viewKey("seen", thread.id), String(lastOrdinal));
+    setSeen(lastOrdinal);
     setDismissedSince(true);
+  }
+
+  function updateScrollState() {
+    const element = scrollRef.current;
+    if (!element) return;
+    const max = element.scrollHeight - element.clientHeight;
+    setAtLatest(max <= 8 || element.scrollTop >= max - 8);
+    setReadProgress(max <= 0 ? 1 : Math.min(1, Math.max(0, element.scrollTop / max)));
+    scrollPositionsRef.current[view] = element.scrollTop;
+  }
+
+  function switchView(next: "story" | "outline") {
+    if (next === view) return;
+    const element = scrollRef.current;
+    if (element) scrollPositionsRef.current[view] = element.scrollTop;
+    setView(next);
+    requestAnimationFrame(() => {
+      if (!scrollRef.current) return;
+      scrollRef.current.scrollTop = scrollPositionsRef.current[next];
+      updateScrollState();
+    });
   }
 
   function jumpToLatest() {
     const element = scrollRef.current;
     if (!element) return;
     element.scrollTop = element.scrollHeight;
+    setAtLatest(true);
+    setReadProgress(1);
+  }
+
+  function jumpToFirstNew() {
+    if (!digest?.firstOrdinal) return;
+    const chapter = chapters.find((item) => item.start <= digest.firstOrdinal && item.end >= digest.firstOrdinal);
+    if (!chapter) return;
+    setView("story");
+    requestAnimationFrame(() => jumpToChapter(chapter.id));
+  }
+
+  function reviewOpenSteps() {
+    const openChapter = chapters.find((chapter) => chapter.status !== "done");
+    const evidenceChapter = chapters.find((chapter) => (chapterEvidence.get(chapter.id)?.open ?? 0) > 0);
+    const target = openChapter ?? evidenceChapter;
+    setView("outline");
+    setOutlineFilter(openChapter ? "open" : "all");
+    requestAnimationFrame(() => {
+      if (target) jumpToChapter(target.id);
+      else if (scrollRef.current) scrollRef.current.scrollTop = 0;
+      updateScrollState();
+    });
   }
 
   function jumpToChapter(id: string) {
+    const target = chapters.find((chapter) => chapter.id === id);
+    const visible = showAllChapters || chapters.length <= 4 ? chapters : chapters.slice(-4);
+    if (target && !visible.some((chapter) => chapter.id === id)) {
+      pendingChapterJumpRef.current = id;
+      setShowAllChapters(true);
+      return;
+    }
+    pendingChapterJumpRef.current = null;
     setTouchedExpanded(true);
     setExpanded((current) => new Set(current.size ? current : defaultExpanded).add(id));
     requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(`[data-journey-chapter="${id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
@@ -754,7 +897,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       return;
     }
     if (!force && !settings.liveSummaries) return;
-    if (!force && summary && summary.coversTo >= lastSequence) return;
+    if (!force && summary && summary.coversTo >= lastOrdinal) return;
     if (!force && Date.now() - lastSummaryAtRef.current < settings.briefInterval * 60_000) return;
     summaryBusyRef.current = true;
     setSummaryUpdating(true);
@@ -764,7 +907,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
         threadId,
         threadTitle: thread?.title || "Research thread",
         brief: ruleBrief,
-        coversTo: lastSequence,
+        coversTo: lastOrdinal,
         force,
         chapters: titledSourceChapters.map((chapter) => ({
           id: chapter.id,
@@ -820,11 +963,11 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   }, [active, settings.briefInterval, settings.episodeCadence, settings.idleDelay, settings.liveSummaries, sourceChapters.length, steps, summary?.coversTo, thread?.id]);
 
   useEffect(() => {
-    if (!active || !summary || settings.liveSummaries || summary.coversTo >= lastSequence) return;
+    if (!active || !summary || settings.liveSummaries || summary.coversTo >= lastOrdinal) return;
     if (!settings.updateOnTurnEnd && !(settings.updateOnApproval && pendingAction)) return;
     const timer = window.setTimeout(() => { void requestSummary(true); }, 1000);
     return () => window.clearTimeout(timer);
-  }, [active, lastSequence, pendingAction, settings.liveSummaries, settings.updateOnApproval, settings.updateOnTurnEnd, summary, thread?.id]);
+  }, [active, lastOrdinal, pendingAction, settings.liveSummaries, settings.updateOnApproval, settings.updateOnTurnEnd, summary, thread?.id]);
 
   useEffect(() => {
     const wasBusy = previousBusyRef.current;
@@ -918,18 +1061,20 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   }
 
   function openClaim(claim: JourneyClaim) {
-    const sequence = claim.sourceIds.map((id) => sourceInfo.get(id)?.eventId).find((value): value is number => typeof value === "number");
-    if (typeof sequence === "number" && onOpenTrajectoryAt) onOpenTrajectoryAt(sequence);
+    const ordinal = claim.sourceIds.map((id) => sourceInfo.get(id)?.eventId).find((value): value is number => typeof value === "number");
+    if (typeof ordinal === "number" && onOpenTrajectoryAt) onOpenTrajectoryAt(ordinal);
     else onOpenTrajectory();
   }
 
   function renderChapter(chapter: JourneyChapter, index: number, dense = false) {
     const isExpanded = expandedIds.has(chapter.id);
     const isPinned = chapterPinIds(chapter).some((id) => pins.includes(id));
+    const isCurrent = chapter.id === activeChapter?.id;
     const nextChapter = chapters[index + 1];
+    const chapterSources = chapterEvidence.get(chapter.id)?.sources ?? 0;
     const episodes = dense || showAllEpisodes.has(chapter.id) ? chapter.episodes : chapter.episodes.slice(0, settings.targetEpisodes);
     const hidden = chapter.episodes.length - episodes.length;
-    return <div className={dense ? "journey-chapter dense" : "journey-chapter"} key={chapter.id} data-journey-chapter={chapter.id}>
+    return <div className={`journey-chapter${dense ? " dense" : ""}${isCurrent ? " current" : ""}`} key={chapter.id} data-journey-chapter={chapter.id}>
       <div className="journey-chapter-row">
         {editingChapter === chapter.id ? <div className="journey-chapter-editor">
           <input value={draftTitle} autoFocus aria-label={t("Rename chapter")} onChange={(event) => setDraftTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveRename(chapter); } if (event.key === "Escape") { setEditingChapter(null); setDraftTitle(""); } }} />
@@ -939,7 +1084,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
           <span className="journey-chevron">{isExpanded ? "▾" : "›"}</span>
           <span className={isPinned ? "journey-chapter-index pinned" : "journey-chapter-index"} title={isPinned ? t("Pinned") : undefined}>{String(index + 1).padStart(2, "0")}</span>
           <span className="journey-chapter-title">{chapter.title}</span>
-          <span className="journey-chapter-meta">{plural(chapter.steps, t("step"))}{chapter.status !== "done" ? ` · ${t(chapterStatusLabel(chapter.status))}` : ""}</span>
+          <span className="journey-chapter-meta">{plural(chapter.steps, t("step"))}{chapterSources ? <span className="journey-chapter-sources">{` · ${plural(chapterSources, t("source"))}`}</span> : null}{chapter.status !== "done" ? ` · ${t(chapterStatusLabel(chapter.status))}` : ""}</span>
         </button>}
         {editingChapter !== chapter.id && <div className="journey-chapter-actions">
           <button className="journey-row-action" onClick={() => beginRename(chapter)}>{t("Rename")}</button>
@@ -968,11 +1113,11 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   const filterChapters = outlineFilter === "pinned" ? pinnedChapters : outlineFilter === "open" ? chapters.filter((chapter) => chapter.status !== "done") : chapters;
 
   const since = settings.sinceYouLeft && !dismissedSince && digest ? <aside className="journey-since">
-    <div className="journey-since-head"><span>{t("Since your last visit")}</span><button onClick={dismissSince}>{t("Dismiss")}</button></div>
+    <div className="journey-since-head"><span>{t("Since your last visit")}</span><div className="journey-since-actions"><button onClick={jumpToFirstNew}>{t("Jump to first new")}</button><button onClick={dismissSince}>{t("Dismiss")}</button></div></div>
     <p>{plural(digest.steps, t("step"))}{digest.sources ? ` · ${plural(digest.sources, t("new source"), t("new sources"))}` : ""}{digest.approval ? ` · ${t("{count} approval waiting", { count: digest.approval })}` : ""}</p>
   </aside> : null;
 
-  const summaryLabel = summary ? (summary.source === "preview" ? t("Preview summary") : t("AI brief")) : t("Rule-based brief");
+  const summaryLabel = summary ? (summary.source === "preview" ? t("Preview summary") : t("AI brief")) : t("Research brief");
   const summaryBehind = summary ? Math.max(0, steps - summary.coversTo) : 0;
   const claims = summary?.claims ?? [];
   const claimStats = [
@@ -990,8 +1135,8 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     <div className="journey-topline">
       <span className="journey-kicker">Journey</span>
       <div className="journey-views">
-        <button className={view === "story" ? "active" : ""} onClick={() => setView("story")}>{t("Story")}</button>
-        <button className={view === "outline" ? "active" : ""} onClick={() => setView("outline")}>{t("Outline")}</button>
+        <button className={view === "story" ? "active" : ""} onClick={() => switchView("story")}>{t("Story")}</button>
+        <button className={view === "outline" ? "active" : ""} onClick={() => switchView("outline")}>{t("Outline")}</button>
         {mapAvailable && <button onClick={() => setMapOpen(true)}>{t("Map")}</button>}
       </div>
     </div>
@@ -1000,6 +1145,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       <strong className={`journey-status-text ${status}`}>{t(statusLabel(status))}</strong>
       {duration && <><span className="journey-dot-sep">·</span><span>{duration}</span></>}
       <span className="journey-dot-sep">·</span><span>{plural(steps, t("step"))}</span>
+      {attentionLabel && <button className="journey-open-chip" onClick={reviewOpenSteps}>{attentionLabel}</button>}
     </div>
   </header>;
 
@@ -1007,7 +1153,14 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     <div className="journey-dock-head"><strong>{t("Next move")}</strong><span>{plural(steps, t("step"))} · {plural(chapters.length, t("chapter"))}</span></div>
     <p>{t(nextMove)}</p>
     <div className="journey-dock-actions">
-      {pendingAction ? <button className="journey-primary" onClick={onReviewPending}>{t("Review approval")}</button> : <button className="journey-primary" onClick={onOpenTrajectory}>{t("Open trajectory")}</button>}
+      {pendingAction
+        ? <button className="journey-primary" onClick={onReviewPending}>{t("Review approval")}</button>
+        : evidence.open > 0 || hasOpenChapters
+          ? <button className="journey-primary" onClick={reviewOpenSteps}>{evidence.open > 0 ? t("Review open steps") : t("Review open chapters")}</button>
+          : chatOnly && onStartResearch
+            ? <button className="journey-primary" onClick={onStartResearch}>{t("Start a research task")}</button>
+            : <button className="journey-primary" onClick={onOpenTrajectory}>{t("Open trajectory")}</button>}
+      {(pendingAction || evidence.open > 0 || hasOpenChapters || (chatOnly && onStartResearch)) && <button className="journey-ghost" onClick={onOpenTrajectory}>{t("Open trajectory")}</button>}
       <button className="journey-ghost" onClick={onOpenSettings}>{t("Journey settings")}</button>
     </div>
   </footer>;
@@ -1018,29 +1171,34 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       <div className="journey-empty-state">
         <h2>{t("No journey yet")}</h2>
         <p>{t("Journey starts after the first research turn. It will summarize what the agent read, what it produced, and what still needs review.")}</p>
+        {onStartResearch && <button className="journey-primary" onClick={onStartResearch}>{t("Start a research task")}</button>}
         <button className="journey-ghost" onClick={onOpenSettings}>{t("Journey settings")}</button>
       </div>
     </section>;
   }
 
-  return <section className="journey-view" aria-label={t("Agent journey")} ref={scrollRef}>
+  return <section className="journey-view" aria-label={t("Agent journey")} ref={scrollRef} onScroll={updateScrollState}>
     {header}
-    <div className="journey-scrubber" aria-label={t("Chapter timeline")} style={{ "--journey-playhead": "98%" } as React.CSSProperties}>
+    <div className="journey-scrubber" aria-label={t("Chapter timeline")} style={{ "--journey-playhead": `${Math.round(readProgress * 100)}%` } as React.CSSProperties}>
       <div className="journey-scrubber-bars">
         {chapters.map((chapter) => <button key={chapter.id} className={chapter.id === activeChapter?.id ? "current" : chapter.status === "error" ? "error" : "done"} style={{ flex: Math.max(1, chapter.steps) }} title={`${chapter.title} · ${plural(chapter.steps, t("step"))}`} aria-label={`${chapter.title}, ${plural(chapter.steps, t("step"))}`} onClick={() => jumpToChapter(chapter.id)} />)}
         <span className="journey-playhead" />
         {chapters.filter((chapter) => pins.includes(chapter.id)).map((chapter) => <span key={`pin-${chapter.id}`} className="journey-mark pin" style={{ left: `${Math.min(99, (chapters.slice(0, chapters.indexOf(chapter)).reduce((total, item) => total + item.steps, 0) / Math.max(1, steps)) * 100)}%` }} />)}
         {chapters.filter((chapter) => chapter.status === "error").map((chapter) => <span key={`error-${chapter.id}`} className="journey-mark error" style={{ left: `${Math.min(99, (chapters.slice(0, chapters.indexOf(chapter)).reduce((total, item) => total + item.steps, 0) / Math.max(1, steps)) * 100)}%` }} />)}
       </div>
-      <div className="journey-scrubber-meta"><span>{duration || t("This session")} · {plural(chapters.length, t("chapter"))}</span><button onClick={jumpToLatest}>{t("Jump to latest")}</button></div>
+      <div className="journey-scrubber-meta"><span>{duration || t("This session")} · {plural(chapters.length, t("chapter"))}</span>{!atLatest && <button onClick={jumpToLatest}>{t("Jump to latest")}</button>}</div>
     </div>
     {since}
     {view === "story" ? <div className="journey-story">
       <section className="journey-brief">
-        <div className="journey-section-head"><h2>{summaryLabel}</h2><span>{summaryMeta}</span></div>
+        <div className="journey-section-head">
+          <h2>{summaryLabel}</h2>
+          {summaryError
+            ? <button className="journey-inline-status" title={summaryError} onClick={() => void requestSummary(true)}>{summary ? t("Update failed · Retry") : t("AI unavailable · Retry")}</button>
+            : <span>{summaryMeta}</span>}
+        </div>
         <p>{brief}</p>
-        {summaryError && <p className="journey-summary-note" title={summaryError}>{summary ? t("Summary update failed. Showing the previous AI brief.") : t("AI summary unavailable. Showing the rule-based brief.")} <button onClick={() => void requestSummary(true)}>{t("Retry")}</button></p>}
-        <button className="journey-text-action" onClick={onOpenTrajectory}>{t("View events #1–#{count}", { count: steps })} →</button>
+        <button className="journey-text-action" onClick={onOpenTrajectory}>{t("Open all {count} events", { count: steps })} →</button>
       </section>
       <section className="journey-section">
         <div className="journey-section-head"><h2>{t("Chapters")}</h2><div className="journey-section-actions"><span>{t("{count} total", { count: chapters.length })}</span>{mapAvailable && <button onClick={() => setMapOpen(true)}>{t("Open map")}</button>}</div></div>
@@ -1050,23 +1208,26 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       </section>
       {settings.evidenceLedger && <section className="journey-section">
         <div className="journey-section-head"><h2>{t("Evidence")}</h2><span>{t("from this thread")}</span></div>
-        <dl className="journey-evidence">
-          <div><dt>{t("Sources")}</dt><dd>{evidence.sources}</dd></div>
-          <div><dt>{t("Files")}</dt><dd>{evidence.files}</dd></div>
-          <div><dt>{t("Artifacts")}</dt><dd>{evidence.artifacts}</dd></div>
-          <div><dt>{t("Pending")}</dt><dd>{evidence.open}</dd></div>
-        </dl>
+        {evidence.sources + evidence.files + evidence.artifacts + evidence.open === 0
+          ? <p className="journey-evidence-empty">{t("No sources or artifacts yet. Ask a research question or attach a paper.")}</p>
+          : <dl className="journey-evidence">
+            <div><dt>{t("Sources")}</dt><dd>{evidence.sources}</dd></div>
+            <div><dt>{t("Files")}</dt><dd>{evidence.files}</dd></div>
+            <div><dt>{t("Artifacts")}</dt><dd>{evidence.artifacts}</dd></div>
+            <div><dt>{t("Pending")}</dt><dd>{evidence.open}</dd></div>
+          </dl>}
       </section>}
       {settings.openClaims && (claims.length > 0 || summary) && <section className="journey-section journey-claims-section">
         <div className="journey-section-head"><h2>{t("Claims")}</h2><span>{claims.length ? claimStats : t("from AI summary")}</span></div>
         {claims.length ? <div className="journey-claims">{claims.map((claim) => {
+          const claimText = plainText(claim.text);
           const sourceLabels = claim.sourceIds.map((id) => sourceInfo.get(id)?.title).filter(Boolean) as string[];
           const sourceMeta = sourceLabels.length
             ? `${truncate(sourceLabels[0], 56)}${sourceLabels.length > 1 ? ` +${sourceLabels.length - 1}` : ""}`
             : claim.sourceIds.length ? plural(claim.sourceIds.length, t("source")) : t("no sources");
-          return <button className="journey-claim" key={claim.id} title={`${claim.text} — ${t(claimStatusLabel(claim.status))}`} onClick={() => openClaim(claim)}>
+          return <button className="journey-claim" key={claim.id} title={`${claimText} — ${t(claimStatusLabel(claim.status))}`} onClick={() => openClaim(claim)}>
             <span className={`journey-claim-dot ${claim.status}`} />
-            <span className="journey-claim-copy"><span className="journey-claim-text">{claim.text}</span><span className="journey-claim-meta" title={sourceLabels.join(" · ")}>{t(claimStatusLabel(claim.status))} · {sourceMeta}</span></span>
+            <span className="journey-claim-copy"><span className="journey-claim-text">{claimText}</span><span className="journey-claim-meta" title={sourceLabels.join(" · ")}>{t(claimStatusLabel(claim.status))} · {sourceMeta}</span></span>
           </button>;
         })}</div> : <p className="journey-claims-empty">{t("No claims extracted yet.")}</p>}
       </section>}
@@ -1082,7 +1243,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       <p className="journey-outline-hint">{t("Click a chapter to expand. Open map for the full tree.")}</p>
       {dock}
     </div>}
-    {mapOpen && <div className="journey-map-scrim" role="presentation" onMouseDown={() => setMapOpen(false)}>
+    {mapOpen && typeof document !== "undefined" && createPortal(<div className="journey-map-scrim" role="presentation" onMouseDown={() => setMapOpen(false)}>
       <section ref={mapDialogRef} tabIndex={-1} className="journey-map" role="dialog" aria-modal="true" aria-label={t("Journey map")} onMouseDown={(event) => event.stopPropagation()}>
         <header className="journey-map-header">
           <div><h2>{t("Journey map")}</h2><p>{thread?.title || t("New research task")} · {plural(steps, t("step"))} · {plural(chapters.length, t("chapter"))}</p></div>
@@ -1133,7 +1294,6 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
         </div>
         <footer className="journey-map-footer"><span>{t("Click a chapter to inspect. Hover a row to see its event range.")}</span><span>{summaryLabel} · {plural(steps, t("step"))}</span></footer>
       </section>
-    </div>}
+    </div>, document.body)}
   </section>;
 }
-
