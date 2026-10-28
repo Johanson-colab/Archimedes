@@ -283,10 +283,11 @@ function fallbackPageSpec({ paper, slide, index, evidence }) {
   const title = slide?.title || paper.title;
   const pageType = index === 0 ? "cover" : "content";
   const titleText = wrapped(title, index === 0 ? 30 : 34);
+  const coverTitleHeight = Math.max(82, titleText.split("\n").length * 62 + 20);
   if (index === 0) return normalizePageSpec({ elements: [
     { type: "shape", shape: "rect", x: 62, y: 62, w: 10, h: 580, fill: GREEN },
     { type: "text", x: 110, y: 115, w: 870, h: 34, text: "PAPER PRESENTATION · 组会汇报", fontSize: 17, color: GREEN, bold: true },
-    { type: "text", x: 110, y: 180, w: 900, h: 260, text: titleText, fontSize: 48, color: INK, bold: true },
+    { type: "text", x: 110, y: 180, w: 900, h: coverTitleHeight, text: titleText, fontSize: 48, color: INK, bold: true },
     { type: "shape", shape: "rect", x: 110, y: 468, w: 900, h: 2, fill: OCHRE },
     { type: "text", x: 110, y: 500, w: 880, h: 90, text: wrapped(`${paper.authors?.slice(0, 5).join(", ") || "Unknown authors"}\n${paper.venue || "Paper"}${paper.year ? ` · ${paper.year}` : ""}`, 70), fontSize: 20, color: INK },
   ] }, { title, hasEvidence: false, pageType });
@@ -370,9 +371,8 @@ async function generateKimiPptd({ paper, plan, workspace, sourcePdfPath, runtime
     const slide = index === 0 ? null : plan.slides[index - 1];
     const evidence = images.get(index - 1);
     emit(`Designing PPTD page ${index + 1} of ${total}…`);
-    const page = await composePage(modelConfig, { paper, slide, index, total, evidence, emit });
+    let page = await composePage(modelConfig, { paper, slide, index, total, evidence, emit });
     const file = path.join(pagesDirectory, `slide-${String(index + 1).padStart(2, "0")}.page`);
-    fs.writeFileSync(file, pageYaml(page, evidence?.path));
     // A live preview is intentionally a one-page PPTD deck.  This avoids
     // repeatedly converting every prior slide while still showing the exact
     // Kimi-validated layout the user will receive in the final deck.
@@ -381,7 +381,26 @@ async function generateKimiPptd({ paper, plan, workspace, sourcePdfPath, runtime
     const pageFile = `pages/slide-${String(index + 1).padStart(2, "0")}.page`;
     fs.writeFileSync(previewEntry, mainYaml(plan.title || paper.title, 1, [pageFile]));
     emit(`Validating and rendering page ${index + 1} for live preview…`);
-    const preview = await convertAndRender(tool, previewEntry, previewsDirectory, previewStem);
+    let preview;
+    try {
+      fs.writeFileSync(file, pageYaml(page, evidence?.path));
+      preview = await convertAndRender(tool, previewEntry, previewsDirectory, previewStem);
+    } catch (error) {
+      // A syntactically valid model response can still overlap or overflow in
+      // PPTD.  Treat that as a per-page design failure, not a deck failure.
+      // The fallback has fixed, converter-verified geometry and keeps the
+      // evidence, title, and review-grounded copy for this particular page.
+      emit(`Page ${index + 1} failed PPTD layout validation; applying the verified academic fallback.`);
+      page = fallbackPageSpec({ paper, slide, index, total, evidence });
+      fs.writeFileSync(file, pageYaml(page, evidence?.path));
+      try {
+        preview = await convertAndRender(tool, previewEntry, previewsDirectory, previewStem);
+      } catch (fallbackError) {
+        const firstFailure = error instanceof Error ? error.message : String(error);
+        const secondFailure = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        throw new Error(`Page ${index + 1} could not pass PPTD validation after the verified fallback. Original: ${firstFailure}. Fallback: ${secondFailure}`);
+      }
+    }
     if (preview.pageCount !== 1) throw new Error(`Live preview ${index + 1} rendered ${preview.pageCount} pages instead of one.`);
     await onPage({
       index,

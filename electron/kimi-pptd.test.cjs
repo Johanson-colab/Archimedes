@@ -68,5 +68,32 @@ test("Kimi desktop checker and converter accept generated PPTD files", { skip: !
     const live = await convertAndRender({ python, pyz: process.env.KIMI_PPTD_TEST_PYZ, env }, liveEntry, previewDirectory, "live-01");
     assert.equal(live.pageCount, 1);
     assert.match(live.pdf, /previews[\\/]live-01\.pdf$/);
+
+    // This is the exact geometry used when a model-produced page parses but
+    // fails PPTD's overlap/overflow checks.  Keep it converter-verified so a
+    // bad single page can be replaced without aborting the entire deck.
+    const fallbackPaper = { title: "A concise paper title", authors: ["A. Author"], venue: "TestConf", year: 2026 };
+    const fallbackCover = fallbackPageSpec({ paper: fallbackPaper, index: 0 });
+    fs.writeFileSync(path.join(directory, "pages", "fallback-cover.page"), pageYaml(fallbackCover));
+    const fallbackCoverEntry = path.join(directory, "fallback-cover.pptd");
+    fs.writeFileSync(fallbackCoverEntry, mainYaml(fallbackPaper.title, 1, ["pages/fallback-cover.page"]));
+    const checkedCover = await convertAndRender({ python, pyz: process.env.KIMI_PPTD_TEST_PYZ, env }, fallbackCoverEntry, directory, "fallback-cover");
+    assert.equal(checkedCover.check.error_count, 0);
+
+    const fallbackContent = fallbackPageSpec({
+      paper: fallbackPaper,
+      slide: {
+        title: "A concise, evidence-grounded mechanism",
+        lead: "The proposed mechanism retains a fixed state while the interaction history grows.",
+        bullets: ["The update rule is bounded by the reported architecture.", "The claimed benefit is scoped to the measured setting."],
+        takeaway: "The evidence supports a bounded conclusion rather than a general guarantee.",
+      },
+      index: 1,
+    });
+    fs.writeFileSync(path.join(directory, "pages", "fallback-content.page"), pageYaml(fallbackContent));
+    const fallbackContentEntry = path.join(directory, "fallback-content.pptd");
+    fs.writeFileSync(fallbackContentEntry, mainYaml(fallbackPaper.title, 1, ["pages/fallback-content.page"]));
+    const checkedContent = await convertAndRender({ python, pyz: process.env.KIMI_PPTD_TEST_PYZ, env }, fallbackContentEntry, directory, "fallback-content");
+    assert.equal(checkedContent.check.error_count, 0);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
