@@ -700,6 +700,20 @@ async function complete(config, messages, { signal, onTextDelta, allowTools = tr
     body: JSON.stringify(body),
     signal,
   });
+  const completeWithoutStream = async () => {
+    const fallback = await requestCompletion({ ...request, stream: false });
+    if (!fallback.ok) {
+      const fallbackDetail = (await fallback.text()).slice(0, 500);
+      throw new Error(`Model stream was incompatible and its non-streaming retry failed (${fallback.status}): ${fallbackDetail}`);
+    }
+    const body = await fallback.json();
+    const choice = body?.choices?.[0];
+    const responseMessage = choice?.message || (typeof choice?.text === "string" ? { role: "assistant", content: choice.text } : null);
+    if (!responseMessage) throw new Error("The model returned neither a compatible stream nor a complete response message.");
+    const normalized = normalizeAssistantMessage(responseMessage);
+    if (normalized.content) onTextDelta(normalized.content);
+    return normalized;
+  };
   let response;
   let detail = "";
   // OpenAI-compatible servers disagree on the completion-limit field. Retry only
@@ -758,7 +772,7 @@ async function complete(config, messages, { signal, onTextDelta, allowTools = tr
     }
     if (done) break;
   }
-  if (!message.content && !message.tool_calls.length) throw new Error("The streamed model response did not contain a message.");
+  if (!message.content && !message.tool_calls.length) return completeWithoutStream();
   const normalized = normalizeAssistantMessage(message);
   contentGuard.finish(normalized);
   return normalized;
