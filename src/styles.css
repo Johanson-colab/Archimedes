@@ -4839,12 +4839,10 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 /* Project row overflow actions live behind one vertical menu. */
 .work-group .project-more-button { display: grid; width: 23px; height: 24px; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border-radius: 4px; }
 .work-group .project-more-button:hover, .work-group .project-more-button.active { color: var(--night-ink); background: var(--sb-hover); }
-.project-more-menu { position: absolute; z-index: 45; top: 27px; right: 2px; display: grid; width: 184px; gap: 1px; padding: 4px; background: var(--sb-panel); border: 1px solid var(--night-line); border-radius: 6px; box-shadow: 0 13px 32px rgba(0, 0, 0, .34); }
-.project-more-menu button { display: flex; height: 29px; align-items: center; gap: 8px; padding: 0 7px; color: var(--sb-ink); background: transparent; border-radius: 4px; font-size: 10px; font-weight: 500; text-align: left; }
+.project-more-menu { position: absolute; z-index: 45; top: 27px; right: 2px; display: grid; width: 196px; gap: 0; padding: 3px; background: var(--sb-panel); border: 1px solid var(--night-line); border-radius: 7px; box-shadow: 0 13px 32px rgba(0, 0, 0, .34); }
+.project-more-menu button { display: flex; height: 32px; align-items: center; padding: 0 9px; color: var(--sb-ink); background: transparent; border-radius: 5px; font-size: 12px; font-weight: 500; text-align: left; }
 .project-more-menu button:hover { color: var(--night-ink); background: var(--sb-hover); }
-.project-more-menu button > svg { flex: 0 0 auto; color: var(--sb-muted); }
 .project-more-menu button.danger { color: var(--night-danger); }
-.project-more-menu button.danger > svg { color: var(--night-danger); }
 .project-more-menu button.danger:hover { color: #ffb4b4; background: color-mix(in srgb, var(--night-danger) 12%, transparent); }
 .project-more-divider { height: 1px; margin: 3px 2px; background: var(--sb-line); }
 
@@ -5254,14 +5252,13 @@ html[data-file-icons="monochrome"] .tree-file-icon { color: var(--rail-row-muted
 .workbench-tab.drop-target::before { position: absolute; top: 5px; bottom: 5px; left: -2px; width: 2px; background: var(--accent); border-radius: 2px; content: ""; }
 .workbench-tab-more { display: grid; width: 26px; height: 30px; flex: 0 0 auto; place-items: center; color: #8f8f8f; background: transparent; border-radius: 5px; }
 .workbench-tab-more:hover { color: #f4f4f4; background: #242424; }
-.workbench-menu { position: absolute; z-index: 32; top: calc(100% + 5px); right: 6px; min-width: 176px; padding: 5px; color: var(--night-ink-soft); background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 7px; box-shadow: 0 14px 34px rgba(0, 0, 0, .32); }
+.workbench-menu { position: absolute; z-index: 32; top: calc(100% + 5px); right: 6px; min-width: 190px; padding: 3px; color: var(--night-ink-soft); background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 7px; box-shadow: 0 14px 34px rgba(0, 0, 0, .32); }
 .workbench-context-menu { position: fixed; top: auto; right: auto; }
-.workbench-menu button { display: flex; width: 100%; height: 28px; align-items: center; gap: 7px; padding: 0 8px; color: var(--night-ink-soft); background: transparent; border-radius: 4px; font-size: 11px; text-align: left; white-space: nowrap; }
+.workbench-menu button { display: flex; width: 100%; height: 32px; align-items: center; padding: 0 9px; color: var(--night-ink-soft); background: transparent; border-radius: 5px; font-size: 12px; text-align: left; white-space: nowrap; }
 .workbench-menu button:hover:not(:disabled) { color: var(--night-ink); background: var(--night-panel-soft); }
 .workbench-menu button:disabled { cursor: default; opacity: .38; }
-.workbench-menu button svg { flex: 0 0 auto; }
-.workbench-menu-label { display: block; padding: 4px 8px 3px; color: var(--night-faint); font-size: 10px; }
-.workbench-menu-divider { display: block; height: 1px; margin: 4px 5px; background: var(--night-line-soft); }
+.workbench-menu-label { display: block; padding: 5px 9px 4px; color: var(--night-faint); font-size: 11px; }
+.workbench-menu-divider { display: block; height: 1px; margin: 3px 6px; background: var(--night-line-soft); }
 .theme-paper .workbench-tab-more { color: #77726b; }
 .theme-paper .workbench-tab-more:hover { color: #252422; background: #e9e5df; }
 
@@ -5420,8 +5417,8 @@ html[data-file-icons="monochrome"] .tree-file-icon { color: var(--rail-row-muted
 .proactive-head-button { display: grid; width: 22px; height: 22px; place-items: center; color: #858981; background: transparent; border-radius: 4px; }
 .proactive-head-button:hover, .proactive-head-button.active { color: #e8e5dc; background: #242723; }
 .proactive-head-button:disabled { opacity: .35; }
-.proactive-menu { position: absolute; z-index: 20; top: 26px; right: 0; display: grid; width: 166px; gap: 1px; padding: 4px; background: #1d211b; border: 1px solid #343a31; border-radius: 6px; box-shadow: 0 12px 28px rgba(0, 0, 0, .32); }
-.proactive-menu button { display: flex; height: 28px; align-items: center; padding: 0 8px; color: #c9c6bb; background: transparent; border-radius: 4px; font-size: 9px; text-align: left; }
+.proactive-menu { position: absolute; z-index: 20; top: 26px; right: 0; display: grid; width: 188px; gap: 0; padding: 3px; background: #1d211b; border: 1px solid #343a31; border-radius: 7px; box-shadow: 0 12px 28px rgba(0, 0, 0, .32); }
+.proactive-menu button { display: flex; height: 32px; align-items: center; padding: 0 9px; color: #c9c6bb; background: transparent; border-radius: 5px; font-size: 12px; text-align: left; }
 .proactive-menu button:hover { color: #f1eee5; background: #292d25; }
 .proactive-inbox { min-height: 0; overflow: auto; padding: 9px 12px 12px 26px; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); }
 .proactive-card { position: relative; display: grid; gap: 6px; padding: 10px 11px; margin-bottom: 8px; background: #171a16; border: 1px solid #2e322b; border-radius: 7px; box-shadow: 0 5px 18px rgba(0, 0, 0, .1); }
