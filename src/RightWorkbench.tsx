@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Ellipsis, Settings2 } from "lucide-react";
+import { Ellipsis } from "lucide-react";
 import { useUISettings } from "./i18n";
 import {
   moveWorkbenchTab,
@@ -226,11 +226,11 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
         <span className="workbench-menu-label">{t("Hidden tabs")}</span>
         {hiddenTabs.map((id) => {
           const tab = workbenchTabDefinition(id);
-          return <button key={id} role="menuitem" onClick={() => showTab(id)}>{tab.icon}<span>{t(tab.labelKey)}</span></button>;
+          return <button key={id} role="menuitem" onClick={() => showTab(id)}><span>{t(tab.labelKey)}</span></button>;
         })}
         <span className="workbench-menu-divider" />
       </>}
-        <button role="menuitem" onClick={() => { setMoreOpen(false); onOpenSettings(); }}><Settings2 size={13} /><span>{t("Customize tabs…")}</span></button>
+        <button role="menuitem" onClick={() => { setMoreOpen(false); onOpenSettings(); }}><span>{t("Customize tabs…")}</span></button>
       </div>}
     </header>
 
@@ -239,7 +239,7 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
       <button role="menuitem" disabled={visibleTabs.indexOf(contextMenu.id) <= 0} onClick={() => { onPreferencesChange(moveWorkbenchTabByOffset(preferences, contextMenu.id, -1)); setContextMenu(null); }}>{t("Move left")}</button>
       <button role="menuitem" disabled={visibleTabs.indexOf(contextMenu.id) >= visibleTabs.length - 1} onClick={() => { onPreferencesChange(moveWorkbenchTabByOffset(preferences, contextMenu.id, 1)); setContextMenu(null); }}>{t("Move right")}</button>
       <span className="workbench-menu-divider" />
-      <button role="menuitem" onClick={() => { setContextMenu(null); onOpenSettings(); }}><Settings2 size={13} /><span>{t("Customize tabs…")}</span></button>
+      <button role="menuitem" onClick={() => { setContextMenu(null); onOpenSettings(); }}><span>{t("Customize tabs…")}</span></button>
     </div>}
 
     <div className="workbench-body">
