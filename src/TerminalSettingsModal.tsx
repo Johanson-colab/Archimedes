@@ -108,6 +108,97 @@ export default function TerminalSettingsModal({ open, mode, settings, workspace,
     }
   }
 
+  if (embedded) return <div className="settings-sections">
+    <section className="settings-section">
+      <h3 className="settings-section-title">{t("Shell")}</h3>
+      <div className="settings-group">
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span className="settings-row-title">{t("Detected shell")}</span>
+            <p className="settings-row-description">{platformLabel} · {settings.detectedShellName || settings.detectedShell}</p>
+          </div>
+          <div className="settings-row-control"><code className="settings-path settings-path-inline">{settings.detectedShellName || settings.detectedShell}</code></div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span className="settings-row-title">{t("Shell profile")}</span>
+            <p className="settings-row-description">{t("Recommended for {platform}: {shell}. Detected: {detected}", { platform: platformLabel, shell: recommendedShell, detected: settings.detectedShellName || settings.detectedShell })}</p>
+          </div>
+          <div className="settings-row-control">
+            <select className="settings-select" value={form.shell || "auto"} aria-label={t("Shell profile")} onChange={(event) => setForm((current) => ({ ...current, shell: event.target.value as TerminalShellProfile }))}>
+              {shellOptions.map((option) => <option value={option.value} key={option.value}>{t(option.label)}</option>)}
+            </select>
+          </div>
+        </div>
+        {(form.shell || settings.shell) === "custom" && <div className="settings-row settings-row-stacked">
+          <div className="settings-row-copy"><span className="settings-row-title">{t("Custom shell")}</span><p className="settings-row-description">{t("Absolute path to the shell executable.")}</p></div>
+          <div className="settings-row-control"><input className="settings-text-input settings-text-input-wide" value={form.customShell || ""} aria-label={t("Custom shell")} onChange={(event) => setForm((current) => ({ ...current, customShell: event.target.value }))} placeholder={platform === "win32" ? "C:\\path\\to\\pwsh.exe" : "/usr/local/bin/fish"} /></div>
+        </div>}
+      </div>
+    </section>
+
+    <section className="settings-section">
+      <h3 className="settings-section-title">{t("Appearance")}</h3>
+      <div className="settings-group">
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span className="settings-row-title">{t("Font family")}</span>
+            <p className="settings-row-description">{t("Leave empty to use the platform monospace stack.")}</p>
+          </div>
+          <div className="settings-row-control"><input className="settings-text-input" value={form.fontFamily || ""} aria-label={t("Font family")} onChange={(event) => setForm((current) => ({ ...current, fontFamily: event.target.value }))} placeholder={platform === "win32" ? "Cascadia Mono" : platform === "darwin" ? "SF Mono" : "JetBrains Mono"} /></div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span className="settings-row-title">{t("Font size")}</span>
+            <p className="settings-row-description">{t("Terminal text size in pixels.")}</p>
+          </div>
+          <div className="settings-row-control"><input className="settings-text-input terminal-font-size" type="number" min={10} max={20} value={form.fontSize ?? 12} aria-label={t("Font size")} onChange={(event) => setForm((current) => ({ ...current, fontSize: Number(event.target.value) }))} /></div>
+        </div>
+      </div>
+    </section>
+
+    <section className="settings-section">
+      <h3 className="settings-section-title">{t("Session")}</h3>
+      <div className="settings-group">
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span className="settings-row-title">{t("Scrollback")}</span>
+            <p className="settings-row-description">{t("Lines kept in memory for each terminal session.")}</p>
+          </div>
+          <div className="settings-row-control">
+            <select className="settings-select" value={form.scrollback ?? 10_000} aria-label={t("Scrollback")} onChange={(event) => setForm((current) => ({ ...current, scrollback: Number(event.target.value) }))}>
+              <option value={5_000}>{t("5,000 lines")}</option>
+              <option value={10_000}>{t("10,000 lines")}</option>
+              <option value={25_000}>{t("25,000 lines")}</option>
+            </select>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span className="settings-row-title">{t("External terminal")}</span>
+            <p className="settings-row-description">{t("Used by the Open external action.")}</p>
+          </div>
+          <div className="settings-row-control settings-inline-control">
+            <select className="settings-select terminal-external-select" value={form.externalTerminal || "auto"} aria-label={t("External terminal")} onChange={(event) => setForm((current) => ({ ...current, externalTerminal: event.target.value as TerminalExternalTerminal }))}>
+              {externalOptions.map((option) => <option value={option.value} key={option.value}>{t(option.label)}</option>)}
+            </select>
+            <button className="secondary-button" onClick={() => void openExternal()} disabled={opening}><ArrowUpRight size={13} />{opening ? t("Opening…") : t("Open external")}</button>
+          </div>
+        </div>
+      </div>
+      <p className="settings-group-note">{t("Open the active workspace in {terminal}.", { terminal: externalLabel })}</p>
+    </section>
+
+    {error && <p className="settings-form-error" role="alert">{error}</p>}
+    <div className="settings-form-actions">
+      <span className="settings-form-status">{t("Changes apply to new terminal sessions.")}</span>
+      <div className="settings-form-buttons">
+        <button className="secondary-button" onClick={() => setForm({ shell: "auto", customShell: "", fontFamily: "", fontSize: 12, scrollback: 10_000, externalTerminal: "auto" })}>{t("Restore recommended")}</button>
+        <button className="primary-button" onClick={() => void save({})} disabled={saving}>{saving ? t("Saving…") : t("Save")}</button>
+      </div>
+    </div>
+  </div>;
+
   const content = <>
       {!embedded && <div className="modal-header">
         <div><span className="eyebrow">{mode === "onboarding" ? t("First terminal") : t("Workspace terminal")}</span><h2>{mode === "onboarding" ? t("Choose your terminal") : t("Terminal settings")}</h2></div>

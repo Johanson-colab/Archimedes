@@ -18,8 +18,8 @@ const SECTION_LABELS: Record<PaperPresentationSection, string> = {
   limitations: "Limitations",
 };
 
-const KIMI_SLIDES_PRESENTATION_VERSION = 2;
-const KIMI_SLIDES_MIN_CONTENT_SLIDES = 12;
+const PAPER_PRESENTATION_VERSION = 3;
+const PAPER_PRESENTATION_MIN_CONTENT_SLIDES = 12;
 
 const FOCUS_RECTS: Record<SourceFocus, { x: number; y: number; width: number; height: number }> = {
   full: { x: 0, y: 0, width: 1, height: 1 },
@@ -211,7 +211,7 @@ function PresentationSourceVisual({ url, source, label, compact = false }: {
   </figure>;
 }
 
-function PptdRenderedPage({ url, pageNumber }: { url: string; pageNumber: number }) {
+function RenderedPresentationPage({ url, pageNumber }: { url: string; pageNumber: number }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -257,8 +257,8 @@ function PptdRenderedPage({ url, pageNumber }: { url: string; pageNumber: number
     return () => { cancelled = true; renderTask?.cancel(); };
   }, [url, pageNumber, size.width, size.height]);
 
-  return <div className="paper-presentation-pptd-page" ref={hostRef}>
-    <canvas ref={canvasRef} aria-label={`Rendered PPTD slide ${pageNumber}`} />
+  return <div className="paper-presentation-rendered-page" ref={hostRef}>
+    <canvas ref={canvasRef} aria-label={`Rendered presentation slide ${pageNumber}`} />
     {state === "loading" && <span className="paper-presentation-page-state"><LoaderCircle className="spin" size={17} />Rendering slide</span>}
     {state === "error" && <span className="paper-presentation-page-state"><AlertTriangle size={17} />Rendered slide unavailable</span>}
   </div>;
@@ -375,7 +375,7 @@ const EMPTY_PRESENTATION_COPY = {
     generatingTitle: "Building a deck you can inspect live",
     legacyTitle: "Create a new presentation for this paper review",
     readyTitle: "Turn this paper review into a presentation you can deliver",
-    generatingDescription: "Each page appears here as soon as PPTD has validated and rendered it, so you can review the deck while it is being built.",
+    generatingDescription: "Each page appears here as soon as it is rendered, so you can review the deck while it is being built.",
     readyDescription: "The saved review becomes a concise academic presentation, with a live preview for every completed page.",
     question: "Research question",
     questionTitle: "Why does long history slow inference?",
@@ -401,7 +401,7 @@ const EMPTY_PRESENTATION_COPY = {
     generatingTitle: "正在搭建可实时查看的演示稿",
     legacyTitle: "为这份论文复盘生成新版演示稿",
     readyTitle: "把论文复盘组织成一份可讲清的演示稿",
-    generatingDescription: "每一页通过 PPTD 校验并完成渲染后，会立即显示在这里；你可以边生成边翻阅。",
+    generatingDescription: "每一页完成渲染后会立即显示在这里；你可以边生成边翻阅。",
     readyDescription: "系统会将已保存的 Review 转换为一套可讲述的学术演示稿，并逐页提供实时预览。",
     question: "研究问题",
     questionTitle: "为什么长历史会拖慢推理？",
@@ -508,10 +508,10 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
   const stale = Boolean(presentation && reviewUpdatedAt && presentation.source_review_updated_at !== reviewUpdatedAt);
   const legacyPresentation = Boolean(presentation && (
-    presentation.skill?.id !== "kimi-slides" ||
-    Number(presentation.skill?.version || 1) < KIMI_SLIDES_PRESENTATION_VERSION ||
-    presentation.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES ||
-    presentation.artifact?.kind !== "pptd" || presentation.artifact.missing || !presentation.artifact.preview_url
+    presentation.skill?.id !== "paper-presentation" ||
+    Number(presentation.skill?.version || 1) < PAPER_PRESENTATION_VERSION ||
+    presentation.slides.length < PAPER_PRESENTATION_MIN_CONTENT_SLIDES ||
+    presentation.artifact?.kind !== "pptx" || presentation.artifact.missing || !presentation.artifact.preview_url
   ));
   const activePresentation = livePresentation || (legacyPresentation ? null : presentation);
   const slides = activePresentation ? [null, ...activePresentation.slides] : [];
@@ -541,13 +541,13 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     setGenerating(true);
     setError("");
     setLivePresentation(null);
-    setProgress("Preparing the PPTD run…");
+    setProgress("Planning the presentation…");
     runIdRef.current = crypto.randomUUID();
     try {
-      const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext, clientRunId: runIdRef.current });
-      if (saved.skill?.id !== "kimi-slides" || Number(saved.skill?.version || 1) < KIMI_SLIDES_PRESENTATION_VERSION ||
-          saved.slides.length < KIMI_SLIDES_MIN_CONTENT_SLIDES || saved.artifact?.kind !== "pptd" || !saved.artifact.preview_url) {
-        throw new Error("The presentation backend did not return a validated, rendered PPTD deck.");
+      const saved = await bridge.runPaperPresentation({ paper, pageCount, workspace, projectId, reasoningEffort: "high", contextLength: "extra-long", contextItems: paperContext, language, clientRunId: runIdRef.current });
+      if (saved.skill?.id !== "paper-presentation" || Number(saved.skill?.version || 1) < PAPER_PRESENTATION_VERSION ||
+          saved.slides.length < PAPER_PRESENTATION_MIN_CONTENT_SLIDES || saved.artifact?.kind !== "pptx" || !saved.artifact.preview_url) {
+        throw new Error("The presentation backend did not return a complete rendered PowerPoint deck.");
       }
       setPresentation(saved);
       setLivePresentation(null);
@@ -588,7 +588,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
   return <section className="paper-presentation-workbench">
     <header className="paper-presentation-toolbar">
-      <div><span>{livePresentation ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}{livePresentation ? `${livePresentation.previewUrls.filter(Boolean).length} / ${livePresentation.total} pages ready to view` : `Validated PPTD · ${activePresentation.source_sufficiency || "review-grounded"}`}</span>{stale && !livePresentation && <em>The text review changed after this deck was generated.</em>}</div>
+      <div><span>{livePresentation ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}{livePresentation ? `${livePresentation.previewUrls.filter(Boolean).length} / ${livePresentation.total} pages ready to view` : `Editable PowerPoint · ${activePresentation.source_sufficiency || "review-grounded"}`}</span>{stale && !livePresentation && <em>The text review changed after this deck was generated.</em>}</div>
       <div>
         <button onClick={() => void reveal()} disabled={Boolean(livePresentation)}><FolderOpen size={15} />Open PPTX</button>
         <button onClick={() => void generate()} disabled={!reviewReady || generating}>{generating ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}{generating ? "Regenerating" : "Regenerate"}</button>
@@ -601,15 +601,15 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
 
     <div className="paper-presentation-stage" ref={stageRef}>
       <div className="paper-presentation-frame">
-        {livePresentation?.previewUrls[activeSlide] ? <PptdRenderedPage url={livePresentation.previewUrls[activeSlide]} pageNumber={1} /> : storedPreviewUrl ? <PptdRenderedPage url={storedPreviewUrl} pageNumber={activeSlide + 1} /> : <article className="paper-presentation-live-placeholder">
+        {livePresentation?.previewUrls[activeSlide] ? <RenderedPresentationPage url={livePresentation.previewUrls[activeSlide]} pageNumber={1} /> : storedPreviewUrl ? <RenderedPresentationPage url={storedPreviewUrl} pageNumber={activeSlide + 1} /> : <article className="paper-presentation-live-placeholder">
           <LoaderCircle className="spin" size={24} />
           <strong>{activeSlide === 0 ? "Cover" : active?.title || "Preparing this slide"}</strong>
-          <p>{livePresentation ? "This page will appear here immediately after PPTD validation." : "The saved presentation has no renderable preview."}</p>
+          <p>{livePresentation ? "This page will appear here immediately after it is rendered." : "The saved presentation has no renderable preview."}</p>
         </article>}
         {!livePresentation && !storedPreviewUrl && activeSlide === 0 ? <article className="paper-presentation-slide cover">
-          <div className="paper-presentation-cover-rail"><b>组会</b><span>论文分享</span><small>Kimi Slides</small></div>
+          <div className="paper-presentation-cover-rail"><b>组会</b><span>论文分享</span><small>Research presentation</small></div>
           <div className="paper-presentation-cover-copy">
-            <p>Kimi Slides · Academic research</p>
+            <p>Academic paper presentation</p>
             <h2>{activePresentation.title || paper.title}</h2>
             <h3>{activePresentation.subtitle}</h3>
             <dl><div><dt>Authors</dt><dd>{paper.authors.slice(0, 5).join(", ") || "Unknown"}{paper.authors.length > 5 ? " et al." : ""}</dd></div><div><dt>Source</dt><dd>{paper.venue || "Paper"} · {paper.year || "n.d."}</dd></div></dl>

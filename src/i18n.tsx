@@ -4,7 +4,7 @@ export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
 export type InterfaceFont = "system" | "geist";
 export type MonoFont = "system" | "geist-mono";
-export type FileIconStyle = "city-lights" | "monochrome";
+export type FileIconStyle = "city-lights" | "material" | "seti" | "monochrome";
 export type ChatVerbosity = "low" | "medium" | "high";
 
 const LANGUAGE_STORAGE_KEY = "archimedes-language";
@@ -444,6 +444,8 @@ const translations: Record<string, string> = {
   "Choose the icon palette for file trees.": "选择文件树使用的图标配色。",
   "Colorful": "彩色",
   "City Lights": "City Lights",
+  "Material": "Material",
+  "Seti": "Seti",
   "Monochrome": "单色",
   "Geist Sans": "Geist Sans",
   "Geist Mono": "Geist Mono",
@@ -470,6 +472,31 @@ const translations: Record<string, string> = {
   "Web search is configured in the Web search section.": "网页搜索在“网页搜索”分区中配置。",
   "Terminal preferences are configured in the Terminal section.": "终端偏好设置在“终端”分区中配置。",
   "Loading terminal settings…": "正在加载终端设置…",
+  "Absolute path to the shell executable.": "Shell 可执行文件的绝对路径。",
+  "Changes apply to new terminal sessions.": "更改会应用到新的终端会话。",
+  "Choose the search service Archimedes uses. Your own API key stays on this device.": "选择 Archimedes 使用的搜索服务。你的 API 密钥只保存在本机。",
+  "Composer focused → badge only · 3 dismissals → 2h pause · No evidence → never shown": "输入框聚焦 → 只亮徽标 · 连续 3 次忽略 → 暂停 2 小时 · 没有证据 → 永不展示",
+  "Create or rotate a key in the provider dashboard.": "在提供商控制台创建或轮换密钥。",
+  "Detected shell": "已检测的 Shell",
+  "L0 · app context": "L0 · 应用内上下文",
+  "Leave empty to use the platform monospace stack.": "留空则使用平台等宽字体。",
+  "Lines kept in memory for each terminal session.": "每个终端会话保留在内存中的行数。",
+  "Look for uncited claims once. Nothing runs in the background.": "检查最新回答中的未引用主张。不会在后台运行。",
+  "Manual only": "仅手动",
+  "Proactive mode": "主动助手模式",
+  "Provider": "提供商",
+  "Provider console": "提供商控制台",
+  "Quiet hours end": "静默时段结束",
+  "Quiet hours start": "静默时段开始",
+  "Review the latest answer": "检查最新回答",
+  "Save key": "保存密钥",
+  "Search provider": "搜索提供商",
+  "Session": "会话",
+  "Shell": "Shell",
+  "Terminal text size in pixels.": "终端文字大小（像素）。",
+  "Used by the Open external action.": "用于“打开外部终端”操作。",
+  "Used for web search and page discovery in new Agent turns.": "用于新的 Agent 轮次中的网页搜索与页面发现。",
+  "configured": "已配置",
 
   // Library and paper reader
   "Library": "文献库",
@@ -815,7 +842,8 @@ function readMonoFont(): MonoFont {
 
 function readFileIconStyle(): FileIconStyle {
   if (typeof window === "undefined") return "city-lights";
-  return window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY) === "monochrome" ? "monochrome" : "city-lights";
+  const stored = window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY);
+  return stored === "monochrome" || stored === "material" || stored === "seti" ? stored : "city-lights";
 }
 
 function readChatVerbosity(): ChatVerbosity {

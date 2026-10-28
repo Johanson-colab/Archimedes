@@ -12,9 +12,11 @@ const i18n = read("src/i18n.tsx");
 const settings = read("src/SettingsModal.tsx");
 
 test("workbench and full editor share the tabbed file shell", () => {
-  assert.match(app, /compact \? "artifact-editor-pane compact"/);
+  assert.match(app, /className="artifact-editor-pane compact"/);
   assert.match(app, /openFiles\.length > 0 && <div className="artifact-tabs"/);
   assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
+  assert.match(app, /artifact-browser-heading/);
+  assert.match(app, /mainSection === "writing" \? t\("Paper writing"\) : t\("Files"\)/);
   assert.match(app, /artifact-workbench-body split/);
   assert.doesNotMatch(app, /className="artifacts-page"/);
   assert.doesNotMatch(app, /Browse the active folder and inspect files created or changed by Archimedes/);
@@ -49,11 +51,15 @@ test("file icons default to City Lights and still switch to monochrome", () => {
   assert.match(app, /className=\{`tree-file-icon tone-\$\{workspaceFileTone\(entry\)\}`\}/);
   assert.match(css, /\.tree-file-icon\.tone-folder \{/);
   assert.match(css, /html\[data-file-icons="monochrome"\] \.tree-file-icon/);
-  assert.match(i18n, /export type FileIconStyle = "city-lights" \| "monochrome"/);
+  assert.match(i18n, /export type FileIconStyle = "city-lights" \| "material" \| "seti" \| "monochrome"/);
   assert.match(i18n, /FILE_ICON_STYLE_STORAGE_KEY/);
-  assert.match(i18n, /return window\.localStorage\.getItem\(FILE_ICON_STYLE_STORAGE_KEY\) === "monochrome" \? "monochrome" : "city-lights"/);
+  assert.match(i18n, /stored === "monochrome" \|\| stored === "material" \|\| stored === "seti"/);
   assert.match(i18n, /document\.documentElement\.dataset\.fileIcons = fileIconStyle/);
   assert.match(settings, /setFileIconStyle\("city-lights"\)/);
+  assert.match(settings, /setFileIconStyle\("material"\)/);
+  assert.match(settings, /setFileIconStyle\("seti"\)/);
   assert.match(settings, /setFileIconStyle\("monochrome"\)/);
   assert.doesNotMatch(settings, /setFileIconStyle\("colorful"\)/);
+  assert.match(css, /html\[data-file-icons="material"\] \{/);
+  assert.match(css, /html\[data-file-icons="seti"\] \{/);
 });

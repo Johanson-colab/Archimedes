@@ -105,7 +105,7 @@ export default function SettingsModal({
   if (!open) return null;
 
   const workspaceName = workspace ? workspace.split(/[\\/]/).filter(Boolean).at(-1) : "";
-  const embedded = section === "models" || section === "web" || section === "terminal";
+  const embedded = section === "models";
   const sizeIndex = Math.max(0, textSizeSteps.findIndex((item) => item.id === textSize));
   const activeSize = textSizeSteps[sizeIndex] ?? textSizeSteps[2];
   const activeVerbosity = verbosityOptions.find((item) => item.id === chatVerbosity) ?? verbosityOptions[1];
@@ -127,7 +127,7 @@ export default function SettingsModal({
   return <div className="modal-backdrop settings-backdrop" role="presentation" onMouseDown={onClose}>
     <section ref={dialogRef} tabIndex={-1} className="settings-modal" role="dialog" aria-modal="true" aria-label={t("Settings")} onMouseDown={(event) => event.stopPropagation()}>
       <aside className="settings-sidebar">
-        <div className="settings-brand"><SettingsMark /><div><strong>Archimedes</strong><span>{t("Settings")}</span></div></div>
+        <div className="settings-brand"><div><strong>Archimedes</strong><span>{t("Settings")}</span></div></div>
         <nav className="settings-nav" aria-label={t("Settings sections")}>
           {sections.map((item) => <button key={item.id} className={item.id === section ? "settings-nav-item active" : "settings-nav-item"} onClick={() => onSectionChange(item.id)} aria-current={item.id === section ? "page" : undefined}>
             {item.icon}<span>{t(item.label)}</span>
@@ -286,8 +286,10 @@ export default function SettingsModal({
                       <p className="settings-row-description">{t("Choose the icon palette for file trees.")}</p>
                     </div>
                     <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("File icons")}>
+                      <div className="settings-choice file-icon-choice" role="group" aria-label={t("File icons")}>
                         <button className={fileIconStyle === "city-lights" ? "active" : ""} aria-pressed={fileIconStyle === "city-lights"} onClick={() => setFileIconStyle("city-lights")}>{t("City Lights")}</button>
+                        <button className={fileIconStyle === "material" ? "active" : ""} aria-pressed={fileIconStyle === "material"} onClick={() => setFileIconStyle("material")}>{t("Material")}</button>
+                        <button className={fileIconStyle === "seti" ? "active" : ""} aria-pressed={fileIconStyle === "seti"} onClick={() => setFileIconStyle("seti")}>{t("Seti")}</button>
                         <button className={fileIconStyle === "monochrome" ? "active" : ""} aria-pressed={fileIconStyle === "monochrome"} onClick={() => setFileIconStyle("monochrome")}>{t("Monochrome")}</button>
                       </div>
                     </div>
@@ -323,7 +325,6 @@ export default function SettingsModal({
             </div>}
 
             {section === "about" && <div className="settings-about">
-              <SettingsMark large />
               <strong>Archimedes</strong>
               <p>{t("Local-first AI for research.")}</p>
               <dl><dt>{t("Version")}</dt><dd>0.1.0</dd></dl>
@@ -335,7 +336,4 @@ export default function SettingsModal({
   </div>;
 }
 
-function SettingsMark({ large = false }: { large?: boolean }) {
-  return <span className={large ? "settings-mark large" : "settings-mark"} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5l2.6-1.5M17.2 9l2.6-1.5" /><circle cx="12" cy="12" r="3.4" /></svg></span>;
-}
 

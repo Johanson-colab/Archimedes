@@ -51,7 +51,7 @@ test("text review and generated presentation remain independent outputs", () => 
   assert.match(kimiSlidesSkill, /claim-to-source ledger/);
   assert.match(kimiSlidesSkill, /Background -> Related work -> Method -> Experiments -> Limitations/);
   assert.match(main, /runKimiSlidesPlan/);
-  assert.match(main, /generateKimiPptd/);
+  assert.match(main, /generateNativePptx/);
 });
 
 test("saved presentations render as a keyboard-navigable academic deck with PDF visuals", () => {
@@ -61,9 +61,10 @@ test("saved presentations render as a keyboard-navigable academic deck with PDF 
   assert.match(presentation, /layout-outline/);
   assert.match(presentation, /layout-editorial/);
   assert.match(presentation, /paper-presentation-structured/);
-  assert.match(presentation, /Legacy presentation detected/);
-  assert.match(presentation, /Generate PPTD presentation/);
-  assert.match(presentation, /PptdRenderedPage/);
+  assert.match(presentation, /PAPER_PRESENTATION_VERSION/);
+  assert.match(presentation, /Generate presentation/);
+  assert.match(presentation, /RenderedPresentationPage/);
+  assert.match(presentation, /Editable PowerPoint/);
   assert.match(presentation, /paper-presentation-stage/);
   assert.match(presentation, /requestFullscreen/);
   assert.match(presentation, /ArrowRight/);

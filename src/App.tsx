@@ -2101,7 +2101,7 @@ function App() {
 
   const dirtyArtifactPaths = useMemo(() => new Set(Object.values(artifactDrafts).filter(isDraftDirty).map((draft) => draft.path)), [artifactDrafts]);
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
-  const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "extensions" ? t("Extensions") : mainSection === "library" ? t("Library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "image-creation" ? t("Image creation") : mainSection === "writing" ? t("Paper writing") : t("Artifacts");
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "extensions" ? t("Extensions") : mainSection === "library" ? t("Library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "image-creation" ? t("Image creation") : mainSection === "writing" ? t("Paper writing") : t("Files");
   const moduleCommands: PaletteCommand[] = (["knowledge", "create"] as const).flatMap((section) =>
     sidebarEntries(section)
       .filter((entry) => !entry.disabled)
@@ -3260,11 +3260,19 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   }
 
   const browser = <aside className="artifact-browser">
+    {!compact && <div className="artifact-browser-heading">
+      <FolderOpen size={14} />
+      <strong title={workspace}>{workspaceName}</strong>
+      <div className="artifact-browser-heading-actions">
+        <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>
+        <button onClick={onNewArtifact} title="New file" aria-label="New file"><Plus size={14} /></button>
+      </div>
+    </div>}
     {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
+  const editor = <div className="artifact-editor-pane compact">
     {openFiles.length > 0 && <div className="artifact-tabs" role="tablist" aria-label="Open files">
       {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
         <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
@@ -3275,7 +3283,7 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
       </div>)}
     </div>}
     <FilePreview
-      compact={compact}
+      compact
       file={file}
       draft={file ? drafts[file.path] : undefined}
       dirty={Boolean(file && dirtyFiles.has(file.path))}
@@ -3329,16 +3337,6 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   }
 
   return <div className="artifact-workbench artifact-workbench-full">
-    <header className="artifact-workbench-toolbar">
-      <div className="artifact-workbench-location">
-        <strong className="artifact-workbench-workspace" title={workspace}>{workspaceName}</strong>
-        {file && <span className="artifact-workbench-file" title={file.path}>{file.path}</span>}
-      </div>
-      <div className="artifact-workbench-actions">
-        <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>
-        <button onClick={onNewArtifact} title="New file" aria-label="New file"><Plus size={14} /></button>
-      </div>
-    </header>
     <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
       {browser}
       <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>
