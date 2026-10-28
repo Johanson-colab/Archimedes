@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FolderOpen, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { useUISettings, type Language } from "./i18n";
 
 type PresentationPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
 type LoadState = "loading" | "ready" | "error";
@@ -368,25 +369,82 @@ function ContentSlide({ slide, index, pdfUrl }: { slide: PaperPresentationSlide;
   </article>;
 }
 
-function PresentationExamples() {
+const EMPTY_PRESENTATION_COPY = {
+  en: {
+    kicker: "Academic presentation",
+    generatingTitle: "Building a deck you can inspect live",
+    legacyTitle: "Create a new presentation for this paper review",
+    readyTitle: "Turn this paper review into a presentation you can deliver",
+    generatingDescription: "Each page appears here as soon as PPTD has validated and rendered it, so you can review the deck while it is being built.",
+    legacyDescription: "Your saved text review stays unchanged. The new presentation reorganizes its evidence into a clear lab-meeting narrative.",
+    readyDescription: "The saved review becomes a concise academic presentation, with a live preview for every completed page.",
+    question: "Research question",
+    questionTitle: "Why does long history slow inference?",
+    questionCaption: "Problem framing · evidence mapping",
+    method: "Method",
+    methodTitle: "Compress history into an evolving state",
+    methodCaption: "Mechanism diagram · one claim per slide",
+    input: "Input",
+    state: "State",
+    output: "Output",
+    evidence: "Evidence",
+    evidenceTitle: "More efficient — but fidelity remains to be tested",
+    evidenceCaption: "Results chart · conclusion and boundary",
+    mapClaims: "Map claims",
+    generatePages: "Generate slides",
+    saveDeck: "Save deck",
+    generatingButton: "Building slides",
+    generateButton: "Generate presentation",
+    reviewRequiredButton: "Complete the text review first",
+  },
+  zh: {
+    kicker: "学术演示稿",
+    generatingTitle: "正在搭建可实时查看的演示稿",
+    legacyTitle: "为这份论文复盘生成新版演示稿",
+    readyTitle: "把论文复盘组织成一份可讲清的演示稿",
+    generatingDescription: "每一页通过 PPTD 校验并完成渲染后，会立即显示在这里；你可以边生成边翻阅。",
+    legacyDescription: "已保存的文字 Review 会保留不变。新版演示稿将从论文证据出发，按组会汇报的节奏重新组织。",
+    readyDescription: "系统会将已保存的 Review 转换为一套可讲述的学术演示稿，并逐页提供实时预览。",
+    question: "研究问题",
+    questionTitle: "为什么长历史会拖慢推理？",
+    questionCaption: "问题定义 · 证据定位",
+    method: "方法",
+    methodTitle: "把历史压缩成持续更新的状态",
+    methodCaption: "机制图 · 一页一个论点",
+    input: "输入",
+    state: "状态",
+    output: "输出",
+    evidence: "证据",
+    evidenceTitle: "效率提高，但保真度仍需检验",
+    evidenceCaption: "实验图表 · 结论与边界",
+    mapClaims: "梳理论点",
+    generatePages: "逐页生成",
+    saveDeck: "保存演示稿",
+    generatingButton: "正在生成页面",
+    generateButton: "生成演示稿",
+    reviewRequiredButton: "请先完成文字 Review",
+  },
+} as const;
+
+function PresentationExamples({ copy }: { copy: typeof EMPTY_PRESENTATION_COPY[Language] }) {
   return <section className="paper-presentation-showcase" aria-label="Academic presentation examples">
     <article className="paper-presentation-example example-question">
-      <p>Research question</p>
-      <h3>为什么长历史会拖慢推理？</h3>
+      <p>{copy.question}</p>
+      <h3>{copy.questionTitle}</h3>
       <div className="example-question-plot"><i /><i /><i /><b /></div>
-      <small>问题定义 · 证据定位</small>
+      <small>{copy.questionCaption}</small>
     </article>
     <article className="paper-presentation-example example-method">
-      <p>Method</p>
-      <h3>把历史压缩成持续更新的状态</h3>
-      <div className="example-method-flow"><span>Input</span><i /><span>State</span><i /><span>Output</span></div>
-      <small>机制图 · 一页一个论点</small>
+      <p>{copy.method}</p>
+      <h3>{copy.methodTitle}</h3>
+      <div className="example-method-flow"><span>{copy.input}</span><i /><span>{copy.state}</span><i /><span>{copy.output}</span></div>
+      <small>{copy.methodCaption}</small>
     </article>
     <article className="paper-presentation-example example-evidence">
-      <p>Evidence</p>
-      <h3>效率提高，但保真度仍需检验</h3>
+      <p>{copy.evidence}</p>
+      <h3>{copy.evidenceTitle}</h3>
       <div className="example-evidence-chart"><i /><i /><i /><i /></div>
-      <small>实验图表 · 结论与边界</small>
+      <small>{copy.evidenceCaption}</small>
     </article>
   </section>;
 }
@@ -401,6 +459,8 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   reviewReady: boolean;
   reviewUpdatedAt: string;
 }) {
+  const { language } = useUISettings();
+  const emptyCopy = EMPTY_PRESENTATION_COPY[language];
   const [presentation, setPresentation] = useState<StoredPaperPresentation | null>(null);
   const [restoring, setRestoring] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -513,18 +573,18 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   if (!activePresentation) return <section className="paper-presentation-empty">
     <div className="paper-presentation-empty-main">
       <div>
-        <p className="paper-review-kicker">Academic presentation</p>
-        <h2>{generating ? "正在搭建可实时查看的演示稿" : legacyPresentation ? "为这份论文复盘生成新版演示稿" : "把论文复盘组织成一份可讲清的演示稿"}</h2>
-        <p>{generating ? "每一页通过 PPTD 校验并完成渲染后，会立即显示在这里；你可以边生成边翻阅。" : legacyPresentation ? "已保存的文字 Review 会保留不变。新版演示稿将从论文证据出发，按组会汇报的节奏重新组织。" : "系统会将已保存的 Review 转换为一套可讲述的学术演示稿，并逐页提供实时预览。"}</p>
+        <p className="paper-review-kicker">{emptyCopy.kicker}</p>
+        <h2>{generating ? emptyCopy.generatingTitle : legacyPresentation ? emptyCopy.legacyTitle : emptyCopy.readyTitle}</h2>
+        <p>{generating ? emptyCopy.generatingDescription : legacyPresentation ? emptyCopy.legacyDescription : emptyCopy.readyDescription}</p>
       </div>
     </div>
-    <PresentationExamples />
-    <div className="paper-presentation-empty-flow" aria-label="Presentation generation stages"><span className={generating ? "active" : ""}>梳理论点</span><span className={generating ? "active" : ""}>逐页生成</span><span>保存演示稿</span></div>
+    <PresentationExamples copy={emptyCopy} />
+    <div className="paper-presentation-empty-flow" aria-label="Presentation generation stages"><span className={generating ? "active" : ""}>{emptyCopy.mapClaims}</span><span className={generating ? "active" : ""}>{emptyCopy.generatePages}</span><span>{emptyCopy.saveDeck}</span></div>
     {generating && <p className="paper-presentation-progress" role="status"><LoaderCircle className="spin" size={15} />{progress}</p>}
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <button onClick={() => void generate()} disabled={!reviewReady || generating || !workspace}>
       {generating ? <LoaderCircle className="spin" size={16} /> : legacyPresentation ? <RefreshCw size={16} /> : <Sparkles size={16} />}
-      {generating ? "正在生成页面" : reviewReady ? "生成演示稿" : "请先完成文字 Review"}
+      {generating ? emptyCopy.generatingButton : reviewReady ? emptyCopy.generateButton : emptyCopy.reviewRequiredButton}
     </button>
   </section>;
 
