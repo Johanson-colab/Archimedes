@@ -5656,3 +5656,16 @@ html[data-file-icons="monochrome"] .tree-file-icon { color: var(--rail-row-muted
   .research-path-line { min-width: 8px; margin: 0 2px; }
   .research-path-label { font-size: 9px; }
 }
+
+/* Terminal shares the workbench surface in charcoal instead of its old blue-black. */
+html:not([data-theme="paper"]) .smart-terminal,
+html:not([data-theme="paper"]) .terminal-surfaces {
+  background: #181513;
+  border-color: #2a2420;
+}
+html:not([data-theme="paper"]) .smart-terminal-tabs {
+  background: #141110;
+  border-color: #2a2420;
+}
+html:not([data-theme="paper"]) .terminal-tab { border-color: #2a2420; }
+html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }

@@ -38,10 +38,10 @@ const PAPER_TERMINAL_THEME: ITheme = {
 };
 
 const CHARCOAL_TERMINAL_THEME: ITheme = {
-  background: "#0b0d13",
+  background: "#181513",
   foreground: "#c7c8d2",
   cursor: "#d6d6d6",
-  cursorAccent: "#0b0d13",
+  cursorAccent: "#181513",
   selectionBackground: "#353849",
   black: "#2b2d38",
   red: "#dc7c83",
