@@ -4,7 +4,7 @@ export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
 export type InterfaceFont = "system" | "geist";
 export type MonoFont = "system" | "geist-mono";
-export type FileIconStyle = "colorful" | "monochrome";
+export type FileIconStyle = "city-lights" | "material" | "seti" | "monochrome";
 export type ChatVerbosity = "low" | "medium" | "high";
 
 const LANGUAGE_STORAGE_KEY = "archimedes-language";
@@ -441,7 +441,11 @@ const translations: Record<string, string> = {
   "Code font": "代码字体",
   "File icons": "文件图标",
   "Use colored icons in file trees.": "在文件树中使用彩色图标。",
+  "Choose the icon palette for file trees.": "选择文件树使用的图标配色。",
   "Colorful": "彩色",
+  "City Lights": "City Lights",
+  "Material": "Material",
+  "Seti": "Seti",
   "Monochrome": "单色",
   "Geist Sans": "Geist Sans",
   "Geist Mono": "Geist Mono",
@@ -837,8 +841,9 @@ function readMonoFont(): MonoFont {
 }
 
 function readFileIconStyle(): FileIconStyle {
-  if (typeof window === "undefined") return "colorful";
-  return window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY) === "monochrome" ? "monochrome" : "colorful";
+  if (typeof window === "undefined") return "city-lights";
+  const stored = window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY);
+  return stored === "monochrome" || stored === "material" || stored === "seti" ? stored : "city-lights";
 }
 
 function readChatVerbosity(): ChatVerbosity {

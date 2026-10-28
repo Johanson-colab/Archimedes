@@ -2101,7 +2101,7 @@ function App() {
 
   const dirtyArtifactPaths = useMemo(() => new Set(Object.values(artifactDrafts).filter(isDraftDirty).map((draft) => draft.path)), [artifactDrafts]);
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
-  const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "extensions" ? t("Extensions") : mainSection === "library" ? t("Library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "image-creation" ? t("Image creation") : mainSection === "writing" ? t("Paper writing") : t("Artifacts");
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "extensions" ? t("Extensions") : mainSection === "library" ? t("Library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "image-creation" ? t("Image creation") : mainSection === "writing" ? t("Paper writing") : t("Files");
   const moduleCommands: PaletteCommand[] = (["knowledge", "create"] as const).flatMap((section) =>
     sidebarEntries(section)
       .filter((entry) => !entry.disabled)
@@ -3036,7 +3036,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   return <section className="artifact-editor">
     <div className="artifact-editor-top">
       {(editable || !compact) && <div className={compact ? "artifact-editor-header compact" : "artifact-editor-header"}>
-        {!compact && <><span>{workspaceFileIcon({ type: "file", kind: file.kind, path: file.path })}</span>
+        {!compact && <><span className={`tree-file-icon tone-${workspaceFileTone({ type: "file", kind: file.kind, path: file.path })}`}>{workspaceFileIcon({ type: "file", kind: file.kind, path: file.path })}</span>
         <strong>{file.path}</strong>
         <small>{formatFileSize(file.size)}</small></>}
         {editable && <div className="artifact-editor-actions">
@@ -3061,7 +3061,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
       }}>
         <div className="artifact-comment-reference"><strong>{file.path}</strong><span>{selection.startLine === selection.endLine ? `Line ${selection.startLine}` : `Lines ${selection.startLine}-${selection.endLine}`}</span></div>
         <pre>{selection.excerpt.slice(0, 1_200)}</pre>
-        <textarea autoFocus value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="What should Archimedes address?" aria-label="Review comment" />
+        <textarea autoFocus value={commentBody} onChange={(event) => setCommentBody(event.target.value)} placeholder="Ask Archimedes about this passage…" aria-label="Review comment" />
         <div className="artifact-comment-actions"><button type="button" className="secondary-button" onClick={() => { setCommentOpen(false); setCommentBody(""); }}>Cancel</button><button type="submit" className="primary-button" disabled={!commentBody.trim()}>Add to chat</button></div>
       </form>}
       {(conflict !== undefined || saveError) && <div className={`artifact-notice${saveError ? " error" : ""}`}>
@@ -3229,8 +3229,9 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = filesPaneWidth;
+    const resizeWidth = compact ? compactWidth : window.innerWidth;
     const onPointerMove = (pointerEvent: PointerEvent) => {
-      setFilesPaneWidth(clampFilesPaneWidth(startWidth + pointerEvent.clientX - startX, compactWidth));
+      setFilesPaneWidth(clampFilesPaneWidth(startWidth + pointerEvent.clientX - startX, resizeWidth));
     };
     const onPointerUp = () => {
       window.removeEventListener("pointermove", onPointerMove);
@@ -3245,12 +3246,13 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   }
 
   function handleFilesPaneResizeKey(event: React.KeyboardEvent<HTMLDivElement>) {
+    const resizeWidth = compact ? compactWidth : window.innerWidth;
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      setFilesPaneWidth((width) => clampFilesPaneWidth(width - 16, compactWidth));
+      setFilesPaneWidth((width) => clampFilesPaneWidth(width - 16, resizeWidth));
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
-      setFilesPaneWidth((width) => clampFilesPaneWidth(width + 16, compactWidth));
+      setFilesPaneWidth((width) => clampFilesPaneWidth(width + 16, resizeWidth));
     } else if (event.key === "Home") {
       event.preventDefault();
       setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH);
@@ -3258,23 +3260,30 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
   }
 
   const browser = <aside className="artifact-browser">
-    {!compact && <div className="artifact-browser-title"><FolderOpen size={14} /><strong>{workspaceName}</strong></div>}
+    {!compact && <div className="artifact-browser-heading">
+      <FolderOpen size={14} />
+      <strong title={workspace}>{workspaceName}</strong>
+      <div className="artifact-browser-heading-actions">
+        <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>
+        <button onClick={onNewArtifact} title="New file" aria-label="New file"><Plus size={14} /></button>
+      </div>
+    </div>}
     {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
-    {(compact || openFiles.length > 1) && <div className="artifact-tabs" role="tablist" aria-label="Open files">
+  const editor = <div className="artifact-editor-pane compact">
+    {openFiles.length > 0 && <div className="artifact-tabs" role="tablist" aria-label="Open files">
       {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
         <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
           {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
-          {workspaceFileIcon({ type: "file", kind: openFile.kind, path: openFile.path })}<span>{openFile.name}</span>
+          <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}>{workspaceFileIcon({ type: "file", kind: openFile.kind, path: openFile.path })}</span><span className="artifact-tab-name">{openFile.name}</span>
         </button>
         <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
       </div>)}
     </div>}
     <FilePreview
-      compact={compact}
+      compact
       file={file}
       draft={file ? drafts[file.path] : undefined}
       dirty={Boolean(file && dirtyFiles.has(file.path))}
@@ -3327,13 +3336,10 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
     </div>;
   }
 
-  return <div className="artifacts-page">
-    <header className="artifacts-header">
-      <div><span className="page-kicker">Workspace</span><h1>Artifacts</h1><p>Browse the active folder and inspect files created or changed by Archimedes.</p></div>
-      <div className="artifacts-header-actions"><button className="secondary-button" onClick={onRefresh} title="Refresh workspace files"><RefreshCw size={14} />Refresh</button><button className="primary-button" onClick={onNewArtifact}><Plus size={15} />New file</button></div>
-    </header>
-    <div className="artifacts-workspace">
+  return <div className="artifact-workbench artifact-workbench-full">
+    <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
       {browser}
+      <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>
       {editor}
     </div>
   </div>;

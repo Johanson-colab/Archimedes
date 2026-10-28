@@ -68,14 +68,15 @@ test("files use a compact workbench pane with drill-down and split modes", () =>
 });
 
 test("files use a tab-first header and keep one visible filename", () => {
-  assert.match(app, /openFiles\.length > 1\) && <div className="artifact-tabs"/);
+  assert.match(app, /openFiles\.length > 0 && <div className="artifact-tabs"/);
   assert.match(app, /artifact-editor-header compact/);
   assert.match(app, /openFiles\.length <= 1 && <span className="artifact-workbench-file"/);
-  assert.match(css, /\.artifact-editor-pane\.no-tabs \{ grid-template-rows: minmax\(0, 1fr\); \}/);
+  assert.match(css, /\.artifact-tab-main \.artifact-tab-name/);
 });
 
-test("files collapse the redundant title row and hide the saved label", () => {
-  assert.match(app, /!compact && <div className="artifact-browser-title">/);
+test("the full editor shares the workbench shell and hides duplicate titles", () => {
+  assert.doesNotMatch(app, /!compact && <div className="artifact-browser-title">/);
+  assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
   assert.match(app, /artifact-workbench-workspace/);
   assert.doesNotMatch(app, /<FolderOpen size=\{13\} \/><strong>Files<\/strong>/);
   assert.match(app, /\{\(saving \|\| dirty\) && <span className=\{`artifact-save-state/);
