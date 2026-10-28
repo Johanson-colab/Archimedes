@@ -932,9 +932,9 @@ function App() {
   const activeStage = stageForMode(researchMode as ResearchMode);
   const pinnedPathThread = pinnedPathThreadId ? threads.find((thread) => thread.id === pinnedPathThreadId) ?? null : null;
   const pathThread = pinnedPathThread ?? activeThread;
-  const pathStage = stageForMode((pathThread?.mode ?? researchMode) as ResearchMode);
-  const pathStageIndex = Math.max(0, researchStages.findIndex((stage) => stage.id === pathStage.id));
   const pathThreadIsActive = Boolean(pathThread && pathThread.id === activeThreadId);
+  const pathStage = stageForMode((pathThreadIsActive || !pathThread ? researchMode : pathThread.mode) as ResearchMode);
+  const pathStageIndex = Math.max(0, researchStages.findIndex((stage) => stage.id === pathStage.id));
   const pathAcceptedStages = pathThreadIsActive ? acceptedStages : researchStages.slice(0, pathStageIndex).map((stage) => stage.id);
   const pathStaleStages = pathThreadIsActive ? staleStages : [];
   const pathProject = projects.find((project) => project.id === (pathThread?.project_id ?? activeProjectId)) ?? null;
