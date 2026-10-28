@@ -376,7 +376,6 @@ const EMPTY_PRESENTATION_COPY = {
     legacyTitle: "Create a new presentation for this paper review",
     readyTitle: "Turn this paper review into a presentation you can deliver",
     generatingDescription: "Each page appears here as soon as PPTD has validated and rendered it, so you can review the deck while it is being built.",
-    legacyDescription: "Your saved text review stays unchanged. The new presentation reorganizes its evidence into a clear lab-meeting narrative.",
     readyDescription: "The saved review becomes a concise academic presentation, with a live preview for every completed page.",
     question: "Research question",
     questionTitle: "Why does long history slow inference?",
@@ -403,7 +402,6 @@ const EMPTY_PRESENTATION_COPY = {
     legacyTitle: "为这份论文复盘生成新版演示稿",
     readyTitle: "把论文复盘组织成一份可讲清的演示稿",
     generatingDescription: "每一页通过 PPTD 校验并完成渲染后，会立即显示在这里；你可以边生成边翻阅。",
-    legacyDescription: "已保存的文字 Review 会保留不变。新版演示稿将从论文证据出发，按组会汇报的节奏重新组织。",
     readyDescription: "系统会将已保存的 Review 转换为一套可讲述的学术演示稿，并逐页提供实时预览。",
     question: "研究问题",
     questionTitle: "为什么长历史会拖慢推理？",
@@ -575,7 +573,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
       <div>
         <p className="paper-review-kicker">{emptyCopy.kicker}</p>
         <h2>{generating ? emptyCopy.generatingTitle : legacyPresentation ? emptyCopy.legacyTitle : emptyCopy.readyTitle}</h2>
-        <p>{generating ? emptyCopy.generatingDescription : legacyPresentation ? emptyCopy.legacyDescription : emptyCopy.readyDescription}</p>
+        {!legacyPresentation && <p>{generating ? emptyCopy.generatingDescription : emptyCopy.readyDescription}</p>}
       </div>
     </div>
     <PresentationExamples copy={emptyCopy} />
