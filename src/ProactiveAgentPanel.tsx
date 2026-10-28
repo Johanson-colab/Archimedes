@@ -6,7 +6,6 @@ import {
   PROACTIVE_SOURCE_LABELS,
   PROACTIVE_STATUS_LABELS,
   type ProactiveEvidence,
-  type ProactiveSuggestion,
 } from "./proactive-types";
 import type { ProactiveAgentController } from "./useProactiveAgent";
 
