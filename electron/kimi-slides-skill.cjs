@@ -4,10 +4,10 @@ const path = require("node:path");
 const { runAgent } = require("./agent.cjs");
 
 const KIMI_SLIDES_SKILL = Object.freeze({
-  id: "kimi-slides",
-  name: "Kimi PPTD · academic research",
-  description: "Plans a source-grounded paper presentation that is authored, checked, and rendered through Kimi's PPTD toolchain without changing the saved review.",
-  version: 2,
+  id: "paper-presentation",
+  name: "Academic paper presentation",
+  description: "Plans a source-grounded, editable academic presentation from the saved review without changing that review.",
+  version: 3,
 });
 
 const PRESENTATION_SECTIONS = Object.freeze([
@@ -104,10 +104,11 @@ function reviewDossier(review) {
   ].join("\n\n");
 }
 
-function kimiSlidesPrompt(paper, review, pageCount) {
-  return `You are planning a Chinese academic lab-meeting deck that will be authored as Kimi PPTD pages. Read the ORIGINAL PAPER. Use the saved review only as a map of claims, caveats, and disputed evidence. This presentation is an independent output: never alter the saved review.
+function kimiSlidesPrompt(paper, review, pageCount, language = "zh") {
+  const presentationLanguage = language === "en" ? "English" : "Simplified Chinese";
+  return `You are planning a ${presentationLanguage} academic lab-meeting deck that will be generated as an editable PowerPoint file. Read the ORIGINAL PAPER. Use the saved review only as a map of claims, caveats, and disputed evidence. This presentation is an independent output: never alter the saved review. Write all titles, leads, bullets, takeaways, and speaker notes in ${presentationLanguage}.
 
-Return a source-grounded CONTENT PLAN as JSON. This is an intermediate plan, not the visible slide format. A second stage will compose individual PPTD .page files, then Kimi's PPTD checker and converter will validate and render the actual deck. Preserve the source skill's planning, academic narrative, evidence selection, typography, density, and validation rules.
+Return a source-grounded CONTENT PLAN as JSON. This is an intermediate plan, not the visible slide format. A native renderer will apply the academic templates, crop original evidence, and build the editable deck. Preserve the source skill's planning, academic narrative, evidence selection, typography, density, and validation rules.
 
 <kimi_slides_methodology>
 ${loadKimiSlidesGuidance()}
@@ -262,12 +263,12 @@ function parseKimiSlidesPresentation(response, paper, pageCount) {
   return normalizeKimiSlidesPresentation(parseJsonObject(response), paper, pageCount);
 }
 
-async function runKimiSlidesPlan({ paper, review, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser }) {
+async function runKimiSlidesPlan({ paper, review, pageCount, workspace, projectId, contextItems, reasoningEffort, contextLength, browser, language = "zh" }) {
   if (!review?.summary || !Array.isArray(review.specialists) || !review.specialists.length) {
     throw new Error("Finish and save the evidence review before generating a presentation.");
   }
   const run = await runAgent({
-    prompt: kimiSlidesPrompt(paper, review, pageCount),
+    prompt: kimiSlidesPrompt(paper, review, pageCount, language),
     workspace,
     projectId,
     mode: "paper-review",

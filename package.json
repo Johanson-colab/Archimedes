@@ -44,6 +44,7 @@
     "lucide-react": "latest",
     "node-pty": "^1.1.0",
     "pdfjs-dist": "5.4.624",
+    "pptxgenjs": "^3.12.0",
     "react": "latest",
     "react-dom": "latest",
     "react-markdown": "^10.1.0",

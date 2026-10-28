@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Check, ChevronDown, FolderOpen, MessageSquarePlus, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, ChevronDown, FolderOpen, MessageSquarePlus, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -226,11 +226,11 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                 <button className={menuOpen ? "project-more-button active" : "project-more-button"} onClick={() => setProjectMenu((current) => current?.project.id === project.id ? null : { project })} title={t("More project actions")} aria-label={t("More project actions")} aria-haspopup="menu" aria-expanded={menuOpen} disabled={disabled}><MoreVertical size={14} /></button>
               </span>
               {menuOpen && <div className="project-more-menu" ref={projectMenuRef} role="menu" aria-label={t("Project actions")}>
-                <button role="menuitem" onClick={() => { setProjectMenu(null); onChangeProjectWorkspace(project); }} disabled={disabled}><FolderOpen size={13} /><span>{t("Change project folder")}</span></button>
-                <button role="menuitem" onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}><Pencil size={13} /><span>{t("Rename")}</span></button>
-                <button role="menuitem" onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}><Archive size={13} /><span>{t("Archive")}</span></button>
+                <button role="menuitem" onClick={() => { setProjectMenu(null); onChangeProjectWorkspace(project); }} disabled={disabled}><span>{t("Change project folder")}</span></button>
+                <button role="menuitem" onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}><span>{t("Rename")}</span></button>
+                <button role="menuitem" onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}><span>{t("Archive")}</span></button>
                 <div className="project-more-divider" />
-                <button className="danger" role="menuitem" onClick={() => { setProjectMenu(null); onRemoveProject(project); }} disabled={disabled}><Trash2 size={13} /><span>{t("Remove")}</span></button>
+                <button className="danger" role="menuitem" onClick={() => { setProjectMenu(null); onRemoveProject(project); }} disabled={disabled}><span>{t("Remove")}</span></button>
               </div>}
             </div>
             {isExpanded && <div className="project-chat-list">
