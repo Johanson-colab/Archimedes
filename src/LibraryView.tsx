@@ -31,6 +31,8 @@ import { isDensePdfProse, mergePdfVisualRegions, pdfCaptionKind } from "./pdf-vi
 import { useUISettings, type Language } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 import ToolbarActions from "./ToolbarActions";
+import { fingerprintFor } from "./proactive-engine";
+import { emitProactiveSignal } from "./proactive-signals";
 import {
   AlignLeft,
   ArrowLeft,
@@ -481,6 +483,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [passages, setPassages] = useState<PaperPassage[]>([]);
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const searchRequestRef = useRef(0);
+  const selectionHistoryRef = useRef<{ key: string; at: number; count: number } | null>(null);
   const [selection, setSelection] = useState("");
   const [selectionAnchor, setSelectionAnchor] = useState<SelectionAnchor | null>(null);
   const [figureCapture, setFigureCapture] = useState<PaperFigureCapture | null>(null);
@@ -580,6 +583,41 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setTranslationPopover(null);
     setHighlightPickerOpen(false);
     setCommentOpen(false);
+
+    // L0 signal: the same passage selected deliberately more than once. A
+    // rapid mousemove can fire the selection callback repeatedly, so ignore
+    // duplicates inside 1.5s instead of counting them as a new decision.
+    const now = Date.now();
+    const key = `${paper.id}:${pageNumber}:${next.slice(0, 180)}`;
+    const previous = selectionHistoryRef.current;
+    const count = previous?.key === key && now - previous.at < 90_000 && now - previous.at > 1_500
+      ? previous.count + 1
+      : previous?.key === key && now - previous.at <= 1_500
+        ? previous.count
+        : 1;
+    selectionHistoryRef.current = { key, at: now, count };
+    if (count >= 2) {
+      emitProactiveSignal({
+        source: "selection",
+        title: `Revisit this passage from “${paper.title}”`,
+        whyNow: `You selected the same passage ${count} times in the last 90 seconds.`,
+        evidence: [{
+          kind: "selection",
+          paperId: paper.id,
+          paperTitle: paper.title,
+          page: pageNumber,
+          text: next.slice(0, 700),
+          libraryName: library.name,
+        }],
+        action: {
+          kind: "insert",
+          label: "Explain passage",
+          text: `Explain this passage from “${paper.title}” (p. ${pageNumber}) in context, and note its limitations:\n\n“${next.slice(0, 1200)}”`,
+        },
+        confidence: 0.65,
+        fingerprint: fingerprintFor("selection", key),
+      });
+    }
   }
   async function prepare(kind: "remote" | "local") {
     setBusy(kind); setError("");
@@ -610,6 +648,27 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       } else {
         setActiveSearchQuery("");
         setError(`No match found in the ${reader.pages.length} indexed PDF pages for “${query.trim()}”.`);
+        const normalizedQuery = query.trim();
+        emitProactiveSignal({
+          source: "search",
+          title: `No match for “${normalizedQuery}”`,
+          whyNow: `You searched ${reader.pages.length} indexed pages in “${paper.title}” and got 0 hits.`,
+          evidence: [{
+            kind: "search",
+            query: normalizedQuery,
+            resultCount: 0,
+            paperId: paper.id,
+            paperTitle: paper.title,
+            libraryName: library.name,
+          }],
+          action: {
+            kind: "insert",
+            label: "Suggest the right term",
+            text: `I searched “${normalizedQuery}” in “${paper.title}” and got 0 results. Suggest the term the authors likely use, and show the closest passages in this paper.`,
+          },
+          confidence: 0.8,
+          fingerprint: fingerprintFor("search", `${paper.id}:${normalizedQuery.toLowerCase()}`),
+        });
       }
     } catch (findError) {
       if (searchRequest === searchRequestRef.current) setError(readableError(findError, "Could not search this paper."));

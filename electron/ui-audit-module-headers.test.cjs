@@ -51,11 +51,11 @@ test("library detail keeps one compact toolbar row", () => {
   assert.match(library, /library-detail-header[\s\S]{0,800}title="All libraries"/);
 });
 
-test("toolbar carries the knowledge module subtitle", () => {
-  assert.match(app, /mainSection === "image-creation" \? t\("Generate and remix research figures"\)/);
-  assert.match(app, /mainSection === "writing" \? t\("LaTeX workspace"\)/);
-  assert.match(app, /mainSection === "daily" \? t\("Live research feed"\)/);
-  assert.match(app, /mainSection === "benchmark-radar" \? t\("Benchmark intelligence"\)/);
+test("the toolbar uses one title line and no module subtitle", () => {
+  assert.doesNotMatch(app, /mainSubtitle/);
+  assert.doesNotMatch(app, /Live research feed/);
+  assert.doesNotMatch(app, /Benchmark intelligence/);
+  assert.match(app, /<div className="conversation-title"><strong>\{mainTitle\}<\/strong><\/div>/);
 });
 
 test("removing the second header reclaims vertical space", () => {

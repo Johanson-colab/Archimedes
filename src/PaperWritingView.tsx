@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleDot, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, X } from "lucide-react";
 import latexTemplateCatalog from "../shared/latex-templates.json";
 import { useDialogFocus } from "./useDialogFocus";
+import { fingerprintFor } from "./proactive-engine";
+import { emitProactiveSignal } from "./proactive-signals";
 
 const latexTemplates: LatexTemplateSummary[] = latexTemplateCatalog;
 
@@ -192,6 +194,30 @@ export default function PaperWritingView({ bridge, workspace, openRequest, onRef
       const result = await bridge.compileLatexDocument(workspace, target);
       if (sequence !== compileSequence.current) return;
       setCompileResult(result); setCompileState(result.ok ? "success" : "error"); setActiveProblem(result.ok ? null : result.diagnostics.find((item) => item.line)?.line ?? null);
+      if (!result.ok && result.diagnostics.length) {
+        const diagnostic = result.diagnostics.find((item) => item.line) ?? result.diagnostics[0];
+        const output = result.diagnostics.slice(0, 3).map((item) => `${item.line ? `line ${item.line}: ` : ""}${item.message}`).join("\n");
+        emitProactiveSignal({
+          source: "latex",
+          title: `Build failed: ${diagnostic.message.slice(0, 90)}`,
+          whyNow: `The last LaTeX build of ${target}${diagnostic.line ? ` failed on line ${diagnostic.line}` : " failed"}.`,
+          evidence: [{
+            kind: "terminal",
+            command: "latexmk",
+            exitCode: 1,
+            output: output || (result.log ?? "").slice(0, 1200),
+            filePath: target,
+            line: diagnostic.line ?? undefined,
+          }],
+          action: {
+            kind: "insert",
+            label: "Ask AI to fix",
+            text: `The LaTeX build failed. Help me fix it without changing the argument.\n\nFile: ${target}${diagnostic.line ? `\nLine: ${diagnostic.line}` : ""}\nProblem: ${diagnostic.message}\n\nBuild log:\n${(result.log ?? output).slice(0, 1600)}`,
+          },
+          confidence: 0.9,
+          fingerprint: fingerprintFor("latex", `${target}:${diagnostic.line ?? 0}:${diagnostic.message}:${result.diagnostics.length}`),
+        });
+      }
     } catch (nextError) {
       if (sequence !== compileSequence.current) return;
       setCompileState("error"); setError(nextError instanceof Error ? nextError.message : String(nextError));

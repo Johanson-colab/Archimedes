@@ -48,6 +48,13 @@ import { useUISettings } from "./i18n";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createArtifactDraft, formatArtifactComment, isDraftDirty, isEditableArtifact, markDraftSaved, mergeRefreshedArtifactFiles, prepareArtifactContent, toEditorText, type ArtifactComment, type ArtifactDraft, type ArtifactSelection } from "./artifact-editor";
 import { previewLibraryBridge } from "./library-preview";
+import ResearchDock from "./ResearchDock";
+import ResearchPathPanel from "./ResearchPathPanel";
+import ProactiveAgentPanel from "./ProactiveAgentPanel";
+import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
+import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
+import { useProactiveAgent } from "./useProactiveAgent";
+import type { ProactiveSuggestion } from "./proactive-types";
 import CopyButton from "./CopyButton";
 import { useDialogFocus } from "./useDialogFocus";
 import ArchimedesMark from "./brand/ArchimedesMark";
@@ -55,7 +62,6 @@ import ArchimedesWordmark from "./brand/ArchimedesWordmark";
 import {
   AlertTriangle,
   BookOpen,
-  Blocks,
   ArrowDown,
   CalendarDays,
   Check,
@@ -104,12 +110,14 @@ import {
   Plus,
   RefreshCw,
   Radar,
+  Route,
   Save,
   Search,
   SendHorizontal,
   Settings,
   ShieldCheck,
   ScanSearch,
+  Sparkles,
   Square,
   SquareTerminal,
   X,
@@ -142,17 +150,8 @@ type TimelineEvent = {
 type PendingAction = AgentAction & { source: "agent" | "manual" };
 type Modal = "artifact" | "evidence" | "search" | "source" | null;
 type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
-type ResearchStageId = "conversation" | "ideas" | "experiments" | "writing" | "review";
 type ReasoningEffort = "low" | "medium" | "high";
 type ContextLength = "standard" | "extra-long";
-
-type ResearchStage = {
-  id: ResearchStageId;
-  label: string;
-  mode: ResearchMode;
-  checkpoint: string;
-  description: string;
-};
 
 const researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [
   { id: "free-chat", label: "Free chat", description: "Talk with AI without a predefined workflow", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },
@@ -160,14 +159,6 @@ const researchModes: Array<{ id: ResearchMode; label: string; description: strin
   { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
   { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
   { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <ScanSearch size={15} />, placeholder: "What paper or draft would you like to review?" },
-];
-
-const researchStages: ResearchStage[] = [
-  { id: "conversation", label: "Conversation", mode: "free-chat", checkpoint: "Research brief", description: "Frame the question, constraints, evidence needs, and available resources." },
-  { id: "ideas", label: "Ideas", mode: "idea-spark", checkpoint: "Idea candidate", description: "Ground a falsifiable idea in literature and check its closest prior work." },
-  { id: "experiments", label: "Experiments", mode: "experiment-setup", checkpoint: "Claims & evidence", description: "Design, run, diagnose, and accept only the claims supported by results." },
-  { id: "writing", label: "Writing", mode: "paper-generation", checkpoint: "Manuscript", description: "Turn accepted claims and evidence into a traceable paper draft." },
-  { id: "review", label: "Review", mode: "paper-review", checkpoint: "Submission decision", description: "Audit novelty, evidence, reproducibility, and presentation before release." },
 ];
 
 const reasoningEfforts: Array<{ id: ReasoningEffort; label: string }> = [
@@ -187,10 +178,6 @@ const previewModelCapabilities: ModelCapabilities = {
   nativeThinking: true,
   contextCharacterLimits: { standard: 300_000, "extra-long": 600_000 },
 };
-
-function stageForMode(mode: ResearchMode) {
-  return researchStages.find((stage) => stage.mode === mode) ?? researchStages[0];
-}
 
 function inferResearchMode(prompt: string, fallback: ResearchMode): ResearchMode {
   const text = prompt.trim().toLowerCase();
@@ -787,6 +774,11 @@ function readSidebarHidden() {
   return window.localStorage.getItem("archimedes-sidebar-hidden") === "true";
 }
 
+function readResearchDockOpen() {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem("archimedes-research-dock-open") !== "false";
+}
+
 function systemTheme(): AppTheme {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "charcoal";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "charcoal" : "paper";
@@ -860,6 +852,16 @@ function App() {
   const [interrupting, setInterrupting] = useState(false);
   const [chatViewNonce, setChatViewNonce] = useState(0);
   const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
+  const [acceptedStages, setAcceptedStages] = useState<ResearchStageId[]>(() => {
+    const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
+    return researchStages.slice(0, activeIndex).map((stage) => stage.id);
+  });
+  const [staleStages, setStaleStages] = useState<ResearchStageId[]>([]);
+  const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
+  const [branchCount, setBranchCount] = useState(1);
+  const [journeyNotice, setJourneyNotice] = useState("");
+  const [researchDockOpen, setResearchDockOpen] = useState(readResearchDockOpen);
+  const [proactiveNotice, setProactiveNotice] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
   const [contextLength, setContextLength] = useState<ContextLength>(readContextLength);
   const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities>(previewModelCapabilities);
@@ -913,13 +915,40 @@ function App() {
   // and paper writing operate inside the session folder: session snapshot →
   // project folder → primary workspace.
   const executionWorkspace = activeThread?.workspace_path || activeProject?.workspace_path || workspace;
-  const executionWorkspaceName = executionWorkspace ? executionWorkspace.split(/[\\/]/).filter(Boolean).at(-1) ?? executionWorkspace : "";
   const draftNoteKey = `draft:${workspace || "workspace"}`;
   const noteKey = activeThreadId ?? draftNoteKey;
   const noteValue = noteLoadedKey === noteKey ? noteValues[noteKey] ?? "" : "";
   noteKeyRef.current = noteKey;
   noteValuesRef.current = noteValues;
   threadsRef.current = threads;
+
+  const activeStage = stageForMode(researchMode as ResearchMode);
+  const proactive = useProactiveAgent({
+    messages,
+    threadId: activeThreadId,
+    projectId: activeProjectId,
+    workspace: executionWorkspace,
+    onRun: runProactiveSuggestion,
+    onNotice: (text) => setProactiveNotice(t(text)),
+  });
+
+  useEffect(() => {
+    if (!proactiveNotice) return;
+    const timer = window.setTimeout(() => setProactiveNotice(""), 4200);
+    return () => window.clearTimeout(timer);
+  }, [proactiveNotice]);
+
+  useEffect(() => {
+    const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
+    setAcceptedStages(researchStages.slice(0, activeIndex).map((stage) => stage.id));
+    setStaleStages([]);
+    setSelectedStage(null);
+    setJourneyNotice("");
+    setBranchCount(1);
+    // A thread owns its research path. The UI state resets when the thread
+    // changes, matching the previous conversation-local behavior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeThreadId, chatViewNonce]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -993,6 +1022,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem("archimedes-workbench-width", String(workbenchWidth));
   }, [workbenchWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-research-dock-open", String(researchDockOpen));
+  }, [researchDockOpen]);
 
   useEffect(() => {
     const handleResize = () => setWorkbenchWidth((width) => clampWorkbenchWidth(width));
@@ -2006,10 +2039,69 @@ function App() {
     setMainSection("image-creation");
   }
 
+  async function runProactiveSuggestion(suggestion: ProactiveSuggestion) {
+    const action = suggestion.action;
+    if (action.kind === "copy") {
+      await desktopBridge.writeClipboardText(action.text).catch(() => undefined);
+      setProactiveNotice(t("Copied to clipboard."));
+      return;
+    }
+    if (action.kind === "open") {
+      setMainSection(action.target);
+      return;
+    }
+    setMainSection("chat");
+    setComposerRequest({ id: `proactive-${suggestion.id}`, text: action.text });
+    setProactiveNotice(t("Draft added to the composer. Nothing runs until you send it."));
+  }
+
+  function acceptCurrentCheckpoint() {
+    const currentIndex = researchStages.findIndex((stage) => stage.id === activeStage.id);
+    const nextStage = researchStages[currentIndex + 1];
+    setAcceptedStages((current) => current.includes(activeStage.id) ? current : [...current, activeStage.id]);
+    setStaleStages((current) => current.filter((id) => id !== activeStage.id));
+    setJourneyNotice(`${activeStage.checkpoint} accepted${nextStage ? `. Archimedes will route new work toward ${nextStage.label}.` : ". Research cycle complete."}`);
+    setSelectedStage(null);
+    if (nextStage) setResearchMode(nextStage.mode);
+  }
+
+  function requestCheckpointChanges() {
+    setMainSection("chat");
+    setComposerRequest({
+      id: `checkpoint-${Date.now()}`,
+      text: `Revise the current ${activeStage.checkpoint.toLowerCase()}. Preserve the accepted evidence, explain what changed, and prepare a new checkpoint for review.`,
+    });
+    setSelectedStage(null);
+  }
+
+  function branchFromCheckpoint() {
+    const nextBranch = branchCount + 1;
+    setBranchCount(nextBranch);
+    setJourneyNotice(`Created branch B${nextBranch} from ${activeStage.label}. The accepted branch remains available.`);
+    setSelectedStage(null);
+  }
+
+  function returnToStage(stage: ResearchStage) {
+    const targetIndex = researchStages.findIndex((candidate) => candidate.id === stage.id);
+    const downstream = researchStages.slice(targetIndex + 1).map((candidate) => candidate.id);
+    setStaleStages((current) => Array.from(new Set([...current, ...downstream.filter((id) => acceptedStages.includes(id))])));
+    setJourneyNotice(`Returned to ${stage.label}. Downstream accepted work is preserved and marked stale until revalidated.`);
+    setSelectedStage(null);
+    setResearchMode(stage.mode);
+  }
+
+  function toggleProactiveDock() {
+    if (proactive.settings.mode === "off") {
+      setSettingsSection("proactive");
+      setSettingsOpen(true);
+      return;
+    }
+    proactive.setOpen(!proactive.open);
+  }
+
   const dirtyArtifactPaths = useMemo(() => new Set(Object.values(artifactDrafts).filter(isDraftDirty).map((draft) => draft.path)), [artifactDrafts]);
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : mainSection === "extensions" ? t("Extensions") : mainSection === "library" ? t("Library") : mainSection === "daily" ? t("Daily papers") : mainSection === "benchmark-radar" ? t("Benchmark Radar") : mainSection === "image-creation" ? t("Image creation") : mainSection === "writing" ? t("Paper writing") : t("Artifacts");
-  const mainSubtitle = mainSection === "image-creation" ? t("Generate and remix research figures") : mainSection === "writing" ? t("LaTeX workspace") : mainSection === "daily" ? t("Live research feed") : mainSection === "benchmark-radar" ? t("Benchmark intelligence") : workspaceReady ? t("Local · {folder}", { folder: executionWorkspaceName || t("Workspace") }) : t("Opening workspace");
   const moduleCommands: PaletteCommand[] = (["knowledge", "create"] as const).flatMap((section) =>
     sidebarEntries(section)
       .filter((entry) => !entry.disabled)
@@ -2025,6 +2117,9 @@ function App() {
     { id: "new-research", group: t("Work"), label: t("New research task"), detail: t("Start a chat in the current project"), shortcut: "Ctrl N", icon: <Plus size={15} />, run: () => startNewTask() },
     { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
     { id: "open-chat", group: t("Work"), label: t("Open current chat"), icon: <MessageCircle size={15} />, run: () => setMainSection("chat") },
+    { id: "research-path", group: t("Panels"), label: t("Research path"), detail: researchDockOpen ? t("Hide the research path dock") : t("Show the research path dock"), icon: <Route size={15} />, run: () => { setMainSection("chat"); setResearchDockOpen((open) => !open); } },
+    { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? t("Set up proactive suggestions") : t("Review suggestions"), icon: <Sparkles size={15} />, run: toggleProactiveDock },
+    { id: "proactive-settings", group: t("System"), label: t("Proactive settings"), icon: <ShieldCheck size={15} />, run: () => { setSettingsSection("proactive"); setSettingsOpen(true); } },
     ...moduleCommands,
     { id: "extensions-skills", group: t("Extensions"), label: t("Skills"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("skills"); setMainSection("extensions"); } },
     { id: "extensions-mcp", group: t("Extensions"), label: t("MCP servers"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("mcp"); setMainSection("extensions"); } },
@@ -2097,14 +2192,59 @@ function App() {
       <section className={workbenchOpen ? "codex-main workbench-open" : "codex-main"} style={{ "--workbench-width": workbenchOpen ? `${workbenchWidth}px` : "0px" } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
           {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
-          <div className="conversation-title"><strong>{mainTitle}</strong><span>{mainSubtitle}</span></div>
+          <div className="conversation-title"><strong>{mainTitle}</strong></div>
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
-            <button className={workbenchOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={toggleWorkbench} title={workbenchOpen ? `${t("Hide workbench")} (Ctrl+\`)` : `${t("Show workbench")} (Ctrl+\`)`} aria-label={workbenchOpen ? t("Hide workbench") : t("Show workbench")} aria-pressed={workbenchOpen}>
-              <PanelRight size={18} />
+            <button
+              className={researchDockOpen && mainSection === "chat" ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
+              onClick={() => setResearchDockOpen((open) => !open)}
+              title={mainSection === "chat" ? (researchDockOpen ? t("Hide Research path") : t("Show Research path")) : t("Research path follows the active chat")}
+              aria-label={researchDockOpen ? t("Hide Research path") : t("Show Research path")}
+              aria-pressed={researchDockOpen && mainSection === "chat"}
+              disabled={mainSection !== "chat"}
+            >
+              <Route size={16} />
+            </button>
+            <button
+              className={proactive.open ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
+              onClick={toggleProactiveDock}
+              title={proactive.settings.mode === "off" ? t("Set up Proactive agent") : proactive.open ? t("Hide Proactive agent") : t("Show Proactive agent")}
+              aria-label={proactive.open ? t("Hide Proactive agent") : t("Show Proactive agent")}
+              aria-pressed={proactive.open}
+            >
+              <Sparkles size={16} />
+              {proactive.queuedCount > 0 && <span className="dock-badge" aria-label={`${proactive.queuedCount} queued suggestions`}>{proactive.queuedCount > 9 ? "9+" : proactive.queuedCount}</span>}
+            </button>
+            <button className={workbenchOpen ? "quiet-icon-button workbench-toggle open" : "quiet-icon-button workbench-toggle"} onClick={toggleWorkbench} title={workbenchOpen ? `${t("Hide workbench")} (Ctrl+\`)` : `${t("Show workbench")} (Ctrl+\`)`} aria-label={workbenchOpen ? t("Hide workbench") : t("Show workbench")} aria-pressed={workbenchOpen}>
+              <PanelRight size={17} />
             </button>
           </div>
         </header>
+
+        <ResearchDock
+          researchOpen={researchDockOpen && mainSection === "chat"}
+          proactiveOpen={proactive.open}
+          research={<ResearchPathPanel
+            stages={researchStages}
+            activeStage={activeStage}
+            acceptedStages={acceptedStages}
+            staleStages={staleStages}
+            selectedStage={selectedStage}
+            agentBusy={agentBusy && Boolean(activeThreadId) && runningThreadId === activeThreadId}
+            notice={journeyNotice}
+            onSelectStage={setSelectedStage}
+            onAccept={acceptCurrentCheckpoint}
+            onRequestChanges={requestCheckpointChanges}
+            onBranch={branchFromCheckpoint}
+            onReturn={returnToStage}
+            onCollapse={() => setResearchDockOpen(false)}
+          />}
+          proactive={<ProactiveAgentPanel
+            controller={proactive}
+            onOpenSettings={() => { setSettingsSection("proactive"); setSettingsOpen(true); }}
+            onCollapse={() => proactive.setOpen(false)}
+          />}
+        />
 
         <div className="main-workspace" ref={mainWorkspaceRef}>
         <div className={mainSection === "chat" ? "main-view chat-main" : "main-view knowledge-main"}>
@@ -2244,6 +2384,12 @@ function App() {
         />
       </section>
 
+      {proactiveNotice && <div className="proactive-toast" role="status">
+        <Sparkles size={14} />
+        <span>{proactiveNotice}</span>
+        <button onClick={() => setProactiveNotice("")} aria-label={t("Dismiss")}><X size={12} /></button>
+      </div>}
+
       <WorkspaceModal
         modal={modal ?? (selectedSource ? "source" : null)}
         artifactName={artifactName}
@@ -2284,6 +2430,14 @@ function App() {
         workbenchPreferences={workbenchPreferences}
         onChangeWorkbenchPreferences={updateWorkbenchPreferences}
         onResetWorkbenchPreferences={() => void resetWorkbenchPreferences()}
+        proactiveSettings={proactive.settings}
+        onChangeProactiveSettings={(patch) => {
+          proactive.setSettings(patch);
+          if (proactive.settings.mode === "off" && patch.mode && patch.mode !== "off") proactive.setOpen(true);
+        }}
+        onResetProactiveHistory={proactive.resetHistory}
+        proactiveHistoryCount={proactive.state.suggestions.length}
+        onObserveProactive={proactive.observeOnce}
       />
       <NewProjectModal
         open={newProjectOpen}
@@ -2336,14 +2490,6 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
   const [contextLengthMenuOpen, setContextLengthMenuOpen] = useState(false);
-  const [acceptedStages, setAcceptedStages] = useState<ResearchStageId[]>(() => {
-    const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
-    return researchStages.slice(0, activeIndex).map((stage) => stage.id);
-  });
-  const [staleStages, setStaleStages] = useState<ResearchStageId[]>([]);
-  const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
-  const [branchCount, setBranchCount] = useState(1);
-  const [journeyNotice, setJourneyNotice] = useState("");
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [composerError, setComposerError] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -2365,7 +2511,6 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
     requestAnimationFrame(() => composerRef.current?.focus());
   }, [composerRequest, onComposerRequestApplied]);
 
-  const activeStage = stageForMode(researchMode);
   const predictedMode = inferResearchMode(prompt, researchMode);
   const visibleMessages = messages.slice(historyStart);
   const hiddenMessageCount = historyStart;
@@ -2519,41 +2664,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
     const draft = prompt;
     setPrompt("");
     onResearchMode(predictedMode);
-    setSelectedStage(null);
-    setJourneyNotice("");
     onSubmit(draft, predictedMode, reasoningEffort, contextLength);
-  }
-
-  function acceptCurrentCheckpoint() {
-    const currentIndex = researchStages.findIndex((stage) => stage.id === activeStage.id);
-    const nextStage = researchStages[currentIndex + 1];
-    setAcceptedStages((current) => current.includes(activeStage.id) ? current : [...current, activeStage.id]);
-    setStaleStages((current) => current.filter((id) => id !== activeStage.id));
-    setJourneyNotice(`${activeStage.checkpoint} accepted${nextStage ? `. Archimedes will route new work toward ${nextStage.label}.` : ". Research cycle complete."}`);
-    setSelectedStage(null);
-    if (nextStage) onResearchMode(nextStage.mode);
-  }
-
-  function requestCheckpointChanges() {
-    setPrompt(`Revise the current ${activeStage.checkpoint.toLowerCase()}. Preserve the accepted evidence, explain what changed, and prepare a new checkpoint for review.`);
-    setSelectedStage(null);
-    requestAnimationFrame(() => composerRef.current?.focus());
-  }
-
-  function branchFromCheckpoint() {
-    const nextBranch = branchCount + 1;
-    setBranchCount(nextBranch);
-    setJourneyNotice(`Created branch B${nextBranch} from ${activeStage.label}. The accepted branch remains available.`);
-    setSelectedStage(null);
-  }
-
-  function returnToStage(stage: ResearchStage) {
-    const targetIndex = researchStages.findIndex((candidate) => candidate.id === stage.id);
-    const downstream = researchStages.slice(targetIndex + 1).map((candidate) => candidate.id);
-    setStaleStages((current) => Array.from(new Set([...current, ...downstream.filter((id) => acceptedStages.includes(id))])));
-    setJourneyNotice(`Returned to ${stage.label}. Downstream accepted work is preserved and marked stale until revalidated.`);
-    setSelectedStage(null);
-    onResearchMode(stage.mode);
   }
 
   function selectWelcomeWorkflow(action: ResearchWelcomeAction) {
@@ -2564,44 +2675,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
     }
   }
 
-  return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout has-journey"}>
-    {!welcomeVisible && <section className="research-journey" aria-label="Research progress">
-      <header className="research-journey-header">
-        <div><span>Research path</span><strong>AI routed · {activeStage.label}</strong></div>
-        <div className="research-journey-actions">
-          {journeyNotice && <span className="research-journey-notice">{journeyNotice}</span>}
-          <button onClick={() => setSelectedStage((current) => current === activeStage.id ? null : activeStage.id)}><Flag size={13} />Review checkpoint</button>
-        </div>
-      </header>
-      <div className="research-stage-track">
-        {researchStages.map((stage, index) => {
-          const accepted = acceptedStages.includes(stage.id);
-          const stale = staleStages.includes(stage.id);
-          const active = stage.id === activeStage.id;
-          const status = stale ? "stale" : active ? agentBusy ? "running" : "active" : accepted ? "accepted" : "planned";
-          return <div className="research-stage-segment" key={stage.id}>
-            <button className={`research-stage ${status} ${selectedStage === stage.id ? "selected" : ""}`} onClick={() => setSelectedStage((current) => current === stage.id ? null : stage.id)} aria-current={active ? "step" : undefined}>
-              <span className="research-stage-node">{accepted && !stale ? <Check size={12} /> : index + 1}</span>
-              <span><strong>{stage.label}</strong><small>{stale ? "Needs revalidation" : accepted ? "Accepted" : active ? agentBusy ? "Running" : "Current focus" : "Planned"}</small></span>
-            </button>
-            {index < researchStages.length - 1 && <span className={`research-stage-line ${accepted && !stale ? "complete" : ""}`} />}
-          </div>;
-        })}
-      </div>
-      {selectedStage && (() => {
-        const stage = researchStages.find((candidate) => candidate.id === selectedStage) ?? activeStage;
-        const isActive = stage.id === activeStage.id;
-        return <div className="research-checkpoint-panel">
-          <div><span>{isActive ? "Next checkpoint" : stage.label}</span><strong>{stage.checkpoint}</strong><p>{stage.description}</p></div>
-          <div className="research-checkpoint-actions">
-            {isActive && <button className="journey-primary" onClick={acceptCurrentCheckpoint}><Check size={13} />Accept & advance</button>}
-            {isActive && <button onClick={requestCheckpointChanges}><RefreshCw size={13} />Request changes</button>}
-            {isActive && <button onClick={branchFromCheckpoint}><Blocks size={13} />Create branch</button>}
-            {!isActive && <button onClick={() => returnToStage(stage)}><RefreshCw size={13} />Return here</button>}
-          </div>
-        </div>;
-      })()}
-    </section>}
+  return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
     <div className="conversation-scroll-area">
     <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
       {welcomeVisible ? <ResearchWelcome onSelect={selectWelcomeWorkflow} /> : <div className="conversation-thread">
