@@ -154,7 +154,7 @@
 .example-evidence-chart i:nth-child(2) { height: 54%; background: #9b4b3d; }
 .example-evidence-chart i:nth-child(3) { height: 76%; background: #276351; }
 .example-evidence-chart i:nth-child(4) { height: 94%; background: #c7813d; }
-.paper-presentation-empty-flow { display: flex; max-width: 610px; gap: 0; color: #81786c; font-size: 12px; font-weight: 680; }
+.paper-presentation-empty-flow { display: flex; width: min(100%, 820px); max-width: none; gap: 0; color: #81786c; font-size: 12px; font-weight: 680; }
 .paper-presentation-empty-flow span { display: flex; flex: 1; align-items: center; gap: 8px; }
 .paper-presentation-empty-flow span::after { width: 100%; height: 2px; margin-left: 8px; background: #ddd4c5; content: ""; }
 .paper-presentation-empty-flow span:last-child { flex: 0 1 auto; }
