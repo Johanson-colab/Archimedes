@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { AlertTriangle, BookOpenCheck, Check, ChevronDown, ChevronUp, FileSearch, FlaskConical, Lightbulb, LoaderCircle, RefreshCw, ScanSearch, Sparkles } from "lucide-react";
 import PaperPresentationDeck from "./PaperPresentationDeck";
 
@@ -26,6 +28,36 @@ function initialRuns(): Record<ReviewAgentId, ReviewRun> {
 
 function reviewError(error: unknown) {
   return error instanceof Error ? error.message : String(error || "The review could not be completed.");
+}
+
+/**
+ * Models often emit TeX delimiters from the paper itself (`\(...\)` and
+ * `\[...\]`) instead of the dollar delimiters remark-math expects. Convert
+ * prose and math while leaving fenced and inline code untouched.
+ */
+function normalizeReviewMath(value: string) {
+  let fenced = false;
+  return String(value || "").replace(/\r\n?/g, "\n").split("\n").map((line) => {
+    if (/^\s*(?:```|~~~)/.test(line)) {
+      fenced = !fenced;
+      return line;
+    }
+    if (fenced) return line;
+    return line.split(/(`+[^`]*`+)/g).map((part, index) => index % 2 ? part : part
+      .replace(/\\\[/g, () => "$$")
+      .replace(/\\\]/g, () => "$$")
+      .replace(/\\\(/g, () => "$")
+      .replace(/\\\)/g, () => "$")).join("");
+  }).join("\n");
+}
+
+function ReviewMarkdown({ content, className = "" }: { content: string; className?: string }) {
+  return <div className={`paper-review-markdown${className ? ` ${className}` : ""}`}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
+    >{normalizeReviewMath(content)}</ReactMarkdown>
+  </div>;
 }
 
 export default function PaperReviewWorkbench({ bridge, workspace, projectId, paper, pageCount, ready, pdfUrl = "", onInternalReviewThreadsDeleted }: {
@@ -184,22 +216,22 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       {!workspace && <div className="paper-review-notice"><AlertTriangle size={17} /><div><strong>Choose a workspace first</strong><span>A workspace keeps this review and its supporting source reads inside Archimedes.</span></div></div>}
 
       <section className="paper-review-route" aria-label="Review process">
-        <div><span>Independent readings</span><strong>{independentReadingStatus}</strong></div>
-        <div><span>Evidence audit</span><strong>{running ? "Checking" : summary.status === "complete" ? "Completed" : summary.status === "error" ? "Not completed" : "Pending"}</strong></div>
-        <div><span>Research memorandum</span><strong>{summary.status === "complete" ? "Ready" : running ? "Drafting" : summary.status === "error" ? "Failed" : "Pending"}</strong></div>
+        <div data-step="01"><span>Independent readings</span><strong>{independentReadingStatus}</strong></div>
+        <div data-step="02"><span>Evidence audit</span><strong>{running ? "Checking" : summary.status === "complete" ? "Completed" : summary.status === "error" ? "Not completed" : "Pending"}</strong></div>
+        <div data-step="03"><span>Research memorandum</span><strong>{summary.status === "complete" ? "Ready" : running ? "Drafting" : summary.status === "error" ? "Failed" : "Pending"}</strong></div>
       </section>
 
       <section className="paper-review-readings" aria-label="Specialist readings">
-        {REVIEWERS.map((reviewer) => {
+        {REVIEWERS.map((reviewer, index) => {
           const run = visibleRuns[reviewer.id];
           const Icon = reviewer.icon;
           const isExpanded = expanded.has(reviewer.id);
-          return <article className={`paper-review-reading ${run.status}`} key={reviewer.id}>
-            <header><Icon size={19} strokeWidth={1.7} /><div><h2>{reviewer.title}</h2><p>{reviewer.subtitle}</p></div><span className={`paper-review-status ${run.status}`} aria-label={run.status}>{run.status === "working" ? <LoaderCircle className="spin" size={14} /> : run.status === "complete" ? <Check size={15} /> : run.status === "error" ? <AlertTriangle size={15} /> : null}</span></header>
+          return <article className={`paper-review-reading ${reviewer.id} ${run.status}${isExpanded ? " expanded" : ""}`} data-index={String(index + 1).padStart(2, "0")} key={reviewer.id}>
+            <header><span className="paper-review-reading-icon"><Icon size={19} strokeWidth={1.7} /></span><div><h2>{reviewer.title}</h2><p>{reviewer.subtitle}</p></div><span className={`paper-review-status ${run.status}`} aria-label={run.status}>{run.status === "working" ? <LoaderCircle className="spin" size={14} /> : run.status === "complete" ? <Check size={15} /> : run.status === "error" ? <AlertTriangle size={15} /> : null}</span></header>
             {run.status === "idle" && <p className="paper-review-reading-copy">Waiting for the complete PDF review to begin.</p>}
             {run.status === "working" && <p className="paper-review-reading-copy">Reading source pages and preparing a page-cited assessment…</p>}
             {run.status === "error" && <p className="paper-review-reading-error">{run.error}</p>}
-            {run.status === "complete" && <><button className="paper-review-expand" onClick={() => toggleExpanded(reviewer.id)} aria-expanded={isExpanded}><span>{run.repaired ? "Read repaired evidence note" : "Read evidence note"}</span>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>{isExpanded && <div className="paper-review-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{run.response}</ReactMarkdown></div>}</>}
+            {run.status === "complete" && <><button className="paper-review-expand" onClick={() => toggleExpanded(reviewer.id)} aria-expanded={isExpanded}><span>{run.repaired ? "Read repaired evidence note" : "Read evidence note"}</span>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>{isExpanded && <ReviewMarkdown content={run.response} />}</>}
           </article>;
         })}
       </section>
@@ -211,7 +243,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         {summary.status === "idle" && <p>Run the review to collect independent readings before Archimedes writes the final memorandum.</p>}
         {summary.status === "working" && <p>{stage}</p>}
         {summary.status === "error" && <p className="paper-review-summary-error">{summary.error}</p>}
-        {summary.status === "complete" && <div className="paper-review-markdown paper-review-final-note"><ReactMarkdown remarkPlugins={[remarkGfm]}>{summary.response}</ReactMarkdown></div>}
+        {summary.status === "complete" && <ReviewMarkdown content={summary.response} className="paper-review-final-note" />}
       </section>
     </main>}
   </div>;
