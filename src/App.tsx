@@ -779,6 +779,12 @@ function readResearchDockOpen() {
   return window.localStorage.getItem("archimedes-research-dock-open") !== "false";
 }
 
+function readPinnedPathThreadId() {
+  if (typeof window === "undefined") return null;
+  const stored = window.localStorage.getItem("archimedes-research-path-pin");
+  return stored && stored.trim() ? stored : null;
+}
+
 function systemTheme(): AppTheme {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "charcoal";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "charcoal" : "paper";
@@ -861,6 +867,7 @@ function App() {
   const [branchCount, setBranchCount] = useState(1);
   const [journeyNotice, setJourneyNotice] = useState("");
   const [researchDockOpen, setResearchDockOpen] = useState(readResearchDockOpen);
+  const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
   const [proactiveNotice, setProactiveNotice] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
   const [contextLength, setContextLength] = useState<ContextLength>(readContextLength);
@@ -923,6 +930,16 @@ function App() {
   threadsRef.current = threads;
 
   const activeStage = stageForMode(researchMode as ResearchMode);
+  const pinnedPathThread = pinnedPathThreadId ? threads.find((thread) => thread.id === pinnedPathThreadId) ?? null : null;
+  const pathThread = pinnedPathThread ?? activeThread;
+  const pathStage = stageForMode((pathThread?.mode ?? researchMode) as ResearchMode);
+  const pathStageIndex = Math.max(0, researchStages.findIndex((stage) => stage.id === pathStage.id));
+  const pathThreadIsActive = Boolean(pathThread && pathThread.id === activeThreadId);
+  const pathAcceptedStages = pathThreadIsActive ? acceptedStages : researchStages.slice(0, pathStageIndex).map((stage) => stage.id);
+  const pathStaleStages = pathThreadIsActive ? staleStages : [];
+  const pathProject = projects.find((project) => project.id === (pathThread?.project_id ?? activeProjectId)) ?? null;
+  const pathIsPinned = Boolean(pinnedPathThreadId);
+  const pathThreadInactive = Boolean(pinnedPathThreadId && !pathThreadIsActive);
   const proactive = useProactiveAgent({
     messages,
     threadId: activeThreadId,
@@ -1026,6 +1043,16 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem("archimedes-research-dock-open", String(researchDockOpen));
   }, [researchDockOpen]);
+
+  useEffect(() => {
+    if (pinnedPathThreadId) window.localStorage.setItem("archimedes-research-path-pin", pinnedPathThreadId);
+    else window.localStorage.removeItem("archimedes-research-path-pin");
+  }, [pinnedPathThreadId]);
+
+  useEffect(() => {
+    if (!pinnedPathThreadId || threads.length === 0) return;
+    if (!threads.some((thread) => thread.id === pinnedPathThreadId)) setPinnedPathThreadId(null);
+  }, [pinnedPathThreadId, threads]);
 
   useEffect(() => {
     const handleResize = () => setWorkbenchWidth((width) => clampWorkbenchWidth(width));
@@ -2055,6 +2082,27 @@ function App() {
     setProactiveNotice(t("Draft added to the composer. Nothing runs until you send it."));
   }
 
+  function draftProactiveInChat(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setMainSection("chat");
+    setComposerRequest({ id: `proactive-ask-${Date.now()}`, text: trimmed });
+    setProactiveNotice(t("Draft added to the main composer. Nothing runs until you send it."));
+  }
+
+  function togglePathPin() {
+    if (pinnedPathThreadId) {
+      setPinnedPathThreadId(null);
+      return;
+    }
+    if (activeThreadId) setPinnedPathThreadId(activeThreadId);
+  }
+
+  function openPathThread() {
+    const target = pinnedPathThread ?? activeThread;
+    if (target) void openResearchThread(target);
+  }
+
   function acceptCurrentCheckpoint() {
     const currentIndex = researchStages.findIndex((stage) => stage.id === activeStage.id);
     const nextStage = researchStages[currentIndex + 1];
@@ -2117,7 +2165,7 @@ function App() {
     { id: "new-research", group: t("Work"), label: t("New research task"), detail: t("Start a chat in the current project"), shortcut: "Ctrl N", icon: <Plus size={15} />, run: () => startNewTask() },
     { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
     { id: "open-chat", group: t("Work"), label: t("Open current chat"), icon: <MessageCircle size={15} />, run: () => setMainSection("chat") },
-    { id: "research-path", group: t("Panels"), label: t("Research path"), detail: researchDockOpen ? t("Hide the research path dock") : t("Show the research path dock"), icon: <Route size={15} />, run: () => { setMainSection("chat"); setResearchDockOpen((open) => !open); } },
+    { id: "research-path", group: t("Panels"), label: t("Research path"), detail: researchDockOpen ? t("Hide the research path dock") : t("Show the research path dock"), icon: <Route size={15} />, run: () => setResearchDockOpen((open) => !open) },
     { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? t("Set up proactive suggestions") : t("Review suggestions"), icon: <Sparkles size={15} />, run: toggleProactiveDock },
     { id: "proactive-settings", group: t("System"), label: t("Proactive settings"), icon: <ShieldCheck size={15} />, run: () => { setSettingsSection("proactive"); setSettingsOpen(true); } },
     ...moduleCommands,
@@ -2196,12 +2244,11 @@ function App() {
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
             <button
-              className={researchDockOpen && mainSection === "chat" ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
+              className={researchDockOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={() => setResearchDockOpen((open) => !open)}
-              title={mainSection === "chat" ? (researchDockOpen ? t("Hide Research path") : t("Show Research path")) : t("Research path follows the active chat")}
+              title={researchDockOpen ? t("Hide Research path") : t("Show Research path")}
               aria-label={researchDockOpen ? t("Hide Research path") : t("Show Research path")}
-              aria-pressed={researchDockOpen && mainSection === "chat"}
-              disabled={mainSection !== "chat"}
+              aria-pressed={researchDockOpen}
             >
               <Route size={16} />
             </button>
@@ -2222,27 +2269,35 @@ function App() {
         </header>
 
         <ResearchDock
-          researchOpen={researchDockOpen && mainSection === "chat"}
+          researchOpen={researchDockOpen}
           proactiveOpen={proactive.open}
           research={<ResearchPathPanel
             stages={researchStages}
-            activeStage={activeStage}
-            acceptedStages={acceptedStages}
-            staleStages={staleStages}
+            activeStage={pathStage}
+            acceptedStages={pathAcceptedStages}
+            staleStages={pathStaleStages}
             selectedStage={selectedStage}
-            agentBusy={agentBusy && Boolean(activeThreadId) && runningThreadId === activeThreadId}
-            notice={journeyNotice}
+            agentBusy={agentBusy && Boolean(pathThread) && runningThreadId === pathThread?.id}
+            notice={pathThreadIsActive ? journeyNotice : ""}
+            projectName={pathProject?.name ?? t("No project")}
+            threadTitle={pathThread?.title ?? t("No active thread")}
+            pinned={pathIsPinned}
+            threadInactive={pathThreadInactive}
+            hasThread={Boolean(pathThread)}
             onSelectStage={setSelectedStage}
             onAccept={acceptCurrentCheckpoint}
             onRequestChanges={requestCheckpointChanges}
             onBranch={branchFromCheckpoint}
             onReturn={returnToStage}
+            onTogglePin={togglePathPin}
+            onOpenThread={openPathThread}
             onCollapse={() => setResearchDockOpen(false)}
           />}
           proactive={<ProactiveAgentPanel
             controller={proactive}
             onOpenSettings={() => { setSettingsSection("proactive"); setSettingsOpen(true); }}
             onCollapse={() => proactive.setOpen(false)}
+            onDraftInChat={draftProactiveInChat}
           />}
         />
 
