@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, FileCode2, ListTree, Wrench } from "lucide-react";
 import JsonCode from "./JsonCode";
 import { eventOrdinal } from "./journeyEventState";
+import { collectTouchedPaths } from "./evidencePaths";
 
 type TrajectoryViewProps = {
   thread: ResearchThread | null;
@@ -26,24 +27,6 @@ function payloadObject(payload: unknown): Record<string, unknown> | null {
   return payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : null;
 }
 
-function collectFiles(payload: unknown, files: Set<string>) {
-  if (Array.isArray(payload)) {
-    for (const item of payload) collectFiles(item, files);
-    return;
-  }
-  if (!payload || typeof payload !== "object") return;
-  const record = payload as Record<string, unknown>;
-  for (const [key, value] of Object.entries(record)) {
-    if ((key === "path" || key === "file" || key === "filePath" || key === "filename") && typeof value === "string") files.add(value);
-    else if (key === "files" && Array.isArray(value)) {
-      for (const item of value) {
-        if (typeof item === "string") files.add(item);
-        else collectFiles(item, files);
-      }
-    } else collectFiles(value, files);
-  }
-}
-
 function isToolCall(event: ResearchEvent) {
   return event.type === "tool_call";
 }
@@ -56,7 +39,7 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
   focusAppliedRef.current = onFocusApplied;
   const files = useMemo(() => {
     const next = new Set<string>();
-    for (const event of events) collectFiles(event.payload, next);
+    for (const event of events) for (const path of collectTouchedPaths(event.payload)) next.add(path);
     return next;
   }, [events]);
   const toolCalls = events.filter(isToolCall).length;
