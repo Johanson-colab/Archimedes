@@ -6136,3 +6136,25 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 }
 
 .settings-appearance-group .settings-row { min-height: 58px; padding-block: 11px; }
+
+/* Appearance live preview: a miniature shell that consumes the same tokens. */
+.appearance-preview-section { padding-top: 14px; }
+.appearance-preview { display: grid; height: 158px; grid-template-columns: 104px minmax(0, 1fr); overflow: hidden; background: var(--surface-ground); border: 1px solid var(--border-default); border-radius: calc(var(--radius-control) + 5px); }
+.appearance-preview-rail { display: flex; flex-direction: column; gap: calc(var(--density-row-pad) / 5); padding: calc(var(--density-row-pad) / 1.5) calc(var(--density-row-pad) / 2); background: var(--surface-sidebar); border-right: 1px solid var(--border-soft); }
+.appearance-preview-mark { display: grid; width: 18px; height: 18px; margin-bottom: calc(var(--density-row-pad) / 3); place-items: center; color: var(--accent-ink); background: var(--accent); border-radius: calc(var(--radius-control) - 2px); font-size: 9px; font-weight: 700; }
+.appearance-preview-nav { display: flex; height: calc(var(--density-nav-height) * .62); align-items: center; padding: 0 5px; overflow: hidden; color: var(--text-muted); border-radius: calc(var(--radius-control) - 2px); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.appearance-preview-nav.active { color: var(--text-primary); background: var(--selected); }
+.appearance-preview-main { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: calc(var(--density-row-pad) / 1.3) calc(var(--density-row-pad) / 1.1); background: var(--surface-ground); }
+.appearance-preview-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.appearance-preview-kicker { color: var(--text-muted); font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
+.appearance-preview-chip { padding: 2px 6px; color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent); border-radius: 999px; font-size: 7px; }
+.appearance-preview-main strong { color: var(--text-primary); font-family: Georgia, "Times New Roman", serif; font-size: 13px; font-weight: 500; letter-spacing: -.02em; }
+.appearance-preview-main p { margin: 0; color: var(--text-muted); font-size: 8px; line-height: 1.4; }
+.appearance-preview-cards { display: flex; gap: 5px; margin-top: 2px; }
+.appearance-preview-cards span { height: calc(var(--density-row-pad) * 2.1); flex: 1; background: var(--surface-panel); border: 1px solid var(--border-default); border-radius: calc(var(--radius-control) * .8); }
+.appearance-preview-actions { display: flex; gap: 5px; margin-top: auto; }
+.appearance-preview-button { display: inline-flex; height: calc(var(--control-height) * .78); align-items: center; padding: 0 8px; color: var(--text-secondary); background: var(--surface-panel); border: 1px solid var(--border-default); border-radius: calc(var(--radius-control) * .8); font-size: 8px; }
+.appearance-preview-button.primary { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+
+/* Keep the preview visible while tuning the controls below it. */
+.appearance-preview-section { position: sticky; top: 0; z-index: 3; background: var(--surface-ground); padding-bottom: 10px; }

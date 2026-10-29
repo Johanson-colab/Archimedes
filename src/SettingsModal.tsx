@@ -270,6 +270,32 @@ export default function SettingsModal({
                 </div>
               </section>
 
+              <section className="settings-section appearance-preview-section">
+                <h3 className="settings-section-title">{t("Live preview")}</h3>
+                <div className="appearance-preview" aria-hidden="true">
+                  <div className="appearance-preview-rail">
+                    <span className="appearance-preview-mark">A</span>
+                    <span className="appearance-preview-nav active">{t("Library")}</span>
+                    <span className="appearance-preview-nav">{t("Daily papers")}</span>
+                    <span className="appearance-preview-nav">{t("Paper writing")}</span>
+                  </div>
+                  <div className="appearance-preview-main">
+                    <div className="appearance-preview-top">
+                      <span className="appearance-preview-kicker">{t("Workspace")}</span>
+                      <span className="appearance-preview-chip">{t("Ready")}</span>
+                    </div>
+                    <strong>{t("A quieter research surface")}</strong>
+                    <p>{t("Accent, surface, density, and radius update here immediately.")}</p>
+                    <div className="appearance-preview-cards"><span /><span /></div>
+                    <div className="appearance-preview-actions">
+                      <span className="appearance-preview-button primary">{t("New research")}</span>
+                      <span className="appearance-preview-button">{t("Open library")}</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="settings-row-description">{t("Uses the current accent, surface, density, and radius. Changes apply live.")}</p>
+              </section>
+
               <section className="settings-section">
                 <h3 className="settings-section-title">{t("Customize")}</h3>
                 <div className="settings-group settings-appearance-group">

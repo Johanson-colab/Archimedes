@@ -47,6 +47,15 @@ test("Settings > Appearance exposes accent, surface, density, radius, and reset 
   assert.match(settings, /onAppearanceChange/);
 });
 
+test("the appearance editor includes a live preview that uses the same tokens", () => {
+  assert.match(settings, /appearance-preview/);
+  assert.match(settings, /className="appearance-preview-rail"/);
+  assert.match(settings, /className="appearance-preview-button primary"/);
+  assert.match(css, /\.appearance-preview \{[^}]*background: var\(--surface-ground\)/);
+  assert.match(css, /\.appearance-preview-section \{[^}]*position: sticky/);
+  assert.match(css, /\.appearance-preview-button\.primary \{[^}]*background: var\(--accent\)/);
+});
+
 test("the new appearance copy is translated", () => {
   for (const key of [
     "Customize",
@@ -67,6 +76,12 @@ test("the new appearance copy is translated", () => {
     "Accent, surface, density, and radius apply to both Charcoal and Paper.",
     "Reset custom theme",
     "Reset",
+    "Live preview",
+    "Ready",
+    "A quieter research surface",
+    "Accent, surface, density, and radius update here immediately.",
+    "Open library",
+    "Uses the current accent, surface, density, and radius. Changes apply live.",
   ]) {
     assert.match(i18n, new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":`));
   }
