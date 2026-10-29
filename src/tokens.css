@@ -1,0 +1,308 @@
+/* ==========================================================================
+   Archimedes theme tokens
+   --------------------------------------------------------------------------
+   The single source of truth for colors, fonts, shape and theme-scoped
+   component tokens. Imported before styles.css and typography.css.
+
+   Layers
+   1. primitives  raw ramps: graphite / paper neutrals, amber, states
+   2. semantic    surfaces, borders, text, accent, states
+   3. components  mono, rail, file tones, chat send, code, scrollbars
+
+   Rules
+   - Rules outside this file must not declare theme tokens or hardcoded hex.
+   - Legacy `--night-*` names are kept as aliases so existing rules keep
+     working while they migrate to the semantic names.
+   - Component tokens that intentionally differ from the semantic palette
+     stay explicit (for example `--mono-*`), instead of being aliased.
+   ========================================================================== */
+
+:root {
+  /* --- Layer 1: primitives ------------------------------------------------ */
+  --amber-400: #e0bd4a;
+  --amber-500: #c9a227;
+  --amber-600: #a8842b;
+  --amber-700: #8a5a24;
+  --amber-800: #74491b;
+
+  --state-success: #65b894;
+  --state-warning: #d4a95c;
+  --state-danger: #dc7c83;
+  --state-info: #c2c2c2;
+
+  --graphite-950: #141110;
+  --graphite-900: #1b1816;
+  --graphite-850: #211e1c;
+  --graphite-800: #262220;
+  --graphite-750: #2b2724;
+  --graphite-600: #2d2825;
+  --graphite-550: #3a332f;
+  --graphite-400: #4a4a4a;
+  --graphite-300: #7d7672;
+  --graphite-200: #a5a09c;
+  --graphite-100: #c9c4c0;
+  --graphite-50: #eae8e6;
+
+  /* --- Layer 2: semantic (charcoal) --------------------------------------- */
+  --surface-ground: var(--graphite-950);
+  --surface-canvas: #1b1b1b;
+  --surface-sidebar: var(--graphite-900);
+  --surface-panel: var(--graphite-850);
+  --surface-raised: var(--graphite-800);
+  --surface-soft: var(--graphite-750);
+  --surface-control: #262626;
+  --surface-control-active: #363636;
+
+  --border-default: var(--graphite-550);
+  --border-soft: var(--graphite-600);
+  --border-strong: var(--graphite-400);
+
+  --text-primary: var(--graphite-50);
+  --text-secondary: var(--graphite-100);
+  --text-muted: var(--graphite-200);
+  --text-faint: var(--graphite-300);
+  --text-on-accent: #111111;
+
+  --accent: var(--amber-500);
+  --accent-hover: var(--amber-400);
+  --accent-subtle: #a6a6a6;
+  --accent-strong: #d6d6d6;
+  --focus-ring: var(--amber-500);
+  --resizer-accent: var(--amber-600);
+
+  --selected: var(--surface-control-active);
+  --selected-row: #2a2a2a;
+
+  /* --- Layer 3: component tokens (charcoal) ------------------------------- */
+  --mono-canvas: #111;
+  --mono-sidebar: #1b1b1b;
+  --mono-surface: #181818;
+  --mono-surface-raised: #202020;
+  --mono-control: #262626;
+  --mono-control-active: #363636;
+  --mono-border: #353535;
+  --mono-border-strong: #4a4a4a;
+  --mono-text: #f4f4f4;
+  --mono-text-soft: #c4c4c4;
+  --mono-text-muted: #929292;
+
+  --rail-row-ink: #a7a8b5;
+  --rail-row-ink-strong: #f1f0f6;
+  --rail-row-hover-bg: #202020;
+  --rail-row-active-bg: #25253a;
+  --rail-row-muted: #8f8f8f;
+
+  --file-tone-folder: #d3a64d;
+  --file-tone-tex: #e09a6b;
+  --file-tone-config: #d9b65c;
+  --file-tone-code: #8fb4e8;
+  --file-tone-style: #d99ab5;
+  --file-tone-markdown: #8fc3df;
+  --file-tone-image: #e094a8;
+  --file-tone-pdf: #e58a80;
+  --file-tone-shell: #9cc9a8;
+  --file-tone-file: #b0a9a3;
+
+  --chat-send-bg: #2f2e2a;
+  --chat-send-bg-hover: #3b3933;
+  --chat-send-ink: #f4f2ec;
+  --chat-send-disabled-bg: #e5e5e1;
+  --chat-send-disabled-ink: #9b9b95;
+
+  --code-bg: #0c0e15;
+  --code-fg: #d7d9e4;
+  --code-comment: #8b8fa3;
+  --code-keyword: #a79df5;
+  --code-string: #8fc7a8;
+  --code-number: #d9a56f;
+  --code-function: #7fb8d8;
+  --code-operator: #b9bac6;
+  --code-punctuation: #8f91a3;
+  --code-line-number: #5f6475;
+  --code-line-hover: #171a24;
+  --code-selection: #264f78;
+  --code-border: #272a38;
+
+  --scrollbar-size: 10px;
+  --scrollbar-thumb: #454545;
+  --scrollbar-thumb-hover: #5f5f5f;
+
+  --turn-rail-tick: #5b554f;
+  --turn-rail-tick-done: #7a736b;
+  --turn-rail-tick-future: #3b3631;
+  --turn-rail-line: #2d2824;
+  --turn-rail-hover: #e0b43b;
+  --turn-rail-shadow: 0 14px 34px rgba(0, 0, 0, .32);
+
+  /* --- Shape --------------------------------------------------------------- */
+  --control-height: 32px;
+  --radius-control: 6px;
+
+  /* --- Typography ---------------------------------------------------------- */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+
+  /* --- Runtime ------------------------------------------------------------- */
+  --ui-scale: 1;
+}
+
+/* Text size preference maps to a UI scale when native zoom is unavailable. */
+html[data-ui-zoom="css"][data-text-size="smaller"] { --ui-scale: 1; }
+html[data-ui-zoom="css"][data-text-size="small"] { --ui-scale: 1.05; }
+html[data-ui-zoom="css"][data-text-size="default"] { --ui-scale: 1.1; }
+html[data-ui-zoom="css"][data-text-size="large"] { --ui-scale: 1.15; }
+html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
+
+
+:root[data-theme="paper"] {
+  /* --- Layer 1: primitives ------------------------------------------------ */
+  --paper-50: #faf7f2;
+  --paper-100: #f4f0e9;
+  --paper-150: #f6f4f1;
+  --paper-200: #fffdf8;
+  --paper-250: #f7f3ec;
+  --paper-300: #efe9df;
+  --paper-350: #eee8df;
+  --paper-400: #e6ded4;
+  --paper-500: #cfc8bf;
+  --paper-600: #a8a19a;
+  --paper-700: #756f6c;
+  --paper-800: #5f5a54;
+  --paper-900: #2c2826;
+
+  /* --- Layer 2: semantic (paper) ------------------------------------------ */
+  --surface-ground: var(--paper-50);
+  --surface-canvas: var(--paper-150);
+  --surface-sidebar: var(--paper-100);
+  --surface-panel: var(--paper-200);
+  --surface-raised: var(--paper-250);
+  --surface-soft: var(--paper-300);
+  --surface-control: #f0ede8;
+  --surface-control-active: #e4dfd8;
+
+  --border-default: var(--paper-400);
+  --border-soft: var(--paper-350);
+  --border-strong: var(--paper-500);
+
+  --text-primary: var(--paper-900);
+  --text-secondary: var(--paper-800);
+  --text-muted: var(--paper-700);
+  --text-faint: var(--paper-600);
+  --text-on-accent: #ffffff;
+
+  --accent: var(--amber-700);
+  --accent-hover: var(--amber-800);
+  --accent-subtle: #57534e;
+  --accent-strong: #24211e;
+  --focus-ring: var(--amber-700);
+  --resizer-accent: var(--amber-700);
+
+  --selected: #e8e4de;
+  --selected-row: #ece5d8;
+
+  /* --- Layer 3: component tokens (paper) ---------------------------------- */
+  --mono-canvas: #fbfaf8;
+  --mono-sidebar: #f6f4f1;
+  --mono-surface: #fffefd;
+  --mono-surface-raised: #f5f2ee;
+  --mono-control: #f0ede8;
+  --mono-control-active: #e4dfd8;
+  --mono-border: #e2ddd6;
+  --mono-border-strong: #cfc8bf;
+  --mono-text: #292620;
+  --mono-text-soft: #5f5951;
+  --mono-text-muted: #8c857d;
+
+  --rail-row-ink: #625f59;
+  --rail-row-ink-strong: #252422;
+  --rail-row-hover-bg: #efede9;
+  --rail-row-active-bg: #f1e8cf;
+  --rail-row-muted: #8b857d;
+
+  --file-tone-folder: #a87522;
+  --file-tone-tex: #a35a2d;
+  --file-tone-config: #8f6a15;
+  --file-tone-code: #35679e;
+  --file-tone-style: #9b4a6a;
+  --file-tone-markdown: #2f6f8f;
+  --file-tone-image: #a74f70;
+  --file-tone-pdf: #a5443a;
+  --file-tone-shell: #3f7a55;
+  --file-tone-file: #6f6862;
+
+  --chat-send-bg: #34312c;
+  --chat-send-bg-hover: #423e37;
+  --chat-send-ink: #fbfaf7;
+  --chat-send-disabled-bg: #e9e5df;
+  --chat-send-disabled-ink: #aaa49c;
+
+  --code-bg: #f4f1ec;
+  --code-fg: #39352f;
+  --code-comment: #8a8278;
+  --code-keyword: #7b4e75;
+  --code-string: #8a6331;
+  --code-number: #765e90;
+  --code-function: #356d72;
+  --code-operator: #625d56;
+  --code-punctuation: #777169;
+  --code-line-number: #a09a91;
+  --code-line-hover: #efebe4;
+  --code-selection: #add6ff;
+  --code-border: #e0dad2;
+
+  --scrollbar-thumb: #c9c4bc;
+  --scrollbar-thumb-hover: #b3ada4;
+
+  --turn-rail-tick: #c9c2b8;
+  --turn-rail-tick-done: #a9a196;
+  --turn-rail-tick-future: #ded8d0;
+  --turn-rail-line: #e6e0d8;
+  --turn-rail-hover: #b07a2b;
+  --turn-rail-shadow: 0 14px 34px rgba(60, 48, 30, .14);
+}
+
+/* --- Legacy aliases -------------------------------------------------------
+   Existing rules still reference `--night-*`. They resolve to the semantic
+   tokens above, so a future theme pack only needs to override semantics. */
+:root {
+  --night-ground: var(--surface-ground);
+  --workbench-ground: var(--surface-canvas);
+  --night-sidebar: var(--surface-sidebar);
+  --night-panel: var(--surface-panel);
+  --night-panel-raised: var(--surface-raised);
+  --night-panel-soft: var(--surface-soft);
+  --night-line: var(--border-default);
+  --night-line-soft: var(--border-soft);
+  --night-ink: var(--text-primary);
+  --night-ink-soft: var(--text-secondary);
+  --night-muted: var(--text-muted);
+  --night-faint: var(--text-faint);
+  --night-accent: var(--accent-subtle);
+  --night-accent-strong: var(--accent-strong);
+  --night-success: var(--state-success);
+  --night-warning: var(--state-warning);
+  --night-danger: var(--state-danger);
+  --night-blue: var(--state-info);
+  --accent-ink: var(--text-on-accent);
+}
+
+/* --- Theme-scoped runtime overrides -------------------------------------- */
+
+/* The send control keeps its own neutral fill instead of the semantic
+   surface, because it sits on top of the composer in both themes. */
+html:not([data-theme="paper"]) {
+  --chat-send-bg: #34332f;
+  --chat-send-bg-hover: #41403a;
+  --chat-send-ink: #f7f5ef;
+  --chat-send-disabled-bg: #292b35;
+  --chat-send-disabled-ink: #666978;
+}
+
+/* Font preferences apply as attribute overrides on the document element. */
+html[data-interface-font="geist"] {
+  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+html[data-mono-font="geist-mono"] {
+  --font-mono: "Geist Mono", "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+}

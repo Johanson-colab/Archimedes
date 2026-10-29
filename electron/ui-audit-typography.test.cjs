@@ -6,24 +6,33 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const main = fs.readFileSync(path.join(root, "src", "main.tsx"), "utf8");
 const typography = fs.readFileSync(path.join(root, "src", "typography.css"), "utf8");
+const tokens = fs.readFileSync(path.join(root, "src", "tokens.css"), "utf8");
 
 test("warm type layer loads after the layout stylesheet", () => {
   assert.match(main, /import "\.\/styles\.css";\s*import "\.\/typography\.css";/);
 });
 
 test("charcoal uses warm neutral surfaces and ink", () => {
-  assert.match(typography, /--night-ground: #141110/);
-  assert.match(typography, /--night-sidebar: #1b1816/);
-  assert.match(typography, /--night-panel: #211e1c/);
-  assert.match(typography, /--night-ink: #eae8e6/);
-  assert.match(typography, /--night-muted: #a5a09c/);
+  assert.match(tokens, /--graphite-950: #141110/);
+  assert.match(tokens, /--surface-ground: var\(--graphite-950\)/);
+  assert.match(tokens, /--graphite-900: #1b1816/);
+  assert.match(tokens, /--surface-sidebar: var\(--graphite-900\)/);
+  assert.match(tokens, /--graphite-850: #211e1c/);
+  assert.match(tokens, /--surface-panel: var\(--graphite-850\)/);
+  assert.match(tokens, /--graphite-50: #eae8e6/);
+  assert.match(tokens, /--text-primary: var\(--graphite-50\)/);
+  assert.match(tokens, /--graphite-200: #a5a09c/);
+  assert.match(tokens, /--text-muted: var\(--graphite-200\)/);
   assert.match(typography, /html:not\(\[data-theme="paper"\]\) \.main-toolbar \{ background: #141110/);
 });
 
 test("paper keeps a warm light palette", () => {
-  assert.match(typography, /:root\[data-theme="paper"\] \{[\s\S]*?--night-ground: #faf7f2/);
-  assert.match(typography, /--night-sidebar: #f4f0e9/);
-  assert.match(typography, /--night-ink: #2c2826/);
+  assert.match(tokens, /--paper-50: #faf7f2/);
+  assert.match(tokens, /--surface-ground: var\(--paper-50\)/);
+  assert.match(tokens, /--paper-100: #f4f0e9/);
+  assert.match(tokens, /--surface-sidebar: var\(--paper-100\)/);
+  assert.match(tokens, /--paper-900: #2c2826/);
+  assert.match(tokens, /--text-primary: var\(--paper-900\)/);
   assert.match(typography, /\.theme-paper \.main-toolbar \{ background: rgba\(255, 253, 248, \.96\)/);
 });
 
@@ -132,8 +141,8 @@ test("Geist Sans and Geist Mono are bundled locally", () => {
   assert.match(typography, /Geist-Variable\.woff2/);
   assert.match(typography, /@font-face \{[\s\S]*?font-family: "Geist Mono"/);
   assert.match(typography, /GeistMono-Variable\.woff2/);
-  assert.match(typography, /html\[data-interface-font="geist"\] \{[\s\S]*?--font-ui: "Geist"/);
-  assert.match(typography, /html\[data-mono-font="geist-mono"\] \{[\s\S]*?--font-mono: "Geist Mono"/);
+  assert.match(tokens, /html\[data-interface-font="geist"\] \{[\s\S]*?--font-ui: "Geist"/);
+  assert.match(tokens, /html\[data-mono-font="geist-mono"\] \{[\s\S]*?--font-mono: "Geist Mono"/);
   assert.match(i18n, /return window\.localStorage\.getItem\(INTERFACE_FONT_STORAGE_KEY\) === "system" \? "system" : "geist"/);
   assert.match(i18n, /return window\.localStorage\.getItem\(MONO_FONT_STORAGE_KEY\) === "system" \? "system" : "geist-mono"/);
   assert.match(i18n, /document\.documentElement\.dataset\.interfaceFont = interfaceFont/);

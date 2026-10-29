@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const rail = fs.readFileSync(path.join(root, "src", "TurnRail.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
+const tokens = fs.readFileSync(path.join(root, "src", "tokens.css"), "utf8");
 const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
 
 test("conversation turns get a rail inside the scroll area", () => {
@@ -23,9 +24,9 @@ test("conversation turns get a rail inside the scroll area", () => {
 });
 
 test("turn rail ticks are short lines with a gold hover state", () => {
-  assert.match(css, /--turn-rail-tick: #5b554f/);
-  assert.match(css, /--turn-rail-hover: #e0b43b/);
-  assert.match(css, /--turn-rail-hover: #b07a2b/);
+  assert.match(tokens, /--turn-rail-tick: #5b554f/);
+  assert.match(tokens, /--turn-rail-hover: #e0b43b/);
+  assert.match(tokens, /--turn-rail-hover: #b07a2b/);
   assert.match(css, /\.turn-rail-tick \{[^}]*width: 7px; height: 2px/);
   assert.match(css, /\.turn-rail-item:hover \.turn-rail-tick/);
   assert.match(css, /width: 11px; background: var\(--turn-rail-hover\)/);

@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
+const tokens = fs.readFileSync(path.join(root, "src", "tokens.css"), "utf8");
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const library = fs.readFileSync(path.join(root, "src", "LibraryView.tsx"), "utf8");
 
@@ -15,7 +16,7 @@ const REQUIRED_TOKENS = [
 
 function paletteFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = css.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`));
+  const match = tokens.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`));
   assert.ok(match, `missing ${selector} block`);
   return Object.fromEntries(
     [...match[1].matchAll(/--code-([\w-]+):\s*([^;]+);/g)].map((item) => [item[1], item[2].trim()]),

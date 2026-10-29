@@ -8,6 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
 const app = read("src", "App.tsx");
 const css = read("src", "styles.css");
+const tokens = read("src", "tokens.css");
 
 test("conversation composers keep their resting border while focused", () => {
   assert.doesNotMatch(css, /\.conversation-composer:focus-within/);
@@ -39,7 +40,7 @@ test("chat-like side inputs share the quiet focus contract", () => {
 test("the chat send control is a neutral circular up-arrow", () => {
   assert.match(app, /<ArrowUp size=\{16\} strokeWidth=\{2\.4\} \/>/);
   assert.doesNotMatch(app, /SendHorizontal/);
-  assert.match(css, /--chat-send-bg: #34332f/);
+  assert.match(tokens, /--chat-send-bg: #34332f/);
   assert.match(css, /\.conversation-send,[\s\S]*?border-radius: 50%;/);
   assert.match(css, /\.conversation-send:hover,[\s\S]*?background: var\(--chat-send-bg-hover\);/);
   assert.match(css, /\.conversation-send:disabled,[\s\S]*?background: var\(--chat-send-disabled-bg\);/);

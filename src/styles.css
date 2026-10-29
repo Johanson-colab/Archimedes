@@ -1,59 +1,9 @@
 :root {
-  --ui-scale: 1;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   color: #f4f4f4;
   background: #111;
   color-scheme: dark;
   font-synthesis: none;
-  --night-ground: #111;
-  --workbench-ground: #1b1b1b;
-  --night-sidebar: #1b1b1b;
-  --night-panel: #181818;
-  --night-panel-raised: #202020;
-  --night-panel-soft: #262626;
-  --night-line: #343434;
-  --night-line-soft: #292929;
-  --night-ink: #f4f4f4;
-  --night-ink-soft: #c2c2c2;
-  --night-muted: #929292;
-  --night-faint: #696969;
-  --night-accent: #a6a6a6;
-  --night-accent-strong: #d6d6d6;
-  --scrollbar-size: 10px;
-  --scrollbar-thumb: #454545;
-  --scrollbar-thumb-hover: #5f5f5f;
-  --turn-rail-tick: #5b554f;
-  --turn-rail-tick-done: #7a736b;
-  --turn-rail-tick-future: #3b3631;
-  --turn-rail-line: #2d2824;
-  --turn-rail-hover: #e0b43b;
-  --turn-rail-shadow: 0 14px 34px rgba(0, 0, 0, .32);
-  --night-blue: #c2c2c2;
-  --night-success: #65b894;
-  --night-warning: #d4a95c;
-  --night-danger: #dc7c83;
-  --code-bg: #0c0e15;
-  --code-fg: #d7d9e4;
-  --code-comment: #8b8fa3;
-  --code-keyword: #a79df5;
-  --code-string: #8fc7a8;
-  --code-number: #d9a56f;
-  --code-function: #7fb8d8;
-  --code-operator: #b9bac6;
-  --code-punctuation: #8f91a3;
-  --code-line-number: #5f6475;
-  --code-line-hover: #171a24;
-  --code-selection: #264f78;
-  --code-border: #272a38;
-  --accent: #c9a227;
-  --accent-ink: #111111;
-  --accent-hover: #e0bd4a;
-  --resizer-accent: #a8842b;
-  --selected: #363636;
-  --selected-row: #2a2a2a;
-  --focus-ring: #c9a227;
-  --control-height: 32px;
-  --radius-control: 6px;
 }
 
 /* Review and presentation are deliberately separate surfaces. The evidence
@@ -400,11 +350,6 @@ html:not([data-theme="paper"]) .paper-presentation-toolbar span { color: #c7beb4
   .paper-presentation-index button span { display: none; }
 }
 
-html[data-ui-zoom="css"][data-text-size="smaller"] { --ui-scale: 1; }
-html[data-ui-zoom="css"][data-text-size="small"] { --ui-scale: 1.05; }
-html[data-ui-zoom="css"][data-text-size="default"] { --ui-scale: 1.1; }
-html[data-ui-zoom="css"][data-text-size="large"] { --ui-scale: 1.15; }
-html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
 
 /* Original-paper reader: the PDF is the primary work surface. */
 .paper-workbench-page { width: 100%; max-width: none; height: 100%; min-height: 0; grid-template-rows: 58px 48px minmax(0, 1fr); background: #f7f7f5; }
@@ -2954,19 +2899,6 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
 .project-chat-empty, .archived-project-row, .archived-chat-row, .archived-toggle { color: #858797; }
 
 /* Monochrome graphite pass: neutral surfaces, neutral emphasis, no colour cast. */
-:root {
-  --mono-canvas: #111;
-  --mono-sidebar: #1b1b1b;
-  --mono-surface: #181818;
-  --mono-surface-raised: #202020;
-  --mono-control: #262626;
-  --mono-control-active: #363636;
-  --mono-border: #353535;
-  --mono-border-strong: #4a4a4a;
-  --mono-text: #f4f4f4;
-  --mono-text-soft: #c4c4c4;
-  --mono-text-muted: #929292;
-}
 
 .codex-shell, .codex-main, .main-view, .chat-main,
 .knowledge-main, .knowledge-main .library-content-pane, .knowledge-main .library-page,
@@ -3273,61 +3205,6 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
   color: #252422;
   background: #fbfaf8;
   color-scheme: light;
-  --night-ground: #fbfaf8;
-  --workbench-ground: #f6f4f1;
-  --night-sidebar: #f6f4f1;
-  --night-panel: #fffefd;
-  --night-panel-raised: #f5f3f0;
-  --night-panel-soft: #efede9;
-  --night-line: #e5e1db;
-  --night-line-soft: #ece9e4;
-  --night-ink: #252422;
-  --night-ink-soft: #5f5c57;
-  --night-muted: #918d86;
-  --night-faint: #aaa59e;
-  --night-accent: #57534e;
-  --night-accent-strong: #24211e;
-  --scrollbar-thumb: #c9c4bc;
-  --scrollbar-thumb-hover: #b3ada4;
-  --turn-rail-tick: #c9c2b8;
-  --turn-rail-tick-done: #a9a196;
-  --turn-rail-tick-future: #ded8d0;
-  --turn-rail-line: #e6e0d8;
-  --turn-rail-hover: #b07a2b;
-  --turn-rail-shadow: 0 14px 34px rgba(60, 48, 30, .14);
-  --mono-canvas: #fbfaf8;
-  --mono-sidebar: #f6f4f1;
-  --mono-surface: #fffefd;
-  --mono-surface-raised: #f5f2ee;
-  --mono-control: #f0ede8;
-  --mono-control-active: #e4dfd8;
-  --selected: #e8e4de;
-  --selected-row: #ece5d8;
-  --mono-border: #e2ddd6;
-  --mono-border-strong: #cfc8bf;
-  --mono-text: #292620;
-  --mono-text-soft: #5f5951;
-  --mono-text-muted: #8c857d;
-  --code-bg: #f4f1ec;
-  --code-fg: #39352f;
-  --code-comment: #8a8278;
-  --code-keyword: #7b4e75;
-  --code-string: #8a6331;
-  --code-number: #765e90;
-  --code-function: #356d72;
-  --code-operator: #625d56;
-  --code-punctuation: #777169;
-  --code-line-number: #a09a91;
-  --code-line-hover: #efebe4;
-  --code-selection: #add6ff;
-  --code-border: #e0dad2;
-  --accent: #8a5a24;
-  --accent-ink: #ffffff;
-  --accent-hover: #74491b;
-  --resizer-accent: #8a5a24;
-  --focus-ring: #8a5a24;
-  --control-height: 32px;
-  --radius-control: 6px;
 }
 
 html[data-theme="paper"], html[data-theme="paper"] body, html[data-theme="paper"] #root { background: #fbfaf8; }
@@ -4602,20 +4479,6 @@ html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4;
 .theme-paper .terminal-settings-button:hover { color: #252422; background: #e9e5df; }
 
 /* Shared row tokens for Files and Trajectory so both lists read as one system. */
-:root {
-  --rail-row-ink: #a7a8b5;
-  --rail-row-ink-strong: #f1f0f6;
-  --rail-row-hover-bg: #202020;
-  --rail-row-active-bg: #25253a;
-  --rail-row-muted: #8f8f8f;
-}
-.theme-paper {
-  --rail-row-ink: #625f59;
-  --rail-row-ink-strong: #252422;
-  --rail-row-hover-bg: #efede9;
-  --rail-row-active-bg: #f1e8cf;
-  --rail-row-muted: #8b857d;
-}
 .workspace-tree-row,
 .trajectory-event-head { color: var(--rail-row-ink); }
 .workspace-tree-row:hover,
@@ -5332,30 +5195,6 @@ html:not([data-theme="paper"]) .artifact-workbench-body .artifact-editor-pane.co
 .artifact-workbench-body .artifact-editor-pane.compact .artifact-preview-surface { min-height: 0; }
 
 /* File-tree icon tones. The setting switches the whole tree to monochrome. */
-:root {
-  --file-tone-folder: #d3a64d;
-  --file-tone-tex: #e09a6b;
-  --file-tone-config: #d9b65c;
-  --file-tone-code: #8fb4e8;
-  --file-tone-style: #d99ab5;
-  --file-tone-markdown: #8fc3df;
-  --file-tone-image: #e094a8;
-  --file-tone-pdf: #e58a80;
-  --file-tone-shell: #9cc9a8;
-  --file-tone-file: #b0a9a3;
-}
-.theme-paper {
-  --file-tone-folder: #a87522;
-  --file-tone-tex: #a35a2d;
-  --file-tone-config: #8f6a15;
-  --file-tone-code: #35679e;
-  --file-tone-style: #9b4a6a;
-  --file-tone-markdown: #2f6f8f;
-  --file-tone-image: #a74f70;
-  --file-tone-pdf: #a5443a;
-  --file-tone-shell: #3f7a55;
-  --file-tone-file: #6f6862;
-}
 
 html[data-theme="paper"][data-file-icons="city-lights"] {
   --file-tone-folder: #a87522;
@@ -5866,27 +5705,6 @@ html[data-file-icons="monochrome"] .tree-file-icon { color: var(--rail-row-muted
 .artifact-workbench-body .artifact-editor-pane.compact .artifact-editor-header.compact .artifact-save-button,
 .artifact-workbench-body .artifact-editor-pane.compact .artifact-editor-header.compact .artifact-comment-button { font-size: 12px; }
 /* The chat send control is a neutral filled circle with an upward arrow. */
-:root {
-  --chat-send-bg: #2f2e2a;
-  --chat-send-bg-hover: #3b3933;
-  --chat-send-ink: #f4f2ec;
-  --chat-send-disabled-bg: #e5e5e1;
-  --chat-send-disabled-ink: #9b9b95;
-}
-html:not([data-theme="paper"]) {
-  --chat-send-bg: #34332f;
-  --chat-send-bg-hover: #41403a;
-  --chat-send-ink: #f7f5ef;
-  --chat-send-disabled-bg: #292b35;
-  --chat-send-disabled-ink: #666978;
-}
-.theme-paper {
-  --chat-send-bg: #34312c;
-  --chat-send-bg-hover: #423e37;
-  --chat-send-ink: #fbfaf7;
-  --chat-send-disabled-bg: #e9e5df;
-  --chat-send-disabled-ink: #aaa49c;
-}
 .conversation-send,
 .theme-paper .conversation-send,
 .has-welcome .conversation-send {
