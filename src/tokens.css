@@ -137,6 +137,10 @@
   /* --- Shape --------------------------------------------------------------- */
   --control-height: 32px;
   --radius-control: 6px;
+  --density-row-pad: 16px;
+  --density-row-min: 68px;
+  --density-nav-height: 32px;
+  --density-settings-nav-height: 34px;
 
   /* --- Typography ---------------------------------------------------------- */
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;

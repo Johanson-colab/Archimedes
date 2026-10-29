@@ -8,7 +8,7 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
-import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, normalizeAppearance, type AppearanceSettings, type AppTheme, type ThemePreset } from "./appearance";
+import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, normalizeAppearance, type AppearanceSettings, type AppTheme, type Density, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
@@ -117,12 +117,17 @@ export default function SettingsModal({
   const activeSize = textSizeSteps[sizeIndex] ?? textSizeSteps[2];
   const activeVerbosity = verbosityOptions.find((item) => item.id === chatVerbosity) ?? verbosityOptions[1];
   const accentValue = appearance.overrides.accent ?? ACCENT_DEFAULT[theme];
+  const surfaceValue = appearance.overrides.surface ?? SURFACE_DEFAULT[theme];
+  const surfaceDepthValue = appearance.overrides.surfaceDepth ?? SURFACE_DEPTH_DEFAULT;
   const radiusValue = appearance.overrides.controlRadius ?? CONTROL_RADIUS_DEFAULT;
-  const hasOverrides = Boolean(appearance.overrides.accent) || appearance.overrides.controlRadius !== undefined;
+  const densityValue: Density = appearance.overrides.density ?? DENSITY_DEFAULT;
+  const hasOverrides = Boolean(appearance.overrides.accent) || Boolean(appearance.overrides.surface)
+    || appearance.overrides.surfaceDepth !== undefined || appearance.overrides.controlRadius !== undefined
+    || appearance.overrides.density !== undefined;
   function updateOverride(patch: Partial<AppearanceSettings["overrides"]>) {
     onAppearanceChange(normalizeAppearance({ ...appearance, overrides: { ...appearance.overrides, ...patch } }));
   }
-  function clearOverride(key: "accent" | "controlRadius") {
+  function clearOverride(key: "accent" | "surface" | "surfaceDepth" | "controlRadius" | "density") {
     const overrides = { ...appearance.overrides };
     delete overrides[key];
     onAppearanceChange(normalizeAppearance({ ...appearance, overrides }));
@@ -267,7 +272,7 @@ export default function SettingsModal({
 
               <section className="settings-section">
                 <h3 className="settings-section-title">{t("Customize")}</h3>
-                <div className="settings-group">
+                <div className="settings-group settings-appearance-group">
                   <div className="settings-row">
                     <div className="settings-row-copy">
                       <span className="settings-row-title">{t("Accent color")}</span>
@@ -277,6 +282,39 @@ export default function SettingsModal({
                       <input className="settings-color-input" type="color" value={accentValue} aria-label={t("Accent color")} onChange={(event) => updateOverride({ accent: event.target.value })} />
                       <code className="settings-value">{accentValue}</code>
                       <button className="secondary-button" onClick={() => clearOverride("accent")} disabled={!appearance.overrides.accent}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Surface color")}</span>
+                      <p className="settings-row-description">{t("Derives the ground, panel, borders, and readable text for the whole shell.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <input className="settings-color-input" type="color" value={surfaceValue} aria-label={t("Surface color")} onChange={(event) => updateOverride({ surface: event.target.value })} />
+                      <code className="settings-value">{surfaceValue}</code>
+                      <button className="secondary-button" onClick={() => clearOverride("surface")} disabled={!appearance.overrides.surface}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Surface depth")}</span>
+                      <p className="settings-row-description">{t("How far panels and borders step away from the base surface.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <input className="settings-range-input" type="range" min={SURFACE_DEPTH_MIN} max={SURFACE_DEPTH_MAX} step={1} value={surfaceDepthValue} disabled={!appearance.overrides.surface} aria-label={t("Surface depth")} onChange={(event) => updateOverride({ surfaceDepth: Number(event.target.value) })} />
+                      <code className="settings-value">{surfaceDepthValue}</code>
+                      <button className="secondary-button" onClick={() => clearOverride("surfaceDepth")} disabled={appearance.overrides.surfaceDepth === undefined}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Density")}</span>
+                      <p className="settings-row-description">{t("Spacing for controls, settings rows, and navigation.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Density")}>
+                        {([["compact", "Compact"], ["comfortable", "Comfortable"], ["spacious", "Spacious"]] as Array<[Density, string]>).map(([id, label]) => <button key={id} className={densityValue === id ? "active" : ""} aria-pressed={densityValue === id} onClick={() => updateOverride({ density: id })}>{t(label)}</button>)}
+                      </div>
                     </div>
                   </div>
                   <div className="settings-row">
@@ -293,7 +331,7 @@ export default function SettingsModal({
                   <div className="settings-row">
                     <div className="settings-row-copy">
                       <span className="settings-row-title">{t("Custom theme")}</span>
-                      <p className="settings-row-description">{t("Accent and radius overrides apply to both Charcoal and Paper.")}</p>
+                      <p className="settings-row-description">{t("Accent, surface, density, and radius apply to both Charcoal and Paper.")}</p>
                     </div>
                     <div className="settings-row-control">
                       <button className="secondary-button" onClick={() => onAppearanceChange(normalizeAppearance({ version: 1, preset: appearance.preset }))} disabled={!hasOverrides}>{t("Reset custom theme")}</button>

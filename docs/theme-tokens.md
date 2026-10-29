@@ -139,6 +139,9 @@ use `.theme-paper` because they predate the token pass.
   "preset": "charcoal",
   "overrides": {
     "accent": "#3f7bd9",
+    "surface": "#1b2028",
+    "surfaceDepth": 60,
+    "density": "compact",
     "controlRadius": 10
   }
 }
@@ -153,13 +156,20 @@ use `.theme-paper` because they predate the token pass.
 - `accentTokens()` derives accent, hover, focus, resizer and readable ink from
   one color. Ink is chosen by measured contrast, and hover moves away from that
   ink so the label keeps its contrast in both themes.
+- `surfaceTokens()` derives the surface ladder (ground / canvas / sidebar /
+  panel / raised / soft / control), borders, readable text, and the parallel
+  `--mono-*` palette from one base color. Light bases step darker for
+  elevation; dark bases step lighter; the panel always lifts toward white.
+- `surfaceDepth` (20–80) scales those steps without changing the base color.
+- `densityTokens()` writes control height, settings-row padding, and navigation
+  heights for compact / comfortable / spacious. Comfortable is the default.
 - `radiusTokens()` writes `--radius-control` within `0–14px`.
 - `resolvedTheme = resolveTheme(preset, systemAppearance)`; overrides survive a
   Charcoal ↔ Paper switch.
 
-Settings › Appearance exposes the first curated controls: accent color, control
-radius, per-field reset, and reset all. Defaults (no overrides) produce the same
-pixels as the token refactor.
+Settings › Appearance exposes: accent color, surface color, surface depth,
+density, control radius, per-field reset, and reset all. Defaults (no overrides)
+produce the same pixels as the token refactor.
 
 ## Migration status
 
@@ -253,8 +263,8 @@ npm run build
    can move, rather than a mechanical replacement.
 2. **M2 — ThemePack v1.** Done: versioned `appearance` settings, token
    application, Charcoal/Paper presets, legacy migration.
-3. **M3 — Appearance editor.** First pass done: accent, radius, reset. Next:
-   surface ladder, density, preview panel, per-surface scope.
+3. **M3 — Appearance editor.** Done: accent, surface ladder, surface depth,
+   density, control radius, reset. Next: preview panel and per-surface scope.
 4. **M4 — Import/export.** Theme pack validation, contrast guard, advanced JSON.
 
 The guard script and this document should be updated in the same PR as each

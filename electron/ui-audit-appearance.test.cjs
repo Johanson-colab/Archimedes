@@ -32,12 +32,16 @@ test("the appearance model persists v2 and migrates the legacy key", () => {
   assert.match(appearance, /color-mix\(in oklab/);
 });
 
-test("Settings > Appearance exposes accent, radius, and reset controls", () => {
+test("Settings > Appearance exposes accent, surface, density, radius, and reset controls", () => {
   assert.match(settings, /type="color"/);
   assert.match(settings, /value=\{accentValue\}/);
+  assert.match(settings, /value=\{surfaceValue\}/);
   assert.match(settings, /type="range"/);
   assert.match(settings, /min=\{CONTROL_RADIUS_MIN\}/);
+  assert.match(settings, /min=\{SURFACE_DEPTH_MIN\}/);
   assert.match(settings, /updateOverride\(\{ accent: event\.target\.value \}\)/);
+  assert.match(settings, /updateOverride\(\{ surface: event\.target\.value \}\)/);
+  assert.match(settings, /updateOverride\(\{ density: id \}\)/);
   assert.match(settings, /updateOverride\(\{ controlRadius: Number\(event\.target\.value\) \}\)/);
   assert.match(settings, /Reset custom theme/);
   assert.match(settings, /onAppearanceChange/);
@@ -48,10 +52,19 @@ test("the new appearance copy is translated", () => {
     "Customize",
     "Accent color",
     "Used for primary actions, focus rings, and highlights.",
+    "Surface color",
+    "Derives the ground, panel, borders, and readable text for the whole shell.",
+    "Surface depth",
+    "How far panels and borders step away from the base surface.",
+    "Density",
+    "Spacing for controls, settings rows, and navigation.",
+    "Compact",
+    "Comfortable",
+    "Spacious",
     "Control radius",
     "Corner radius for buttons, inputs, and controls.",
     "Custom theme",
-    "Accent and radius overrides apply to both Charcoal and Paper.",
+    "Accent, surface, density, and radius apply to both Charcoal and Paper.",
     "Reset custom theme",
     "Reset",
   ]) {
