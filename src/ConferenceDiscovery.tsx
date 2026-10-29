@@ -91,20 +91,25 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
         const key = `${targetLibraryId}:${paper.external_id}`;
         const saved = added.has(key);
         const presentationLabel = PRESENTATIONS.find((item) => item.id === metadata.presentation)?.label || "Unclassified";
+        const authors = `${paper.authors.slice(0, 5).join(", ")}${paper.authors.length > 5 ? " et al." : ""}`;
         return <article className="daily-paper-row conference-paper-row" key={paper.external_id}>
-          <div className="daily-paper-date"><strong>{selected.label}</strong><span>{year}</span></div>
           <div className="daily-paper-content">
-            <div className="daily-paper-title"><h2><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({ children }) => <>{children}</> }}>{paper.title}</ReactMarkdown></h2><a href={paper.url} target="_blank" rel="noreferrer" title="Open official paper record"><ExternalLink size={13} /></a></div>
-            <p>{paper.authors.slice(0, 5).join(", ")}{paper.authors.length > 5 ? " et al." : ""}</p>
+            <div className="daily-paper-title">
+              <h2><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({ children }) => <>{children}</> }}>{paper.title}</ReactMarkdown></h2>
+              <a href={paper.url} target="_blank" rel="noreferrer" title="Open official paper record"><ExternalLink size={13} /></a>
+              <button className={saved ? "secondary-button imported" : "outline-button"} disabled={saved || Boolean(adding) || !targetLibraryId} onClick={() => void save(paper)}>
+                {saved ? <Check size={14} /> : adding === key ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{saved ? "Saved" : "Save"}
+              </button>
+            </div>
+            <p className="daily-paper-meta"><span className="daily-paper-date">{selected.label} {year}</span><span className="daily-paper-authors">{authors}</span></p>
             {paper.abstract && <small>{paper.abstract}</small>}
-            <div className="daily-paper-signals"><a className={`conference-badge ${metadata.presentation}`} href={metadata.presentation_source_url || metadata.source_url} title={metadata.decision} target="_blank" rel="noreferrer">{presentationLabel}</a><span>{metadata.track}</span>
+            <div className="daily-paper-signals">
+              <a className={`conference-badge ${metadata.presentation}`} href={metadata.presentation_source_url || metadata.source_url} title={metadata.decision} target="_blank" rel="noreferrer">{presentationLabel}</a>
+              <span>{metadata.track}</span>
               <a href={metadata.source_url} target="_blank" rel="noreferrer"><Check size={11} />Official catalog</a>
               {paper.pdf_url && <a href={paper.pdf_url} target="_blank" rel="noreferrer"><FileText size={11} />PDF</a>}
             </div>
           </div>
-          <button className={saved ? "secondary-button imported" : "outline-button"} disabled={saved || Boolean(adding) || !targetLibraryId} onClick={() => void save(paper)}>
-            {saved ? <Check size={14} /> : adding === key ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{saved ? "Saved" : "Save"}
-          </button>
         </article>;
       })}</div>}
     {response && response.total > PAGE_SIZE && <nav className="conference-pagination" aria-label="Conference result pages">

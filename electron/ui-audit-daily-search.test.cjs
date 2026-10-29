@@ -49,3 +49,14 @@ test("daily rows pair the copy with the paper figure on the right", () => {
 test("the save action sits beside the open-paper link", () => {
   assert.match(library, /daily-paper-title"><h2>\{paper\.title\}<\/h2>\{paper\.url && <a[^>]*><ExternalLink size=\{13\} \/><\/a>\}<button/);
 });
+
+test("conference rows reuse the daily row structure", () => {
+  const conference = fs.readFileSync(path.join(root, "src", "ConferenceDiscovery.tsx"), "utf8");
+  assert.match(conference, /className="daily-paper-row conference-paper-row"/);
+  assert.match(conference, /className="daily-paper-title"/);
+  assert.match(conference, /className="daily-paper-meta"/);
+  // Save moved into the title row, next to the open-record link.
+  assert.match(conference, /<ExternalLink size=\{13\} \/><\/a>\s*<button[^>]*onClick=\{\(\) => void save\(paper\)\}/);
+  assert.match(css, /\.conference-paper-row \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.doesNotMatch(conference, /className="daily-paper-date"><strong>/);
+});
