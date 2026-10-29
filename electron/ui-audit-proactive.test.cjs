@@ -222,6 +222,8 @@ test("live observation follows the local activity pulse", () => {
 
 test("L2 captures the Archimedes window only, never the desktop", () => {
   assert.match(settingsPanel, /appCapture/);
+  assert.match(settingsPanel, /disabled={!settings.visionCapable}/);
+  assert.match(settingsPanel, /Mark the Proactive model as vision-capable/);
   assert.match(settingsPanel, /L2 · Archimedes window only/);
   assert.match(hook, /captureProactiveScreenshot/);
   assert.match(hook, /proactiveCapture/);
@@ -234,14 +236,17 @@ test("L2 captures the Archimedes window only, never the desktop", () => {
   assert.match(css, /\[data-proactive-capture="true"\] \.agent-layer/);
 });
 
-test("Proactive has a separate model role with an inheritance escape hatch", () => {
-  assert.match(settingsModal, /proactive-model/);
-  assert.match(settingsModal, /role="proactive"/);
+test("Proactive model lives inside the Proactive agent page", () => {
+  assert.match(settingsPanel, /Proactive model/);
+  assert.match(settingsPanel, /saveModelConfig/);
+  assert.match(settingsPanel, /visionCapable/);
+  assert.match(settingsPanel, /This model accepts images/);
+  assert.doesNotMatch(settingsModal, /proactive-model/);
   assert.match(model, /role = "agent"/);
   assert.match(model, /useAgent/);
   assert.match(model, /inheritedFromAgent/);
-  assert.match(settingsPanel, /Configure model/);
   assert.match(types, /liveObservation: boolean/);
+  assert.match(types, /visionCapable: boolean/);
 });
 
 test("the research path is thread-scoped and can be pinned globally", () => {

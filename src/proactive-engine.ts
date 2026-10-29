@@ -170,14 +170,16 @@ export function loadProactiveState(): ProactiveState {
     if (!raw) return emptyProactiveState();
     const parsed = JSON.parse(raw) as Partial<ProactiveState>;
     if (!parsed || parsed.version !== 1) return emptyProactiveState();
+    const settings = {
+      ...DEFAULT_PROACTIVE_SETTINGS,
+      ...(parsed.settings ?? {}),
+      quietHours: { ...DEFAULT_PROACTIVE_SETTINGS.quietHours, ...(parsed.settings?.quietHours ?? {}) },
+      sources: { ...DEFAULT_PROACTIVE_SETTINGS.sources, ...(parsed.settings?.sources ?? {}) },
+    };
+    if (!settings.visionCapable) settings.appCapture = false;
     return expireAndPrune({
       version: 1,
-      settings: {
-        ...DEFAULT_PROACTIVE_SETTINGS,
-        ...(parsed.settings ?? {}),
-        quietHours: { ...DEFAULT_PROACTIVE_SETTINGS.quietHours, ...(parsed.settings?.quietHours ?? {}) },
-        sources: { ...DEFAULT_PROACTIVE_SETTINGS.sources, ...(parsed.settings?.sources ?? {}) },
-      },
+      settings,
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
       events: Array.isArray(parsed.events) ? parsed.events : [],
       suppressedUntil: typeof parsed.suppressedUntil === "number" ? parsed.suppressedUntil : 0,

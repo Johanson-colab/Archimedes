@@ -868,6 +868,7 @@ const translations: Record<string, string> = {
 
   // Proactive settings
   "A quiet research sidekick. It reads only app context, never screenshots, and every suggestion must carry evidence you can open.": "一个安静的研究助手。只读取应用内上下文，从不截图；每条建议都必须带有可打开的证据。",
+  "A quiet research sidekick. It reads app context; screenshots are opt-in, app-only, and never written to disk.": "一个安静的研究助手。读取应用内上下文；截图是可选项，只截本应用，且不写入磁盘。",
   "Mode": "模式",
   "Proactive is opt-in. Off is the default.": "主动助手为可选项，默认关闭。",
   "No signals, no suggestions. Nothing is collected.": "不采集信号，不产生建议。",
@@ -888,6 +889,12 @@ const translations: Record<string, string> = {
   "Once a day": "每天一次",
   "Visual observation": "视觉观察",
   "App screenshots": "应用截图",
+  "This model accepts images": "这个模型支持图片输入",
+  "Only vision-capable models can enable Visual observation below.": "只有支持视觉的模型才能开启下方的视觉观察。",
+  "Requires a vision-capable model": "需要支持视觉的模型",
+  "Mark the Proactive model as vision-capable above before enabling Visual observation.": "请先在上方把主动助手模型标记为支持视觉，再开启视觉观察。",
+  "Currently inheriting the main Agent model.": "当前继承主 Agent 模型。",
+  "A dedicated Proactive model.": "独立的主动助手模型。",
   "Capture only Archimedes' own window while you are active. Images are sent to the Proactive model in memory and discarded after the call. Requires a vision-capable model.": "只截取 Archimedes 自己的窗口。图片在内存中发给主动助手模型，调用后即丢弃；需要支持视觉的模型。",
   "L2 · Archimedes window only": "L2 · 仅 Archimedes 窗口",
   "No desktop capture and no other windows. The floating Proactive panel is hidden before each capture; the image is never written to disk.": "不截桌面，也不截其他窗口。截图前会隐藏浮动的主动助手面板；图片不会写入磁盘。",

@@ -1,5 +1,5 @@
 ﻿import { useRef, useState } from "react";
-import { BrainCircuit, Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, X } from "lucide-react";
+import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, X } from "lucide-react";
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import type { ProactiveSettings } from "./proactive-types";
@@ -12,7 +12,7 @@ import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, t
 import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type ContrastIssue, type Density, type DialogStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
-export type SettingsSection = "general" | "journey" | "proactive" | "proactive-model" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
+export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
 
 type SettingsModalProps = {
   open: boolean;
@@ -52,7 +52,6 @@ const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNod
   { id: "general", label: "General", icon: <SlidersHorizontal size={15} /> },
   { id: "journey", label: "Journey", icon: <Route size={15} /> },
   { id: "proactive", label: "Proactive agent", icon: <Sparkles size={15} /> },
-  { id: "proactive-model", label: "Proactive model", icon: <BrainCircuit size={15} /> },
   { id: "appearance", label: "Appearance", icon: <Palette size={15} /> },
   { id: "workbench", label: "Workbench", icon: <LayoutPanelTop size={15} /> },
   { id: "models", label: "Models", icon: <Orbit size={15} /> },
@@ -119,7 +118,7 @@ export default function SettingsModal({
   if (!open) return null;
 
   const workspaceName = workspace ? workspace.split(/[\\/]/).filter(Boolean).at(-1) : "";
-  const embedded = section === "models" || section === "proactive-model";
+  const embedded = section === "models";
   const sizeIndex = Math.max(0, textSizeSteps.findIndex((item) => item.id === textSize));
   const activeSize = textSizeSteps[sizeIndex] ?? textSizeSteps[2];
   const activeVerbosity = verbosityOptions.find((item) => item.id === chatVerbosity) ?? verbosityOptions[1];
@@ -213,7 +212,6 @@ export default function SettingsModal({
     general: { title: t("General"), description: t("Preferences that apply across Archimedes.") },
     journey: { title: t("Journey"), description: t("How the AI summarizes long runs and when the map appears.") },
     proactive: { title: t("Proactive agent"), description: t("Opt-in L0 signals, evidence, and interruption limits.") },
-    "proactive-model": { title: t("Proactive model"), description: t("Dedicated model for replies and live observation.") },
     appearance: { title: t("Appearance"), description: t("Theme and fonts") },
     workbench: { title: t("Workbench"), description: t("Choose the tabs that appear in the right rail.") },
     models: { title: t("Models"), description: t("Default model and providers") },
@@ -323,7 +321,7 @@ export default function SettingsModal({
             onChange={onChangeProactiveSettings}
             onObserveOnce={onObserveProactive}
             onResetHistory={onResetProactiveHistory}
-            onOpenModel={() => onSectionChange("proactive-model")}
+            bridge={bridge}
             historyCount={proactiveHistoryCount}
             canObserve={proactiveSettings.mode !== "off"}
           />}
@@ -599,7 +597,6 @@ export default function SettingsModal({
             {section === "workbench" && <WorkbenchSettingsPanel preferences={workbenchPreferences} onChange={onChangeWorkbenchPreferences} onReset={onResetWorkbenchPreferences} />}
 
             {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} />}
-            {section === "proactive-model" && <ModelSettingsModal bridge={bridge} open embedded role="proactive" onClose={() => undefined} onSaved={() => undefined} />}
             {section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}
             {section === "terminal" && (terminalSettings
               ? <TerminalSettingsModal open embedded mode="settings" settings={terminalSettings} workspace={workspace} onClose={() => undefined} onSave={onSaveTerminalSettings} onOpenExternal={onOpenExternalTerminal} />

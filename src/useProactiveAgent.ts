@@ -360,6 +360,7 @@ export function useProactiveAgent({
       let screenshot: { dataUrl: string; width: number; height: number } | null = null;
       const settings = stateRef.current.settings;
       const wantsScreenshot = settings.appCapture
+        && settings.visionCapable
         && modelReadyRef.current
         && typeof document !== "undefined"
         && (origin === "manual" || now - lastCaptureRef.current >= 8_000)

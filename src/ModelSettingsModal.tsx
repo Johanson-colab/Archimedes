@@ -238,3 +238,6 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     <section ref={dialogRef} tabIndex={-1} className="model-settings-modal" role="dialog" aria-modal="true" aria-label="Model settings" onMouseDown={(event) => event.stopPropagation()}>{content}</section>
   </div>;
 }
+
+export { providers };
+

@@ -124,6 +124,8 @@ export type ProactiveSettings = {
   liveObservationBudget: number;
   /** L2: capture only Archimedes' own window for vision-capable observation. */
   appCapture: boolean;
+  /** The configured Proactive model accepts image input. */
+  visionCapable: boolean;
   quietHours: {
     enabled: boolean;
     start: string;
@@ -157,6 +159,7 @@ export const DEFAULT_PROACTIVE_SETTINGS: ProactiveSettings = {
   liveObservation: true,
   liveObservationBudget: 120,
   appCapture: false,
+  visionCapable: false,
   quietHours: { enabled: false, start: "22:00", end: "08:00" },
   sources: { search: true, selection: true, latex: true, citation: true, library: true },
 };
