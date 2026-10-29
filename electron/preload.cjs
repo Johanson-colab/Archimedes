@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listLibraryPapers: (libraryId, query = "") => ipcRenderer.invoke("library:list-papers", { libraryId, query }),
   searchAcademicPapers: (query, limit = 12) => ipcRenderer.invoke("library:search-external", { query, limit }),
   discoverDailyPapers: (input = {}) => ipcRenderer.invoke("library:discover-daily", input),
+  getDailyFigure: (arxivId) => ipcRenderer.invoke("library:daily-figure", { arxivId }),
   deepSearchPapers: (input) => ipcRenderer.invoke("library:deep-search", input),
   getBenchmarkRadarData: () => ipcRenderer.invoke("benchmark-radar:get-data"),
   searchConferencePapers: (input) => ipcRenderer.invoke("library:search-conferences", input),

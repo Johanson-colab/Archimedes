@@ -24,7 +24,7 @@ const modelConfig = require("./model-config.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
-const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
+const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
 const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
@@ -825,6 +825,11 @@ app.whenReady().then(() => {
       }
       throw error;
     }
+  });
+
+  ipcMain.handle("library:daily-figure", async (_event, { arxivId } = {}) => {
+    if (typeof arxivId !== "string" || !arxivId.trim()) throw new Error("An arXiv id is required.");
+    return resolveArxivFigure(arxivId);
   });
 
   ipcMain.handle("library:deep-search", async (_event, input = {}) => {

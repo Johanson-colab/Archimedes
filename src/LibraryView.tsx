@@ -2364,6 +2364,28 @@ function readableError(error: unknown, fallback: string) {
     .trim() || fallback;
 }
 
+function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: ResearchDeskBridge }) {
+  const [figureUrl, setFigureUrl] = useState("");
+  const holder = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = holder.current;
+    const load = bridge.getDailyFigure;
+    if (!node || !paper.arxiv_id || !load) return;
+    let cancelled = false;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      void load(paper.arxiv_id).then((url) => { if (!cancelled && url) setFigureUrl(url); }).catch(() => undefined);
+    }, { rootMargin: "320px" });
+    observer.observe(node);
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [bridge, paper.arxiv_id]);
+  return <div className="daily-paper-thumb" ref={holder}>
+    <span className="daily-paper-thumb-fallback">{paper.categories[0] || "Paper"}</span>
+    {figureUrl && <img src={figureUrl} alt="" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.remove(); }} />}
+  </div>;
+}
+
 function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
   const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
   const [range, setRange] = useState<DailyDiscoveryRange>("7d");
@@ -2515,18 +2537,12 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       const isAdding = adding === key;
       return <article className="daily-paper-row" key={key}>
         <div className="daily-paper-content">
-          <div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}</div>
+          <div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}<button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button></div>
           <p className="daily-paper-meta"><span className="daily-paper-date">{formatPaperDate(paper.published_at)}</span><span className="daily-paper-source">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}</span><span className="daily-paper-authors">{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</span></p>
           <small>{paper.abstract || "No abstract available."}</small>
           <div className="daily-paper-signals">{paper.categories.slice(0, 3).map((category) => <span key={category}>{category}</span>)}{paper.upvotes > 0 && <span><Flame size={11} />{paper.upvotes}</span>}{paper.github_url && <a href={paper.github_url} target="_blank" rel="noreferrer"><Code2 size={11} />{paper.github_stars > 0 ? paper.github_stars : "Code"}</a>}</div>
         </div>
-        <div className="daily-paper-aside">
-          <div className="daily-paper-thumb">
-            <span className="daily-paper-thumb-fallback">{paper.categories[0] || "Paper"}</span>
-            {paper.thumbnail && <img src={paper.thumbnail} alt="" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.remove(); }} />}
-          </div>
-          <button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button>
-        </div>
+        <DailyThumbnail paper={paper} bridge={bridge} />
       </article>;
     })}</div>}
     </>}

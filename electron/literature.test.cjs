@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { fetchWithRetry, normalizeDailyOptions, resetProviderCooldowns, searchAcademicPaperSources } = require("./literature.cjs");
+const { fetchWithRetry, firstFigureSrc, normalizeDailyOptions, resetProviderCooldowns, resolveArxivFigure, searchAcademicPaperSources } = require("./literature.cjs");
 
 test("retries a timed-out literature request", async () => {
   let attempts = 0;
@@ -91,4 +91,26 @@ test("deep-search retrieval combines Semantic Scholar and OpenAlex", async () =>
   assert.equal(requested.length, 3);
   assert.deepEqual(result.providers, ["arXiv", "Semantic Scholar", "OpenAlex"]);
   assert.deepEqual(result.papers.map((paper) => paper.title), ["arXiv result", "Semantic result", "OpenAlex result"]);
+});
+
+test("reads the first real figure out of an arXiv HTML page", () => {
+  const page = `<html><body><img src="site-logo.png"><figure id="S1.F1"><img src="2610.37668v1/hexel.png" alt=""></figure><figure><img src="b.png"></figure></body></html>`;
+  assert.equal(firstFigureSrc(page), "2610.37668v1/hexel.png");
+  assert.equal(firstFigureSrc(`<html><body><img src="x.png"></body></html>`), "");
+  assert.equal(firstFigureSrc(`<figure><img src="https://arxiv.org/icons/licenses/by-4.0.png"></figure>`), "");
+  assert.equal(firstFigureSrc(""), "");
+});
+
+test("resolves a paper figure and caches the miss", async () => {
+  const html = `<html><body><figure><img src="2610.37668v1/hexel.png"></figure></body></html>`;
+  const requested = [];
+  const fetchImpl = async (url) => {
+    requested.push(url);
+    return { ok: true, status: 200, text: async () => html };
+  };
+  const url = await resolveArxivFigure("2610.37668", fetchImpl);
+  assert.equal(url, "https://arxiv.org/html/2610.37668v1/hexel.png");
+  assert.equal((await resolveArxivFigure("2610.37668", fetchImpl)), url);
+  assert.equal(requested.length, 1, "the figure is cached");
+  assert.equal(await resolveArxivFigure("not-an-id", fetchImpl), "");
 });

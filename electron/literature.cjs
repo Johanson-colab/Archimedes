@@ -10,12 +10,6 @@ const HF_DAILY_PAPERS_URLS = [
   "https://hf-mirror.com/api/daily_papers",
   "https://huggingface.co/api/daily_papers",
 ];
-// Hugging Face renders a social preview per paper; the mirror is listed first
-// for the same reason the API mirror is.
-const HF_THUMBNAIL_HOSTS = [
-  "https://cdn-thumbnails.hf-mirror.com",
-  "https://cdn-thumbnails.huggingface.co",
-];
 const DEFAULT_DAILY_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"];
 const DAILY_CATEGORIES = new Set([...DEFAULT_DAILY_CATEGORIES, "cs.CV", "cs.RO", "cs.SE", "cs.IR", "cs.HC", "cs.MA", "cs.NE", "cs.CY", "cs.PF", "cs.GR", "cs.SD", "eess.AS", "stat.ML"]);
 const DAILY_RANGES = new Set(["7d", "30d", "90d", "all"]);
@@ -99,17 +93,6 @@ function asArray(value) {
   return Array.isArray(value) ? value : [value];
 }
 
-function normalizeThumbnailUrl(value) {
-  const text = normalizeWhitespace(value);
-  return /^https:\/\/[^\s]+$/i.test(text) ? text : "";
-}
-
-function arxivThumbnailUrl(arxivId) {
-  const id = normalizeWhitespace(arxivId);
-  if (!/^\d{4}\.\d{4,5}$/.test(id)) return "";
-  return `${HF_THUMBNAIL_HOSTS[0]}/social-thumbnails/papers/${id}.png`;
-}
-
 function normalizeArxivEntry(entry, requestedId) {
   const published = normalizeWhitespace(entry.published);
   const primaryCategory = entry["arxiv:primary_category"]?.term || "";
@@ -130,7 +113,6 @@ function normalizeArxivEntry(entry, requestedId) {
     pdf_url: `https://arxiv.org/pdf/${arxivId}`,
     citation_count: 0,
     source: "arxiv",
-    thumbnail: arxivThumbnailUrl(arxivId),
     published_at: published,
     discovered_at: published,
     categories,
@@ -246,7 +228,6 @@ function normalizeHuggingFacePaper(item) {
     pdf_url: arxivId ? `https://arxiv.org/pdf/${arxivId}` : "",
     citation_count: 0,
     source: "hugging-face",
-    thumbnail: normalizeThumbnailUrl(item.thumbnail || paper.thumbnail) || arxivThumbnailUrl(arxivId),
     published_at: publishedAt,
     discovered_at: discoveredAt,
     categories,
@@ -291,6 +272,77 @@ async function discoverHuggingFacePapers(options) {
     .filter((paper) => matchesDailyQuery(paper, options.query))
     .sort((left, right) => right.upvotes - left.upvotes || right.github_stars - left.github_stars)
     .slice(0, options.limit);
+}
+
+// The feed preview is the paper's own first figure, so it has to come from the
+// HTML rendering of the paper rather than a generated social card.
+const ARXIV_HTML_HOSTS = ["https://arxiv.org/html", "https://ar5iv.labs.arxiv.org/html"];
+const FIGURE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+// A feed of sixty rows must not turn into sixty simultaneous arXiv requests.
+const FIGURE_CONCURRENCY = 3;
+const figureCache = new Map();
+const figureInflight = new Map();
+let figureActive = 0;
+const figureWaiting = [];
+
+async function withFigureSlot(task) {
+  if (figureActive >= FIGURE_CONCURRENCY) await new Promise((resolve) => figureWaiting.push(resolve));
+  figureActive += 1;
+  try {
+    return await task();
+  } finally {
+    figureActive -= 1;
+    const next = figureWaiting.shift();
+    if (next) next();
+  }
+}
+
+function firstFigureSrc(html) {
+  const source = String(html || "");
+  // Only a real <figure> qualifies. Falling back to any <img> picks up licence
+  // badges and site chrome rather than the paper's own artwork.
+  const figure = source.match(/<figure[\s\S]{0,6000}?<img[^>]+src="([^"]+)"/i);
+  if (!figure) return "";
+  const src = figure[1];
+  if (/\/icons\/|licen[cs]e|favicon|logo|placeholder/i.test(src)) return "";
+  return src;
+}
+
+async function fetchArxivFigure(arxivId, fetchImpl) {
+  for (const host of ARXIV_HTML_HOSTS) {
+    const pageUrl = `${host}/${arxivId}`;
+    try {
+      const response = await fetchWithRetry(pageUrl, {
+        headers: { Accept: "text/html", "User-Agent": "Archimedes-Research/0.1" },
+      }, { provider: "arXiv", attempts: 2, retryDelayMs: 600, timeoutMs: 15_000, fetchImpl });
+      if (!response.ok) continue;
+      const src = firstFigureSrc(await response.text());
+      if (!src) continue;
+      const url = new URL(src, pageUrl).toString();
+      if (!/^https:\/\//i.test(url)) continue;
+      return url;
+    } catch {
+      // Try the next mirror before giving up on this paper.
+    }
+  }
+  return "";
+}
+
+async function resolveArxivFigure(arxivId, fetchImpl = fetch) {
+  const id = normalizeWhitespace(arxivId);
+  if (!/^\d{4}\.\d{4,5}$/.test(id)) return "";
+  const cached = figureCache.get(id);
+  if (cached && Date.now() - cached.at < FIGURE_CACHE_TTL_MS) return cached.url;
+  const pending = figureInflight.get(id);
+  if (pending) return pending;
+  const task = withFigureSlot(() => fetchArxivFigure(id, fetchImpl))
+    .then((url) => {
+      figureCache.set(id, { url, at: Date.now() });
+      return url;
+    })
+    .finally(() => { figureInflight.delete(id); });
+  figureInflight.set(id, task);
+  return task;
 }
 
 async function discoverDailyPapers(input) {
@@ -493,4 +545,4 @@ async function searchAcademicPaperSources(query, requestedLimit, fetchImpl = fet
   return { papers, providers: usedProviders, warnings };
 }
 
-module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, matchesDailyTopic, resetProviderCooldowns };
+module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, firstFigureSrc, matchesDailyTopic, resetProviderCooldowns, resolveArxivFigure };

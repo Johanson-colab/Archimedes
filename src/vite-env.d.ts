@@ -46,6 +46,7 @@ interface ResearchDeskBridge {
     listLibraryPapers: (libraryId: string, query?: string) => Promise<LibraryPaper[]>;
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
+    getDailyFigure?: (arxivId: string) => Promise<string>;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
@@ -559,7 +560,6 @@ interface DailyPaper extends AcademicSearchResult {
   published_at: string;
   discovered_at: string;
   categories: string[];
-  thumbnail: string;
   upvotes: number;
   github_url: string;
   github_stars: number;

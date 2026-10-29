@@ -31,15 +31,21 @@ test("speech and audio is offered as a daily topic", () => {
   assert.match(library, /\{ id: "speech_audio", label: "Speech & Audio", description: "[^"]+" \}/);
 });
 
-test("daily rows pair the copy with a thumbnail on the right", () => {
+test("daily rows pair the copy with the paper figure on the right", () => {
   const literature = fs.readFileSync(path.join(root, "electron", "literature.cjs"), "utf8");
-  assert.match(library, /daily-paper-aside/);
+  assert.match(library, /function DailyThumbnail\(/);
   assert.match(library, /daily-paper-thumb/);
-  assert.match(library, /loading="lazy"/);
-  assert.match(library, /event\.currentTarget\.remove\(\)/);
+  assert.match(library, /IntersectionObserver/);
+  assert.match(library, /bridge\.getDailyFigure/);
   assert.match(css, /\.daily-paper-row \{[^}]*grid-template-columns: minmax\(0, 1fr\) 208px/);
   assert.match(css, /\.daily-paper-thumb img \{[^}]*object-fit: cover/);
-  assert.match(literature, /social-thumbnails\/papers/);
-  assert.match(literature, /thumbnail: arxivThumbnailUrl\(arxivId\)/);
-  assert.match(literature, /thumbnail: normalizeThumbnailUrl\(item\.thumbnail/);
+  // The preview is the paper's own figure, not a generated social card.
+  assert.match(literature, /ARXIV_HTML_HOSTS = \["https:\/\/arxiv\.org\/html"/);
+  assert.match(literature, /function firstFigureSrc/);
+  assert.match(literature, /<figure/);
+  assert.doesNotMatch(literature, /social-thumbnails/);
+});
+
+test("the save action sits beside the open-paper link", () => {
+  assert.match(library, /daily-paper-title"><h2>\{paper\.title\}<\/h2>\{paper\.url && <a[^>]*><ExternalLink size=\{13\} \/><\/a>\}<button/);
 });
