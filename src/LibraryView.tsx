@@ -984,6 +984,19 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         {readerView !== "review" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}<span>{t("Ask AI")}</span></button>}
       </div>
     </header>
+    {readerView === "paper" && <section className="paper-reader-hero" aria-label={t("Paper overview")}>
+      <div className="paper-reader-hero-copy">
+        <span className="paper-reader-kicker">{paper.venue || t("Research paper")} · {paper.year ?? t("Year unknown")}</span>
+        <h1>{paper.title}</h1>
+        <p>{paper.authors.length ? `${paper.authors.slice(0, 4).join(", ")}${paper.authors.length > 4 ? " et al." : ""}` : t("Authors unavailable")}</p>
+      </div>
+      <div className="paper-reader-hero-meta">
+        <span className={`paper-reading-pill ${paper.reading_status}`}>{paper.reading_status === "reading" ? t("Reading") : paper.reading_status === "read" ? t("Read") : t("Unread")}</span>
+        <span className="paper-reader-chip"><Highlighter size={12} />{reader?.highlights.length ?? 0}</span>
+        <span className="paper-reader-chip"><StickyNote size={12} />{reader?.highlights.filter((highlight) => Boolean(highlight.note)).length ?? 0}</span>
+        <span className="paper-reader-chip"><FileText size={12} />{paper.pdf_url ? t("PDF available") : t("No PDF")}</span>
+      </div>
+    </section>}
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
       {readerView === "review" ? <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} pdfUrl={reader?.asset?.preview_url || ""} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} /> : readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
         {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
@@ -1010,8 +1023,21 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
           <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} searchQuery={activeSearchQuery} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
-          <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>{t("Open the original paper")}</h2><p>{paper.pdf_url ? t("The public PDF can be cached locally and opened in the reader.") : t("Attach a local PDF to open the original paper here.")}</p>
-          <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? t("Preparing…") : t("Prepare PDF")}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{t("Attach PDF")}</button></div>
+          <div className="reader-empty-grid">
+            <article className="reader-abstract-card">
+              <span className="reader-abstract-kicker">{t("Abstract")}</span>
+              <p>{paper.abstract || t("No abstract available for this paper.")}</p>
+              <div className="reader-abstract-foot"><span>{paper.venue || t("Research paper")}</span><span>{paper.year ?? t("Year unknown")}</span></div>
+            </article>
+            <div className="reader-empty-card">
+              <span className="paper-reader-empty-icon"><FileText size={24} /></span>
+              <span className="reader-empty-kicker">{t("Reader setup")}</span>
+              <h2>{t("Open the original paper")}</h2>
+              <p>{paper.pdf_url ? t("The public PDF can be cached locally and opened in the reader.") : t("Attach a local PDF to open the original paper here.")}</p>
+              <div className="reader-empty-actions"><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? t("Preparing…") : t("Prepare PDF")}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{t("Attach PDF")}</button></div>
+              <small>{paper.pdf_url ? t("Public PDF available") : t("Attach a local PDF to read and annotate here.")}</small>
+            </div>
+          </div>
         </div>}
         {(error || reader?.asset?.error) && <div className="reader-runtime-error">{error || reader?.asset?.error}</div>}
         </>}

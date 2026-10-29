@@ -429,7 +429,7 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .module-toolbar-note { display: inline-flex; align-items: center; gap: 5px; color: var(--night-muted); font-size: 10px; white-space: nowrap; }
 .module-toolbar-note svg { color: var(--accent); }
 
-.paper-writing-page { grid-template-rows: minmax(0, 1fr); padding-top: 16px; }
+.paper-writing-page { grid-template-rows: auto minmax(0, 1fr); padding-top: 16px; }
 .gallery-page { padding-top: 18px; }
 .daily-page { padding-top: 18px; }
 .benchmark-radar-page { padding-top: 22px; }
