@@ -6362,3 +6362,12 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .theme-paper .agent-float-grip:hover { color: #5f5b54; }
 .theme-paper .agent-float-resize::before,
 .theme-paper .agent-float-resize::after { background: #a29b91; }
+
+/* Seamless card: no separator lines between header, body and footer. */
+.agent-proactive-head,
+.agent-path-head,
+.agent-proactive-foot,
+.agent-proactive-compose,
+.agent-proactive-history-head {
+  border: 0;
+}
