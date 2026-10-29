@@ -12,6 +12,18 @@ export type SurfaceAppearance = {
   surfaceDepth?: number;
 };
 
+export type ButtonStyle = "solid" | "soft" | "outline" | "ghost";
+export type DialogStyle = "elevated" | "flat" | "outlined" | "glass";
+export type ShapeStyle = "sharp" | "soft" | "rounded";
+export type ShadowStyle = "default" | "none" | "subtle" | "deep";
+
+export type AppearanceStyles = {
+  button?: ButtonStyle;
+  dialog?: DialogStyle;
+  shape?: ShapeStyle;
+  shadow?: ShadowStyle;
+};
+
 export type AppearanceOverrides = {
   /** Optional accent override. Semantic tokens are derived from it. */
   accent?: string;
@@ -30,6 +42,7 @@ export type AppearanceSettings = {
   preset: ThemePreset;
   overrides: AppearanceOverrides;
   surfaces?: Partial<Record<SurfaceScope, SurfaceAppearance>>;
+  styles?: AppearanceStyles;
 };
 
 export const APPEARANCE_STORAGE_KEY = "archimedes-appearance-v2";
@@ -62,6 +75,32 @@ export const APPEARANCE_VARIABLES = [
   "--text-on-accent",
   "--accent-ink",
   "--radius-control",
+  "--button-radius",
+  "--button-secondary-radius",
+  "--button-shadow",
+  "--button-primary-bg",
+  "--button-primary-ink",
+  "--button-primary-border",
+  "--button-primary-border-width",
+  "--button-primary-hover-bg",
+  "--button-secondary-bg",
+  "--button-secondary-ink",
+  "--button-secondary-border",
+  "--button-secondary-border-width",
+  "--button-secondary-hover-bg",
+  "--button-secondary-hover-ink",
+  "--button-secondary-hover-border",
+  "--dialog-radius-lg",
+  "--dialog-radius-md",
+  "--dialog-radius-sm",
+  "--dialog-shadow-lg",
+  "--dialog-shadow-md",
+  "--dialog-shadow-sm",
+  "--dialog-border",
+  "--dialog-border-strong",
+  "--dialog-backdrop",
+  "--dialog-bg",
+  "--dialog-backdrop-filter",
   "--control-height",
   "--density-row-pad",
   "--density-row-min",
@@ -133,6 +172,34 @@ export function isSurfaceScope(value: unknown): value is SurfaceScope {
   return value === "reader" || value === "writing" || value === "agent";
 }
 
+export function isButtonStyle(value: unknown): value is ButtonStyle {
+  return value === "solid" || value === "soft" || value === "outline" || value === "ghost";
+}
+
+export function isDialogStyle(value: unknown): value is DialogStyle {
+  return value === "elevated" || value === "flat" || value === "outlined" || value === "glass";
+}
+
+export function isShapeStyle(value: unknown): value is ShapeStyle {
+  return value === "sharp" || value === "soft" || value === "rounded";
+}
+
+export function isShadowStyle(value: unknown): value is ShadowStyle {
+  return value === "default" || value === "none" || value === "subtle" || value === "deep";
+}
+
+function normalizeStyles(input: unknown): AppearanceStyles | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = input as AppearanceStyles;
+  const styles: AppearanceStyles = {
+    ...(isButtonStyle(value.button) ? { button: value.button } : {}),
+    ...(isDialogStyle(value.dialog) ? { dialog: value.dialog } : {}),
+    ...(isShapeStyle(value.shape) ? { shape: value.shape } : {}),
+    ...(isShadowStyle(value.shadow) ? { shadow: value.shadow } : {}),
+  };
+  return Object.keys(styles).length ? styles : undefined;
+}
+
 function normalizeSurfaceAppearance(input: unknown): SurfaceAppearance | undefined {
   if (!input || typeof input !== "object") return undefined;
   const value = input as Partial<SurfaceAppearance>;
@@ -166,6 +233,7 @@ export function normalizeAppearance(input: unknown, fallback: AppearanceSettings
     ? value.overrides as Partial<AppearanceOverrides>
     : {};
   const surfaces = normalizeSurfaces((value as AppearanceSettings).surfaces);
+  const styles = normalizeStyles((value as AppearanceSettings).styles);
   return {
     version: 1,
     preset: isThemePreset(value.preset) ? value.preset : fallback.preset,
@@ -181,6 +249,7 @@ export function normalizeAppearance(input: unknown, fallback: AppearanceSettings
       ...(isDensity(overrides.density) ? { density: overrides.density } : {}),
     },
     ...(surfaces ? { surfaces } : {}),
+    ...(styles ? { styles } : {}),
   };
 }
 
@@ -340,6 +409,146 @@ export function densityTokens(density: Density | undefined): Record<string, stri
   return {};
 }
 
+/**
+ * Maps style presets to component token overrides. Unset or default styles
+ * return no variables, so the shipped geometry stays pixel-identical.
+ */
+export function styleTokens(styles: AppearanceStyles | undefined, theme: AppTheme): Record<string, string> {
+  if (!styles) return {};
+  const tokens: Record<string, string> = {};
+
+  if (styles.shape === "sharp") {
+    Object.assign(tokens, {
+      "--radius-control": "2px",
+      "--button-radius": "2px",
+      "--button-secondary-radius": "2px",
+      "--dialog-radius-lg": "6px",
+      "--dialog-radius-md": "5px",
+      "--dialog-radius-sm": "4px",
+    });
+  }
+  if (styles.shape === "rounded") {
+    Object.assign(tokens, {
+      "--radius-control": "12px",
+      "--button-radius": "12px",
+      "--button-secondary-radius": "10px",
+      "--dialog-radius-lg": "20px",
+      "--dialog-radius-md": "16px",
+      "--dialog-radius-sm": "14px",
+    });
+  }
+
+  if (styles.shadow === "none") {
+    Object.assign(tokens, {
+      "--button-shadow": "none",
+      "--dialog-shadow-lg": "none",
+      "--dialog-shadow-md": "none",
+      "--dialog-shadow-sm": "none",
+    });
+  }
+  if (styles.shadow === "subtle") {
+    Object.assign(tokens, theme === "paper" ? {
+      "--button-shadow": "0 1px 2px rgba(59, 53, 46, .12)",
+      "--dialog-shadow-lg": "0 18px 48px rgba(59, 53, 46, .14)",
+      "--dialog-shadow-md": "0 16px 40px rgba(59, 53, 46, .16)",
+      "--dialog-shadow-sm": "0 12px 32px rgba(59, 53, 46, .12)",
+    } : {
+      "--button-shadow": "0 1px 2px rgba(0, 0, 0, .16)",
+      "--dialog-shadow-lg": "0 18px 48px rgba(0, 0, 0, .26)",
+      "--dialog-shadow-md": "0 16px 40px rgba(0, 0, 0, .28)",
+      "--dialog-shadow-sm": "0 12px 32px rgba(0, 0, 0, .2)",
+    });
+  }
+  if (styles.shadow === "deep") {
+    Object.assign(tokens, theme === "paper" ? {
+      "--button-shadow": "0 6px 18px rgba(59, 53, 46, .18)",
+      "--dialog-shadow-lg": "0 44px 120px rgba(59, 53, 46, .24)",
+      "--dialog-shadow-md": "0 36px 100px rgba(59, 53, 46, .26)",
+      "--dialog-shadow-sm": "0 28px 80px rgba(59, 53, 46, .22)",
+    } : {
+      "--button-shadow": "0 6px 18px rgba(0, 0, 0, .32)",
+      "--dialog-shadow-lg": "0 44px 120px rgba(0, 0, 0, .5)",
+      "--dialog-shadow-md": "0 36px 100px rgba(0, 0, 0, .52)",
+      "--dialog-shadow-sm": "0 28px 80px rgba(0, 0, 0, .42)",
+    });
+  }
+
+  if (styles.button === "soft") {
+    Object.assign(tokens, {
+      "--button-primary-bg": "color-mix(in oklab, var(--accent) 14%, transparent)",
+      "--button-primary-ink": "var(--accent)",
+      "--button-primary-border": "color-mix(in oklab, var(--accent) 32%, transparent)",
+      "--button-primary-border-width": "1px",
+      "--button-primary-hover-bg": "color-mix(in oklab, var(--accent) 22%, transparent)",
+      "--button-secondary-bg": "var(--surface-raised)",
+      "--button-secondary-ink": "var(--text-primary)",
+      "--button-secondary-border": "var(--border-default)",
+      "--button-secondary-hover-bg": "var(--surface-soft)",
+      "--button-secondary-hover-ink": "var(--text-primary)",
+      "--button-secondary-hover-border": "var(--border-strong)",
+    });
+  }
+  if (styles.button === "outline") {
+    Object.assign(tokens, {
+      "--button-primary-bg": "transparent",
+      "--button-primary-ink": "var(--accent)",
+      "--button-primary-border": "var(--accent)",
+      "--button-primary-border-width": "1px",
+      "--button-primary-hover-bg": "color-mix(in oklab, var(--accent) 12%, transparent)",
+      "--button-secondary-bg": "transparent",
+      "--button-secondary-ink": "var(--text-secondary)",
+      "--button-secondary-border": "var(--border-default)",
+      "--button-secondary-hover-bg": "var(--surface-raised)",
+      "--button-secondary-hover-ink": "var(--text-primary)",
+      "--button-secondary-hover-border": "var(--border-strong)",
+    });
+  }
+  if (styles.button === "ghost") {
+    Object.assign(tokens, {
+      "--button-primary-bg": "transparent",
+      "--button-primary-ink": "var(--text-primary)",
+      "--button-primary-border": "transparent",
+      "--button-primary-border-width": "0",
+      "--button-primary-hover-bg": "var(--surface-raised)",
+      "--button-secondary-bg": "transparent",
+      "--button-secondary-ink": "var(--text-muted)",
+      "--button-secondary-border": "transparent",
+      "--button-secondary-border-width": "0",
+      "--button-secondary-hover-bg": "var(--surface-soft)",
+      "--button-secondary-hover-ink": "var(--text-primary)",
+      "--button-secondary-hover-border": "transparent",
+    });
+  }
+
+  if (styles.dialog === "flat") {
+    Object.assign(tokens, {
+      "--dialog-shadow-lg": "none",
+      "--dialog-shadow-md": "none",
+      "--dialog-shadow-sm": "none",
+    });
+  }
+  if (styles.dialog === "outlined") {
+    Object.assign(tokens, {
+      "--dialog-shadow-lg": "none",
+      "--dialog-shadow-md": "none",
+      "--dialog-shadow-sm": "none",
+      "--dialog-border": "var(--border-strong)",
+      "--dialog-border-strong": "var(--border-strong)",
+    });
+  }
+  if (styles.dialog === "glass") {
+    Object.assign(tokens, {
+      "--dialog-bg": "color-mix(in oklab, var(--surface-panel) 84%, transparent)",
+      "--dialog-border": "color-mix(in oklab, var(--border-default) 70%, transparent)",
+      "--dialog-border-strong": "color-mix(in oklab, var(--border-default) 70%, transparent)",
+      "--dialog-backdrop": "color-mix(in oklab, #000000 55%, transparent)",
+      "--dialog-backdrop-filter": "blur(18px) saturate(1.12)",
+    });
+  }
+
+  return tokens;
+}
+
 function mix(base: string, toward: string, percent: number): string {
   const step = Math.max(0, Math.min(40, Math.round(percent)));
   return `color-mix(in oklab, ${base} ${100 - step}%, ${toward} ${step}%)`;
@@ -448,6 +657,7 @@ export function applyAppearance(root: AppearanceRoot, settings: AppearanceSettin
   const values = {
     ...(settings.overrides.accent ? accentTokens(settings.overrides.accent, theme) : {}),
     ...(settings.overrides.surface ? surfaceTokens(settings.overrides.surface, settings.overrides.surfaceDepth, theme) : {}),
+    ...styleTokens(settings.styles, theme),
     ...(settings.overrides.controlRadius !== undefined ? radiusTokens(settings.overrides.controlRadius) : {}),
     ...(settings.overrides.density ? densityTokens(settings.overrides.density) : {}),
   };
@@ -510,9 +720,13 @@ export function contrastIssues(settings: AppearanceSettings, theme: AppTheme): C
     if (source.accent && tokens["--accent"] && tokens["--text-on-accent"]) {
       const ratio = contrastRatio(tokens["--text-on-accent"], tokens["--accent"]);
       if (ratio < 4.5) issues.push({ scope, pair: "--text-on-accent on --accent", ratio, minimum: 4.5 });
-      if (surface && tokens["--surface-panel"]) {
-        const accentRatio = contrastRatio(tokens["--accent"], tokens["--surface-panel"]);
-        if (accentRatio < 3) issues.push({ scope, pair: "--accent on --surface-panel", ratio: accentRatio, minimum: 3 });
+    }
+    if (ownsSurface && tokens["--surface-panel"]) {
+      const effectiveAccent = source.accent ?? settings.overrides.accent ?? ACCENT_DEFAULT[theme];
+      const accentRatio = contrastRatio(effectiveAccent, tokens["--surface-panel"]);
+      if (accentRatio < 3) issues.push({ scope, pair: "--accent on --surface-panel", ratio: accentRatio, minimum: 3 });
+      if ((settings.styles?.button === "soft" || settings.styles?.button === "outline") && accentRatio < 4.5) {
+        issues.push({ scope, pair: "--accent on button", ratio: accentRatio, minimum: 4.5 });
       }
     }
   }
@@ -524,12 +738,13 @@ export function contrastIssues(settings: AppearanceSettings, theme: AppTheme): C
 /* -------------------------------------------------------------------------- */
 
 export type ThemePack = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   id: string;
   name: string;
   preset: ThemePreset;
   overrides: AppearanceOverrides;
   surfaces?: Partial<Record<SurfaceScope, SurfaceAppearance>>;
+  styles?: AppearanceStyles;
 };
 
 function slugify(value: string): string {
@@ -542,12 +757,13 @@ export function toThemePack(settings: AppearanceSettings, name = "Archimedes the
   const normalized = normalizeAppearance(settings);
   const trimmed = name.trim() || "Archimedes theme";
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: slugify(trimmed),
     name: trimmed,
     preset: normalized.preset,
     overrides: normalized.overrides,
     ...(normalized.surfaces ? { surfaces: normalized.surfaces } : {}),
+    ...(normalized.styles ? { styles: normalized.styles } : {}),
   };
 }
 
@@ -555,21 +771,24 @@ export function toThemePack(settings: AppearanceSettings, name = "Archimedes the
 export function parseThemePack(input: unknown): ThemePack {
   if (!input || typeof input !== "object") throw new Error("Theme pack must be a JSON object.");
   const value = input as Partial<ThemePack>;
-  if (value.schemaVersion !== 1) throw new Error("Unsupported theme pack version.");
+  const schemaVersion = (input as { schemaVersion?: unknown }).schemaVersion;
+  if (schemaVersion !== 1 && schemaVersion !== 2) throw new Error("Unsupported theme pack version.");
   if (typeof value.name !== "string" || !value.name.trim()) throw new Error("Theme pack needs a name.");
   if (!isThemePreset(value.preset)) throw new Error("Theme pack has an invalid preset.");
   const normalized = normalizeAppearance({
     preset: value.preset,
     overrides: value.overrides,
     surfaces: value.surfaces,
+    styles: value.styles,
   });
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: typeof value.id === "string" && value.id.trim() ? slugify(value.id) : slugify(value.name),
     name: value.name.trim(),
     preset: normalized.preset,
     overrides: normalized.overrides,
     ...(normalized.surfaces ? { surfaces: normalized.surfaces } : {}),
+    ...(normalized.styles ? { styles: normalized.styles } : {}),
   };
 }
 
@@ -579,5 +798,6 @@ export function themePackSettings(pack: ThemePack): AppearanceSettings {
     preset: pack.preset,
     overrides: pack.overrides,
     ...(pack.surfaces ? { surfaces: pack.surfaces } : {}),
+    ...(pack.styles ? { styles: pack.styles } : {}),
   };
 }

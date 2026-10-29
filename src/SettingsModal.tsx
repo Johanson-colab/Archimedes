@@ -9,7 +9,7 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
-import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppTheme, type ContrastIssue, type Density, type SurfaceAppearance, type SurfaceScope, type ThemePack, type ThemePreset } from "./appearance";
+import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type ContrastIssue, type Density, type DialogStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
@@ -132,12 +132,17 @@ export default function SettingsModal({
   const depthResetDisabled = scope === "global" ? appearance.overrides.surfaceDepth === undefined : scopedAppearance?.surfaceDepth === undefined;
   const radiusValue = appearance.overrides.controlRadius ?? CONTROL_RADIUS_DEFAULT;
   const densityValue: Density = appearance.overrides.density ?? DENSITY_DEFAULT;
+  const buttonStyle: ButtonStyle = appearance.styles?.button ?? "solid";
+  const dialogStyle: DialogStyle = appearance.styles?.dialog ?? "elevated";
+  const shapeStyle: ShapeStyle = appearance.styles?.shape ?? "soft";
+  const shadowStyle: ShadowStyle = appearance.styles?.shadow ?? "default";
   const scopeLabel = scope === "global" ? "Global" : scope === "reader" ? "Reader" : scope === "writing" ? "Writing" : "Agent";
   const scopeIssues = contrastIssues(appearance, theme).filter((issue) => issue.scope === scope);
   const hasOverrides = Boolean(appearance.overrides.accent) || Boolean(appearance.overrides.surface)
     || appearance.overrides.surfaceDepth !== undefined || appearance.overrides.controlRadius !== undefined
     || appearance.overrides.density !== undefined
-    || Boolean(appearance.surfaces && Object.keys(appearance.surfaces).length);
+    || Boolean(appearance.surfaces && Object.keys(appearance.surfaces).length)
+    || Boolean(appearance.styles && Object.keys(appearance.styles).length);
 
   function updateOverride(patch: SurfaceAppearance) {
     if (scope === "global") {
@@ -163,6 +168,9 @@ export default function SettingsModal({
     if (Object.keys(scoped).length) surfaces[scope] = scoped;
     else delete surfaces[scope];
     onAppearanceChange(normalizeAppearance({ ...appearance, surfaces }));
+  }
+  function updateStyles(patch: AppearanceStyles) {
+    onAppearanceChange(normalizeAppearance({ ...appearance, styles: { ...appearance.styles, ...patch } }));
   }
   function clearScope() {
     if (scope === "global") return;
@@ -351,12 +359,14 @@ export default function SettingsModal({
                       <span className="appearance-preview-kicker">{t("Workspace")}</span>
                       <span className="appearance-preview-chip">{t("Ready")}</span>
                     </div>
-                    <strong>{t("A quieter research surface")}</strong>
-                    <p>{t("Accent, surface, density, and radius update here immediately.")}</p>
-                    <div className="appearance-preview-cards"><span /><span /></div>
-                    <div className="appearance-preview-actions">
-                      <span className="appearance-preview-button primary">{t("New research")}</span>
-                      <span className="appearance-preview-button">{t("Open library")}</span>
+                    <div className="appearance-preview-dialog">
+                      <span className="appearance-preview-dialog-kicker">{t("Dialog")}</span>
+                      <strong>{t("Preview dialog")}</strong>
+                      <p>{t("Buttons and dialogs follow the selected style.")}</p>
+                      <div className="appearance-preview-actions">
+                        <span className="appearance-preview-button primary">{t("Apply")}</span>
+                        <span className="appearance-preview-button">{t("Cancel")}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -444,6 +454,56 @@ export default function SettingsModal({
                     </div>
                     <div className="settings-row-control">
                       <button className="secondary-button" onClick={() => onAppearanceChange(normalizeAppearance({ version: 1, preset: appearance.preset }))} disabled={!hasOverrides}>{t("Reset custom theme")}</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Style")}</h3>
+                <div className="settings-group settings-appearance-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Button style")}</span>
+                      <p className="settings-row-description">{t("Fill, border, and hover treatment for primary and secondary buttons.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Button style")}>
+                        {([["solid", "Solid"], ["soft", "Soft"], ["outline", "Outline style"], ["ghost", "Ghost"]] as Array<[ButtonStyle, string]>).map(([id, label]) => <button key={id} className={buttonStyle === id ? "active" : ""} aria-pressed={buttonStyle === id} onClick={() => updateStyles({ button: id })}>{t(label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Dialog style")}</span>
+                      <p className="settings-row-description">{t("Elevation and surface treatment for dialogs and menus.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Dialog style")}>
+                        {([["elevated", "Elevated"], ["flat", "Flat"], ["outlined", "Outlined"], ["glass", "Glass"]] as Array<[DialogStyle, string]>).map(([id, label]) => <button key={id} className={dialogStyle === id ? "active" : ""} aria-pressed={dialogStyle === id} onClick={() => updateStyles({ dialog: id })}>{t(label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Shape")}</span>
+                      <p className="settings-row-description">{t("Corner radius across buttons and dialogs.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Shape")}>
+                        {([["sharp", "Sharp"], ["soft", "Soft"], ["rounded", "Rounded"]] as Array<[ShapeStyle, string]>).map(([id, label]) => <button key={id} className={shapeStyle === id ? "active" : ""} aria-pressed={shapeStyle === id} onClick={() => updateStyles({ shape: id })}>{t(label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Shadow")}</span>
+                      <p className="settings-row-description">{t("Depth for buttons and dialogs.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Shadow")}>
+                        {([["default", "Default"], ["none", "None"], ["subtle", "Subtle"], ["deep", "Deep"]] as Array<[ShadowStyle, string]>).map(([id, label]) => <button key={id} className={shadowStyle === id ? "active" : ""} aria-pressed={shadowStyle === id} onClick={() => updateStyles({ shadow: id })}>{t(label)}</button>)}
+                      </div>
                     </div>
                   </div>
                 </div>

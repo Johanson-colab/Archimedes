@@ -100,14 +100,16 @@ test("round-trips a theme pack through export and import", async () => {
     preset: "paper",
     overrides: { accent: "#3F7BD9", surface: "#F0E8DC", density: "compact", controlRadius: 10 },
     surfaces: { reader: { accent: "#2F8F6B", surface: "#122018", surfaceDepth: 60 } },
+    styles: { button: "soft", dialog: "glass", shape: "rounded", shadow: "deep" },
   };
   const pack = toThemePack(settings, "Lab Notebook");
-  assert.equal(pack.schemaVersion, 1);
+  assert.equal(pack.schemaVersion, 2);
   assert.equal(pack.id, "lab-notebook");
   assert.equal(pack.name, "Lab Notebook");
   assert.equal(pack.preset, "paper");
   assert.deepEqual(pack.overrides, { accent: "#3f7bd9", surface: "#f0e8dc", density: "compact", controlRadius: 10 });
   assert.deepEqual(pack.surfaces, { reader: { accent: "#2f8f6b", surface: "#122018", surfaceDepth: 60 } });
+  assert.deepEqual(pack.styles, { button: "soft", dialog: "glass", shape: "rounded", shadow: "deep" });
 
   const parsed = parseThemePack(JSON.parse(JSON.stringify(pack)));
   assert.deepEqual(parsed, pack);
@@ -116,13 +118,28 @@ test("round-trips a theme pack through export and import", async () => {
     preset: "paper",
     overrides: pack.overrides,
     surfaces: pack.surfaces,
+    styles: pack.styles,
   });
+});
+
+test("migrates a schema v1 pack to v2", async () => {
+  const { parseThemePack } = await appearanceModule;
+  const pack = parseThemePack({
+    schemaVersion: 1,
+    id: "legacy",
+    name: "Legacy",
+    preset: "paper",
+    overrides: { accent: "#3f7bd9" },
+  });
+  assert.equal(pack.schemaVersion, 2);
+  assert.equal(pack.styles, undefined);
+  assert.deepEqual(pack.overrides, { accent: "#3f7bd9" });
 });
 
 test("rejects malformed theme packs", async () => {
   const { parseThemePack } = await appearanceModule;
   assert.throws(() => parseThemePack(null), /JSON object/);
-  assert.throws(() => parseThemePack({ schemaVersion: 2, name: "Old", preset: "paper" }), /version/);
+  assert.throws(() => parseThemePack({ schemaVersion: 3, name: "Old", preset: "paper" }), /version/);
   assert.throws(() => parseThemePack({ schemaVersion: 1, name: " ", preset: "paper" }), /name/);
   assert.throws(() => parseThemePack({ schemaVersion: 1, name: "Neon", preset: "neon" }), /preset/);
 });
@@ -133,8 +150,10 @@ test("flags accent and surface pairs below WCAG AA", async () => {
     version: 1,
     preset: "charcoal",
     overrides: { accent: "#868686", surface: "#808080" },
+    styles: { button: "soft" },
   }, "charcoal");
   assert.ok(issues.some((issue) => issue.pair === "--accent on --surface-panel"));
+  assert.ok(issues.some((issue) => issue.pair === "--accent on button"));
   assert.ok(issues.every((issue) => issue.scope === "global"));
   assert.equal(contrastIssues({ version: 1, preset: "charcoal", overrides: {} }, "charcoal").length, 0);
 });
@@ -215,6 +234,18 @@ test("density tokens cover compact, comfortable, and spacious", async () => {
   assert.equal(densityTokens("compact")["--density-row-pad"], "11px");
   assert.equal(densityTokens("spacious")["--control-height"], "38px");
   assert.equal(densityTokens("spacious")["--density-settings-nav-height"], "38px");
+});
+
+test("maps style presets to component tokens", async () => {
+  const { styleTokens } = await appearanceModule;
+  assert.deepEqual(styleTokens(undefined, "charcoal"), {});
+  assert.equal(styleTokens({ shape: "sharp" }, "charcoal")["--radius-control"], "2px");
+  assert.equal(styleTokens({ shape: "rounded" }, "paper")["--dialog-radius-lg"], "20px");
+  assert.equal(styleTokens({ button: "soft" }, "charcoal")["--button-primary-bg"], "color-mix(in oklab, var(--accent) 14%, transparent)");
+  assert.equal(styleTokens({ button: "ghost" }, "charcoal")["--button-secondary-border-width"], "0");
+  assert.equal(styleTokens({ dialog: "outlined" }, "charcoal")["--dialog-shadow-lg"], "none");
+  assert.equal(styleTokens({ dialog: "glass" }, "charcoal")["--dialog-backdrop-filter"], "blur(18px) saturate(1.12)");
+  assert.match(styleTokens({ shadow: "subtle" }, "paper")["--dialog-shadow-lg"], /rgba\(59, 53, 46/);
 });
 
 test("applies and clears inline appearance variables", async () => {

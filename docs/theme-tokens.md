@@ -143,6 +143,12 @@ use `.theme-paper` because they predate the token pass.
     "surfaceDepth": 60,
     "density": "compact",
     "controlRadius": 10
+  },
+  "styles": {
+    "button": "soft",
+    "dialog": "glass",
+    "shape": "rounded",
+    "shadow": "deep"
   }
 }
 ```
@@ -178,19 +184,20 @@ scope. Defaults (no overrides) produce the same pixels as the token refactor.
 
 ### Theme packs and contrast
 
-- `toThemePack()` serializes the current preset, global overrides, and
-  per-surface overrides into a versioned `schemaVersion: 1` JSON pack.
-- `parseThemePack()` validates the version, name, and preset, then normalizes
-  every color, depth, density, and radius before the pack can apply.
+- `toThemePack()` serializes the current preset, global overrides, per-surface
+  overrides, and style presets into a `schemaVersion: 2` JSON pack.
+- `parseThemePack()` accepts v1 or v2, migrates v1 packs to v2, and normalizes
+  every color, depth, density, radius, and style before the pack can apply.
 - `themePackSettings()` turns a validated pack back into `AppearanceSettings`.
 - Settings › Appearance exports and imports `.archtheme.json`, shows the pack
   name / preset / override count, checks contrast, and waits for Apply.
 - `contrastIssues()` resolves the generated OKLab `color-mix()` values and
-  checks text on panel/ground, secondary text, muted text, accent ink, and
-  accent on panel. Warnings do not block applying, but they are visible.
+  checks text on panel/ground, secondary text, muted text, accent ink, accent
+  on panel, and soft/outline accent-on-button pairs. Warnings do not block
+  applying, but they are visible.
 - Invalid packs are rejected before they touch localStorage.
 
-### Component style tokens (M5, Phase 1)
+### Component style tokens (M5)
 
 The first component layer covers buttons and the main dialogs:
 
@@ -203,9 +210,14 @@ The first component layer covers buttons and the main dialogs:
 - Defaults match the pre-token geometry exactly, including the 6px primary
   button radius, 5px secondary radius, 12px settings dialog, 9px project
   dialog, and 7px gallery dialog.
-- Phase 2 adds the Style section (Solid / Soft / Outline / Ghost buttons;
-  Elevated / Flat / Outlined / Glass dialogs), then ThemePack v2 stores those
-  choices.
+- **Style presets**: `styleTokens()` maps Solid / Soft / Outline / Ghost
+  buttons, Elevated / Flat / Outlined / Glass dialogs, Sharp / Soft / Rounded
+  shape, and Default / None / Subtle / Deep shadow to the component tokens.
+- Settings › Style exposes those four dimensions; the live preview contains a
+  mini dialog and real button tokens.
+- ThemePack v2 stores `styles`, and v1 packs migrate without losing colors.
+- Glass dialogs add `--dialog-bg` and `--dialog-backdrop-filter`; the components
+  use `var(--dialog-bg, …)` so the default background is untouched.
 
 ## Migration status
 
@@ -302,10 +314,12 @@ npm run build
 3. **M3 — Appearance editor.** Done: accent, surface ladder, surface depth,
    density, control radius, reset, live preview, and per-surface scope for
    Reader / Writing / Agent.
-4. **M4 — Import/export.** Done: schema v1, export/import, validation,
-   preview, and contrast guard. Next: community presets and advanced JSON.
-5. **M5 — Component styles.** Phase 1 done: button and dialog style tokens,
-   default 0 px diff. Next: Style controls, preview button/dialog, pack v2.
+4. **M4 — Import/export.** Done: schema v2 with v1 migration, export/import,
+   validation, preview, and contrast guard. Next: community presets and
+   advanced JSON.
+5. **M5 — Component styles.** Done: button and dialog style tokens, Style
+   controls, preview dialog, pack v2, contrast checks. Next: per-surface style
+   overrides, input/card/menu presets, motion.
 
 The guard script and this document should be updated in the same PR as each
 milestone.

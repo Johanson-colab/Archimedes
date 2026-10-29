@@ -69,7 +69,21 @@ test("the appearance editor includes a live preview that uses the same tokens", 
   assert.match(settings, /className="appearance-preview-button primary"/);
   assert.match(css, /\.appearance-preview \{[^}]*background: var\(--surface-ground\)/);
   assert.match(css, /\.appearance-preview-section \{[^}]*position: sticky/);
-  assert.match(css, /\.appearance-preview-button\.primary \{[^}]*background: var\(--accent\)/);
+  assert.match(css, /\.appearance-preview-button\.primary \{[^}]*background: var\(--button-primary-bg\)/);
+});
+
+test("the Style section maps button, dialog, shape, and shadow presets", () => {
+  assert.match(settings, /t\("Button style"\)/);
+  assert.match(settings, /t\("Dialog style"\)/);
+  assert.match(settings, /t\("Shape"\)/);
+  assert.match(settings, /t\("Shadow"\)/);
+  assert.match(settings, /updateStyles\(\{ button: id \}\)/);
+  assert.match(settings, /updateStyles\(\{ dialog: id \}\)/);
+  assert.match(settings, /updateStyles\(\{ shape: id \}\)/);
+  assert.match(settings, /updateStyles\(\{ shadow: id \}\)/);
+  assert.match(settings, /appearance-preview-dialog/);
+  assert.match(appearance, /export function styleTokens/);
+  assert.match(appearance, /export type AppearanceStyles/);
 });
 
 test("appearance can be exported, imported, and checked for contrast", () => {
@@ -118,6 +132,32 @@ test("the new appearance copy is translated", () => {
     "Reset this surface",
     "Previewing {scope}. Accent and surface apply only to this surface.",
     "Contrast warning",
+    "Style",
+    "Button style",
+    "Fill, border, and hover treatment for primary and secondary buttons.",
+    "Dialog style",
+    "Elevation and surface treatment for dialogs and menus.",
+    "Shape",
+    "Corner radius across buttons and dialogs.",
+    "Shadow",
+    "Depth for buttons and dialogs.",
+    "Solid",
+    "Soft",
+    "Outline style",
+    "Ghost",
+    "Elevated",
+    "Flat",
+    "Outlined",
+    "Glass",
+    "Sharp",
+    "Rounded",
+    "None",
+    "Subtle",
+    "Deep",
+    "Dialog",
+    "Preview dialog",
+    "Buttons and dialogs follow the selected style.",
+    "Apply",
     "Theme pack",
     "Share this appearance",
     "Export the current appearance or import a shared .archtheme.json file.",
