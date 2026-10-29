@@ -32,11 +32,16 @@ function isToolCall(event: ResearchEvent) {
 }
 
 export default function TrajectoryView({ thread, events, provider, model, modeLabel, onCopy, onOpenJourney, focusOrdinal, onFocusApplied }: TrajectoryViewProps) {
+  const PAGE_SIZE = 120;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState("");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [jumpToEnd, setJumpToEnd] = useState(false);
   const sectionRef = useRef<HTMLElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const focusAppliedRef = useRef(onFocusApplied);
   focusAppliedRef.current = onFocusApplied;
+  const visibleEvents = Math.min(visibleCount, events.length);
   const files = useMemo(() => {
     const next = new Set<string>();
     for (const event of events) for (const path of collectTouchedPaths(event.payload)) next.add(path);
@@ -47,10 +52,21 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
   const allExpanded = events.length > 0 && events.every((event) => expanded.has(event.id));
 
   useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+    setExpanded(new Set());
+    setCopied("");
+    const container = sectionRef.current;
+    if (container) container.scrollTop = 0;
+  }, [thread?.id]);
+
+  useEffect(() => {
     if (focusOrdinal == null) return;
     const targetIndex = events.findIndex((event, index) => eventOrdinal(event, index) >= focusOrdinal);
     if (targetIndex < 0) { focusAppliedRef.current?.(); return; }
     const target = events[targetIndex];
+    // The list renders progressively; make sure the focus target is mounted
+    // before the reveal loop looks for it.
+    setVisibleCount((current) => Math.max(current, Math.min(events.length, targetIndex + PAGE_SIZE)));
     setExpanded((current) => current.has(target.id) ? current : new Set(current).add(target.id));
   }, [events, focusOrdinal]);
 
@@ -88,12 +104,52 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
     };
   }, [events, expanded, focusOrdinal]);
 
+  // Progressive rendering: long coding traces can contain thousands of events,
+  // so mount the first page and extend it when the sentinel comes into view.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    const root = sectionRef.current;
+    if (!node || !root) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisibleCount((current) => Math.min(events.length, current + PAGE_SIZE));
+      }
+    }, { root, rootMargin: "600px 0px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [events.length, visibleEvents]);
+
+  useEffect(() => {
+    if (!jumpToEnd) return;
+    const frame = requestAnimationFrame(() => {
+      const container = sectionRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+      setJumpToEnd(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [jumpToEnd, visibleEvents]);
+
   function toggle(id: string) {
     setExpanded((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  function toggleAll() {
+    if (allExpanded) {
+      setExpanded(new Set());
+      return;
+    }
+    // "Expand all" is an explicit request for the whole trace.
+    setVisibleCount(events.length);
+    setExpanded(new Set(events.map((event) => event.id)));
+  }
+
+  function jumpToLatest() {
+    setVisibleCount(events.length);
+    setJumpToEnd(true);
   }
 
   async function copy(text: string, label: string) {
@@ -136,12 +192,13 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
         <div><h3>Raw events</h3></div>
         <div className="trajectory-head-actions">
           <button onClick={() => void copy(JSON.stringify(events, null, 2), "all")} title="Copy all raw events"><Copy size={13} />{copied === "all" ? "Copied" : "Copy JSON"}</button>
-          <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(events.map((event) => event.id)))} title={allExpanded ? "Collapse all events" : "Expand all events"}>{allExpanded ? "Collapse all" : "Expand all"}</button>
+          {events.length > PAGE_SIZE && <button onClick={jumpToLatest} title="Load every event and scroll to the newest">Jump to latest</button>}
+          <button onClick={toggleAll} title={allExpanded ? "Collapse all events" : "Expand all events"}>{allExpanded ? "Collapse all" : "Expand all"}</button>
         </div>
       </div>
 
       {events.length > 0 ? <div className="trajectory-event-list">
-        {events.map((event, index) => {
+        {events.slice(0, visibleEvents).map((event, index) => {
           const open = expanded.has(event.id);
           const payload = payloadObject(event.payload);
           return <article className={open ? "trajectory-event open" : "trajectory-event"} key={event.id} data-trajectory-sequence={event.sequence} data-trajectory-ordinal={eventOrdinal(event, index)}>
@@ -161,6 +218,10 @@ export default function TrajectoryView({ thread, events, provider, model, modeLa
             </div>}
           </article>;
         })}
+        {visibleEvents < events.length && <div className="trajectory-more" ref={sentinelRef}>
+          <span>Showing {visibleEvents} of {events.length} events</span>
+          <button onClick={() => setVisibleCount(events.length)}>Show all events</button>
+        </div>}
       </div> : <div className="trajectory-empty">
         <ListTree size={20} />
         <strong>No raw events yet</strong>

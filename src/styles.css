@@ -1502,6 +1502,9 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .trajectory-head-actions button, .trajectory-event-meta button, .trajectory-empty button { display: inline-flex; height: 26px; align-items: center; gap: 4px; padding: 0 7px; color: #bdbdbd; background: #242424; border: 1px solid #363636; border-radius: 5px; font-size: 8px; white-space: nowrap; }
 .trajectory-head-actions button:hover, .trajectory-event-meta button:hover, .trajectory-empty button:hover { color: #f4f4f4; background: #2e2e2e; }
 .trajectory-event-list { margin-top: 8px; border-top: 1px solid #2b2b2b; }
+.trajectory-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 2px 6px; color: #8f8f8f; font-size: 9px; }
+.trajectory-more button { display: inline-flex; height: 26px; align-items: center; padding: 0 9px; color: #bdbdbd; background: #242424; border: 1px solid #363636; border-radius: 5px; font-size: 9px; white-space: nowrap; }
+.trajectory-more button:hover { color: #f4f4f4; background: #2e2e2e; }
 .trajectory-event { border-bottom: 1px solid #2b2b2b; }
 .trajectory-event-head { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 7px; padding: 5px 2px; color: #8f8f8f; background: transparent; text-align: left; }
 .trajectory-event-head:hover { color: #d6d6d6; background: #202020; }
@@ -3451,6 +3454,9 @@ html[data-theme="paper"] .paper-create-backdrop {
 .theme-paper .trajectory-head-actions button, .theme-paper .trajectory-event-meta button, .theme-paper .trajectory-empty button { color: #625d56; background: #fffefd; border-color: #ded8d0; }
 .theme-paper .trajectory-head-actions button:hover, .theme-paper .trajectory-event-meta button:hover, .theme-paper .trajectory-empty button:hover { color: #24211e; background: #f2efeb; }
 .theme-paper .trajectory-event-list, .theme-paper .trajectory-event { border-color: #e8e4de; }
+.theme-paper .trajectory-more { color: #8b857d; }
+.theme-paper .trajectory-more button { color: #625d56; background: #fffefd; border-color: #ded8d0; }
+.theme-paper .trajectory-more button:hover { color: #24211e; background: #f2efeb; }
 .theme-paper .trajectory-event-head { color: #8b857d; }
 .theme-paper .trajectory-event-head:hover { color: #252422; background: #efede9; }
 .theme-paper .trajectory-event-icon { color: #77726b; background: #f2efeb; border-color: #ded8d0; }
