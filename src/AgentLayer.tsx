@@ -196,7 +196,7 @@ export default function AgentLayer({
     { id: "proactive", open: proactiveOpen, content: proactive, label: "Proactive agent" },
   ];
 
-  return <div className="agent-layer" ref={layerRef} aria-label="Floating agent panels">
+  return <div className="agent-layer" ref={layerRef} aria-label="Floating agent panels" data-surface="agent">
     {ready && panels.filter((panel) => panel.open && layout[panel.id]).map((panel) => {
       const panelLayout = layout[panel.id]!;
       return <div

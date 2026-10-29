@@ -4,11 +4,12 @@ const path = require("node:path");
 const test = require("node:test");
 
 const css = fs.readFileSync(path.resolve(__dirname, "..", "src", "styles.css"), "utf8");
+const tokens = fs.readFileSync(path.resolve(__dirname, "..", "src", "tokens.css"), "utf8");
 
 test("welcome reuses warm paper tokens and the shared accent", () => {
-  assert.match(css, /html\[data-theme="paper"\] \.conversation-layout\.has-welcome \{[\s\S]*?--welcome-ground: #fbfaf8;/);
-  assert.match(css, /html\[data-theme="paper"\] \.conversation-layout\.has-welcome \{[\s\S]*?--welcome-muted: #6f6a63;/);
-  assert.match(css, /html\[data-theme="paper"\] \.conversation-layout\.has-welcome \{[\s\S]*?--welcome-bronze: #8a5a24;/);
+  assert.match(tokens, /html\[data-theme="paper"\] \.conversation-layout\.has-welcome \{[\s\S]*?--welcome-ground: #fbfaf8;/);
+  assert.match(tokens, /html\[data-theme="paper"\] \.conversation-layout\.has-welcome \{[\s\S]*?--welcome-muted: #6f6a63;/);
+  assert.match(tokens, /html\[data-theme="paper"\] \.conversation-layout\.has-welcome \{[\s\S]*?--welcome-bronze: #8a5a24;/);
 });
 
 test("welcome board and composer are docked instead of clipped", () => {

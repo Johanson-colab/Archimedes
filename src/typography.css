@@ -22,44 +22,6 @@
   font-display: swap;
 }
 
-:root {
-  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
-  --night-ground: #141110;
-  --night-sidebar: #1b1816;
-  --night-panel: #211e1c;
-  --night-panel-raised: #262220;
-  --night-panel-soft: #2b2724;
-  --night-line: #3a332f;
-  --night-line-soft: #2d2825;
-  --night-ink: #eae8e6;
-  --night-ink-soft: #c9c4c0;
-  --night-muted: #a5a09c;
-  --night-faint: #7d7672;
-}
-
-:root[data-theme="paper"] {
-  --night-ground: #faf7f2;
-  --night-sidebar: #f4f0e9;
-  --night-panel: #fffdf8;
-  --night-panel-raised: #f7f3ec;
-  --night-panel-soft: #efe9df;
-  --night-line: #e6ded4;
-  --night-line-soft: #eee8df;
-  --night-ink: #2c2826;
-  --night-ink-soft: #5f5a54;
-  --night-muted: #756f6c;
-  --night-faint: #a8a19a;
-}
-
-html[data-interface-font="geist"] {
-  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-html[data-mono-font="geist-mono"] {
-  --font-mono: "Geist Mono", "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
-}
-
 body,
 .codex-shell,
 .codex-shell button,

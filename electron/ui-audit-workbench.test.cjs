@@ -6,6 +6,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
+const tokens = fs.readFileSync(path.join(root, "src", "tokens.css"), "utf8");
 const terminal = fs.readFileSync(path.join(root, "src", "TerminalPanel.tsx"), "utf8");
 const workbench = fs.readFileSync(path.join(root, "src", "RightWorkbench.tsx"), "utf8");
 const tabs = fs.readFileSync(path.join(root, "src", "workbench-tabs.tsx"), "utf8");
@@ -103,13 +104,13 @@ test("paper workbench toggle uses a warm active tone instead of green", () => {
 });
 
 test("files and trajectory share one row token system", () => {
-  assert.match(css, /--rail-row-ink: #a7a8b5/);
-  assert.match(css, /--rail-row-hover-bg: #202020/);
-  assert.match(css, /--rail-row-active-bg: #25253a/);
+  assert.match(tokens, /--rail-row-ink: #a7a8b5/);
+  assert.match(tokens, /--rail-row-hover-bg: #202020/);
+  assert.match(tokens, /--rail-row-active-bg: #25253a/);
+  assert.match(tokens, /:root\[data-theme="paper"\] \{[\s\S]*?--rail-row-hover-bg: #efede9/);
   assert.match(css, /\.workspace-tree-row,\s*\.trajectory-event-head \{ color: var\(--rail-row-ink\); \}/);
   assert.match(css, /\.workspace-tree-row:hover,\s*\.trajectory-event-head:hover \{ color: var\(--rail-row-ink-strong\); background: var\(--rail-row-hover-bg\); \}/);
   assert.match(css, /\.workspace-tree-row\.active,\s*\.trajectory-event\.open \.trajectory-event-head \{ color: var\(--rail-row-ink-strong\); background: var\(--rail-row-active-bg\); \}/);
-  assert.match(css, /\.theme-paper \{[\s\S]*?--rail-row-hover-bg: #efede9/);
 });
 
 test("terminal settings sit in the terminal tab row with a distinct icon", () => {
@@ -199,5 +200,5 @@ test("agent journey is derived from raw trajectory events", () => {
   assert.doesNotMatch(journey, /const phases = \[/);
   assert.doesNotMatch(journey, /derived progress/i);
   assert.match(css, /\.trajectory-json \{[^}]*white-space: pre-wrap/);
-  assert.match(css, /\.theme-paper \.right-workbench \{[^}]*background: #f6f4f1/);
+  assert.match(css, /\.theme-paper \.right-workbench \{[^}]*background: var\(--surface-canvas\)/);
 });

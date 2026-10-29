@@ -1,4 +1,5 @@
-﻿import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, X } from "lucide-react";
+﻿import { useRef, useState } from "react";
+import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, X } from "lucide-react";
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import type { ProactiveSettings } from "./proactive-types";
@@ -8,6 +9,7 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
+import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppTheme, type ContrastIssue, type Density, type SurfaceAppearance, type SurfaceScope, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
@@ -17,9 +19,12 @@ type SettingsModalProps = {
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
   onClose: () => void;
-  themePreference: "charcoal" | "system" | "paper";
-  systemAppearance: "charcoal" | "paper";
-  onThemePreferenceChange: (preference: "charcoal" | "system" | "paper") => void;
+  themePreference: ThemePreset;
+  theme: AppTheme;
+  systemAppearance: AppTheme;
+  onThemePreferenceChange: (preference: ThemePreset) => void;
+  appearance: AppearanceSettings;
+  onAppearanceChange: (appearance: AppearanceSettings) => void;
   bridge: ResearchDeskBridge;
   onModelSaved: (config: PublicModelConfig) => void;
   workspace: string;
@@ -76,8 +81,11 @@ export default function SettingsModal({
   onSectionChange,
   onClose,
   themePreference,
+  theme,
   systemAppearance,
   onThemePreferenceChange,
+  appearance,
+  onAppearanceChange,
   bridge,
   onModelSaved,
   workspace,
@@ -102,6 +110,11 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
+  const [scope, setScope] = useState<SurfaceScope | "global">("global");
+  const [pendingPack, setPendingPack] = useState<ThemePack | null>(null);
+  const [packWarnings, setPackWarnings] = useState<ContrastIssue[]>([]);
+  const [packError, setPackError] = useState("");
+  const packInputRef = useRef<HTMLInputElement>(null);
   if (!open) return null;
 
   const workspaceName = workspace ? workspace.split(/[\\/]/).filter(Boolean).at(-1) : "";
@@ -109,6 +122,83 @@ export default function SettingsModal({
   const sizeIndex = Math.max(0, textSizeSteps.findIndex((item) => item.id === textSize));
   const activeSize = textSizeSteps[sizeIndex] ?? textSizeSteps[2];
   const activeVerbosity = verbosityOptions.find((item) => item.id === chatVerbosity) ?? verbosityOptions[1];
+  const scopedAppearance = scope === "global" ? undefined : appearance.surfaces?.[scope];
+  const accentValue = scopedAppearance?.accent ?? appearance.overrides.accent ?? ACCENT_DEFAULT[theme];
+  const surfaceValue = scopedAppearance?.surface ?? appearance.overrides.surface ?? SURFACE_DEFAULT[theme];
+  const surfaceDepthValue = scopedAppearance?.surfaceDepth ?? appearance.overrides.surfaceDepth ?? SURFACE_DEPTH_DEFAULT;
+  const hasSurface = Boolean(scopedAppearance?.surface ?? appearance.overrides.surface);
+  const accentResetDisabled = scope === "global" ? !appearance.overrides.accent : !scopedAppearance?.accent;
+  const surfaceResetDisabled = scope === "global" ? !appearance.overrides.surface : !scopedAppearance?.surface;
+  const depthResetDisabled = scope === "global" ? appearance.overrides.surfaceDepth === undefined : scopedAppearance?.surfaceDepth === undefined;
+  const radiusValue = appearance.overrides.controlRadius ?? CONTROL_RADIUS_DEFAULT;
+  const densityValue: Density = appearance.overrides.density ?? DENSITY_DEFAULT;
+  const scopeLabel = scope === "global" ? "Global" : scope === "reader" ? "Reader" : scope === "writing" ? "Writing" : "Agent";
+  const scopeIssues = contrastIssues(appearance, theme).filter((issue) => issue.scope === scope);
+  const hasOverrides = Boolean(appearance.overrides.accent) || Boolean(appearance.overrides.surface)
+    || appearance.overrides.surfaceDepth !== undefined || appearance.overrides.controlRadius !== undefined
+    || appearance.overrides.density !== undefined
+    || Boolean(appearance.surfaces && Object.keys(appearance.surfaces).length);
+
+  function updateOverride(patch: SurfaceAppearance) {
+    if (scope === "global") {
+      onAppearanceChange(normalizeAppearance({ ...appearance, overrides: { ...appearance.overrides, ...patch } }));
+      return;
+    }
+    const surfaces = { ...appearance.surfaces, [scope]: { ...appearance.surfaces?.[scope], ...patch } };
+    onAppearanceChange(normalizeAppearance({ ...appearance, surfaces }));
+  }
+  function updateGlobalOverride(patch: Partial<AppearanceSettings["overrides"]>) {
+    onAppearanceChange(normalizeAppearance({ ...appearance, overrides: { ...appearance.overrides, ...patch } }));
+  }
+  function clearOverride(key: "accent" | "surface" | "surfaceDepth" | "controlRadius" | "density") {
+    if (key === "controlRadius" || key === "density" || scope === "global") {
+      const overrides = { ...appearance.overrides };
+      delete overrides[key];
+      onAppearanceChange(normalizeAppearance({ ...appearance, overrides }));
+      return;
+    }
+    const surfaces = { ...appearance.surfaces };
+    const scoped = { ...surfaces[scope] };
+    delete scoped[key];
+    if (Object.keys(scoped).length) surfaces[scope] = scoped;
+    else delete surfaces[scope];
+    onAppearanceChange(normalizeAppearance({ ...appearance, surfaces }));
+  }
+  function clearScope() {
+    if (scope === "global") return;
+    const surfaces = { ...appearance.surfaces };
+    delete surfaces[scope];
+    onAppearanceChange(normalizeAppearance({ ...appearance, surfaces }));
+  }
+  function exportPack() {
+    const pack = toThemePack(appearance, appearance.preset === "system" ? "Archimedes theme" : `${appearance.preset} theme`);
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${pack.id}.archtheme.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+  async function importPack(file: File | undefined) {
+    if (!file) return;
+    try {
+      const pack = parseThemePack(JSON.parse(await file.text()));
+      setPendingPack(pack);
+      setPackWarnings(contrastIssues(themePackSettings(pack), theme));
+      setPackError("");
+    } catch (error) {
+      setPendingPack(null);
+      setPackWarnings([]);
+      setPackError(error instanceof Error ? error.message : "Could not read the theme pack.");
+    }
+  }
+  function applyPack() {
+    if (!pendingPack) return;
+    onAppearanceChange(themePackSettings(pendingPack));
+    setPendingPack(null);
+    setPackWarnings([]);
+  }
 
   const sectionHeadings: Record<SettingsSection, { title: string; description: string }> = {
     general: { title: t("General"), description: t("Preferences that apply across Archimedes.") },
@@ -244,6 +334,151 @@ export default function SettingsModal({
                       </div>
                     </div>
                   </div>
+                </div>
+              </section>
+
+              <section className="settings-section appearance-preview-section">
+                <h3 className="settings-section-title">{t("Live preview")}</h3>
+                <div className="appearance-preview" aria-hidden="true" data-surface={scope === "global" ? undefined : scope}>
+                  <div className="appearance-preview-rail">
+                    <span className="appearance-preview-mark">A</span>
+                    <span className="appearance-preview-nav active">{t("Library")}</span>
+                    <span className="appearance-preview-nav">{t("Daily papers")}</span>
+                    <span className="appearance-preview-nav">{t("Paper writing")}</span>
+                  </div>
+                  <div className="appearance-preview-main">
+                    <div className="appearance-preview-top">
+                      <span className="appearance-preview-kicker">{t("Workspace")}</span>
+                      <span className="appearance-preview-chip">{t("Ready")}</span>
+                    </div>
+                    <strong>{t("A quieter research surface")}</strong>
+                    <p>{t("Accent, surface, density, and radius update here immediately.")}</p>
+                    <div className="appearance-preview-cards"><span /><span /></div>
+                    <div className="appearance-preview-actions">
+                      <span className="appearance-preview-button primary">{t("New research")}</span>
+                      <span className="appearance-preview-button">{t("Open library")}</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="settings-row-description">{scope === "global" ? t("Uses the current accent, surface, density, and radius. Changes apply live.") : t("Previewing {scope}. Accent and surface apply only to this surface.", { scope: t(scopeLabel) })}</p>
+              </section>
+
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Customize")}</h3>
+                <div className="settings-group settings-appearance-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Apply to")}</span>
+                      <p className="settings-row-description">{t("Accent and surface can be scoped; density and radius stay global.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <div className="settings-choice" role="group" aria-label={t("Apply to")}>
+                        {([["global", "Global"], ["reader", "Reader"], ["writing", "Writing"], ["agent", "Agent"]] as Array<[SurfaceScope | "global", string]>).map(([id, label]) => <button key={id} className={scope === id ? "active" : ""} aria-pressed={scope === id} onClick={() => setScope(id)}>{t(label)}</button>)}
+                      </div>
+                      {scope !== "global" && <button className="secondary-button" onClick={clearScope} disabled={!appearance.surfaces?.[scope]}>{t("Reset this surface")}</button>}
+                    </div>
+                  </div>
+                  {scopeIssues.length > 0 && <div className="settings-contrast-warning" role="status">
+                    <strong>{t("Contrast warning")}</strong>
+                    <span>{scopeIssues[0].pair} · {scopeIssues[0].ratio.toFixed(1)}:1 / {scopeIssues[0].minimum}:1{scopeIssues.length > 1 ? ` · +${scopeIssues.length - 1}` : ""}</span>
+                  </div>}
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Accent color")}</span>
+                      <p className="settings-row-description">{t("Used for primary actions, focus rings, and highlights.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <input className="settings-color-input" type="color" value={accentValue} aria-label={t("Accent color")} onChange={(event) => updateOverride({ accent: event.target.value })} />
+                      <code className="settings-value">{accentValue}</code>
+                      <button className="secondary-button" onClick={() => clearOverride("accent")} disabled={accentResetDisabled}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Surface color")}</span>
+                      <p className="settings-row-description">{t("Derives the ground, panel, borders, and readable text for the whole shell.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <input className="settings-color-input" type="color" value={surfaceValue} aria-label={t("Surface color")} onChange={(event) => updateOverride({ surface: event.target.value })} />
+                      <code className="settings-value">{surfaceValue}</code>
+                      <button className="secondary-button" onClick={() => clearOverride("surface")} disabled={surfaceResetDisabled}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Surface depth")}</span>
+                      <p className="settings-row-description">{t("How far panels and borders step away from the base surface.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <input className="settings-range-input" type="range" min={SURFACE_DEPTH_MIN} max={SURFACE_DEPTH_MAX} step={1} value={surfaceDepthValue} disabled={!hasSurface} aria-label={t("Surface depth")} onChange={(event) => updateOverride({ surfaceDepth: Number(event.target.value) })} />
+                      <code className="settings-value">{surfaceDepthValue}</code>
+                      <button className="secondary-button" onClick={() => clearOverride("surfaceDepth")} disabled={depthResetDisabled}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Density")}</span>
+                      <p className="settings-row-description">{t("Spacing for controls, settings rows, and navigation.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Density")}>
+                        {([["compact", "Compact"], ["comfortable", "Comfortable"], ["spacious", "Spacious"]] as Array<[Density, string]>).map(([id, label]) => <button key={id} className={densityValue === id ? "active" : ""} aria-pressed={densityValue === id} onClick={() => updateGlobalOverride({ density: id })}>{t(label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Control radius")}</span>
+                      <p className="settings-row-description">{t("Corner radius for buttons, inputs, and controls.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <input className="settings-range-input" type="range" min={CONTROL_RADIUS_MIN} max={CONTROL_RADIUS_MAX} step={1} value={radiusValue} aria-label={t("Control radius")} onChange={(event) => updateGlobalOverride({ controlRadius: Number(event.target.value) })} />
+                      <code className="settings-value">{radiusValue}px</code>
+                      <button className="secondary-button" onClick={() => clearOverride("controlRadius")} disabled={appearance.overrides.controlRadius === undefined}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Custom theme")}</span>
+                      <p className="settings-row-description">{t("Accent, surface, density, and radius apply to both Charcoal and Paper.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <button className="secondary-button" onClick={() => onAppearanceChange(normalizeAppearance({ version: 1, preset: appearance.preset }))} disabled={!hasOverrides}>{t("Reset custom theme")}</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Theme pack")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Share this appearance")}</span>
+                      <p className="settings-row-description">{t("Export the current appearance or import a shared .archtheme.json file.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-appearance-control">
+                        <button className="secondary-button" onClick={exportPack}>{t("Export")}</button>
+                        <button className="secondary-button" onClick={() => packInputRef.current?.click()}>{t("Import")}</button>
+                        <input ref={packInputRef} className="settings-file-input" type="file" accept=".json,.archtheme.json,application/json" aria-label={t("Import theme pack")} onChange={(event) => void importPack(event.target.files?.[0])} />
+                      </div>
+                    </div>
+                  </div>
+                  {packError && <p className="settings-pack-error" role="alert">{packError}</p>}
+                  {pendingPack && <div className="settings-pack-preview">
+                    <div>
+                      <strong>{pendingPack.name}</strong>
+                      <span>{pendingPack.preset} · {Object.keys(pendingPack.overrides).length + Object.keys(pendingPack.surfaces ?? {}).length} overrides</span>
+                    </div>
+                    {packWarnings.length
+                      ? <p className="settings-pack-warning">{t("{count} contrast pair(s) below WCAG AA.", { count: packWarnings.length })}</p>
+                      : <p className="settings-pack-ok">{t("No contrast issues found.")}</p>}
+                    <div className="settings-pack-actions">
+                      <button className="primary-button" onClick={applyPack}>{t("Apply pack")}</button>
+                      <button className="secondary-button" onClick={() => { setPendingPack(null); setPackWarnings([]); setPackError(""); }}>{t("Cancel")}</button>
+                    </div>
+                  </div>}
                 </div>
               </section>
 

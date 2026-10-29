@@ -13,6 +13,7 @@ const store = fs.readFileSync(path.join(root, "electron", "journey-settings.cjs"
 const main = fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8");
 const preload = fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
+const tokens = fs.readFileSync(path.join(root, "src", "tokens.css"), "utf8");
 const summarizer = fs.readFileSync(path.join(root, "electron", "journey-summarizer.cjs"), "utf8");
 const snapshots = fs.readFileSync(path.join(root, "electron", "journey-snapshots.cjs"), "utf8");
 const eventState = fs.readFileSync(path.join(root, "src", "journeyEventState.ts"), "utf8");
@@ -123,7 +124,8 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(css, /journey-open-chip/);
   assert.match(css, /journey-evidence-empty/);
   assert.match(css, /compact-tabs \.journey-chapter-sources/);
-  assert.match(css, /--workbench-ground: #1b1b1b/);
+  assert.match(tokens, /--surface-canvas: #1b1b1b/);
+  assert.match(tokens, /--workbench-ground: var\(--surface-canvas\)/);
 });
 
 test("journey settings control view, merging, cadence, and pins", () => {

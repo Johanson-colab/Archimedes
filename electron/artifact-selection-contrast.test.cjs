@@ -4,9 +4,10 @@ const path = require("node:path");
 const test = require("node:test");
 
 const css = fs.readFileSync(path.resolve(__dirname, "..", "src", "styles.css"), "utf8");
+const tokens = fs.readFileSync(path.resolve(__dirname, "..", "src", "tokens.css"), "utf8");
 
 function palette(selector) {
-  const match = css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
+  const match = tokens.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
   assert.ok(match, `missing ${selector}`);
   return Object.fromEntries([...match[1].matchAll(/--code-([\w-]+):\s*([^;]+);/g)].map((item) => [item[1], item[2].trim()]));
 }

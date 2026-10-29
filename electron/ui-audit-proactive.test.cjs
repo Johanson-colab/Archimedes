@@ -172,8 +172,8 @@ test("panels float over the workspace and share one surface", () => {
   assert.doesNotMatch(app, /research-dock/);
   assert.match(css, /\.agent-layer \{[^}]*position: absolute/);
   assert.match(css, /\.agent-float-panel \{[^}]*border-radius: 14px/);
-  assert.match(css, /\.agent-proactive-head,\n\.agent-path-head \{[^}]*background: transparent/);
-  assert.match(css, /\.agent-proactive-foot,\n\.agent-proactive-compose \{[\s\S]*?background: transparent/);
+  assert.match(css, /\.agent-proactive-head,\r?\n\.agent-path-head \{[^}]*background: transparent/);
+  assert.match(css, /\.agent-proactive-foot,\r?\n\.agent-proactive-compose \{[\s\S]*?background: transparent/);
   assert.match(css, /\.agent-float-panel > \.agent-proactive-panel/);
   assert.match(css, /\.agent-float-resize/);
 });

@@ -4,11 +4,23 @@ const path = require("node:path");
 const test = require("node:test");
 
 const css = fs.readFileSync(path.resolve(__dirname, "..", "src", "styles.css"), "utf8");
+const tokens = fs.readFileSync(path.resolve(__dirname, "..", "src", "tokens.css"), "utf8");
 
 function palette(selector) {
-  const match = css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
+  const match = tokens.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
   assert.ok(match, `missing ${selector}`);
   return Object.fromEntries([...match[1].matchAll(/--([\w-]+):\s*([^;]+);/g)].map((item) => [item[1], item[2].trim()]));
+}
+
+function resolve(paletteValues, value) {
+  let current = value;
+  for (let depth = 0; depth < 10; depth += 1) {
+    const alias = current.match(/^var\((--[\w-]+)\)$/);
+    const name = alias ? alias[1].replace(/^--/, "") : "";
+    if (!alias || !paletteValues[name]) return current;
+    current = paletteValues[name];
+  }
+  return current;
 }
 
 function luminance(hex) {
@@ -25,13 +37,13 @@ function contrast(left, right) {
 
 test("paper and charcoal have one readable primary accent", () => {
   const charcoal = palette(":root");
-  const paper = palette(':root[data-theme="paper"]');
-  assert.equal(paper.accent, "#8a5a24");
-  assert.equal(paper["accent-ink"], "#ffffff");
-  assert.equal(charcoal.accent, "#c9a227");
-  assert.equal(charcoal["accent-ink"], "#111111");
-  assert.ok(contrast(paper["accent-ink"], paper.accent) >= 4.5);
-  assert.ok(contrast(charcoal["accent-ink"], charcoal.accent) >= 4.5);
+  const paper = { ...charcoal, ...palette(':root[data-theme="paper"]') };
+  assert.equal(resolve(paper, paper.accent), "#8a5a24");
+  assert.equal(resolve(paper, paper["text-on-accent"]), "#ffffff");
+  assert.equal(resolve(charcoal, charcoal.accent), "#c9a227");
+  assert.equal(resolve(charcoal, charcoal["text-on-accent"]), "#111111");
+  assert.ok(contrast(resolve(paper, paper["text-on-accent"]), resolve(paper, paper.accent)) >= 4.5);
+  assert.ok(contrast(resolve(charcoal, charcoal["text-on-accent"]), resolve(charcoal, charcoal.accent)) >= 4.5);
 });
 
 test("primary actions share accent, control height and focus tokens", () => {
