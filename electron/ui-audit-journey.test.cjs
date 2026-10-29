@@ -217,3 +217,15 @@ test("manual merge and split persist by event range", () => {
   assert.match(css, /\.journey-chapter-actions/);
   assert.match(css, /\.journey-chapter-index\.pinned/);
 });
+
+test("journey chapter rows keep actions clear of meta and only dot attention episodes", () => {
+  assert.match(css, /\.journey-chapter-row:hover \.journey-chapter-meta,\s*\.journey-chapter-row:focus-within \.journey-chapter-meta \{ opacity: 0; \}/);
+  assert.match(css, /\.journey-chapter-row:focus-within \.journey-chapter-actions/);
+  assert.match(css, /\.journey-chapter-actions \{[^}]*background: var\(--journey-chapter-surface\)/);
+  assert.match(css, /\.journey-chapter-actions::before \{[^}]*right: 100%/);
+  assert.match(css, /\.journey-chapter\.current \{[^}]*--journey-chapter-surface:/);
+  assert.match(css, /\.journey-episode-dot \{[^}]*background: transparent/);
+  assert.match(css, /\.journey-map-episode-dot \{[^}]*background: transparent/);
+  assert.match(css, /\.journey-episode\.running \.journey-episode-dot/);
+  assert.match(css, /\.journey-episode\.error \.journey-episode-dot/);
+});
