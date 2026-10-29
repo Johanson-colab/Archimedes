@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUISettings } from "./i18n";
-import { eventHasError, eventOrdinal, isUnresolvedError, latestAnswerOrdinal } from "./journeyEventState";
+import { chapterChunkStatus, eventFailedAnswer, eventHasError, eventOrdinal, isUnresolvedError, latestAnswerOrdinal } from "./journeyEventState";
 import { useDialogFocus } from "./useDialogFocus";
 
 type JourneyViewProps = {
@@ -259,13 +259,14 @@ function chapterTitle(firstUser: ResearchEvent | undefined, index: number, t: (k
   return truncate(raw, 58);
 }
 
-function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: boolean, t: (key: string, values?: Record<string, string | number>) => string): JourneyChapter {
+function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: boolean, t: (key: string, values?: Record<string, string | number>) => string, turn?: { last: boolean; failed: boolean }): JourneyChapter {
   const sorted = [...events].sort((a, b) => (a.ordinal ?? a.sequence) - (b.ordinal ?? b.sequence));
   const sources = new Set<string>();
   const files = new Set<string>();
   const artifacts = new Set<string>();
   let toolCalls = 0;
   let hasAnswer = false;
+  let hasFailure = false;
   for (const event of sorted) {
     if (event.type === "tool_call") {
       toolCalls += 1;
@@ -278,6 +279,7 @@ function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: 
     if (event.type === "source_evidence") for (const source of eventSources(event)) sources.add(source);
     for (const file of eventFiles(event)) files.add(file);
     if (event.type === "assistant_message" && eventText(event)) hasAnswer = true;
+    if (eventFailedAnswer(event)) hasFailure = true;
   }
   const firstUser = sorted.find((event) => event.type === "user_message");
   const title = firstOfTurn && firstUser ? chapterTitle(firstUser, index, t) : `Continued research ${index + 1}`;
@@ -286,11 +288,20 @@ function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: 
   if (sources.size) summaryParts.push(plural(sources.size, t("source")));
   if (files.size) summaryParts.push(plural(files.size, t("file")));
   if (artifacts.size) summaryParts.push(plural(artifacts.size, t("artifact")));
+  // A single agent turn can span dozens of chunks. Only its final chunk can be
+  // waiting for an answer; earlier chunks already finished and must not keep the
+  // whole thread in "open" forever.
+  const status: JourneyChapter["status"] = chapterChunkStatus({
+    hasAnswer,
+    hasFailure,
+    lastInTurn: turn ? turn.last : true,
+    turnFailed: turn?.failed ?? false,
+  });
   return {
     id: `${sorted[0]?.turn_id || "thread"}:${sorted[0]?.sequence ?? index}:${index}`,
     title: title || `Research chapter ${index + 1}`,
     summary: summaryParts.join(" · "),
-    status: hasAnswer ? "done" : "open",
+    status,
     start: sorted[0] ? eventOrdinal(sorted[0], 0) : 0,
     end: sorted.at(-1) ? eventOrdinal(sorted.at(-1)!, sorted.length - 1) : 0,
     steps: sorted.length,
@@ -305,7 +316,7 @@ function mergeChapters(chapters: JourneyChapter[], first: number, last: number, 
     id: `merged:${merged[0]?.id ?? "early"}`,
     title: "Earlier research",
     summary: `${plural(merged.length, t("chapter"))} · ${plural(merged.reduce((total, chapter) => total + chapter.steps, 0), t("step"))}`,
-    status: merged.some((chapter) => chapter.status === "error") ? "error" : merged.some((chapter) => chapter.status === "waiting") ? "waiting" : "done",
+    status: merged.some((chapter) => chapter.status === "error") ? "error" : merged.some((chapter) => chapter.status === "waiting") ? "waiting" : merged.some((chapter) => chapter.status === "running") ? "running" : merged.some((chapter) => chapter.status === "open") ? "open" : "done",
     start: merged[0]?.start ?? 0,
     end: merged.at(-1)?.end ?? 0,
     steps: merged.reduce((total, chapter) => total + chapter.steps, 0),
@@ -366,8 +377,12 @@ function buildChapters(events: ResearchEvent[], settings: JourneySettings, pendi
   let chapters: JourneyChapter[] = [];
   for (const group of groups.values()) {
     const segments = chunk(group, CHAPTER_EVENT_LIMIT);
+    const failed = group.some(eventFailedAnswer);
     for (const [segmentIndex, segment] of segments.entries()) {
-      chapters.push(chapterFromEvents(segment, chapters.length, segmentIndex === 0, t));
+      chapters.push(chapterFromEvents(segment, chapters.length, segmentIndex === 0, t, {
+        last: segmentIndex === segments.length - 1,
+        failed,
+      }));
     }
   }
   if (!chapters.length) return [];
@@ -419,7 +434,7 @@ function buildEvidence(events: ResearchEvent[], pendingAction: AgentAction | nul
   return { sources: sources.size, files: files.size, artifacts: artifacts.size, open };
 }
 
-function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence: JourneyEvidence; pendingAction: AgentAction | null; thread: ResearchThread | null; openChapters: number }, t: (key: string, values?: Record<string, string | number>) => string): string {
+function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence: JourneyEvidence; pendingAction: AgentAction | null; thread: ResearchThread | null; openChapters: number; failedTurn: boolean; chatOnly: boolean }, t: (key: string, values?: Record<string, string | number>) => string): string {
   const { steps, chapters, evidence, openChapters } = data;
   if (!steps) return t("No research activity yet. Start a task and the journey will take shape here.");
   const hasResearch = evidence.sources + evidence.files + evidence.artifacts > 0;
@@ -435,6 +450,9 @@ function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence:
   if (data.thread?.status === "running") {
     return `${facts} ${t("The agent is working through the current chapter.")}`;
   }
+  if (data.failedTurn) {
+    return `${facts} ${t("The last turn failed before producing a final answer.")}`;
+  }
   if (evidence.open > 0) {
     return `${facts} ${t("{count} steps still need attention before the chapter can be considered closed.", { count: evidence.open })}`;
   }
@@ -442,19 +460,23 @@ function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence:
     return `${facts} ${t("{count} chapters still need a closer look.", { count: openChapters })}`;
   }
   if (!hasResearch) {
-    return `${facts} ${t("No sources or artifacts yet. This is conversation only — ask a research question or attach a paper to start collecting evidence.")}`;
+    return `${facts} ${data.chatOnly
+      ? t("No sources or artifacts yet. This is conversation only — ask a research question or attach a paper to start collecting evidence.")
+      : t("No sources or artifacts were recorded for this run.")}`;
   }
   const latestChapter = chapters.at(-1)?.title;
   return latestChapter ? `${facts} ${t("Latest chapter: {title}.", { title: latestChapter })}` : facts;
 }
 
-function buildNextMove(data: { pendingAction: AgentAction | null; thread: ResearchThread | null; evidence: JourneyEvidence; steps: number; openChapters: number }, t: (key: string, values?: Record<string, string | number>) => string): string {
+function buildNextMove(data: { pendingAction: AgentAction | null; thread: ResearchThread | null; evidence: JourneyEvidence; steps: number; openChapters: number; failedTurn: boolean; hasToolActivity: boolean }, t: (key: string, values?: Record<string, string | number>) => string): string {
   if (data.pendingAction) return t("Review the pending {kind}, then continue.", { kind: t(data.pendingAction.kind === "write" ? "file write" : "command") });
   if (data.thread?.status === "running") return t("Let the agent finish the current chapter, then audit the result.");
+  if (data.failedTurn) return t("Retry the failed turn, or continue with a follow-up question.");
   if (data.evidence.open > 0) return t("Resolve {count} open steps, or continue with a follow-up question.", { count: data.evidence.open });
   if (data.openChapters > 0) return t("Review {count} open chapters, or continue with a follow-up question.", { count: data.openChapters });
   if (!data.steps) return t("Start a research task to build a journey.");
-  if (!data.evidence.sources && !data.evidence.files && !data.evidence.artifacts) return t("Ask a research question or attach a paper to start collecting evidence.");
+  if (!data.hasToolActivity) return t("Ask a research question or attach a paper to start collecting evidence.");
+  if (!data.evidence.sources && !data.evidence.files && !data.evidence.artifacts) return t("Review the trajectory or continue with a follow-up question.");
   return t("Review the evidence or draft the next section.");
 }
 
@@ -600,6 +622,10 @@ function chapterStatusLabel(status: JourneyChapter["status"]): string {
   return "done";
 }
 
+function isOpenChapter(chapter: JourneyChapter): boolean {
+  return chapter.status === "open" || chapter.status === "waiting" || chapter.status === "running";
+}
+
 function claimStatusLabel(status: JourneyClaim["status"]): string {
   if (status === "supported") return "Supported";
   if (status === "contradicted") return "Contradicted";
@@ -668,17 +694,23 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   const hasErrors = evidence.open > (pendingAction ? 1 : 0);
   const hasResearch = evidence.sources + evidence.files + evidence.artifacts > 0;
   const allDone = chapters.every((chapter) => chapter.status === "done");
-  const openChapterCount = chapters.filter((chapter) => chapter.status !== "done").length;
-  const attentionLabel = openChapterCount > 0
-    ? plural(openChapterCount, t("open chapter"), t("open chapters"))
-    : evidence.open > 0
-      ? plural(evidence.open, t("open step"), t("open steps"))
-      : "";
-  const chatOnly = steps > 0 && !hasResearch && !pendingAction && !hasErrors && allDone;
+  const failedChapterCount = chapters.filter((chapter) => chapter.status === "error").length;
+  const openChapterCount = chapters.filter(isOpenChapter).length;
+  const lastAnswer = [...events].reverse().find((event) => event.type === "assistant_message");
+  const failedTurn = Boolean(lastAnswer && eventFailedAnswer(lastAnswer));
+  const hasToolActivity = useMemo(() => events.some((event) => event.type === "tool_call" || event.type === "tool_result"), [events]);
+  const attentionLabel = failedChapterCount > 0
+    ? plural(failedChapterCount, t("failed chapter"), t("failed chapters"))
+    : openChapterCount > 0
+      ? plural(openChapterCount, t("open chapter"), t("open chapters"))
+      : evidence.open > 0
+        ? plural(evidence.open, t("open step"), t("open steps"))
+        : "";
+  const chatOnly = steps > 0 && !hasResearch && !hasToolActivity && !pendingAction && !hasErrors && allDone;
   const hasOpenChapters = openChapterCount > 0;
   const status: JourneyData["status"] = !steps ? "not-started" : pendingAction ? "waiting" : agentBusy || thread?.status === "running" ? "running" : hasErrors ? "attention" : chatOnly ? "chat-only" : allDone ? "complete" : "attention";
-  const ruleBrief = useMemo(() => buildBrief({ steps, chapters, evidence, pendingAction, thread, openChapters: openChapterCount }, t), [chapters, evidence, openChapterCount, pendingAction, steps, thread, t]);
-  const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps, openChapters: openChapterCount }, t);
+  const ruleBrief = useMemo(() => buildBrief({ steps, chapters, evidence, pendingAction, thread, openChapters: openChapterCount, failedTurn, chatOnly }, t), [chapters, chatOnly, evidence, failedTurn, openChapterCount, pendingAction, steps, thread, t]);
+  const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps, openChapters: openChapterCount, failedTurn, hasToolActivity }, t);
   const brief = summary?.brief ? plainText(summary.brief) : ruleBrief;
   const nextMove = summary?.nextMove ? plainText(summary.nextMove) : ruleNextMove;
   const pinnedChapters = chapters.filter((chapter) => chapterPinIds(chapter).some((id) => pins.includes(id)));
@@ -785,6 +817,12 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     if (!mapAvailable && mapOpen) setMapOpen(false);
   }, [mapAvailable, mapOpen]);
 
+  // The map is portaled to document.body, so hiding the Journey panel does not
+  // hide it. Close it whenever another workbench tab takes over.
+  useEffect(() => {
+    if (!active && mapOpen) setMapOpen(false);
+  }, [active, mapOpen]);
+
   useEffect(() => {
     const element = scrollRef.current;
     if (!element || !settings.followLive) return;
@@ -863,9 +901,10 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   }
 
   function reviewOpenSteps() {
-    const openChapter = chapters.find((chapter) => chapter.status !== "done");
+    const openChapter = chapters.find(isOpenChapter);
+    const failedChapter = chapters.find((chapter) => chapter.status === "error");
     const evidenceChapter = chapters.find((chapter) => (chapterEvidence.get(chapter.id)?.open ?? 0) > 0);
-    const target = openChapter ?? evidenceChapter;
+    const target = openChapter ?? failedChapter ?? evidenceChapter;
     setView("outline");
     setOutlineFilter(openChapter ? "open" : "all");
     requestAnimationFrame(() => {
@@ -1060,10 +1099,17 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     }
   }
 
-  function openClaim(claim: JourneyClaim) {
-    const ordinal = claim.sourceIds.map((id) => sourceInfo.get(id)?.eventId).find((value): value is number => typeof value === "number");
+  function openTrajectoryAt(ordinal?: number) {
+    // The map lives in a body portal, so close it explicitly before the tab
+    // switch hides the Journey panel.
+    setMapOpen(false);
     if (typeof ordinal === "number" && onOpenTrajectoryAt) onOpenTrajectoryAt(ordinal);
     else onOpenTrajectory();
+  }
+
+  function openClaim(claim: JourneyClaim) {
+    const ordinal = claim.sourceIds.map((id) => sourceInfo.get(id)?.eventId).find((value): value is number => typeof value === "number");
+    openTrajectoryAt(ordinal);
   }
 
   function renderChapter(chapter: JourneyChapter, index: number, dense = false) {
@@ -1094,7 +1140,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
         </div>}
       </div>
       {isExpanded && <div className="journey-episodes">
-        {episodes.map((episode) => <button className={`journey-episode ${episode.status}`} key={episode.id} title={`Events #${episode.start}–#${episode.end}`} onClick={() => onOpenTrajectoryAt ? onOpenTrajectoryAt(episode.start) : onOpenTrajectory()}>
+        {episodes.map((episode) => <button className={`journey-episode ${episode.status}`} key={episode.id} title={`Events #${episode.start}–#${episode.end}`} onClick={() => openTrajectoryAt(episode.start)}>
           <span className="journey-episode-head"><span className="journey-episode-dot" /><span className="journey-episode-title">{episode.title}</span><span className="journey-episode-meta">#{episode.start}{episode.end !== episode.start ? `–#${episode.end}` : ""}</span></span>
           <span className="journey-episode-outcome">{episode.outcome}</span>
         </button>)}
@@ -1110,7 +1156,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     ?? filteredMapChapters.find((chapter) => chapter.id === activeChapter?.id)
     ?? filteredMapChapters[0];
   const selectedEvidence = selectedMapChapter ? chapterEvidence.get(selectedMapChapter.id) ?? evidence : evidence;
-  const filterChapters = outlineFilter === "pinned" ? pinnedChapters : outlineFilter === "open" ? chapters.filter((chapter) => chapter.status !== "done") : chapters;
+  const filterChapters = outlineFilter === "pinned" ? pinnedChapters : outlineFilter === "open" ? chapters.filter(isOpenChapter) : chapters;
 
   const since = settings.sinceYouLeft && !dismissedSince && digest ? <aside className="journey-since">
     <div className="journey-since-head"><span>{t("Since your last visit")}</span><div className="journey-since-actions"><button onClick={jumpToFirstNew}>{t("Jump to first new")}</button><button onClick={dismissSince}>{t("Dismiss")}</button></div></div>
@@ -1155,11 +1201,13 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     <div className="journey-dock-actions">
       {pendingAction
         ? <button className="journey-primary" onClick={onReviewPending}>{t("Review approval")}</button>
-        : evidence.open > 0 || hasOpenChapters
-          ? <button className="journey-primary" onClick={reviewOpenSteps}>{evidence.open > 0 ? t("Review open steps") : t("Review open chapters")}</button>
-          : chatOnly && onStartResearch
-            ? <button className="journey-primary" onClick={onStartResearch}>{t("Start a research task")}</button>
-            : <button className="journey-primary" onClick={onOpenTrajectory}>{t("Open trajectory")}</button>}
+        : failedChapterCount > 0
+          ? <button className="journey-primary" onClick={reviewOpenSteps}>{t("Review failed chapter")}</button>
+          : evidence.open > 0 || hasOpenChapters
+            ? <button className="journey-primary" onClick={reviewOpenSteps}>{evidence.open > 0 ? t("Review open steps") : t("Review open chapters")}</button>
+            : chatOnly && onStartResearch
+              ? <button className="journey-primary" onClick={onStartResearch}>{t("Start a research task")}</button>
+              : <button className="journey-primary" onClick={onOpenTrajectory}>{t("Open trajectory")}</button>}
       {(pendingAction || evidence.open > 0 || hasOpenChapters || (chatOnly && onStartResearch)) && <button className="journey-ghost" onClick={onOpenTrajectory}>{t("Open trajectory")}</button>}
       <button className="journey-ghost" onClick={onOpenSettings}>{t("Journey settings")}</button>
     </div>
@@ -1209,7 +1257,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       {settings.evidenceLedger && <section className="journey-section">
         <div className="journey-section-head"><h2>{t("Evidence")}</h2><span>{t("from this thread")}</span></div>
         {evidence.sources + evidence.files + evidence.artifacts + evidence.open === 0
-          ? <p className="journey-evidence-empty">{t("No sources or artifacts yet. Ask a research question or attach a paper.")}</p>
+          ? <p className="journey-evidence-empty">{hasToolActivity ? t("No sources or artifacts were recorded for this run.") : t("No sources or artifacts yet. Ask a research question or attach a paper.")}</p>
           : <dl className="journey-evidence">
             <div><dt>{t("Sources")}</dt><dd>{evidence.sources}</dd></div>
             <div><dt>{t("Files")}</dt><dd>{evidence.files}</dd></div>
@@ -1235,7 +1283,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     </div> : <div className="journey-outline">
       <div className="journey-outline-filters">
         <button className={outlineFilter === "all" ? "active" : ""} onClick={() => setOutlineFilter("all")}>{t("All {count}", { count: chapters.length })}</button>
-        <button className={outlineFilter === "open" ? "active" : ""} onClick={() => setOutlineFilter("open")}>{t("Open {count}", { count: chapters.filter((chapter) => chapter.status !== "done").length })}</button>
+        <button className={outlineFilter === "open" ? "active" : ""} onClick={() => setOutlineFilter("open")}>{t("Open {count}", { count: chapters.filter(isOpenChapter).length })}</button>
         <button className={outlineFilter === "pinned" ? "active" : ""} onClick={() => setOutlineFilter("pinned")}>{t("Pinned {count}", { count: pinnedChapters.length })}</button>
       </div>
       {pinnedChapters.length > 0 && <div className="journey-pinned outline"><span className="journey-mini-label">{t("Pinned")}</span>{pinnedChapters.map((chapter) => <button key={chapter.id} onClick={() => jumpToChapter(chapter.id)}>{chapter.title}<span>{plural(chapter.steps, t("step"))}</span></button>)}</div>}
@@ -1267,7 +1315,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
                     <span className="journey-map-index">{String(chapters.indexOf(chapter) + 1).padStart(2, "0")}</span>
                     <span><strong>{chapter.title}</strong><small>{plural(chapter.steps, t("step"))} · {t(chapterStatusLabel(chapter.status))}</small></span>
                   </button>
-                  {selectedMapChapter?.id === chapter.id && <div className="journey-map-episode-list">{chapter.episodes.map((episode) => <button key={episode.id} onClick={() => onOpenTrajectoryAt ? onOpenTrajectoryAt(episode.start) : onOpenTrajectory()}><span className={`journey-map-episode-dot ${episode.status}`} /><strong>{episode.title}</strong><small>#{episode.start}</small></button>)}</div>}
+                  {selectedMapChapter?.id === chapter.id && <div className="journey-map-episode-list">{chapter.episodes.map((episode) => <button key={episode.id} onClick={() => openTrajectoryAt(episode.start)}><span className={`journey-map-episode-dot ${episode.status}`} /><strong>{episode.title}</strong><small>#{episode.start}</small></button>)}</div>}
                 </div>)}
               </div>
               {filteredMapChapters.length === 0 && <p className="journey-map-empty">{t("No chapters match this search.")}</p>}
@@ -1280,13 +1328,13 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
               <p className="journey-map-meta">{plural(selectedMapChapter.steps, t("step"))} · #{selectedMapChapter.start}–#{selectedMapChapter.end}</p>
               <p className="journey-map-summary">{selectedMapChapter.summary}</p>
               <h3>{t("Episodes")}</h3>
-              <div className="journey-map-episodes">{selectedMapChapter.episodes.map((episode) => <button key={episode.id} onClick={() => onOpenTrajectoryAt ? onOpenTrajectoryAt(episode.start) : onOpenTrajectory()}><span>#{episode.start}</span><strong>{episode.title}</strong><small>{plural(episode.steps, t("step"))}</small></button>)}</div>
+              <div className="journey-map-episodes">{selectedMapChapter.episodes.map((episode) => <button key={episode.id} onClick={() => openTrajectoryAt(episode.start)}><span>#{episode.start}</span><strong>{episode.title}</strong><small>{plural(episode.steps, t("step"))}</small></button>)}</div>
               {settings.evidenceLedger && <>
                 <h3>{t("Evidence")}</h3>
                 <div className="journey-map-evidence"><span>{plural(selectedEvidence.sources, t("source"))}</span><span>{plural(selectedEvidence.files, t("file"))}</span><span>{plural(selectedEvidence.artifacts, t("artifact"))}</span></div>
               </>}
               <div className="journey-map-actions">
-                <button className="journey-primary" onClick={() => onOpenTrajectoryAt ? onOpenTrajectoryAt(selectedMapChapter.start) : onOpenTrajectory()}>{t("Open in Trajectory")}</button>
+                <button className="journey-primary" onClick={() => openTrajectoryAt(selectedMapChapter.start)}>{t("Open in Trajectory")}</button>
                 <button className="journey-ghost" onClick={() => togglePin(selectedMapChapter.id)}>{chapterPinIds(selectedMapChapter).some((id) => pins.includes(id)) ? t("Unpin chapter") : t("Pin chapter")}</button>
               </div>
             </> : <p className="journey-map-empty">{t("Select a chapter to inspect it.")}</p>}

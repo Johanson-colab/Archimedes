@@ -103,6 +103,14 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(journey, /chatOnly/);
   assert.match(journey, /attentionLabel/);
   assert.match(journey, /reviewOpenSteps/);
+  assert.match(journey, /eventFailedAnswer/);
+  assert.match(journey, /failedTurn/);
+  assert.match(journey, /failedChapterCount/);
+  assert.match(journey, /isOpenChapter/);
+  assert.match(journey, /hasToolActivity/);
+  assert.match(eventState, /export function eventFailedAnswer/);
+  assert.match(journey, /if \(!active && mapOpen\) setMapOpen\(false\)/);
+  assert.match(journey, /function openTrajectoryAt/);
   assert.match(journey, /Jump to first new/);
   assert.match(journey, /journey-inline-status/);
   assert.match(css, /journey-status-text\.chat-only/);

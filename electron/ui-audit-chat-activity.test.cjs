@@ -27,6 +27,9 @@ test("default verbosity is grouped steps with collapsible activity", () => {
   assert.match(activity, /steps\.slice\(0, 4\)/);
   assert.match(activity, /chat-activity-more/);
   assert.match(activity, /chat-activity-footer/);
+  assert.match(activity, /eventFailedAnswer/);
+  assert.match(activity, /Stopped with an error/);
+  assert.match(css, /\.chat-activity-footer\.failed/);
   assert.match(activity, /Agent activity/);
   assert.match(css, /\.chat-activity-card/);
   assert.match(css, /\.chat-activity-step\.running/);

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { BookOpen, Check, ChevronDown, FileCode2, Search, SquareTerminal, Wrench } from "lucide-react";
+import { AlertCircle, BookOpen, Check, ChevronDown, FileCode2, Search, SquareTerminal, Wrench } from "lucide-react";
 import { useUISettings } from "./i18n";
+import { eventFailedAnswer } from "./journeyEventState";
 
 type ActivityEvent = {
   title: string;
@@ -31,7 +32,7 @@ function kindForTool(name: string): ActivityKind {
   if (/search|find/.test(name)) return "search";
   if (/read|list|browser|open_web|inspect/.test(name)) return "read";
   if (/write|edit|patch/.test(name)) return "edit";
-  if (/command|terminal|run/.test(name)) return "run";
+  if (/command|terminal|run|bash|shell|exec/.test(name)) return "run";
   return "other";
 }
 
@@ -170,6 +171,8 @@ export default function ChatActivityTimeline({
   const latest = [...steps].reverse().find((step) => step.status === "running") ?? steps.at(-1);
   const visible = chatVerbosity === "high" || showAll ? steps : steps.slice(0, 4);
   const stepCountLabel = t(steps.length === 1 ? "{count} step" : "{count} steps", { count: steps.length });
+  const lastAnswer = [...rawEvents].reverse().find((event) => event.type === "assistant_message");
+  const failed = !busy && Boolean(lastAnswer && eventFailedAnswer(lastAnswer));
 
   if (!steps.length && !busy) return null;
 
@@ -214,9 +217,9 @@ export default function ChatActivityTimeline({
           {showAll ? t("Show less") : t("Show {count} more", { count: steps.length - 4 })}
         </button>}
       </div>}
-      {!busy && <div className="chat-activity-footer">
-        <Check size={11} />
-        <strong>{t("Completed")}</strong>
+      {!busy && <div className={`chat-activity-footer${failed ? " failed" : ""}`}>
+        {failed ? <AlertCircle size={11} /> : <Check size={11} />}
+        <strong>{failed ? t("Stopped with an error") : t("Completed")}</strong>
         <span className="chat-activity-footer-sep">·</span>
         <span>{stepCountLabel}</span>
         {sources > 0 && <><span className="chat-activity-footer-sep">·</span><span>{t("{count} sources", { count: sources })}</span></>}

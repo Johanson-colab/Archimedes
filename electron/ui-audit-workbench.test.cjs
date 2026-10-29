@@ -137,6 +137,7 @@ test("agent trajectory mirrors the OpenCode context structure", () => {
   assert.match(trajectory, /<JsonCode value=\{event\}/);
   assert.match(trajectory, /Expand all/);
   assert.match(trajectory, /Copy JSON/);
+  assert.match(trajectory, /return event\.type === "tool_call";/);
   assert.doesNotMatch(trajectory, /Every field is preserved/);
   assert.match(css, /\.trajectory-section-head h3/);
   assert.match(store, /FROM research_events[\s\S]*?ORDER BY t\.created_at ASC/);

@@ -4668,6 +4668,8 @@ html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4;
 .chat-activity-more:hover { color: var(--night-ink); }
 .chat-activity-footer { display: flex; align-items: center; gap: 6px; padding: 8px 12px; color: var(--night-muted); border-top: 1px solid var(--night-line-soft); font-size: 12px; }
 .chat-activity-footer strong { color: var(--night-ink-soft); font-weight: 500; }
+.chat-activity-footer.failed { color: var(--night-danger); }
+.chat-activity-footer.failed strong { color: var(--night-danger); }
 .chat-activity-footer-sep { color: var(--night-faint); }
 .chat-activity-low-summary { display: flex; align-items: center; gap: 6px; color: var(--night-muted); font-family: var(--font-mono); font-size: 11px; }
 .chat-activity-low-plus { color: var(--accent); }

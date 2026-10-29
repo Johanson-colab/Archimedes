@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { eventHasError, isUnresolvedError, latestAnswerOrdinal } = require("../src/journeyEventState.ts");
+const { chapterChunkStatus, eventFailedAnswer, eventHasError, isUnresolvedError, latestAnswerOrdinal } = require("../src/journeyEventState.ts");
 
 function event(sequence, type, payload = {}) {
   return { id: `event-${sequence}`, turn_id: "turn-1", sequence, type, payload, created_at: "2026-10-25T00:00:00.000Z" };
@@ -59,10 +59,30 @@ test("failed or interrupted answers do not resolve earlier errors", () => {
   const latest = latestAnswerOrdinal(events);
   assert.equal(latest, 1);
   assert.equal(isUnresolvedError(events[1], latest, 1), true);
+  assert.equal(isUnresolvedError(events[2], latest, 2), true);
 });
 
-test("an error on the final assistant response stays unresolved", () => {
-  const events = [
+test("treats a failed assistant message as an error even without an error field", () => {
+  const failed = event(1, "assistant_message", { text: "Run aborted (BadRequestError)", status: "failed" });
+  const completed = event(2, "assistant_message", { text: "done", status: "completed" });
+  assert.equal(eventFailedAnswer(failed), true);
+  assert.equal(eventHasError(failed), true);
+  assert.equal(eventFailedAnswer(completed), false);
+  assert.equal(eventHasError(completed), false);
+  assert.equal(eventFailedAnswer(event(3, "tool_error", {})), false);
+  assert.equal(eventHasError(event(4, "assistant_message", { text: "done", status: "error" })), true);
+});
+
+test("only the final chunk of a turn waits for an answer", () => {
+  assert.equal(chapterChunkStatus({ hasAnswer: false, hasFailure: false, lastInTurn: false, turnFailed: false }), "done");
+  assert.equal(chapterChunkStatus({ hasAnswer: false, hasFailure: false, lastInTurn: true, turnFailed: false }), "open");
+  assert.equal(chapterChunkStatus({ hasAnswer: true, hasFailure: false, lastInTurn: true, turnFailed: false }), "done");
+  assert.equal(chapterChunkStatus({ hasAnswer: true, hasFailure: true, lastInTurn: true, turnFailed: true }), "error");
+  assert.equal(chapterChunkStatus({ hasAnswer: false, hasFailure: false, lastInTurn: true, turnFailed: true }), "error");
+  assert.equal(chapterChunkStatus({ hasAnswer: false, hasFailure: false, lastInTurn: false, turnFailed: true }), "done");
+});
+
+test("an error on the final assistant response stays unresolved", () => {  const events = [
     event(1, "assistant_message", { text: "earlier answer" }),
     event(2, "assistant_message", { error: "final response failed" }),
   ];
