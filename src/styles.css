@@ -4502,11 +4502,11 @@ html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4;
 .chat-activity-meta { min-width: 0; margin-left: auto; overflow: hidden; color: var(--night-muted); font-family: var(--font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .chat-activity-chevron { flex: 0 0 auto; color: var(--night-muted); transition: transform .15s ease; }
 .chat-activity-card.open .chat-activity-chevron { transform: rotate(180deg); }
-.chat-activity-steps { display: grid; }
-.chat-activity-step { display: grid; grid-template-columns: 18px 100px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--night-line-soft); font-size: 12px; }
+.chat-activity-steps { display: grid; grid-template-columns: 18px minmax(0, max-content) minmax(0, 1fr) auto; column-gap: 8px; }
+.chat-activity-step { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; padding: 8px 12px; border-top: 1px solid var(--night-line-soft); font-size: 12px; }
 .chat-activity-step:first-child { border-top: 0; }
 .chat-activity-step-icon { display: grid; place-items: center; color: var(--night-muted); }
-.chat-activity-step-label { color: var(--night-ink-soft); white-space: nowrap; }
+.chat-activity-step-label { min-width: 0; overflow: hidden; color: var(--night-ink-soft); text-overflow: ellipsis; white-space: nowrap; }
 .chat-activity-step-detail { min-width: 0; overflow: hidden; color: var(--night-muted); font-family: var(--font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .chat-activity-step-state { display: grid; place-items: center; min-width: 16px; color: var(--night-ink-soft); }
 .chat-activity-step.running .chat-activity-step-label { color: var(--accent); }
@@ -4515,7 +4515,7 @@ html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4;
 .chat-activity-wait { width: 7px; height: 7px; border: 1px solid var(--night-faint); border-radius: 50%; }
 .chat-activity-error { display: grid; width: 14px; height: 14px; place-items: center; color: var(--night-danger); border: 1px solid var(--night-danger); border-radius: 50%; font-size: 9px; font-weight: 700; }
 .chat-activity-step-full { grid-column: 2 / -1; padding: 3px 0 2px; overflow: hidden; color: var(--night-muted); font-family: var(--font-mono); font-size: 11px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
-.chat-activity-more { justify-self: start; margin: 4px 12px 8px 38px; color: var(--night-ink-soft); font-size: 11px; background: transparent; }
+.chat-activity-more { grid-column: 2 / -1; justify-self: start; margin: 4px 0 8px; color: var(--night-ink-soft); font-size: 11px; background: transparent; }
 .chat-activity-more:hover { color: var(--night-ink); }
 .chat-activity-footer { display: flex; align-items: center; gap: 6px; padding: 8px 12px; color: var(--night-muted); border-top: 1px solid var(--night-line-soft); font-size: 12px; }
 .chat-activity-footer strong { color: var(--night-ink-soft); font-weight: 500; }
@@ -4525,7 +4525,7 @@ html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4;
 .chat-activity-low-summary { display: flex; align-items: center; gap: 6px; color: var(--night-muted); font-family: var(--font-mono); font-size: 11px; }
 .chat-activity-low-plus { color: var(--accent); }
 @media (max-width: 620px) {
-  .chat-activity-step { grid-template-columns: 18px 76px minmax(0, 1fr) auto; }
+  .chat-activity-steps { grid-template-columns: 18px minmax(0, 45%) minmax(0, 1fr) auto; }
 }
 /* Review follows the chosen application theme as a single surface. The paper
    theme uses the warm dossier palette above; charcoal gets a quieter variant. */

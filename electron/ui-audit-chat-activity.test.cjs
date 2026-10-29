@@ -36,6 +36,17 @@ test("default verbosity is grouped steps with collapsible activity", () => {
   assert.match(css, /\.chat-activity-step-full/);
 });
 
+test("activity rows share one column track so labels never overlap details", () => {
+  // A fixed label column let long labels overflow into the detail text. The
+  // rows are subgrids of one shared track, and the label ellipsizes if the
+  // widest label still does not fit.
+  assert.match(css, /\.chat-activity-steps \{[^}]*grid-template-columns: 18px minmax\(0, max-content\) minmax\(0, 1fr\) auto/);
+  assert.match(css, /\.chat-activity-step \{[^}]*grid-template-columns: subgrid/);
+  assert.match(css, /\.chat-activity-step-label \{[^}]*overflow: hidden/);
+  assert.match(css, /\.chat-activity-step-label \{[^}]*text-overflow: ellipsis/);
+  assert.doesNotMatch(css, /\.chat-activity-step \{[^}]*grid-template-columns: 18px 100px/);
+});
+
 test("activity is derived from raw trajectory events when a thread is reopened", () => {
   assert.match(activity, /function rawSteps/);
   assert.match(activity, /event\.type === "tool_call"/);
