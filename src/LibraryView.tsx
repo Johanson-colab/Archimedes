@@ -29,6 +29,7 @@ import { equationTokens, findEquationRects } from "./pdf-equations";
 import { applyPdfSearchHighlights } from "./pdf-search-highlights";
 import { findPdfHorizontalRules, findRuledTableRect, findTextTableRect } from "./pdf-table-regions";
 import { isDensePdfProse, mergePdfVisualRegions, pdfCaptionKind } from "./pdf-visual-regions";
+import { buildPdfHighlightSegments, PDF_HIGHLIGHT_COLORS } from "./pdf-highlight-segments";
 import { useUISettings, type Language } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 import ToolbarActions from "./ToolbarActions";
@@ -2150,36 +2151,52 @@ function selectPdfTextByLayout(layer: HTMLElement, anchorSpan: HTMLSpanElement, 
 }
 
 function applyPdfHighlights(textLayer: HTMLDivElement, highlights: PaperHighlight[]) {
-  const spans = Array.from(textLayer.querySelectorAll("span"));
+  const spans = Array.from(textLayer.querySelectorAll<HTMLSpanElement>("span"));
   for (const span of spans) {
     span.classList.remove("arch-pdf-highlight", "arch-pdf-highlight-note", "arch-pdf-highlight-yellow", "arch-pdf-highlight-red", "arch-pdf-highlight-blue", "arch-pdf-highlight-green", "arch-pdf-highlight-pink");
+    span.style.backgroundImage = "";
+    span.style.backgroundSize = "";
+    span.style.backgroundPosition = "";
+    span.style.backgroundRepeat = "";
     span.removeAttribute("title");
   }
   if (!highlights.length) return;
-  const compact = (value: string) => value.replace(/\s+/g, "").toLocaleLowerCase();
-  const spanRanges: Array<{ element: HTMLSpanElement; start: number; end: number }> = [];
-  let cursor = 0;
-  for (const element of spans) {
-    const length = compact(element.textContent || "").length;
-    spanRanges.push({ element, start: cursor, end: cursor + length });
-    cursor += length;
+
+  const grouped = new Map<number, Array<{ start: number; end: number; color: string; note: boolean; noteText: string }>>();
+  for (const segment of buildPdfHighlightSegments(spans.map((span) => span.textContent || ""), highlights)) {
+    const list = grouped.get(segment.spanIndex) ?? [];
+    list.push(segment);
+    grouped.set(segment.spanIndex, list);
   }
-  const source = compact(spans.map((span) => span.textContent || "").join(""));
-  const painted = new Set<HTMLSpanElement>();
-  for (const highlight of highlights) {
-    const quote = compact(highlight.quote);
-    if (!quote) continue;
-    const start = source.indexOf(quote);
-    if (start < 0) continue;
-    const end = start + quote.length;
-    for (const range of spanRanges) if (range.start < end && range.end > start && !painted.has(range.element)) {
-      range.element.classList.add("arch-pdf-highlight", `arch-pdf-highlight-${highlight.color}`);
-      if (highlight.note) {
-        range.element.classList.add("arch-pdf-highlight-note");
-        range.element.title = highlight.note;
+
+  for (const [spanIndex, segments] of grouped) {
+    const span = spans[spanIndex];
+    if (!span) continue;
+    const layers: string[] = [];
+    const sizes: string[] = [];
+    const positions: string[] = [];
+    const repeats: string[] = [];
+    for (const segment of segments) {
+      const bounds = pdfSelectionSegmentBounds(span, segment.start, segment.end);
+      const color = PDF_HIGHLIGHT_COLORS[segment.color] || PDF_HIGHLIGHT_COLORS.yellow;
+      layers.push(`linear-gradient(90deg, transparent 0 ${bounds.start}%, ${color} ${bounds.start}% ${bounds.end}%, transparent ${bounds.end}% 100%)`);
+      sizes.push("100% 100%");
+      positions.push("0 0");
+      repeats.push("no-repeat");
+      if (segment.note) {
+        layers.push(`linear-gradient(90deg, transparent 0 ${bounds.start}%, rgba(38, 103, 77, .72) ${bounds.start}% ${bounds.end}%, transparent ${bounds.end}% 100%)`);
+        sizes.push("100% 2px");
+        positions.push("0 100%");
+        repeats.push("no-repeat");
       }
-      painted.add(range.element);
     }
+    span.classList.add("arch-pdf-highlight");
+    span.style.backgroundImage = layers.join(", ");
+    span.style.backgroundSize = sizes.join(", ");
+    span.style.backgroundPosition = positions.join(", ");
+    span.style.backgroundRepeat = repeats.join(", ");
+    const note = segments.find((segment) => segment.noteText)?.noteText;
+    if (note) span.title = note;
   }
 }
 
