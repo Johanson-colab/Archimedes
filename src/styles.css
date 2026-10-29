@@ -1538,7 +1538,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-earlier:hover { color: var(--night-ink); }
 .journey-chapters { display: grid; }
 .journey-chapter { --journey-chapter-surface: var(--workbench-ground); border-top: 1px solid var(--night-line-soft); }
-.journey-chapter.current { --journey-chapter-surface: color-mix(in srgb, var(--accent) 4%, var(--workbench-ground)); background: var(--journey-chapter-surface); box-shadow: inset 2px 0 0 var(--accent); }
+.journey-chapter.current { --journey-chapter-surface: color-mix(in srgb, var(--accent) 4%, var(--workbench-ground)); background: var(--journey-chapter-surface); }
 .journey-chapter.current .journey-chapter-index { color: var(--accent); }
 .journey-chapter:first-child { border-top: 0; }
 .journey-chapter-row { position: relative; display: flex; align-items: baseline; gap: 4px; }
@@ -1647,7 +1647,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-map-chapter { display: flex; width: 100%; align-items: flex-start; gap: 10px; padding: 10px 12px; background: transparent; border-top: 1px solid var(--night-line-soft); text-align: left; }
 .journey-map-chapter:first-child { border-top: 0; }
 .journey-map-chapter:hover { background: var(--night-panel-raised); }
-.journey-map-chapter.selected { background: var(--night-panel); box-shadow: inset 2px 0 0 var(--accent); }
+.journey-map-chapter.selected { background: var(--night-panel); }
 .journey-map-index { flex: 0 0 20px; padding-top: 2px; color: var(--night-faint); font-family: var(--font-mono); font-size: 11px; }
 .journey-map-chapter > span:last-child { display: grid; min-width: 0; flex: 1; gap: 2px; }
 .journey-map-chapter strong { overflow: hidden; color: var(--night-ink-soft); font-size: 12px; font-weight: 500; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
