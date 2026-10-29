@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { deepSearchPapers, deduplicatePapers, normalizeDeepSearchInput, sanitizeSearchPlan } = require("./deep-paper-search.cjs");
+const { collapseWarnings, deepSearchPapers, deduplicatePapers, normalizeDeepSearchInput, sanitizeSearchPlan } = require("./deep-paper-search.cjs");
 
 test("normalizes deep-search input and bounds generated plans", () => {
   assert.deepEqual(normalizeDeepSearchInput({ prompt: "  Find nonlinear multi-agent control papers  ", topic: "Robotics/VLA", limit: 999 }), {
@@ -46,4 +46,16 @@ test("falls back transparently when no model is configured", async () => {
   assert.match(response.warning, /Query expansion unavailable/);
   assert.match(response.warning, /Semantic reranking unavailable/);
   assert.deepEqual(response.providers, ["Test index"]);
+});
+
+test("collapses repeated provider warnings into one counted line", () => {
+  assert.equal(collapseWarnings([]), "");
+  assert.equal(
+    collapseWarnings([
+      "Semantic Scholar is rate-limiting anonymous requests; retry in a moment.",
+      "Semantic Scholar is rate-limiting anonymous requests; retry in a moment.",
+      "OpenAlex is rate-limiting anonymous requests; retry in a moment.",
+    ]),
+    "Semantic Scholar is rate-limiting anonymous requests; retry in a moment. (\u00d72) OpenAlex is rate-limiting anonymous requests; retry in a moment.",
+  );
 });

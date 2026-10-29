@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { fetchWithRetry, normalizeDailyOptions, searchAcademicPaperSources } = require("./literature.cjs");
+const { fetchWithRetry, normalizeDailyOptions, resetProviderCooldowns, searchAcademicPaperSources } = require("./literature.cjs");
 
 test("retries a timed-out literature request", async () => {
   let attempts = 0;
@@ -18,6 +18,27 @@ test("retries a timed-out literature request", async () => {
 
   assert.equal(attempts, 2);
   assert.equal(response.status, 200);
+});
+
+test("names a rate limit in plain language and stops retrying it", async () => {
+  resetProviderCooldowns();
+  const limited = { ok: false, status: 429, headers: { get: () => null }, text: async () => "" };
+  let calls = 0;
+  await assert.rejects(
+    searchAcademicPaperSources("agent evaluation", 8, async () => {
+      calls += 1;
+      return limited;
+    }),
+    /Semantic Scholar is rate-limiting anonymous requests/,
+  );
+  // Each provider retries before giving up.
+  assert.ok(calls >= 6, `expected retries, saw ${calls} calls`);
+
+  // A second query in the same deep search must not wait out the backoff again.
+  const before = calls;
+  await assert.rejects(searchAcademicPaperSources("agent evaluation", 8, async () => { calls += 1; return limited; }), /rate-limiting/);
+  assert.equal(calls - before, 2, "only arXiv should be attempted while the other providers cool down");
+  resetProviderCooldowns();
 });
 
 test("bounds daily discovery options", () => {

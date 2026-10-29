@@ -194,6 +194,32 @@ async function rerankCandidates(config, input, plan, papers, options = {}) {
   }).slice(0, input.limit);
 }
 
+function collapseWarnings(warnings) {
+  // Five expanded queries hitting the same rate limit produce five identical
+  // lines. Show the failure once, with a count, instead of a wall of repeats.
+  const counts = new Map();
+  for (const warning of warnings) {
+    const text = String(warning || "").trim();
+    if (!text) continue;
+    counts.set(text, (counts.get(text) || 0) + 1);
+  }
+  return [...counts].map(([text, count]) => (count > 1 ? `${text} (×${count})` : text)).join(" ");
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 async function deepSearchPapers(rawInput, { modelConfig, searchSources = searchAcademicPaperSources, fetchImpl = fetch } = {}) {
   const input = normalizeDeepSearchInput(rawInput);
   const warnings = [];
@@ -205,7 +231,15 @@ async function deepSearchPapers(rawInput, { modelConfig, searchSources = searchA
     warnings.push(`Query expansion unavailable: ${error instanceof Error ? error.message : "model request failed"}`);
   }
 
-  const settled = await Promise.allSettled(plan.queries.map((query) => searchSources(query, 16, fetchImpl)));
+  // Two queries at a time keeps the fan-out inside the anonymous rate limits of
+  // Semantic Scholar and OpenAlex instead of firing fifteen requests at once.
+  const settled = await mapWithConcurrency(plan.queries, 2, async (query) => {
+    try {
+      return { status: "fulfilled", value: await searchSources(query, 16, fetchImpl) };
+    } catch (reason) {
+      return { status: "rejected", reason };
+    }
+  });
   const candidates = [];
   const providers = new Set();
   for (let index = 0; index < settled.length; index += 1) {
@@ -219,7 +253,7 @@ async function deepSearchPapers(rawInput, { modelConfig, searchSources = searchA
     }
   }
   const unique = deduplicatePapers(candidates);
-  if (!unique.length) throw new Error(`No papers matched the expanded search. ${warnings.join(" ")}`);
+  if (!unique.length) throw new Error(`No papers matched the expanded search. ${collapseWarnings(warnings)}`);
   const preRanked = unique.map((paper) => ({ paper, ...lexicalScore(paper, plan) }))
     .filter((entry) => entry.score >= 0)
     .sort((left, right) => right.score - left.score)
@@ -239,11 +273,12 @@ async function deepSearchPapers(rawInput, { modelConfig, searchSources = searchA
     results,
     providers: [...providers],
     fetched_at: new Date().toISOString(),
-    warning: warnings.filter(Boolean).join(" "),
+    warning: collapseWarnings(warnings),
   };
 }
 
 module.exports = {
+  collapseWarnings,
   deepSearchPapers,
   deduplicatePapers,
   fallbackPlan,

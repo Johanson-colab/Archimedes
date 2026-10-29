@@ -1,6 +1,9 @@
 const { XMLParser } = require("fast-xml-parser");
 
 const S2_BASE_URL = "https://api.semanticscholar.org/graph/v1";
+// An API key moves Semantic Scholar onto a dedicated quota; without one the
+// shared anonymous pool returns 429 as soon as a deep search fans out.
+const SEMANTIC_SCHOLAR_API_KEY = (process.env.SEMANTIC_SCHOLAR_API_KEY || "").trim();
 const OPENALEX_BASE_URL = "https://api.openalex.org";
 const ARXIV_API_URL = "https://export.arxiv.org/api/query";
 const HF_DAILY_PAPERS_URLS = [
@@ -49,6 +52,12 @@ async function fetchWithRetry(url, init = {}, options = {}) {
       const response = await fetchImpl(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
       if (!RETRYABLE_HTTP_STATUSES.has(response.status) || attempt === attempts - 1) return response;
       lastError = new Error(`${provider} returned ${response.status}.`);
+      // Rate limits ask for a specific pause; ignoring it just earns another 429.
+      const retryAfter = Number(response.headers?.get?.("retry-after"));
+      if (Number.isFinite(retryAfter) && retryAfter > 0) {
+        await delay(Math.min(retryAfter * 1000, 8_000));
+        continue;
+      }
     } catch (error) {
       lastError = error;
       if (attempt === attempts - 1) break;
@@ -291,17 +300,54 @@ function normalizeS2Paper(paper) {
   };
 }
 
+// A 429 usually holds for a while. Remembering it stops the other expanded
+// queries in the same deep search from waiting out the same backoff.
+const PROVIDER_COOLDOWN_MS = 60_000;
+const providerCooldowns = new Map();
+
+function providerCoolingDown(provider) {
+  return (providerCooldowns.get(provider) || 0) > Date.now();
+}
+
+function noteProviderRateLimit(provider) {
+  providerCooldowns.set(provider, Date.now() + PROVIDER_COOLDOWN_MS);
+}
+
+function resetProviderCooldowns() {
+  providerCooldowns.clear();
+}
+
+function providerResponseError(provider, response) {
+  // A bare "returned 429" tells the user nothing. Say what happened and what
+  // it means for their results.
+  if (response?.status === 429) {
+    return new Error(`${provider} is rate-limiting anonymous requests; retry in a moment.`);
+  }
+  return new Error(`${provider} search returned ${response?.status}.`);
+}
+
 async function searchSemanticScholar(query, limit, fetchImpl = fetch) {
   const fields = "title,authors,year,venue,abstract,url,externalIds,openAccessPdf,citationCount";
   const detectedId = detectPaperId(query);
   const url = detectedId
     ? `${S2_BASE_URL}/paper/${encodeURIComponent(detectedId)}?fields=${fields}`
     : `${S2_BASE_URL}/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=${fields}`;
-  const response = await fetchImpl(url, {
-    headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) throw new Error(`Semantic Scholar search returned ${response.status}.`);
+  if (providerCoolingDown("Semantic Scholar")) {
+    throw providerResponseError("Semantic Scholar", { status: 429 });
+  }
+  // The unauthenticated pool is shared and rate-limits aggressively, so retry
+  // with a real backoff instead of surfacing the first 429 to the user.
+  const response = await fetchWithRetry(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "Archimedes-Research/0.1",
+      ...(SEMANTIC_SCHOLAR_API_KEY ? { "x-api-key": SEMANTIC_SCHOLAR_API_KEY } : {}),
+    },
+  }, { provider: "Semantic Scholar", attempts: SEMANTIC_SCHOLAR_API_KEY ? 3 : 2, retryDelayMs: 1_500, timeoutMs: 15_000, fetchImpl });
+  if (!response.ok) {
+    if (response.status === 429) noteProviderRateLimit("Semantic Scholar");
+    throw providerResponseError("Semantic Scholar", response);
+  }
   const payload = await response.json();
   const papers = detectedId ? [payload] : payload.data || [];
   return papers.map(normalizeS2Paper);
@@ -338,12 +384,17 @@ function normalizeOpenAlexWork(work) {
 async function searchOpenAlex(query, limit, fetchImpl = fetch) {
   const detectedId = detectPaperId(query);
   const searchQuery = detectedId?.startsWith("ARXIV:") ? detectedId.slice(6) : query;
+  if (providerCoolingDown("OpenAlex")) {
+    throw providerResponseError("OpenAlex", { status: 429 });
+  }
   const url = `${OPENALEX_BASE_URL}/works?search=${encodeURIComponent(searchQuery)}&per-page=${limit}`;
-  const response = await fetchImpl(url, {
+  const response = await fetchWithRetry(url, {
     headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) throw new Error(`OpenAlex search returned ${response.status}.`);
+  }, { provider: "OpenAlex", attempts: 3, retryDelayMs: 1_200, timeoutMs: 15_000, fetchImpl });
+  if (!response.ok) {
+    if (response.status === 429) noteProviderRateLimit("OpenAlex");
+    throw providerResponseError("OpenAlex", response);
+  }
   const payload = await response.json();
   return (payload.results || []).map(normalizeOpenAlexWork);
 }
@@ -361,7 +412,7 @@ async function searchArxivKeywords(query, limit, fetchImpl = fetch) {
   const response = await fetchWithRetry(`${ARXIV_API_URL}?${params}`, {
     headers: { Accept: "application/atom+xml", "User-Agent": "Archimedes-Research/0.1" },
   }, { provider: "arXiv", attempts: 2, timeoutMs: 25_000, fetchImpl });
-  if (!response.ok) throw new Error(`arXiv search returned ${response.status}.`);
+  if (!response.ok) throw providerResponseError("arXiv", response);
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
   const payload = parser.parse(await response.text());
   return asArray(payload.feed?.entry).map((entry) => normalizeArxivEntry(entry, "")).slice(0, limit);
@@ -415,11 +466,12 @@ async function searchAcademicPaperSources(query, requestedLimit, fetchImpl = fet
       if (result.value.length) usedProviders.push(provider);
       papers.push(...result.value);
     } else {
-      warnings.push(`${provider}: ${result.reason instanceof Error ? result.reason.message : "search failed"}`);
+      const message = result.reason instanceof Error ? result.reason.message : "search failed";
+      warnings.push(message.startsWith(provider) ? message : `${provider}: ${message}`);
     }
   }
   if (!papers.length) throw new Error(`No paper metadata could be retrieved. ${warnings.join(" ")}`);
   return { papers, providers: usedProviders, warnings };
 }
 
-module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, matchesDailyTopic };
+module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, matchesDailyTopic, resetProviderCooldowns };
