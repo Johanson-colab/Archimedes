@@ -7,7 +7,7 @@ const KIMI_SLIDES_SKILL = Object.freeze({
   id: "paper-presentation",
   name: "Academic paper presentation",
   description: "Plans a source-grounded, editable academic presentation from the saved review without changing that review.",
-  version: 3,
+  version: 4,
 });
 
 const PRESENTATION_SECTIONS = Object.freeze([
@@ -18,8 +18,8 @@ const PRESENTATION_SECTIONS = Object.freeze([
   { id: "limitations", label: "Limitations" },
 ]);
 
-const LAYOUTS = new Set(["outline", "editorial", "figure-led", "split", "process", "comparison", "metrics", "boundaries"]);
-const VISUAL_KINDS = new Set(["source", "outline", "process", "comparison", "metrics", "boundaries"]);
+const LAYOUTS = new Set(["outline", "editorial", "figure-led", "table-led", "split", "process", "comparison", "metrics", "evidence-pair", "boundaries", "closing"]);
+const VISUAL_KINDS = new Set(["source", "outline", "process", "comparison", "metrics", "evidence-pair", "boundaries"]);
 const SOURCE_KINDS = new Set(["figure", "table", "diagram", "text", "page"]);
 const SOURCE_FOCUS = new Set(["full", "top", "middle", "bottom", "left", "right"]);
 
@@ -66,7 +66,10 @@ function loadKimiSlidesGuidance() {
 function clipped(value, limit) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (text.length <= limit) return text;
-  return `${text.slice(0, limit + 1).replace(/\s+\S*$/, "").trimEnd()}…`;
+  // A visible ellipsis makes a generated slide look unfinished.  The prompt
+  // keeps copy compact; this only guards malformed or hostile model output.
+  const prefix = text.slice(0, limit + 1).replace(/\s+\S*$/, "").trimEnd();
+  return prefix || text.slice(0, limit).trimEnd();
 }
 
 function clampPage(value, pageCount) {
@@ -126,7 +129,7 @@ ${loadKimiSlidesGuidance()}
 </kimi_slides_methodology>
 
 Reference-quality target observed in the supplied Kimi deck:
-- Target 15 slides total: one cover rendered by the UI plus exactly 14 content slides.
+- Target 15–18 slides total: one cover rendered by the UI plus 14–17 content slides. Choose the count from the paper's evidence; do not add filler to reach a count.
 - Warm ivory paper, dark ink, restrained forest green structure, and sparse ochre accents. Use MiSans-like sans typography, never advertising-style display text.
 - Fixed skeleton: small section marker, restrained claim title, thin rule, dense but readable evidence body, and page number. No cards, pills, shadows, decorative circles, or oversized slogans.
 - The first content slide is an outline. Later pages alternate among dense editorial explanations, large paper figures with analysis, technical processes, equations, benchmark tables, and result charts.
@@ -141,27 +144,30 @@ Evidence workflow:
 
 Narrative and page plan:
 - Keep this order: Background -> Related work -> Method -> Experiments -> Limitations.
-- Return exactly 14 CONTENT slides. Slide 1 is an outline classified as background.
-- Recommended distribution including the outline: Background 3, Related work 2, Method 4, Experiments 4, Limitations 1. Adjust by at most one slide only when the paper's evidence requires it.
+- Return 14–17 CONTENT slides. Slide 1 is an outline classified as background, and the final slide is a limitations/discussion slide.
+- Allocate pages from evidence rather than a fixed quota. A typical range is: Background 2–4 including the outline; Related work 1–3; Method 3–5; Experiments 3–5; Limitations 1–2. Every section must appear.
 - Each title states the page's actual subject or a source-supported finding. Reading the titles alone must tell the full paper story.
 - Use the saved review's language. Avoid slogans, rhetorical questions, vague abstractions, and the pattern “not X, but Y.”
-- title <= 72 characters; lead <= 240; 2-5 bullets <= 145 each; takeaway <= 150. Do not invent speaker notes.
+- Keep text genuinely slide-sized: title <= 64 characters; lead <= 150; 2–4 bullets <= 105 each; takeaway <= 110. End every sentence normally; never use ellipses to indicate omitted text. Do not invent speaker notes.
 
 Layout contract:
 - outline: five-section reading route plus one concise core thread. visual.kind=outline with 5 items.
 - editorial: dense conceptual or mathematical explanation without a decorative source image. Use visual items and bullets as unequal columns.
 - figure-led: one decisive original figure/table occupies 55%-70% of the body, with short analysis beside it.
+- table-led: one tightly cropped benchmark table or ablation table paired with 2–3 result interpretations; do not reproduce a full text-heavy PDF page.
 - split: a tightly cropped source and an interpretation column.
 - process: ordered mechanism or training stages. visual.items are stages.
 - comparison: prior work, baselines, or alternatives aligned by a real comparison axis.
 - metrics: exact source-supported results. Pair values with dataset/setting and comparison meaning.
+- evidence-pair: two complementary evidence modules, such as a result figure plus a compact numerical comparison. Use only when both modules support the same claim.
 - boundaries: limitations, supported scope, failure modes, and next tests.
+- closing: a restrained final discussion page that separates the supported contribution from open limitations.
 - Do not repeat one layout more than twice in succession. Do not default to equal thirds or 2x2 grids.
 - source.label contains only a page/section reference. Never repeat the figure/table name there and never write 全图/全表.
 
 Return ONLY valid JSON:
 {"title":"paper title","subtitle":"one-line contribution","source_sufficiency":"full-paper|partial-paper|review-grounded","slides":[
-{"section":"background|related_work|method|experiments|limitations","layout":"outline|editorial|figure-led|split|process|comparison|metrics|boundaries","title":"specific subject or bounded finding","lead":"short framing sentence","bullets":["..."],"takeaway":"one restrained conclusion","speaker_notes":"","source":{"page":1,"label":"PDF p. 1 · §1 Introduction","kind":"figure|table|diagram|text|page","figure":"Fig. 1","panel":"a-b","focus":"full","crop":{"x":0.05,"y":0.18,"width":0.9,"height":0.55}},"visual":{"kind":"source|outline|process|comparison|metrics|boundaries","items":[{"label":"...","value":"...","detail":"..."}]}}
+{"section":"background|related_work|method|experiments|limitations","layout":"outline|editorial|figure-led|table-led|split|process|comparison|metrics|evidence-pair|boundaries|closing","title":"specific subject or bounded finding","lead":"short framing sentence","bullets":["Short source-grounded evidence point"],"takeaway":"one restrained conclusion","speaker_notes":"","source":{"page":1,"label":"PDF p. 1 · §1 Introduction","kind":"figure|table|diagram|text|page","figure":"Fig. 1","panel":"a-b","focus":"full","crop":{"x":0.05,"y":0.18,"width":0.9,"height":0.55}},"visual":{"kind":"source|outline|process|comparison|metrics|evidence-pair|boundaries","items":[{"label":"Metric label","value":"42.0","detail":"Source-supported comparison"}]}}
 ]}
 
 Paper: ${paper.title}
@@ -214,21 +220,21 @@ function normalizeSlide(input, pageCount, index) {
   const section = PRESENTATION_SECTIONS.find((candidate) => candidate.id === input?.section)?.id;
   if (!section) throw new Error(`Slide ${index + 1} has an unsupported section.`);
   const bullets = Array.isArray(input.bullets)
-    ? input.bullets.map((bullet) => clipped(bullet, 145)).filter(Boolean).slice(0, 5)
+    ? input.bullets.map((bullet) => clipped(bullet, 105)).filter(Boolean).slice(0, 4)
     : [];
   const source = input.source && typeof input.source === "object" ? input.source : {};
   const visual = input.visual && typeof input.visual === "object" ? input.visual : {};
   const page = clampPage(source.page ?? input.page, pageCount);
-  const layout = LAYOUTS.has(input.layout) ? input.layout : section === "method" ? "editorial" : section === "experiments" ? "figure-led" : section === "limitations" ? "boundaries" : "split";
-  const kind = VISUAL_KINDS.has(visual.kind) ? visual.kind : layout === "outline" ? "outline" : layout === "figure-led" || layout === "split" ? "source" : layout === "editorial" ? "comparison" : layout;
+  const layout = LAYOUTS.has(input.layout) ? input.layout : source.kind === "table" ? "table-led" : section === "method" ? "editorial" : section === "experiments" ? "figure-led" : section === "limitations" ? "boundaries" : "split";
+  const kind = VISUAL_KINDS.has(visual.kind) ? visual.kind : layout === "outline" ? "outline" : ["figure-led", "table-led", "split"].includes(layout) ? "source" : layout === "editorial" ? "comparison" : layout;
   return {
     id: clipped(input.id || `${section}-${index + 1}`, 64),
     section,
     layout,
-    title: clipped(input.title || PRESENTATION_SECTIONS.find((candidate) => candidate.id === section)?.label, 72),
-    lead: clipped(input.lead ?? input.summary, 240),
+    title: clipped(input.title || PRESENTATION_SECTIONS.find((candidate) => candidate.id === section)?.label, 64),
+    lead: clipped(input.lead ?? input.summary, 150),
     bullets,
-    takeaway: clipped(input.takeaway, 150),
+    takeaway: clipped(input.takeaway, 110),
     speaker_notes: "",
     source: {
       page,
@@ -246,8 +252,8 @@ function normalizeSlide(input, pageCount, index) {
 
 function normalizeKimiSlidesPresentation(value, paper, pageCount) {
   if (!value || typeof value !== "object") throw new Error("A presentation object is required.");
-  const inputSlides = Array.isArray(value.slides) ? value.slides.slice(0, 15) : [];
-  if (inputSlides.length < 12) throw new Error("Kimi Slides returned fewer than 12 content slides.");
+  const inputSlides = Array.isArray(value.slides) ? value.slides.slice(0, 17) : [];
+  if (inputSlides.length < 14) throw new Error("Kimi Slides returned fewer than 14 content slides.");
   const slides = inputSlides.map((slide, index) => normalizeSlide(slide, pageCount, index));
   if (slides[0]?.layout !== "outline") throw new Error("Kimi Slides did not start with the required presentation outline.");
   const order = new Map(PRESENTATION_SECTIONS.map((section, index) => [section.id, index]));
@@ -260,6 +266,7 @@ function normalizeKimiSlidesPresentation(value, paper, pageCount) {
   for (const section of PRESENTATION_SECTIONS) {
     if (!slides.some((slide) => slide.section === section.id)) throw new Error(`Kimi Slides is missing its ${section.label} section.`);
   }
+  if (slides.at(-1)?.section !== "limitations") throw new Error("Kimi Slides must close with limitations and discussion.");
   return {
     skill: { ...KIMI_SLIDES_SKILL },
     title: clipped(value.title || paper.title, 180),

@@ -573,8 +573,8 @@ function savePaperReview(paperId, review) {
 }
 
 const PAPER_PRESENTATION_SECTIONS = ["background", "related_work", "method", "experiments", "limitations"];
-const PAPER_PRESENTATION_LAYOUTS = new Set(["outline", "editorial", "figure-led", "split", "process", "comparison", "metrics", "boundaries"]);
-const PAPER_PRESENTATION_VISUAL_KINDS = new Set(["source", "outline", "process", "comparison", "metrics", "boundaries"]);
+const PAPER_PRESENTATION_LAYOUTS = new Set(["outline", "editorial", "figure-led", "table-led", "split", "process", "comparison", "metrics", "evidence-pair", "boundaries", "closing"]);
+const PAPER_PRESENTATION_VISUAL_KINDS = new Set(["source", "outline", "process", "comparison", "metrics", "table-led", "evidence-pair", "boundaries", "closing"]);
 const PAPER_PRESENTATION_SOURCE_KINDS = new Set(["figure", "table", "diagram", "text", "page"]);
 const PAPER_PRESENTATION_SOURCE_FOCUS = new Set(["full", "top", "middle", "bottom", "left", "right"]);
 
@@ -634,7 +634,9 @@ function normalizePaperPresentationSlide(slide, index) {
 function normalizePaperPresentation(presentation) {
   if (!presentation || typeof presentation !== "object") throw new Error("A completed paper presentation is required.");
   const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
-  const normalizedSlides = slides.slice(0, 15).map(normalizePaperPresentationSlide);
+  // Content slides plus the separately rendered cover may total 15–18 pages.
+  // Do not truncate the final limitations/discussion pages before validation.
+  const normalizedSlides = slides.slice(0, 17).map(normalizePaperPresentationSlide);
   for (const section of PAPER_PRESENTATION_SECTIONS) {
     if (!normalizedSlides.some((slide) => slide.section === section)) throw new Error(`The paper presentation is missing its ${section} section.`);
   }

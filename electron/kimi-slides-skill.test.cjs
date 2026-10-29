@@ -22,7 +22,7 @@ test("presentation planner prepares source-grounded content for native PowerPoin
   const prompt = kimiSlidesPrompt(paper, review, 24);
   assert.match(prompt, /editable PowerPoint file/);
   assert.match(prompt, /intermediate plan, not the visible slide format/);
-  assert.match(prompt, /exactly 14 CONTENT slides/);
+  assert.match(prompt, /14–17 CONTENT slides/);
   assert.match(prompt, /Reading the titles alone must tell the full paper story/);
   assert.match(prompt, /inspect_pdf_page on every page/);
   assert.match(prompt, /Background -> Related work -> Method -> Experiments -> Limitations/);
@@ -53,7 +53,7 @@ test("Kimi Slides adapter normalizes a 15-page academic deck with an outline", (
     })),
   }, paper, 24);
   assert.equal(presentation.skill.id, "paper-presentation");
-  assert.equal(presentation.skill.version, 3);
+  assert.equal(presentation.skill.version, 4);
   assert.equal(presentation.slides.length, 14);
   assert.equal(presentation.slides[0].layout, "outline");
   assert.equal(presentation.slides[5].layout, "editorial");
@@ -63,8 +63,29 @@ test("Kimi Slides adapter normalizes a 15-page academic deck with an outline", (
   assert.equal(presentation.slides[0].source.label, "PDF p. 1");
 });
 
+test("Kimi Slides adapter accepts evidence-led 15–18 page decks and rejects unfinished endings", () => {
+  const sections = ["background", "background", "background", "related_work", "related_work", "method", "method", "method", "method", "method", "experiments", "experiments", "experiments", "experiments", "experiments", "limitations", "limitations"];
+  const valid = normalizeKimiSlidesPresentation({
+    slides: sections.map((section, index) => ({
+      section,
+      layout: index === 0 ? "outline" : section === "experiments" ? "table-led" : section === "limitations" && index === sections.length - 1 ? "closing" : "editorial",
+      title: `Topic ${index}`,
+      lead: "A compact, source-grounded statement.",
+      bullets: ["A concise point."],
+      source: { page: index + 1, kind: "table" },
+      visual: { kind: "source", items: [] },
+    })),
+  }, paper, 24);
+  assert.equal(valid.slides.length, 17);
+  assert.equal(valid.slides.at(-1).layout, "closing");
+
+  assert.throws(() => normalizeKimiSlidesPresentation({
+    slides: sections.slice(0, -1).concat("experiments").map((section, index) => ({ section, layout: index === 0 ? "outline" : "editorial", title: `Topic ${index}` })),
+  }, paper, 24), /outside the required evidence order/);
+});
+
 test("Kimi Slides adapter rejects decks without an outline or the complete evidence arc", () => {
-  const sections = ["background", "background", "background", "related_work", "related_work", "method", "method", "method", "method", "experiments", "experiments", "limitations"];
+  const sections = ["background", "background", "background", "related_work", "related_work", "method", "method", "method", "method", "experiments", "experiments", "experiments", "experiments", "limitations"];
   assert.throws(() => normalizeKimiSlidesPresentation({
     slides: sections.map((section) => ({ section, layout: "split", title: section })),
   }, paper, 12), /required presentation outline/);

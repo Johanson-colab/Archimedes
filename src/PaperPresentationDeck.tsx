@@ -18,8 +18,8 @@ const SECTION_LABELS: Record<PaperPresentationSection, string> = {
   limitations: "Limitations",
 };
 
-const PAPER_PRESENTATION_VERSION = 3;
-const PAPER_PRESENTATION_MIN_CONTENT_SLIDES = 12;
+const PAPER_PRESENTATION_VERSION = 4;
+const PAPER_PRESENTATION_MIN_CONTENT_SLIDES = 14;
 
 const FOCUS_RECTS: Record<SourceFocus, { x: number; y: number; width: number; height: number }> = {
   full: { x: 0, y: 0, width: 1, height: 1 },

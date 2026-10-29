@@ -233,6 +233,40 @@ test("persists presentations separately from their source review", () => {
   }
 });
 
+test("retains all 17 content slides so a final limitations discussion can be saved", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-presentation-17-"));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-presentation-17-close-"));
+  try {
+    store.openWorkspace(workspace);
+    const library = store.createLibrary({ name: "Long presentation shelf" });
+    const paper = store.addPaper(library.id, { title: "Long deck", authors: [], source: "manual" });
+    const sections = ["background", "background", "background", "related_work", "related_work", "method", "method", "method", "method", "experiments", "experiments", "experiments", "experiments", "experiments", "limitations", "limitations", "limitations"];
+    store.savePaperPresentation(paper.id, {
+      skill: { id: "paper-presentation", version: 4 }, title: paper.title, generation_mode: "paper",
+      artifact: {
+        kind: "pptx",
+        pptx_path: ".archimedes/presentations/a1b2c3d4/123e4567-e89b-12d3-a456-426614174001/presentation.pptx",
+        pdf_path: ".archimedes/presentations/a1b2c3d4/123e4567-e89b-12d3-a456-426614174001/presentation.pdf",
+        page_count: 18, validation: "rendered", renderer: "native-pptx",
+      },
+      slides: sections.map((section, index) => ({
+        id: `${section}-${index}`, section, layout: index === sections.length - 1 ? "closing" : section === "experiments" ? "table-led" : "editorial",
+        title: `${section} ${index}`, lead: "Source-grounded evidence.", bullets: ["One complete point."], takeaway: "A bounded takeaway.",
+        source: { page: index + 1, kind: "figure", focus: "full", crop: { x: .1, y: .1, width: .8, height: .8 } },
+        visual: { kind: index === sections.length - 1 ? "closing" : "source", items: [] },
+      })),
+    }, "2026-10-29T00:00:00.000Z");
+    const restored = store.getPaperPresentation(paper.id);
+    assert.equal(restored.slides.length, 17);
+    assert.equal(restored.slides.at(-1).section, "limitations");
+    assert.equal(restored.slides.at(-1).layout, "closing");
+  } finally {
+    store.openWorkspace(other);
+    fs.rmSync(workspace, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  }
+});
+
 test("permanently deletes an archived research chat and its turns", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-thread-delete-"));
   try {
