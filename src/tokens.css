@@ -142,6 +142,41 @@
   --density-nav-height: 32px;
   --density-settings-nav-height: 34px;
 
+  /* --- Component style ----------------------------------------------------- */
+  --button-height: var(--control-height);
+  --button-pad-x: 12px;
+  --button-radius: var(--radius-control);
+  --button-font-size: 11px;
+  --button-font-weight: 750;
+  --button-gap: 6px;
+  --button-shadow: none;
+  --button-primary-bg: var(--accent);
+  --button-primary-ink: var(--accent-ink);
+  --button-primary-border: transparent;
+  --button-primary-border-width: 0;
+  --button-primary-hover-bg: var(--accent-hover);
+  --button-secondary-height: var(--control-height);
+  --button-secondary-pad-x: 10px;
+  --button-secondary-radius: 5px;
+  --button-secondary-font-weight: 700;
+  --button-secondary-bg: #1a1c25;
+  --button-secondary-ink: #c4c4cf;
+  --button-secondary-border: #353745;
+  --button-secondary-border-width: 1px;
+  --button-secondary-hover-bg: #242630;
+  --button-secondary-hover-ink: #ffffff;
+  --button-secondary-hover-border: #4a4d5e;
+
+  --dialog-radius-lg: 12px;
+  --dialog-radius-md: 9px;
+  --dialog-radius-sm: 7px;
+  --dialog-shadow-lg: 0 30px 90px rgba(10, 10, 8, .38);
+  --dialog-shadow-md: 0 24px 70px rgba(0, 0, 0, .58);
+  --dialog-shadow-sm: 0 20px 60px rgba(0, 0, 0, .3);
+  --dialog-border: var(--border-default);
+  --dialog-border-strong: #444;
+  --dialog-backdrop: rgba(0, 0, 0, .88);
+
   /* --- Typography ---------------------------------------------------------- */
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
@@ -239,6 +274,17 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
   --chat-send-ink: #fbfaf7;
   --chat-send-disabled-bg: #e9e5df;
   --chat-send-disabled-ink: #aaa49c;
+
+  --button-primary-border: var(--accent);
+  --button-secondary-bg: #f3f0eb;
+  --button-secondary-ink: #5c564e;
+  --button-secondary-border: #dfd9d2;
+  --button-secondary-hover-bg: #e9e5df;
+  --button-secondary-hover-ink: var(--mono-text);
+  --button-secondary-hover-border: #d2cbc2;
+
+  --dialog-shadow-md: 0 24px 64px rgba(59, 53, 46, .16);
+  --dialog-border-strong: #ddd7cf;
 
   --code-bg: #f4f1ec;
   --code-fg: #39352f;
