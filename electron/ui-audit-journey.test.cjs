@@ -229,3 +229,8 @@ test("journey chapter rows keep actions clear of meta and only dot attention epi
   assert.match(css, /\.journey-episode\.running \.journey-episode-dot/);
   assert.match(css, /\.journey-episode\.error \.journey-episode-dot/);
 });
+
+test("selected journey chapters do not draw an accent left border", () => {
+  assert.doesNotMatch(css, /\.journey-chapter\.current \{[^}]*box-shadow: inset 2px 0 0 var\(--accent\)/);
+  assert.doesNotMatch(css, /\.journey-map-chapter\.selected \{[^}]*box-shadow: inset 2px 0 0 var\(--accent\)/);
+});
