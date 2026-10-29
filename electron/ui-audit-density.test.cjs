@@ -10,8 +10,8 @@ const sidebar = fs.readFileSync(path.join(root, "src", "ProjectSidebar.tsx"), "u
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 
 test("high-frequency metadata uses the denser 10–12px scale", () => {
-  assert.match(css, /\.daily-paper-row p \{[^}]*font-size: 11px/);
-  assert.match(css, /\.daily-paper-date span \{[^}]*font-size: 10px/);
+  assert.match(css, /\.daily-paper-meta \{[^}]*font-size: 10px/);
+  assert.match(css, /\.daily-paper-row small \{[^}]*font-size: 10\.5px/);
   assert.match(css, /\.artifact-tab-main span \{[^}]*font-size: 12px/);
   assert.match(css, /\.artifact-editor-header small \{[^}]*font-size: 10px/);
   assert.match(css, /\.codex-sidebar-label \{ color: var\(--night-faint\); font-size: 10px/);

@@ -559,6 +559,7 @@ interface DailyPaper extends AcademicSearchResult {
   published_at: string;
   discovered_at: string;
   categories: string[];
+  thumbnail: string;
   upvotes: number;
   github_url: string;
   github_stars: number;

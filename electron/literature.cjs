@@ -10,6 +10,12 @@ const HF_DAILY_PAPERS_URLS = [
   "https://hf-mirror.com/api/daily_papers",
   "https://huggingface.co/api/daily_papers",
 ];
+// Hugging Face renders a social preview per paper; the mirror is listed first
+// for the same reason the API mirror is.
+const HF_THUMBNAIL_HOSTS = [
+  "https://cdn-thumbnails.hf-mirror.com",
+  "https://cdn-thumbnails.huggingface.co",
+];
 const DEFAULT_DAILY_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"];
 const DAILY_CATEGORIES = new Set([...DEFAULT_DAILY_CATEGORIES, "cs.CV", "cs.RO", "cs.SE", "cs.IR", "cs.HC", "cs.MA", "cs.NE", "cs.CY", "cs.PF", "cs.GR", "cs.SD", "eess.AS", "stat.ML"]);
 const DAILY_RANGES = new Set(["7d", "30d", "90d", "all"]);
@@ -93,6 +99,17 @@ function asArray(value) {
   return Array.isArray(value) ? value : [value];
 }
 
+function normalizeThumbnailUrl(value) {
+  const text = normalizeWhitespace(value);
+  return /^https:\/\/[^\s]+$/i.test(text) ? text : "";
+}
+
+function arxivThumbnailUrl(arxivId) {
+  const id = normalizeWhitespace(arxivId);
+  if (!/^\d{4}\.\d{4,5}$/.test(id)) return "";
+  return `${HF_THUMBNAIL_HOSTS[0]}/social-thumbnails/papers/${id}.png`;
+}
+
 function normalizeArxivEntry(entry, requestedId) {
   const published = normalizeWhitespace(entry.published);
   const primaryCategory = entry["arxiv:primary_category"]?.term || "";
@@ -113,6 +130,7 @@ function normalizeArxivEntry(entry, requestedId) {
     pdf_url: `https://arxiv.org/pdf/${arxivId}`,
     citation_count: 0,
     source: "arxiv",
+    thumbnail: arxivThumbnailUrl(arxivId),
     published_at: published,
     discovered_at: published,
     categories,
@@ -228,6 +246,7 @@ function normalizeHuggingFacePaper(item) {
     pdf_url: arxivId ? `https://arxiv.org/pdf/${arxivId}` : "",
     citation_count: 0,
     source: "hugging-face",
+    thumbnail: normalizeThumbnailUrl(item.thumbnail || paper.thumbnail) || arxivThumbnailUrl(arxivId),
     published_at: publishedAt,
     discovered_at: discoveredAt,
     categories,

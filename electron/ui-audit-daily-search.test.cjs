@@ -30,3 +30,16 @@ test("the range control offers an all-time option", () => {
 test("speech and audio is offered as a daily topic", () => {
   assert.match(library, /\{ id: "speech_audio", label: "Speech & Audio", description: "[^"]+" \}/);
 });
+
+test("daily rows pair the copy with a thumbnail on the right", () => {
+  const literature = fs.readFileSync(path.join(root, "electron", "literature.cjs"), "utf8");
+  assert.match(library, /daily-paper-aside/);
+  assert.match(library, /daily-paper-thumb/);
+  assert.match(library, /loading="lazy"/);
+  assert.match(library, /event\.currentTarget\.remove\(\)/);
+  assert.match(css, /\.daily-paper-row \{[^}]*grid-template-columns: minmax\(0, 1fr\) 208px/);
+  assert.match(css, /\.daily-paper-thumb img \{[^}]*object-fit: cover/);
+  assert.match(literature, /social-thumbnails\/papers/);
+  assert.match(literature, /thumbnail: arxivThumbnailUrl\(arxivId\)/);
+  assert.match(literature, /thumbnail: normalizeThumbnailUrl\(item\.thumbnail/);
+});

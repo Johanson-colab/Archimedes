@@ -2514,9 +2514,19 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       const isAdded = added.has(key);
       const isAdding = adding === key;
       return <article className="daily-paper-row" key={key}>
-        <div className="daily-paper-date"><strong>{formatPaperDate(paper.published_at)}</strong><span>{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}</span></div>
-        <div className="daily-paper-content"><div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}</div><p>{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</p><small>{paper.abstract || "No abstract available."}</small><div className="daily-paper-signals">{paper.categories.slice(0, 3).map((category) => <span key={category}>{category}</span>)}{paper.upvotes > 0 && <span><Flame size={11} />{paper.upvotes}</span>}{paper.github_url && <a href={paper.github_url} target="_blank" rel="noreferrer"><Code2 size={11} />{paper.github_stars > 0 ? paper.github_stars : "Code"}</a>}</div></div>
-        <button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button>
+        <div className="daily-paper-content">
+          <div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}</div>
+          <p className="daily-paper-meta"><span className="daily-paper-date">{formatPaperDate(paper.published_at)}</span><span className="daily-paper-source">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}</span><span className="daily-paper-authors">{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</span></p>
+          <small>{paper.abstract || "No abstract available."}</small>
+          <div className="daily-paper-signals">{paper.categories.slice(0, 3).map((category) => <span key={category}>{category}</span>)}{paper.upvotes > 0 && <span><Flame size={11} />{paper.upvotes}</span>}{paper.github_url && <a href={paper.github_url} target="_blank" rel="noreferrer"><Code2 size={11} />{paper.github_stars > 0 ? paper.github_stars : "Code"}</a>}</div>
+        </div>
+        <div className="daily-paper-aside">
+          <div className="daily-paper-thumb">
+            <span className="daily-paper-thumb-fallback">{paper.categories[0] || "Paper"}</span>
+            {paper.thumbnail && <img src={paper.thumbnail} alt="" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.remove(); }} />}
+          </div>
+          <button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button>
+        </div>
       </article>;
     })}</div>}
     </>}
