@@ -6252,3 +6252,113 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 @media (max-width: 680px) {
   .research-dock { display: none; }
 }
+
+/* Floating agent layer: the default surface. Panels never take a grid row. */
+.agent-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+.agent-float-panel {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  background: #191c17;
+  border: 1px solid #343830;
+  border-radius: 14px;
+  box-shadow: 0 26px 60px -20px rgba(0, 0, 0, .82), 0 4px 16px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .04);
+  outline: none;
+}
+.agent-float-panel.active { z-index: 3; }
+.agent-float-panel:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+.agent-float-panel > .agent-proactive-panel,
+.agent-float-panel > .agent-path-panel {
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  background: transparent;
+}
+.agent-float-grip {
+  position: absolute;
+  z-index: 6;
+  top: 8px;
+  left: 6px;
+  display: grid;
+  width: 12px;
+  height: 18px;
+  grid-template-columns: repeat(2, 2px);
+  grid-auto-rows: 2px;
+  gap: 2px;
+  place-content: center;
+  color: #63675f;
+  opacity: .6;
+  cursor: grab;
+  touch-action: none;
+}
+.agent-float-grip:hover { color: #a7aaa1; opacity: 1; }
+.agent-float-grip:active { cursor: grabbing; }
+.agent-float-grip i { width: 2px; height: 2px; background: currentColor; border-radius: 50%; }
+.agent-float-resize {
+  position: absolute;
+  z-index: 6;
+  right: 2px;
+  bottom: 2px;
+  width: 15px;
+  height: 15px;
+  cursor: nwse-resize;
+  opacity: .45;
+  touch-action: none;
+}
+.agent-float-resize::before,
+.agent-float-resize::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 8px;
+  height: 1px;
+  background: #73786e;
+  transform: rotate(-45deg);
+  transform-origin: right bottom;
+}
+.agent-float-resize::after { width: 4px; bottom: 5px; }
+.agent-float-resize:hover { opacity: .9; }
+
+/* One surface: header, body and footer share the panel fill. */
+.agent-proactive-head,
+.agent-path-head {
+  background: transparent;
+  border-bottom: 1px solid #242724;
+}
+.agent-proactive-status { flex: 1; }
+.agent-proactive-foot,
+.agent-proactive-compose {
+  background: transparent;
+}
+.agent-proactive-history { background: transparent; }
+.agent-proactive-panel,
+.agent-path-panel { background: transparent; }
+
+.theme-paper .agent-float-panel {
+  background: #fdfcf8;
+  border-color: #ded7ca;
+  box-shadow: 0 26px 60px -24px rgba(74, 62, 40, .45), 0 4px 16px rgba(74, 62, 40, .1), inset 0 1px 0 rgba(255, 255, 255, .7);
+}
+.theme-paper .agent-proactive-head,
+.theme-paper .agent-path-head {
+  background: transparent;
+  border-color: #e9e3d7;
+}
+.theme-paper .agent-proactive-foot,
+.theme-paper .agent-proactive-compose {
+  background: transparent;
+  border-color: #e8e3db;
+}
+.theme-paper .agent-float-grip { color: #aaa49a; }
+.theme-paper .agent-float-grip:hover { color: #5f5b54; }
+.theme-paper .agent-float-resize::before,
+.theme-paper .agent-float-resize::after { background: #a29b91; }

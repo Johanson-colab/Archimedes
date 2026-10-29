@@ -1,4 +1,4 @@
-import { ArrowUpRight, Blocks, Check, ChevronUp, Pin, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Blocks, Check, Pin, RefreshCw, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import type { ResearchStage, ResearchStageId } from "./research-path";
 
@@ -87,8 +87,8 @@ export default function ResearchPathPanel({
         >
           <ArrowUpRight size={12} />
         </button>
-        <button className="agent-path-icon" onClick={onCollapse} title={t("Collapse Research path")} aria-label={t("Collapse Research path")}>
-          <ChevronUp size={12} />
+        <button className="agent-path-icon" onClick={onCollapse} title={t("Close Research path")} aria-label={t("Close Research path")}>
+          <X size={12} />
         </button>
       </div>
     </header>

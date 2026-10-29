@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
 const app = read("src", "App.tsx");
-const dock = read("src", "ResearchDock.tsx");
+const layer = read("src", "AgentLayer.tsx");
 const researchPath = read("src", "ResearchPathPanel.tsx");
 const proactive = read("src", "ProactiveAgentPanel.tsx");
 const settingsPanel = read("src", "ProactiveSettingsPanel.tsx");
@@ -30,19 +30,16 @@ test("proactive is opt-in and starts off", () => {
   assert.match(types, /undo\?: \{ label: string; token\?: string \}/);
 });
 
-test("the dock is global, collapsible, reorderable, resizable, and never auto-opens", () => {
-  assert.match(dock, /archimedes-research-dock-v1/);
-  assert.match(dock, /order: \["research", "proactive"\]/);
-  assert.match(dock, /researchOpen/);
-  assert.match(dock, /proactiveOpen/);
-  assert.match(dock, /if \(!openIds\.length\) return null/);
-  assert.match(dock, /onPointerDown=\{\(event\) => startDrag\(event, id\)\}/);
-  assert.match(dock, /const reorder =/);
-  assert.match(dock, /document\.elementFromPoint/);
-  assert.match(dock, /role="separator"/);
-  assert.match(dock, /onDoubleClick/);
-  assert.match(dock, /--dock-split/);
-  assert.doesNotMatch(dock, /autoOpen|setOpen\(true\)/);
+test("the floating layer drags, resizes, clamps, and persists", () => {
+  assert.match(layer, /archimedes-agent-layer-v1/);
+  assert.match(layer, /agent-float-panel/);
+  assert.match(layer, /agent-float-grip/);
+  assert.match(layer, /agent-float-resize/);
+  assert.match(layer, /startDrag/);
+  assert.match(layer, /startResize/);
+  assert.match(layer, /clampLayout/);
+  assert.match(layer, /ResizeObserver/);
+  assert.doesNotMatch(layer, /research-dock/);
 });
 
 test("research path keeps the thread state and drops the old chrome", () => {
@@ -126,18 +123,17 @@ test("L0 signals are emitted by the surfaces that own the evidence", () => {
   assert.match(paper, /Ask AI to fix/);
 });
 
-test("toolbar exposes the global dock and proactive agent without stealing focus", () => {
-  assert.match(app, /className=\{researchDockOpen \? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"\}/);
+test("toolbar opens the floating panels without stealing focus", () => {
+  assert.match(app, /className=\{researchPanelOpen \? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"\}/);
   assert.match(app, /className=\{proactive\.open \? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"\}/);
   assert.match(app, /dock-badge/);
   assert.match(app, /aria-pressed=\{proactive\.open\}/);
   assert.match(app, /toggleProactiveDock/);
   assert.match(app, /setSettingsSection\("proactive"\)/);
-  assert.match(app, /<ResearchDock/);
+  assert.match(app, /<AgentLayer/);
   assert.match(app, /<ProactiveAgentPanel/);
-  assert.match(app, /<div className="conversation-title"><strong>\{mainTitle\}<\/strong><\/div>/);
-  assert.doesNotMatch(app, /researchDockOpen && mainSection === "chat"/);
-  assert.doesNotMatch(app, /disabled=\{mainSection !== "chat"\}/);
+  assert.doesNotMatch(app, /<ResearchDock/);
+  assert.doesNotMatch(app, /researchDockOpen/);
 });
 
 test("proactive settings expose mode, budget, quiet hours, and L0 sources", () => {
@@ -159,7 +155,8 @@ test("proactive settings expose mode, budget, quiet hours, and L0 sources", () =
 test("the proactive header is output-first and uses an amber status mark", () => {
   assert.doesNotMatch(proactive, /proactive-panel-name/);
   assert.match(proactive, /agent-proactive-status/);
-  assert.match(proactive, /agent-proactive-budget/);
+  assert.doesNotMatch(proactive, /agent-proactive-budget/);
+  assert.doesNotMatch(proactive, /agent-proactive-mark/);
   assert.match(proactive, /agent-proactive-bar/);
   assert.doesNotMatch(proactive, /proactive-status-dot/);
   assert.doesNotMatch(proactive, /SourceIcon/);
@@ -168,16 +165,17 @@ test("the proactive header is output-first and uses an amber status mark", () =>
   assert.doesNotMatch(css, /\.agent-proactive[^}]*#8fbf9d/);
 });
 
-test("the dock is 186px, global, and keeps the work surface a stable row", () => {
-  assert.match(css, /\.codex-main \{[\s\S]*?grid-template-rows: 44px auto minmax\(0, 1fr\)/);
-  assert.match(css, /\.main-workspace \{[^}]*grid-row: 3/);
-  assert.match(css, /\.research-dock \{[^}]*height: 186px/);
-  assert.match(css, /\.research-dock-panel \{[^}]*border-radius: 12px/);
-  assert.match(css, /\.research-dock\.split \.research-dock-panels/);
-  assert.match(css, /\.theme-paper \.research-dock/);
-  assert.match(css, /\.research-path-label/);
-  assert.match(app, /researchOpen=\{researchDockOpen\}/);
-  assert.match(css, /@media \(max-width: 980px\)/);
+test("panels float over the workspace and share one surface", () => {
+  assert.match(app, /<AgentLayer/);
+  assert.doesNotMatch(app, /<ResearchDock/);
+  assert.match(app, /researchOpen=\{researchPanelOpen\}/);
+  assert.doesNotMatch(app, /research-dock/);
+  assert.match(css, /\.agent-layer \{[^}]*position: absolute/);
+  assert.match(css, /\.agent-float-panel \{[^}]*border-radius: 14px/);
+  assert.match(css, /\.agent-proactive-head,\n\.agent-path-head \{[^}]*background: transparent/);
+  assert.match(css, /\.agent-proactive-foot,\n\.agent-proactive-compose \{[\s\S]*?background: transparent/);
+  assert.match(css, /\.agent-float-panel > \.agent-proactive-panel/);
+  assert.match(css, /\.agent-float-resize/);
 });
 
 test("proactive shows the latest output only and hides the composer until asked", () => {

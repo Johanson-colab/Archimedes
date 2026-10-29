@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ChevronUp, Clock, MessageSquare, MoreHorizontal, Send, Sparkles, X } from "lucide-react";
+import { Clock, MessageSquare, MoreHorizontal, Send, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { evidenceLabel, formatRelativeTime } from "./proactive-engine";
 import {
@@ -142,13 +142,9 @@ export default function ProactiveAgentPanel({
 
   return <div className="agent-proactive-panel dock-panel" data-paused={limited ? "true" : "false"}>
     <header className="agent-proactive-head dock-panel-head">
-      <span className="agent-proactive-mark" aria-hidden="true"><Sparkles size={12} /></span>
-      <span className="agent-proactive-status">
+      <span className="agent-proactive-status" title={t("{count} of {total} auto suggestions today", { count: controller.todayCount, total: controller.settings.dailyBudget })}>
         <i className={statusActive ? "agent-proactive-bar active" : "agent-proactive-bar"} aria-hidden="true" />
         <span>{status}</span>
-      </span>
-      <span className="agent-proactive-budget" title={t("{count} of {total} auto suggestions today", { count: controller.todayCount, total: controller.settings.dailyBudget })}>
-        {controller.todayCount}/{controller.settings.dailyBudget}
       </span>
       <div className="agent-proactive-tools" ref={menuRef}>
         <button
@@ -171,8 +167,8 @@ export default function ProactiveAgentPanel({
         >
           <MoreHorizontal size={13} />
         </button>
-        <button className="agent-proactive-icon" onClick={onCollapse} title={t("Collapse Proactive agent")} aria-label={t("Collapse Proactive agent")}>
-          <ChevronUp size={13} />
+        <button className="agent-proactive-icon" onClick={onCollapse} title={t("Close Proactive agent")} aria-label={t("Close Proactive agent")}>
+          <X size={13} />
         </button>
         {menuOpen && <div className="agent-proactive-menu" role="menu" aria-label={t("Proactive actions")}>
           <button role="menuitem" onClick={() => { setMenuOpen(false); controller.observeOnce(); }}>{t("Observe once")}</button>
