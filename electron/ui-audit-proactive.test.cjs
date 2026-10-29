@@ -192,7 +192,8 @@ test("proactive suggestions are read-only and only draft into the main chat", ()
   assert.match(app, /function draftProactiveInChat/);
   assert.match(app, /Draft added to the main composer/);
   assert.doesNotMatch(app, /runProactiveSuggestion[\s\S]{0,700}writeWorkspaceFile/);
-  assert.match(proactive, /Suggestions only · drafts go to chat/);
+  assert.match(proactive, /Ask in chat/);
+  assert.doesNotMatch(proactive, /Suggestions only/);
 });
 
 test("the research path is thread-scoped and can be pinned globally", () => {

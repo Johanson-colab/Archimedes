@@ -809,7 +809,7 @@ const translations: Record<string, string> = {
   "Observe once": "观察一次",
   "Suggestion history": "建议历史",
   "Back to suggestions": "返回建议",
-  "Watching L0 signals": "正在观察 L0 信号",
+  "Watching context": "正在观察上下文",
   "Manual review": "手动审阅",
   "Quiet hours": "静默时段",
   "Daily budget reached": "已达到每日预算",

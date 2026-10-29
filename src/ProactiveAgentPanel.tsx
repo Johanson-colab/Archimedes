@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Clock, MessageSquare, MoreHorizontal, Send, X } from "lucide-react";
+import { MessageSquare, MoreHorizontal, Send, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { evidenceLabel, formatRelativeTime } from "./proactive-engine";
 import {
@@ -79,7 +79,7 @@ export default function ProactiveAgentPanel({
         : controller.composerFocused
           ? t("Paused while typing")
           : mode === "auto"
-            ? t("Watching L0 signals")
+            ? t("Watching context")
             : mode === "manual"
               ? t("Manual review")
               : t("Off");
@@ -148,16 +148,6 @@ export default function ProactiveAgentPanel({
       </span>
       <div className="agent-proactive-tools" ref={menuRef}>
         <button
-          className={historyOpen ? "agent-proactive-icon wide active" : "agent-proactive-icon wide"}
-          onClick={openHistory}
-          title={t("History")}
-          aria-label={t("History")}
-          aria-pressed={historyOpen}
-        >
-          <Clock size={12} />
-          {sorted.length > 0 && <span>{sorted.length}</span>}
-        </button>
-        <button
           className={menuOpen ? "agent-proactive-icon active" : "agent-proactive-icon"}
           onClick={() => setMenuOpen((open) => !open)}
           title={t("More actions")}
@@ -208,7 +198,6 @@ export default function ProactiveAgentPanel({
         </button>}
         <div className="agent-proactive-meta">
           <b className={`agent-proactive-source source-${selected.source}`}>{t(PROACTIVE_SOURCE_LABELS[selected.source])}</b>
-          <span>·</span>
           <time>{formatRelativeTime(selected.createdAt)}</time>
           {stateLabel && <span className={`agent-proactive-state ${selected.status}`}>{stateLabel}</span>}
         </div>
@@ -260,10 +249,10 @@ export default function ProactiveAgentPanel({
       <button type="button" className="agent-proactive-compose-close" onClick={() => { setComposerOpen(false); setDraft(""); }} title={t("Close")} aria-label={t("Close")}><X size={11} /></button>
     </form> : <div className="agent-proactive-foot">
       <button className="agent-proactive-reply" onClick={() => setComposerOpen(true)}>
-        <MessageSquare size={11} />
-        {t("Reply")}
+        <MessageSquare size={12} />
+        {t("Ask in chat")}
       </button>
-      <span className="agent-proactive-foot-hint">{t("Suggestions only · drafts go to chat")}</span>
     </div>)}
   </div>;
 }
+
