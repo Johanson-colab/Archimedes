@@ -6137,25 +6137,6 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 
 .settings-appearance-group .settings-row { min-height: 58px; padding-block: 11px; }
 
-/* Appearance live preview: a miniature shell that consumes the same tokens. */
-.appearance-preview-section { padding-top: 14px; }
-.appearance-preview { display: grid; height: 176px; grid-template-columns: 104px minmax(0, 1fr); overflow: hidden; background: var(--surface-ground); border: 1px solid var(--border-default); border-radius: calc(var(--radius-control) + 5px); }
-.appearance-preview-rail { display: flex; flex-direction: column; gap: calc(var(--density-row-pad) / 5); padding: calc(var(--density-row-pad) / 1.5) calc(var(--density-row-pad) / 2); background: var(--surface-sidebar); border-right: 1px solid var(--border-soft); }
-.appearance-preview-mark { display: grid; width: 18px; height: 18px; margin-bottom: calc(var(--density-row-pad) / 3); place-items: center; color: var(--button-primary-ink); background: var(--button-primary-bg); border: var(--button-primary-border-width) solid var(--button-primary-border); border-radius: calc(var(--radius-control) - 2px); font-size: 9px; font-weight: 700; }
-.appearance-preview-nav { display: flex; height: calc(var(--density-nav-height) * .62); align-items: center; padding: 0 5px; overflow: hidden; color: var(--text-muted); border-radius: calc(var(--radius-control) - 2px); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.appearance-preview-nav.active { color: var(--text-primary); background: var(--selected); }
-.appearance-preview-main { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: calc(var(--density-row-pad) / 1.3) calc(var(--density-row-pad) / 1.1); background: var(--surface-ground); }
-.appearance-preview-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.appearance-preview-kicker, .appearance-preview-dialog-kicker { color: var(--text-muted); font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
-.appearance-preview-chip { padding: 2px 6px; color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent); border-radius: 999px; font-size: 7px; }
-.appearance-preview-dialog { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; padding: calc(var(--density-row-pad) / 2.2) calc(var(--density-row-pad) / 2); background: var(--dialog-bg, var(--surface-panel)); border: 1px solid var(--dialog-border); border-radius: var(--dialog-radius-sm); box-shadow: var(--dialog-shadow-sm); backdrop-filter: var(--dialog-backdrop-filter, none); }
-.appearance-preview-dialog strong { color: var(--text-primary); font-family: Georgia, "Times New Roman", serif; font-size: 12px; font-weight: 500; letter-spacing: -.02em; }
-.appearance-preview-dialog p { margin: 0; color: var(--text-muted); font-size: 8px; line-height: 1.4; }
-.appearance-preview-actions { display: flex; gap: 5px; margin-top: 4px; }
-.appearance-preview-button { display: inline-flex; height: calc(var(--button-height) * .72); align-items: center; padding: 0 8px; color: var(--button-secondary-ink); background: var(--button-secondary-bg); border: var(--button-secondary-border-width) solid var(--button-secondary-border); border-radius: var(--button-secondary-radius); font-size: 8px; }
-.appearance-preview-button.primary { color: var(--button-primary-ink); background: var(--button-primary-bg); border: var(--button-primary-border-width) solid var(--button-primary-border); border-radius: var(--button-radius); }
-.appearance-preview-section { position: sticky; top: 0; z-index: 3; background: var(--surface-ground); padding-bottom: 10px; }
-
 /* Appearance contrast guard and theme packs. */
 .settings-contrast-warning { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 9px 20px; color: var(--state-warning); background: color-mix(in oklab, var(--state-warning) 10%, transparent); border-block: 1px solid color-mix(in oklab, var(--state-warning) 24%, transparent); font-size: 10px; }
 .settings-contrast-warning strong { color: var(--state-warning); font-size: 10px; font-weight: 650; }

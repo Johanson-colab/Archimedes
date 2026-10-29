@@ -56,20 +56,17 @@ test("accent and surface can be scoped to reader, writing, and agent", () => {
   assert.match(agent, /data-surface="agent"/);
   assert.match(settings, /t\("Apply to"\)/);
   assert.match(settings, /setScope\(id\)/);
-  assert.match(settings, /data-surface=\{scope === "global" \? undefined : scope\}/);
   assert.match(settings, /accentResetDisabled/);
   assert.match(settings, /clearScope/);
   assert.match(appearance, /surfaceCss/);
   assert.match(appearance, /\[data-surface="\$\{scope\}"\]/);
 });
 
-test("the appearance editor includes a live preview that uses the same tokens", () => {
-  assert.match(settings, /appearance-preview/);
-  assert.match(settings, /className="appearance-preview-rail"/);
-  assert.match(settings, /className="appearance-preview-button primary"/);
-  assert.match(css, /\.appearance-preview \{[^}]*background: var\(--surface-ground\)/);
-  assert.match(css, /\.appearance-preview-section \{[^}]*position: sticky/);
-  assert.match(css, /\.appearance-preview-button\.primary \{[^}]*background: var\(--button-primary-bg\)/);
+test("the appearance editor has no live preview section", () => {
+  assert.doesNotMatch(settings, /appearance-preview/);
+  assert.doesNotMatch(settings, /Live preview/);
+  assert.doesNotMatch(css, /\.appearance-preview/);
+  assert.doesNotMatch(i18n, /"Live preview"/);
 });
 
 test("the Style section maps button, dialog, shape, and shadow presets", () => {
@@ -81,7 +78,6 @@ test("the Style section maps button, dialog, shape, and shadow presets", () => {
   assert.match(settings, /updateStyles\(\{ dialog: id \}\)/);
   assert.match(settings, /updateStyles\(\{ shape: id \}\)/);
   assert.match(settings, /updateStyles\(\{ shadow: id \}\)/);
-  assert.match(settings, /appearance-preview-dialog/);
   assert.match(appearance, /export function styleTokens/);
   assert.match(appearance, /export type AppearanceStyles/);
 });
@@ -119,18 +115,11 @@ test("the new appearance copy is translated", () => {
     "Accent, surface, density, and radius apply to both Charcoal and Paper.",
     "Reset custom theme",
     "Reset",
-    "Live preview",
-    "Ready",
-    "A quieter research surface",
-    "Accent, surface, density, and radius update here immediately.",
-    "Open library",
-    "Uses the current accent, surface, density, and radius. Changes apply live.",
     "Apply to",
     "Global",
     "Agent",
     "Accent and surface can be scoped; density and radius stay global.",
     "Reset this surface",
-    "Previewing {scope}. Accent and surface apply only to this surface.",
     "Contrast warning",
     "Style",
     "Button style",
@@ -155,8 +144,6 @@ test("the new appearance copy is translated", () => {
     "Subtle",
     "Deep",
     "Dialog",
-    "Preview dialog",
-    "Buttons and dialogs follow the selected style.",
     "Apply",
     "Theme pack",
     "Share this appearance",

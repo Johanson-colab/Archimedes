@@ -179,8 +179,9 @@ use `.theme-paper` because they predate the token pass.
 
 Settings › Appearance exposes: a scope switcher (Global / Reader / Writing /
 Agent), accent color, surface color, surface depth, density, control radius,
-per-field reset, and reset all. A sticky live preview follows the selected
-scope. Defaults (no overrides) produce the same pixels as the token refactor.
+per-field reset, and reset all. Changes apply to the app immediately; there is
+no separate preview pane. Defaults (no overrides) produce the same pixels as
+the token refactor.
 
 ### Theme packs and contrast
 
@@ -213,8 +214,8 @@ The first component layer covers buttons and the main dialogs:
 - **Style presets**: `styleTokens()` maps Solid / Soft / Outline / Ghost
   buttons, Elevated / Flat / Outlined / Glass dialogs, Sharp / Soft / Rounded
   shape, and Default / None / Subtle / Deep shadow to the component tokens.
-- Settings › Style exposes those four dimensions; the live preview contains a
-  mini dialog and real button tokens.
+- Settings › Style exposes those four dimensions and applies them to the app
+  chrome immediately.
 - ThemePack v2 stores `styles`, and v1 packs migrate without losing colors.
 - Glass dialogs add `--dialog-bg` and `--dialog-backdrop-filter`; the components
   use `var(--dialog-bg, …)` so the default background is untouched.
@@ -312,8 +313,8 @@ npm run build
 2. **M2 — ThemePack v1.** Done: versioned `appearance` settings, token
    application, Charcoal/Paper presets, legacy migration.
 3. **M3 — Appearance editor.** Done: accent, surface ladder, surface depth,
-   density, control radius, reset, live preview, and per-surface scope for
-   Reader / Writing / Agent.
+   density, control radius, reset, and per-surface scope for Reader / Writing
+   / Agent.
 4. **M4 — Import/export.** Done: schema v2 with v1 migration, export/import,
    validation, preview, and contrast guard. Next: community presets and
    advanced JSON.

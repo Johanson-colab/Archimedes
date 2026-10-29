@@ -136,7 +136,6 @@ export default function SettingsModal({
   const dialogStyle: DialogStyle = appearance.styles?.dialog ?? "elevated";
   const shapeStyle: ShapeStyle = appearance.styles?.shape ?? "soft";
   const shadowStyle: ShadowStyle = appearance.styles?.shadow ?? "default";
-  const scopeLabel = scope === "global" ? "Global" : scope === "reader" ? "Reader" : scope === "writing" ? "Writing" : "Agent";
   const scopeIssues = contrastIssues(appearance, theme).filter((issue) => issue.scope === scope);
   const hasOverrides = Boolean(appearance.overrides.accent) || Boolean(appearance.overrides.surface)
     || appearance.overrides.surfaceDepth !== undefined || appearance.overrides.controlRadius !== undefined
@@ -343,34 +342,6 @@ export default function SettingsModal({
                     </div>
                   </div>
                 </div>
-              </section>
-
-              <section className="settings-section appearance-preview-section">
-                <h3 className="settings-section-title">{t("Live preview")}</h3>
-                <div className="appearance-preview" aria-hidden="true" data-surface={scope === "global" ? undefined : scope}>
-                  <div className="appearance-preview-rail">
-                    <span className="appearance-preview-mark">A</span>
-                    <span className="appearance-preview-nav active">{t("Library")}</span>
-                    <span className="appearance-preview-nav">{t("Daily papers")}</span>
-                    <span className="appearance-preview-nav">{t("Paper writing")}</span>
-                  </div>
-                  <div className="appearance-preview-main">
-                    <div className="appearance-preview-top">
-                      <span className="appearance-preview-kicker">{t("Workspace")}</span>
-                      <span className="appearance-preview-chip">{t("Ready")}</span>
-                    </div>
-                    <div className="appearance-preview-dialog">
-                      <span className="appearance-preview-dialog-kicker">{t("Dialog")}</span>
-                      <strong>{t("Preview dialog")}</strong>
-                      <p>{t("Buttons and dialogs follow the selected style.")}</p>
-                      <div className="appearance-preview-actions">
-                        <span className="appearance-preview-button primary">{t("Apply")}</span>
-                        <span className="appearance-preview-button">{t("Cancel")}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <p className="settings-row-description">{scope === "global" ? t("Uses the current accent, surface, density, and radius. Changes apply live.") : t("Previewing {scope}. Accent and surface apply only to this surface.", { scope: t(scopeLabel) })}</p>
               </section>
 
               <section className="settings-section">
