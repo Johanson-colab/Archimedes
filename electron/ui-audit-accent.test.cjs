@@ -47,8 +47,8 @@ test("paper and charcoal have one readable primary accent", () => {
 });
 
 test("primary actions share accent, control height and focus tokens", () => {
-  assert.match(css, /\.primary-button \{[^}]*min-height: var\(--control-height\)/);
-  assert.match(css, /\.primary-button \{[^}]*background: var\(--accent\)/);
+  assert.match(css, /\.primary-button \{[^}]*min-height: var\(--button-height\)/);
+  assert.match(css, /\.primary-button \{[^}]*background: var\(--button-primary-bg\)/);
   assert.match(css, /button:focus-visible[^{]*\{ outline: 2px solid var\(--focus-ring\)/);
   assert.match(css, /\.primary-button:disabled[\s\S]*?opacity: \.45/);
   assert.match(css, /\.daily-topic-filter button \{[^}]*border-radius: var\(--radius-control\)/);

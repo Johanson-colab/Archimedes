@@ -190,6 +190,23 @@ scope. Defaults (no overrides) produce the same pixels as the token refactor.
   accent on panel. Warnings do not block applying, but they are visible.
 - Invalid packs are rejected before they touch localStorage.
 
+### Component style tokens (M5, Phase 1)
+
+The first component layer covers buttons and the main dialogs:
+
+- **Buttons**: `--button-height`, `--button-pad-x`, `--button-radius`,
+  `--button-font-size`, `--button-font-weight`, `--button-gap`,
+  `--button-shadow`, plus primary / secondary background, ink, border, hover
+  and radius tokens.
+- **Dialogs**: `--dialog-radius-lg/md/sm`, `--dialog-shadow-lg/md/sm`,
+  `--dialog-border`, `--dialog-border-strong`, `--dialog-backdrop`.
+- Defaults match the pre-token geometry exactly, including the 6px primary
+  button radius, 5px secondary radius, 12px settings dialog, 9px project
+  dialog, and 7px gallery dialog.
+- Phase 2 adds the Style section (Solid / Soft / Outline / Ghost buttons;
+  Elevated / Flat / Outlined / Glass dialogs), then ThemePack v2 stores those
+  choices.
+
 ## Migration status
 
 Done in this pass:
@@ -287,6 +304,8 @@ npm run build
    Reader / Writing / Agent.
 4. **M4 — Import/export.** Done: schema v1, export/import, validation,
    preview, and contrast guard. Next: community presets and advanced JSON.
+5. **M5 — Component styles.** Phase 1 done: button and dialog style tokens,
+   default 0 px diff. Next: Style controls, preview button/dialog, pack v2.
 
 The guard script and this document should be updated in the same PR as each
 milestone.
