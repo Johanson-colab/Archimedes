@@ -21,6 +21,7 @@ const workbenchSettings = require("./workbench-settings.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
+const proactiveAgent = require("./proactive-agent.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers } = require("./literature.cjs");
@@ -740,13 +741,17 @@ app.whenReady().then(() => {
     return result;
   });
 
-  ipcMain.handle("model-config:get", () => modelConfig.getPublicModelConfig());
+  ipcMain.handle("model-config:get", (_event, role) => modelConfig.getPublicModelConfig(role));
 
-  ipcMain.handle("model-config:list-models", (_event, input = {}) => modelConfig.listProviderModels(input));
+  ipcMain.handle("model-config:list-models", (_event, input = {}, role) => modelConfig.listProviderModels(input, role));
 
-  ipcMain.handle("model-config:save", (_event, input = {}) => modelConfig.saveModelConfig(input));
+  ipcMain.handle("model-config:save", (_event, input = {}, role) => modelConfig.saveModelConfig(input, role));
 
-  ipcMain.handle("model-config:test", (_event, input = {}) => modelConfig.testModelConfig(input));
+  ipcMain.handle("model-config:test", (_event, input = {}, role) => modelConfig.testModelConfig(input, role));
+
+  ipcMain.handle("proactive:reply", (_event, input = {}) => proactiveAgent.runProactiveReply(input));
+
+  ipcMain.handle("proactive:observe", (_event, input = {}) => proactiveAgent.runProactiveObservation(input));
 
   ipcMain.handle("web-search:get-config", () => webSearch.getPublicWebSearchConfig());
 
@@ -1178,7 +1183,7 @@ app.whenReady().then(() => {
     return store.deleteInternalPaperReviewThreads();
   });
 
-  ipcMain.handle("model-config:capabilities", () => getModelCapabilities(modelConfig.getActiveModelConfig()));
+  ipcMain.handle("model-config:capabilities", (_event, role) => getModelCapabilities(modelConfig.getActiveModelConfig(role)));
 
   ipcMain.handle("agent:approve-action", (event, actionId) => {
     if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");

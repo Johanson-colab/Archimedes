@@ -21,7 +21,7 @@ test("settings chrome drops the decorative marks", () => {
 });
 
 test("proactive, web, and terminal use the shared settings page language", () => {
-  assert.match(modal, /const embedded = section === "models";/);
+  assert.match(modal, /const embedded = section === "models" \|\| section === "proactive-model";/);
   for (const panel of [proactive, web, terminal]) assert.match(panel, /className="settings-sections"/);
   assert.match(proactive, /className="settings-section-title"/);
   assert.match(proactive, /className="settings-group"/);

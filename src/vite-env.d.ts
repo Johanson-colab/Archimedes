@@ -32,11 +32,11 @@ interface ResearchDeskBridge {
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
     deleteResearchThread: (id: string) => Promise<{ deleted: boolean }>;
-    getModelConfig: () => Promise<PublicModelConfig>;
-    getModelCapabilities: () => Promise<ModelCapabilities>;
-    listProviderModels: (input: ModelCatalogInput) => Promise<ModelCatalogResponse>;
-    saveModelConfig: (input: ModelConfigInput) => Promise<PublicModelConfig>;
-    testModelConfig: (input: ModelConfigInput) => Promise<ModelConnectionResult>;
+    getModelConfig: (role?: ModelRole) => Promise<PublicModelConfig>;
+    getModelCapabilities: (role?: ModelRole) => Promise<ModelCapabilities>;
+    listProviderModels: (input: ModelCatalogInput, role?: ModelRole) => Promise<ModelCatalogResponse>;
+    saveModelConfig: (input: ModelConfigInput, role?: ModelRole) => Promise<PublicModelConfig>;
+    testModelConfig: (input: ModelConfigInput, role?: ModelRole) => Promise<ModelConnectionResult>;
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: () => Promise<ResearchLibrary[]>;
@@ -71,6 +71,8 @@ interface ResearchDeskBridge {
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string }) => Promise<AgentRunResult>;
+    runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
+    runProactiveObservation: (input: { context: Record<string, unknown> }) => Promise<ProactiveObservationResult | null>;
     runPaperReview: (input: PaperReviewInput) => Promise<PaperReviewResult>;
     getPaperReview: (paperId: string, workspace?: string) => Promise<StoredPaperReview | null>;
     runPaperPresentation: (input: PaperPresentationInput) => Promise<StoredPaperPresentation>;
@@ -718,11 +720,15 @@ type ModelProviderId = "openai" | "anthropic" | "gemini" | "glm" | "minimax" | "
 type WebSearchProviderId = "brave" | "tavily" | "exa" | "firecrawl";
 interface PublicWebSearchConfig { provider: WebSearchProviderId; hasApiKey: boolean; configuredProviders: WebSearchProviderId[] }
 
+type ModelRole = "agent" | "proactive";
+
 interface ModelConfigInput {
   provider: ModelProviderId;
   baseUrl: string;
   model: string;
   apiKey?: string;
+  /** Proactive only: drop the dedicated model and inherit the main Agent's. */
+  useAgent?: boolean;
 }
 
 interface ModelCatalogInput {
@@ -741,7 +747,24 @@ interface PublicModelConfig {
   baseUrl: string;
   model: string;
   hasApiKey: boolean;
-  source: "saved" | "environment";
+  source: "saved" | "environment" | "agent";
+  role?: ModelRole;
+  inheritedFromAgent?: boolean;
+}
+
+type ProactiveObservationAction =
+  | { kind: "insert"; label: string; text: string }
+  | { kind: "copy"; label: string; text: string }
+  | { kind: "open"; label: string; target: "chat" | "library" | "daily" | "writing" | "artifacts" };
+
+interface ProactiveObservationResult {
+  shouldSuggest: true;
+  source: "search" | "selection" | "latex" | "citation" | "reader" | "repo" | "library" | "chat";
+  title: string;
+  whyNow: string;
+  evidenceIds: string[];
+  confidence: number;
+  action: ProactiveObservationAction;
 }
 
 interface ModelConnectionResult {

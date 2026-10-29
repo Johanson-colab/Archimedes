@@ -14,6 +14,7 @@ const settingsPanel = read("src", "ProactiveSettingsPanel.tsx");
 const settingsModal = read("src", "SettingsModal.tsx");
 const types = read("src", "proactive-types.ts");
 const engine = read("src", "proactive-engine.ts");
+const model = read("electron", "model-config.cjs");
 const hook = read("src", "useProactiveAgent.ts");
 const library = read("src", "LibraryView.tsx");
 const paper = read("src", "PaperWritingView.tsx");
@@ -184,16 +185,46 @@ test("proactive shows the latest output only and hides the composer until asked"
   assert.match(proactive, /composerOpen \?/);
   assert.match(proactive, /agent-proactive-foot/);
   assert.match(proactive, /agent-proactive-history/);
-  assert.match(proactive, /onDraftInChat/);
+  assert.match(proactive, /controller\.reply/);
+  assert.match(proactive, /ArrowUp/);
   assert.doesNotMatch(proactive, /proactive-inbox/);
 });
 
-test("proactive suggestions are read-only and only draft into the main chat", () => {
-  assert.match(app, /function draftProactiveInChat/);
-  assert.match(app, /Draft added to the main composer/);
+test("proactive suggestions are read-only and replies use the Proactive model", () => {
+  assert.match(hook, /runProactiveReply/);
+  assert.match(hook, /replyBusy/);
+  assert.doesNotMatch(app, /draftProactiveInChat/);
   assert.doesNotMatch(app, /runProactiveSuggestion[\s\S]{0,700}writeWorkspaceFile/);
-  assert.match(proactive, /Ask in chat/);
-  assert.doesNotMatch(proactive, /Suggestions only/);
+  assert.match(proactive, /submitReply/);
+  assert.match(proactive, /Back to suggestions/);
+  assert.match(css, /\.agent-proactive-send \{[^}]*background: transparent/);
+  assert.doesNotMatch(css, /\.agent-proactive-send \{[^}]*border-radius: 50%/);
+});
+
+test("live observation follows the local activity pulse", () => {
+  assert.match(hook, /useActivityPulse/);
+  assert.match(hook, /observationInterval/);
+  assert.match(hook, /shouldObserve/);
+  assert.match(hook, /runProactiveObservation/);
+  assert.match(hook, /recordObservation/);
+  assert.match(proactive, /agent-proactive-activity/);
+  assert.match(proactive, /controller\.activity\.score/);
+  assert.match(css, /\.agent-proactive-activity i \{/);
+  assert.match(settingsPanel, /Live observation/);
+  assert.match(settingsPanel, /liveObservationBudget/);
+  assert.match(settingsPanel, /Library radar/);
+  assert.match(hook, /citationSignalFromMessages/);
+  assert.match(hook, /archimedes-proactive-radar-day/);
+});
+
+test("Proactive has a separate model role with an inheritance escape hatch", () => {
+  assert.match(settingsModal, /proactive-model/);
+  assert.match(settingsModal, /role="proactive"/);
+  assert.match(model, /role = "agent"/);
+  assert.match(model, /useAgent/);
+  assert.match(model, /inheritedFromAgent/);
+  assert.match(settingsPanel, /Configure model/);
+  assert.match(types, /liveObservation: boolean/);
 });
 
 test("the research path is thread-scoped and can be pinned globally", () => {

@@ -4,7 +4,7 @@ import type { ProactiveSettings } from "./proactive-types";
 const MODES: Array<{ id: ProactiveSettings["mode"]; label: string; description: string }> = [
   { id: "off", label: "Off", description: "No signals, no suggestions. Nothing is collected." },
   { id: "manual", label: "Manual", description: "Only when you ask Proactive agent to look at the current context." },
-  { id: "auto", label: "Auto", description: "Watch L0 signals and queue suggestions in the top dock." },
+  { id: "auto", label: "Auto", description: "Watch L0 signals and observe the active context in seconds-level bursts." },
 ];
 
 function Row({ title, description, hint, children, stacked = false }: { title: string; description: string; hint?: string; children: React.ReactNode; stacked?: boolean }) {
@@ -27,6 +27,7 @@ export default function ProactiveSettingsPanel({
   onChange,
   onObserveOnce,
   onResetHistory,
+  onOpenModel,
   historyCount,
   canObserve,
 }: {
@@ -34,6 +35,7 @@ export default function ProactiveSettingsPanel({
   onChange: (patch: Partial<ProactiveSettings>) => void;
   onObserveOnce: () => void;
   onResetHistory: () => void;
+  onOpenModel: () => void;
   historyCount: number;
   canObserve: boolean;
 }) {
@@ -68,6 +70,16 @@ export default function ProactiveSettingsPanel({
     </section>
 
     <section className="settings-section">
+      <h3 className="settings-section-title">{t("Model")}</h3>
+      <div className="settings-group">
+        <Row title={t("Proactive model")} description={t("Replies and live observation use this model. It can inherit the main Agent model or use a cheaper one.")}>
+          <button className="secondary-button" onClick={onOpenModel}>{t("Configure model")}</button>
+        </Row>
+      </div>
+      <p className="settings-group-note">{t("The API key stays in Electron user data. Proactive never shares the main Agent's conversation unless it is part of the current context.")}</p>
+    </section>
+
+    <section className="settings-section">
       <h3 className="settings-section-title">{t("What it watches")}</h3>
       <p className="settings-group-note">{t("Only L0 signals from inside Archimedes.")}</p>
       <div className="settings-group">
@@ -83,8 +95,11 @@ export default function ProactiveSettingsPanel({
         <Row title={t("Uncited claims")} description={t("Manual review of the latest answer; never runs on its own.")} hint={t("Manual only")}>
           <Toggle checked={settings.sources.citation} label={t("Uncited claims")} onChange={(value) => setSource("citation", value)} />
         </Row>
+        <Row title={t("Library radar")} description={t("Sum up papers added to your library in the last 24 hours.")} hint={t("Once a day")}>
+          <Toggle checked={settings.sources.library} label={t("Library radar")} onChange={(value) => setSource("library", value)} />
+        </Row>
       </div>
-      <p className="settings-group-note">{t("No screenshots, window titles, keystrokes, or background model calls. Evidence stays in this workspace.")}</p>
+      <p className="settings-group-note">{t("No screenshots, window titles, or keystroke content. Activity is reduced to a local rate and level; evidence stays in this workspace.")}</p>
     </section>
 
     <section className="settings-section">
@@ -99,6 +114,20 @@ export default function ProactiveSettingsPanel({
             value={settings.dailyBudget}
             aria-label={t("Daily budget")}
             onChange={(event) => onChange({ dailyBudget: Math.min(20, Math.max(1, Number(event.target.value) || 1)) })}
+          />
+        </Row>
+        <Row title={t("Live observation")} description={t("While you are active, look at the current context every few seconds. The interval follows pointer and typing activity.")}>
+          <Toggle checked={settings.liveObservation} label={t("Live observation")} onChange={(liveObservation) => onChange({ liveObservation })} />
+        </Row>
+        <Row title={t("Live observation budget")} description={t("Model calls per day for live observation. Suggestions have their own budget above.")}>
+          <input
+            className="settings-text-input proactive-budget-input"
+            type="number"
+            min={0}
+            max={1000}
+            value={settings.liveObservationBudget}
+            aria-label={t("Live observation budget")}
+            onChange={(event) => onChange({ liveObservationBudget: Math.min(1000, Math.max(0, Number(event.target.value) || 0)) })}
           />
         </Row>
         <Row title={t("Quiet hours")} description={t("Suggestions stay queued and only light the toolbar badge.")}>
@@ -116,7 +145,7 @@ export default function ProactiveSettingsPanel({
     <section className="settings-section">
       <h3 className="settings-section-title">{t("Manual review")}</h3>
       <div className="settings-group">
-        <Row title={t("Review the latest answer")} description={t("Look for uncited claims once. Nothing runs in the background.")}>
+        <Row title={t("Review the current context")} description={t("Run one full observation now: current view, selection, recent answers, and activity. Nothing continues in the background.")}>
           <button className="secondary-button" onClick={onObserveOnce} disabled={!canObserve}>{t("Observe once")}</button>
         </Row>
         <Row title={t("Suggestion history")} description={t("{count} suggestions retained for 30 days", { count: historyCount })}>

@@ -10,6 +10,7 @@ import {
   Route,
   Save,
   Server,
+  Sparkles,
   X,
 } from "lucide-react";
 import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg";
@@ -50,8 +51,9 @@ const providers: Array<{
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [], icon: <Network size={17} /> },
 ];
 
-export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean }) {
+export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent" }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole }) {
   const { t } = useUISettings();
+  const proactiveRole = role === "proactive";
   const dialogRef = useDialogFocus<HTMLElement>(open && !embedded, onClose);
   const [provider, setProvider] = useState<ProviderId>("custom");
   const [baseUrl, setBaseUrl] = useState("");
@@ -75,7 +77,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     if (!open) return;
     setLoading(true);
     setFeedback({ kind: "idle", text: "" });
-    void bridge.getModelConfig().then((config) => {
+    void bridge.getModelConfig(role).then((config) => {
       setProvider(config.provider);
       setBaseUrl(config.baseUrl);
       setModel(config.model);
@@ -86,7 +88,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       setModelMenuOpen(false);
       setModelSearch("");
     }).catch((error) => setFeedback({ kind: "error", text: String(error) })).finally(() => setLoading(false));
-  }, [bridge, open]);
+  }, [bridge, open, role]);
 
   function chooseProvider(next: typeof providers[number]) {
     setProvider(next.id);
@@ -114,7 +116,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setCatalogLoading(true);
     setCatalogError("");
     try {
-      const result = await bridge.listProviderModels({ provider, baseUrl, apiKey });
+      const result = await bridge.listProviderModels({ provider, baseUrl, apiKey }, role);
       setCatalogModels(result.models);
     } catch (error) {
       setCatalogError(String(error).replace(/^Error invoking remote method '[^']+': Error:\s*|^Error:\s*/, ""));
@@ -136,7 +138,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setTesting(true);
     setFeedback({ kind: "idle", text: "" });
     try {
-      const result = await bridge.testModelConfig({ provider, baseUrl, model, apiKey });
+      const result = await bridge.testModelConfig({ provider, baseUrl, model, apiKey }, role);
       setFeedback({ kind: "success", text: `Connected in ${result.latencyMs} ms · ${result.resolvedModel}` });
     } catch (error) {
       setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
@@ -149,14 +151,33 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setSaving(true);
     setFeedback({ kind: "idle", text: "" });
     try {
-      const config = await bridge.saveModelConfig({ provider, baseUrl, model, apiKey });
+      const config = await bridge.saveModelConfig({ provider, baseUrl, model, apiKey }, role);
       setProvider(config.provider);
       setBaseUrl(config.baseUrl);
       setModel(config.model);
       setSavedConfig(config);
       setApiKey("");
       onSaved(config);
-      setFeedback({ kind: "success", text: `Saved ${config.model}. New Agent turns will use this model.` });
+      setFeedback({ kind: "success", text: proactiveRole ? `Saved ${config.model}. Proactive replies and live observation will use this model.` : `Saved ${config.model}. New Agent turns will use this model.` });
+    } catch (error) {
+      setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function useMainAgent() {
+    setSaving(true);
+    setFeedback({ kind: "idle", text: "" });
+    try {
+      const config = await bridge.saveModelConfig({ provider, baseUrl, model, apiKey, useAgent: true }, role);
+      setProvider(config.provider);
+      setBaseUrl(config.baseUrl);
+      setModel(config.model);
+      setSavedConfig(config);
+      setApiKey("");
+      onSaved(config);
+      setFeedback({ kind: "success", text: "Proactive agent will inherit the main Agent's model." });
     } catch (error) {
       setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
     } finally {
@@ -167,7 +188,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   if (!open) return null;
   const content = <>
       {!embedded && <header className="model-settings-header">
-        <div><span>Agent runtime</span><h2>Model providers</h2><p>Choose the model Archimedes uses for new research turns.</p></div>
+        <div><span>{proactiveRole ? "Proactive runtime" : "Agent runtime"}</span><h2>{proactiveRole ? "Proactive model" : "Model providers"}</h2><p>{proactiveRole ? "Choose the model Proactive agent uses for replies and live observation." : "Choose the model Archimedes uses for new research turns."}</p></div>
         <button className="quiet-icon-button" onClick={onClose} title="Close model settings"><X size={17} /></button>
       </header>}
 
@@ -182,6 +203,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
 
         <div className="provider-config">
           {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />{t("Loading configuration")}</div> : <>
+            {proactiveRole && savedConfig?.inheritedFromAgent && <div className="model-inherited-note"><Sparkles size={13} /><span>{t("Currently inheriting the main Agent model. Save below to give Proactive agent its own model.")}</span></div>}
             <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>
             <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
             <label><span><KeyRound size={14} />{t("API key")}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} /></label>
@@ -204,7 +226,10 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       </div>
 
       <footer className="model-settings-footer">
-        <button className="secondary-button" onClick={() => void testConnection()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{testing ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t("Test connection")}</button>
+        <div className="model-settings-footer-left">
+          <button className="secondary-button" onClick={() => void testConnection()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{testing ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t("Test connection")}</button>
+          {proactiveRole && <button className="secondary-button" onClick={() => void useMainAgent()} disabled={loading || testing || saving || savedConfig?.inheritedFromAgent}>{t("Use main Agent model")}</button>}
+        </div>
         <div>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Cancel")}</button>}<button className="primary-button" onClick={() => void save()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{saving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{t("Save model")}</button></div>
       </footer>
     </>;

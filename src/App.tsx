@@ -936,9 +936,12 @@ function App() {
   const pathThreadInactive = Boolean(pinnedPathThreadId && !pathThreadIsActive);
   const proactive = useProactiveAgent({
     messages,
+    thread: activeThread ? { id: activeThread.id, title: activeThread.title, status: activeThread.status } : null,
     threadId: activeThreadId,
     projectId: activeProjectId,
     workspace: executionWorkspace,
+    section: mainSection,
+    bridge: desktopBridge,
     onRun: runProactiveSuggestion,
     onNotice: (text) => setProactiveNotice(t(text)),
   });
@@ -2076,14 +2079,6 @@ function App() {
     setProactiveNotice(t("Draft added to the composer. Nothing runs until you send it."));
   }
 
-  function draftProactiveInChat(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setMainSection("chat");
-    setComposerRequest({ id: `proactive-ask-${Date.now()}`, text: trimmed });
-    setProactiveNotice(t("Draft added to the main composer. Nothing runs until you send it."));
-  }
-
   function togglePathPin() {
     if (pinnedPathThreadId) {
       setPinnedPathThreadId(null);
@@ -2318,7 +2313,6 @@ function App() {
             controller={proactive}
             onOpenSettings={() => { setSettingsSection("proactive"); setSettingsOpen(true); }}
             onCollapse={() => proactive.setOpen(false)}
-            onDraftInChat={draftProactiveInChat}
           />}
           research={<ResearchPathPanel
             stages={researchStages}
