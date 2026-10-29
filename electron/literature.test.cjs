@@ -46,6 +46,18 @@ test("maps focused research topics and discards retired filters", () => {
   assert.equal(normalizeDailyOptions({ topic: "multi_agent" }).topic, "all");
 });
 
+test("accepts an unbounded daily discovery range", () => {
+  assert.equal(normalizeDailyOptions({ range: "all" }).range, "all");
+  assert.equal(normalizeDailyOptions({ range: "90d" }).range, "90d");
+  assert.equal(normalizeDailyOptions({ range: "5y" }).range, "7d");
+});
+
+test("maps the added daily topics to their categories", () => {
+  assert.deepEqual(normalizeDailyOptions({ topic: "efficient_inference" }).categories, ["cs.LG", "cs.AI", "cs.CL", "cs.PF"]);
+  assert.deepEqual(normalizeDailyOptions({ topic: "generative_models" }).categories, ["cs.LG", "cs.CV", "cs.AI"]);
+  assert.deepEqual(normalizeDailyOptions({ topic: "vision_3d" }).categories, ["cs.CV", "cs.GR"]);
+});
+
 test("deep-search retrieval combines Semantic Scholar and OpenAlex", async () => {
   const requested = [];
   const result = await searchAcademicPaperSources("agent evaluation", 8, async (url) => {

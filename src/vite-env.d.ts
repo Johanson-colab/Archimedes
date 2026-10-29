@@ -542,8 +542,8 @@ interface ConferenceSearchResponse {
 }
 
 type DailyDiscoveryMode = "latest" | "trending";
-type DailyDiscoveryRange = "7d" | "30d" | "90d";
-type DailyDiscoveryTopic = "all" | "ai4ai_rsi" | "gui_compute_use" | "coding_agents" | "reinforcement_learning" | "on_policy_distillation" | "robotics_vla" | "world_models" | "reasoning_test_time" | "interpretability" | "rag" | "multimodal" | "safety" | "science";
+type DailyDiscoveryRange = "7d" | "30d" | "90d" | "all";
+type DailyDiscoveryTopic = "all" | "ai4ai_rsi" | "gui_compute_use" | "coding_agents" | "reinforcement_learning" | "on_policy_distillation" | "robotics_vla" | "world_models" | "reasoning_test_time" | "interpretability" | "rag" | "multimodal" | "safety" | "science" | "efficient_inference" | "generative_models" | "vision_3d";
 
 interface DailyDiscoveryOptions {
   mode?: DailyDiscoveryMode;

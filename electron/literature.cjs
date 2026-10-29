@@ -8,8 +8,8 @@ const HF_DAILY_PAPERS_URLS = [
   "https://huggingface.co/api/daily_papers",
 ];
 const DEFAULT_DAILY_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"];
-const DAILY_CATEGORIES = new Set([...DEFAULT_DAILY_CATEGORIES, "cs.CV", "cs.RO", "cs.SE", "cs.IR", "cs.HC", "cs.MA", "cs.NE", "cs.CY", "stat.ML"]);
-const DAILY_RANGES = new Set(["7d", "30d", "90d"]);
+const DAILY_CATEGORIES = new Set([...DEFAULT_DAILY_CATEGORIES, "cs.CV", "cs.RO", "cs.SE", "cs.IR", "cs.HC", "cs.MA", "cs.NE", "cs.CY", "cs.PF", "cs.GR", "stat.ML"]);
+const DAILY_RANGES = new Set(["7d", "30d", "90d", "all"]);
 const DAILY_TOPICS = {
   all: { categories: DEFAULT_DAILY_CATEGORIES, terms: [] },
   ai4ai_rsi: { categories: ["cs.AI", "cs.LG", "cs.SE"], terms: ["AI4AI", "AI for AI", "recursive self-improvement", "self-improving agent", "self-evolving agent", "automated AI research"] },
@@ -25,6 +25,9 @@ const DAILY_TOPICS = {
   multimodal: { categories: ["cs.CV", "cs.CL", "cs.AI"], terms: ["multimodal", "vision-language", "VLM"] },
   safety: { categories: ["cs.AI", "cs.LG", "cs.CY"], terms: ["safety", "alignment", "red teaming", "jailbreak"] },
   science: { categories: ["cs.AI", "cs.LG", "stat.ML"], terms: ["AI for science", "scientific discovery", "scientific research"] },
+  efficient_inference: { categories: ["cs.LG", "cs.AI", "cs.CL", "cs.PF"], terms: ["efficient inference", "inference efficiency", "inference latency", "KV cache", "speculative decoding", "quantization", "model compression", "pruning"] },
+  generative_models: { categories: ["cs.LG", "cs.CV", "cs.AI"], terms: ["generative model", "diffusion model", "flow matching", "variational autoencoder", "image generation", "video generation", "text-to-image"] },
+  vision_3d: { categories: ["cs.CV", "cs.GR"], terms: ["3D reconstruction", "NeRF", "Gaussian splatting", "point cloud", "novel view synthesis", "depth estimation", "3D generation", "scene reconstruction"] },
 };
 const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
@@ -137,6 +140,8 @@ function normalizeDailyOptions(input = {}) {
 }
 
 function rangeStart(range) {
+  // "all" means no lower bound: search the whole archive instead of a window.
+  if (range === "all") return new Date(0);
   const days = Number(range.slice(0, -1));
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
@@ -167,7 +172,9 @@ function buildTopicQuery(topic) {
 
 async function discoverArxivPapers(options) {
   const categoryQuery = options.categories.map((category) => `cat:${category}`).join(" OR ");
-  const submittedRange = `submittedDate:[${formatArxivDate(rangeStart(options.range))} TO ${formatArxivDate(new Date())}]`;
+  const submittedRange = options.range === "all"
+    ? ""
+    : `submittedDate:[${formatArxivDate(rangeStart(options.range))} TO ${formatArxivDate(new Date())}]`;
   const topicQuery = buildTopicQuery(options.topic);
   const keywordQuery = buildArxivKeywordQuery(options.query);
   const searchQuery = [`(${categoryQuery})`, submittedRange, topicQuery ? `(${topicQuery})` : "", keywordQuery ? `(${keywordQuery})` : ""].filter(Boolean).join(" AND ");

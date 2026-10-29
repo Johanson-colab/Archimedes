@@ -130,6 +130,16 @@ const DAILY_TOPICS: Array<{ id: DailyDiscoveryTopic; label: string; description:
   { id: "multimodal", label: "Multimodal", description: "Vision-language and multimodal models" },
   { id: "safety", label: "AI Safety", description: "Alignment, robustness, and red teaming" },
   { id: "science", label: "AI for Science", description: "Scientific discovery and research automation" },
+  { id: "efficient_inference", label: "Efficient Inference", description: "Serving, quantization, and inference-time efficiency" },
+  { id: "generative_models", label: "Generative Models", description: "Diffusion, flow, and generative modelling" },
+  { id: "vision_3d", label: "Vision & 3D", description: "3D reconstruction, Gaussian splatting, and geometry" },
+];
+
+const DAILY_RANGES: Array<{ id: DailyDiscoveryRange; label: string }> = [
+  { id: "7d", label: "7 days" },
+  { id: "30d", label: "30 days" },
+  { id: "90d", label: "90 days" },
+  { id: "all", label: "All" },
 ];
 
 function publicPaperRecordUrl(paper: Pick<LibraryPaper, "url" | "conference">) {
@@ -2474,7 +2484,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
         <button className={mode === "latest" && !searchActive ? "active" : ""} role="tab" aria-selected={mode === "latest" && !searchActive} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Newest arXiv submissions"} onClick={() => setMode("latest")}><Clock3 size={14} />Latest</button>
         <button className={mode === "trending" && !searchActive ? "active" : ""} role="tab" aria-selected={mode === "trending" && !searchActive} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Trending community papers"} onClick={() => setMode("trending")}><Flame size={14} />Trending</button>
       </div>
-      <div className="daily-range-control" aria-label="Publication range">{(["7d", "30d", "90d"] as DailyDiscoveryRange[]).map((item) => <button key={item} disabled={mode === "conference" || (searchActive && searchKind === "deep")} className={range === item && mode !== "conference" && !(searchActive && searchKind === "deep") ? "active" : ""} title={searchActive && searchKind === "deep" ? "Deep search uses the time range inferred from your request" : ""} onClick={() => setRange(item)}>{item === "7d" ? "7 days" : item === "30d" ? "30 days" : "90 days"}</button>)}</div>
+      <div className="daily-range-control" aria-label="Publication range">{DAILY_RANGES.map((item) => <button key={item.id} disabled={mode === "conference" || (searchActive && searchKind === "deep")} className={range === item.id && mode !== "conference" && !(searchActive && searchKind === "deep") ? "active" : ""} title={searchActive && searchKind === "deep" ? "Deep search uses the time range inferred from your request" : item.id === "all" ? "Search the whole archive, not just the last 90 days" : ""} onClick={() => setRange(item.id)}>{item.label}</button>)}</div>
       </div>
       <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} disabled={searchActive} title={searchActive ? "Clear search before switching discovery modes" : "Search official conference catalogs"} onClick={() => setMode("conference")}><GraduationCap size={16} />Top conference search</button>
       {mode !== "conference" && !searchActive && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
