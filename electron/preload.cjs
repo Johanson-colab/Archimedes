@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   runAgent: (input) => ipcRenderer.invoke("agent:run", input),
   runProactiveReply: (input) => ipcRenderer.invoke("proactive:reply", input),
   runProactiveObservation: (input) => ipcRenderer.invoke("proactive:observe", input),
+  captureProactiveScreenshot: () => ipcRenderer.invoke("proactive:screenshot"),
   runPaperReview: (input) => ipcRenderer.invoke("paper-review:run", input),
   getPaperReview: (paperId, workspace) => ipcRenderer.invoke("paper-review:get", { paperId, workspace }),
   runPaperPresentation: (input) => ipcRenderer.invoke("paper-presentation:run", input),

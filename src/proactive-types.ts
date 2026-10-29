@@ -122,6 +122,8 @@ export type ProactiveSettings = {
   liveObservation: boolean;
   /** Cap live model calls per day so active typing cannot run unbounded. */
   liveObservationBudget: number;
+  /** L2: capture only Archimedes' own window for vision-capable observation. */
+  appCapture: boolean;
   quietHours: {
     enabled: boolean;
     start: string;
@@ -154,6 +156,7 @@ export const DEFAULT_PROACTIVE_SETTINGS: ProactiveSettings = {
   dailyBudget: 8,
   liveObservation: true,
   liveObservationBudget: 120,
+  appCapture: false,
   quietHours: { enabled: false, start: "22:00", end: "08:00" },
   sources: { search: true, selection: true, latex: true, citation: true, library: true },
 };
@@ -183,6 +186,7 @@ export type ProactiveContextSnapshot = {
   };
   selection?: string;
   focused?: string;
+  screenshot?: { capturedAt: string; width: number; height: number };
   messages: Array<{ id: string; role: string; text: string }>;
   suggestions: Array<{ id: string; source: ProactiveSource; title: string; status: ProactiveStatus }>;
   evidence: ProactiveContextEvidence[];

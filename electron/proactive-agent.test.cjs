@@ -1,7 +1,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { buildObservationMessages, buildReplyMessages, normalizeObservation, parseJson, runProactiveObservation, runProactiveReply } = require("./proactive-agent.cjs");
+const { buildObservationMessages, buildReplyMessages, captureAppWindow, normalizeObservation, normalizeScreenshot, parseJson, runProactiveObservation, runProactiveReply } = require("./proactive-agent.cjs");
+const { toAnthropicRequest } = require("./agent/anthropic.cjs");
 
 const context = {
   section: "chat",
@@ -56,6 +57,43 @@ test("prompts keep tools off and require evidence", () => {
   assert.match(reply[0].content, /cannot open, edit, run, or save/);
 });
 
+test("builds a vision observation message and validates screenshots", () => {
+  const screenshot = { dataUrl: "data:image/jpeg;base64,abc123", width: 1280, height: 800 };
+  const messages = buildObservationMessages(context, screenshot);
+  assert.ok(Array.isArray(messages[1].content));
+  assert.equal(messages[1].content[1].type, "image_url");
+  assert.equal(messages[1].content[1].image_url.url, screenshot.dataUrl);
+  assert.match(messages[0].content, /only Archimedes' own window/);
+  const anthropic = toAnthropicRequest({ model: "claude-test" }, messages, { allowTools: false });
+  assert.equal(anthropic.messages[0].content[1].type, "image");
+  assert.equal(anthropic.messages[0].content[1].source.type, "base64");
+  assert.equal(normalizeScreenshot(screenshot).width, 1280);
+  assert.throws(() => normalizeScreenshot({ dataUrl: "data:text/plain;base64,abc" }), /base64 PNG/);
+  assert.throws(() => normalizeScreenshot({ dataUrl: `data:image/jpeg;base64,${"a".repeat(4_000_001)}` }), /too large/);
+});
+
+test("captures only the visible app window and downsizes it in memory", async () => {
+  const makeImage = (width, height) => ({
+    getSize: () => ({ width, height }),
+    isEmpty: () => false,
+    resize: ({ width: nextWidth }) => makeImage(nextWidth, Math.round((height * nextWidth) / width)),
+    toJPEG: () => Buffer.from("x".repeat(2_000)),
+  });
+  const visible = {
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    isVisible: () => true,
+    webContents: { capturePage: async () => makeImage(1800, 1100) },
+  };
+  const shot = await captureAppWindow(visible);
+  assert.match(shot.dataUrl, /^data:image\/jpeg;base64,/);
+  assert.equal(shot.width, 1280);
+  assert.equal(shot.height, 782);
+  assert.equal(await captureAppWindow({ ...visible, isMinimized: () => true }), null);
+  assert.equal(await captureAppWindow({ ...visible, isVisible: () => false }), null);
+  assert.equal(await captureAppWindow(null), null);
+});
+
 test("runs both model roles through the injected completer", async () => {
   const calls = [];
   const complete = async (config, messages, options) => {
@@ -72,4 +110,17 @@ test("runs both model roles through the injected completer", async () => {
   const reply = await runProactiveReply({ prompt: "Why?", context }, { complete: replyComplete, config });
   assert.equal(reply.text, "Because the claim has no source.");
   assert.equal(reply.model, "deepseek-chat");
+
+  let visionContent = null;
+  const visionComplete = async (_config, messages) => {
+    visionContent = messages[1].content;
+    return { content: '{"shouldSuggest":true,"source":"chat","title":"Cite the 3x claim","whyNow":"The answer states a result without a source.","evidenceIds":["e1"],"confidence":0.7,"action":{"kind":"insert","label":"Draft citation","text":"Find a source."}}' };
+  };
+  const vision = await runProactiveObservation({
+    context,
+    screenshot: { dataUrl: "data:image/jpeg;base64,abc123", width: 1280, height: 800 },
+  }, { complete: visionComplete, config });
+  assert.equal(vision.title, "Cite the 3x claim");
+  assert.ok(Array.isArray(visionContent));
+  assert.equal(visionContent[1].type, "image_url");
 });

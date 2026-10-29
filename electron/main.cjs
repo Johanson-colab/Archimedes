@@ -753,6 +753,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle("proactive:observe", (_event, input = {}) => proactiveAgent.runProactiveObservation(input));
 
+  ipcMain.handle("proactive:screenshot", (event) => proactiveAgent.captureAppWindow(BrowserWindow.fromWebContents(event.sender)));
+
   ipcMain.handle("web-search:get-config", () => webSearch.getPublicWebSearchConfig());
 
   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));

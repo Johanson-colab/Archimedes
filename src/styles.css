@@ -6187,6 +6187,8 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .settings-pack-ok { color: var(--state-success); }
 
 /* Proactive: activity pulse, replies, and the dedicated model boundary. */
+html[data-proactive-capture="true"] .agent-layer,
+html[data-proactive-capture="true"] .proactive-toast { visibility: hidden !important; }
 .model-inherited-note { display: flex; align-items: flex-start; gap: 7px; margin-bottom: 10px; padding: 8px 10px; color: var(--state-warning); background: color-mix(in srgb, var(--accent) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent); border-radius: 7px; font-size: 10.5px; line-height: 1.45; }
 .model-inherited-note > svg { flex: 0 0 auto; margin-top: 1px; color: var(--accent); }
 .model-settings-footer-left { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

@@ -125,6 +125,7 @@ export function useProactiveAgent({
   composerFocusedRef.current = composerFocused;
   const observingRef = useRef(false);
   const lastObservationRef = useRef(0);
+  const lastCaptureRef = useRef(0);
   const citationMessageRef = useRef<string | null>(null);
   const contextRef = useRef({ messages, thread, threadId, projectId, workspace, section });
   contextRef.current = { messages, thread, threadId, projectId, workspace, section };
@@ -327,7 +328,7 @@ export function useProactiveAgent({
     return () => window.clearInterval(timer);
   }, [checkRadar, state.settings.mode, state.settings.sources.library]);
 
-  const buildContext = useCallback((): ProactiveContextSnapshot => {
+  const buildContext = useCallback((screenshot?: { capturedAt: string; width: number; height: number }): ProactiveContextSnapshot => {
     const current = contextRef.current;
     return buildProactiveContext({
       section: current.section,
@@ -337,6 +338,7 @@ export function useProactiveAgent({
       activity: activityRef.current,
       selection: currentSelectionText(),
       focused: focusedElementLabel(),
+      screenshot,
       messages: current.messages,
       suggestions: stateRef.current.suggestions,
     });
@@ -355,8 +357,44 @@ export function useProactiveAgent({
     setLastObservationAt(now);
     setState((current) => recordObservation(current, now, origin));
     try {
-      const context = buildContext();
-      const observation = await activeBridge.runProactiveObservation({ context });
+      let screenshot: { dataUrl: string; width: number; height: number } | null = null;
+      const settings = stateRef.current.settings;
+      const wantsScreenshot = settings.appCapture
+        && modelReadyRef.current
+        && typeof document !== "undefined"
+        && (origin === "manual" || now - lastCaptureRef.current >= 8_000)
+        && typeof activeBridge.captureProactiveScreenshot === "function";
+      if (wantsScreenshot) {
+        document.documentElement.dataset.proactiveCapture = "true";
+        try {
+          // Two frames let the capture-only CSS hide the floating layer before
+          // the compositor snapshots the page. The timer is a fallback for an
+          // occluded window where requestAnimationFrame can be paused.
+          await new Promise<void>((resolve) => {
+            let settled = false;
+            const finish = () => {
+              if (settled) return;
+              settled = true;
+              resolve();
+            };
+            requestAnimationFrame(() => requestAnimationFrame(finish));
+            window.setTimeout(finish, 150);
+          });
+          screenshot = await activeBridge.captureProactiveScreenshot();
+          if (screenshot) lastCaptureRef.current = now;
+        } catch {
+          screenshot = null;
+        } finally {
+          delete document.documentElement.dataset.proactiveCapture;
+        }
+      }
+      const context = buildContext(screenshot
+        ? { capturedAt: new Date(now).toISOString(), width: screenshot.width, height: screenshot.height }
+        : undefined);
+      const observation = await activeBridge.runProactiveObservation({
+        context,
+        ...(screenshot ? { screenshot: { dataUrl: screenshot.dataUrl, width: screenshot.width, height: screenshot.height } } : {}),
+      });
       if (!observation) return null;
       const signal = signalFromObservation(observation, context, {
         threadId: contextRef.current.threadId,

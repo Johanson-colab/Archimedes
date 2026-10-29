@@ -18,6 +18,7 @@ type BuildContextInput = {
   activity: ActivitySnapshot;
   selection: string;
   focused: string;
+  screenshot?: { capturedAt: string; width: number; height: number };
   messages: Array<{ id: string; role: string; text: string }>;
   suggestions: ProactiveSuggestion[];
 };
@@ -59,6 +60,13 @@ export function buildProactiveContext(input: BuildContextInput): ProactiveContex
   if (input.focused.trim()) {
     add("Focus", { kind: "generic", label: "Focus", detail: clip(input.focused, 180) });
   }
+  if (input.screenshot) {
+    add("App screenshot", {
+      kind: "generic",
+      label: "App screenshot",
+      detail: `Archimedes window captured at ${input.screenshot.capturedAt} · ${input.screenshot.width}×${input.screenshot.height}`,
+    });
+  }
   for (const message of input.messages.slice(-4)) {
     add(message.role === "user" ? "Recent request" : "Recent answer", {
       kind: "generic",
@@ -81,6 +89,7 @@ export function buildProactiveContext(input: BuildContextInput): ProactiveContex
     },
     selection: clip(input.selection, 1_200),
     focused: clip(input.focused, 180),
+    screenshot: input.screenshot,
     messages: input.messages.slice(-4).map((message) => ({
       id: message.id,
       role: message.role,

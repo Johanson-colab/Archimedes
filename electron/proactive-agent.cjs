@@ -38,7 +38,7 @@ function buildReplyMessages(input = {}) {
   ];
 }
 
-function buildObservationMessages(context = {}) {
+function buildObservationMessages(context = {}, screenshot = null) {
   const system = [
     "You are the observer, judge, and tutor for Proactive agent, a quiet research sidekick inside Archimedes.",
     "Decide whether exactly one short suggestion is worth showing now. Silence is the default.",
@@ -51,10 +51,17 @@ function buildObservationMessages(context = {}) {
     "- Do not repeat a suggestion already listed in context.suggestions unless the new context materially changes it.",
     "- If the user is simply progressing, if evidence is weak, or if the suggestion would interrupt without value, return {\"shouldSuggest\":false}.",
     "- Write title and whyNow in the same language as the latest user message.",
+    "- If an app screenshot is attached, it shows only Archimedes' own window with the Proactive panel hidden. Use only what is visibly on screen, never infer other apps, past screens, or hidden data.",
   ].join("\n");
+  const content = screenshot
+    ? [
+        { type: "text", text: `Context:\n${JSON.stringify(context)}` },
+        { type: "image_url", image_url: { url: screenshot.dataUrl } },
+      ]
+    : `Context:\n${JSON.stringify(context)}`;
   return [
     { role: "system", content: system },
-    { role: "user", content: `Context:\n${JSON.stringify(context)}` },
+    { role: "user", content },
   ];
 }
 
@@ -115,6 +122,39 @@ async function callModel(config, messages, options = {}) {
   }
 }
 
+async function captureAppWindow(win, options = {}) {
+  if (!win || typeof win.webContents?.capturePage !== "function") return null;
+  if (win.isDestroyed?.() || win.isMinimized?.() || win.isVisible?.() === false) return null;
+  const image = await win.webContents.capturePage();
+  if (!image || image.isEmpty?.()) return null;
+  const maxWidth = Number(options.maxWidth) > 0 ? Number(options.maxWidth) : 1280;
+  const quality = Number.isFinite(Number(options.quality)) ? Number(options.quality) : 72;
+  const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : 1_500_000;
+  let resized = image.getSize().width > maxWidth ? image.resize({ width: maxWidth }) : image;
+  let jpeg = resized.toJPEG(quality);
+  if (jpeg.length > maxBytes) {
+    const narrowed = Math.max(640, Math.round(resized.getSize().width * 0.75));
+    resized = resized.resize({ width: narrowed });
+    jpeg = resized.toJPEG(quality);
+  }
+  const size = resized.getSize();
+  return {
+    dataUrl: `data:image/jpeg;base64,${jpeg.toString("base64")}`,
+    width: size.width,
+    height: size.height,
+    bytes: jpeg.length,
+  };
+}
+
+function normalizeScreenshot(input) {
+  if (!input || typeof input !== "object" || typeof input.dataUrl !== "string") return null;
+  if (!/^data:image\/(?:png|jpeg|webp);base64,/i.test(input.dataUrl)) {
+    throw new Error("The app screenshot must be a base64 PNG, JPEG, or WebP image.");
+  }
+  if (input.dataUrl.length > 4_000_000) throw new Error("The app screenshot is too large.");
+  return input;
+}
+
 async function runProactiveReply(input = {}, deps = {}) {
   const prompt = clip(input.prompt, 4_000);
   if (!prompt) throw new Error("Write a reply first.");
@@ -132,12 +172,13 @@ async function runProactiveReply(input = {}, deps = {}) {
 
 async function runProactiveObservation(input = {}, deps = {}) {
   const context = input.context && typeof input.context === "object" ? input.context : {};
+  const screenshot = normalizeScreenshot(input.screenshot);
   const config = deps.config || getActiveModelConfig("proactive");
   const completeFn = deps.complete || complete;
-  const content = await callModel(config, buildObservationMessages(context), {
+  const content = await callModel(config, buildObservationMessages(context, screenshot), {
     completeFn,
-    maxOutputTokens: 700,
-    timeoutMs: 25_000,
+    maxOutputTokens: screenshot ? 900 : 700,
+    timeoutMs: 35_000,
   });
   return normalizeObservation(parseJson(content), context);
 }
@@ -145,7 +186,9 @@ async function runProactiveObservation(input = {}, deps = {}) {
 module.exports = {
   buildObservationMessages,
   buildReplyMessages,
+  captureAppWindow,
   normalizeObservation,
+  normalizeScreenshot,
   parseJson,
   runProactiveObservation,
   runProactiveReply,

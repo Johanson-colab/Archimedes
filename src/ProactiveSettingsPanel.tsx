@@ -99,7 +99,21 @@ export default function ProactiveSettingsPanel({
           <Toggle checked={settings.sources.library} label={t("Library radar")} onChange={(value) => setSource("library", value)} />
         </Row>
       </div>
-      <p className="settings-group-note">{t("No screenshots, window titles, or keystroke content. Activity is reduced to a local rate and level; evidence stays in this workspace.")}</p>
+      <p className="settings-group-note">{t("Activity metadata stays local. Window titles and keystroke content are never read.")}</p>
+    </section>
+
+    <section className="settings-section">
+      <h3 className="settings-section-title">{t("Visual observation")}</h3>
+      <div className="settings-group">
+        <Row
+          title={t("App screenshots")}
+          description={t("Capture only Archimedes' own window while you are active. Images are sent to the Proactive model in memory and discarded after the call. Requires a vision-capable model.")}
+          hint={t("L2 · Archimedes window only")}
+        >
+          <Toggle checked={settings.appCapture} label={t("App screenshots")} onChange={(appCapture) => onChange({ appCapture })} />
+        </Row>
+      </div>
+      <p className="settings-group-note">{t("No desktop capture and no other windows. The floating Proactive panel is hidden before each capture; the image is never written to disk.")}</p>
     </section>
 
     <section className="settings-section">

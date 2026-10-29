@@ -15,6 +15,8 @@ const settingsModal = read("src", "SettingsModal.tsx");
 const types = read("src", "proactive-types.ts");
 const engine = read("src", "proactive-engine.ts");
 const model = read("electron", "model-config.cjs");
+const main = read("electron", "main.cjs");
+const proactiveAgent = read("electron", "proactive-agent.cjs");
 const hook = read("src", "useProactiveAgent.ts");
 const library = read("src", "LibraryView.tsx");
 const paper = read("src", "PaperWritingView.tsx");
@@ -149,7 +151,8 @@ test("proactive settings expose mode, budget, quiet hours, and L0 sources", () =
   assert.match(settingsPanel, /Repeated passage selection/);
   assert.match(settingsPanel, /LaTeX build failure/);
   assert.match(settingsPanel, /Uncited claims/);
-  assert.match(settingsPanel, /No screenshots/);
+  assert.match(settingsPanel, /App screenshots/);
+  assert.match(settingsPanel, /L2 · Archimedes window only/);
   assert.match(settingsPanel, /3 dismissals/);
 });
 
@@ -215,6 +218,20 @@ test("live observation follows the local activity pulse", () => {
   assert.match(settingsPanel, /Library radar/);
   assert.match(hook, /citationSignalFromMessages/);
   assert.match(hook, /archimedes-proactive-radar-day/);
+});
+
+test("L2 captures the Archimedes window only, never the desktop", () => {
+  assert.match(settingsPanel, /appCapture/);
+  assert.match(settingsPanel, /L2 · Archimedes window only/);
+  assert.match(hook, /captureProactiveScreenshot/);
+  assert.match(hook, /proactiveCapture/);
+  assert.match(hook, /lastCaptureRef/);
+  assert.match(main, /proactive:screenshot/);
+  assert.match(main, /captureAppWindow/);
+  assert.match(proactiveAgent, /capturePage/);
+  assert.match(proactiveAgent, /toJPEG/);
+  assert.doesNotMatch(main, /desktopCapturer/);
+  assert.match(css, /\[data-proactive-capture="true"\] \.agent-layer/);
 });
 
 test("Proactive has a separate model role with an inheritance escape hatch", () => {

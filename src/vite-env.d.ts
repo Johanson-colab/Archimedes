@@ -72,7 +72,8 @@ interface ResearchDeskBridge {
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string }) => Promise<AgentRunResult>;
     runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
-    runProactiveObservation: (input: { context: Record<string, unknown> }) => Promise<ProactiveObservationResult | null>;
+    runProactiveObservation: (input: { context: Record<string, unknown>; screenshot?: { dataUrl: string; width: number; height: number } }) => Promise<ProactiveObservationResult | null>;
+    captureProactiveScreenshot: () => Promise<{ dataUrl: string; width: number; height: number; bytes: number } | null>;
     runPaperReview: (input: PaperReviewInput) => Promise<PaperReviewResult>;
     getPaperReview: (paperId: string, workspace?: string) => Promise<StoredPaperReview | null>;
     runPaperPresentation: (input: PaperPresentationInput) => Promise<StoredPaperPresentation>;
