@@ -133,6 +133,7 @@ const DAILY_TOPICS: Array<{ id: DailyDiscoveryTopic; label: string; description:
   { id: "efficient_inference", label: "Efficient Inference", description: "Serving, quantization, and inference-time efficiency" },
   { id: "generative_models", label: "Generative Models", description: "Diffusion, flow, and generative modelling" },
   { id: "vision_3d", label: "Vision & 3D", description: "3D reconstruction, Gaussian splatting, and geometry" },
+  { id: "speech_audio", label: "Speech & Audio", description: "Speech recognition, synthesis, and audio models" },
 ];
 
 const DAILY_RANGES: Array<{ id: DailyDiscoveryRange; label: string }> = [
@@ -2450,6 +2451,14 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     setLoading(false);
   }
 
+  function changeQuery(value: string) {
+    setQuery(value);
+    // Emptying the box is the way back to the live feed. Without this the
+    // completed search stays submitted, so Latest / Trending and the range
+    // control stay locked until the search is cleared explicitly.
+    if (!value.trim() && submittedQuery) clearSearch();
+  }
+
   function changeSearchKind(next: "quick" | "deep") {
     if (next === searchKind) return;
     feedRequestId.current += 1;
@@ -2494,10 +2503,10 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     {mode === "conference" ? <ConferenceDiscovery bridge={bridge} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /> : <>
     <div className={searchKind === "deep" ? "daily-search-panel deep" : "daily-search-panel"}>
       <div className="daily-search-kind" role="tablist" aria-label="Paper search type"><button className={searchKind === "quick" ? "active" : ""} role="tab" aria-selected={searchKind === "quick"} onClick={() => changeSearchKind("quick")}><Search size={13} />Quick search</button><button className={searchKind === "deep" ? "active" : ""} role="tab" aria-selected={searchKind === "deep"} onClick={() => changeSearchKind("deep")}><Sparkles size={13} />Deep search</button></div>
-      <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
+      <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
         <button className="primary-button" disabled={loading || !query.trim()} onClick={() => void submitSearch()}>{loading ? <LoaderCircle className="spin" size={14} /> : searchKind === "deep" ? <Sparkles size={14} /> : <Search size={14} />}{searchKind === "deep" ? "Deep search" : "Search"}</button>
       </div>
-      {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}</span>{searchActive && <button className="daily-clear-search" onClick={clearSearch}><X size={12} />Clear search</button>}</div>}
+      {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}</span></div>}
     </div>
     {error && <div className={deepResponse ? "daily-search-warning" : "library-error"} role="alert">{error}</div>}
     {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <div className="daily-empty daily-feed-failed"><RefreshCw size={28} /><strong>Could not load the live feed</strong><span>arXiv may be responding slowly. Your library is unaffected.</span><button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button></div> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try another topic, expand the date range, or use a broader keyword.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {

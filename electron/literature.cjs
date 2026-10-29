@@ -8,7 +8,7 @@ const HF_DAILY_PAPERS_URLS = [
   "https://huggingface.co/api/daily_papers",
 ];
 const DEFAULT_DAILY_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"];
-const DAILY_CATEGORIES = new Set([...DEFAULT_DAILY_CATEGORIES, "cs.CV", "cs.RO", "cs.SE", "cs.IR", "cs.HC", "cs.MA", "cs.NE", "cs.CY", "cs.PF", "cs.GR", "stat.ML"]);
+const DAILY_CATEGORIES = new Set([...DEFAULT_DAILY_CATEGORIES, "cs.CV", "cs.RO", "cs.SE", "cs.IR", "cs.HC", "cs.MA", "cs.NE", "cs.CY", "cs.PF", "cs.GR", "cs.SD", "eess.AS", "stat.ML"]);
 const DAILY_RANGES = new Set(["7d", "30d", "90d", "all"]);
 const DAILY_TOPICS = {
   all: { categories: DEFAULT_DAILY_CATEGORIES, terms: [] },
@@ -28,6 +28,7 @@ const DAILY_TOPICS = {
   efficient_inference: { categories: ["cs.LG", "cs.AI", "cs.CL", "cs.PF"], terms: ["efficient inference", "inference efficiency", "inference latency", "KV cache", "speculative decoding", "quantization", "model compression", "pruning"] },
   generative_models: { categories: ["cs.LG", "cs.CV", "cs.AI"], terms: ["generative model", "diffusion model", "flow matching", "variational autoencoder", "image generation", "video generation", "text-to-image"] },
   vision_3d: { categories: ["cs.CV", "cs.GR"], terms: ["3D reconstruction", "NeRF", "Gaussian splatting", "point cloud", "novel view synthesis", "depth estimation", "3D generation", "scene reconstruction"] },
+  speech_audio: { categories: ["cs.SD", "eess.AS", "cs.CL", "cs.LG"], terms: ["speech recognition", "speech synthesis", "text-to-speech", "speech-to-text", "speech enhancement", "speech separation", "speaker verification", "audio generation", "audio-language model", "voice conversion"] },
 };
 const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 

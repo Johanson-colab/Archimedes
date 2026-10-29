@@ -56,6 +56,7 @@ test("maps the added daily topics to their categories", () => {
   assert.deepEqual(normalizeDailyOptions({ topic: "efficient_inference" }).categories, ["cs.LG", "cs.AI", "cs.CL", "cs.PF"]);
   assert.deepEqual(normalizeDailyOptions({ topic: "generative_models" }).categories, ["cs.LG", "cs.CV", "cs.AI"]);
   assert.deepEqual(normalizeDailyOptions({ topic: "vision_3d" }).categories, ["cs.CV", "cs.GR"]);
+  assert.deepEqual(normalizeDailyOptions({ topic: "speech_audio" }).categories, ["cs.SD", "eess.AS", "cs.CL", "cs.LG"]);
 });
 
 test("deep-search retrieval combines Semantic Scholar and OpenAlex", async () => {
