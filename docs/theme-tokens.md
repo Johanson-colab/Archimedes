@@ -139,6 +139,11 @@ Done in this pass:
 - duplicate `--night-*` and font tokens removed from `typography.css`
 - legacy `--night-*` aliases introduced
 - semantic surface / border / text / accent / state layer added
+- 142 theme-scoped colors replaced by semantic tokens with
+  `scripts/codemod-theme-colors.mjs`
+- 98 scoped palette declarations (`--review-*`, `--welcome-*`, `--reading-*`,
+  `--presentation-*`, `--sb-*`, `--work-*`, `--context-usage-color`) moved from
+  `styles.css` into component scopes in `tokens.css`
 - visual baseline: 6 screenshots (chat, Library, Appearance × charcoal, paper)
   pixel-diff **0**
 
@@ -146,9 +151,10 @@ Still to migrate:
 
 | Item | Count |
 | --- | --- |
-| Hardcoded colors in `styles.css` | 3,969 |
+| Hardcoded colors in `styles.css` | 3,745 |
 | Hardcoded colors in `typography.css` | 11 |
-| Scoped component token declarations in `styles.css` | 118 |
+| Theme token declarations in `styles.css` | 0 |
+| PDF runtime and file-icon declarations in `styles.css` | 50 |
 | `.theme-paper` / dark override lines | ~930 |
 
 The counts are a ratchet. They may go down, never up. See
@@ -180,8 +186,15 @@ The counts are a ratchet. They may go down, never up. See
 ### Migrate a hardcoded color
 
 1. Find the closest semantic token; if none fits, the color is component debt.
-2. Replace the value, then run `npm run check:theme`.
-3. Compare the surface before/after with the screenshot baseline.
+2. Prefer the codemod for theme-scoped rules:
+
+   ```bash
+   npm run codemod:theme          # dry run
+   npm run codemod:theme -- --list
+   npm run codemod:theme -- --write
+   ```
+
+3. Run `npm run check:theme`, then compare the surface before/after.
 4. Lower `scripts/theme-baseline.json` by the number of colors removed.
 
 ### Theme-specific override
@@ -201,9 +214,11 @@ npm run build
 
 ## Next milestones
 
-1. **M1b — codemod batches.** Replace the top repeated values first: `#fff`,
-   `#fffefd`, `#252422`, `#292620`, `#8f8f8f`, `#f4f4f4`, plus the scoped
-   `--review-*`, `--welcome-*`, `--sb-*` palettes.
+1. **M1b — remaining codemod batches.** The theme-scoped rules are migrated;
+   the remaining debt is mostly base rules whose value intentionally differs
+   between Charcoal and Paper (`#fff`, `#252422`, light knowledge-module
+   surfaces). Those need new semantic tokens or component tokens before they
+   can move, rather than a mechanical replacement.
 2. **M2 — ThemePack v1.** Introduce `appearance` settings, a provider that
    writes semantic tokens, and make Charcoal/Paper the first two packs.
 3. **M3 — Appearance editor.** Curated controls + live preview + reset.
@@ -211,4 +226,5 @@ npm run build
 
 The guard script and this document should be updated in the same PR as each
 milestone.
+
 

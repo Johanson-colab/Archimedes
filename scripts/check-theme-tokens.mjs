@@ -87,12 +87,13 @@ for (const [, name, value] of nightDeclarations) {
 const exact = new Set([
   "--accent", "--accent-ink", "--accent-hover", "--accent-subtle", "--accent-strong",
   "--selected", "--selected-row", "--focus-ring", "--resizer-accent",
-  "--font-ui", "--font-mono", "--ui-scale",
+  "--font-ui", "--font-mono", "--ui-scale", "--context-usage-color",
 ]);
 const prefixes = [
   "--night-", "--surface-", "--border-", "--mono-", "--rail-", "--chat-send-",
   "--code-", "--scrollbar-", "--turn-rail-", "--text-primary", "--text-secondary",
   "--text-muted", "--text-faint", "--text-on-accent",
+  "--presentation-", "--review-", "--welcome-", "--reading-", "--sb-", "--work-",
 ];
 const forbidden = (prop) => exact.has(prop) || prefixes.some((prefix) => prop.startsWith(prefix));
 

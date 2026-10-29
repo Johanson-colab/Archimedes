@@ -48,9 +48,19 @@ test("theme tokens are not re-declared outside tokens.css", () => {
     assert.doesNotMatch(source, /(^|\n)\s*--surface-[\w-]+\s*:/, `${file} still declares --surface-* values`);
     assert.doesNotMatch(source, /(^|\n)\s*--mono-[\w-]+\s*:/, `${file} still declares --mono-* values`);
     assert.doesNotMatch(source, /(^|\n)\s*--ui-scale\s*:/, `${file} still declares --ui-scale`);
+    assert.doesNotMatch(source, /(^|\n)\s*--review-[\w-]+\s*:/, `${file} still declares --review-* values`);
+    assert.doesNotMatch(source, /(^|\n)\s*--welcome-[\w-]+\s*:/, `${file} still declares --welcome-* values`);
+    assert.doesNotMatch(source, /(^|\n)\s*--sb-[\w-]+\s*:/, `${file} still declares --sb-* values`);
   }
   assert.doesNotMatch(styles, /:root[^{]*\{[^}]*--[\w-]+\s*:/);
   assert.doesNotMatch(typography, /:root[^{]*\{[^}]*--[\w-]+\s*:/);
+});
+
+test("scoped component palettes live in tokens.css", () => {
+  assert.match(tokens, /\.paper-review-workbench \{[\s\S]*?--review-ground:/);
+  assert.match(tokens, /\.conversation-layout\.has-welcome \{[\s\S]*?--welcome-ground:/);
+  assert.match(tokens, /\.codex-sidebar \{[\s\S]*?--sb-ink:/);
+  assert.match(tokens, /\.codex-sidebar \{[\s\S]*?--work-running-base:/);
 });
 
 test("font tokens live in tokens.css", () => {

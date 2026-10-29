@@ -14,7 +14,7 @@ test("charcoal terminal uses the workbench surface colour", () => {
   assert.match(terminal, /cursorAccent: "#181513"/);
   assert.doesNotMatch(terminal, /background: "#0b0d13"/);
   assert.match(css, /html:not\(\[data-theme="paper"\]\) \.smart-terminal,\s*html:not\(\[data-theme="paper"\]\) \.terminal-surfaces \{[\s\S]*?background: #181513;/);
-  assert.match(css, /html:not\(\[data-theme="paper"\]\) \.smart-terminal-tabs \{[\s\S]*?background: #141110;/);
+  assert.match(css, /html:not\(\[data-theme="paper"\]\) \.smart-terminal-tabs \{[\s\S]*?background: var\(--surface-ground\);/);
 });
 
 test("paper terminal theme is left intact", () => {

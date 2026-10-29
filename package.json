@@ -16,6 +16,7 @@
     "lint": "tsc -b --pretty false",
     "audit:theme": "node scripts/theme-audit.mjs",
     "check:theme": "node scripts/check-theme-tokens.mjs",
+    "codemod:theme": "node scripts/codemod-theme-colors.mjs",
     "test": "node --test electron/*.test.cjs electron/agent/*.test.cjs && node scripts/check-theme-tokens.mjs",
     "gallery:build": "python3 scripts/gallery-pipeline.py build",
     "gallery:pool": "python3 scripts/gallery-pipeline.py pool",
@@ -65,6 +66,7 @@
     "concurrently": "latest",
     "cross-env": "latest",
     "electron": "latest",
+    "postcss": "^8.5.26",
     "typescript": "latest",
     "wait-on": "latest"
   }

@@ -306,3 +306,185 @@ html[data-interface-font="geist"] {
 html[data-mono-font="geist-mono"] {
   --font-mono: "Geist Mono", "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
 }
+
+/* --- Component scopes migrated from styles.css ---------------------------
+   These palettes are scoped to a component or a theme, so they stay explicit
+   instead of being folded into the global surface tokens. */
+
+.paper-presentation-workbench {
+  --presentation-paper: #f8f5eb;
+  --presentation-paper-2: #ece5d7;
+  --presentation-ink: #272923;
+  --presentation-muted: #73766e;
+  --presentation-accent: #1f6652;
+  --presentation-accent-2: #bd7429;
+  --presentation-rule: #c9cabc;
+}
+
+.paper-review-workbench {
+  --review-ground: #f3efe8;
+  --review-ink: #272421;
+  --review-soft: #71695f;
+  --review-field: #d9e4dc;
+  --review-field-deep: #405c4d;
+  --review-accent: #d7653d;
+}
+
+html:not([data-theme="paper"]) .paper-review-workbench {
+  --review-ground: #111210;
+  --review-ink: #f2efe8;
+  --review-soft: #aaa59a;
+  --review-field: #233a30;
+  --review-field-deep: #182720;
+  --review-accent: #ef8b62;
+}
+
+.context-usage {
+  --context-usage-color: #4d7765;
+}
+
+.context-usage.warning {
+  --context-usage-color: #a87732;
+}
+
+.context-usage.critical {
+  --context-usage-color: #ad5148;
+}
+
+.context-usage {
+  --context-usage-color: #c6c6c6;
+}
+
+.context-usage.warning {
+  --context-usage-color: #d9d9d9;
+}
+
+.context-usage.critical {
+  --context-usage-color: #f1f1f1;
+}
+
+.theme-paper .context-usage,
+.theme-paper .context-usage.warning,
+.theme-paper .context-usage.critical {
+  --context-usage-color: #777169;
+}
+
+.conversation-layout.has-welcome {
+  --welcome-ground: #0f0f0f;
+  --welcome-paper: #171716;
+  --welcome-stone: #1d1c1a;
+  --welcome-hover: #1c1b19;
+  --welcome-ink: #f2f0ea;
+  --welcome-muted: #a8a49b;
+  --welcome-bronze: #c9a87c;
+  --welcome-line: #2a2926;
+  --welcome-send-ink: #171716;
+  --welcome-hero-scrim: linear-gradient(90deg, rgba(15, 15, 15, .94) 0%, rgba(15, 15, 15, .62) 45%, rgba(15, 15, 15, .12) 100%);
+}
+
+html[data-theme="paper"] .conversation-layout.has-welcome {
+  --welcome-ground: #fbfaf8;
+  --welcome-paper: #fffefd;
+  --welcome-stone: #f7f4ef;
+  --welcome-hover: #f1ede7;
+  --welcome-ink: #252422;
+  --welcome-muted: #6f6a63;
+  --welcome-bronze: #8a5a24;
+  --welcome-line: #e5e1db;
+  --welcome-send-ink: #fff;
+  --welcome-hero-scrim: linear-gradient(90deg, rgba(251, 250, 248, .94) 0%, rgba(251, 250, 248, .58) 48%, rgba(251, 250, 248, .06) 100%);
+}
+
+.has-welcome .context-usage {
+  --context-usage-color: var(--welcome-muted);
+}
+
+.paper-review-workbench {
+  --review-ink: #302b25;
+  --review-muted: #746a5e;
+  --review-line: #dfd3c2;
+  --review-paper: #fffdf8;
+  --review-paper-soft: #f7f0e5;
+  --review-accent: #9a4e3d;
+  --review-brass: #a67c4b;
+}
+
+.paper-review-reading {
+  --reading-accent: #95683f;
+  --reading-tint: #f3e7d6;
+}
+
+.paper-review-reading.related {
+  --reading-accent: #95683f;
+  --reading-tint: #f2e5d2;
+}
+
+.paper-review-reading.method {
+  --reading-accent: #3f6b58;
+  --reading-tint: #e4eee7;
+}
+
+.paper-review-reading.experiments {
+  --reading-accent: #9a4e3d;
+  --reading-tint: #f3e1dc;
+}
+
+.paper-review-reading.limitations {
+  --reading-accent: #676376;
+  --reading-tint: #ebe8ef;
+}
+
+html:not([data-theme="paper"]) .paper-review-workbench {
+  --review-ink: #f1ece3;
+  --review-muted: #aaa196;
+  --review-line: #39342e;
+  --review-paper: #181714;
+  --review-paper-soft: #201d18;
+  --review-accent: #d98972;
+  --review-brass: #c39b68;
+}
+
+html:not([data-theme="paper"]) .paper-review-reading.related {
+  --reading-accent: #d1a06d;
+  --reading-tint: #34281d;
+}
+
+html:not([data-theme="paper"]) .paper-review-reading.method {
+  --reading-accent: #8fc0a8;
+  --reading-tint: #1e3027;
+}
+
+html:not([data-theme="paper"]) .paper-review-reading.experiments {
+  --reading-accent: #e0937f;
+  --reading-tint: #35201b;
+}
+
+html:not([data-theme="paper"]) .paper-review-reading.limitations {
+  --reading-accent: #aaa3c0;
+  --reading-tint: #272331;
+}
+
+.codex-sidebar {
+  --sb-ink: var(--night-ink-soft);
+  --sb-muted: var(--night-muted);
+  --sb-faint: var(--night-faint);
+  --sb-line: var(--night-line-soft);
+  --sb-hover: color-mix(in srgb, var(--night-ink) 5%, transparent);
+  --sb-active: color-mix(in srgb, var(--night-ink) 9%, transparent);
+  --sb-panel: var(--night-panel-raised);
+  --work-running-base: #8d6c1f;
+  --work-running-mid: #b08a2b;
+  --work-running-bright: #e0b43b;
+  --work-review: #8f6424;
+  --work-review-ring: rgba(143, 100, 36, .55);
+  --work-failed: #a34d46;
+}
+
+html:not([data-theme="paper"]) .codex-sidebar {
+  --work-running-base: #9d7f38;
+  --work-running-mid: #c9a227;
+  --work-running-bright: #ffeeb8;
+  --work-review: #c9a266;
+  --work-review-ring: rgba(201, 162, 39, .58);
+  --work-failed: #dc7c83;
+}
