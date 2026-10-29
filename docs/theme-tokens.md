@@ -161,6 +161,10 @@ use `.theme-paper` because they predate the token pass.
   `--mono-*` palette from one base color. Light bases step darker for
   elevation; dark bases step lighter; the panel always lifts toward white.
 - `surfaceDepth` (20–80) scales those steps without changing the base color.
+- `surfaces.reader / .writing / .agent` store per-surface accent and surface
+  overrides. `surfaceCss()` emits `[data-surface="…"]` rules; the reader,
+  writing workspace, and agent layer carry the matching attribute. Density and
+  control radius stay global.
 - `densityTokens()` writes control height, settings-row padding, and navigation
   heights for compact / comfortable / spacious. Comfortable is the default.
 - `radiusTokens()` writes `--radius-control` within `0–14px`.
@@ -264,7 +268,8 @@ npm run build
 2. **M2 — ThemePack v1.** Done: versioned `appearance` settings, token
    application, Charcoal/Paper presets, legacy migration.
 3. **M3 — Appearance editor.** Done: accent, surface ladder, surface depth,
-   density, control radius, reset. Next: preview panel and per-surface scope.
+   density, control radius, reset, live preview, and per-surface scope for
+   Reader / Writing / Agent.
 4. **M4 — Import/export.** Theme pack validation, contrast guard, advanced JSON.
 
 The guard script and this document should be updated in the same PR as each

@@ -57,6 +57,42 @@ test("migrates the legacy theme key into appearance v2", async () => {
   assert.deepEqual(readAppearance(current), { version: 1, preset: "charcoal", overrides: { accent: "#336699" } });
 });
 
+test("normalizes per-surface overrides", async () => {
+  const { normalizeAppearance } = await appearanceModule;
+  const normalized = normalizeAppearance({
+    preset: "charcoal",
+    overrides: {},
+    surfaces: {
+      reader: { accent: "#AABBCC", surface: "#112233", surfaceDepth: 99, density: "compact", controlRadius: 2 },
+      writing: {},
+      bogus: { accent: "#fff000" },
+    },
+  });
+  assert.deepEqual(normalized.surfaces, {
+    reader: { accent: "#aabbcc", surface: "#112233", surfaceDepth: 80 },
+  });
+});
+
+test("surface CSS targets only the configured surface wrappers", async () => {
+  const { surfaceCss } = await appearanceModule;
+  const css = surfaceCss({
+    version: 1,
+    preset: "charcoal",
+    overrides: {},
+    surfaces: {
+      reader: { accent: "#336699", surface: "#1b2028", surfaceDepth: 60 },
+      agent: { accent: "#c9a227" },
+    },
+  }, "charcoal");
+  assert.match(css, /\[data-surface="reader"\] \{/);
+  assert.match(css, /--accent: #336699;/);
+  assert.match(css, /--surface-ground: #1b2028;/);
+  assert.match(css, /\[data-surface="agent"\] \{/);
+  assert.match(css, /--accent: #c9a227;/);
+  assert.doesNotMatch(css, /data-surface="writing"/);
+  assert.equal(surfaceCss({ version: 1, preset: "charcoal", overrides: {} }, "charcoal"), "");
+});
+
 test("writes v2 and keeps the legacy key in sync", async () => {
   const { writeAppearance } = await appearanceModule;
   const storage = memoryStorage();

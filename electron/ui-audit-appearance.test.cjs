@@ -9,6 +9,9 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const app = read("src", "App.tsx");
 const settings = read("src", "SettingsModal.tsx");
 const appearance = read("src", "appearance.ts");
+const library = read("src", "LibraryView.tsx");
+const writing = read("src", "PaperWritingView.tsx");
+const agent = read("src", "AgentLayer.tsx");
 const i18n = read("src", "i18n.tsx");
 const css = read("src", "styles.css");
 
@@ -41,10 +44,23 @@ test("Settings > Appearance exposes accent, surface, density, radius, and reset 
   assert.match(settings, /min=\{SURFACE_DEPTH_MIN\}/);
   assert.match(settings, /updateOverride\(\{ accent: event\.target\.value \}\)/);
   assert.match(settings, /updateOverride\(\{ surface: event\.target\.value \}\)/);
-  assert.match(settings, /updateOverride\(\{ density: id \}\)/);
-  assert.match(settings, /updateOverride\(\{ controlRadius: Number\(event\.target\.value\) \}\)/);
+  assert.match(settings, /updateGlobalOverride\(\{ density: id \}\)/);
+  assert.match(settings, /updateGlobalOverride\(\{ controlRadius: Number\(event\.target\.value\) \}\)/);
   assert.match(settings, /Reset custom theme/);
   assert.match(settings, /onAppearanceChange/);
+});
+
+test("accent and surface can be scoped to reader, writing, and agent", () => {
+  assert.match(library, /data-surface="reader"/);
+  assert.match(writing, /data-surface="writing"/);
+  assert.match(agent, /data-surface="agent"/);
+  assert.match(settings, /t\("Apply to"\)/);
+  assert.match(settings, /setScope\(id\)/);
+  assert.match(settings, /data-surface=\{scope === "global" \? undefined : scope\}/);
+  assert.match(settings, /accentResetDisabled/);
+  assert.match(settings, /clearScope/);
+  assert.match(appearance, /surfaceCss/);
+  assert.match(appearance, /\[data-surface="\$\{scope\}"\]/);
 });
 
 test("the appearance editor includes a live preview that uses the same tokens", () => {
@@ -82,6 +98,12 @@ test("the new appearance copy is translated", () => {
     "Accent, surface, density, and radius update here immediately.",
     "Open library",
     "Uses the current accent, surface, density, and radius. Changes apply live.",
+    "Apply to",
+    "Global",
+    "Agent",
+    "Accent and surface can be scoped; density and radius stay global.",
+    "Reset this surface",
+    "Previewing {scope}. Accent and surface apply only to this surface.",
   ]) {
     assert.match(i18n, new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":`));
   }

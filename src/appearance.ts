@@ -2,6 +2,15 @@ export type AppTheme = "charcoal" | "paper";
 export type ThemePreset = AppTheme | "system";
 
 export type Density = "compact" | "comfortable" | "spacious";
+export type SurfaceScope = "reader" | "writing" | "agent";
+export const SURFACE_SCOPES: readonly SurfaceScope[] = ["reader", "writing", "agent"];
+
+/** Accent and surface overrides that apply to one surface subtree. */
+export type SurfaceAppearance = {
+  accent?: string;
+  surface?: string;
+  surfaceDepth?: number;
+};
 
 export type AppearanceOverrides = {
   /** Optional accent override. Semantic tokens are derived from it. */
@@ -20,6 +29,7 @@ export type AppearanceSettings = {
   version: 1;
   preset: ThemePreset;
   overrides: AppearanceOverrides;
+  surfaces?: Partial<Record<SurfaceScope, SurfaceAppearance>>;
 };
 
 export const APPEARANCE_STORAGE_KEY = "archimedes-appearance-v2";
@@ -119,6 +129,32 @@ export function isDensity(value: unknown): value is Density {
   return value === "compact" || value === "comfortable" || value === "spacious";
 }
 
+export function isSurfaceScope(value: unknown): value is SurfaceScope {
+  return value === "reader" || value === "writing" || value === "agent";
+}
+
+function normalizeSurfaceAppearance(input: unknown): SurfaceAppearance | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = input as Partial<SurfaceAppearance>;
+  const normalized: SurfaceAppearance = {
+    ...(normalizeAccent(value.accent) ? { accent: normalizeAccent(value.accent) } : {}),
+    ...(normalizeAccent(value.surface) ? { surface: normalizeAccent(value.surface) } : {}),
+    ...(clampSurfaceDepth(value.surfaceDepth) !== undefined ? { surfaceDepth: clampSurfaceDepth(value.surfaceDepth) } : {}),
+  };
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
+function normalizeSurfaces(input: unknown): Partial<Record<SurfaceScope, SurfaceAppearance>> | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = input as Record<string, unknown>;
+  const surfaces: Partial<Record<SurfaceScope, SurfaceAppearance>> = {};
+  for (const scope of SURFACE_SCOPES) {
+    const normalized = normalizeSurfaceAppearance(value[scope]);
+    if (normalized) surfaces[scope] = normalized;
+  }
+  return Object.keys(surfaces).length ? surfaces : undefined;
+}
+
 /**
  * Normalizes persisted or imported appearance settings. Invalid fields fall
  * back to the preset default instead of breaking the interface.
@@ -129,6 +165,7 @@ export function normalizeAppearance(input: unknown, fallback: AppearanceSettings
   const overrides = value.overrides && typeof value.overrides === "object"
     ? value.overrides as Partial<AppearanceOverrides>
     : {};
+  const surfaces = normalizeSurfaces((value as AppearanceSettings).surfaces);
   return {
     version: 1,
     preset: isThemePreset(value.preset) ? value.preset : fallback.preset,
@@ -143,6 +180,7 @@ export function normalizeAppearance(input: unknown, fallback: AppearanceSettings
         : {}),
       ...(isDensity(overrides.density) ? { density: overrides.density } : {}),
     },
+    ...(surfaces ? { surfaces } : {}),
   };
 }
 
@@ -316,6 +354,29 @@ export type AppearanceRoot = {
   };
 };
 
+export const SURFACE_STYLE_ID = "archimedes-appearance-surfaces";
+
+/**
+ * Builds the scoped stylesheet for per-surface overrides. The rule targets the
+ * wrapper that owns the surface, so the values beat inherited root variables
+ * without touching the global appearance.
+ */
+export function surfaceCss(settings: AppearanceSettings, theme: AppTheme): string {
+  const rules: string[] = [];
+  for (const scope of SURFACE_SCOPES) {
+    const scoped = settings.surfaces?.[scope];
+    if (!scoped) continue;
+    const values = {
+      ...(scoped.accent ? accentTokens(scoped.accent, theme) : {}),
+      ...(scoped.surface ? surfaceTokens(scoped.surface, scoped.surfaceDepth, theme) : {}),
+    };
+    if (!Object.keys(values).length) continue;
+    const body = Object.entries(values).map(([property, value]) => `  ${property}: ${value};`).join("\n");
+    rules.push(`[data-surface="${scope}"] {\n${body}\n}`);
+  }
+  return rules.join("\n\n");
+}
+
 /**
  * Applies the resolved appearance to the document element. Inline variables
  * are always cleared first so resetting an override restores tokens.css.
@@ -331,5 +392,16 @@ export function applyAppearance(root: AppearanceRoot, settings: AppearanceSettin
     ...(settings.overrides.density ? densityTokens(settings.overrides.density) : {}),
   };
   for (const [property, value] of Object.entries(values)) root.style.setProperty(property, value);
+
+  const document = (root as AppearanceRoot & { ownerDocument?: Document }).ownerDocument;
+  if (document?.head) {
+    let style = document.getElementById(SURFACE_STYLE_ID) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = SURFACE_STYLE_ID;
+      document.head.appendChild(style);
+    }
+    style.textContent = surfaceCss(settings, theme);
+  }
   return values;
 }
