@@ -23,6 +23,7 @@ import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
 import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
+import { applyAppearance, readAppearance, resolveTheme, writeAppearance, type AppearanceSettings, type AppTheme, type ThemePreset } from "./appearance";
 import LibraryView from "./LibraryView";
 import ImageCreationView from "./ImageCreationView";
 import BenchmarkRadarView from "./BenchmarkRadarView";
@@ -752,9 +753,6 @@ function contextImageFromData(image: ContextImage): ContextAttachment {
   };
 }
 
-type AppTheme = "charcoal" | "paper";
-type ThemePreference = AppTheme | "system";
-
 const SIDEBAR_DEFAULT_WIDTH = 280;
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 420;
@@ -790,12 +788,6 @@ function systemTheme(): AppTheme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "charcoal" : "paper";
 }
 
-function readThemePreference(): ThemePreference {
-  if (typeof window === "undefined") return "system";
-  const stored = window.localStorage.getItem("archimedes-theme");
-  return stored === "charcoal" || stored === "paper" || stored === "system" ? stored : "system";
-}
-
 function readReasoningEffort(): ReasoningEffort {
   if (typeof window === "undefined") return "medium";
   const stored = window.localStorage.getItem("archimedes-reasoning-effort");
@@ -809,11 +801,13 @@ function readContextLength(): ContextLength {
 
 function App() {
   const { t } = useUISettings();
-  const [themePreference, setThemePreference] = useState<ThemePreference>(readThemePreference);
+  const [appearance, setAppearance] = useState<AppearanceSettings>(readAppearance);
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
-  const theme: AppTheme = themePreference === "system" ? systemAppearance : themePreference;
+  const theme = resolveTheme(appearance.preset, systemAppearance);
+  const themePreference = appearance.preset;
+  const setThemePreference = (preset: ThemePreset) => setAppearance((current) => ({ ...current, preset }));
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -968,11 +962,11 @@ function App() {
   }, [activeThreadId, chatViewNonce]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    applyAppearance(document.documentElement, appearance, theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "paper" ? "#fbfaf8" : "#20211F");
     const applyTitleBar = desktopBridge.setTitleBarTheme;
     if (applyTitleBar) void applyTitleBar(theme).catch(() => undefined);
-  }, [theme]);
+  }, [appearance, theme]);
 
   useEffect(() => {
     const platform = desktopBridge.platform ?? "web";
@@ -981,8 +975,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("archimedes-theme", themePreference);
-  }, [themePreference]);
+    writeAppearance(appearance);
+  }, [appearance]);
 
   useEffect(() => {
     const handleSettingsShortcut = (event: KeyboardEvent) => {
@@ -2467,8 +2461,11 @@ function App() {
         onSectionChange={setSettingsSection}
         onClose={() => setSettingsOpen(false)}
         themePreference={themePreference}
+        theme={theme}
         systemAppearance={systemAppearance}
         onThemePreferenceChange={setThemePreference}
+        appearance={appearance}
+        onAppearanceChange={setAppearance}
         bridge={desktopBridge}
         onModelSaved={setActiveModelConfig}
         workspace={workspace}

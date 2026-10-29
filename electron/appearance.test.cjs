@@ -1,0 +1,117 @@
+const assert = require("node:assert/strict");
+const test = require("node:test");
+
+const appearanceModule = import("../src/appearance.ts");
+
+function memoryStorage(seed = {}) {
+  const values = new Map(Object.entries(seed));
+  return {
+    getItem: (key) => (values.has(key) ? values.get(key) : null),
+    setItem: (key, value) => values.set(key, String(value)),
+    values,
+  };
+}
+
+test("defaults to system with no overrides", async () => {
+  const { defaultAppearance } = await appearanceModule;
+  assert.deepEqual(defaultAppearance(), { version: 1, preset: "system", overrides: {} });
+});
+
+test("normalizes invalid presets, accents, and radii", async () => {
+  const { normalizeAppearance } = await appearanceModule;
+  const normalized = normalizeAppearance({
+    version: 99,
+    preset: "neon",
+    overrides: { accent: "blue", controlRadius: 99 },
+  });
+  assert.equal(normalized.version, 1);
+  assert.equal(normalized.preset, "system");
+  assert.deepEqual(normalized.overrides, { controlRadius: 14 });
+
+  const clamped = normalizeAppearance({ preset: "paper", overrides: { accent: "#AABBCC", controlRadius: -3 } });
+  assert.equal(clamped.preset, "paper");
+  assert.deepEqual(clamped.overrides, { accent: "#aabbcc", controlRadius: 0 });
+});
+
+test("migrates the legacy theme key into appearance v2", async () => {
+  const { readAppearance } = await appearanceModule;
+  const legacy = memoryStorage({ "archimedes-theme": "paper" });
+  assert.deepEqual(readAppearance(legacy), { version: 1, preset: "paper", overrides: {} });
+
+  const current = memoryStorage({
+    "archimedes-appearance-v2": JSON.stringify({ version: 1, preset: "charcoal", overrides: { accent: "#336699" } }),
+    "archimedes-theme": "paper",
+  });
+  assert.deepEqual(readAppearance(current), { version: 1, preset: "charcoal", overrides: { accent: "#336699" } });
+});
+
+test("writes v2 and keeps the legacy key in sync", async () => {
+  const { writeAppearance } = await appearanceModule;
+  const storage = memoryStorage();
+  writeAppearance({ version: 1, preset: "charcoal", overrides: { accent: "#336699", controlRadius: 9 } }, storage);
+  assert.deepEqual(JSON.parse(storage.values.get("archimedes-appearance-v2")), {
+    version: 1,
+    preset: "charcoal",
+    overrides: { accent: "#336699", controlRadius: 9 },
+  });
+  assert.equal(storage.values.get("archimedes-theme"), "charcoal");
+});
+
+test("resolves system and explicit presets", async () => {
+  const { resolveTheme } = await appearanceModule;
+  assert.equal(resolveTheme("system", "paper"), "paper");
+  assert.equal(resolveTheme("system", "charcoal"), "charcoal");
+  assert.equal(resolveTheme("paper", "charcoal"), "paper");
+  assert.equal(resolveTheme("charcoal", "paper"), "charcoal");
+});
+
+test("derives readable accent tokens", async () => {
+  const { accentTokens, contrastRatio } = await appearanceModule;
+  const dark = accentTokens("#C9A227", "charcoal");
+  assert.equal(dark["--accent"], "#c9a227");
+  assert.equal(dark["--text-on-accent"], "#111111");
+  assert.equal(dark["--accent-ink"], "#111111");
+  assert.match(dark["--accent-hover"], /^color-mix\(in oklab, #c9a227 86%, #ffffff\)$/);
+  assert.ok(contrastRatio(dark["--text-on-accent"], dark["--accent"]) >= 4.5);
+
+  const light = accentTokens("#336699", "paper");
+  assert.equal(light["--text-on-accent"], "#ffffff");
+  assert.match(light["--accent-hover"], /#000000/);
+  assert.ok(contrastRatio(light["--text-on-accent"], light["--accent"]) >= 4.5);
+});
+
+test("radius tokens clamp to the supported range", async () => {
+  const { radiusTokens } = await appearanceModule;
+  assert.deepEqual(radiusTokens(9), { "--radius-control": "9px" });
+  assert.deepEqual(radiusTokens(99), { "--radius-control": "14px" });
+  assert.deepEqual(radiusTokens(-1), { "--radius-control": "0px" });
+  assert.deepEqual(radiusTokens(undefined), {});
+});
+
+test("applies and clears inline appearance variables", async () => {
+  const { applyAppearance } = await appearanceModule;
+  const properties = {};
+  const root = {
+    dataset: {},
+    style: {
+      setProperty: (property, value) => { properties[property] = value; },
+      removeProperty: (property) => { delete properties[property]; },
+    },
+  };
+
+  const applied = applyAppearance(root, {
+    version: 1,
+    preset: "charcoal",
+    overrides: { accent: "#336699", controlRadius: 10 },
+  }, "charcoal");
+  assert.equal(root.dataset.theme, "charcoal");
+  assert.equal(properties["--accent"], "#336699");
+  assert.equal(properties["--radius-control"], "10px");
+  assert.equal(properties["--text-on-accent"], "#ffffff");
+  assert.equal(applied["--accent"], "#336699");
+
+  applyAppearance(root, { version: 1, preset: "charcoal", overrides: {} }, "charcoal");
+  assert.equal(properties["--accent"], undefined);
+  assert.equal(properties["--radius-control"], undefined);
+  assert.equal(root.dataset.theme, "charcoal");
+});

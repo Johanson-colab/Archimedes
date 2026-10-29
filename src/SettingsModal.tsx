@@ -8,6 +8,7 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
+import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, normalizeAppearance, type AppearanceSettings, type AppTheme, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
@@ -17,9 +18,12 @@ type SettingsModalProps = {
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
   onClose: () => void;
-  themePreference: "charcoal" | "system" | "paper";
-  systemAppearance: "charcoal" | "paper";
-  onThemePreferenceChange: (preference: "charcoal" | "system" | "paper") => void;
+  themePreference: ThemePreset;
+  theme: AppTheme;
+  systemAppearance: AppTheme;
+  onThemePreferenceChange: (preference: ThemePreset) => void;
+  appearance: AppearanceSettings;
+  onAppearanceChange: (appearance: AppearanceSettings) => void;
   bridge: ResearchDeskBridge;
   onModelSaved: (config: PublicModelConfig) => void;
   workspace: string;
@@ -76,8 +80,11 @@ export default function SettingsModal({
   onSectionChange,
   onClose,
   themePreference,
+  theme,
   systemAppearance,
   onThemePreferenceChange,
+  appearance,
+  onAppearanceChange,
   bridge,
   onModelSaved,
   workspace,
@@ -109,6 +116,17 @@ export default function SettingsModal({
   const sizeIndex = Math.max(0, textSizeSteps.findIndex((item) => item.id === textSize));
   const activeSize = textSizeSteps[sizeIndex] ?? textSizeSteps[2];
   const activeVerbosity = verbosityOptions.find((item) => item.id === chatVerbosity) ?? verbosityOptions[1];
+  const accentValue = appearance.overrides.accent ?? ACCENT_DEFAULT[theme];
+  const radiusValue = appearance.overrides.controlRadius ?? CONTROL_RADIUS_DEFAULT;
+  const hasOverrides = Boolean(appearance.overrides.accent) || appearance.overrides.controlRadius !== undefined;
+  function updateOverride(patch: Partial<AppearanceSettings["overrides"]>) {
+    onAppearanceChange(normalizeAppearance({ ...appearance, overrides: { ...appearance.overrides, ...patch } }));
+  }
+  function clearOverride(key: "accent" | "controlRadius") {
+    const overrides = { ...appearance.overrides };
+    delete overrides[key];
+    onAppearanceChange(normalizeAppearance({ ...appearance, overrides }));
+  }
 
   const sectionHeadings: Record<SettingsSection, { title: string; description: string }> = {
     general: { title: t("General"), description: t("Preferences that apply across Archimedes.") },
@@ -242,6 +260,43 @@ export default function SettingsModal({
                         <button className={themePreference === "system" ? "active" : ""} onClick={() => onThemePreferenceChange("system")} aria-pressed={themePreference === "system"}><Monitor size={13} />{t("System")}</button>
                         <button className={themePreference === "paper" ? "active" : ""} onClick={() => onThemePreferenceChange("paper")} aria-pressed={themePreference === "paper"}><Sun size={13} />{t("Paper")}</button>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Customize")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Accent color")}</span>
+                      <p className="settings-row-description">{t("Used for primary actions, focus rings, and highlights.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <input className="settings-color-input" type="color" value={accentValue} aria-label={t("Accent color")} onChange={(event) => updateOverride({ accent: event.target.value })} />
+                      <code className="settings-value">{accentValue}</code>
+                      <button className="secondary-button" onClick={() => clearOverride("accent")} disabled={!appearance.overrides.accent}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Control radius")}</span>
+                      <p className="settings-row-description">{t("Corner radius for buttons, inputs, and controls.")}</p>
+                    </div>
+                    <div className="settings-row-control settings-appearance-control">
+                      <input className="settings-range-input" type="range" min={CONTROL_RADIUS_MIN} max={CONTROL_RADIUS_MAX} step={1} value={radiusValue} aria-label={t("Control radius")} onChange={(event) => updateOverride({ controlRadius: Number(event.target.value) })} />
+                      <code className="settings-value">{radiusValue}px</code>
+                      <button className="secondary-button" onClick={() => clearOverride("controlRadius")} disabled={appearance.overrides.controlRadius === undefined}>{t("Reset")}</button>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Custom theme")}</span>
+                      <p className="settings-row-description">{t("Accent and radius overrides apply to both Charcoal and Paper.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <button className="secondary-button" onClick={() => onAppearanceChange(normalizeAppearance({ version: 1, preset: appearance.preset }))} disabled={!hasOverrides}>{t("Reset custom theme")}</button>
                     </div>
                   </div>
                 </div>

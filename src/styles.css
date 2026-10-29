@@ -6122,3 +6122,15 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .agent-proactive-history-head {
   border: 0;
 }
+
+/* Appearance customization: accent color, control radius, and reset. */
+.settings-appearance-control { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.settings-color-input { width: 36px; height: 28px; padding: 2px; background: var(--surface-panel); border: 1px solid var(--border-default); border-radius: var(--radius-control); cursor: pointer; }
+.settings-color-input::-webkit-color-swatch-wrapper { padding: 0; }
+.settings-color-input::-webkit-color-swatch { border: 0; border-radius: calc(var(--radius-control) - 2px); }
+.settings-range-input { width: 132px; accent-color: var(--accent); }
+.settings-value { min-width: 52px; color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; }
+
+@media (max-width: 640px) {
+  .settings-appearance-control { flex-wrap: wrap; }
+}

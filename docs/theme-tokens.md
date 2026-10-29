@@ -129,6 +129,38 @@ The app sets `document.documentElement.dataset.theme` and the `.theme-paper`
 class. Semantic tokens respond to `data-theme`; a few component tokens still
 use `.theme-paper` because they predate the token pass.
 
+## Appearance settings (M2)
+
+`src/appearance.ts` owns the user layer on top of the tokens:
+
+```json
+{
+  "version": 1,
+  "preset": "charcoal",
+  "overrides": {
+    "accent": "#3f7bd9",
+    "controlRadius": 10
+  }
+}
+```
+
+- Stored under `archimedes-appearance-v2`; the legacy `archimedes-theme`
+  key is migrated on first read and kept in sync for downgrades.
+- `normalizeAppearance()` validates presets, hex colors, and the radius range,
+  so a corrupt value falls back instead of breaking the UI.
+- `applyAppearance()` clears the managed inline variables and writes only the
+  current overrides. Resetting a field therefore restores `tokens.css`.
+- `accentTokens()` derives accent, hover, focus, resizer and readable ink from
+  one color. Ink is chosen by measured contrast, and hover moves away from that
+  ink so the label keeps its contrast in both themes.
+- `radiusTokens()` writes `--radius-control` within `0–14px`.
+- `resolvedTheme = resolveTheme(preset, systemAppearance)`; overrides survive a
+  Charcoal ↔ Paper switch.
+
+Settings › Appearance exposes the first curated controls: accent color, control
+radius, per-field reset, and reset all. Defaults (no overrides) produce the same
+pixels as the token refactor.
+
 ## Migration status
 
 Done in this pass:
@@ -219,9 +251,10 @@ npm run build
    between Charcoal and Paper (`#fff`, `#252422`, light knowledge-module
    surfaces). Those need new semantic tokens or component tokens before they
    can move, rather than a mechanical replacement.
-2. **M2 — ThemePack v1.** Introduce `appearance` settings, a provider that
-   writes semantic tokens, and make Charcoal/Paper the first two packs.
-3. **M3 — Appearance editor.** Curated controls + live preview + reset.
+2. **M2 — ThemePack v1.** Done: versioned `appearance` settings, token
+   application, Charcoal/Paper presets, legacy migration.
+3. **M3 — Appearance editor.** First pass done: accent, radius, reset. Next:
+   surface ladder, density, preview panel, per-surface scope.
 4. **M4 — Import/export.** Theme pack validation, contrast guard, advanced JSON.
 
 The guard script and this document should be updated in the same PR as each
