@@ -17,6 +17,12 @@
   background: #f3efe7;
 }
 .paper-review-shell .paper-review-workbench { min-height: auto; overflow: visible; }
+.paper-review-shell.presentation-active {
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr);
+  overflow: hidden;
+}
+.paper-review-shell.presentation-active .paper-review-view-switch { position: static; }
 .paper-review-view-switch {
   position: sticky;
   z-index: 8;
@@ -142,6 +148,16 @@
   padding: 22px clamp(18px, 3vw, 42px) 48px;
   font-family: "MiSans", "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif;
 }
+.paper-review-shell.presentation-active .paper-presentation-workbench {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  flex-direction: column;
+  overflow: hidden;
+}
 .paper-presentation-toolbar {
   display: flex;
   align-items: center;
@@ -164,6 +180,12 @@
   padding: 14px;
   background: #d5d3ca;
 }
+.paper-review-shell.presentation-active .paper-presentation-stage {
+  height: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr);
+}
 .paper-presentation-stage:fullscreen { width: 100vw; height: 100vh; align-content: center; padding: 28px; background: #24211d; }
 .paper-presentation-stage:fullscreen .paper-presentation-frame { max-height: calc(100vh - 56px); }
 .paper-presentation-frame {
@@ -173,6 +195,11 @@
   aspect-ratio: 16 / 9;
   color: var(--presentation-ink);
   background: var(--presentation-paper);
+}
+.paper-review-shell.presentation-active .paper-presentation-frame {
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
 }
 .paper-presentation-live-placeholder { display: grid; width: 100%; height: 100%; place-items: center; align-content: center; gap: 10px; box-sizing: border-box; padding: 42px; color: #5f655c; background: #f8f5eb; text-align: center; }
 .paper-presentation-live-placeholder strong { max-width: 36ch; color: #302d28; font: 600 clamp(18px, 2vw, 27px)/1.2 Georgia, serif; }
@@ -233,7 +260,8 @@
 .paper-presentation-cover-object { position: relative; align-self: stretch; min-height: 0; }
 .paper-presentation-cover-object .paper-presentation-source { position: absolute; z-index: 2; inset: 17% 0 12%; background: #eee9dc; }
 
-.paper-presentation-index { display: grid; max-height: 100%; align-content: start; gap: 4px; overflow: auto; }
+.paper-presentation-index { display: grid; min-height: 0; max-height: 100%; align-content: start; gap: 4px; overflow: auto; overscroll-behavior: contain; }
+.paper-review-shell.presentation-active .paper-presentation-index { height: 100%; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }
 .paper-presentation-index button { display: grid; min-height: 48px; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; padding: 7px 8px; color: #6f675e; background: #e7e1d8; border: 0; border-left: 3px solid transparent; font-size: 10px; text-align: left; }
 .paper-presentation-index button span { color: #9a8d7c; font: 700 9px Georgia, serif; }
 .paper-presentation-index button b { font-size: 10px; }
@@ -310,6 +338,10 @@ html:not([data-theme="paper"]) .paper-review-view-switch button.active { color: 
 html:not([data-theme="paper"]) .paper-presentation-toolbar span { color: #c7beb4; }
 
 @media (max-width: 980px) {
+  .paper-review-shell.presentation-active { display: block; overflow: auto; }
+  .paper-review-shell.presentation-active .paper-presentation-workbench { display: block; height: auto; overflow: visible; }
+  .paper-review-shell.presentation-active .paper-presentation-stage { height: auto; min-height: 0; display: grid; overflow: visible; }
+  .paper-review-shell.presentation-active .paper-presentation-frame { height: auto; aspect-ratio: 16 / 9; }
   .paper-presentation-empty { width: min(900px, calc(100% - 28px)); min-height: 0; }
   .paper-presentation-showcase { min-height: 230px; grid-template-columns: 1.2fr .9fr .9fr; }
   .paper-presentation-stage { grid-template-columns: 1fr; padding-bottom: 60px; }

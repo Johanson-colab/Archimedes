@@ -199,7 +199,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     });
   }
 
-  return <div className="paper-review-shell">
+  return <div className={`paper-review-shell${view === "presentation" ? " presentation-active" : ""}`}>
     <nav className="paper-review-view-switch" aria-label="Review output">
       <button className={view === "review" ? "active" : ""} onClick={() => setView("review")}>Text review</button>
       <button className={view === "presentation" ? "active" : ""} onClick={() => setView("presentation")} disabled={!reviewAvailable}>Presentation</button>
