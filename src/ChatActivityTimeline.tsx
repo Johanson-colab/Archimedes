@@ -31,7 +31,7 @@ const KIND_ICON = {
 function kindForTool(name: string): ActivityKind {
   if (/search|find/.test(name)) return "search";
   if (/read|list|browser|open_web|inspect/.test(name)) return "read";
-  if (/write|edit|patch/.test(name)) return "edit";
+  if (/write|edit|patch|replace|create_file|file_change/.test(name)) return "edit";
   if (/command|terminal|run|bash|shell|exec/.test(name)) return "run";
   return "other";
 }

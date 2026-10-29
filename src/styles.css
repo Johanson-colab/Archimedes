@@ -1732,8 +1732,8 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .journey-map-inspector h3 { margin: 18px 0 6px; color: var(--night-muted); font-size: 11px; font-weight: 550; }
 .journey-map-meta { margin-top: 6px; color: var(--night-faint); font-size: 11px; }
 .journey-map-summary { margin: 12px 0 0; color: var(--night-ink-soft); font-size: 12px; line-height: 1.55; }
-.journey-map-episodes { display: grid; }
-.journey-map-episodes button { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; background: transparent; border-top: 1px solid var(--night-line-soft); text-align: left; }
+.journey-map-episodes { display: grid; min-width: 0; }
+.journey-map-episodes button { display: flex; width: 100%; min-width: 0; align-items: baseline; gap: 8px; padding: 7px 0; background: transparent; border-top: 1px solid var(--night-line-soft); text-align: left; }
 .journey-map-episodes button:first-child { border-top: 0; }
 .journey-map-episodes button:hover strong { color: var(--night-ink); }
 .journey-map-episodes span { flex: 0 0 34px; color: var(--night-faint); font-family: var(--font-mono); font-size: 11px; }

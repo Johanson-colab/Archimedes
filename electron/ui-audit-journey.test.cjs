@@ -108,6 +108,12 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(journey, /failedChapterCount/);
   assert.match(journey, /isOpenChapter/);
   assert.match(journey, /hasToolActivity/);
+  assert.match(journey, /planChapterMerges/);
+  assert.match(journey, /function mergeChapterBatch/);
+  assert.doesNotMatch(journey, /episodes\.slice\(-12\)/);
+  assert.match(journey, /artifactPaths/);
+  assert.match(journey, /collectTouchedPaths/);
+  assert.match(journey, /function episodeLabel/);
   assert.match(eventState, /export function eventFailedAnswer/);
   assert.match(journey, /if \(!active && mapOpen\) setMapOpen\(false\)/);
   assert.match(journey, /function openTrajectoryAt/);

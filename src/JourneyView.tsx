@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUISettings } from "./i18n";
 import { chapterChunkStatus, eventFailedAnswer, eventHasError, eventOrdinal, isUnresolvedError, latestAnswerOrdinal } from "./journeyEventState";
+import { artifactPaths, collectTouchedPaths, toolArgumentsOf, toolNameOf } from "./evidencePaths";
+import { planChapterMerges } from "./journeyMergePlan";
 import { useDialogFocus } from "./useDialogFocus";
 
 type JourneyViewProps = {
@@ -134,23 +136,6 @@ function humanize(value: string): string {
   return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : "Step";
 }
 
-function collectFiles(payload: unknown, files: Set<string>): void {
-  if (Array.isArray(payload)) {
-    for (const item of payload) collectFiles(item, files);
-    return;
-  }
-  if (!payload || typeof payload !== "object") return;
-  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
-    if ((key === "path" || key === "file" || key === "filePath") && typeof value === "string") files.add(value);
-    else if (key === "files" && Array.isArray(value)) {
-      for (const item of value) {
-        if (typeof item === "string") files.add(item);
-        else collectFiles(item, files);
-      }
-    } else collectFiles(value, files);
-  }
-}
-
 function collectSources(payload: unknown, sources: Set<string>): void {
   if (Array.isArray(payload)) {
     for (const item of payload) collectSources(item, sources);
@@ -178,9 +163,7 @@ function collectSummarySources(events: ResearchEvent[]): JourneySourceInput[] {
 }
 
 function eventFiles(event: ResearchEvent): Set<string> {
-  const files = new Set<string>();
-  collectFiles(event.payload, files);
-  return files;
+  return collectTouchedPaths(event.payload);
 }
 
 function eventSources(event: ResearchEvent): Set<string> {
@@ -270,11 +253,7 @@ function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: 
   for (const event of sorted) {
     if (event.type === "tool_call") {
       toolCalls += 1;
-      const name = toolName(event);
-      if (name === "write_file" || name === "write_artifact") {
-        const path = text(record(record(event.payload).arguments).path) || text(record(record(event.payload).arguments).file_path);
-        if (path) artifacts.add(path);
-      }
+      for (const path of artifactPaths(toolNameOf(event.payload), toolArgumentsOf(event.payload))) artifacts.add(path);
     }
     if (event.type === "source_evidence") for (const source of eventSources(event)) sources.add(source);
     for (const file of eventFiles(event)) files.add(file);
@@ -309,18 +288,20 @@ function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: 
   };
 }
 
-function mergeChapters(chapters: JourneyChapter[], first: number, last: number, t: (key: string, values?: Record<string, string | number>) => string): JourneyChapter {
-  const merged = chapters.slice(first, last);
+function mergeChapterBatch(merged: JourneyChapter[], t: (key: string, values?: Record<string, string | number>) => string): JourneyChapter {
   const episodes = merged.flatMap((chapter) => chapter.episodes);
+  const start = merged[0]?.start ?? 0;
+  const end = merged.at(-1)?.end ?? 0;
+  const steps = merged.reduce((total, chapter) => total + chapter.steps, 0);
   return {
     id: `merged:${merged[0]?.id ?? "early"}`,
-    title: "Earlier research",
-    summary: `${plural(merged.length, t("chapter"))} · ${plural(merged.reduce((total, chapter) => total + chapter.steps, 0), t("step"))}`,
+    title: `${t("Earlier research")} · #${start}–#${end}`,
+    summary: `${plural(merged.length, t("chapter"))} · ${plural(steps, t("step"))}`,
     status: merged.some((chapter) => chapter.status === "error") ? "error" : merged.some((chapter) => chapter.status === "waiting") ? "waiting" : merged.some((chapter) => chapter.status === "running") ? "running" : merged.some((chapter) => chapter.status === "open") ? "open" : "done",
-    start: merged[0]?.start ?? 0,
-    end: merged.at(-1)?.end ?? 0,
-    steps: merged.reduce((total, chapter) => total + chapter.steps, 0),
-    episodes: episodes.slice(-12),
+    start,
+    end,
+    steps,
+    episodes,
     memberIds: merged.flatMap((chapter) => [chapter.id, ...(chapter.memberIds ?? [])]),
   };
 }
@@ -394,9 +375,9 @@ function buildChapters(events: ResearchEvent[], settings: JourneySettings, pendi
     return chapter;
   });
   if (settings.autoMerge && chapters.length > settings.maxChapters) {
-    const keep = Math.max(1, settings.maxChapters - 1);
-    const merged = mergeChapters(chapters, 0, chapters.length - keep, t);
-    chapters = [merged, ...chapters.slice(chapters.length - keep)];
+    const plan = planChapterMerges(chapters.length, settings.maxChapters);
+    const merged = plan.batches.map(({ start, end }) => mergeChapterBatch(chapters.slice(start, end), t));
+    chapters = [...merged, ...chapters.slice(plan.keepFrom)];
   }
   return dedupeChapterTitles(applyMergeRanges(chapters, mergeRanges, t));
 }
@@ -426,9 +407,8 @@ function buildEvidence(events: ResearchEvent[], pendingAction: AgentAction | nul
     for (const source of eventSources(event)) sources.add(source);
     for (const file of eventFiles(event)) files.add(file);
     if (isUnresolvedError(event, latestAnswer, index)) open += 1;
-    if (event.type === "tool_call" && (toolName(event) === "write_file" || toolName(event) === "write_artifact")) {
-      const path = text(record(record(event.payload).arguments).path) || text(record(record(event.payload).arguments).file_path);
-      if (path) artifacts.add(path);
+    if (event.type === "tool_call") {
+      for (const path of artifactPaths(toolNameOf(event.payload), toolArgumentsOf(event.payload))) artifacts.add(path);
     }
   });
   return { sources: sources.size, files: files.size, artifacts: artifacts.size, open };
@@ -624,6 +604,10 @@ function chapterStatusLabel(status: JourneyChapter["status"]): string {
 
 function isOpenChapter(chapter: JourneyChapter): boolean {
   return chapter.status === "open" || chapter.status === "waiting" || chapter.status === "running";
+}
+
+function episodeLabel(episode: JourneyEpisode): string {
+  return episode.outcome ? `${episode.title} · ${episode.outcome}` : episode.title;
 }
 
 function claimStatusLabel(status: JourneyClaim["status"]): string {
@@ -1315,7 +1299,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
                     <span className="journey-map-index">{String(chapters.indexOf(chapter) + 1).padStart(2, "0")}</span>
                     <span><strong>{chapter.title}</strong><small>{plural(chapter.steps, t("step"))} · {t(chapterStatusLabel(chapter.status))}</small></span>
                   </button>
-                  {selectedMapChapter?.id === chapter.id && <div className="journey-map-episode-list">{chapter.episodes.map((episode) => <button key={episode.id} onClick={() => openTrajectoryAt(episode.start)}><span className={`journey-map-episode-dot ${episode.status}`} /><strong>{episode.title}</strong><small>#{episode.start}</small></button>)}</div>}
+                  {selectedMapChapter?.id === chapter.id && <div className="journey-map-episode-list">{chapter.episodes.map((episode) => <button key={episode.id} onClick={() => openTrajectoryAt(episode.start)}><span className={`journey-map-episode-dot ${episode.status}`} /><strong title={episodeLabel(episode)}>{episodeLabel(episode)}</strong><small>#{episode.start}</small></button>)}</div>}
                 </div>)}
               </div>
               {filteredMapChapters.length === 0 && <p className="journey-map-empty">{t("No chapters match this search.")}</p>}
@@ -1328,7 +1312,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
               <p className="journey-map-meta">{plural(selectedMapChapter.steps, t("step"))} · #{selectedMapChapter.start}–#{selectedMapChapter.end}</p>
               <p className="journey-map-summary">{selectedMapChapter.summary}</p>
               <h3>{t("Episodes")}</h3>
-              <div className="journey-map-episodes">{selectedMapChapter.episodes.map((episode) => <button key={episode.id} onClick={() => openTrajectoryAt(episode.start)}><span>#{episode.start}</span><strong>{episode.title}</strong><small>{plural(episode.steps, t("step"))}</small></button>)}</div>
+              <div className="journey-map-episodes">{selectedMapChapter.episodes.map((episode) => <button key={episode.id} onClick={() => openTrajectoryAt(episode.start)}><span>#{episode.start}</span><strong title={episodeLabel(episode)}>{episodeLabel(episode)}</strong><small>{plural(episode.steps, t("step"))}</small></button>)}</div>
               {settings.evidenceLedger && <>
                 <h3>{t("Evidence")}</h3>
                 <div className="journey-map-evidence"><span>{plural(selectedEvidence.sources, t("source"))}</span><span>{plural(selectedEvidence.files, t("file"))}</span><span>{plural(selectedEvidence.artifacts, t("artifact"))}</span></div>

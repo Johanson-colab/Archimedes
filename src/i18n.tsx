@@ -303,6 +303,7 @@ const translations: Record<string, string> = {
   "Split merged chapter": "拆分合并章节",
   "Split chapter group": "拆分章节组",
   "Merged chapter": "合并章节",
+  "Earlier research": "更早的研究",
   "Reset to defaults": "恢复默认值",
   "Restore every Journey option to its default. This does not delete trajectory data.": "将所有 Journey 选项恢复为默认值，不会删除轨迹数据。",
   "How the AI summarizes long runs and when the map appears.": "AI 如何总结长任务，以及何时显示地图。",
