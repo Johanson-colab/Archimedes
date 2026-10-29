@@ -299,13 +299,22 @@ async function withFigureSlot(task) {
 
 function firstFigureSrc(html) {
   const source = String(html || "");
-  // Only a real <figure> qualifies. Falling back to any <img> picks up licence
-  // badges and site chrome rather than the paper's own artwork.
-  const figure = source.match(/<figure[\s\S]{0,6000}?<img[^>]+src="([^"]+)"/i);
-  if (!figure) return "";
-  const src = figure[1];
-  if (/\/icons\/|licen[cs]e|favicon|logo|placeholder/i.test(src)) return "";
-  return src;
+  // arXiv renders most figures as <img>, but papers built with vector graphics
+  // publish them as <object type="image/svg+xml" data="…">, which browsers can
+  // still display directly.
+  for (const block of source.split(/<figure/i).slice(1)) {
+    const end = block.indexOf("</figure>");
+    const chunk = end >= 0 ? block.slice(0, end) : block.slice(0, 8_000);
+    const src = chunk.match(/<img[^>]+src="([^"]+)"/i)?.[1]
+      || chunk.match(/<object[^>]+data="([^"]+)"/i)?.[1]
+      || chunk.match(/<embed[^>]+src="([^"]+)"/i)?.[1]
+      || "";
+    if (!src) continue;
+    if (!/\.(?:png|jpe?g|webp|gif|svg)(?:[?#]|$)/i.test(src)) continue;
+    if (/\/icons\/|licen[cs]e|favicon|logo|placeholder/i.test(src)) continue;
+    return src;
+  }
+  return "";
 }
 
 async function fetchArxivFigure(arxivId, fetchImpl) {
@@ -316,6 +325,8 @@ async function fetchArxivFigure(arxivId, fetchImpl) {
         headers: { Accept: "text/html", "User-Agent": "Archimedes-Research/0.1" },
       }, { provider: "arXiv", attempts: 2, retryDelayMs: 600, timeoutMs: 15_000, fetchImpl });
       if (!response.ok) continue;
+      // Papers without an HTML rendering answer 200 with the abstract page.
+      if (/\/abs\//.test(String(response.url || ""))) continue;
       const src = firstFigureSrc(await response.text());
       if (!src) continue;
       const url = new URL(src, pageUrl).toString();

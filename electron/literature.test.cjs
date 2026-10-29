@@ -101,6 +101,15 @@ test("reads the first real figure out of an arXiv HTML page", () => {
   assert.equal(firstFigureSrc(""), "");
 });
 
+test("reads vector figures published as <object> instead of <img>", () => {
+  const page = `<figure id="S1.F1"><object type="image/svg+xml" data="2610.37642v1/teaser.svg"></object><figcaption>Figure 1</figcaption></figure>`;
+  assert.equal(firstFigureSrc(page), "2610.37642v1/teaser.svg");
+  const mixed = `<figure><object data="a.svg"></object></figure><figure><img src="b.png"></figure>`;
+  assert.equal(firstFigureSrc(mixed), "a.svg");
+  const noFigure = `<picture><source srcset="hero.webp"></picture>`;
+  assert.equal(firstFigureSrc(noFigure), "");
+});
+
 test("resolves a paper figure and caches the miss", async () => {
   const html = `<html><body><figure><img src="2610.37668v1/hexel.png"></figure></body></html>`;
   const requested = [];
