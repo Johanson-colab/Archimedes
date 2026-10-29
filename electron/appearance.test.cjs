@@ -93,6 +93,61 @@ test("surface CSS targets only the configured surface wrappers", async () => {
   assert.equal(surfaceCss({ version: 1, preset: "charcoal", overrides: {} }, "charcoal"), "");
 });
 
+test("round-trips a theme pack through export and import", async () => {
+  const { toThemePack, parseThemePack, themePackSettings } = await appearanceModule;
+  const settings = {
+    version: 1,
+    preset: "paper",
+    overrides: { accent: "#3F7BD9", surface: "#F0E8DC", density: "compact", controlRadius: 10 },
+    surfaces: { reader: { accent: "#2F8F6B", surface: "#122018", surfaceDepth: 60 } },
+  };
+  const pack = toThemePack(settings, "Lab Notebook");
+  assert.equal(pack.schemaVersion, 1);
+  assert.equal(pack.id, "lab-notebook");
+  assert.equal(pack.name, "Lab Notebook");
+  assert.equal(pack.preset, "paper");
+  assert.deepEqual(pack.overrides, { accent: "#3f7bd9", surface: "#f0e8dc", density: "compact", controlRadius: 10 });
+  assert.deepEqual(pack.surfaces, { reader: { accent: "#2f8f6b", surface: "#122018", surfaceDepth: 60 } });
+
+  const parsed = parseThemePack(JSON.parse(JSON.stringify(pack)));
+  assert.deepEqual(parsed, pack);
+  assert.deepEqual(themePackSettings(parsed), {
+    version: 1,
+    preset: "paper",
+    overrides: pack.overrides,
+    surfaces: pack.surfaces,
+  });
+});
+
+test("rejects malformed theme packs", async () => {
+  const { parseThemePack } = await appearanceModule;
+  assert.throws(() => parseThemePack(null), /JSON object/);
+  assert.throws(() => parseThemePack({ schemaVersion: 2, name: "Old", preset: "paper" }), /version/);
+  assert.throws(() => parseThemePack({ schemaVersion: 1, name: " ", preset: "paper" }), /name/);
+  assert.throws(() => parseThemePack({ schemaVersion: 1, name: "Neon", preset: "neon" }), /preset/);
+});
+
+test("flags accent and surface pairs below WCAG AA", async () => {
+  const { contrastIssues } = await appearanceModule;
+  const issues = contrastIssues({
+    version: 1,
+    preset: "charcoal",
+    overrides: { accent: "#868686", surface: "#808080" },
+  }, "charcoal");
+  assert.ok(issues.some((issue) => issue.pair === "--accent on --surface-panel"));
+  assert.ok(issues.every((issue) => issue.scope === "global"));
+  assert.equal(contrastIssues({ version: 1, preset: "charcoal", overrides: {} }, "charcoal").length, 0);
+});
+
+test("resolves OKLab color-mix values for contrast checks", async () => {
+  const { resolveColor, contrastRatio } = await appearanceModule;
+  const mixed = resolveColor("color-mix(in oklab, #000000 50%, #ffffff 50%)");
+  assert.ok(Array.isArray(mixed));
+  assert.ok(mixed[0] > 80 && mixed[0] < 180);
+  const ratio = contrastRatio("color-mix(in oklab, #000000 50%, #ffffff 50%)", "#808080");
+  assert.ok(ratio > 1.2 && ratio < 2.2, String(ratio));
+});
+
 test("writes v2 and keeps the legacy key in sync", async () => {
   const { writeAppearance } = await appearanceModule;
   const storage = memoryStorage();

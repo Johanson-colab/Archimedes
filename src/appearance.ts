@@ -211,14 +211,74 @@ export function resolveTheme(preset: ThemePreset, systemTheme: AppTheme): AppThe
   return preset === "system" ? systemTheme : preset;
 }
 
-function channelLuminance(channel: number): number {
+type Rgb = [number, number, number];
+
+function parseHexColor(value: string): Rgb | null {
+  const hex = value.trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return null;
+  return [0, 2, 4].map((offset) => parseInt(hex.slice(1 + offset, 3 + offset), 16)) as Rgb;
+}
+
+function srgbToLinear(channel: number): number {
   const value = channel / 255;
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
-export function relativeLuminance(hex: string): number {
-  const value = hex.replace("#", "");
-  const channels = [0, 2, 4].map((offset) => channelLuminance(parseInt(value.slice(offset, offset + 2), 16)));
+function linearToSrgb(channel: number): number {
+  const value = channel <= 0.0031308 ? channel * 12.92 : 1.055 * channel ** (1 / 2.4) - 0.055;
+  return Math.max(0, Math.min(255, Math.round(value * 255)));
+}
+
+function rgbToOklab([red, green, blue]: Rgb): Rgb {
+  const r = srgbToLinear(red);
+  const g = srgbToLinear(green);
+  const b = srgbToLinear(blue);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function oklabToRgb([lightness, a, b]: Rgb): Rgb {
+  const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    linearToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    linearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    linearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+  ];
+}
+
+const COLOR_MIX = /^color-mix\(in oklab,\s*(#[0-9a-fA-F]{6})\s+([\d.]+)%,\s*(#[0-9a-fA-F]{6})\s+([\d.]+)%\)$/;
+
+/** Resolves the hex and two-stop OKLab color-mix values the token layer emits. */
+export function resolveColor(value: string): Rgb | null {
+  const hex = parseHexColor(value);
+  if (hex) return hex;
+  const match = value.match(COLOR_MIX);
+  if (!match) return null;
+  const first = parseHexColor(match[1]);
+  const second = parseHexColor(match[3]);
+  if (!first || !second) return null;
+  const firstWeight = Number(match[2]);
+  const secondWeight = Number(match[4]);
+  const total = firstWeight + secondWeight;
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const a = rgbToOklab(first);
+  const b = rgbToOklab(second);
+  const mix = a.map((channel, index) => (channel * firstWeight + b[index] * secondWeight) / total) as Rgb;
+  return oklabToRgb(mix);
+}
+
+export function relativeLuminance(value: string): number {
+  const rgb = resolveColor(value);
+  if (!rgb) return 0;
+  const channels = rgb.map((channel) => srgbToLinear(channel));
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
@@ -404,4 +464,120 @@ export function applyAppearance(root: AppearanceRoot, settings: AppearanceSettin
     style.textContent = surfaceCss(settings, theme);
   }
   return values;
+}
+
+export type ContrastIssue = {
+  scope: "global" | SurfaceScope;
+  pair: string;
+  ratio: number;
+  minimum: number;
+};
+
+const TEXT_CONTRAST_PAIRS: ReadonlyArray<readonly [string, string, number]> = [
+  ["--text-primary", "--surface-panel", 4.5],
+  ["--text-primary", "--surface-ground", 4.5],
+  ["--text-secondary", "--surface-ground", 4.5],
+  ["--text-muted", "--surface-ground", 3],
+];
+
+/**
+ * Checks the token pairs that can actually be affected by an override. Preset
+ * palettes are trusted; only custom surfaces and accents are measured.
+ */
+export function contrastIssues(settings: AppearanceSettings, theme: AppTheme): ContrastIssue[] {
+  const issues: ContrastIssue[] = [];
+  const scopes: Array<"global" | SurfaceScope> = ["global", ...SURFACE_SCOPES];
+  for (const scope of scopes) {
+    const source = scope === "global" ? settings.overrides : settings.surfaces?.[scope];
+    if (!source) continue;
+    const ownsSurface = Boolean(source.surface);
+    const surface = source.surface ?? (scope === "global" ? undefined : settings.overrides.surface);
+    const depth = source.surfaceDepth ?? settings.overrides.surfaceDepth;
+    const accent = source.accent ?? (scope === "global" ? settings.overrides.accent : undefined);
+    const tokens = {
+      ...(surface ? surfaceTokens(surface, depth, theme) : {}),
+      ...(accent ? accentTokens(accent, theme) : {}),
+    };
+    if (ownsSurface) {
+      for (const [foreground, background, minimum] of TEXT_CONTRAST_PAIRS) {
+        const foregroundValue = tokens[foreground];
+        const backgroundValue = tokens[background];
+        if (!foregroundValue || !backgroundValue) continue;
+        const ratio = contrastRatio(foregroundValue, backgroundValue);
+        if (ratio < minimum) issues.push({ scope, pair: `${foreground} on ${background}`, ratio, minimum });
+      }
+    }
+    if (source.accent && tokens["--accent"] && tokens["--text-on-accent"]) {
+      const ratio = contrastRatio(tokens["--text-on-accent"], tokens["--accent"]);
+      if (ratio < 4.5) issues.push({ scope, pair: "--text-on-accent on --accent", ratio, minimum: 4.5 });
+      if (surface && tokens["--surface-panel"]) {
+        const accentRatio = contrastRatio(tokens["--accent"], tokens["--surface-panel"]);
+        if (accentRatio < 3) issues.push({ scope, pair: "--accent on --surface-panel", ratio: accentRatio, minimum: 3 });
+      }
+    }
+  }
+  return issues;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Theme packs                                                                */
+/* -------------------------------------------------------------------------- */
+
+export type ThemePack = {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  preset: ThemePreset;
+  overrides: AppearanceOverrides;
+  surfaces?: Partial<Record<SurfaceScope, SurfaceAppearance>>;
+};
+
+function slugify(value: string): string {
+  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || "archimedes-theme";
+}
+
+/** Serializes the current appearance into a shareable pack. */
+export function toThemePack(settings: AppearanceSettings, name = "Archimedes theme"): ThemePack {
+  const normalized = normalizeAppearance(settings);
+  const trimmed = name.trim() || "Archimedes theme";
+  return {
+    schemaVersion: 1,
+    id: slugify(trimmed),
+    name: trimmed,
+    preset: normalized.preset,
+    overrides: normalized.overrides,
+    ...(normalized.surfaces ? { surfaces: normalized.surfaces } : {}),
+  };
+}
+
+/** Validates an imported pack and normalizes every token value. */
+export function parseThemePack(input: unknown): ThemePack {
+  if (!input || typeof input !== "object") throw new Error("Theme pack must be a JSON object.");
+  const value = input as Partial<ThemePack>;
+  if (value.schemaVersion !== 1) throw new Error("Unsupported theme pack version.");
+  if (typeof value.name !== "string" || !value.name.trim()) throw new Error("Theme pack needs a name.");
+  if (!isThemePreset(value.preset)) throw new Error("Theme pack has an invalid preset.");
+  const normalized = normalizeAppearance({
+    preset: value.preset,
+    overrides: value.overrides,
+    surfaces: value.surfaces,
+  });
+  return {
+    schemaVersion: 1,
+    id: typeof value.id === "string" && value.id.trim() ? slugify(value.id) : slugify(value.name),
+    name: value.name.trim(),
+    preset: normalized.preset,
+    overrides: normalized.overrides,
+    ...(normalized.surfaces ? { surfaces: normalized.surfaces } : {}),
+  };
+}
+
+export function themePackSettings(pack: ThemePack): AppearanceSettings {
+  return {
+    version: 1,
+    preset: pack.preset,
+    overrides: pack.overrides,
+    ...(pack.surfaces ? { surfaces: pack.surfaces } : {}),
+  };
 }

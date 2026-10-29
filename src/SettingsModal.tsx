@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useRef, useState } from "react";
 import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, X } from "lucide-react";
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
@@ -9,7 +9,7 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
-import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, normalizeAppearance, type AppearanceSettings, type AppTheme, type Density, type SurfaceAppearance, type SurfaceScope, type ThemePreset } from "./appearance";
+import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppTheme, type ContrastIssue, type Density, type SurfaceAppearance, type SurfaceScope, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
@@ -111,6 +111,10 @@ export default function SettingsModal({
   const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   const [scope, setScope] = useState<SurfaceScope | "global">("global");
+  const [pendingPack, setPendingPack] = useState<ThemePack | null>(null);
+  const [packWarnings, setPackWarnings] = useState<ContrastIssue[]>([]);
+  const [packError, setPackError] = useState("");
+  const packInputRef = useRef<HTMLInputElement>(null);
   if (!open) return null;
 
   const workspaceName = workspace ? workspace.split(/[\\/]/).filter(Boolean).at(-1) : "";
@@ -129,6 +133,7 @@ export default function SettingsModal({
   const radiusValue = appearance.overrides.controlRadius ?? CONTROL_RADIUS_DEFAULT;
   const densityValue: Density = appearance.overrides.density ?? DENSITY_DEFAULT;
   const scopeLabel = scope === "global" ? "Global" : scope === "reader" ? "Reader" : scope === "writing" ? "Writing" : "Agent";
+  const scopeIssues = contrastIssues(appearance, theme).filter((issue) => issue.scope === scope);
   const hasOverrides = Boolean(appearance.overrides.accent) || Boolean(appearance.overrides.surface)
     || appearance.overrides.surfaceDepth !== undefined || appearance.overrides.controlRadius !== undefined
     || appearance.overrides.density !== undefined
@@ -164,6 +169,35 @@ export default function SettingsModal({
     const surfaces = { ...appearance.surfaces };
     delete surfaces[scope];
     onAppearanceChange(normalizeAppearance({ ...appearance, surfaces }));
+  }
+  function exportPack() {
+    const pack = toThemePack(appearance, appearance.preset === "system" ? "Archimedes theme" : `${appearance.preset} theme`);
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${pack.id}.archtheme.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+  async function importPack(file: File | undefined) {
+    if (!file) return;
+    try {
+      const pack = parseThemePack(JSON.parse(await file.text()));
+      setPendingPack(pack);
+      setPackWarnings(contrastIssues(themePackSettings(pack), theme));
+      setPackError("");
+    } catch (error) {
+      setPendingPack(null);
+      setPackWarnings([]);
+      setPackError(error instanceof Error ? error.message : "Could not read the theme pack.");
+    }
+  }
+  function applyPack() {
+    if (!pendingPack) return;
+    onAppearanceChange(themePackSettings(pendingPack));
+    setPendingPack(null);
+    setPackWarnings([]);
   }
 
   const sectionHeadings: Record<SettingsSection, { title: string; description: string }> = {
@@ -344,6 +378,10 @@ export default function SettingsModal({
                       {scope !== "global" && <button className="secondary-button" onClick={clearScope} disabled={!appearance.surfaces?.[scope]}>{t("Reset this surface")}</button>}
                     </div>
                   </div>
+                  {scopeIssues.length > 0 && <div className="settings-contrast-warning" role="status">
+                    <strong>{t("Contrast warning")}</strong>
+                    <span>{scopeIssues[0].pair} · {scopeIssues[0].ratio.toFixed(1)}:1 / {scopeIssues[0].minimum}:1{scopeIssues.length > 1 ? ` · +${scopeIssues.length - 1}` : ""}</span>
+                  </div>}
                   <div className="settings-row">
                     <div className="settings-row-copy">
                       <span className="settings-row-title">{t("Accent color")}</span>
@@ -408,6 +446,39 @@ export default function SettingsModal({
                       <button className="secondary-button" onClick={() => onAppearanceChange(normalizeAppearance({ version: 1, preset: appearance.preset }))} disabled={!hasOverrides}>{t("Reset custom theme")}</button>
                     </div>
                   </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <h3 className="settings-section-title">{t("Theme pack")}</h3>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Share this appearance")}</span>
+                      <p className="settings-row-description">{t("Export the current appearance or import a shared .archtheme.json file.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-appearance-control">
+                        <button className="secondary-button" onClick={exportPack}>{t("Export")}</button>
+                        <button className="secondary-button" onClick={() => packInputRef.current?.click()}>{t("Import")}</button>
+                        <input ref={packInputRef} className="settings-file-input" type="file" accept=".json,.archtheme.json,application/json" aria-label={t("Import theme pack")} onChange={(event) => void importPack(event.target.files?.[0])} />
+                      </div>
+                    </div>
+                  </div>
+                  {packError && <p className="settings-pack-error" role="alert">{packError}</p>}
+                  {pendingPack && <div className="settings-pack-preview">
+                    <div>
+                      <strong>{pendingPack.name}</strong>
+                      <span>{pendingPack.preset} · {Object.keys(pendingPack.overrides).length + Object.keys(pendingPack.surfaces ?? {}).length} overrides</span>
+                    </div>
+                    {packWarnings.length
+                      ? <p className="settings-pack-warning">{t("{count} contrast pair(s) below WCAG AA.", { count: packWarnings.length })}</p>
+                      : <p className="settings-pack-ok">{t("No contrast issues found.")}</p>}
+                    <div className="settings-pack-actions">
+                      <button className="primary-button" onClick={applyPack}>{t("Apply pack")}</button>
+                      <button className="secondary-button" onClick={() => { setPendingPack(null); setPackWarnings([]); setPackError(""); }}>{t("Cancel")}</button>
+                    </div>
+                  </div>}
                 </div>
               </section>
 

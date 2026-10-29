@@ -72,6 +72,19 @@ test("the appearance editor includes a live preview that uses the same tokens", 
   assert.match(css, /\.appearance-preview-button\.primary \{[^}]*background: var\(--accent\)/);
 });
 
+test("appearance can be exported, imported, and checked for contrast", () => {
+  assert.match(settings, /toThemePack\(appearance/);
+  assert.match(settings, /parseThemePack\(JSON\.parse/);
+  assert.match(settings, /type="file"/);
+  assert.match(settings, /\.archtheme\.json/);
+  assert.match(settings, /Apply pack/);
+  assert.match(settings, /contrastIssues\(appearance, theme\)/);
+  assert.match(settings, /settings-contrast-warning/);
+  assert.match(appearance, /export type ThemePack/);
+  assert.match(appearance, /export function parseThemePack/);
+  assert.match(appearance, /export function contrastIssues/);
+});
+
 test("the new appearance copy is translated", () => {
   for (const key of [
     "Customize",
@@ -104,6 +117,16 @@ test("the new appearance copy is translated", () => {
     "Accent and surface can be scoped; density and radius stay global.",
     "Reset this surface",
     "Previewing {scope}. Accent and surface apply only to this surface.",
+    "Contrast warning",
+    "Theme pack",
+    "Share this appearance",
+    "Export the current appearance or import a shared .archtheme.json file.",
+    "Export",
+    "Import",
+    "Import theme pack",
+    "Apply pack",
+    "No contrast issues found.",
+    "{count} contrast pair(s) below WCAG AA.",
   ]) {
     assert.match(i18n, new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":`));
   }

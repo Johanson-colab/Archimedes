@@ -171,9 +171,24 @@ use `.theme-paper` because they predate the token pass.
 - `resolvedTheme = resolveTheme(preset, systemAppearance)`; overrides survive a
   Charcoal ↔ Paper switch.
 
-Settings › Appearance exposes: accent color, surface color, surface depth,
-density, control radius, per-field reset, and reset all. Defaults (no overrides)
-produce the same pixels as the token refactor.
+Settings › Appearance exposes: a scope switcher (Global / Reader / Writing /
+Agent), accent color, surface color, surface depth, density, control radius,
+per-field reset, and reset all. A sticky live preview follows the selected
+scope. Defaults (no overrides) produce the same pixels as the token refactor.
+
+### Theme packs and contrast
+
+- `toThemePack()` serializes the current preset, global overrides, and
+  per-surface overrides into a versioned `schemaVersion: 1` JSON pack.
+- `parseThemePack()` validates the version, name, and preset, then normalizes
+  every color, depth, density, and radius before the pack can apply.
+- `themePackSettings()` turns a validated pack back into `AppearanceSettings`.
+- Settings › Appearance exports and imports `.archtheme.json`, shows the pack
+  name / preset / override count, checks contrast, and waits for Apply.
+- `contrastIssues()` resolves the generated OKLab `color-mix()` values and
+  checks text on panel/ground, secondary text, muted text, accent ink, and
+  accent on panel. Warnings do not block applying, but they are visible.
+- Invalid packs are rejected before they touch localStorage.
 
 ## Migration status
 
@@ -270,7 +285,8 @@ npm run build
 3. **M3 — Appearance editor.** Done: accent, surface ladder, surface depth,
    density, control radius, reset, live preview, and per-surface scope for
    Reader / Writing / Agent.
-4. **M4 — Import/export.** Theme pack validation, contrast guard, advanced JSON.
+4. **M4 — Import/export.** Done: schema v1, export/import, validation,
+   preview, and contrast guard. Next: community presets and advanced JSON.
 
 The guard script and this document should be updated in the same PR as each
 milestone.
