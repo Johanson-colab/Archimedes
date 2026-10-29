@@ -104,6 +104,7 @@ export type ProactiveEventType =
   | "expired"
   | "undone"
   | "suppressed"
+  | "observed"
   | "evidence-opened";
 
 export type ProactiveEvent = {
@@ -117,6 +118,14 @@ export type ProactiveEvent = {
 export type ProactiveSettings = {
   mode: ProactiveMode;
   dailyBudget: number;
+  /** Seconds-level context observation while the user is active. */
+  liveObservation: boolean;
+  /** Cap live model calls per day so active typing cannot run unbounded. */
+  liveObservationBudget: number;
+  /** L2: capture only Archimedes' own window for vision-capable observation. */
+  appCapture: boolean;
+  /** The configured Proactive model accepts image input. */
+  visionCapable: boolean;
   quietHours: {
     enabled: boolean;
     start: string;
@@ -127,6 +136,7 @@ export type ProactiveSettings = {
     selection: boolean;
     latex: boolean;
     citation: boolean;
+    library: boolean;
   };
 };
 
@@ -146,8 +156,54 @@ export const DEFAULT_PROACTIVE_SETTINGS: ProactiveSettings = {
   // Proactive is opt-in. Off means no signal collection and no suggestions.
   mode: "off",
   dailyBudget: 8,
+  liveObservation: true,
+  liveObservationBudget: 120,
+  appCapture: false,
+  visionCapable: false,
   quietHours: { enabled: false, start: "22:00", end: "08:00" },
-  sources: { search: true, selection: true, latex: true, citation: true },
+  sources: { search: true, selection: true, latex: true, citation: true, library: true },
+};
+
+export type ProactiveContextEvidence = {
+  id: string;
+  label: string;
+  evidence: ProactiveEvidence;
+};
+
+/**
+ * The serializable slice of app context Proactive agent may send to its own
+ * model. It contains no screenshots, keystrokes, window titles, or file
+ * contents outside the current selection.
+ */
+export type ProactiveContextSnapshot = {
+  section: string;
+  thread: { id?: string | null; title?: string; status?: string } | null;
+  projectId?: string | null;
+  workspace?: string;
+  activity: {
+    level: string;
+    score: number;
+    pointerRate: number;
+    keyRate: number;
+    lastInputAt: number;
+  };
+  selection?: string;
+  focused?: string;
+  screenshot?: { capturedAt: string; width: number; height: number };
+  messages: Array<{ id: string; role: string; text: string }>;
+  suggestions: Array<{ id: string; source: ProactiveSource; title: string; status: ProactiveStatus }>;
+  evidence: ProactiveContextEvidence[];
+  at: string;
+};
+
+export type ProactiveObservation = {
+  shouldSuggest: boolean;
+  source: ProactiveSource;
+  title: string;
+  whyNow: string;
+  evidenceIds: string[];
+  confidence: number;
+  action: ProactiveAction;
 };
 
 export const PROACTIVE_SOURCE_LABELS: Record<ProactiveSource, string> = {

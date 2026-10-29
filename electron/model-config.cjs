@@ -2,7 +2,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const PROVIDERS = new Set(["openai", "anthropic", "gemini", "glm", "minimax", "deepseek", "qwen", "moonshot", "openrouter", "custom"]);
+const ROLES = new Set(["agent", "proactive"]);
 let configPath = "";
+
+function normalizeRole(role) {
+  return ROLES.has(role) ? role : "agent";
+}
 
 function environmentConfig() {
   const legacyPrefix = ["AX", "IOM_LLM_"].join("");
@@ -23,10 +28,34 @@ function readSavedConfig() {
   if (!configPath || !fs.existsSync(configPath)) return null;
   try {
     const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    return parsed && typeof parsed === "object" ? parsed : null;
+    if (!parsed || typeof parsed !== "object") return null;
+    // v1 stored one flat config. v2 stores named roles so Proactive can use a
+    // different (usually cheaper) model from the main research Agent.
+    if (Object.hasOwn(parsed, "agent") || Object.hasOwn(parsed, "proactive")) {
+      return {
+        agent: parsed.agent && typeof parsed.agent === "object" ? parsed.agent : null,
+        proactive: parsed.proactive && typeof parsed.proactive === "object" ? parsed.proactive : null,
+      };
+    }
+    return { agent: parsed, proactive: null };
   } catch {
     return null;
   }
+}
+
+function readRoleConfig(role) {
+  const saved = readSavedConfig();
+  return saved ? saved[normalizeRole(role)] : null;
+}
+
+function writeSavedConfig(saved) {
+  if (!configPath) throw new Error("Model configuration storage is not ready.");
+  const next = {};
+  if (saved.agent) next.agent = saved.agent;
+  if (saved.proactive) next.proactive = saved.proactive;
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  try { fs.chmodSync(configPath, 0o600); } catch { /* Windows and some filesystems ignore POSIX modes. */ }
 }
 
 function normalizeBaseUrl(value) {
@@ -72,20 +101,25 @@ function extractModelIds(payload) {
     .sort((left, right) => left.localeCompare(right));
 }
 
-function getActiveModelConfig() {
-  const saved = readSavedConfig();
+function getActiveModelConfig(role = "agent") {
+  const normalizedRole = normalizeRole(role);
   const fallback = environmentConfig();
-  if (!saved) return fallback;
+  const own = readRoleConfig(normalizedRole);
+  const inherited = normalizedRole === "proactive" && !own ? readRoleConfig("agent") : null;
+  const saved = own || inherited;
+  if (!saved) return { ...fallback, role: normalizedRole, inheritedFromAgent: false };
   return {
     provider: PROVIDERS.has(saved.provider) ? saved.provider : "custom",
     baseUrl: saved.baseUrl || fallback.baseUrl,
     model: saved.model || fallback.model,
     apiKey: saved.apiKey || fallback.apiKey,
+    role: normalizedRole,
+    inheritedFromAgent: Boolean(inherited),
   };
 }
 
-async function listProviderModels(input = {}) {
-  const current = getActiveModelConfig();
+async function listProviderModels(input = {}, role = "agent") {
+  const current = getActiveModelConfig(role);
   const provider = PROVIDERS.has(input.provider) ? input.provider : current.provider;
   const baseUrl = normalizeBaseUrl(input.baseUrl || current.baseUrl);
   const suppliedKey = String(input.apiKey || "").trim();
@@ -116,34 +150,45 @@ async function listProviderModels(input = {}) {
   }
 }
 
-function getPublicModelConfig() {
-  const config = getActiveModelConfig();
+function getPublicModelConfig(role = "agent") {
+  const normalizedRole = normalizeRole(role);
+  const config = getActiveModelConfig(normalizedRole);
+  const own = readRoleConfig(normalizedRole);
+  const inherited = normalizedRole === "proactive" && !own && Boolean(readRoleConfig("agent"));
   return {
     provider: config.provider,
     baseUrl: config.baseUrl,
     model: config.model,
     hasApiKey: Boolean(config.apiKey),
-    source: readSavedConfig() ? "saved" : "environment",
+    source: own ? "saved" : inherited ? "agent" : "environment",
+    role: normalizedRole,
+    inheritedFromAgent: inherited,
   };
 }
 
-function saveModelConfig(input = {}) {
+function saveModelConfig(input = {}, role = "agent") {
   if (!configPath) throw new Error("Model configuration storage is not ready.");
-  const previous = getActiveModelConfig();
+  const normalizedRole = normalizeRole(role);
+  const saved = readSavedConfig() ?? { agent: null, proactive: null };
+  if (normalizedRole === "proactive" && input.useAgent === true) {
+    saved.proactive = null;
+    writeSavedConfig(saved);
+    return getPublicModelConfig("proactive");
+  }
+  const previous = getActiveModelConfig(normalizedRole);
   const provider = PROVIDERS.has(input.provider) ? input.provider : "custom";
   const baseUrl = normalizeBaseUrl(input.baseUrl);
   const model = validateModelId(baseUrl, input.model);
   const apiKey = String(input.apiKey || "").trim() || (previous.provider === provider && previous.baseUrl === baseUrl ? previous.apiKey : "");
   if (!apiKey || apiKey.length > 2_000) throw new Error("Enter a valid API key.");
   const config = { provider, baseUrl, model, apiKey };
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
-  try { fs.chmodSync(configPath, 0o600); } catch { /* Windows and some filesystems ignore POSIX modes. */ }
-  return getPublicModelConfig();
+  saved[normalizedRole] = config;
+  writeSavedConfig(saved);
+  return getPublicModelConfig(normalizedRole);
 }
 
-async function testModelConfig(input = null) {
-  const current = getActiveModelConfig();
+async function testModelConfig(input = null, role = "agent") {
+  const current = getActiveModelConfig(role);
   const candidate = input && typeof input === "object" ? {
     provider: PROVIDERS.has(input.provider) ? input.provider : "custom",
     baseUrl: normalizeBaseUrl(input.baseUrl || current.baseUrl),
@@ -193,5 +238,6 @@ module.exports = {
   saveModelConfig,
   testModelConfig,
   extractModelIds,
+  normalizeRole,
   validateModelId,
 };

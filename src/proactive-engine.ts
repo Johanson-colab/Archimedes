@@ -68,6 +68,11 @@ export function createdToday(state: ProactiveState, now: number): number {
   return state.suggestions.filter((suggestion) => suggestion.createdAt >= start && suggestion.origin !== "manual").length;
 }
 
+export function observationsToday(state: ProactiveState, now: number): number {
+  const start = localDayStart(now);
+  return state.events.filter((entry) => entry.type === "observed" && entry.at >= start).length;
+}
+
 export function canPresent(state: ProactiveState, now: number, composerFocused: boolean): boolean {
   if (state.settings.mode === "off") return false;
   const queued = state.suggestions.filter((suggestion) => suggestion.status === "queued");
@@ -128,6 +133,16 @@ export function addEvent(state: ProactiveState, next: ProactiveEvent): Proactive
   return { ...state, events: [next, ...state.events].slice(0, 1000) };
 }
 
+export function recordObservation(state: ProactiveState, now: number, detail?: string): ProactiveState {
+  return addEvent(state, {
+    id: `evt-observed-${now}-${Math.random().toString(36).slice(2, 7)}`,
+    suggestionId: "observation",
+    type: "observed",
+    at: now,
+    detail,
+  });
+}
+
 export function expireAndPrune(state: ProactiveState, now: number): ProactiveState {
   const cutoff = now - PROACTIVE_HISTORY_RETENTION_MS;
   const events: ProactiveEvent[] = [];
@@ -155,14 +170,16 @@ export function loadProactiveState(): ProactiveState {
     if (!raw) return emptyProactiveState();
     const parsed = JSON.parse(raw) as Partial<ProactiveState>;
     if (!parsed || parsed.version !== 1) return emptyProactiveState();
+    const settings = {
+      ...DEFAULT_PROACTIVE_SETTINGS,
+      ...(parsed.settings ?? {}),
+      quietHours: { ...DEFAULT_PROACTIVE_SETTINGS.quietHours, ...(parsed.settings?.quietHours ?? {}) },
+      sources: { ...DEFAULT_PROACTIVE_SETTINGS.sources, ...(parsed.settings?.sources ?? {}) },
+    };
+    if (!settings.visionCapable) settings.appCapture = false;
     return expireAndPrune({
       version: 1,
-      settings: {
-        ...DEFAULT_PROACTIVE_SETTINGS,
-        ...(parsed.settings ?? {}),
-        quietHours: { ...DEFAULT_PROACTIVE_SETTINGS.quietHours, ...(parsed.settings?.quietHours ?? {}) },
-        sources: { ...DEFAULT_PROACTIVE_SETTINGS.sources, ...(parsed.settings?.sources ?? {}) },
-      },
+      settings,
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
       events: Array.isArray(parsed.events) ? parsed.events : [],
       suppressedUntil: typeof parsed.suppressedUntil === "number" ? parsed.suppressedUntil : 0,
@@ -224,6 +241,7 @@ export function recordSignal(state: ProactiveState, signal: ProactiveSignal, now
   if (signal.source === "selection" && !state.settings.sources.selection) return state;
   if (signal.source === "latex" && !state.settings.sources.latex) return state;
   if (signal.source === "citation" && !state.settings.sources.citation) return state;
+  if (signal.source === "library" && !state.settings.sources.library) return state;
   if (origin === "auto" && now < state.suppressedUntil) return state;
   if (origin === "auto" && createdToday(state, now) >= state.settings.dailyBudget) return state;
   if (isDuplicate(state, signal, now)) return state;

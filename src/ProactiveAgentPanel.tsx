@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Clock, MessageSquare, MoreHorizontal, Send, X } from "lucide-react";
+import { ArrowUp, MessageSquare, MoreHorizontal, X } from "lucide-react";
 import { useUISettings } from "./i18n";
+import { activityLabel, observationInterval } from "./activityPulse";
 import { evidenceLabel, formatRelativeTime } from "./proactive-engine";
 import {
   PROACTIVE_SOURCE_LABELS,
@@ -44,12 +45,10 @@ export default function ProactiveAgentPanel({
   controller,
   onOpenSettings,
   onCollapse,
-  onDraftInChat,
 }: {
   controller: ProactiveAgentController;
   onOpenSettings: () => void;
   onCollapse: () => void;
-  onDraftInChat: (text: string) => void;
 }) {
   const { t } = useUISettings();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -58,8 +57,14 @@ export default function ProactiveAgentPanel({
   const [draft, setDraft] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [openEvidence, setOpenEvidence] = useState<number | null>(null);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyMessages, setReplyMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
+  const [replyError, setReplyError] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<"all" | "active" | "accepted" | "closed">("all");
+  const [workspaceOnly, setWorkspaceOnly] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
+  const replyEndRef = useRef<HTMLDivElement | null>(null);
 
   const suggestions = controller.state.suggestions;
   const sorted = useMemo(
@@ -68,22 +73,39 @@ export default function ProactiveAgentPanel({
   );
   const latest = sorted[0] ?? null;
   const selected = selectedId ? sorted.find((suggestion) => suggestion.id === selectedId) ?? latest : latest;
+  const historyRows = useMemo(() => {
+    const scoped = workspaceOnly
+      ? sorted.filter((suggestion) => suggestion.workspace === controller.workspace)
+      : sorted;
+    if (historyFilter === "active") return scoped.filter((suggestion) => suggestion.status === "queued" || suggestion.status === "shown");
+    if (historyFilter === "accepted") return scoped.filter((suggestion) => suggestion.status === "accepted" || suggestion.status === "undone");
+    if (historyFilter === "closed") return scoped.filter((suggestion) => suggestion.status === "dismissed" || suggestion.status === "expired");
+    return scoped;
+  }, [controller.workspace, historyFilter, sorted, workspaceOnly]);
+  const openCount = sorted.filter((suggestion) => suggestion.status === "queued" || suggestion.status === "shown").length;
   const mode = controller.settings.mode;
-  const limited = controller.quiet || controller.budgetReached || controller.suppressed || controller.composerFocused;
+  const limited = controller.quiet || controller.budgetReached || controller.observationBudgetReached || controller.suppressed || controller.composerFocused;
   const status = controller.quiet
     ? t("Quiet hours")
     : controller.budgetReached
       ? t("Daily budget reached")
-      : controller.suppressed
-        ? t("Paused after dismissals")
-        : controller.composerFocused
-          ? t("Paused while typing")
-          : mode === "auto"
-            ? t("Watching L0 signals")
-            : mode === "manual"
-              ? t("Manual review")
-              : t("Off");
-  const statusActive = mode !== "off" && !limited;
+      : controller.observationBudgetReached
+        ? t("Observation budget reached")
+        : controller.suppressed
+          ? t("Paused after dismissals")
+          : controller.composerFocused
+            ? t("Paused while typing")
+            : controller.observing
+              ? t("Observing now")
+              : mode === "auto" && !controller.modelReady
+                ? t("Proactive model not configured")
+                : mode === "auto"
+                  ? t("Watching context")
+                  : mode === "manual"
+                    ? t("Manual review")
+                    : t("Off");
+  const statusActive = mode !== "off" && !limited && (mode !== "auto" || controller.modelReady);
+  const pulseTitle = `${activityLabel(controller.activity.level)} · ${controller.activity.pointerRate} pointer/min · ${controller.activity.keyRate} keys/min · every ${Math.round(observationInterval(controller.activity.level) / 1_000)}s`;
 
   useEffect(() => {
     if (selectedId && !sorted.some((suggestion) => suggestion.id === selectedId)) setSelectedId(null);
@@ -124,16 +146,37 @@ export default function ProactiveAgentPanel({
     setHistoryOpen(false);
     setSelectedId(null);
     setComposerOpen(false);
+    setReplyOpen(false);
   }
 
-  function submitDraft(event: FormEvent) {
+  function openReplyComposer() {
+    setReplyOpen(false);
+    setComposerOpen(true);
+    setReplyError("");
+    window.setTimeout(() => composerRef.current?.focus(), 0);
+  }
+
+  async function submitReply(event: FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
-    onDraftInChat(text);
+    if (!text || controller.replyBusy) return;
     setDraft("");
     setComposerOpen(false);
+    setReplyOpen(true);
+    setReplyError("");
+    setReplyMessages((current) => [...current, { role: "user", text }]);
+    try {
+      const answer = await controller.reply(text, selected);
+      setReplyMessages((current) => [...current, { role: "assistant", text: answer }]);
+    } catch (error) {
+      setReplyError(String(error).replace(/^Error invoking remote method '[^']+': Error:\s*|^Error:\s*/, ""));
+    }
   }
+
+  useEffect(() => {
+    if (!replyOpen) return;
+    replyEndRef.current?.scrollIntoView({ block: "end" });
+  }, [replyOpen, replyMessages, controller.replyBusy]);
 
   const actionable = selected?.status === "queued" || selected?.status === "shown";
   const stateLabel = selected && !actionable && selected.status !== "expired"
@@ -144,19 +187,12 @@ export default function ProactiveAgentPanel({
     <header className="agent-proactive-head dock-panel-head">
       <span className="agent-proactive-status" title={t("{count} of {total} auto suggestions today", { count: controller.todayCount, total: controller.settings.dailyBudget })}>
         <i className={statusActive ? "agent-proactive-bar active" : "agent-proactive-bar"} aria-hidden="true" />
-        <span>{status}</span>
+        <span className="agent-proactive-activity" title={pulseTitle} aria-label={pulseTitle}>
+          <i style={{ width: `${Math.round(controller.activity.score * 100)}%` }} />
+        </span>
+        <span className="agent-proactive-status-label">{status}</span>
       </span>
       <div className="agent-proactive-tools" ref={menuRef}>
-        <button
-          className={historyOpen ? "agent-proactive-icon wide active" : "agent-proactive-icon wide"}
-          onClick={openHistory}
-          title={t("History")}
-          aria-label={t("History")}
-          aria-pressed={historyOpen}
-        >
-          <Clock size={12} />
-          {sorted.length > 0 && <span>{sorted.length}</span>}
-        </button>
         <button
           className={menuOpen ? "agent-proactive-icon active" : "agent-proactive-icon"}
           onClick={() => setMenuOpen((open) => !open)}
@@ -184,8 +220,13 @@ export default function ProactiveAgentPanel({
         <b>{t("{count} outputs", { count: sorted.length })}</b>
         <button onClick={backToLatest}>{t("Back to latest")}</button>
       </div>
+      <div className="agent-proactive-history-filters" role="tablist" aria-label={t("Suggestion history filter")}>
+        {([["all", t("All")], ["active", t("Active")], ["accepted", t("Accepted")], ["closed", t("Closed")]] as const).map(([id, label]) =>
+          <button key={id} role="tab" aria-selected={historyFilter === id} className={historyFilter === id ? "active" : ""} onClick={() => setHistoryFilter(id)}>{label}{id === "active" && openCount > 0 ? ` ${openCount}` : ""}</button>)}
+        <button className={workspaceOnly ? "agent-proactive-history-scope active" : "agent-proactive-history-scope"} aria-pressed={workspaceOnly} onClick={() => setWorkspaceOnly((value) => !value)} title={t("Only suggestions for the current workspace")}>{t("This workspace")}</button>
+      </div>
       <div className="agent-proactive-history-list">
-        {sorted.map((suggestion) => <button
+        {historyRows.map((suggestion) => <button
           key={suggestion.id}
           className={suggestion.id === selected?.id ? "agent-proactive-history-row active" : "agent-proactive-history-row"}
           onClick={() => { setSelectedId(suggestion.id); setHistoryOpen(false); }}
@@ -195,20 +236,30 @@ export default function ProactiveAgentPanel({
           <span className={`agent-proactive-history-state ${suggestion.status}`}>{t(PROACTIVE_STATUS_LABELS[suggestion.status])}</span>
           <time>{formatRelativeTime(suggestion.createdAt)}</time>
         </button>)}
-        {sorted.length === 0 && <div className="agent-proactive-empty compact">
+        {historyRows.length === 0 && <div className="agent-proactive-empty compact">
           <strong>{t("No history yet")}</strong>
           <p>{t("Queued, shown, accepted, dismissed, and expired suggestions all appear here.")}</p>
         </div>}
       </div>
     </div> : <div className="agent-proactive-body">
-      {selected ? <>
+      {replyOpen ? <div className="agent-proactive-reply-thread">
+        <button className="agent-proactive-back" onClick={() => setReplyOpen(false)}><span>{t("Back to suggestions")}</span></button>
+        <div className="agent-proactive-reply-list">
+          {replyMessages.map((message, index) => <div key={`${message.role}-${index}`} className={`agent-proactive-reply-message ${message.role}`}>
+            <span>{message.role === "assistant" ? t("Proactive agent") : t("You")}</span>
+            <p>{message.text}</p>
+          </div>)}
+          {controller.replyBusy && <div className="agent-proactive-reply-message assistant pending"><span>{t("Proactive agent")}</span><p>{t("Thinking…")}</p></div>}
+          {replyError && <p className="agent-proactive-reply-error">{replyError}</p>}
+          <div ref={replyEndRef} />
+        </div>
+      </div> : selected ? <>
         {selected.id !== latest?.id && <button className="agent-proactive-back" onClick={backToLatest}>
           <span>{t("Earlier output")}</span>
           <b>{t("Back to latest")}</b>
         </button>}
         <div className="agent-proactive-meta">
           <b className={`agent-proactive-source source-${selected.source}`}>{t(PROACTIVE_SOURCE_LABELS[selected.source])}</b>
-          <span>·</span>
           <time>{formatRelativeTime(selected.createdAt)}</time>
           {stateLabel && <span className={`agent-proactive-state ${selected.status}`}>{stateLabel}</span>}
         </div>
@@ -247,23 +298,23 @@ export default function ProactiveAgentPanel({
       </div>}
     </div>}
 
-    {!historyOpen && (composerOpen ? <form className="agent-proactive-compose" onSubmit={submitDraft}>
+    {!historyOpen && (composerOpen ? <form className="agent-proactive-compose" onSubmit={submitReply}>
       <input
         ref={composerRef}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        placeholder={t("Ask in chat (draft only)")}
-        aria-label={t("Ask in chat")}
+        placeholder={t("Reply to Proactive agent…")}
+        aria-label={t("Reply to Proactive agent")}
         onKeyDown={(event) => { if (event.key === "Escape") { setComposerOpen(false); setDraft(""); } }}
       />
-      <button type="submit" className="agent-proactive-send" disabled={!draft.trim()} title={t("Draft in chat")} aria-label={t("Draft in chat")}><Send size={11} /></button>
+      <button type="submit" className="agent-proactive-send" disabled={!draft.trim() || controller.replyBusy} title={t("Send reply")} aria-label={t("Send reply")}><ArrowUp size={15} /></button>
       <button type="button" className="agent-proactive-compose-close" onClick={() => { setComposerOpen(false); setDraft(""); }} title={t("Close")} aria-label={t("Close")}><X size={11} /></button>
     </form> : <div className="agent-proactive-foot">
-      <button className="agent-proactive-reply" onClick={() => setComposerOpen(true)}>
-        <MessageSquare size={11} />
+      <button className="agent-proactive-reply" onClick={openReplyComposer}>
+        <MessageSquare size={12} />
         {t("Reply")}
       </button>
-      <span className="agent-proactive-foot-hint">{t("Suggestions only · drafts go to chat")}</span>
     </div>)}
   </div>;
 }
+

@@ -7,9 +7,9 @@ type LayerLayout = Partial<Record<AgentPanelId, PanelLayout>>;
 
 const STORAGE_KEY = "archimedes-agent-layer-v1";
 const MIN_WIDTH = 340;
-const MIN_HEIGHT = 190;
+const MIN_HEIGHT = 220;
 const EDGE = 12;
-const DEFAULT_PROACTIVE = { w: 400, h: 220 };
+const DEFAULT_PROACTIVE = { w: 440, h: 300 };
 const DEFAULT_RESEARCH = { w: 560, h: 220 };
 
 function clamp(value: number, min: number, max: number) {
@@ -35,7 +35,7 @@ function defaultLayout(id: AgentPanelId, size: { width: number; height: number }
   }
   return clampLayout({
     x: size.width - DEFAULT_PROACTIVE.w - 20,
-    y: size.height - DEFAULT_PROACTIVE.h - 180,
+    y: size.height - DEFAULT_PROACTIVE.h - 210,
     ...DEFAULT_PROACTIVE,
   }, size);
 }
@@ -49,6 +49,12 @@ function readLayout(): LayerLayout {
       const panel = parsed?.[id];
       if (!panel) continue;
       if ([panel.x, panel.y, panel.w, panel.h].every((value) => typeof value === "number" && Number.isFinite(value))) {
+        // The first floating panel shipped at 400×220, which is too tight for
+        // the current type scale. Grow only the untouched default.
+        if (id === "proactive" && panel.w === 400 && panel.h === 220) {
+          next[id] = { x: panel.x, y: panel.y, ...DEFAULT_PROACTIVE };
+          continue;
+        }
         next[id] = { x: panel.x, y: panel.y, w: panel.w, h: panel.h };
       }
     }

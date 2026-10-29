@@ -14,6 +14,9 @@ const settingsPanel = read("src", "ProactiveSettingsPanel.tsx");
 const settingsModal = read("src", "SettingsModal.tsx");
 const types = read("src", "proactive-types.ts");
 const engine = read("src", "proactive-engine.ts");
+const model = read("electron", "model-config.cjs");
+const main = read("electron", "main.cjs");
+const proactiveAgent = read("electron", "proactive-agent.cjs");
 const hook = read("src", "useProactiveAgent.ts");
 const library = read("src", "LibraryView.tsx");
 const paper = read("src", "PaperWritingView.tsx");
@@ -148,7 +151,8 @@ test("proactive settings expose mode, budget, quiet hours, and L0 sources", () =
   assert.match(settingsPanel, /Repeated passage selection/);
   assert.match(settingsPanel, /LaTeX build failure/);
   assert.match(settingsPanel, /Uncited claims/);
-  assert.match(settingsPanel, /No screenshots/);
+  assert.match(settingsPanel, /App screenshots/);
+  assert.match(settingsPanel, /L2 · Archimedes window only/);
   assert.match(settingsPanel, /3 dismissals/);
 });
 
@@ -184,15 +188,65 @@ test("proactive shows the latest output only and hides the composer until asked"
   assert.match(proactive, /composerOpen \?/);
   assert.match(proactive, /agent-proactive-foot/);
   assert.match(proactive, /agent-proactive-history/);
-  assert.match(proactive, /onDraftInChat/);
+  assert.match(proactive, /controller\.reply/);
+  assert.match(proactive, /ArrowUp/);
   assert.doesNotMatch(proactive, /proactive-inbox/);
 });
 
-test("proactive suggestions are read-only and only draft into the main chat", () => {
-  assert.match(app, /function draftProactiveInChat/);
-  assert.match(app, /Draft added to the main composer/);
+test("proactive suggestions are read-only and replies use the Proactive model", () => {
+  assert.match(hook, /runProactiveReply/);
+  assert.match(hook, /replyBusy/);
+  assert.doesNotMatch(app, /draftProactiveInChat/);
   assert.doesNotMatch(app, /runProactiveSuggestion[\s\S]{0,700}writeWorkspaceFile/);
-  assert.match(proactive, /Suggestions only · drafts go to chat/);
+  assert.match(proactive, /submitReply/);
+  assert.match(proactive, /Back to suggestions/);
+  assert.match(css, /\.agent-proactive-send \{[^}]*background: transparent/);
+  assert.doesNotMatch(css, /\.agent-proactive-send \{[^}]*border-radius: 50%/);
+});
+
+test("live observation follows the local activity pulse", () => {
+  assert.match(hook, /useActivityPulse/);
+  assert.match(hook, /observationInterval/);
+  assert.match(hook, /shouldObserve/);
+  assert.match(hook, /runProactiveObservation/);
+  assert.match(hook, /recordObservation/);
+  assert.match(proactive, /agent-proactive-activity/);
+  assert.match(proactive, /controller\.activity\.score/);
+  assert.match(css, /\.agent-proactive-activity i \{/);
+  assert.match(settingsPanel, /Live observation/);
+  assert.match(settingsPanel, /liveObservationBudget/);
+  assert.match(settingsPanel, /Library radar/);
+  assert.match(hook, /citationSignalFromMessages/);
+  assert.match(hook, /archimedes-proactive-radar-day/);
+});
+
+test("L2 captures the Archimedes window only, never the desktop", () => {
+  assert.match(settingsPanel, /appCapture/);
+  assert.match(settingsPanel, /disabled={!settings.visionCapable}/);
+  assert.match(settingsPanel, /Mark the Proactive model as vision-capable/);
+  assert.match(settingsPanel, /L2 · Archimedes window only/);
+  assert.match(hook, /captureProactiveScreenshot/);
+  assert.match(hook, /proactiveCapture/);
+  assert.match(hook, /lastCaptureRef/);
+  assert.match(main, /proactive:screenshot/);
+  assert.match(main, /captureAppWindow/);
+  assert.match(proactiveAgent, /capturePage/);
+  assert.match(proactiveAgent, /toJPEG/);
+  assert.doesNotMatch(main, /desktopCapturer/);
+  assert.match(css, /\[data-proactive-capture="true"\] \.agent-layer/);
+});
+
+test("Proactive model lives inside the Proactive agent page", () => {
+  assert.match(settingsPanel, /Proactive model/);
+  assert.match(settingsPanel, /saveModelConfig/);
+  assert.match(settingsPanel, /visionCapable/);
+  assert.match(settingsPanel, /This model accepts images/);
+  assert.doesNotMatch(settingsModal, /proactive-model/);
+  assert.match(model, /role = "agent"/);
+  assert.match(model, /useAgent/);
+  assert.match(model, /inheritedFromAgent/);
+  assert.match(types, /liveObservation: boolean/);
+  assert.match(types, /visionCapable: boolean/);
 });
 
 test("the research path is thread-scoped and can be pinned globally", () => {

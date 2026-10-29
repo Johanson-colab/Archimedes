@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { extractModelIds, getPublicModelConfig, initializeModelConfig, listProviderModels, saveModelConfig, testModelConfig, validateModelId } = require("./model-config.cjs");
+const { extractModelIds, getActiveModelConfig, getPublicModelConfig, initializeModelConfig, listProviderModels, saveModelConfig, testModelConfig, validateModelId } = require("./model-config.cjs");
 
 test("requires provider-qualified model IDs for OpenRouter", () => {
   assert.throws(
@@ -37,6 +37,41 @@ test("accepts new providers without reusing another provider's API key", () => {
     saveModelConfig({ provider: "anthropic", baseUrl: "https://api.anthropic.com/v1", model: "claude-sonnet-4-6", apiKey: "anthropic-key" });
     assert.equal(getPublicModelConfig().provider, "anthropic");
     assert.equal(getPublicModelConfig().hasApiKey, true);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reads the legacy flat model config as the Agent role", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-legacy-"));
+  try {
+    initializeModelConfig(directory);
+    fs.writeFileSync(path.join(directory, "model-config.json"), JSON.stringify({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "legacy-key" }));
+    assert.equal(getPublicModelConfig("agent").model, "gpt-4.1-mini");
+    assert.equal(getActiveModelConfig("proactive").model, "gpt-4.1-mini");
+    assert.equal(getActiveModelConfig("proactive").inheritedFromAgent, true);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("keeps the Agent and Proactive models separate and supports inheritance", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-roles-"));
+  try {
+    initializeModelConfig(directory);
+    saveModelConfig({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "agent-key" });
+    saveModelConfig({ provider: "deepseek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", apiKey: "proactive-key" }, "proactive");
+    assert.equal(getPublicModelConfig("agent").model, "gpt-4.1-mini");
+    assert.equal(getPublicModelConfig("proactive").model, "deepseek-chat");
+    assert.equal(getPublicModelConfig("proactive").inheritedFromAgent, false);
+    assert.equal(getActiveModelConfig("proactive").apiKey, "proactive-key");
+
+    saveModelConfig({ provider: "deepseek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", useAgent: true }, "proactive");
+    assert.equal(getPublicModelConfig("proactive").model, "gpt-4.1-mini");
+    assert.equal(getPublicModelConfig("proactive").source, "agent");
+    assert.equal(getPublicModelConfig("proactive").inheritedFromAgent, true);
+    assert.equal(getActiveModelConfig("proactive").inheritedFromAgent, true);
+    assert.equal(getActiveModelConfig("proactive").apiKey, "agent-key");
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

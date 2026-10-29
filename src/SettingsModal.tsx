@@ -320,6 +320,7 @@ export default function SettingsModal({
             onChange={onChangeProactiveSettings}
             onObserveOnce={onObserveProactive}
             onResetHistory={onResetProactiveHistory}
+            bridge={bridge}
             historyCount={proactiveHistoryCount}
             canObserve={proactiveSettings.mode !== "off"}
           />}
