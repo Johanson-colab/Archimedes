@@ -45,7 +45,7 @@ function collectFiles(payload: unknown, files: Set<string>) {
 }
 
 function isToolCall(event: ResearchEvent) {
-  return event.type === "tool_call" || event.type === "tool.result" || event.type === "tool_result";
+  return event.type === "tool_call";
 }
 
 export default function TrajectoryView({ thread, events, provider, model, modeLabel, onCopy, onOpenJourney, focusOrdinal, onFocusApplied }: TrajectoryViewProps) {
