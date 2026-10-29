@@ -687,7 +687,7 @@ function applyDelta(accumulator, delta, onTextDelta) {
   }
 }
 
-async function complete(config, messages, { signal, onTextDelta, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens }) {
+async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens }) {
   const tokenLimit = Number.isFinite(Number(maxOutputTokens)) ? Math.max(64, Math.min(8192, Math.round(Number(maxOutputTokens)))) : 0;
   if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens: tokenLimit });
   const nativeReasoning = openAiReasoningOptions(config, reasoningEffort);

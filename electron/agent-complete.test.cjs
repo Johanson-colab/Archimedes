@@ -58,3 +58,24 @@ test("retries a nonstandard empty stream as a non-streaming completion", async (
     assert.equal(requests[1].stream, false);
   } finally { global.fetch = originalFetch; }
 });
+
+test("completes without a text callback, as the proactive agent does", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    if (body.stream) {
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        headers: { get: () => "text/event-stream" },
+        body: new ReadableStream({ start(controller) { controller.enqueue(encoder.encode('data: {"type":"response.output_text.delta","delta":"OK"}\n\n')); controller.close(); } }),
+      };
+    }
+    return successfulResponse();
+  };
+  try {
+    const result = await complete({ provider: "custom", baseUrl: "https://example.test/v1", model: "compat-model", apiKey: "test-key" },
+      [{ role: "user", content: "Reply with OK." }], { allowTools: false, maxOutputTokens: 128 });
+    assert.equal(result.content, "OK");
+  } finally { global.fetch = originalFetch; }
+});
