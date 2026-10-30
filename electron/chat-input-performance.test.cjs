@@ -80,3 +80,41 @@ test("typing leaves long history and navigation untouched while history updates 
     delete global.cancelAnimationFrame;
   }
 });
+
+test("parent activity updates preserve history callbacks while using their latest implementations", async () => {
+  const dom = new JSDOM('<!doctype html><div id="root"></div>');
+  global.window = dom.window;
+  global.document = dom.window.document;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const React = require("react");
+  const { act } = React;
+  const { createRoot } = require("react-dom/client");
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "App.tsx"), "utf8");
+  const start = source.indexOf("  const historyHandlersRef = useRef(");
+  const end = source.indexOf("\n  const [welcomeDismissed", start);
+  assert.ok(start >= 0 && end > start);
+  const { transformWithOxc } = await import("vite");
+  const { code } = await transformWithOxc(`function useHistoryHandlers(onApprove, onReject, onOpenFile, onWelcomeAction) {\n${source.slice(start, end)}\nreturn { approveHistoryAction, rejectHistoryAction, openHistoryFile };\n}`, "history-handlers.tsx");
+  const useHistoryHandlers = new Function("useRef", "useCallback", `${code}\nreturn useHistoryHandlers;`)(React.useRef, React.useCallback);
+  let renders = 0;
+  let observed = "";
+  const History = React.memo(({ handlers }) => { renders++; return React.createElement("button", { onClick: handlers.approveHistoryAction }, "Approve"); }, (a, b) => a.handlers.approveHistoryAction === b.handlers.approveHistoryAction && a.handlers.rejectHistoryAction === b.handlers.rejectHistoryAction && a.handlers.openHistoryFile === b.handlers.openHistoryFile);
+  function Parent({ version }) {
+    const handlers = useHistoryHandlers(() => { observed = version; }, () => {}, () => {}, () => {});
+    return React.createElement(History, { handlers });
+  }
+  const root = createRoot(document.getElementById("root"));
+  try {
+    await act(async () => root.render(React.createElement(Parent, { version: "old" })));
+    await act(async () => root.render(React.createElement(Parent, { version: "new" })));
+    assert.equal(renders, 1);
+    await act(async () => document.querySelector("button").click());
+    assert.equal(observed, "new");
+  } finally {
+    await act(async () => root.unmount());
+    dom.window.close();
+    delete global.window;
+    delete global.document;
+    delete global.IS_REACT_ACT_ENVIRONMENT;
+  }
+});

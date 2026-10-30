@@ -2640,6 +2640,13 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   const reasoningMenuRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
+  // Parent activity updates can occur every second. Keep the history's event
+  // handlers stable without retaining stale closures from the parent render.
+  const historyHandlersRef = useRef({ onApprove, onReject, onOpenFile, onWelcomeAction });
+  historyHandlersRef.current = { onApprove, onReject, onOpenFile, onWelcomeAction };
+  const approveHistoryAction = useCallback(() => historyHandlersRef.current.onApprove(), []);
+  const rejectHistoryAction = useCallback(() => historyHandlersRef.current.onReject(), []);
+  const openHistoryFile = useCallback((path: string) => historyHandlersRef.current.onOpenFile(path), []);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const welcomeVisible = showWelcome && !welcomeDismissed;
 
@@ -2773,15 +2780,15 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
   }
 
   const selectWelcomeWorkflow = useCallback((action: ResearchWelcomeAction) => {
-    onWelcomeAction(action);
+    historyHandlersRef.current.onWelcomeAction(action);
     if (action === "idea") {
       setWelcomeDismissed(true);
       requestAnimationFrame(() => composerRef.current?.focus());
     }
-  }, [onWelcomeAction]);
+  }, []);
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
-    <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={onApprove} onReject={onReject} onOpenFile={onOpenFile} />
+    <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} />
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
       <div className="conversation-composer">
