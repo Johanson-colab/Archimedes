@@ -6303,7 +6303,6 @@ html[data-proactive-capture="true"] .proactive-toast { visibility: hidden !impor
 .data-chart-gallery { min-width: 0; }
 .data-chart-controls { margin-top: 14px; }
 .data-chart-filter-panel { max-height: min(72vh, 640px); overflow-y: auto; }
-.data-chart-filter-select { min-height: 28px; padding: 0 9px; color: var(--night-ink-soft); background: var(--night-panel-raised); border: 1px solid var(--night-line); border-radius: 5px; font-size: 10px; }
 .data-chart-search { height: 38px; background: var(--night-panel); border-color: var(--night-line); }
 .data-chart-search input { color: var(--night-ink); }
 .data-chart-results { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; margin-bottom: 10px; color: var(--night-muted); border-top: 1px solid var(--night-line); font-size: 10px; }

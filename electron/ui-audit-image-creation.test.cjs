@@ -32,17 +32,16 @@ test("the page keeps Gallery and Templates in one tab row with the module action
   assert.match(view, /useDialogFocus/);
 });
 
-test("Data charts is a separate Gallery tab with only the requested research fields and chart kinds", () => {
+test("Data charts is a separate Gallery tab with chart types and tables, but no field or venue filter", () => {
   assert.match(view, /role="tab" id="image-creation-tab-charts"/);
   assert.match(view, /<DataChartGallery active=\{active\} \/>/);
-  for (const area of ['"ml"', '"ai"', '"vision"', '"nlp"']) assert.match(charts, new RegExp(`id: ${area}`));
   assert.match(charts, /type Category = "data" \| "table"/);
   assert.match(charts, /EXCLUDED_CHARTS = new Set\(\["area", "other", "mixed"\]\)/);
   assert.match(charts, /figure\.chart_types\.some\(\(type\) => EXCLUDED_CHARTS\.has\(type\)\)/);
   assert.match(charts, /img\.paperfigure\.net/);
   assert.match(charts, /image-creation-filter-panel data-chart-filter-panel" role="dialog"/);
   assert.match(charts, /className="image-creation-controls data-chart-controls"/);
-  assert.doesNotMatch(charts, /data-chart-scope/);
+  assert.doesNotMatch(charts, /searchParams\.set\("area"|searchParams\.set\("venue"|Filter by venue|Research field/);
 });
 
 test("images lead and text is a single secondary line", () => {
