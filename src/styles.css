@@ -4152,8 +4152,11 @@ html[data-titlebar="overlay"] .workbench-tabs::-webkit-scrollbar { display: none
 .theme-paper .settings-embedded .provider-list { border-right-color: var(--border-soft); }
 .theme-paper .settings-embedded .provider-option.active {
   background: var(--surface-control);
-  box-shadow: inset 0 0 0 1px var(--border-default);
+  box-shadow: none;
 }
+/* The embedded card provides the surface; the config pane must not cast its
+   own dialog shadow inside it. */
+.theme-paper .settings-embedded .provider-config { box-shadow: none; }
 .theme-paper .settings-embedded .provider-config input {
   background: var(--surface-raised);
   border-color: var(--border-default);
