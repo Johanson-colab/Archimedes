@@ -10,6 +10,9 @@ export type DialogStyle = "elevated" | "flat" | "outlined" | "glass";
 export type ShapeStyle = "sharp" | "soft" | "rounded";
 export type ShadowStyle = "default" | "none" | "subtle" | "deep";
 export type MotionStyle = "full" | "reduced" | "none";
+export type InputStyle = "default" | "filled" | "outlined" | "ghost";
+export type CardStyle = "default" | "flat" | "outlined";
+export type MenuStyle = "default" | "flat" | "outlined" | "glass";
 
 export type AppearanceStyles = {
   button?: ButtonStyle;
@@ -17,10 +20,14 @@ export type AppearanceStyles = {
   shape?: ShapeStyle;
   shadow?: ShadowStyle;
   motion?: MotionStyle;
+  input?: InputStyle;
+  card?: CardStyle;
+  menu?: MenuStyle;
 };
 
-/** Component styles that can be scoped to one surface. Motion is global. */
-export type SurfaceStyles = Omit<AppearanceStyles, "motion">;
+/** Component styles that can be scoped to one surface. Motion and surface
+ * presets for inputs, cards, and menus are global. */
+export type SurfaceStyles = Omit<AppearanceStyles, "motion" | "input" | "card" | "menu">;
 
 /** Accent, surface, and component styles that apply to one surface subtree. */
 export type SurfaceAppearance = {
@@ -198,6 +205,18 @@ export function isMotionStyle(value: unknown): value is MotionStyle {
   return value === "full" || value === "reduced" || value === "none";
 }
 
+export function isInputStyle(value: unknown): value is InputStyle {
+  return value === "default" || value === "filled" || value === "outlined" || value === "ghost";
+}
+
+export function isCardStyle(value: unknown): value is CardStyle {
+  return value === "default" || value === "flat" || value === "outlined";
+}
+
+export function isMenuStyle(value: unknown): value is MenuStyle {
+  return value === "default" || value === "flat" || value === "outlined" || value === "glass";
+}
+
 function normalizeStyles(input: unknown): AppearanceStyles | undefined {
   if (!input || typeof input !== "object") return undefined;
   const value = input as AppearanceStyles;
@@ -207,6 +226,9 @@ function normalizeStyles(input: unknown): AppearanceStyles | undefined {
     ...(isShapeStyle(value.shape) ? { shape: value.shape } : {}),
     ...(isShadowStyle(value.shadow) ? { shadow: value.shadow } : {}),
     ...(isMotionStyle(value.motion) ? { motion: value.motion } : {}),
+    ...(isInputStyle(value.input) ? { input: value.input } : {}),
+    ...(isCardStyle(value.card) ? { card: value.card } : {}),
+    ...(isMenuStyle(value.menu) ? { menu: value.menu } : {}),
   };
   return Object.keys(styles).length ? styles : undefined;
 }
@@ -217,6 +239,9 @@ function normalizeSurfaceStyles(input: unknown): SurfaceStyles | undefined {
   if (!styles) return undefined;
   const surfaceStyles: AppearanceStyles = { ...styles };
   delete surfaceStyles.motion;
+  delete surfaceStyles.input;
+  delete surfaceStyles.card;
+  delete surfaceStyles.menu;
   return Object.keys(surfaceStyles).length ? surfaceStyles as SurfaceStyles : undefined;
 }
 
@@ -677,6 +702,9 @@ export function applyAppearance(root: AppearanceRoot, settings: AppearanceSettin
   root.dataset.theme = theme;
   root.dataset.density = settings.overrides.density ?? DENSITY_DEFAULT;
   root.dataset.motion = settings.styles?.motion ?? "full";
+  root.dataset.inputStyle = settings.styles?.input ?? "default";
+  root.dataset.cardStyle = settings.styles?.card ?? "default";
+  root.dataset.menuStyle = settings.styles?.menu ?? "default";
   for (const variable of APPEARANCE_VARIABLES) root.style.removeProperty(variable);
   const values = {
     ...(settings.overrides.accent ? accentTokens(settings.overrides.accent, theme) : {}),

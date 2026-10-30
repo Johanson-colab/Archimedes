@@ -96,6 +96,26 @@ test("Motion is a global Full / Reduced / None preference", () => {
   assert.match(css, /animation: none !important/);
 });
 
+test("Components exposes global input, card, and menu presets", () => {
+  assert.match(settings, /t\("Components"\)/);
+  assert.match(settings, /t\("Input style"\)/);
+  assert.match(settings, /t\("Card style"\)/);
+  assert.match(settings, /t\("Menu style"\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ input: id \}\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ card: id \}\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ menu: id \}\)/);
+  assert.match(appearance, /export type InputStyle/);
+  assert.match(appearance, /export type CardStyle/);
+  assert.match(appearance, /export type MenuStyle/);
+  assert.match(appearance, /root\.dataset\.inputStyle/);
+  assert.match(appearance, /root\.dataset\.cardStyle/);
+  assert.match(appearance, /root\.dataset\.menuStyle/);
+  assert.match(css, /html\[data-input-style="filled"\]/);
+  assert.match(css, /html\[data-card-style="outlined"\]/);
+  assert.match(css, /html\[data-menu-style="glass"\]/);
+  assert.match(css, /backdrop-filter: blur\(18px\) saturate\(1\.12\)/);
+});
+
 test("appearance can be exported, imported, and checked for contrast", () => {
   assert.match(settings, /toThemePack\(appearance/);
   assert.match(settings, /parseThemePack\(JSON\.parse/);
@@ -132,7 +152,7 @@ test("the new appearance copy is translated", () => {
     "Apply to",
     "Global",
     "Agent",
-    "Accent, surface, and component styles can be scoped; density, radius, and motion stay global.",
+    "Button, dialog, shape, and shadow can be scoped; density, radius, motion, input, card, and menu stay global.",
     "Reset this surface",
     "Contrast warning",
     "Style",
@@ -146,6 +166,14 @@ test("the new appearance copy is translated", () => {
     "Depth for buttons and dialogs.",
     "Motion",
     "Animation and transition intensity across the app.",
+    "Components",
+    "Input style",
+    "Field fill and border treatment across the app.",
+    "Card style",
+    "Panel fill and border treatment across the app.",
+    "Menu style",
+    "Popup fill, border, and blur treatment across the app.",
+    "Filled",
     "Full",
     "Reduced",
     "Solid",

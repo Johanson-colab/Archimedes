@@ -6340,3 +6340,48 @@ html[data-motion="none"] *::after {
   transition: none !important;
   scroll-behavior: auto !important;
 }
+
+/* Appearance > Components: opt-in input / card / menu surface presets. The
+   default values emit no rules, so the shipped appearance stays unchanged. */
+html[data-input-style="filled"] :is(.settings-select, .settings-text-input, .settings-row-control input:not([type="range"]):not([type="color"]):not([type="checkbox"]), .provider-config input, .web-search-modal-body input, .workspace-modal input, .workspace-modal textarea, .daily-search-input-row input, .daily-search-input-row textarea, .daily-save-target select, .conference-filter-row select, .paper-search-control, .paper-ai-compose-input, .paper-ai-compose textarea, .paper-notes textarea, .paper-record-row select, .artifact-comment-box textarea, .context-search, .composer textarea) {
+  background: var(--surface-raised) !important;
+  border-color: var(--border-soft) !important;
+}
+html[data-input-style="outlined"] :is(.settings-select, .settings-text-input, .settings-row-control input:not([type="range"]):not([type="color"]):not([type="checkbox"]), .provider-config input, .web-search-modal-body input, .workspace-modal input, .workspace-modal textarea, .daily-search-input-row input, .daily-search-input-row textarea, .daily-save-target select, .conference-filter-row select, .paper-search-control, .paper-ai-compose-input, .paper-ai-compose textarea, .paper-notes textarea, .paper-record-row select, .artifact-comment-box textarea, .context-search, .composer textarea) {
+  background: var(--surface-panel) !important;
+  border-color: var(--border-strong) !important;
+}
+html[data-input-style="ghost"] :is(.settings-select, .settings-text-input, .settings-row-control input:not([type="range"]):not([type="color"]):not([type="checkbox"]), .provider-config input, .web-search-modal-body input, .workspace-modal input, .workspace-modal textarea, .daily-search-input-row input, .daily-search-input-row textarea, .daily-save-target select, .conference-filter-row select, .paper-search-control, .paper-ai-compose-input, .paper-ai-compose textarea, .paper-notes textarea, .paper-record-row select, .artifact-comment-box textarea, .context-search, .composer textarea) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: inset 0 -1px 0 var(--border-default) !important;
+}
+html:is([data-input-style="filled"], [data-input-style="outlined"], [data-input-style="ghost"]) :is(.settings-select, .settings-text-input, .settings-row-control input:not([type="range"]):not([type="color"]):not([type="checkbox"]), .provider-config input, .web-search-modal-body input, .workspace-modal input, .workspace-modal textarea, .daily-search-input-row input, .daily-search-input-row textarea, .daily-save-target select, .conference-filter-row select, .paper-search-control, .paper-ai-compose-input, .paper-ai-compose textarea, .paper-notes textarea, .paper-record-row select, .artifact-comment-box textarea, .context-search, .composer textarea):focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent) !important;
+}
+
+html[data-card-style="flat"] :is(.settings-group, .library-card, .daily-paper-row, .gallery-card, .proactive-card, .workspace-change-card, .paper-inspector) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-paper-row, .gallery-card, .proactive-card, .workspace-change-card, .paper-inspector) {
+  border-color: transparent !important;
+  box-shadow: inset 0 0 0 1px var(--border-strong) !important;
+}
+
+html[data-menu-style="flat"] :is(.proactive-menu, .agent-proactive-menu, .project-more-menu, .work-filter-menu, .context-picker-menu, .research-mode-menu, .composer-context-menu, .workbench-menu, .model-catalog) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+html[data-menu-style="outlined"] :is(.proactive-menu, .agent-proactive-menu, .project-more-menu, .work-filter-menu, .context-picker-menu, .research-mode-menu, .composer-context-menu, .workbench-menu, .model-catalog) {
+  border-color: var(--border-strong) !important;
+  box-shadow: none !important;
+}
+html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .project-more-menu, .work-filter-menu, .context-picker-menu, .research-mode-menu, .composer-context-menu, .workbench-menu, .model-catalog) {
+  background: color-mix(in oklab, var(--surface-panel) 84%, transparent) !important;
+  border-color: color-mix(in oklab, var(--border-default) 70%, transparent) !important;
+  box-shadow: var(--dialog-shadow-md) !important;
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+

@@ -149,7 +149,10 @@ use `.theme-paper` because they predate the token pass.
     "dialog": "glass",
     "shape": "rounded",
     "shadow": "deep",
-    "motion": "reduced"
+    "motion": "reduced",
+    "input": "outlined",
+    "card": "flat",
+    "menu": "glass"
   },
   "surfaces": {
     "reader": {
@@ -178,7 +181,8 @@ use `.theme-paper` because they predate the token pass.
   component style overrides. `surfaceCss()` emits `[data-surface="…"]` rules
   containing the derived accent / surface tokens and the scoped button, dialog,
   shape, and shadow tokens; the reader, writing workspace, and agent layer
-  carry the matching attribute. Density, control radius, and motion stay global.
+  carry the matching attribute. Density, control radius, motion, and the
+  global input / card / menu presets stay global.
 - `densityTokens()` writes control height, settings-row padding, and navigation
   heights for compact / comfortable / spacious. Comfortable is the default.
 - `radiusTokens()` writes `--radius-control` within `0–14px`.
@@ -227,11 +231,15 @@ The first component layer covers buttons and the main dialogs:
   to Reader / Writing / Agent; the scoped values are written into the same
   `[data-surface]` rules as accent and surface overrides.
 - **Motion** is a global Full / Reduced / None preference. `applyAppearance()`
-  writes `data-motion` on the document root; Reduces collapses transition and
+  writes `data-motion` on the document root; Reduced collapses transition and
   animation durations to `0.01ms`, None removes them entirely. Motion is not
   scoped per surface.
-- ThemePack v2 stores `styles` (including motion) and per-surface styles; v1
-  packs migrate without losing colors.
+- **Input / Card / Menu** are global presets driven by `data-input-style`,
+  `data-card-style`, and `data-menu-style` on the document root. Default emits
+  no rules; Filled / Outlined / Ghost inputs, Flat / Outlined cards, and Flat /
+  Outlined / Glass menus opt into the alternate surface treatment.
+- ThemePack v2 stores `styles` (including motion and component presets) and
+  per-surface styles; v1 packs migrate without losing colors.
 - Glass dialogs add `--dialog-bg` and `--dialog-backdrop-filter`; the components
   use `var(--dialog-bg, …)` so the default background is untouched.
 
