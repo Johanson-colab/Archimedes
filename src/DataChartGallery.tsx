@@ -4,8 +4,9 @@ import { ArrowLeft, ArrowRight, ExternalLink, ImageOff, LoaderCircle, Search, Sl
 import { useDialogFocus } from "./useDialogFocus";
 
 const SOURCE_ROOT = "https://paperfigure.net/";
-const SEARCH_URL = `${SOURCE_ROOT}api/search`;
-const MAX_RESULTS = 50;
+const IMAGE_ROOT = "https://img.paperfigure.net/";
+const SHARDS = [0, 1, 2, 3].map((index) => `${SOURCE_ROOT}data/index-${index}.json`);
+const PAGE_SIZE = 48;
 const CHART_TYPES = [
   { id: "bar", label: "Bar" }, { id: "line", label: "Line" },
   { id: "scatter", label: "Scatter" }, { id: "point", label: "Point & error bar" },
@@ -33,23 +34,76 @@ type ChartFigure = {
   thumb: string;
   page: string;
 };
-type SearchResponse = { results: ChartFigure[]; total: number };
-
-function isChartFigure(value: unknown): value is ChartFigure {
-  if (!value || typeof value !== "object") return false;
-  const row = value as Record<string, unknown>;
-  return typeof row.id === "string" && typeof row.paper === "string"
-    && typeof row.venue === "string" && typeof row.year === "string"
-    && typeof row.category === "string"
-    && Array.isArray(row.chart_types) && row.chart_types.every((type) => typeof type === "string")
-    && typeof row.caption === "string" && Array.isArray(row.tags)
-    && typeof row.figure === "string" && typeof row.image === "string"
-    && typeof row.thumb === "string" && typeof row.page === "string";
-}
+type RawFigure = { fig_id?: unknown; num?: unknown; caption?: unknown; kind?: unknown; thumb?: unknown; full?: unknown; chart_guess?: unknown; charts?: unknown; vision?: unknown };
+type RawPaper = { paper_key?: unknown; meta?: unknown; figures?: unknown };
+let catalogPromise: Promise<ChartFigure[]> | null = null;
 
 function trustedUrl(value: string, host: string) {
   try { const url = new URL(value); return url.protocol === "https:" && url.hostname === host ? url.href : ""; }
   catch { return ""; }
+}
+
+function normalizeChart(value: unknown) {
+  if (value === "violin") return "box";
+  if (value === "mixed") return "other";
+  return typeof value === "string" ? value : "";
+}
+
+function imageUrl(value: unknown) {
+  if (typeof value !== "string") return "";
+  try {
+    const url = new URL(value, IMAGE_ROOT);
+    return url.protocol === "https:" && url.hostname === "img.paperfigure.net" && url.pathname.startsWith("/figs/") ? url.href : "";
+  } catch { return ""; }
+}
+
+function flattenCatalog(payloads: unknown[]): ChartFigure[] {
+  const figures: ChartFigure[] = [];
+  for (const payload of payloads) {
+    if (!payload || typeof payload !== "object" || !Array.isArray((payload as { papers?: unknown }).papers)) throw new Error("The figure catalogue format has changed.");
+    for (const paper of (payload as { papers: RawPaper[] }).papers) {
+      if (!paper || typeof paper !== "object" || !Array.isArray(paper.figures)) continue;
+      const meta = paper.meta && typeof paper.meta === "object" ? paper.meta as Record<string, unknown> : {};
+      for (const raw of paper.figures as RawFigure[]) {
+        if (!raw || typeof raw !== "object" || typeof raw.fig_id !== "string") continue;
+        const vision = raw.vision && typeof raw.vision === "object" ? raw.vision as Record<string, unknown> : {};
+        const sourceCategory = typeof vision.category === "string" ? vision.category
+          : raw.kind === "result" ? "data" : raw.kind === "table" ? "table" : "other";
+        const category = sourceCategory === "data" || sourceCategory === "table" ? sourceCategory : null;
+        if (!category) continue;
+        const visionChart = normalizeChart(vision.chart_type);
+        const primary = (!visionChart || visionChart === "other") ? normalizeChart(raw.chart_guess) || visionChart : visionChart;
+        const chartTypes = Array.isArray(raw.charts) && raw.charts.length > 1
+          ? [...new Set(raw.charts.map(normalizeChart))] : [primary];
+        const figure: ChartFigure = {
+          id: raw.fig_id,
+          paper: typeof meta.title === "string" ? meta.title : String(paper.paper_key || raw.fig_id),
+          venue: typeof meta.venue === "string" ? meta.venue : "",
+          year: typeof meta.year === "string" ? meta.year : "",
+          category,
+          chart_types: category === "data" ? chartTypes : [],
+          caption: typeof raw.caption === "string" ? raw.caption : "",
+          tags: Array.isArray(vision.tags) ? vision.tags.filter((tag): tag is string => typeof tag === "string") : [],
+          figure: String(raw.num ?? ""),
+          image: imageUrl(raw.full),
+          thumb: imageUrl(raw.thumb),
+          page: `${SOURCE_ROOT}en/#fig=${encodeURIComponent(raw.fig_id)}`,
+        };
+        if (figure.image && figure.thumb) figures.push(figure);
+      }
+    }
+  }
+  return figures.sort((a, b) => Number(b.year || 0) - Number(a.year || 0) || a.paper.localeCompare(b.paper) || a.id.localeCompare(b.id));
+}
+
+function loadCatalog(refresh = false) {
+  if (refresh) catalogPromise = null;
+  if (!catalogPromise) catalogPromise = Promise.all(SHARDS.map(async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Figure catalogue returned HTTP ${response.status}.`);
+    return response.json() as Promise<unknown>;
+  })).then(flattenCatalog).catch((error: unknown) => { catalogPromise = null; throw error; });
+  return catalogPromise;
 }
 
 function allowedFigure(figure: ChartFigure, category: Category, chart: ChartType) {
@@ -118,8 +172,8 @@ export default function DataChartGallery({ active }: { active: boolean }) {
   const [chart, setChart] = useState<ChartType>("all");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [figures, setFigures] = useState<ChartFigure[]>([]);
-  const [sourceTotal, setSourceTotal] = useState(0);
+  const [catalog, setCatalog] = useState<ChartFigure[]>([]);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -145,37 +199,33 @@ export default function DataChartGallery({ active }: { active: boolean }) {
   }, [query]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const url = new URL(SEARCH_URL);
-    url.searchParams.set("cat", category);
-    url.searchParams.set("n", String(MAX_RESULTS));
-    if (category === "data" && chart !== "all") url.searchParams.set("chart", chart);
-    if (debouncedQuery) url.searchParams.set("q", debouncedQuery);
+    let cancelled = false;
     setLoading(true);
     setError("");
-    setSelectedId(null);
-    setFigures([]);
-    fetch(url.href, { signal: controller.signal }).then(async (response) => {
-      if (!response.ok) throw new Error(`Search returned HTTP ${response.status}.`);
-      const payload: unknown = await response.json();
-      if (!payload || typeof payload !== "object" || !Array.isArray((payload as SearchResponse).results)) throw new Error("The chart search format has changed.");
-      const data = payload as SearchResponse;
-      setSourceTotal(typeof data.total === "number" ? data.total : 0);
-      setFigures(data.results.filter(isChartFigure).filter((figure) => allowedFigure(figure, category, chart)));
+    loadCatalog(retry > 0).then((figures) => {
+      if (!cancelled) setCatalog(figures);
     }).catch((failure: unknown) => {
-      if (controller.signal.aborted) return;
-      setError(failure instanceof Error ? failure.message : String(failure));
-    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [category, chart, debouncedQuery, retry]);
+      if (!cancelled) setError(failure instanceof Error ? failure.message : String(failure));
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [retry]);
+
+  useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [category, chart, debouncedQuery]);
 
   const activeFilterCount = Number(category !== "data") + Number(category === "data" && chart !== "all");
   const resetFilters = () => { setCategory("data"); setChart("all"); setQuery(""); };
+  const figures = useMemo(() => {
+    const words = debouncedQuery.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    return catalog.filter((figure) => allowedFigure(figure, category, chart) && words.every((word) =>
+      `${figure.paper} ${figure.caption} ${figure.tags.join(" ")} ${figure.venue} ${figure.year}`.toLocaleLowerCase().includes(word)));
+  }, [catalog, category, chart, debouncedQuery]);
+  const shown = figures.slice(0, visibleCount);
   const selectedIndex = useMemo(() => figures.findIndex((figure) => figure.id === selectedId), [figures, selectedId]);
   const sourceLink = new URL("en/", SOURCE_ROOT);
   sourceLink.searchParams.set("cat", category);
   if (category === "data" && chart !== "all") sourceLink.searchParams.set("chart", chart);
   if (debouncedQuery) sourceLink.searchParams.set("q", debouncedQuery);
+  sourceLink.searchParams.set("sort", "year");
   const step = (direction: number) => {
     if (selectedIndex >= 0) setSelectedId(figures[(selectedIndex + direction + figures.length) % figures.length].id);
   };
@@ -194,11 +244,12 @@ export default function DataChartGallery({ active }: { active: boolean }) {
         </div>}
       </div>
     </div>
-    <div className="data-chart-results"><span>{loading ? "Searching…" : error ? "Search unavailable" : `${figures.length} references shown${sourceTotal > MAX_RESULTS ? ` · ${sourceTotal.toLocaleString()} source matches; first 50 checked` : ""}`}</span><a href={sourceLink.href} target="_blank" rel="noreferrer">Explore more at source <ExternalLink size={13} /></a></div>
-    {loading ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading references…</strong></div>
+    <div className="data-chart-results"><span>{loading ? "Loading full catalogue…" : error ? "Catalogue unavailable" : `Showing ${shown.length.toLocaleString()} of ${figures.length.toLocaleString()} · newest first`}</span><a href={sourceLink.href} target="_blank" rel="noreferrer">Explore more at source <ExternalLink size={13} /></a></div>
+    {loading ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading full figure catalogue…</strong></div>
       : error ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load data charts</strong><p>{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>
-        : !figures.length ? <div className="gallery-state"><Search size={25} /><strong>No matching references in this batch</strong><p>Try another keyword or chart type. The source returns at most 50 results per search.</p></div>
-          : <div className="data-chart-grid">{figures.map((figure) => <ChartCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>}
+        : !figures.length ? <div className="gallery-state"><Search size={25} /><strong>No matching references</strong><p>Try another keyword or chart type.</p></div>
+          : <><div className="data-chart-grid">{shown.map((figure) => <ChartCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>
+            {visibleCount < figures.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more references <span>{shown.length.toLocaleString()} / {figures.length.toLocaleString()}</span></button></div>}</>}
     <p className="data-chart-credit">Image rights remain with the paper authors and publishers. References and images are served by <a href={SOURCE_ROOT} target="_blank" rel="noreferrer">Paper Figure Library</a>; check the paper license before reuse.</p>
     {active && selectedIndex >= 0 && <ChartDialog figures={figures} index={selectedIndex} onClose={() => setSelectedId(null)} onStep={step} />}
   </section>;

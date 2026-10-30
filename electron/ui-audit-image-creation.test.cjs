@@ -42,6 +42,10 @@ test("Data charts is a separate Gallery tab with chart types and tables, but no 
   assert.match(charts, /image-creation-filter-panel data-chart-filter-panel" role="dialog"/);
   assert.match(charts, /className="image-creation-controls data-chart-controls"/);
   assert.doesNotMatch(charts, /searchParams\.set\("area"|searchParams\.set\("venue"|Filter by venue|Research field/);
+  assert.match(charts, /data\/index-\$\{index\}\.json/);
+  assert.match(charts, /Number\(b\.year \|\| 0\) - Number\(a\.year \|\| 0\)/);
+  assert.match(charts, /sourceLink\.searchParams\.set\("sort", "year"\)/);
+  assert.doesNotMatch(charts, /api\/search|first 50 checked/);
 });
 
 test("images lead and text is a single secondary line", () => {
