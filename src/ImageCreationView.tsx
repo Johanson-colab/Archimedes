@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
+import DataChartGallery from "./DataChartGallery";
 
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
@@ -180,7 +181,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [sort, setSort] = useState("newest");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"gallery" | "templates">("gallery");
+  const [tab, setTab] = useState<"gallery" | "charts" | "templates">("gallery");
   const [filterOpen, setFilterOpen] = useState(false);
   const [reference, setReference] = useState<Figure | null>(null);
   const [composerText, setComposerText] = useState("");
@@ -240,15 +241,18 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     setTab("gallery");
   }
 
-  return <main className="image-creation-page">
+  return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
     <div className="image-creation-tabs" role="tablist" aria-label="Image creation views">
       <button type="button" role="tab" id="image-creation-tab-gallery" aria-selected={tab === "gallery"} aria-controls="image-creation-panel-gallery" tabIndex={tab === "gallery" ? 0 : -1} className={tab === "gallery" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("gallery")}>
         Gallery <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small>
       </button>
+      <button type="button" role="tab" id="image-creation-tab-charts" aria-selected={tab === "charts"} aria-controls="image-creation-panel-charts" tabIndex={tab === "charts" ? 0 : -1} className={tab === "charts" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("charts")}>
+        Data charts
+      </button>
       <button type="button" role="tab" id="image-creation-tab-templates" aria-selected={tab === "templates"} aria-controls="image-creation-panel-templates" tabIndex={tab === "templates" ? 0 : -1} className={tab === "templates" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("templates")}>
         Templates <small>{PATTERNS.length}</small>
       </button>
-      <div className="image-creation-actions">
+      {tab !== "charts" && <div className="image-creation-actions">
         {tab === "gallery" && <label className="image-creation-sort">
           <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort gallery">
             <option value="newest">Sort: Newest</option>
@@ -258,7 +262,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           <ChevronDown size={12} aria-hidden="true" />
         </label>}
         <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>
-      </div>
+      </div>}
     </div>
 
     {tab === "gallery" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-gallery" aria-labelledby="image-creation-tab-gallery">
@@ -286,13 +290,13 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
               {visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}
             </>}
       <p className="gallery-credit">Figures belong to their paper authors and publishers. The catalogue and image files are served by <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>. Check each paper's license before reuse.</p>
-    </div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-templates" aria-labelledby="image-creation-tab-templates">
+    </div> : tab === "charts" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-charts" aria-labelledby="image-creation-tab-charts"><DataChartGallery active={active} /></div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-templates" aria-labelledby="image-creation-tab-templates">
       <p className="image-creation-templates-intro">Start from a figure pattern, then make it yours. Each template opens the gallery filtered to real examples from accepted papers.</p>
       {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading templates…</strong></div>
         : <div className="image-creation-template-grid">{templates.map((template) => <TemplateCard key={template.id} label={template.label} note={template.note} count={template.count} preview={template.preview} onUse={() => browsePattern(template.id)} />)}</div>}
     </div>}
 
-    <div className="image-creation-fade" aria-hidden="true" />
+    {tab !== "charts" && <><div className="image-creation-fade" aria-hidden="true" />
     <div className="image-creation-composer-dock">
       <div className="image-creation-composer">
         {reference && <div className="image-creation-reference">
@@ -314,7 +318,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
         </div>
         <p className="image-creation-composer-note">Generated images will be saved to <b>Gallery</b>. Check each paper's license before reuse.</p>
       </div>
-    </div>
+    </div></>}
 
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
   </main>;
