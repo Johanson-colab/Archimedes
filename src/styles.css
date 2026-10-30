@@ -4959,40 +4959,6 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
   line-height: 1.4; text-overflow: ellipsis; white-space: nowrap;
   text-shadow: 0 1px 8px rgba(0, 0, 0, .6);
 }
-.image-creation-card-use {
-  position: absolute; z-index: 3; top: 9px; right: 9px;
-  display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px;
-  color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 4px;
-  font-size: 9px; font-weight: 750; opacity: 0; transform: translateY(-2px);
-  transition: opacity .16s ease, transform .16s ease;
-}
-.image-creation-card:hover .image-creation-card-use,
-.image-creation-card:focus-within .image-creation-card-use { opacity: 1; transform: none; }
-@media (hover: none) { .image-creation-card-use { opacity: 1; transform: none; } }
-
-.image-creation-templates-intro { max-width: 70ch; margin: 16px 0 14px; color: var(--night-muted); font-size: 12px; line-height: 1.6; }
-.image-creation-template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
-.image-creation-template {
-  display: grid; grid-template-rows: auto auto; padding: 0; overflow: hidden;
-  color: inherit; background: var(--night-panel); border: 1px solid var(--night-line);
-  border-radius: 9px; text-align: left;
-}
-.image-creation-template:hover { border-color: var(--night-faint); }
-.image-creation-template-image {
-  position: relative; display: grid; aspect-ratio: 16 / 9; place-items: center; overflow: hidden;
-  color: var(--night-faint); background: var(--night-panel-raised);
-}
-.image-creation-template-image img { width: 100%; height: 100%; object-fit: cover; }
-.image-creation-template-count {
-  position: absolute; top: 9px; right: 9px; padding: 3px 6px;
-  color: #eee9df; background: rgba(12, 12, 12, .64); border-radius: 4px;
-  font-size: 9px; font-weight: 680; font-variant-numeric: tabular-nums;
-}
-.image-creation-template-copy { display: grid; gap: 4px; padding: 11px 12px 12px; }
-.image-creation-template-copy strong { color: var(--night-ink); font-size: 12px; font-weight: 650; }
-.image-creation-template-copy > span { color: var(--night-muted); font-size: 11px; line-height: 1.5; }
-.image-creation-template-copy small { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; color: var(--accent); font-size: 10px; font-weight: 700; }
-
 .image-creation-fade {
   position: fixed; z-index: 25; right: var(--workbench-width, 0px); bottom: 0; left: var(--sidebar-width, 0px);
   height: 150px; pointer-events: none;
@@ -5040,30 +5006,12 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 }
 .image-creation-send:disabled { cursor: default; opacity: .55; }
 .image-creation-composer-note { margin: 7px 0 0; color: var(--night-muted); font-size: 9.5px; text-align: center; }
-.image-creation-composer-note b { color: var(--night-ink-soft); font-weight: 650; }
-.image-creation-reference {
-  display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 9px;
-  margin: 0 0 7px; padding: 6px 8px; color: var(--night-ink-soft);
-  background: color-mix(in srgb, var(--night-panel) 94%, transparent);
-  border: 1px solid var(--night-line); border-radius: 8px; backdrop-filter: blur(18px);
-}
-.image-creation-reference img { width: 44px; height: 31px; flex: 0 0 auto; object-fit: cover; border-radius: 4px; }
-.image-creation-reference span { display: grid; min-width: 0; gap: 1px; }
-.image-creation-reference b { color: var(--night-muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
-.image-creation-reference em { overflow: hidden; color: var(--night-ink); font-size: 10.5px; font-style: normal; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
-.image-creation-reference button {
-  display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center;
-  color: var(--night-muted); background: transparent; border-radius: 4px;
-}
-.image-creation-reference button:hover { color: var(--night-ink); background: var(--night-panel-soft); }
 
 .codex-shell.sidebar-hidden .image-creation-composer-dock,
 .codex-shell.sidebar-hidden .image-creation-fade { left: 0; }
 html[data-theme="paper"] .image-creation-composer-box { box-shadow: 0 18px 40px rgba(60, 48, 30, .18); }
 html[data-theme="paper"] .image-creation-filter-panel { box-shadow: 0 18px 44px rgba(60, 48, 30, .16); }
 html[data-theme="paper"] .image-creation-tab small,
-html[data-theme="paper"] .image-creation-templates-intro,
-html[data-theme="paper"] .image-creation-template-copy > span,
 html[data-theme="paper"] .image-creation-model,
 html[data-theme="paper"] .image-creation-composer-input::placeholder,
 html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
@@ -5086,7 +5034,7 @@ html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
   .image-creation-model { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .image-creation-card-image img, .image-creation-card-use { transition: none; }
+  .image-creation-card-image img { transition: none; }
 }
 
 /* The compose dock has to survive a narrow main column when the right

@@ -11,7 +11,7 @@ const charts = fs.readFileSync(path.join(root, "src", "DataChartGallery.tsx"), "
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
 
-test("Gallery is a view inside Image creation, not a second Create destination", () => {
+test("Paper diagrams is a view inside Image creation, not a second Create destination", () => {
   assert.match(registry, /id: "image-creation"[^\n]*labelKey: "Image creation"[^\n]*destination: \{ type: "section", section: "image-creation" \}/);
   assert.doesNotMatch(registry, /id: "gallery"/);
   assert.doesNotMatch(registry, /id: "image-creation"[^\n]*disabled/);
@@ -21,10 +21,11 @@ test("Gallery is a view inside Image creation, not a second Create destination",
   assert.match(i18n, /"Generate and remix research figures"/);
 });
 
-test("the page keeps Gallery and Templates in one tab row with the module actions", () => {
+test("the page keeps Paper diagrams and Data charts in one tab row without Templates", () => {
   assert.match(view, /className="image-creation-tabs" role="tablist"/);
-  assert.match(view, />\s*Gallery <small>/);
-  assert.match(view, />\s*Templates <small>/);
+  assert.match(view, />\s*Paper diagrams <small>/);
+  assert.match(view, />\s*Data charts\s*</);
+  assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard|Use as template/);
   assert.match(view, /className="image-creation-actions"/);
   assert.match(view, /className="image-creation-sort"/);
   assert.match(view, /Browse full proceedings/);
@@ -32,7 +33,7 @@ test("the page keeps Gallery and Templates in one tab row with the module action
   assert.match(view, /useDialogFocus/);
 });
 
-test("Data charts is a separate Gallery tab with chart types and tables, but no field or venue filter", () => {
+test("Data charts is a separate tab with chart types and tables, but no field or venue filter", () => {
   assert.match(view, /role="tab" id="image-creation-tab-charts"/);
   assert.match(view, /<DataChartGallery active=\{active\} sort=\{chartSort\} \/>/);
   assert.match(view, /<option value="preferred">Sort: AI venues first<\/option>/);
@@ -64,9 +65,8 @@ test("images lead and text is a single secondary line", () => {
   assert.match(css, /\.image-creation-card-image img \{[^}]*object-fit: cover/);
   assert.match(css, /\.image-creation-card-venue \{[^}]*position: absolute/);
   assert.match(css, /\.image-creation-card-title \{[^}]*white-space: nowrap/);
-  assert.match(css, /\.image-creation-card-use \{[^}]*opacity: 0/);
-  assert.match(view, /Use as template/);
-  assert.match(view, /setComposerText\("Adapt this figure for "\)/);
+  assert.doesNotMatch(css, /\.image-creation-card-use|\.image-creation-template|\.image-creation-reference/);
+  assert.doesNotMatch(view, /onUseTemplate|setReference|Adapt this figure/);
 });
 
 test("filter facets fold into one popover instead of a permanent block", () => {
@@ -78,7 +78,7 @@ test("filter facets fold into one popover instead of a permanent block", () => {
 
 test("the composer is present but does not pretend image generation is shipped", () => {
   assert.match(view, /className="image-creation-composer-dock"/);
-  assert.match(view, /Describe an image, or start from a published figure/);
+  assert.match(view, /Describe an image to generate/);
   assert.match(view, /Image model · Soon/);
   assert.match(view, /disabled title="Image generation is coming soon"/);
   assert.match(css, /\.image-creation-composer-dock \{[^}]*position: fixed/);

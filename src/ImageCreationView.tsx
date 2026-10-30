@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
 import DataChartGallery from "./DataChartGallery";
 
@@ -14,16 +14,6 @@ const PATTERNS = [
   ["architecture", "Architecture"], ["teaser", "Teaser"], ["taxonomy", "Taxonomy"],
   ["results", "Results"], ["comparison", "Comparison"],
 ] as const;
-const TEMPLATE_NOTES: Record<string, string> = {
-  conceptual: "Explain one idea with a minimal diagram.",
-  framework: "Show the components of a method and how they connect.",
-  pipeline: "Walk through stages, inputs, and data flow.",
-  architecture: "Lay out modules, tensors, and training flow.",
-  teaser: "Lead with the problem and the headline result.",
-  taxonomy: "Organize related work into a tree or map.",
-  results: "Compare methods across benchmarks.",
-  comparison: "Put qualitative examples side by side.",
-};
 const ASPECTS = ["1:1", "4:3", "16:9"] as const;
 type Aspect = typeof ASPECTS[number];
 
@@ -114,8 +104,8 @@ function Facet({ label, options, value, onChange }: {
   </div>;
 }
 
-function FigureCard({ figure, onOpen, onUseTemplate }: {
-  figure: Figure; onOpen: () => void; onUseTemplate: () => void;
+function FigureCard({ figure, onOpen }: {
+  figure: Figure; onOpen: () => void;
 }) {
   const [failed, setFailed] = useState(false);
   return <article className="image-creation-card">
@@ -127,27 +117,7 @@ function FigureCard({ figure, onOpen, onUseTemplate }: {
       <span className="image-creation-card-venue">{figure.venue.toUpperCase()} · {figure.year}</span>
       <span className="image-creation-card-title">{figure.title}</span>
     </button>
-    <button type="button" className="image-creation-card-use" onClick={onUseTemplate}
-      title={`Use "${figure.title}" as a template`}>
-      <Sparkles size={12} />Use as template
-    </button>
   </article>;
-}
-
-function TemplateCard({ label, note, count, preview, onUse }: {
-  label: string; note: string; count: number; preview?: Figure; onUse: () => void;
-}) {
-  return <button type="button" className="image-creation-template" onClick={onUse}>
-    <span className="image-creation-template-image">
-      {preview ? <img src={imageUrl(preview)} alt="" loading="lazy" decoding="async" /> : <ImageOff size={20} />}
-      <span className="image-creation-template-count">{count.toLocaleString()} figures</span>
-    </span>
-    <span className="image-creation-template-copy">
-      <strong>{label}</strong>
-      <span>{note}</span>
-      <small>Browse examples <ArrowRight size={12} /></small>
-    </span>
-  </button>;
 }
 
 function FigureDialog({ figure, index, total, onClose, onStep }: {
@@ -182,12 +152,10 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [chartSort, setChartSort] = useState<"preferred" | "newest">("preferred");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"gallery" | "charts" | "templates">("gallery");
+  const [tab, setTab] = useState<"gallery" | "charts">("gallery");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [reference, setReference] = useState<Figure | null>(null);
   const [composerText, setComposerText] = useState("");
   const [aspect, setAspect] = useState<Aspect>("1:1");
-  const composerRef = useRef<HTMLInputElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
 
   async function refresh(force = false) {
@@ -213,7 +181,6 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onPointer); document.removeEventListener("keydown", onKey); };
   }, [filterOpen]);
-  useEffect(() => { if (reference) composerRef.current?.focus(); }, [reference]);
 
   const result = useMemo(() => {
     const matched = figures.filter((figure) => matches(figure, filters, query));
@@ -225,37 +192,21 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const selectedIndex = result.findIndex((figure) => figure.id === selectedId);
   const shown = result.slice(0, visibleCount);
   const activeFilterCount = [filters.venue, filters.year, filters.tier, filters.pattern].filter((value) => value !== "all").length;
-  const templates = useMemo(() => PATTERNS.map(([id, label]) => {
-    const matched = figures.filter((figure) => figure.pattern === id);
-    return { id, label, note: TEMPLATE_NOTES[id] ?? "", count: matched.length, preview: matched[0] };
-  }), [figures]);
   const updateFilter = (key: keyof Filters, value: string | number) => setFilters((current) => ({ ...current, [key]: value }));
   const step = (direction: number) => { if (selectedIndex >= 0) setSelectedId(result[(selectedIndex + direction + result.length) % result.length].id); };
   const resetFilters = () => { setQuery(""); setFilters(INITIAL_FILTERS); };
-  function useAsTemplate(figure: Figure) {
-    setReference(figure);
-    setComposerText("Adapt this figure for ");
-  }
-  function browsePattern(pattern: string) {
-    setFilters((current) => ({ ...current, pattern }));
-    setQuery("");
-    setTab("gallery");
-  }
 
   return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
     <div className="image-creation-tabs" role="tablist" aria-label="Image creation views">
       <button type="button" role="tab" id="image-creation-tab-gallery" aria-selected={tab === "gallery"} aria-controls="image-creation-panel-gallery" tabIndex={tab === "gallery" ? 0 : -1} className={tab === "gallery" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("gallery")}>
-        Gallery <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small>
+        Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small>
       </button>
       <button type="button" role="tab" id="image-creation-tab-charts" aria-selected={tab === "charts"} aria-controls="image-creation-panel-charts" tabIndex={tab === "charts" ? 0 : -1} className={tab === "charts" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("charts")}>
         Data charts
       </button>
-      <button type="button" role="tab" id="image-creation-tab-templates" aria-selected={tab === "templates"} aria-controls="image-creation-panel-templates" tabIndex={tab === "templates" ? 0 : -1} className={tab === "templates" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("templates")}>
-        Templates <small>{PATTERNS.length}</small>
-      </button>
       <div className="image-creation-actions">
         {tab === "gallery" && <label className="image-creation-sort">
-          <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort gallery">
+          <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort paper diagrams">
             <option value="newest">Sort: Newest</option>
             <option value="venue">Sort: Venue / year</option>
             <option value="oldest">Sort: Oldest</option>
@@ -269,19 +220,19 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           </select>
           <ChevronDown size={12} aria-hidden="true" />
         </label>}
-        {tab !== "charts" && <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>}
+        {tab === "gallery" && <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>}
       </div>
     </div>
 
     {tab === "gallery" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-gallery" aria-labelledby="image-creation-tab-gallery">
       <div className="image-creation-controls">
-        <label className="gallery-search image-creation-search"><Search size={17} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a published figure, author, or topic" aria-label="Search gallery" /></label>
+        <label className="gallery-search image-creation-search"><Search size={17} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a published diagram, author, or topic" aria-label="Search paper diagrams" /></label>
         <div className="image-creation-filter" ref={filterRef}>
-          <button type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={filterOpen} title="Filter gallery">
+          <button type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={filterOpen} title="Filter paper diagrams">
             <SlidersHorizontal size={14} />Filters{activeFilterCount > 0 && <b>{activeFilterCount}</b>}
           </button>
-          {filterOpen && <div className="image-creation-filter-panel" role="dialog" aria-label="Filter gallery">
-            <header><strong>Filter gallery</strong><button type="button" onClick={resetFilters} disabled={!activeFilterCount && !query}>Clear all</button></header>
+          {filterOpen && <div className="image-creation-filter-panel" role="dialog" aria-label="Filter paper diagrams">
+            <header><strong>Filter paper diagrams</strong><button type="button" onClick={resetFilters} disabled={!activeFilterCount && !query}>Clear all</button></header>
             <Facet label="Venue" value={filters.venue} onChange={(value) => updateFilter("venue", value)} options={[{ value: "all", label: "All" }, ...VENUES.map((venue) => ({ value: venue, label: venue, count: figures.filter((figure) => figure.venue === venue.toLowerCase()).length }))]} />
             <Facet label="Year" value={filters.year} onChange={(value) => updateFilter("year", value)} options={[{ value: "all", label: "All" }, ...YEARS.map((year) => ({ value: year, label: String(year) }))]} />
             <Facet label="Presentation" value={filters.tier} onChange={(value) => updateFilter("tier", value)} options={[{ value: "all", label: "All" }, { value: "best", label: "Awarded" }, { value: "oral", label: "Oral" }, { value: "spotlight", label: "Spotlight" }]} />
@@ -291,30 +242,21 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
       </div>
       {error && figures.length > 0 && <div className="gallery-notice">The Top-Conf catalogue could not be refreshed. Showing the last successfully loaded catalogue.</div>}
       {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading figures…</strong></div>
-        : error && !figures.length ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load the gallery</strong><p>{error}</p><button type="button" onClick={() => void refresh(true)}>Retry</button></div>
+        : error && !figures.length ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load paper diagrams</strong><p>{error}</p><button type="button" onClick={() => void refresh(true)}>Retry</button></div>
           : !result.length ? <div className="gallery-state"><Search size={25} /><strong>No figures match these filters</strong><button type="button" onClick={resetFilters}>Clear filters</button></div>
             : <>
-              <div className="image-creation-grid">{shown.map((figure) => <FigureCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} onUseTemplate={() => useAsTemplate(figure)} />)}</div>
+              <div className="image-creation-grid">{shown.map((figure) => <FigureCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>
               {visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}
             </>}
       <p className="gallery-credit">Figures belong to their paper authors and publishers. The catalogue and image files are served by <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>. Check each paper's license before reuse.</p>
-    </div> : tab === "charts" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-charts" aria-labelledby="image-creation-tab-charts"><DataChartGallery active={active} sort={chartSort} /></div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-templates" aria-labelledby="image-creation-tab-templates">
-      <p className="image-creation-templates-intro">Start from a figure pattern, then make it yours. Each template opens the gallery filtered to real examples from accepted papers.</p>
-      {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading templates…</strong></div>
-        : <div className="image-creation-template-grid">{templates.map((template) => <TemplateCard key={template.id} label={template.label} note={template.note} count={template.count} preview={template.preview} onUse={() => browsePattern(template.id)} />)}</div>}
-    </div>}
+    </div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-charts" aria-labelledby="image-creation-tab-charts"><DataChartGallery active={active} sort={chartSort} /></div>}
 
-    {tab !== "charts" && <><div className="image-creation-fade" aria-hidden="true" />
+    {tab === "gallery" && <><div className="image-creation-fade" aria-hidden="true" />
     <div className="image-creation-composer-dock">
       <div className="image-creation-composer">
-        {reference && <div className="image-creation-reference">
-          <img src={imageUrl(reference)} alt="" />
-          <span><b>{reference.venue.toUpperCase()} {reference.year}</b><em>{reference.title}</em></span>
-          <button type="button" onClick={() => setReference(null)} title="Remove reference figure" aria-label="Remove reference figure"><X size={13} /></button>
-        </div>}
         <div className="image-creation-composer-box">
           <button type="button" className="image-creation-attach" disabled title="Attaching a reference image is coming soon" aria-label="Attach a reference image"><Plus size={16} /></button>
-          <input ref={composerRef} className="image-creation-composer-input" value={composerText} onChange={(event) => setComposerText(event.target.value)} placeholder={reference ? "Describe how to adapt this figure…" : "Describe an image, or start from a published figure…"} aria-label="Describe an image" />
+          <input className="image-creation-composer-input" value={composerText} onChange={(event) => setComposerText(event.target.value)} placeholder="Describe an image to generate…" aria-label="Describe an image" />
           <label className="image-creation-aspect">
             <select value={aspect} onChange={(event) => setAspect(event.target.value as Aspect)} aria-label="Aspect ratio">
               {ASPECTS.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -324,7 +266,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           <span className="image-creation-model" title="Image generation will arrive with the image model backend"><ImagePlus size={12} />Image model · Soon</span>
           <button type="button" className="image-creation-send" disabled title="Image generation is coming soon" aria-label="Generate image"><ArrowUp size={15} /></button>
         </div>
-        <p className="image-creation-composer-note">Generated images will be saved to <b>Gallery</b>. Check each paper's license before reuse.</p>
+        <p className="image-creation-composer-note">Image generation is coming soon. Check each paper's license before reuse.</p>
       </div>
     </div></>}
 
