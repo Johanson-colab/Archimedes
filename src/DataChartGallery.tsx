@@ -124,17 +124,15 @@ function chartLabel(figure: ChartFigure) {
 
 function ChartCard({ figure, onOpen }: { figure: ChartFigure; onOpen: () => void }) {
   const [failed, setFailed] = useState(false);
-  return <article className="chart-reference-card">
-    <button type="button" className="chart-reference-preview" onClick={onOpen} aria-label={`View ${figure.paper}, ${chartLabel(figure)}`}>
+  return <article className="image-creation-card chart-reference-card">
+    <button type="button" className="image-creation-card-image chart-reference-preview" onClick={onOpen} aria-label={`View ${figure.paper}, ${chartLabel(figure)}`} title={figure.caption || figure.paper}>
       {failed ? <span className="gallery-image-failed"><ImageOff size={24} />Preview unavailable</span>
         : <img src={figure.thumb} alt={figure.caption || `${chartLabel(figure)} from ${figure.paper}`} loading="lazy" decoding="async" onError={() => setFailed(true)} />}
+      <span className="image-creation-card-shade" aria-hidden="true" />
+      <span className="image-creation-card-venue">{figure.venue || "Paper"} · {figure.year || "Year unknown"}</span>
+      <span className="chart-reference-type">{chartLabel(figure)}</span>
+      <span className="image-creation-card-title">{figure.paper}</span>
     </button>
-    <div className="chart-reference-info">
-      <div className="chart-reference-meta"><span>{chartLabel(figure)}</span><span>{figure.venue} · {figure.year}</span></div>
-      <h3>{figure.paper}</h3>
-      <p>{figure.caption}</p>
-      <button type="button" onClick={onOpen}>Inspect figure <ArrowRight size={13} /></button>
-    </div>
   </article>;
 }
 
@@ -248,7 +246,7 @@ export default function DataChartGallery({ active }: { active: boolean }) {
     {loading ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading full figure catalogue…</strong></div>
       : error ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load data charts</strong><p>{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>
         : !figures.length ? <div className="gallery-state"><Search size={25} /><strong>No matching references</strong><p>Try another keyword or chart type.</p></div>
-          : <><div className="data-chart-grid">{shown.map((figure) => <ChartCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>
+          : <><div className="image-creation-grid data-chart-grid">{shown.map((figure) => <ChartCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>
             {visibleCount < figures.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more references <span>{shown.length.toLocaleString()} / {figures.length.toLocaleString()}</span></button></div>}</>}
     <p className="data-chart-credit">Image rights remain with the paper authors and publishers. References and images are served by <a href={SOURCE_ROOT} target="_blank" rel="noreferrer">Paper Figure Library</a>; check the paper license before reuse.</p>
     {active && selectedIndex >= 0 && <ChartDialog figures={figures} index={selectedIndex} onClose={() => setSelectedId(null)} onStep={step} />}
