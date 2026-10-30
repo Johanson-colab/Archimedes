@@ -421,6 +421,7 @@ html:not([data-theme="paper"]) .paper-presentation-toolbar span { color: #c7beb4
 .paper-ai-thread { min-width: 0; grid-template-columns: minmax(0, 1fr); overflow-x: hidden; overflow-y: auto; }
 .paper-ai-thread article { box-sizing: border-box; min-width: 0; overflow-wrap: anywhere; }
 .paper-ai-thread article.assistant { width: 100%; max-width: 100%; }
+.paper-ai-thread article.assistant:not(.streaming) { content-visibility: auto; contain-intrinsic-size: auto 240px; }
 .paper-ai-markdown { min-width: 0; max-width: 100%; }
 .paper-ai-markdown :not(pre) > code, .paper-ai-markdown .paper-code-path { overflow-wrap: anywhere; white-space: normal; }
 .paper-ai-markdown pre, .paper-ai-markdown .katex-display, .paper-ai-table-scroll { max-width: 100%; overflow-x: auto; }
@@ -2363,6 +2364,7 @@ html:not([data-theme="paper"]) .codebase-source .code-target-line { background: 
 .paper-ai-code-attachment button { display: grid; flex: 0 0 auto; width: 19px; height: 19px; place-items: center; color: #697b6e; background: transparent; border-radius: 3px; }
 .paper-ai-code-attachment button:hover { color: #a34d46; background: #f9eae6; }
 .paper-ai-compose textarea { min-height: 34px; max-height: 132px; padding: 7px 8px; resize: none; overflow-y: hidden; background: transparent; border: 0; box-shadow: none; font: 9px/1.5 inherit; }
+@supports (field-sizing: content) { .paper-ai-compose textarea { field-sizing: content; overflow-y: auto; } }
 .paper-ai-compose textarea:focus { border: 0; box-shadow: none; }
 .paper-ai-compose .primary-button { min-height: 34px; }
 
