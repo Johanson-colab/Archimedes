@@ -5,23 +5,29 @@ export type Density = "compact" | "comfortable" | "spacious";
 export type SurfaceScope = "reader" | "writing" | "agent";
 export const SURFACE_SCOPES: readonly SurfaceScope[] = ["reader", "writing", "agent"];
 
-/** Accent and surface overrides that apply to one surface subtree. */
-export type SurfaceAppearance = {
-  accent?: string;
-  surface?: string;
-  surfaceDepth?: number;
-};
-
 export type ButtonStyle = "solid" | "soft" | "outline" | "ghost";
 export type DialogStyle = "elevated" | "flat" | "outlined" | "glass";
 export type ShapeStyle = "sharp" | "soft" | "rounded";
 export type ShadowStyle = "default" | "none" | "subtle" | "deep";
+export type MotionStyle = "full" | "reduced" | "none";
 
 export type AppearanceStyles = {
   button?: ButtonStyle;
   dialog?: DialogStyle;
   shape?: ShapeStyle;
   shadow?: ShadowStyle;
+  motion?: MotionStyle;
+};
+
+/** Component styles that can be scoped to one surface. Motion is global. */
+export type SurfaceStyles = Omit<AppearanceStyles, "motion">;
+
+/** Accent, surface, and component styles that apply to one surface subtree. */
+export type SurfaceAppearance = {
+  accent?: string;
+  surface?: string;
+  surfaceDepth?: number;
+  styles?: SurfaceStyles;
 };
 
 export type AppearanceOverrides = {
@@ -188,6 +194,10 @@ export function isShadowStyle(value: unknown): value is ShadowStyle {
   return value === "default" || value === "none" || value === "subtle" || value === "deep";
 }
 
+export function isMotionStyle(value: unknown): value is MotionStyle {
+  return value === "full" || value === "reduced" || value === "none";
+}
+
 function normalizeStyles(input: unknown): AppearanceStyles | undefined {
   if (!input || typeof input !== "object") return undefined;
   const value = input as AppearanceStyles;
@@ -196,17 +206,29 @@ function normalizeStyles(input: unknown): AppearanceStyles | undefined {
     ...(isDialogStyle(value.dialog) ? { dialog: value.dialog } : {}),
     ...(isShapeStyle(value.shape) ? { shape: value.shape } : {}),
     ...(isShadowStyle(value.shadow) ? { shadow: value.shadow } : {}),
+    ...(isMotionStyle(value.motion) ? { motion: value.motion } : {}),
   };
   return Object.keys(styles).length ? styles : undefined;
+}
+
+/** Surface styles deliberately exclude motion, which is a global preference. */
+function normalizeSurfaceStyles(input: unknown): SurfaceStyles | undefined {
+  const styles = normalizeStyles(input);
+  if (!styles) return undefined;
+  const surfaceStyles: AppearanceStyles = { ...styles };
+  delete surfaceStyles.motion;
+  return Object.keys(surfaceStyles).length ? surfaceStyles as SurfaceStyles : undefined;
 }
 
 function normalizeSurfaceAppearance(input: unknown): SurfaceAppearance | undefined {
   if (!input || typeof input !== "object") return undefined;
   const value = input as Partial<SurfaceAppearance>;
+  const styles = normalizeSurfaceStyles(value.styles);
   const normalized: SurfaceAppearance = {
     ...(normalizeAccent(value.accent) ? { accent: normalizeAccent(value.accent) } : {}),
     ...(normalizeAccent(value.surface) ? { surface: normalizeAccent(value.surface) } : {}),
     ...(clampSurfaceDepth(value.surfaceDepth) !== undefined ? { surfaceDepth: clampSurfaceDepth(value.surfaceDepth) } : {}),
+    ...(styles ? { styles } : {}),
   };
   return Object.keys(normalized).length ? normalized : undefined;
 }
@@ -638,6 +660,7 @@ export function surfaceCss(settings: AppearanceSettings, theme: AppTheme): strin
     const values = {
       ...(scoped.accent ? accentTokens(scoped.accent, theme) : {}),
       ...(scoped.surface ? surfaceTokens(scoped.surface, scoped.surfaceDepth, theme) : {}),
+      ...(scoped.styles ? styleTokens(scoped.styles, theme) : {}),
     };
     if (!Object.keys(values).length) continue;
     const body = Object.entries(values).map(([property, value]) => `  ${property}: ${value};`).join("\n");
@@ -653,6 +676,7 @@ export function surfaceCss(settings: AppearanceSettings, theme: AppTheme): strin
 export function applyAppearance(root: AppearanceRoot, settings: AppearanceSettings, theme: AppTheme): Record<string, string> {
   root.dataset.theme = theme;
   root.dataset.density = settings.overrides.density ?? DENSITY_DEFAULT;
+  root.dataset.motion = settings.styles?.motion ?? "full";
   for (const variable of APPEARANCE_VARIABLES) root.style.removeProperty(variable);
   const values = {
     ...(settings.overrides.accent ? accentTokens(settings.overrides.accent, theme) : {}),
@@ -721,13 +745,19 @@ export function contrastIssues(settings: AppearanceSettings, theme: AppTheme): C
       const ratio = contrastRatio(tokens["--text-on-accent"], tokens["--accent"]);
       if (ratio < 4.5) issues.push({ scope, pair: "--text-on-accent on --accent", ratio, minimum: 4.5 });
     }
+    const effectiveAccent = source.accent ?? settings.overrides.accent ?? ACCENT_DEFAULT[theme];
     if (ownsSurface && tokens["--surface-panel"]) {
-      const effectiveAccent = source.accent ?? settings.overrides.accent ?? ACCENT_DEFAULT[theme];
       const accentRatio = contrastRatio(effectiveAccent, tokens["--surface-panel"]);
       if (accentRatio < 3) issues.push({ scope, pair: "--accent on --surface-panel", ratio: accentRatio, minimum: 3 });
-      if ((settings.styles?.button === "soft" || settings.styles?.button === "outline") && accentRatio < 4.5) {
-        issues.push({ scope, pair: "--accent on button", ratio: accentRatio, minimum: 4.5 });
-      }
+    }
+    const buttonStyle = scope === "global"
+      ? settings.styles?.button
+      : settings.surfaces?.[scope]?.styles?.button ?? settings.styles?.button;
+    if (buttonStyle === "soft" || buttonStyle === "outline") {
+      const panel = tokens["--surface-panel"]
+        ?? surfaceTokens(surface ?? SURFACE_DEFAULT[theme], depth, theme)["--surface-panel"];
+      const accentRatio = contrastRatio(effectiveAccent, panel);
+      if (accentRatio < 4.5) issues.push({ scope, pair: "--accent on button", ratio: accentRatio, minimum: 4.5 });
     }
   }
   return issues;

@@ -50,7 +50,7 @@ test("Settings > Appearance exposes accent, surface, density, radius, and reset 
   assert.match(settings, /onAppearanceChange/);
 });
 
-test("accent and surface can be scoped to reader, writing, and agent", () => {
+test("accent, surface, and component styles can be scoped to reader, writing, and agent", () => {
   assert.match(library, /data-surface="reader"/);
   assert.match(writing, /data-surface="writing"/);
   assert.match(agent, /data-surface="agent"/);
@@ -58,8 +58,10 @@ test("accent and surface can be scoped to reader, writing, and agent", () => {
   assert.match(settings, /setScope\(id\)/);
   assert.match(settings, /accentResetDisabled/);
   assert.match(settings, /clearScope/);
+  assert.match(settings, /styles: \{ \.\.\.appearance\.surfaces\?\.\[scope\]\?\.styles, \.\.\.patch \}/);
   assert.match(appearance, /surfaceCss/);
   assert.match(appearance, /\[data-surface="\$\{scope\}"\]/);
+  assert.match(appearance, /scoped\.styles \? styleTokens\(scoped\.styles, theme\)/);
 });
 
 test("the appearance editor has no live preview section", () => {
@@ -80,6 +82,18 @@ test("the Style section maps button, dialog, shape, and shadow presets", () => {
   assert.match(settings, /updateStyles\(\{ shadow: id \}\)/);
   assert.match(appearance, /export function styleTokens/);
   assert.match(appearance, /export type AppearanceStyles/);
+});
+
+test("Motion is a global Full / Reduced / None preference", () => {
+  assert.match(settings, /type MotionStyle/);
+  assert.match(settings, /t\("Motion"\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ motion: id \}\)/);
+  assert.match(appearance, /export type MotionStyle = "full" \| "reduced" \| "none"/);
+  assert.match(appearance, /root\.dataset\.motion = settings\.styles\?\.motion \?\? "full"/);
+  assert.match(css, /html\[data-motion="reduced"\] \*/);
+  assert.match(css, /html\[data-motion="none"\] \*/);
+  assert.match(css, /animation-duration: \.01ms !important/);
+  assert.match(css, /animation: none !important/);
 });
 
 test("appearance can be exported, imported, and checked for contrast", () => {
@@ -118,7 +132,7 @@ test("the new appearance copy is translated", () => {
     "Apply to",
     "Global",
     "Agent",
-    "Accent and surface can be scoped; density and radius stay global.",
+    "Accent, surface, and component styles can be scoped; density, radius, and motion stay global.",
     "Reset this surface",
     "Contrast warning",
     "Style",
@@ -130,6 +144,10 @@ test("the new appearance copy is translated", () => {
     "Corner radius across buttons and dialogs.",
     "Shadow",
     "Depth for buttons and dialogs.",
+    "Motion",
+    "Animation and transition intensity across the app.",
+    "Full",
+    "Reduced",
     "Solid",
     "Soft",
     "Outline style",

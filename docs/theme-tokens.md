@@ -148,7 +148,14 @@ use `.theme-paper` because they predate the token pass.
     "button": "soft",
     "dialog": "glass",
     "shape": "rounded",
-    "shadow": "deep"
+    "shadow": "deep",
+    "motion": "reduced"
+  },
+  "surfaces": {
+    "reader": {
+      "accent": "#2f8f6b",
+      "styles": { "button": "ghost", "shape": "rounded" }
+    }
   }
 }
 ```
@@ -167,10 +174,11 @@ use `.theme-paper` because they predate the token pass.
   `--mono-*` palette from one base color. Light bases step darker for
   elevation; dark bases step lighter; the panel always lifts toward white.
 - `surfaceDepth` (20–80) scales those steps without changing the base color.
-- `surfaces.reader / .writing / .agent` store per-surface accent and surface
-  overrides. `surfaceCss()` emits `[data-surface="…"]` rules; the reader,
-  writing workspace, and agent layer carry the matching attribute. Density and
-  control radius stay global.
+- `surfaces.reader / .writing / .agent` store per-surface accent, surface, and
+  component style overrides. `surfaceCss()` emits `[data-surface="…"]` rules
+  containing the derived accent / surface tokens and the scoped button, dialog,
+  shape, and shadow tokens; the reader, writing workspace, and agent layer
+  carry the matching attribute. Density, control radius, and motion stay global.
 - `densityTokens()` writes control height, settings-row padding, and navigation
   heights for compact / comfortable / spacious. Comfortable is the default.
 - `radiusTokens()` writes `--radius-control` within `0–14px`.
@@ -179,9 +187,9 @@ use `.theme-paper` because they predate the token pass.
 
 Settings › Appearance exposes: a scope switcher (Global / Reader / Writing /
 Agent), accent color, surface color, surface depth, density, control radius,
-per-field reset, and reset all. Changes apply to the app immediately; there is
-no separate preview pane. Defaults (no overrides) produce the same pixels as
-the token refactor.
+component styles, motion, per-field reset, and reset all. Changes apply to the
+app immediately; there is no separate preview pane. Defaults (no overrides)
+produce the same pixels as the token refactor.
 
 ### Theme packs and contrast
 
@@ -215,8 +223,15 @@ The first component layer covers buttons and the main dialogs:
   buttons, Elevated / Flat / Outlined / Glass dialogs, Sharp / Soft / Rounded
   shape, and Default / None / Subtle / Deep shadow to the component tokens.
 - Settings › Style exposes those four dimensions and applies them to the app
-  chrome immediately.
-- ThemePack v2 stores `styles`, and v1 packs migrate without losing colors.
+  chrome immediately. Button, dialog, shape, and shadow presets can be scoped
+  to Reader / Writing / Agent; the scoped values are written into the same
+  `[data-surface]` rules as accent and surface overrides.
+- **Motion** is a global Full / Reduced / None preference. `applyAppearance()`
+  writes `data-motion` on the document root; Reduces collapses transition and
+  animation durations to `0.01ms`, None removes them entirely. Motion is not
+  scoped per surface.
+- ThemePack v2 stores `styles` (including motion) and per-surface styles; v1
+  packs migrate without losing colors.
 - Glass dialogs add `--dialog-bg` and `--dialog-backdrop-filter`; the components
   use `var(--dialog-bg, …)` so the default background is untouched.
 

@@ -6322,3 +6322,21 @@ html[data-proactive-capture="true"] .proactive-toast { visibility: hidden !impor
   .data-chart-results { align-items: start; flex-direction: column; padding: 10px 0; }
   .chart-reference-dialog footer { flex-direction: column; }
 }
+
+/* Appearance > Motion: reduced keeps the layout while removing movement;
+   none removes transitions and keyframe animation entirely. */
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion="none"] *,
+html[data-motion="none"] *::before,
+html[data-motion="none"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
