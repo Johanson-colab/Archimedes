@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 import { visit } from "unist-util-visit";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
 import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
@@ -541,7 +542,7 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
         </div>)}
         {droppedAttachments.map((item) => <div className="paper-ai-code-attachment" key={item.id} title={item.path}>{item.type === "folder" ? <Folder size={13} /> : <FileCode2 size={13} />}<span>{item.name}</span><button type="button" onClick={() => onRemoveDropped(item.id)} title={t("Remove attachment")} aria-label={`${t("Remove attachment")}: ${item.name}`}><X size={12} /></button></div>)}
       </div>}
-      <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? t("Ask about the selected code…") : t("Ask about the paper…")} rows={1} />
+      <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (shouldSubmitPaperChatKey(event)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? t("Ask about the selected code…") : t("Ask about the paper…")} rows={1} />
     </div>
     <button className="primary-button" disabled={busy ? !canInterrupt || cancelling : !draft.trim()} onClick={busy ? onInterrupt : submit}>{busy ? <><Square size={13} fill="currentColor" />{cancelling ? t("Stopping") : t("Stop")}</> : <><Send size={14} />{t("Send")}</>}</button>
   </div>;
