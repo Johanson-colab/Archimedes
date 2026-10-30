@@ -54,7 +54,7 @@ function tabBadge(count: number | undefined) {
 export default function RightWorkbench({ open, width, activeTab, panels, preferences, badges = {}, onTabChange, onPreferencesChange, onOpenSettings, onWidthChange }: RightWorkbenchProps) {
   const { t } = useUISettings();
   const visibleTabs = useMemo(() => visibleWorkbenchTabs(preferences), [preferences]);
-  const hiddenTabs = useMemo(() => preferences.order.filter((id) => preferences.hidden.includes(id)), [preferences]);
+  const hiddenTabs = useMemo(() => preferences.order.filter((id) => preferences.hidden.includes(id) && !workbenchTabDefinition(id).optional), [preferences]);
   const [dragging, setDragging] = useState<WorkbenchTabId | null>(null);
   const [dropTarget, setDropTarget] = useState<WorkbenchTabId | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);

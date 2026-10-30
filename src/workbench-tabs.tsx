@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { FolderTree, GitCompareArrows, ListTree, Milestone, NotebookPen, SquareTerminal } from "lucide-react";
+import { Compass, FolderTree, GitCompareArrows, ListTree, Milestone, NotebookPen, SquareTerminal } from "lucide-react";
 
-export type WorkbenchTabId = "journey" | "trajectory" | "files" | "changes" | "notes" | "terminal";
+export type WorkbenchTabId = "journey" | "trajectory" | "files" | "changes" | "notes" | "terminal" | "browser";
+
+export const WORKBENCH_PREFERENCES_VERSION = 2;
 
 export type WorkbenchTabPreferences = {
-  version: 1;
+  version: typeof WORKBENCH_PREFERENCES_VERSION;
   order: WorkbenchTabId[];
   hidden: WorkbenchTabId[];
 };
@@ -14,6 +16,8 @@ export type WorkbenchTabDefinition = {
   labelKey: string;
   descriptionKey: string;
   icon: ReactNode;
+  /** Optional tabs stay hidden until the user enables them in Settings. */
+  optional?: boolean;
 };
 
 export const WORKBENCH_TAB_DEFINITIONS: WorkbenchTabDefinition[] = [
@@ -23,14 +27,16 @@ export const WORKBENCH_TAB_DEFINITIONS: WorkbenchTabDefinition[] = [
   { id: "changes", labelKey: "Changes", descriptionKey: "Files changed by the agent in this conversation.", icon: <GitCompareArrows size={13} /> },
   { id: "notes", labelKey: "Notes", descriptionKey: "A scratchpad for ideas and prompt drafts.", icon: <NotebookPen size={13} /> },
   { id: "terminal", labelKey: "Terminal", descriptionKey: "An interactive shell in the workspace.", icon: <SquareTerminal size={13} /> },
+  { id: "browser", labelKey: "Browser", descriptionKey: "A lightweight browser for reading pages beside your research. Off by default.", icon: <Compass size={13} />, optional: true },
 ];
 
 export const WORKBENCH_TAB_IDS: WorkbenchTabId[] = WORKBENCH_TAB_DEFINITIONS.map((tab) => tab.id);
-export const DEFAULT_WORKBENCH_TAB_ORDER: WorkbenchTabId[] = ["journey", "trajectory", "files", "changes", "notes", "terminal"];
+export const DEFAULT_WORKBENCH_TAB_ORDER: WorkbenchTabId[] = ["journey", "trajectory", "files", "changes", "notes", "terminal", "browser"];
+export const OPTIONAL_WORKBENCH_TAB_IDS: WorkbenchTabId[] = WORKBENCH_TAB_DEFINITIONS.filter((tab) => tab.optional).map((tab) => tab.id);
 export const DEFAULT_WORKBENCH_PREFERENCES: WorkbenchTabPreferences = {
-  version: 1,
+  version: WORKBENCH_PREFERENCES_VERSION,
   order: DEFAULT_WORKBENCH_TAB_ORDER,
-  hidden: [],
+  hidden: [...OPTIONAL_WORKBENCH_TAB_IDS],
 };
 
 const TAB_ID_SET = new Set<string>(WORKBENCH_TAB_IDS);
@@ -44,7 +50,8 @@ export function workbenchTabDefinition(id: WorkbenchTabId) {
 }
 
 export function normalizeWorkbenchPreferences(input: unknown): WorkbenchTabPreferences {
-  const source = input && typeof input === "object" ? input as { order?: unknown; hidden?: unknown } : {};
+  const source = input && typeof input === "object" ? input as { version?: unknown; order?: unknown; hidden?: unknown } : {};
+  const version = typeof source.version === "number" ? source.version : 1;
   const order: WorkbenchTabId[] = [];
   const seen = new Set<WorkbenchTabId>();
   const rawOrder = Array.isArray(source.order) ? source.order : [];
@@ -64,8 +71,13 @@ export function normalizeWorkbenchPreferences(input: unknown): WorkbenchTabPrefe
     if (!isWorkbenchTabId(value) || !order.includes(value) || hidden.includes(value)) continue;
     hidden.push(value);
   }
+  if (version < WORKBENCH_PREFERENCES_VERSION) {
+    for (const id of OPTIONAL_WORKBENCH_TAB_IDS) {
+      if (order.includes(id) && !hidden.includes(id)) hidden.push(id);
+    }
+  }
   if (hidden.length >= order.length) hidden.splice(0, hidden.length, ...order.filter((id) => id !== order[0]));
-  return { version: 1, order, hidden };
+  return { version: WORKBENCH_PREFERENCES_VERSION, order, hidden: order.filter((id) => hidden.includes(id)) };
 }
 
 export function visibleWorkbenchTabs(preferences: WorkbenchTabPreferences): WorkbenchTabId[] {

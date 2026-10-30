@@ -18,8 +18,9 @@ const main = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
 
 test("workbench tabs are registry-driven, reorderable, and configurable", () => {
-  assert.match(tabs, /export type WorkbenchTabId = "journey" \| "trajectory" \| "files" \| "changes" \| "notes" \| "terminal"/);
-  assert.match(tabs, /DEFAULT_WORKBENCH_TAB_ORDER: WorkbenchTabId\[\] = \["journey", "trajectory", "files", "changes", "notes", "terminal"\]/);
+  assert.match(tabs, /export type WorkbenchTabId = "journey" \| "trajectory" \| "files" \| "changes" \| "notes" \| "terminal" \| "browser"/);
+  assert.match(tabs, /DEFAULT_WORKBENCH_TAB_ORDER: WorkbenchTabId\[\] = \["journey", "trajectory", "files", "changes", "notes", "terminal", "browser"\]/);
+  assert.match(tabs, /hidden: \[\.\.\.OPTIONAL_WORKBENCH_TAB_IDS\]/);
   assert.match(tabs, /setWorkbenchTabVisibility/);
   assert.match(right, /role="tablist"/);
   assert.match(right, /draggable/);

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -45,6 +45,8 @@ const workspaceWatchers = new Map();
 const allowedContextPaths = new Set();
 const WORKSPACE_STATE_FILE = "last-workspace.json";
 const MAX_CLIPBOARD_IMAGE_BYTES = 6 * 1024 * 1024;
+const WORKBENCH_BROWSER_PARTITION = "archimedes-browser";
+let browserSessionHardened = false;
 
 app.setName("Archimedes");
 app.setAppUserModelId("com.archimedes.research");
@@ -216,11 +218,13 @@ function createWindow(workspace) {
 
   const senderId = browserWindow.webContents.id;
   browserWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
-    if (!isEmbeddableProjectPage(params.src)) {
+    const browserTab = params.partition === WORKBENCH_BROWSER_PARTITION;
+    const allowed = browserTab ? isWebPage(params.src) : isEmbeddableProjectPage(params.src);
+    if (!allowed) {
       event.preventDefault();
       return;
     }
-    if (isGithubPage(params.src)) {
+    if (!browserTab && isGithubPage(params.src)) {
       try {
         const repository = normalizeGithubRepositoryUrl(params.src);
         params.src = repository.url;
@@ -235,13 +239,16 @@ function createWindow(workspace) {
     webPreferences.sandbox = true;
   });
   browserWindow.webContents.on("did-attach-webview", (_event, guestContents) => {
+    const browserTab = guestContents.session === session.fromPartition(WORKBENCH_BROWSER_PARTITION);
     guestContents.setWindowOpenHandler(({ url }) => {
-      if (isEmbeddableProjectPage(url)) void guestContents.loadURL(url);
+      if (browserTab && isWebPage(url)) void shell.openExternal(url);
+      if (!browserTab && isEmbeddableProjectPage(url)) void guestContents.loadURL(url);
       return { action: "deny" };
     });
     guestContents.on("will-navigate", (event, url) => {
-      if (!isEmbeddableProjectPage(url)) event.preventDefault();
+      if (!(browserTab ? isWebPage(url) : isEmbeddableProjectPage(url))) event.preventDefault();
     });
+    if (browserTab) hardenBrowserSession(guestContents.session);
   });
   if (workspace) setWindowWorkspace(senderId, resolveWorkspace(workspace));
 
@@ -295,6 +302,27 @@ function isEmbeddableProjectPage(value) {
   } catch {
     return false;
   }
+}
+
+function isWebPage(value) {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function hardenBrowserSession(session) {
+  if (browserSessionHardened) return;
+  browserSessionHardened = true;
+  session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  session.setPermissionCheckHandler(() => false);
+  session.on("will-download", (event, item) => {
+    event.preventDefault();
+    const url = item.getURL();
+    if (isWebPage(url)) void shell.openExternal(url);
+  });
 }
 
 function workspaceForWindow(browserWindow) {
@@ -968,6 +996,14 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("clipboard:read-text", () => clipboard.readText().slice(0, 100_000));
+
+  ipcMain.handle("app:open-external", async (_event, url) => {
+    if (typeof url !== "string" || url.length > 4_096 || !isWebPage(url)) {
+      throw new Error("Only http:// and https:// links can be opened.");
+    }
+    await shell.openExternal(url);
+    return { opened: true };
+  });
 
   ipcMain.handle("clipboard:write-text", (_event, { text } = {}) => {
     if (typeof text !== "string") throw new Error("Clipboard text must be a string.");

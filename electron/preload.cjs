@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   getWorkbenchNote: (key) => ipcRenderer.invoke("workbench:get-note", key),
   saveWorkbenchNote: (key, content) => ipcRenderer.invoke("workbench:save-note", { key, content }),
   deleteWorkbenchNote: (key) => ipcRenderer.invoke("workbench:delete-note", key),
+  openExternalUrl: (url) => ipcRenderer.invoke("app:open-external", url),
   saveJourneySettings: (input) => ipcRenderer.invoke("journey:save-settings", input),
   resetJourneySettings: () => ipcRenderer.invoke("journey:reset-settings"),
   getJourneySummary: (threadId) => ipcRenderer.invoke("journey:get-summary", threadId),
