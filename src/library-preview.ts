@@ -188,4 +188,6 @@ export const previewLibraryBridge = {
   getLibraryGithubRepositoryCheckout: async (): Promise<RepositoryCheckout | null> => null,
   cloneLibraryGithubRepository: async (): Promise<RepositoryCheckout> => { throw new Error("Clone repositories in the Archimedes desktop app."); },
   resolveLibraryGithubRepositoryReference: async (): Promise<{ status: "missing"; paths: string[] }> => ({ status: "missing", paths: [] }),
+  attachDroppedFiles: async (): Promise<ContextAttachment[]> => { throw new Error("Drag files and folders in the desktop app."); },
+  attachRepositoryPath: async (): Promise<ContextAttachment> => { throw new Error("Drag repository files in the desktop app."); },
 };

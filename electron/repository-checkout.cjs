@@ -211,4 +211,4 @@ async function searchRepositoryCheckout(workspace, url, query, directory = "") {
   return { query: needle, matches };
 }
 
-module.exports = { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveRepositoryCodeReference, searchRepositoryCheckout };
+module.exports = { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference, searchRepositoryCheckout };

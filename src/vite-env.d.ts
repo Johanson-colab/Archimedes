@@ -9,6 +9,8 @@ interface ResearchDeskBridge {
     watchWorkspace: (workspace: string) => Promise<string>;
     revealWorkspace: (workspace: string) => Promise<{ opened: boolean }>;
     chooseContextPaths: (kind: "file" | "folder", workspace?: string) => Promise<ContextAttachment[]>;
+    attachDroppedFiles: (files: File[]) => Promise<ContextAttachment[]>;
+    attachRepositoryPath: (url: string, workspace: string, path: string) => Promise<ContextAttachment>;
     listContextResources: (kind: "plugin" | "skill", workspace?: string) => Promise<ContextAttachment[]>;
     listSkillCollections: (workspace?: string) => Promise<SkillCollection[]>;
     listSkills: (workspace?: string, collectionId?: string) => Promise<SkillSummary[]>;

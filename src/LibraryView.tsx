@@ -499,9 +499,10 @@ const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, 
   </div>;
 });
 
-const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, canInterrupt, attachments, command, onAsk, onInterrupt, onRemoveAttachment }: {
-  busy: boolean; cancelling: boolean; canInterrupt: boolean; attachments: CodeChatAttachment[]; command: PaperChatComposerCommand;
+const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, canInterrupt, attachments, droppedAttachments, command, onAsk, onInterrupt, onRemoveAttachment, onRemoveDropped, onDropFiles }: {
+  busy: boolean; cancelling: boolean; canInterrupt: boolean; attachments: CodeChatAttachment[]; droppedAttachments: ContextAttachment[]; command: PaperChatComposerCommand;
   onAsk: (prompt: string) => boolean; onInterrupt: () => void; onRemoveAttachment: (index: number) => void;
+  onRemoveDropped: (id: string) => void; onDropFiles: (files: File[], repositoryPath: string) => void;
 }) {
   const { t } = useUISettings();
   const [draft, setDraft] = useState("");
@@ -529,12 +530,13 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
     if (!draft.trim() || busy) return;
     if (onAsk(draft)) setDraft("");
   }
-  return <div className="paper-ai-compose">
+  return <div className="paper-ai-compose" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes("application/x-archimedes-repository-path")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDrop={(event) => { const files = Array.from(event.dataTransfer.files); const repositoryPath = event.dataTransfer.getData("application/x-archimedes-repository-path"); if (!files.length && !repositoryPath) return; event.preventDefault(); event.stopPropagation(); onDropFiles(files, repositoryPath); }}>
     <div className="paper-ai-compose-input">
-      {attachments.length > 0 && <div className="paper-ai-code-attachments">
+      {(attachments.length > 0 || droppedAttachments.length > 0) && <div className="paper-ai-code-attachments">
         {attachments.map((attachment, index) => <div className="paper-ai-code-attachment" key={attachment.path + ":" + attachment.startLine + ":" + index} title={attachment.path + ":" + attachment.startLine + "-" + attachment.endLine}>
           <FileCode2 size={13} /><span>{attachment.path}:{attachment.startLine}{attachment.endLine !== attachment.startLine ? "-" + attachment.endLine : ""}</span><button type="button" onClick={() => onRemoveAttachment(index)} title={t("Remove code attachment")} aria-label={t("Remove {path} code attachment", { path: attachment.path })}><X size={12} /></button>
         </div>)}
+        {droppedAttachments.map((item) => <div className="paper-ai-code-attachment" key={item.id} title={item.path}>{item.type === "folder" ? <Folder size={13} /> : <FileCode2 size={13} />}<span>{item.name}</span><button type="button" onClick={() => onRemoveDropped(item.id)} title={t("Remove attachment")} aria-label={`${t("Remove attachment")}: ${item.name}`}><X size={12} /></button></div>)}
       </div>}
       <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? t("Ask about the selected code…") : t("Ask about the paper…")} rows={1} />
     </div>
@@ -581,6 +583,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [checkoutError, setCheckoutError] = useState("");
   const [aiMode, setAiMode] = useState<PaperAiMode>("brief");
   const [codeAttachments, setCodeAttachments] = useState<CodeChatAttachment[]>([]);
+  const [droppedAttachments, setDroppedAttachments] = useState<ContextAttachment[]>([]);
   const [composerCommand, setComposerCommand] = useState<PaperChatComposerCommand>({ id: 0 });
   const [chatBusy, setChatBusy] = useState(false);
   const [chatCancelling, setChatCancelling] = useState(false);
@@ -853,6 +856,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setChatOpen(true);
     if (!options.initialBriefing) {
       setCodeAttachments([]);
+      setDroppedAttachments([]);
       setFigureCapture(null);
       setChatMessages((current) => [...current, { role: "user", text: userPrompt }]);
     }
@@ -868,7 +872,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         threadId: chatThreadId,
         projectId: projectId || undefined,
         mode: options.initialBriefing || aiMode === "audit" ? "deep-research" : "free-chat",
-        contextItems: attachedFigure ? [...researchContext, attachedFigure.image] : researchContext,
+        contextItems: [...researchContext, ...(options.initialBriefing ? [] : droppedAttachments), ...(attachedFigure ? [attachedFigure.image] : [])],
         clientRunId,
       });
       setChatThreadId(result.threadId);
@@ -932,6 +936,17 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     if (chatBusy || !workspace || !draft.trim()) return false;
     void askAI(draft);
     return true;
+  }
+  async function attachPaperChatDrop(files: File[], repositoryPath: string) {
+    try {
+      const items = files.length ? await bridge.attachDroppedFiles(files) : repositoryPath && projectUrl ? [await bridge.attachRepositoryPath(projectUrl, workspace, repositoryPath)] : [];
+      setDroppedAttachments((current) => {
+        const combined = [...current, ...items.filter((item) => !current.some((existing) => existing.id === item.id))];
+        return combined.slice(0, 9);
+      });
+      if (items.length + droppedAttachments.length > 9) setError("A paper chat can attach up to 9 files or folders at once.");
+      else setError("");
+    } catch (dropError) { setError(readableError(dropError, "Could not attach the dropped files or folders.")); }
   }
   async function interruptPaperChat() {
     if (!chatThreadId || chatCancelling) return;
@@ -1050,7 +1065,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={(prompt) => void askAI(prompt)} onOpenCodePath={openCodePath} />
         {selection && <div className="paper-ai-context"><span>{t("p. {page} selection", { page: pageNumber })}</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
         {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
-        <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} />
+        <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} droppedAttachments={droppedAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} onRemoveDropped={(id) => setDroppedAttachments((current) => current.filter((item) => item.id !== id))} onDropFiles={(files, repositoryPath) => void attachPaperChatDrop(files, repositoryPath)} />
       </aside></>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
@@ -1251,9 +1266,9 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
     return (tree[directory] || []).flatMap((entry) => {
       if (entry.type === "directory") {
         const open = expanded.has(entry.path);
-        return [<div key={entry.path}><button className={open ? "codebase-tree-node open" : "codebase-tree-node"} style={{ paddingLeft: 12 + depth * 14 }} onClick={() => void toggleDirectory(entry.path)}>{open ? <FolderOpen size={14} /> : <Folder size={14} />}<span>{entry.name}</span></button>{open ? renderEntries(entry.path, depth + 1) : []}</div>];
+        return [<div key={entry.path}><button draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-archimedes-repository-path", entry.path); event.dataTransfer.effectAllowed = "copy"; }} className={open ? "codebase-tree-node open" : "codebase-tree-node"} style={{ paddingLeft: 12 + depth * 14 }} onClick={() => void toggleDirectory(entry.path)}>{open ? <FolderOpen size={14} /> : <Folder size={14} />}<span>{entry.name}</span></button>{open ? renderEntries(entry.path, depth + 1) : []}</div>];
       }
-      return [<button className={activeFile?.path === entry.path ? "codebase-tree-node active" : "codebase-tree-node"} key={entry.path} style={{ paddingLeft: 12 + depth * 14 }} onClick={() => void openFile(entry)}><FileCode2 size={13} /><span>{entry.name}</span></button>];
+      return [<button draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-archimedes-repository-path", entry.path); event.dataTransfer.effectAllowed = "copy"; }} className={activeFile?.path === entry.path ? "codebase-tree-node active" : "codebase-tree-node"} key={entry.path} style={{ paddingLeft: 12 + depth * 14 }} onClick={() => void openFile(entry)}><FileCode2 size={13} /><span>{entry.name}</span></button>];
     });
   }
 

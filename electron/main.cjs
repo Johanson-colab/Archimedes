@@ -33,7 +33,7 @@ const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
 const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");
-const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");
+const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");
 const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");
 
 const commandSessions = new Map();
@@ -623,6 +623,23 @@ app.whenReady().then(() => {
       : await dialog.showOpenDialog(options);
     if (result.canceled) return [];
     return result.filePaths.map((selectedPath) => contextItem(kind, selectedPath, path.dirname(selectedPath)));
+  });
+
+  ipcMain.handle("context:attach-dropped-paths", async (_event, paths) => {
+    if (!Array.isArray(paths) || paths.length > 12 || paths.some((p) => typeof p !== "string" || !path.isAbsolute(p) || p.length > 4000)) throw new Error("Invalid dropped files.");
+    return paths.map((p) => {
+      const stats = fs.statSync(p);
+      if (!stats.isFile() && !stats.isDirectory()) throw new Error("Only files and folders can be attached.");
+      return contextItem(stats.isDirectory() ? "folder" : "file", p, path.dirname(p));
+    });
+  });
+
+  ipcMain.handle("context:attach-repository-path", async (event, { url, workspace, path: filePath } = {}) => {
+    if (typeof url !== "string" || url.length > 3000 || typeof filePath !== "string" || !filePath || filePath.length > 2000) throw new Error("Invalid repository path.");
+    const resolved = await resolveAuditPath(resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id)), url, filePath);
+    const stats = fs.statSync(resolved.target);
+    if (!stats.isFile() && !stats.isDirectory()) throw new Error("Only files and folders can be attached.");
+    return contextItem(stats.isDirectory() ? "folder" : "file", resolved.target, filePath);
   });
 
   ipcMain.handle("context:list-resources", (_event, input = {}) => {

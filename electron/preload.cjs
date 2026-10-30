@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("researchDesk", {
   platform: process.platform,
@@ -9,6 +9,12 @@ contextBridge.exposeInMainWorld("researchDesk", {
   watchWorkspace: (workspace) => ipcRenderer.invoke("workspace:watch", workspace),
   revealWorkspace: (workspace) => ipcRenderer.invoke("workspace:reveal", workspace),
   chooseContextPaths: (kind, workspace) => ipcRenderer.invoke("context:choose-paths", { kind, workspace }),
+  attachDroppedFiles: (files) => {
+    const paths = Array.from(files, (file) => webUtils.getPathForFile(file));
+    if (!paths.length || paths.some((p) => !p)) return Promise.reject(new Error("Could not read the dropped files. Drag files or folders from the system file manager."));
+    return ipcRenderer.invoke("context:attach-dropped-paths", paths);
+  },
+  attachRepositoryPath: (url, workspace, path) => ipcRenderer.invoke("context:attach-repository-path", { url, workspace, path }),
   listContextResources: (kind, workspace) => ipcRenderer.invoke("context:list-resources", { kind, workspace }),
   listSkillCollections: (workspace) => ipcRenderer.invoke("skills:list-collections", { workspace }),
   listSkills: (workspace, collectionId = "") => ipcRenderer.invoke("skills:list", { workspace, collectionId }),
