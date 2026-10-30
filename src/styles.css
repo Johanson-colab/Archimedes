@@ -3532,8 +3532,13 @@ html[data-theme="paper"] .paper-create-backdrop {
 .theme-paper .daily-search-meta,
 .theme-paper .daily-search-row > span,
 .theme-paper .daily-save-target { color: #8b857d; }
-.theme-paper .daily-paper-list { border-color: #e5e0d9; }
-.theme-paper .daily-paper-row { background: var(--mono-surface); border-color: #ebe6df; }
+.theme-paper .daily-paper-list { display: grid; gap: 10px; padding-top: 2px; border-top: 0; }
+.theme-paper .daily-paper-row {
+  padding: 16px;
+  background: var(--mono-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
 .theme-paper .daily-paper-row:hover { background: var(--surface-raised); }
 .theme-paper .daily-paper-title h2 { color: #2b2823; }
 .theme-paper .daily-paper-title a { color: #655f57; }
