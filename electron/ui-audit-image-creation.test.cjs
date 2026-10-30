@@ -25,7 +25,7 @@ test("the page keeps Paper diagrams and Data charts in one tab row without Templ
   assert.match(view, /className="image-creation-tabs" role="tablist"/);
   assert.match(view, />\s*Paper diagrams <small>/);
   assert.match(view, />\s*Data charts\s*</);
-  assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard|Use as template/);
+  assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard/);
   assert.match(view, /className="image-creation-actions"/);
   assert.match(view, /className="image-creation-sort"/);
   assert.match(view, /Browse full proceedings/);
@@ -65,8 +65,11 @@ test("images lead and text is a single secondary line", () => {
   assert.match(css, /\.image-creation-card-image img \{[^}]*object-fit: cover/);
   assert.match(css, /\.image-creation-card-venue \{[^}]*position: absolute/);
   assert.match(css, /\.image-creation-card-title \{[^}]*white-space: nowrap/);
-  assert.doesNotMatch(css, /\.image-creation-card-use|\.image-creation-template|\.image-creation-reference/);
-  assert.doesNotMatch(view, /onUseTemplate|setReference|Adapt this figure/);
+  assert.match(css, /\.image-creation-card-use \{[^}]*opacity: 0/);
+  assert.match(css, /\.image-creation-reference \{/);
+  assert.match(view, /Use as template/);
+  assert.match(view, /setComposerText\("Adapt this figure for "\)/);
+  assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard/);
 });
 
 test("filter facets fold into one popover instead of a permanent block", () => {

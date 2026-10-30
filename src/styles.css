@@ -4959,6 +4959,16 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
   line-height: 1.4; text-overflow: ellipsis; white-space: nowrap;
   text-shadow: 0 1px 8px rgba(0, 0, 0, .6);
 }
+.image-creation-card-use {
+  position: absolute; z-index: 3; top: 9px; right: 9px;
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px;
+  color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 4px;
+  font-size: 9px; font-weight: 750; opacity: 0; transform: translateY(-2px);
+  transition: opacity .16s ease, transform .16s ease;
+}
+.image-creation-card:hover .image-creation-card-use,
+.image-creation-card:focus-within .image-creation-card-use { opacity: 1; transform: none; }
+@media (hover: none) { .image-creation-card-use { opacity: 1; transform: none; } }
 .image-creation-fade {
   position: fixed; z-index: 25; right: var(--workbench-width, 0px); bottom: 0; left: var(--sidebar-width, 0px);
   height: 150px; pointer-events: none;
@@ -5006,6 +5016,21 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 }
 .image-creation-send:disabled { cursor: default; opacity: .55; }
 .image-creation-composer-note { margin: 7px 0 0; color: var(--night-muted); font-size: 9.5px; text-align: center; }
+.image-creation-reference {
+  display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 9px;
+  margin: 0 0 7px; padding: 6px 8px; color: var(--night-ink-soft);
+  background: color-mix(in srgb, var(--night-panel) 94%, transparent);
+  border: 1px solid var(--night-line); border-radius: 8px; backdrop-filter: blur(18px);
+}
+.image-creation-reference img { width: 44px; height: 31px; flex: 0 0 auto; object-fit: cover; border-radius: 4px; }
+.image-creation-reference span { display: grid; min-width: 0; gap: 1px; }
+.image-creation-reference b { color: var(--night-muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
+.image-creation-reference em { overflow: hidden; color: var(--night-ink); font-size: 10.5px; font-style: normal; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
+.image-creation-reference button {
+  display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center;
+  color: var(--night-muted); background: transparent; border-radius: 4px;
+}
+.image-creation-reference button:hover { color: var(--night-ink); background: var(--night-panel-soft); }
 
 .codex-shell.sidebar-hidden .image-creation-composer-dock,
 .codex-shell.sidebar-hidden .image-creation-fade { left: 0; }
@@ -5034,7 +5059,7 @@ html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
   .image-creation-model { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .image-creation-card-image img { transition: none; }
+  .image-creation-card-image img, .image-creation-card-use { transition: none; }
 }
 
 /* The compose dock has to survive a narrow main column when the right

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
 import DataChartGallery from "./DataChartGallery";
 
@@ -104,8 +104,8 @@ function Facet({ label, options, value, onChange }: {
   </div>;
 }
 
-function FigureCard({ figure, onOpen }: {
-  figure: Figure; onOpen: () => void;
+function FigureCard({ figure, onOpen, onUseTemplate }: {
+  figure: Figure; onOpen: () => void; onUseTemplate: () => void;
 }) {
   const [failed, setFailed] = useState(false);
   return <article className="image-creation-card">
@@ -116,6 +116,10 @@ function FigureCard({ figure, onOpen }: {
       <span className="image-creation-card-shade" aria-hidden="true" />
       <span className="image-creation-card-venue">{figure.venue.toUpperCase()} · {figure.year}</span>
       <span className="image-creation-card-title">{figure.title}</span>
+    </button>
+    <button type="button" className="image-creation-card-use" onClick={onUseTemplate}
+      title={`Use "${figure.title}" as a template`}>
+      <Sparkles size={12} />Use as template
     </button>
   </article>;
 }
@@ -154,8 +158,10 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"gallery" | "charts">("gallery");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [reference, setReference] = useState<Figure | null>(null);
   const [composerText, setComposerText] = useState("");
   const [aspect, setAspect] = useState<Aspect>("1:1");
+  const composerRef = useRef<HTMLInputElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
 
   async function refresh(force = false) {
@@ -181,6 +187,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onPointer); document.removeEventListener("keydown", onKey); };
   }, [filterOpen]);
+  useEffect(() => { if (reference) composerRef.current?.focus(); }, [reference]);
 
   const result = useMemo(() => {
     const matched = figures.filter((figure) => matches(figure, filters, query));
@@ -195,6 +202,10 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const updateFilter = (key: keyof Filters, value: string | number) => setFilters((current) => ({ ...current, [key]: value }));
   const step = (direction: number) => { if (selectedIndex >= 0) setSelectedId(result[(selectedIndex + direction + result.length) % result.length].id); };
   const resetFilters = () => { setQuery(""); setFilters(INITIAL_FILTERS); };
+  function useAsTemplate(figure: Figure) {
+    setReference(figure);
+    setComposerText("Adapt this figure for ");
+  }
 
   return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
     <div className="image-creation-tabs" role="tablist" aria-label="Image creation views">
@@ -245,7 +256,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
         : error && !figures.length ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load paper diagrams</strong><p>{error}</p><button type="button" onClick={() => void refresh(true)}>Retry</button></div>
           : !result.length ? <div className="gallery-state"><Search size={25} /><strong>No figures match these filters</strong><button type="button" onClick={resetFilters}>Clear filters</button></div>
             : <>
-              <div className="image-creation-grid">{shown.map((figure) => <FigureCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>
+              <div className="image-creation-grid">{shown.map((figure) => <FigureCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} onUseTemplate={() => useAsTemplate(figure)} />)}</div>
               {visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}
             </>}
       <p className="gallery-credit">Figures belong to their paper authors and publishers. The catalogue and image files are served by <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>. Check each paper's license before reuse.</p>
@@ -254,9 +265,14 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     {tab === "gallery" && <><div className="image-creation-fade" aria-hidden="true" />
     <div className="image-creation-composer-dock">
       <div className="image-creation-composer">
+        {reference && <div className="image-creation-reference">
+          <img src={imageUrl(reference)} alt="" />
+          <span><b>{reference.venue.toUpperCase()} {reference.year}</b><em>{reference.title}</em></span>
+          <button type="button" onClick={() => setReference(null)} title="Remove reference figure" aria-label="Remove reference figure"><X size={13} /></button>
+        </div>}
         <div className="image-creation-composer-box">
           <button type="button" className="image-creation-attach" disabled title="Attaching a reference image is coming soon" aria-label="Attach a reference image"><Plus size={16} /></button>
-          <input className="image-creation-composer-input" value={composerText} onChange={(event) => setComposerText(event.target.value)} placeholder="Describe an image to generate…" aria-label="Describe an image" />
+          <input ref={composerRef} className="image-creation-composer-input" value={composerText} onChange={(event) => setComposerText(event.target.value)} placeholder={reference ? "Describe how to adapt this figure…" : "Describe an image to generate…"} aria-label="Describe an image" />
           <label className="image-creation-aspect">
             <select value={aspect} onChange={(event) => setAspect(event.target.value as Aspect)} aria-label="Aspect ratio">
               {ASPECTS.map((option) => <option key={option} value={option}>{option}</option>)}
