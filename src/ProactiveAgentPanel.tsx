@@ -1,14 +1,29 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowUp, MessageSquare, MoreHorizontal, X } from "lucide-react";
 import { useUISettings } from "./i18n";
-import { activityLabel, observationInterval } from "./activityPulse";
 import { evidenceLabel, formatRelativeTime } from "./proactive-engine";
 import {
   PROACTIVE_SOURCE_LABELS,
   PROACTIVE_STATUS_LABELS,
+  type ProactiveAction,
   type ProactiveEvidence,
 } from "./proactive-types";
 import type { ProactiveAgentController } from "./useProactiveAgent";
+
+function hasCjkLabel(label: string) {
+  return /[\u3400-\u9fff]/.test(label);
+}
+
+/** The observer model labels the action in the language of the latest user
+ * message. Keep that verb when it matches the UI language, but fall back to a
+ * stable localized label so an English panel never shows a Chinese verb. */
+function actionLabel(action: ProactiveAction, language: "en" | "zh", t: (key: string) => string) {
+  const mismatched = language === "zh" ? !hasCjkLabel(action.label) : hasCjkLabel(action.label);
+  if (!mismatched) return action.label;
+  if (action.kind === "insert") return t("Insert draft");
+  if (action.kind === "copy") return t("Copy draft");
+  return action.label;
+}
 
 function EvidenceDetail({ evidence }: { evidence: ProactiveEvidence }) {
   switch (evidence.kind) {
@@ -50,7 +65,7 @@ export default function ProactiveAgentPanel({
   onOpenSettings: () => void;
   onCollapse: () => void;
 }) {
-  const { t } = useUISettings();
+  const { t, language } = useUISettings();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -105,7 +120,6 @@ export default function ProactiveAgentPanel({
                     ? t("Manual review")
                     : t("Off");
   const statusActive = mode !== "off" && !limited && (mode !== "auto" || controller.modelReady);
-  const pulseTitle = `${activityLabel(controller.activity.level)} · ${controller.activity.pointerRate} pointer/min · ${controller.activity.keyRate} keys/min · every ${Math.round(observationInterval(controller.activity.level) / 1_000)}s`;
 
   useEffect(() => {
     if (selectedId && !sorted.some((suggestion) => suggestion.id === selectedId)) setSelectedId(null);
@@ -187,9 +201,6 @@ export default function ProactiveAgentPanel({
     <header className="agent-proactive-head dock-panel-head">
       <span className="agent-proactive-status" title={t("{count} of {total} auto suggestions today", { count: controller.todayCount, total: controller.settings.dailyBudget })}>
         <i className={statusActive ? "agent-proactive-bar active" : "agent-proactive-bar"} aria-hidden="true" />
-        <span className="agent-proactive-activity" title={pulseTitle} aria-label={pulseTitle}>
-          <i style={{ width: `${Math.round(controller.activity.score * 100)}%` }} />
-        </span>
         <span className="agent-proactive-status-label">{status}</span>
       </span>
       <div className="agent-proactive-tools" ref={menuRef}>
@@ -278,7 +289,7 @@ export default function ProactiveAgentPanel({
         </div>
         {openEvidence !== null && selected.evidence[openEvidence] && <EvidenceDetail evidence={selected.evidence[openEvidence]} />}
         {(actionable || selected.action.undo) && <div className="agent-proactive-action-row">
-          {actionable && <button className="agent-proactive-primary" onClick={() => controller.accept(selected)}>{selected.action.label}</button>}
+          {actionable && <button className="agent-proactive-primary" onClick={() => controller.accept(selected)}>{actionLabel(selected.action, language, t)}</button>}
           {selected.action.undo && <button className="agent-proactive-secondary" onClick={() => controller.undo(selected)}>{t("Undo")}</button>}
           {actionable && <button className="agent-proactive-dismiss" onClick={() => controller.dismiss(selected)}>{t("Not now")}</button>}
         </div>}

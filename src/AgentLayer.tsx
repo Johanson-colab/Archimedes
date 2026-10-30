@@ -116,7 +116,7 @@ export default function AgentLayer({
     setActive(id);
     const target = event.target as HTMLElement;
     if (target.closest("button,input,textarea,select,a,[contenteditable='true']")) return;
-    if (!target.closest(".agent-proactive-head, .agent-path-head, .agent-float-grip")) return;
+    if (!target.closest(".agent-proactive-head, .agent-path-head")) return;
     const start = layout[id];
     if (!start) return;
     event.preventDefault();
@@ -216,7 +216,6 @@ export default function AgentLayer({
         onFocus={() => setActive(panel.id)}
         onKeyDown={(event) => handleKeyDown(event, panel.id)}
       >
-        <span className="agent-float-grip" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <i key={index} />)}</span>
         {panel.content}
         <span className="agent-float-resize" onPointerDown={(event) => startResize(event, panel.id)} aria-hidden="true" />
       </div>;

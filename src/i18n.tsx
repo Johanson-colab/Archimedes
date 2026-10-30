@@ -838,6 +838,8 @@ const translations: Record<string, string> = {
   "Ask in chat (draft only)": "在主对话中提问（仅起草）",
   "Ask in chat": "在主对话中提问",
   "Draft in chat": "起草到主对话",
+  "Insert draft": "插入草稿",
+  "Copy draft": "复制草稿",
   "Suggestions only · drafts go to chat": "仅建议 · 起草内容会进入主对话",
   "Draft added to the main composer. Nothing runs until you send it.": "已把草稿加入主输入框。发送前不会执行任何操作。",
   "Unpin this thread": "取消固定此线程",
