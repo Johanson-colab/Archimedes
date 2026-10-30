@@ -18,11 +18,6 @@
     "check:theme": "node scripts/check-theme-tokens.mjs",
     "codemod:theme": "node scripts/codemod-theme-colors.mjs",
     "test": "node --test electron/*.test.cjs electron/agent/*.test.cjs && node scripts/check-theme-tokens.mjs",
-    "gallery:build": "python3 scripts/gallery-pipeline.py build",
-    "gallery:pool": "python3 scripts/gallery-pipeline.py pool",
-    "gallery:extract": "python3 scripts/gallery-pipeline.py extract",
-    "gallery:select": "python3 scripts/gallery-pipeline.py select",
-    "gallery:sheets": "python3 scripts/gallery-pipeline.py sheets",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "postinstall": "npm run rebuild:native"
   },

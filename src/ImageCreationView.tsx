@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
-import { GALLERY_CATALOG_ADDITIONS, GALLERY_CATALOG_VERSION, GALLERY_COVERAGE } from "./gallery-catalog";
 import { useDialogFocus } from "./useDialogFocus";
 
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
 const PAGE_SIZE = 48;
-const VENUES = ["ICLR", "ICML", "NeurIPS", "CVPR", "ICCV", "ECCV", "ACL", "EMNLP", "AAAI"] as const;
+const VENUES = ["ICLR", "ICML", "NeurIPS", "CVPR", "ACL", "AAAI"] as const;
 const YEARS = [2026, 2025, 2024, 2023] as const;
 const PATTERNS = [
   ["conceptual", "Concept"], ["framework", "Framework"], ["pipeline", "Pipeline"],
@@ -45,7 +44,6 @@ type Figure = {
 type Filters = { venue: string; year: number | "all"; tier: string; pattern: string };
 const INITIAL_FILTERS: Filters = { venue: "all", year: "all", tier: "all", pattern: "all" };
 let catalogPromise: Promise<Figure[]> | null = null;
-let catalogVersion = GALLERY_CATALOG_VERSION;
 
 function isFigure(value: unknown): value is Figure {
   if (!value || typeof value !== "object") return false;
@@ -57,10 +55,6 @@ function isFigure(value: unknown): value is Figure {
 }
 
 function loadCatalog(refresh = false) {
-  if (catalogVersion !== GALLERY_CATALOG_VERSION) {
-    catalogPromise = null;
-    catalogVersion = GALLERY_CATALOG_VERSION;
-  }
   if (refresh) catalogPromise = null;
   if (!catalogPromise) {
     catalogPromise = fetch(CATALOG_URL).then(async (response) => {
@@ -69,7 +63,7 @@ function loadCatalog(refresh = false) {
       if (!Array.isArray(payload)) throw new Error("The gallery catalog format has changed.");
       const figures = payload.filter(isFigure);
       if (!figures.length) throw new Error("No valid figures were found in the gallery catalog.");
-      return [...figures, ...GALLERY_CATALOG_ADDITIONS];
+      return figures;
     }).catch((error: unknown) => {
       catalogPromise = null;
       throw error;
@@ -198,12 +192,12 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     setLoading(true); setError("");
     try { setFigures(await loadCatalog(force)); }
     catch (failure) {
-      setFigures(GALLERY_CATALOG_ADDITIONS);
+      setFigures([]);
       setError(failure instanceof Error ? failure.message : String(failure));
     }
     finally { setLoading(false); }
   }
-  useEffect(() => { void refresh(); }, [GALLERY_CATALOG_VERSION]);
+  useEffect(() => { void refresh(); }, []);
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
   useEffect(() => { setSelectedId(null); }, [tab]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [filters, query, sort]);
@@ -236,8 +230,6 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const updateFilter = (key: keyof Filters, value: string | number) => setFilters((current) => ({ ...current, [key]: value }));
   const step = (direction: number) => { if (selectedIndex >= 0) setSelectedId(result[(selectedIndex + direction + result.length) % result.length].id); };
   const resetFilters = () => { setQuery(""); setFilters(INITIAL_FILTERS); };
-  const emnlp2026 = GALLERY_COVERAGE.find((row) => row.venue === "emnlp" && row.year === 2026);
-
   function useAsTemplate(figure: Figure) {
     setReference(figure);
     setComposerText("Adapt this figure for ");
@@ -285,9 +277,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           </div>}
         </div>
       </div>
-      {filters.venue === "EMNLP" && (filters.year === "all" || filters.year === 2026) &&
-        <p className="gallery-availability-note">All {emnlp2026?.accepted.toLocaleString() ?? "2,710"} EMNLP 2026 accepted papers are indexed. Figure cards will appear when ACL Anthology publishes the official proceedings.</p>}
-      {error && figures.length > 0 && <div className="gallery-notice">The Top-Conf catalogue is temporarily unavailable. Showing verified official-proceedings additions.</div>}
+      {error && figures.length > 0 && <div className="gallery-notice">The Top-Conf catalogue could not be refreshed. Showing the last successfully loaded catalogue.</div>}
       {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading figures…</strong></div>
         : error && !figures.length ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load the gallery</strong><p>{error}</p><button type="button" onClick={() => void refresh(true)}>Retry</button></div>
           : !result.length ? <div className="gallery-state"><Search size={25} /><strong>No figures match these filters</strong><button type="button" onClick={resetFilters}>Clear filters</button></div>
@@ -295,7 +285,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
               <div className="image-creation-grid">{shown.map((figure) => <FigureCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} onUseTemplate={() => useAsTemplate(figure)} />)}</div>
               {visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}
             </>}
-      <p className="gallery-credit">Figures belong to their paper authors and publishers. The base catalogue is from <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>; ICCV, ECCV, and EMNLP additions are validated Figure 1 crops from the linked official proceedings. Check each paper's license before reuse.</p>
+      <p className="gallery-credit">Figures belong to their paper authors and publishers. The catalogue and image files are served by <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>. Check each paper's license before reuse.</p>
     </div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-templates" aria-labelledby="image-creation-tab-templates">
       <p className="image-creation-templates-intro">Start from a figure pattern, then make it yours. Each template opens the gallery filtered to real examples from accepted papers.</p>
       {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading templates…</strong></div>
