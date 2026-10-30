@@ -49,6 +49,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock3,
   Code2,
   ExternalLink,
@@ -570,7 +571,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const chatResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
   const [readerView, setReaderView] = useState<"paper" | "review" | "project" | "codebase">("paper");
-  const [readerChromeOpen, setReaderChromeOpen] = useState(false);
+  const [readerChromeOpen, setReaderChromeOpen] = useState(true);
   const [codebaseVisited, setCodebaseVisited] = useState(false);
   const [codeNavigationTarget, setCodeNavigationTarget] = useState<CodeNavigationTarget | null>(null);
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
@@ -990,14 +991,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   return <section
     className={`${chatOpen ? "paper-workbench-page paper-chat-open" : "paper-workbench-page"}${readerChromeOpen ? " chrome-open" : ""}`}
     data-surface="reader"
-    onPointerMove={(event) => {
-      const near = event.clientY - event.currentTarget.getBoundingClientRect().top <= (readerChromeOpen ? 104 : 24);
-      if (near !== readerChromeOpen) setReaderChromeOpen(near);
-    }}
-    onPointerLeave={() => setReaderChromeOpen(false)}
-    onFocusCapture={() => setReaderChromeOpen(true)}
   >
-    <header className="paper-reader-bar" title={`${library.name} · ${paper.title}`}>
+    <button type="button" className="paper-reader-chrome-toggle" onClick={() => setReaderChromeOpen((open) => !open)} aria-expanded={readerChromeOpen} aria-controls="paper-reader-bar" aria-label={t(readerChromeOpen ? "Hide reader controls" : "Show reader controls")} title={t(readerChromeOpen ? "Hide reader controls" : "Show reader controls")}>
+      {readerChromeOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+    </button>
+    <header id="paper-reader-bar" className="paper-reader-bar" title={`${library.name} · ${paper.title}`} inert={!readerChromeOpen}>
       <button className="reader-back-button" onClick={onBack} title={`${t("Library")} · ${library.name}`} aria-label={t("Library")}><ChevronLeft size={15} /></button>
       <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />{t("Original paper")}</button><button className={readerView === "review" ? "active" : ""} role="tab" aria-selected={readerView === "review"} onClick={() => { setReaderView("review"); setChatOpen(false); }}><BookOpen size={16} />{t("Review")}</button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
       <div className="reader-header-actions">
@@ -1010,7 +1008,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       {readerView === "review" ? <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} pdfUrl={reader?.asset?.preview_url || ""} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} /> : readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
         {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
         {ready ? <>
-          <div className="paper-reader-toolbar">
+          <div className="paper-reader-toolbar" inert={!readerChromeOpen}>
             <div className="paper-reader-navigation">
               <div className="paper-page-controls"><button onClick={() => setPageNumber((value) => Math.max(1, value - 1))} disabled={pageNumber <= 1} title={t("Previous page")}><ChevronLeft size={17} /></button><strong>{pageNumber} / {lastPage}</strong><button onClick={() => setPageNumber((value) => Math.min(lastPage, value + 1))} disabled={pageNumber >= lastPage} title={t("Next page")}><ChevronRight size={17} /></button></div>
               <div className="paper-zoom-control" aria-label={t("PDF zoom")}>

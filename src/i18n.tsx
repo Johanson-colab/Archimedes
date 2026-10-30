@@ -31,6 +31,8 @@ const translations: Record<string, string> = {
   "Gallery": "图库",
   "Paper writing": "论文写作",
   "Image creation": "图像创作",
+  "Hide reader controls": "隐藏阅读器工具栏",
+  "Show reader controls": "显示阅读器工具栏",
   "Templates": "模板",
   "Soon": "即将推出",
   "Open extensions": "打开扩展",
