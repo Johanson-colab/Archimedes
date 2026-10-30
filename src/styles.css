@@ -4141,6 +4141,31 @@ html[data-titlebar="overlay"] .workbench-tabs::-webkit-scrollbar { display: none
 .settings-embedded .web-data-config input { color: var(--night-ink); background: var(--night-panel); border-color: var(--night-line); }
 .settings-embedded .web-data-config input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201, 162, 39, .14); }
 
+/* Models in Paper: use the same bordered card and field surface as General. */
+.theme-paper .settings-embedded .model-settings-body {
+  padding: 8px 18px 12px 14px;
+  overflow: hidden;
+  background: var(--mono-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
+.theme-paper .settings-embedded .provider-list { border-right-color: var(--border-soft); }
+.theme-paper .settings-embedded .provider-option.active {
+  background: var(--surface-control);
+  box-shadow: none;
+}
+/* The embedded card provides the surface; the config pane must not cast its
+   own dialog shadow inside it. */
+.theme-paper .settings-embedded .provider-config { box-shadow: none; }
+.theme-paper .settings-embedded .provider-config input {
+  background: var(--surface-raised);
+  border-color: var(--border-default);
+}
+.theme-paper .settings-embedded .provider-config input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 @media (max-width: 900px) {
   .settings-modal { grid-template-columns: 224px minmax(0, 1fr); }
   .settings-sidebar { padding-inline: 18px; }
