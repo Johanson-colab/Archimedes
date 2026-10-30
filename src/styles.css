@@ -4772,6 +4772,46 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
   .knowledge-main .paper-workbench-page { grid-template-rows: 42px minmax(0, 1fr); }
 }
 
+/* Reader chrome stays out of the way until the pointer reaches the top edge. */
+.paper-workbench-page { transition: grid-template-rows .18s ease; }
+.original-paper-reader { transition: grid-template-rows .18s ease; }
+.paper-workbench-page:not(.chrome-open) { grid-template-rows: 0 minmax(0, 1fr); }
+.paper-workbench-page:not(.chrome-open) .paper-reader-bar {
+  opacity: 0;
+  pointer-events: none;
+}
+.paper-workbench-page:not(.chrome-open) .original-paper-reader:has(> .paper-reader-toolbar) {
+  grid-template-rows: 0 0 minmax(0, 1fr);
+}
+.paper-workbench-page:not(.chrome-open) .paper-reader-toolbar {
+  opacity: 0;
+  pointer-events: none;
+}
+.paper-reader-bar,
+.paper-reader-toolbar { transition: opacity .16s ease; }
+
+/* Paper reader chrome blends with the reading canvas and avoids extra fills. */
+.theme-paper .paper-reader-bar,
+.theme-paper .paper-reader-toolbar {
+  background: var(--surface-canvas);
+  border-bottom-color: var(--border-soft);
+}
+.theme-paper .paper-reader-bar .reader-ask-button {
+  color: var(--text-secondary);
+  background: transparent;
+  border-color: var(--border-default);
+}
+.theme-paper .paper-reader-bar .reader-ask-button:hover,
+.theme-paper .paper-reader-bar .reader-ask-button.active {
+  color: var(--text-primary);
+  background: var(--surface-control);
+  border-color: var(--border-strong);
+}
+.theme-paper .paper-zoom-control > .paper-zoom-readout { color: var(--text-secondary); background: transparent; }
+.theme-paper .paper-search-control { background: var(--mono-surface); border-color: var(--border-default); }
+.theme-paper .paper-search-control button { color: var(--accent); background: transparent; }
+.theme-paper .paper-search-control button:hover { background: var(--surface-control); }
+
 /* The reader stage must own the flexible row even when the optional search
    strip is absent; otherwise the PDF page changes an auto row on first render. */
 .original-paper-reader > .paper-search-results { grid-row: 2; }
