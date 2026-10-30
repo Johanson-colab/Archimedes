@@ -2,7 +2,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SETTINGS_FILE = "workbench-settings.json";
-const TAB_IDS = ["journey", "trajectory", "files", "changes", "notes", "terminal"];
+const PREFERENCES_VERSION = 2;
+const TAB_IDS = ["journey", "trajectory", "files", "changes", "notes", "terminal", "browser"];
+const OPTIONAL_TAB_IDS = ["browser"];
 const DEFAULT_ORDER = [...TAB_IDS];
 const TAB_ID_SET = new Set(TAB_IDS);
 
@@ -10,11 +12,12 @@ let settingsPath = "";
 let settings = null;
 
 function defaults() {
-  return { version: 1, order: [...DEFAULT_ORDER], hidden: [] };
+  return { version: PREFERENCES_VERSION, order: [...DEFAULT_ORDER], hidden: [...OPTIONAL_TAB_IDS] };
 }
 
 function normalize(input = {}) {
   const source = input && typeof input === "object" ? input : {};
+  const version = typeof source.version === "number" ? source.version : 1;
   const order = [];
   const seen = new Set();
   for (const value of Array.isArray(source.order) ? source.order : []) {
@@ -32,10 +35,15 @@ function normalize(input = {}) {
     if (typeof value !== "string" || !TAB_ID_SET.has(value) || !order.includes(value) || hidden.includes(value)) continue;
     hidden.push(value);
   }
+  if (version < PREFERENCES_VERSION) {
+    for (const id of OPTIONAL_TAB_IDS) {
+      if (order.includes(id) && !hidden.includes(id)) hidden.push(id);
+    }
+  }
   if (hidden.length >= order.length) {
     hidden.splice(0, hidden.length, ...order.filter((id) => id !== order[0]));
   }
-  return { version: 1, order, hidden };
+  return { version: PREFERENCES_VERSION, order, hidden: order.filter((id) => hidden.includes(id)) };
 }
 
 function initialize(userDataPath) {
@@ -72,6 +80,7 @@ function resetWorkbenchSettings() {
 }
 
 module.exports = {
+  PREFERENCES_VERSION,
   defaults,
   initialize,
   normalize,

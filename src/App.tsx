@@ -36,6 +36,7 @@ import { sidebarEntries, type MainSection, type SidebarEntry } from "./sidebar-r
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
 import ChangesView from "./ChangesView";
 import NotesView from "./NotesView";
+import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, normalizeWorkbenchPreferences, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ChatActivityTimeline from "./ChatActivityTimeline";
 import JourneyView from "./JourneyView";
@@ -579,19 +580,23 @@ const previewBridge = {
   getWorkbenchSettings: async () => {
     try {
       const saved = JSON.parse(window.localStorage.getItem("archimedes-workbench-settings") || "null");
-      return saved && typeof saved === "object" ? saved : { version: 1, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
+      return saved && typeof saved === "object" ? saved : { version: DEFAULT_WORKBENCH_PREFERENCES.version, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
     } catch {
-      return { version: 1, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
+      return { version: DEFAULT_WORKBENCH_PREFERENCES.version, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
     }
   },
   saveWorkbenchSettings: async (input: { version?: number; order: string[]; hidden: string[] }) => {
-    const next = { version: 1, order: [...input.order], hidden: [...input.hidden] };
+    const next = normalizeWorkbenchPreferences(input);
     window.localStorage.setItem("archimedes-workbench-settings", JSON.stringify(next));
     return next;
   },
   resetWorkbenchSettings: async () => {
     window.localStorage.removeItem("archimedes-workbench-settings");
-    return { version: 1, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
+    return { version: DEFAULT_WORKBENCH_PREFERENCES.version, order: [...DEFAULT_WORKBENCH_PREFERENCES.order], hidden: [...DEFAULT_WORKBENCH_PREFERENCES.hidden] };
+  },
+  openExternalUrl: async (url: string) => {
+    if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
+    return { opened: true };
   },
   getWorkbenchNote: async (key: string) => ({ content: window.localStorage.getItem(`archimedes-workbench-note:${key}`) || "", updatedAt: null }),
   saveWorkbenchNote: async (key: string, content: string) => {
@@ -2413,6 +2418,7 @@ function App() {
               onChange={(content) => setNoteValues((current) => ({ ...current, [noteKey]: content }))}
               onSend={sendNoteToChat}
             />,
+            browser: <BrowserView active={workbenchOpen && workbenchTab === "browser"} onOpenExternal={(url) => desktopBridge.openExternalUrl(url)} />,
             terminal: <TerminalPanel
               bridge={desktopBridge}
               open={workbenchOpen && workbenchTab === "terminal"}
