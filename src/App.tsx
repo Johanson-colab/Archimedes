@@ -3318,16 +3318,18 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const editor = <div className="artifact-editor-pane compact">
-    {openFiles.length > 0 && <div className="artifact-tabs" role="tablist" aria-label="Open files">
-      {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
-        <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
-          {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
-          <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}>{workspaceFileIcon({ type: "file", kind: openFile.kind, path: openFile.path })}</span><span className="artifact-tab-name">{openFile.name}</span>
-        </button>
-        <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
-      </div>)}
-    </div>}
+  const tabs = openFiles.length > 0 ? <div className="artifact-tabs" role="tablist" aria-label="Open files">
+    {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
+      <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
+        {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
+        <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}>{workspaceFileIcon({ type: "file", kind: openFile.kind, path: openFile.path })}</span><span className="artifact-tab-name">{openFile.name}</span>
+      </button>
+      <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
+    </div>)}
+  </div> : null;
+
+  const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
+    {!compact && tabs}
     <FilePreview
       compact
       file={file}
@@ -3355,13 +3357,9 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
           : "artifact-workbench-body split"
       : showingEditor ? "artifact-workbench-body editor" : "artifact-workbench-body";
     return <div className="artifact-workbench">
-      <header className="artifact-workbench-toolbar">
-        <div className="artifact-workbench-location">
-          {showingEditor && !split
-            ? <button className="artifact-workbench-back" onClick={() => setCompactPane("browse")} title="Back to files"><ChevronLeft size={13} /><span>Files</span></button>
-            : <strong className="artifact-workbench-workspace" title={workspace}>{workspaceName}</strong>}
-          {showingEditor && file && openFiles.length <= 1 && <span className="artifact-workbench-file" title={file.path}>{file.name}</span>}
-        </div>
+      <div className="artifact-tabs-row">
+        {showingEditor && !split && <button className="artifact-workbench-back" onClick={() => setCompactPane("browse")} title="Back to files"><ChevronLeft size={13} /><span>Files</span></button>}
+        {tabs}
         <div className="artifact-workbench-actions">
           {split && <div className="artifact-workbench-pane-toggles" role="group" aria-label="File panes">
             <button className={filesListCollapsed ? "" : "active"} onClick={toggleFilesList} title={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-label={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-pressed={!filesListCollapsed}>{filesListCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button>
@@ -3371,7 +3369,7 @@ function ArtifactsView({ workspace, tree, openFiles, selectedPath, file, loading
           <button onClick={onNewArtifact} title="New file" aria-label="New file"><Plus size={14} /></button>
           {onOpenFull && <button onClick={onOpenFull} title="Open full editor" aria-label="Open full editor"><Maximize2 size={13} /></button>}
         </div>
-      </header>
+      </div>
       <div className={bodyClass} style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
         {split ? <>
           {!filesListCollapsed && browser}
