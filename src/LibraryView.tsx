@@ -1134,6 +1134,8 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
   const [expanded, setExpanded] = useState<Set<string>>(new Set([""]));
   const [activeFile, setActiveFile] = useState<RepositoryCheckoutFile | null>(null);
   const [browserError, setBrowserError] = useState("");
+  const [referenceChoices, setReferenceChoices] = useState<{ target: CodePathLocation; paths: string[] } | null>(null);
+  const navigationRequestRef = useRef(0);
   const [fileLoading, setFileLoading] = useState(false);
   const [snippet, setSnippet] = useState("");
   const [snippetLine, setSnippetLine] = useState(1);
@@ -1150,11 +1152,15 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
   }, [bridge, checkout, url, workspace]);
 
   useEffect(() => {
+    navigationRequestRef.current += 1;
     setTree({});
     setExpanded(new Set([""]));
     setActiveFile(null);
     setSnippet("");
     setActiveRange(null);
+    setReferenceChoices(null);
+    setFileLoading(false);
+    setBrowserError("");
     if (checkout) void loadDirectory("");
   }, [checkout?.commit, loadDirectory]);
 
@@ -1168,38 +1174,59 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
     setExpanded(next);
   }
   async function openFile(entry: RepositoryCheckoutEntry) {
+    const request = ++navigationRequestRef.current;
+    setReferenceChoices(null);
     setFileLoading(true);
     setSnippet("");
     setActiveRange(null);
     try {
       const file = await bridge.readLibraryGithubRepositoryCheckoutFile(url, workspace, entry.path);
+      if (request !== navigationRequestRef.current) return;
       setActiveFile(file);
       setBrowserError("");
-    } catch (loadError) { setBrowserError(readableError(loadError, "Could not open this repository file.")); }
-    finally { setFileLoading(false); }
+    } catch (loadError) { if (request === navigationRequestRef.current) setBrowserError(readableError(loadError, "Could not open this repository file.")); }
+    finally { if (request === navigationRequestRef.current) setFileLoading(false); }
   }
   async function openFilePath(target: CodePathLocation) {
+    const request = ++navigationRequestRef.current;
     setFileLoading(true);
     setSnippet("");
     setBrowserError("");
+    setReferenceChoices(null);
     try {
-      const directoryParts = target.path.split("/").slice(0, -1);
+      const resolution = await bridge.resolveLibraryGithubRepositoryReference(url, workspace, target.path);
+      if (request !== navigationRequestRef.current) return;
+      if (resolution.status === "missing") {
+        setBrowserError(`No file matches “${target.path}” in this checkout. The reference may be incomplete or from a different revision.`);
+        return;
+      }
+      if (resolution.status === "ambiguous") {
+        setReferenceChoices({ target, paths: resolution.paths });
+        return;
+      }
+      const resolvedPath = resolution.paths[0];
+      const directoryParts = resolvedPath.split("/").slice(0, -1);
       const directories = directoryParts.map((_, index) => directoryParts.slice(0, index + 1).join("/"));
       if (directories.length) {
         const listings = await Promise.all(directories.map(async (directory) => {
           const listing = await bridge.listLibraryGithubRepositoryCheckout(url, workspace, directory);
           return [directory, listing.entries] as const;
         }));
+        if (request !== navigationRequestRef.current) return;
         setTree((current) => ({ ...current, ...Object.fromEntries(listings) }));
         setExpanded((current) => new Set([...current, "", ...directories]));
       }
-      const file = await bridge.readLibraryGithubRepositoryCheckoutFile(url, workspace, target.path);
+      const file = await bridge.readLibraryGithubRepositoryCheckoutFile(url, workspace, resolvedPath);
+      if (request !== navigationRequestRef.current) return;
       setActiveFile(file);
-      setActiveRange({ start: target.startLine, end: target.endLine });
+      if (target.startLine > file.line_count || target.endLine > file.line_count) {
+        setActiveRange(target.startLine <= file.line_count ? { start: target.startLine, end: file.line_count } : null);
+        setBrowserError(`Opened “${resolvedPath}”, but the cited lines ${target.startLine}–${target.endLine} exceed this file's ${file.line_count} lines. Check the repository revision.`);
+      } else setActiveRange({ start: target.startLine, end: target.endLine });
     } catch (loadError) {
-      setBrowserError(readableError(loadError, `Could not open ${target.path} at line ${target.startLine}.`));
+      if (request === navigationRequestRef.current) setBrowserError(readableError(loadError, `Could not open ${target.path} at line ${target.startLine}.`));
     } finally {
-      setFileLoading(false);
+      if (request === navigationRequestRef.current) setFileLoading(false);
     }
   }
   function captureSelection(event: ReactMouseEvent<HTMLElement>) {
@@ -1242,7 +1269,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
       line?.scrollIntoView({ block: "center" });
     });
     return () => cancelAnimationFrame(frame);
-  }, [activeFile?.path, activeRange?.start, activeRange?.end, fileLoading]);
+  }, [activeFile?.path, activeRange, fileLoading]);
 
   if (!checkout) return <div className="codebase-empty"><span className="paper-reader-empty-icon"><ShieldCheck size={24} /></span><h2>Start a strict code audit</h2><p>Clone this public repository locally to inspect the full file tree, select code, and verify paper claims against the implementation. The checkout is read-only here and no repository code is executed.</p>{error && <div className="reader-runtime-error">{error}</div>}<button className="primary-button" disabled={loading || !workspace} onClick={onClone}>{loading ? <LoaderCircle className="spin" size={15} /> : <GitBranch size={15} />}{loading ? "Cloning repository…" : "Clone for code audit"}</button>{!workspace && <small>Choose a workspace before cloning a repository.</small>}</div>;
 
@@ -1268,11 +1295,19 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
             customStyle={{ minWidth: 0, minHeight: 0, margin: 0, padding: "15px 18px 56px 0", border: 0, fontSize: "11px", lineHeight: 1.65, overflow: "auto" }}
             codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
             onMouseUp={captureSelection}
-          >{activeFile.content || " "}</SyntaxHighlighter> : <pre onMouseUp={captureSelection}><code>{activeFile.content}</code></pre>}
+          >{activeFile.content || " "}</SyntaxHighlighter> : <pre onMouseUp={captureSelection}><code>{(() => {
+            if (!activeRange) return activeFile.content;
+            const lines = activeFile.content.split("\n");
+            const before = lines.slice(0, activeRange.start - 1).join("\n");
+            const selected = lines.slice(activeRange.start - 1, activeRange.end).join("\n");
+            const after = lines.slice(activeRange.end).join("\n");
+            return <>{before}{before && "\n"}<span className="code-target-line" data-code-line={activeRange.start}>{selected}</span>{after && "\n"}{after}</>;
+          })()}</code></pre>}
           {snippet ? <div className="codebase-selection"><span>{activeFile.path} line {snippetLine}</span><button className="secondary-button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onAddToChat(activeFile, snippet, snippetLine); setSnippet(""); window.getSelection()?.removeAllRanges(); }}><MessageSquareText size={13} />Add to chat</button><button className="reader-icon-button" onClick={() => setSnippet("")} title="Discard code selection"><X size={13} /></button></div> : null}
         </> : <div className="codebase-editor-empty">{fileLoading ? <><LoaderCircle className="spin" size={18} />Opening file…</> : <><FileCode2 size={24} /><strong>Select a source file</strong><span>Choose a file in the explorer, then select code to add it to the evidence conversation.</span></>}</div>}
       </section>
     </div>
+    {referenceChoices && <div className="codebase-reference-choices" role="group" aria-label="Choose a matching repository file"><strong>Multiple files match “{referenceChoices.target.path}”. Choose one:</strong>{referenceChoices.paths.map((candidate) => <button key={candidate} onClick={() => void openFilePath({ ...referenceChoices.target, path: candidate })}>{candidate}</button>)}<button onClick={() => setReferenceChoices(null)}>Cancel</button></div>}
     {browserError && <div className="reader-runtime-error">{browserError}</div>}
   </div>;
 });

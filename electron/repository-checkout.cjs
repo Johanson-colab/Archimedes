@@ -161,6 +161,35 @@ async function walkRepository(root, directory = "") {
   return files;
 }
 
+// Resolve references produced by the model without guessing between files.
+// A full repository-relative path always wins; abbreviated paths must match a
+// whole path suffix and only regular files within the checkout are eligible.
+async function resolveRepositoryCodeReference(workspace, url, requested) {
+  const relative = safeRelativePath(requested);
+  if (!relative) throw new Error("A repository file path is required.");
+  const { root } = await assertCheckout(workspace, url);
+  try {
+    const exact = await resolveAuditPath(workspace, url, relative);
+    if ((await fsp.stat(exact.target)).isFile()) return { status: "exact", paths: [relative] };
+  } catch (error) {
+    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+  }
+  const files = await walkRepository(root);
+  const matches = [];
+  for (const file of files) {
+    const candidate = file.split(path.sep).join("/");
+    if (!candidate.endsWith(`/${relative}`)) continue;
+    try {
+      const resolved = await resolveAuditPath(workspace, url, candidate);
+      if ((await fsp.stat(resolved.target)).isFile()) matches.push(candidate);
+    } catch (error) {
+      if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+    }
+  }
+  matches.sort();
+  return { status: matches.length === 0 ? "missing" : matches.length === 1 ? "unique" : "ambiguous", paths: matches };
+}
+
 async function searchRepositoryCheckout(workspace, url, query, directory = "") {
   const needle = String(query || "").trim();
   if (!needle || needle.length > 300) throw new Error("Search for between 1 and 300 characters.");
@@ -182,4 +211,4 @@ async function searchRepositoryCheckout(workspace, url, query, directory = "") {
   return { query: needle, matches };
 }
 
-module.exports = { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout };
+module.exports = { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveRepositoryCodeReference, searchRepositoryCheckout };

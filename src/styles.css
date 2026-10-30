@@ -428,6 +428,10 @@ html:not([data-theme="paper"]) .paper-presentation-toolbar span { color: #c7beb4
 .paper-ai-markdown img { max-width: 100%; height: auto; }
 .paper-ai-table-scroll table { border-collapse: collapse; }
 .paper-ai-table-scroll th, .paper-ai-table-scroll td { padding: 6px 8px; border: 1px solid currentColor; overflow-wrap: anywhere; }
+.codebase-reference-choices { display: flex; flex-direction: column; align-items: stretch; gap: 6px; max-height: 220px; overflow: auto; padding: 10px 14px; color: inherit; background: var(--mono-surface, #f7f7f5); border-top: 1px solid var(--mono-border, #deded9); font-size: 12px; }
+.codebase-reference-choices button { padding: 5px 8px; overflow-wrap: anywhere; color: inherit; background: transparent; border: 1px solid var(--mono-border, #deded9); border-radius: 4px; text-align: left; }
+.codebase-reference-choices button:hover, .codebase-reference-choices button:focus-visible { outline: 2px solid #7b9a86; outline-offset: 1px; }
+.codebase-editor pre .code-target-line { background: rgba(82, 122, 99, .2); }
 @media (max-width: 850px) {
   .paper-chat-open .paper-ai-panel { width: min(var(--paper-chat-width, 354px), calc(100% - 8px)); }
   .paper-chat-open .paper-chat-resizer { position: absolute; z-index: 21; top: 0; right: min(var(--paper-chat-width, 354px), calc(100% - 8px)); bottom: 0; display: block; width: 8px; }

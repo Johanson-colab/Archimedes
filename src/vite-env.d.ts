@@ -67,6 +67,7 @@ interface ResearchDeskBridge {
     cloneLibraryGithubRepository: (url: string, workspace?: string) => Promise<RepositoryCheckout>;
     listLibraryGithubRepositoryCheckout: (url: string, workspace: string, directory?: string) => Promise<RepositoryCheckoutDirectory>;
     readLibraryGithubRepositoryCheckoutFile: (url: string, workspace: string, path: string) => Promise<RepositoryCheckoutFile>;
+    resolveLibraryGithubRepositoryReference: (url: string, workspace: string, path: string) => Promise<{ status: "exact" | "unique" | "ambiguous" | "missing"; paths: string[] }>;
     readClipboardText: () => Promise<string>;
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;

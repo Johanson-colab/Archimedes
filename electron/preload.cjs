@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   cloneLibraryGithubRepository: (url, workspace) => ipcRenderer.invoke("library:clone-github-repository", { url, workspace }),
   listLibraryGithubRepositoryCheckout: (url, workspace, directory = "") => ipcRenderer.invoke("library:list-github-repository-checkout", { url, workspace, directory }),
   readLibraryGithubRepositoryCheckoutFile: (url, workspace, path) => ipcRenderer.invoke("library:read-github-repository-checkout-file", { url, workspace, path }),
+  resolveLibraryGithubRepositoryReference: (url, workspace, path) => ipcRenderer.invoke("library:resolve-github-repository-reference", { url, workspace, path }),
   readClipboardText: () => ipcRenderer.invoke("clipboard:read-text"),
   writeClipboardText: (text) => ipcRenderer.invoke("clipboard:write-text", { text }),
   readClipboardImage: () => ipcRenderer.invoke("clipboard:read-image"),

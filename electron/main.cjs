@@ -33,7 +33,7 @@ const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
 const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");
-const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile } = require("./repository-checkout.cjs");
+const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");
 const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");
 
 const commandSessions = new Map();
@@ -993,6 +993,11 @@ app.whenReady().then(() => {
   ipcMain.handle("library:read-github-repository-checkout-file", async (event, { url, workspace, path: filePath } = {}) => {
     if (typeof url !== "string" || typeof filePath !== "string" || url.length > 3_000 || filePath.length > 2_000) throw new Error("A repository URL and valid file path are required.");
     return readRepositoryCheckoutFile(resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id)), url, filePath);
+  });
+
+  ipcMain.handle("library:resolve-github-repository-reference", async (event, { url, workspace, path: filePath } = {}) => {
+    if (typeof url !== "string" || typeof filePath !== "string" || url.length > 3_000 || filePath.length > 2_000) throw new Error("A repository URL and valid file path are required.");
+    return resolveRepositoryCodeReference(resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id)), url, filePath);
   });
 
   ipcMain.handle("clipboard:read-text", () => clipboard.readText().slice(0, 100_000));

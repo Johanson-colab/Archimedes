@@ -187,4 +187,5 @@ export const previewLibraryBridge = {
   deleteLibraryPaperHighlight: async (): Promise<{ deleted: boolean }> => ({ deleted: true }),
   getLibraryGithubRepositoryCheckout: async (): Promise<RepositoryCheckout | null> => null,
   cloneLibraryGithubRepository: async (): Promise<RepositoryCheckout> => { throw new Error("Clone repositories in the Archimedes desktop app."); },
+  resolveLibraryGithubRepositoryReference: async (): Promise<{ status: "missing"; paths: string[] }> => ({ status: "missing", paths: [] }),
 };
