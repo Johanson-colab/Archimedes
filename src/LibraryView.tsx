@@ -438,6 +438,7 @@ const PaperChatMarkdown = memo(function PaperChatMarkdown({ text, onOpenCodePath
     remarkPlugins={[remarkGfm, remarkMath, remarkCodePaths]}
     rehypePlugins={[rehypeKatex]}
     components={{
+      table: ({ children, ...props }) => <div className="paper-ai-table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table {...props}>{children}</table></div>,
       code: (({ className, children }: { className?: string; children?: React.ReactNode }) => {
         const value = String(children ?? "").replace(/\n$/, "");
         const target = !className && !value.includes("\n") ? parseCodePath(value) : null;
@@ -956,7 +957,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   function beginChatResize(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
     event.preventDefault();
-    chatResizeRef.current = { startX: event.clientX, startWidth: chatWidth };
+    // On narrow windows the panel may be visually clamped below its saved
+    // width. Start from its actual width so dragging responds immediately.
+    const panel = event.currentTarget.nextElementSibling;
+    const startWidth = panel instanceof HTMLElement ? panel.getBoundingClientRect().width : chatWidth;
+    chatResizeRef.current = { startX: event.clientX, startWidth };
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.classList.add("paper-chat-resizing");
   }
