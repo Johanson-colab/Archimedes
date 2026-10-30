@@ -122,6 +122,7 @@ test("appearance can be exported, imported, and checked for contrast", () => {
   assert.match(settings, /type="file"/);
   assert.match(settings, /\.archtheme\.json/);
   assert.match(settings, /Apply pack/);
+  assert.match(settings, /Object\.keys\(pendingPack\.styles \?\? \{\}\)\.length/);
   assert.match(settings, /contrastIssues\(appearance, theme\)/);
   assert.match(settings, /settings-contrast-warning/);
   assert.match(appearance, /export type ThemePack/);

@@ -572,7 +572,7 @@ export default function SettingsModal({
                   {pendingPack && <div className="settings-pack-preview">
                     <div>
                       <strong>{pendingPack.name}</strong>
-                      <span>{pendingPack.preset} · {Object.keys(pendingPack.overrides).length + Object.keys(pendingPack.surfaces ?? {}).length} overrides</span>
+                      <span>{pendingPack.preset} · {Object.keys(pendingPack.overrides).length + Object.keys(pendingPack.surfaces ?? {}).length + Object.keys(pendingPack.styles ?? {}).length} overrides</span>
                     </div>
                     {packWarnings.length
                       ? <p className="settings-pack-warning">{t("{count} contrast pair(s) below WCAG AA.", { count: packWarnings.length })}</p>
