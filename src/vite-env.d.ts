@@ -94,6 +94,7 @@ interface ResearchDeskBridge {
     getWorkbenchNote: (key: string) => Promise<{ content: string; updatedAt: string | null }>;
     saveWorkbenchNote: (key: string, content: string) => Promise<{ content: string; updatedAt: string | null }>;
     deleteWorkbenchNote: (key: string) => Promise<{ deleted: boolean }>;
+    openExternalUrl: (url: string) => Promise<{ opened: boolean }>;
     saveJourneySettings: (input: Partial<JourneySettings>) => Promise<JourneySettings>;
     resetJourneySettings: () => Promise<JourneySettings>;
     getJourneySummary: (threadId: string) => Promise<JourneySummarySnapshot | null>;
