@@ -21,6 +21,7 @@ const hook = read("src", "useProactiveAgent.ts");
 const library = read("src", "LibraryView.tsx");
 const paper = read("src", "PaperWritingView.tsx");
 const css = read("src", "styles.css");
+const i18n = read("src", "i18n.tsx");
 
 test("proactive is opt-in and starts off", () => {
   assert.match(types, /mode: "off"/);
@@ -36,7 +37,7 @@ test("proactive is opt-in and starts off", () => {
 test("the floating layer drags, resizes, clamps, and persists", () => {
   assert.match(layer, /archimedes-agent-layer-v1/);
   assert.match(layer, /agent-float-panel/);
-  assert.match(layer, /agent-float-grip/);
+  assert.doesNotMatch(layer, /agent-float-grip/);
   assert.match(layer, /agent-float-resize/);
   assert.match(layer, /startDrag/);
   assert.match(layer, /startResize/);
@@ -202,6 +203,17 @@ test("proactive suggestions are read-only and replies use the Proactive model", 
   assert.match(proactive, /Back to suggestions/);
   assert.match(css, /\.agent-proactive-send \{[^}]*background: transparent/);
   assert.doesNotMatch(css, /\.agent-proactive-send \{[^}]*border-radius: 50%/);
+  assert.doesNotMatch(css, /\.theme-paper \.agent-proactive-send \{[^}]*background: #34302a/);
+  assert.doesNotMatch(css, /\.agent-proactive-(body|history-list) \{[^}]*scrollbar-width: thin/);
+});
+
+test("proactive action labels follow the interface language", () => {
+  assert.match(proactive, /function hasCjkLabel/);
+  assert.match(proactive, /function actionLabel/);
+  assert.match(proactive, /t\("Insert draft"\)/);
+  assert.match(proactive, /t\("Copy draft"\)/);
+  assert.match(i18n, /"Insert draft": "插入草稿"/);
+  assert.match(i18n, /"Copy draft": "复制草稿"/);
 });
 
 test("live observation follows the local activity pulse", () => {
@@ -210,9 +222,8 @@ test("live observation follows the local activity pulse", () => {
   assert.match(hook, /shouldObserve/);
   assert.match(hook, /runProactiveObservation/);
   assert.match(hook, /recordObservation/);
-  assert.match(proactive, /agent-proactive-activity/);
-  assert.match(proactive, /controller\.activity\.score/);
-  assert.match(css, /\.agent-proactive-activity i \{/);
+  assert.doesNotMatch(proactive, /agent-proactive-activity/);
+  assert.doesNotMatch(proactive, /controller\.activity\.score/);
   assert.match(settingsPanel, /Live observation/);
   assert.match(settingsPanel, /liveObservationBudget/);
   assert.match(settingsPanel, /Library radar/);
