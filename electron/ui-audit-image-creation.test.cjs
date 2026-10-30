@@ -40,6 +40,9 @@ test("Data charts is a separate Gallery tab with only the requested research fie
   assert.match(charts, /EXCLUDED_CHARTS = new Set\(\["area", "other", "mixed"\]\)/);
   assert.match(charts, /figure\.chart_types\.some\(\(type\) => EXCLUDED_CHARTS\.has\(type\)\)/);
   assert.match(charts, /img\.paperfigure\.net/);
+  assert.match(charts, /image-creation-filter-panel data-chart-filter-panel" role="dialog"/);
+  assert.match(charts, /className="image-creation-controls data-chart-controls"/);
+  assert.doesNotMatch(charts, /data-chart-scope/);
 });
 
 test("images lead and text is a single secondary line", () => {

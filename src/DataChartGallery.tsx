@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, ExternalLink, ImageOff, LoaderCircle, Search, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, ImageOff, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
 
 const SOURCE_ROOT = "https://paperfigure.net/";
@@ -137,8 +137,20 @@ export default function DataChartGallery({ active }: { active: boolean }) {
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
+  useEffect(() => {
+    if (!filterOpen) return;
+    function onPointer(event: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) setFilterOpen(false);
+    }
+    function onKey(event: KeyboardEvent) { if (event.key === "Escape") setFilterOpen(false); }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onPointer); document.removeEventListener("keydown", onKey); };
+  }, [filterOpen]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -173,6 +185,8 @@ export default function DataChartGallery({ active }: { active: boolean }) {
   }, [area, category, chart, debouncedQuery, retry, venue]);
 
   const areaConfig = AREAS.find((item) => item.id === area)!;
+  const activeFilterCount = Number(area !== "ml") + Number(venue !== "all") + Number(category !== "data") + Number(category === "data" && chart !== "all");
+  const resetFilters = () => { setArea("ml"); setVenue("all"); setCategory("data"); setChart("all"); setQuery(""); };
   const selectedIndex = useMemo(() => figures.findIndex((figure) => figure.id === selectedId), [figures, selectedId]);
   const sourceLink = new URL("en/", SOURCE_ROOT);
   sourceLink.searchParams.set("cat", category);
@@ -185,14 +199,21 @@ export default function DataChartGallery({ active }: { active: boolean }) {
   };
 
   return <section className="data-chart-gallery" aria-label="Paper data charts and tables">
-    <div className="data-chart-heading"><div><span>RESEARCH REFERENCES</span><h1>Data charts & tables</h1><p>Browse published results from four research fields. Each image links back to its source.</p></div><span className="data-chart-source">Paper Figure Library · remote images</span></div>
-    <div className="data-chart-scope" aria-label="Research field">{AREAS.map((item) => <button type="button" key={item.id} className={area === item.id ? "selected" : ""} aria-pressed={area === item.id} onClick={() => { setArea(item.id); setVenue("all"); }}>{item.label}</button>)}</div>
-    <div className="data-chart-toolbar">
-      <div className="data-chart-kind" aria-label="Image category"><button type="button" className={category === "data" ? "selected" : ""} aria-pressed={category === "data"} onClick={() => setCategory("data")}>Data charts</button><button type="button" className={category === "table" ? "selected" : ""} aria-pressed={category === "table"} onClick={() => setCategory("table")}>Tables</button></div>
+    <div className="image-creation-controls data-chart-controls">
       <label className="gallery-search data-chart-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search paper titles, captions, or tags" aria-label="Search charts and tables" /></label>
-      <label className="data-chart-venue"><span>Venue</span><select value={venue} onChange={(event) => setVenue(event.target.value)} aria-label="Filter by venue"><option value="all">All {areaConfig.label}</option>{areaConfig.venues.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+      <div className="image-creation-filter" ref={filterRef}>
+        <button type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={filterOpen} title="Filter data charts">
+          <SlidersHorizontal size={14} />Filters{activeFilterCount > 0 && <b>{activeFilterCount}</b>}
+        </button>
+        {filterOpen && <div className="image-creation-filter-panel data-chart-filter-panel" role="dialog" aria-label="Filter data charts">
+          <header><strong>Filter data charts</strong><button type="button" onClick={resetFilters} disabled={!activeFilterCount && !query}>Clear all</button></header>
+          <div className="gallery-facet"><span className="gallery-facet-label">Field</span><div className="gallery-facet-options">{AREAS.map((item) => <button type="button" key={item.id} className={area === item.id ? "selected" : ""} aria-pressed={area === item.id} onClick={() => { setArea(item.id); setVenue("all"); }}>{item.label}</button>)}</div></div>
+          <div className="gallery-facet"><span className="gallery-facet-label">Content</span><div className="gallery-facet-options"><button type="button" className={category === "data" ? "selected" : ""} aria-pressed={category === "data"} onClick={() => setCategory("data")}>Data charts</button><button type="button" className={category === "table" ? "selected" : ""} aria-pressed={category === "table"} onClick={() => setCategory("table")}>Tables</button></div></div>
+          <label className="gallery-facet"><span className="gallery-facet-label">Venue</span><select className="data-chart-filter-select" value={venue} onChange={(event) => setVenue(event.target.value)} aria-label="Filter by venue"><option value="all">All {areaConfig.label}</option>{areaConfig.venues.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          {category === "data" && <div className="gallery-facet"><span className="gallery-facet-label">Chart type</span><div className="gallery-facet-options"><button type="button" className={chart === "all" ? "selected" : ""} aria-pressed={chart === "all"} onClick={() => setChart("all")}>All</button>{CHART_TYPES.map((item) => <button type="button" key={item.id} className={chart === item.id ? "selected" : ""} aria-pressed={chart === item.id} onClick={() => setChart(item.id)}>{item.label}</button>)}</div></div>}
+        </div>}
+      </div>
     </div>
-    {category === "data" && <div className="data-chart-types" aria-label="Chart type"><button type="button" className={chart === "all" ? "selected" : ""} aria-pressed={chart === "all"} onClick={() => setChart("all")}>All chart types</button>{CHART_TYPES.map((item) => <button type="button" key={item.id} className={chart === item.id ? "selected" : ""} aria-pressed={chart === item.id} onClick={() => setChart(item.id)}>{item.label}</button>)}</div>}
     <div className="data-chart-results"><span>{loading ? "Searching…" : error ? "Search unavailable" : `${figures.length} references shown${sourceTotal > MAX_RESULTS ? ` · ${sourceTotal.toLocaleString()} source matches; first 50 checked` : ""}`}</span><a href={sourceLink.href} target="_blank" rel="noreferrer">Explore more at source <ExternalLink size={13} /></a></div>
     {loading ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading references…</strong></div>
       : error ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load data charts</strong><p>{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>
