@@ -50,7 +50,7 @@ test("Settings > Appearance exposes accent, surface, density, radius, and reset 
   assert.match(settings, /onAppearanceChange/);
 });
 
-test("accent and surface can be scoped to reader, writing, and agent", () => {
+test("accent, surface, and component styles can be scoped to reader, writing, and agent", () => {
   assert.match(library, /data-surface="reader"/);
   assert.match(writing, /data-surface="writing"/);
   assert.match(agent, /data-surface="agent"/);
@@ -58,8 +58,10 @@ test("accent and surface can be scoped to reader, writing, and agent", () => {
   assert.match(settings, /setScope\(id\)/);
   assert.match(settings, /accentResetDisabled/);
   assert.match(settings, /clearScope/);
+  assert.match(settings, /styles: \{ \.\.\.appearance\.surfaces\?\.\[scope\]\?\.styles, \.\.\.patch \}/);
   assert.match(appearance, /surfaceCss/);
   assert.match(appearance, /\[data-surface="\$\{scope\}"\]/);
+  assert.match(appearance, /scoped\.styles \? styleTokens\(scoped\.styles, theme\)/);
 });
 
 test("the appearance editor has no live preview section", () => {
@@ -82,12 +84,45 @@ test("the Style section maps button, dialog, shape, and shadow presets", () => {
   assert.match(appearance, /export type AppearanceStyles/);
 });
 
+test("Motion is a global Full / Reduced / None preference", () => {
+  assert.match(settings, /type MotionStyle/);
+  assert.match(settings, /t\("Motion"\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ motion: id \}\)/);
+  assert.match(appearance, /export type MotionStyle = "full" \| "reduced" \| "none"/);
+  assert.match(appearance, /root\.dataset\.motion = settings\.styles\?\.motion \?\? "full"/);
+  assert.match(css, /html\[data-motion="reduced"\] \*/);
+  assert.match(css, /html\[data-motion="none"\] \*/);
+  assert.match(css, /animation-duration: \.01ms !important/);
+  assert.match(css, /animation: none !important/);
+});
+
+test("Components exposes global input, card, and menu presets", () => {
+  assert.match(settings, /t\("Components"\)/);
+  assert.match(settings, /t\("Input style"\)/);
+  assert.match(settings, /t\("Card style"\)/);
+  assert.match(settings, /t\("Menu style"\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ input: id \}\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ card: id \}\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ menu: id \}\)/);
+  assert.match(appearance, /export type InputStyle/);
+  assert.match(appearance, /export type CardStyle/);
+  assert.match(appearance, /export type MenuStyle/);
+  assert.match(appearance, /root\.dataset\.inputStyle/);
+  assert.match(appearance, /root\.dataset\.cardStyle/);
+  assert.match(appearance, /root\.dataset\.menuStyle/);
+  assert.match(css, /html\[data-input-style="filled"\]/);
+  assert.match(css, /html\[data-card-style="outlined"\]/);
+  assert.match(css, /html\[data-menu-style="glass"\]/);
+  assert.match(css, /backdrop-filter: blur\(18px\) saturate\(1\.12\)/);
+});
+
 test("appearance can be exported, imported, and checked for contrast", () => {
   assert.match(settings, /toThemePack\(appearance/);
   assert.match(settings, /parseThemePack\(JSON\.parse/);
   assert.match(settings, /type="file"/);
   assert.match(settings, /\.archtheme\.json/);
   assert.match(settings, /Apply pack/);
+  assert.match(settings, /Object\.keys\(pendingPack\.styles \?\? \{\}\)\.length/);
   assert.match(settings, /contrastIssues\(appearance, theme\)/);
   assert.match(settings, /settings-contrast-warning/);
   assert.match(appearance, /export type ThemePack/);
@@ -118,7 +153,7 @@ test("the new appearance copy is translated", () => {
     "Apply to",
     "Global",
     "Agent",
-    "Accent and surface can be scoped; density and radius stay global.",
+    "Button, dialog, shape, and shadow can be scoped; density, radius, motion, input, card, and menu stay global.",
     "Reset this surface",
     "Contrast warning",
     "Style",
@@ -130,6 +165,18 @@ test("the new appearance copy is translated", () => {
     "Corner radius across buttons and dialogs.",
     "Shadow",
     "Depth for buttons and dialogs.",
+    "Motion",
+    "Animation and transition intensity across the app.",
+    "Components",
+    "Input style",
+    "Field fill and border treatment across the app.",
+    "Card style",
+    "Panel fill and border treatment across the app.",
+    "Menu style",
+    "Popup fill, border, and blur treatment across the app.",
+    "Filled",
+    "Full",
+    "Reduced",
     "Solid",
     "Soft",
     "Outline style",

@@ -1,4 +1,4 @@
-﻿import { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, X } from "lucide-react";
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
@@ -9,7 +9,7 @@ import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
-import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type ContrastIssue, type Density, type DialogStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type ThemePack, type ThemePreset } from "./appearance";
+import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type CardStyle, type ContrastIssue, type Density, type DialogStyle, type InputStyle, type MenuStyle, type MotionStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type SurfaceStyles, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
@@ -132,10 +132,17 @@ export default function SettingsModal({
   const depthResetDisabled = scope === "global" ? appearance.overrides.surfaceDepth === undefined : scopedAppearance?.surfaceDepth === undefined;
   const radiusValue = appearance.overrides.controlRadius ?? CONTROL_RADIUS_DEFAULT;
   const densityValue: Density = appearance.overrides.density ?? DENSITY_DEFAULT;
-  const buttonStyle: ButtonStyle = appearance.styles?.button ?? "solid";
-  const dialogStyle: DialogStyle = appearance.styles?.dialog ?? "elevated";
-  const shapeStyle: ShapeStyle = appearance.styles?.shape ?? "soft";
-  const shadowStyle: ShadowStyle = appearance.styles?.shadow ?? "default";
+  const effectiveStyles = scope === "global"
+    ? appearance.styles
+    : { ...appearance.styles, ...appearance.surfaces?.[scope]?.styles };
+  const buttonStyle: ButtonStyle = effectiveStyles?.button ?? "solid";
+  const dialogStyle: DialogStyle = effectiveStyles?.dialog ?? "elevated";
+  const shapeStyle: ShapeStyle = effectiveStyles?.shape ?? "soft";
+  const shadowStyle: ShadowStyle = effectiveStyles?.shadow ?? "default";
+  const motionStyle: MotionStyle = appearance.styles?.motion ?? "full";
+  const inputStyle: InputStyle = appearance.styles?.input ?? "default";
+  const cardStyle: CardStyle = appearance.styles?.card ?? "default";
+  const menuStyle: MenuStyle = appearance.styles?.menu ?? "default";
   const scopeIssues = contrastIssues(appearance, theme).filter((issue) => issue.scope === scope);
   const hasOverrides = Boolean(appearance.overrides.accent) || Boolean(appearance.overrides.surface)
     || appearance.overrides.surfaceDepth !== undefined || appearance.overrides.controlRadius !== undefined
@@ -168,8 +175,22 @@ export default function SettingsModal({
     else delete surfaces[scope];
     onAppearanceChange(normalizeAppearance({ ...appearance, surfaces }));
   }
-  function updateStyles(patch: AppearanceStyles) {
+  function updateGlobalStyles(patch: AppearanceStyles) {
     onAppearanceChange(normalizeAppearance({ ...appearance, styles: { ...appearance.styles, ...patch } }));
+  }
+  function updateStyles(patch: SurfaceStyles) {
+    if (scope === "global") {
+      updateGlobalStyles(patch);
+      return;
+    }
+    const surfaces = {
+      ...appearance.surfaces,
+      [scope]: {
+        ...appearance.surfaces?.[scope],
+        styles: { ...appearance.surfaces?.[scope]?.styles, ...patch },
+      },
+    };
+    onAppearanceChange(normalizeAppearance({ ...appearance, surfaces }));
   }
   function clearScope() {
     if (scope === "global") return;
@@ -351,7 +372,7 @@ export default function SettingsModal({
                   <div className="settings-row">
                     <div className="settings-row-copy">
                       <span className="settings-row-title">{t("Apply to")}</span>
-                      <p className="settings-row-description">{t("Accent and surface can be scoped; density and radius stay global.")}</p>
+                      <p className="settings-row-description">{t("Button, dialog, shape, and shadow can be scoped; density, radius, motion, input, card, and menu stay global.")}</p>
                     </div>
                     <div className="settings-row-control settings-appearance-control">
                       <div className="settings-choice" role="group" aria-label={t("Apply to")}>
@@ -482,6 +503,56 @@ export default function SettingsModal({
               </section>
 
               <section className="settings-section">
+                <h3 className="settings-section-title">{t("Components")}</h3>
+                <div className="settings-group settings-appearance-group">
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Input style")}</span>
+                      <p className="settings-row-description">{t("Field fill and border treatment across the app.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Input style")}>
+                        {([["default", "Default"], ["filled", "Filled"], ["outlined", "Outlined"], ["ghost", "Ghost"]] as Array<[InputStyle, string]>).map(([id, label]) => <button key={id} className={inputStyle === id ? "active" : ""} aria-pressed={inputStyle === id} onClick={() => updateGlobalStyles({ input: id })}>{t(label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Card style")}</span>
+                      <p className="settings-row-description">{t("Panel fill and border treatment across the app.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Card style")}>
+                        {([["default", "Default"], ["flat", "Flat"], ["outlined", "Outlined"]] as Array<[CardStyle, string]>).map(([id, label]) => <button key={id} className={cardStyle === id ? "active" : ""} aria-pressed={cardStyle === id} onClick={() => updateGlobalStyles({ card: id })}>{t(label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Menu style")}</span>
+                      <p className="settings-row-description">{t("Popup fill, border, and blur treatment across the app.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Menu style")}>
+                        {([["default", "Default"], ["flat", "Flat"], ["outlined", "Outlined"], ["glass", "Glass"]] as Array<[MenuStyle, string]>).map(([id, label]) => <button key={id} className={menuStyle === id ? "active" : ""} aria-pressed={menuStyle === id} onClick={() => updateGlobalStyles({ menu: id })}>{t(label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <span className="settings-row-title">{t("Motion")}</span>
+                      <p className="settings-row-description">{t("Animation and transition intensity across the app.")}</p>
+                    </div>
+                    <div className="settings-row-control">
+                      <div className="settings-choice" role="group" aria-label={t("Motion")}>
+                        {([["full", "Full"], ["reduced", "Reduced"], ["none", "None"]] as Array<[MotionStyle, string]>).map(([id, label]) => <button key={id} className={motionStyle === id ? "active" : ""} aria-pressed={motionStyle === id} onClick={() => updateGlobalStyles({ motion: id })}>{t(label)}</button>)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-section">
                 <h3 className="settings-section-title">{t("Theme pack")}</h3>
                 <div className="settings-group">
                   <div className="settings-row">
@@ -501,7 +572,7 @@ export default function SettingsModal({
                   {pendingPack && <div className="settings-pack-preview">
                     <div>
                       <strong>{pendingPack.name}</strong>
-                      <span>{pendingPack.preset} · {Object.keys(pendingPack.overrides).length + Object.keys(pendingPack.surfaces ?? {}).length} overrides</span>
+                      <span>{pendingPack.preset} · {Object.keys(pendingPack.overrides).length + Object.keys(pendingPack.surfaces ?? {}).length + Object.keys(pendingPack.styles ?? {}).length} overrides</span>
                     </div>
                     {packWarnings.length
                       ? <p className="settings-pack-warning">{t("{count} contrast pair(s) below WCAG AA.", { count: packWarnings.length })}</p>

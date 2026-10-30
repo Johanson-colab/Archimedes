@@ -63,13 +63,25 @@ test("normalizes per-surface overrides", async () => {
     preset: "charcoal",
     overrides: {},
     surfaces: {
-      reader: { accent: "#AABBCC", surface: "#112233", surfaceDepth: 99, density: "compact", controlRadius: 2 },
+      reader: {
+        accent: "#AABBCC",
+        surface: "#112233",
+        surfaceDepth: 99,
+        density: "compact",
+        controlRadius: 2,
+        styles: { button: "ghost", shape: "rounded", motion: "none" },
+      },
       writing: {},
       bogus: { accent: "#fff000" },
     },
   });
   assert.deepEqual(normalized.surfaces, {
-    reader: { accent: "#aabbcc", surface: "#112233", surfaceDepth: 80 },
+    reader: {
+      accent: "#aabbcc",
+      surface: "#112233",
+      surfaceDepth: 80,
+      styles: { button: "ghost", shape: "rounded" },
+    },
   });
 });
 
@@ -80,13 +92,15 @@ test("surface CSS targets only the configured surface wrappers", async () => {
     preset: "charcoal",
     overrides: {},
     surfaces: {
-      reader: { accent: "#336699", surface: "#1b2028", surfaceDepth: 60 },
+      reader: { accent: "#336699", surface: "#1b2028", surfaceDepth: 60, styles: { button: "ghost", shape: "rounded" } },
       agent: { accent: "#c9a227" },
     },
   }, "charcoal");
   assert.match(css, /\[data-surface="reader"\] \{/);
   assert.match(css, /--accent: #336699;/);
   assert.match(css, /--surface-ground: #1b2028;/);
+  assert.match(css, /--button-primary-bg: transparent;/);
+  assert.match(css, /--radius-control: 12px;/);
   assert.match(css, /\[data-surface="agent"\] \{/);
   assert.match(css, /--accent: #c9a227;/);
   assert.doesNotMatch(css, /data-surface="writing"/);
@@ -99,8 +113,8 @@ test("round-trips a theme pack through export and import", async () => {
     version: 1,
     preset: "paper",
     overrides: { accent: "#3F7BD9", surface: "#F0E8DC", density: "compact", controlRadius: 10 },
-    surfaces: { reader: { accent: "#2F8F6B", surface: "#122018", surfaceDepth: 60 } },
-    styles: { button: "soft", dialog: "glass", shape: "rounded", shadow: "deep" },
+    surfaces: { reader: { accent: "#2F8F6B", surface: "#122018", surfaceDepth: 60, styles: { button: "ghost", shape: "sharp" } } },
+    styles: { button: "soft", dialog: "glass", shape: "rounded", shadow: "deep", motion: "reduced", input: "outlined", card: "flat", menu: "glass" },
   };
   const pack = toThemePack(settings, "Lab Notebook");
   assert.equal(pack.schemaVersion, 2);
@@ -108,8 +122,8 @@ test("round-trips a theme pack through export and import", async () => {
   assert.equal(pack.name, "Lab Notebook");
   assert.equal(pack.preset, "paper");
   assert.deepEqual(pack.overrides, { accent: "#3f7bd9", surface: "#f0e8dc", density: "compact", controlRadius: 10 });
-  assert.deepEqual(pack.surfaces, { reader: { accent: "#2f8f6b", surface: "#122018", surfaceDepth: 60 } });
-  assert.deepEqual(pack.styles, { button: "soft", dialog: "glass", shape: "rounded", shadow: "deep" });
+  assert.deepEqual(pack.surfaces, { reader: { accent: "#2f8f6b", surface: "#122018", surfaceDepth: 60, styles: { button: "ghost", shape: "sharp" } } });
+  assert.deepEqual(pack.styles, { button: "soft", dialog: "glass", shape: "rounded", shadow: "deep", motion: "reduced", input: "outlined", card: "flat", menu: "glass" });
 
   const parsed = parseThemePack(JSON.parse(JSON.stringify(pack)));
   assert.deepEqual(parsed, pack);
@@ -248,6 +262,22 @@ test("maps style presets to component tokens", async () => {
   assert.match(styleTokens({ shadow: "subtle" }, "paper")["--dialog-shadow-lg"], /rgba\(59, 53, 46/);
 });
 
+test("normalizes global motion and component presets, and keeps them out of surface styles", async () => {
+  const { normalizeAppearance } = await appearanceModule;
+  const normalized = normalizeAppearance({
+    version: 1,
+    preset: "paper",
+    overrides: {},
+    styles: { motion: "none", input: "filled", card: "outlined", menu: "glass", button: "soft" },
+    surfaces: { reader: { styles: { motion: "reduced", input: "ghost", card: "flat", menu: "flat", dialog: "flat" } } },
+  });
+  assert.deepEqual(normalized.styles, { button: "soft", motion: "none", input: "filled", card: "outlined", menu: "glass" });
+  assert.deepEqual(normalized.surfaces, { reader: { styles: { dialog: "flat" } } });
+
+  const invalid = normalizeAppearance({ version: 1, preset: "paper", overrides: {}, styles: { motion: "slow", input: "round", card: "glass", menu: "sharp" } });
+  assert.equal(invalid.styles, undefined);
+});
+
 test("applies and clears inline appearance variables", async () => {
   const { applyAppearance } = await appearanceModule;
   const properties = {};
@@ -263,9 +293,14 @@ test("applies and clears inline appearance variables", async () => {
     version: 1,
     preset: "charcoal",
     overrides: { accent: "#336699", surface: "#1b2028", surfaceDepth: 60, controlRadius: 10, density: "compact" },
+    styles: { motion: "reduced", input: "ghost", card: "outlined", menu: "glass" },
   }, "charcoal");
   assert.equal(root.dataset.theme, "charcoal");
   assert.equal(root.dataset.density, "compact");
+  assert.equal(root.dataset.motion, "reduced");
+  assert.equal(root.dataset.inputStyle, "ghost");
+  assert.equal(root.dataset.cardStyle, "outlined");
+  assert.equal(root.dataset.menuStyle, "glass");
   assert.equal(properties["--accent"], "#336699");
   assert.equal(properties["--radius-control"], "10px");
   assert.equal(properties["--text-on-accent"], "#ffffff");
@@ -276,6 +311,10 @@ test("applies and clears inline appearance variables", async () => {
 
   applyAppearance(root, { version: 1, preset: "charcoal", overrides: {} }, "charcoal");
   assert.equal(root.dataset.density, "comfortable");
+  assert.equal(root.dataset.motion, "full");
+  assert.equal(root.dataset.inputStyle, "default");
+  assert.equal(root.dataset.cardStyle, "default");
+  assert.equal(root.dataset.menuStyle, "default");
   assert.equal(properties["--accent"], undefined);
   assert.equal(properties["--radius-control"], undefined);
   assert.equal(properties["--surface-ground"], undefined);
