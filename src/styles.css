@@ -5138,11 +5138,16 @@ html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
 }
 .artifact-tabs-row .artifact-tab { height: 100%; }
 .artifact-tabs-row .artifact-workbench-actions { margin-left: auto; padding: 0 6px; border-left: 1px solid var(--border-soft); }
+.artifact-workbench-body .artifact-editor-pane.compact .artifact-editor { position: relative; }
 .artifact-workbench-body .artifact-editor-pane.compact .artifact-editor-header.compact {
-  min-height: 34px;
-  padding: 0 12px;
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 0;
+  min-height: 0;
+  padding: 6px 12px 4px;
   background: transparent;
-  border-bottom: 1px solid var(--border-soft);
+  border: 0;
 }
 .artifact-editor-header.compact .artifact-editor-actions { gap: 8px; }
 .artifact-editor-header.compact .artifact-view-toggle { height: auto; gap: 8px; padding: 0; background: transparent; border-radius: 0; }

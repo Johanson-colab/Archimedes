@@ -33,6 +33,7 @@ test("file tabs are larger and view actions are plain text", () => {
   assert.match(css, /\.artifact-editor-header \.artifact-view-toggle \{[\s\S]*?background: transparent/);
   assert.match(css, /\.artifact-editor-header \.artifact-save-button,[\s\S]*?background: transparent; border: 0;/);
   assert.match(css, /\.artifact-tab-close:hover \{[^}]*background: transparent/);
+  assert.match(css, /\.artifact-editor-pane\.compact \.artifact-editor-header\.compact \{[\s\S]*?position: absolute;[\s\S]*?background: transparent;/);
   assert.doesNotMatch(app, /artifact-workbench-toolbar/);
   assert.match(app, /fontSize: "13px", lineHeight: 1.65/);
   assert.match(editor, /fontSize: "13px"/);
