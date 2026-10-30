@@ -12,8 +12,8 @@ const i18n = read("src/i18n.tsx");
 const settings = read("src/SettingsModal.tsx");
 
 test("workbench and full editor share the tabbed file shell", () => {
-  assert.match(app, /className="artifact-editor-pane compact"/);
-  assert.match(app, /openFiles\.length > 0 && <div className="artifact-tabs"/);
+  assert.match(app, /className=\{compact \? "artifact-editor-pane compact" : "artifact-editor-pane"\}/);
+  assert.match(app, /const tabs = openFiles\.length > 0 \? <div className="artifact-tabs"/);
   assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
   assert.match(app, /artifact-browser-heading/);
   assert.match(app, /mainSection === "writing" \? t\("Paper writing"\) : t\("Files"\)/);
@@ -21,8 +21,10 @@ test("workbench and full editor share the tabbed file shell", () => {
   assert.doesNotMatch(app, /className="artifacts-page"/);
   assert.doesNotMatch(app, /Browse the active folder and inspect files created or changed by Archimedes/);
   assert.match(css, /\.artifact-editor-pane\.compact \{ position: relative; \}/);
-  assert.match(css, /\.artifact-editor-pane\.compact \.artifact-tabs \{ min-height: 38px; padding-right: 258px; \}/);
-  assert.match(css, /\.artifact-editor-header\.compact \{[\s\S]*?position: absolute;/);
+  assert.match(css, /\.artifact-tabs-row \{[\s\S]*?height: 38px;/);
+  assert.match(css, /\.artifact-tabs-row \.artifact-tabs \{[\s\S]*?height: 100%;/);
+  assert.doesNotMatch(css, /padding-right: 258px/);
+  assert.match(css, /\.artifact-tabs-row \.artifact-workbench-actions \{ margin-left: auto;/);
 });
 
 test("file tabs are larger and view actions are plain text", () => {
@@ -30,6 +32,9 @@ test("file tabs are larger and view actions are plain text", () => {
   assert.match(css, /\.artifact-tab \{ min-width: 120px; max-width: 230px; \}/);
   assert.match(css, /\.artifact-editor-header \.artifact-view-toggle \{[\s\S]*?background: transparent/);
   assert.match(css, /\.artifact-editor-header \.artifact-save-button,[\s\S]*?background: transparent; border: 0;/);
+  assert.match(css, /\.artifact-tab-close:hover \{[^}]*background: transparent/);
+  assert.match(css, /\.artifact-editor-pane\.compact \.artifact-editor-header\.compact \{[\s\S]*?position: absolute;[\s\S]*?background: transparent;/);
+  assert.doesNotMatch(app, /artifact-workbench-toolbar/);
   assert.match(app, /fontSize: "13px", lineHeight: 1.65/);
   assert.match(editor, /fontSize: "13px"/);
 });

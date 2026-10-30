@@ -69,21 +69,23 @@ test("files use a compact workbench pane with drill-down and split modes", () =>
   assert.match(css, /body\.files-pane-resizing/);
 });
 
-test("files use a tab-first header and keep one visible filename", () => {
-  assert.match(app, /openFiles\.length > 0 && <div className="artifact-tabs"/);
+test("files use a tab-first header without a path strip", () => {
+  assert.match(app, /const tabs = openFiles\.length > 0 \? <div className="artifact-tabs"/);
   assert.match(app, /artifact-editor-header compact/);
-  assert.match(app, /openFiles\.length <= 1 && <span className="artifact-workbench-file"/);
+  assert.match(app, /className="artifact-tabs-row"/);
+  assert.doesNotMatch(app, /artifact-workbench-location/);
+  assert.doesNotMatch(app, /artifact-workbench-file/);
   assert.match(css, /\.artifact-tab-main \.artifact-tab-name/);
 });
 
 test("the full editor shares the workbench shell and hides duplicate titles", () => {
   assert.doesNotMatch(app, /!compact && <div className="artifact-browser-title">/);
   assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
-  assert.match(app, /artifact-workbench-workspace/);
+  assert.match(app, /className="artifact-browser-heading"/);
+  assert.doesNotMatch(app, /artifact-workbench-location/);
   assert.doesNotMatch(app, /<FolderOpen size=\{13\} \/><strong>Files<\/strong>/);
   assert.match(app, /\{\(saving \|\| dirty\) && <span className=\{`artifact-save-state/);
   assert.doesNotMatch(app, /"Saving" : dirty \? "Unsaved" : "Saved"/);
-  assert.match(css, /\.artifact-workbench-location strong\.artifact-workbench-workspace/);
   assert.match(css, /\.workspace-tree-row \{ height: 30px; \}/);
 });
 
