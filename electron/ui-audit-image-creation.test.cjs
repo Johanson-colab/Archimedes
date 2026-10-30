@@ -34,7 +34,9 @@ test("the page keeps Gallery and Templates in one tab row with the module action
 
 test("Data charts is a separate Gallery tab with chart types and tables, but no field or venue filter", () => {
   assert.match(view, /role="tab" id="image-creation-tab-charts"/);
-  assert.match(view, /<DataChartGallery active=\{active\} \/>/);
+  assert.match(view, /<DataChartGallery active=\{active\} sort=\{chartSort\} \/>/);
+  assert.match(view, /<option value="preferred">Sort: AI venues first<\/option>/);
+  assert.match(view, /<option value="newest">Sort: Newest across all<\/option>/);
   assert.match(charts, /type Category = "data" \| "table"/);
   assert.match(charts, /EXCLUDED_CHARTS = new Set\(\["area", "other", "mixed"\]\)/);
   assert.match(charts, /figure\.chart_types\.some\(\(type\) => EXCLUDED_CHARTS\.has\(type\)\)/);
@@ -44,6 +46,9 @@ test("Data charts is a separate Gallery tab with chart types and tables, but no 
   assert.doesNotMatch(charts, /searchParams\.set\("area"|searchParams\.set\("venue"|Filter by venue|Research field/);
   assert.match(charts, /data\/index-\$\{index\}\.json/);
   assert.match(charts, /Number\(b\.year \|\| 0\) - Number\(a\.year \|\| 0\)/);
+  assert.match(charts, /const FEATURED_VENUES = \["NeurIPS", "ICML", "ICLR", "ACL", "CVPR"\]/);
+  assert.match(charts, /orderPreferred\(matched\)/);
+  assert.match(charts, /interleave\(venues\.map/);
   assert.match(charts, /sourceLink\.searchParams\.set\("sort", "year"\)/);
   assert.doesNotMatch(charts, /api\/search|first 50 checked/);
   assert.match(charts, /className="image-creation-card chart-reference-card"/);

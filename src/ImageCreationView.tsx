@@ -179,6 +179,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS);
   const [sort, setSort] = useState("newest");
+  const [chartSort, setChartSort] = useState<"preferred" | "newest">("preferred");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"gallery" | "charts" | "templates">("gallery");
@@ -252,7 +253,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
       <button type="button" role="tab" id="image-creation-tab-templates" aria-selected={tab === "templates"} aria-controls="image-creation-panel-templates" tabIndex={tab === "templates" ? 0 : -1} className={tab === "templates" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("templates")}>
         Templates <small>{PATTERNS.length}</small>
       </button>
-      {tab !== "charts" && <div className="image-creation-actions">
+      <div className="image-creation-actions">
         {tab === "gallery" && <label className="image-creation-sort">
           <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort gallery">
             <option value="newest">Sort: Newest</option>
@@ -261,8 +262,15 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           </select>
           <ChevronDown size={12} aria-hidden="true" />
         </label>}
-        <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>
-      </div>}
+        {tab === "charts" && <label className="image-creation-sort">
+          <select value={chartSort} onChange={(event) => setChartSort(event.target.value as "preferred" | "newest")} aria-label="Sort data charts">
+            <option value="preferred">Sort: AI venues first</option>
+            <option value="newest">Sort: Newest across all</option>
+          </select>
+          <ChevronDown size={12} aria-hidden="true" />
+        </label>}
+        {tab !== "charts" && <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>}
+      </div>
     </div>
 
     {tab === "gallery" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-gallery" aria-labelledby="image-creation-tab-gallery">
@@ -290,7 +298,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
               {visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}
             </>}
       <p className="gallery-credit">Figures belong to their paper authors and publishers. The catalogue and image files are served by <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>. Check each paper's license before reuse.</p>
-    </div> : tab === "charts" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-charts" aria-labelledby="image-creation-tab-charts"><DataChartGallery active={active} /></div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-templates" aria-labelledby="image-creation-tab-templates">
+    </div> : tab === "charts" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-charts" aria-labelledby="image-creation-tab-charts"><DataChartGallery active={active} sort={chartSort} /></div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-templates" aria-labelledby="image-creation-tab-templates">
       <p className="image-creation-templates-intro">Start from a figure pattern, then make it yours. Each template opens the gallery filtered to real examples from accepted papers.</p>
       {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading templates…</strong></div>
         : <div className="image-creation-template-grid">{templates.map((template) => <TemplateCard key={template.id} label={template.label} note={template.note} count={template.count} preview={template.preview} onUse={() => browsePattern(template.id)} />)}</div>}

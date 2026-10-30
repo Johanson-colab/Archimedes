@@ -7,6 +7,9 @@ const SOURCE_ROOT = "https://paperfigure.net/";
 const IMAGE_ROOT = "https://img.paperfigure.net/";
 const SHARDS = [0, 1, 2, 3].map((index) => `${SOURCE_ROOT}data/index-${index}.json`);
 const PAGE_SIZE = 48;
+const FEATURED_VENUES = ["NeurIPS", "ICML", "ICLR", "ACL", "CVPR"] as const;
+const OTHER_AI_VENUES = ["AAAI", "EMNLP", "ICCV", "ECCV", "NAACL", "IJCAI", "COLM", "KDD", "JMLR", "TMLR", "MLSys", "TACL"] as const;
+const VENUE_PRIORITY = [...FEATURED_VENUES, ...OTHER_AI_VENUES].map((venue) => venue.toUpperCase());
 const CHART_TYPES = [
   { id: "bar", label: "Bar" }, { id: "line", label: "Line" },
   { id: "scatter", label: "Scatter" }, { id: "point", label: "Point & error bar" },
@@ -20,6 +23,7 @@ const EXCLUDED_CHARTS = new Set(["area", "other", "mixed"]);
 
 type Category = "data" | "table";
 type ChartType = typeof CHART_TYPES[number]["id"] | "all";
+type SortMode = "preferred" | "newest";
 type ChartFigure = {
   id: string;
   paper: string;
@@ -55,6 +59,64 @@ function imageUrl(value: unknown) {
     const url = new URL(value, IMAGE_ROOT);
     return url.protocol === "https:" && url.hostname === "img.paperfigure.net" && url.pathname.startsWith("/figs/") ? url.href : "";
   } catch { return ""; }
+}
+
+function compareNewest(a: ChartFigure, b: ChartFigure) {
+  return Number(b.year || 0) - Number(a.year || 0) || a.paper.localeCompare(b.paper) || a.id.localeCompare(b.id);
+}
+
+function venuePriority(venue: string) {
+  const rank = VENUE_PRIORITY.indexOf(venue.trim().toUpperCase());
+  return rank < 0 ? { tier: 2, rank: 0 } : { tier: rank < FEATURED_VENUES.length ? 0 : 1, rank };
+}
+
+function interleave<T>(lists: T[][]) {
+  const result: T[] = [];
+  let active = lists.map((list) => ({ list, index: 0 })).filter(({ list }) => list.length > 0);
+  while (active.length) {
+    const next: typeof active = [];
+    for (const queue of active) {
+      result.push(queue.list[queue.index++]);
+      if (queue.index < queue.list.length) next.push(queue);
+    }
+    active = next;
+  }
+  return result;
+}
+
+function orderPreferred(figures: ChartFigure[]) {
+  const byTier = new Map<number, ChartFigure[]>();
+  for (const figure of figures) {
+    const tier = venuePriority(figure.venue).tier;
+    if (!byTier.has(tier)) byTier.set(tier, []);
+    byTier.get(tier)!.push(figure);
+  }
+  return [...byTier.entries()].sort(([a], [b]) => a - b).flatMap(([tier, tierFigures]) => {
+    if (tier === 2) return tierFigures;
+    const byVenue = new Map<string, ChartFigure[]>();
+    for (const figure of tierFigures) {
+      if (!byVenue.has(figure.venue)) byVenue.set(figure.venue, []);
+      byVenue.get(figure.venue)!.push(figure);
+    }
+    const venues = [...byVenue.entries()].sort(([a], [b]) => venuePriority(a).rank - venuePriority(b).rank);
+    return interleave(venues.map(([, venueFigures]) => {
+      const byYear = new Map<number, ChartFigure[]>();
+      for (const figure of venueFigures) {
+        const year = Number(figure.year || 0);
+        if (!byYear.has(year)) byYear.set(year, []);
+        byYear.get(year)!.push(figure);
+      }
+      return [...byYear.entries()].sort(([a], [b]) => b - a).flatMap(([, yearFigures]) => {
+        const byPaper = new Map<string, ChartFigure[]>();
+        for (const figure of yearFigures) {
+          const paperKey = figure.id.split("__", 1)[0];
+          if (!byPaper.has(paperKey)) byPaper.set(paperKey, []);
+          byPaper.get(paperKey)!.push(figure);
+        }
+        return interleave([...byPaper.values()]);
+      });
+    }));
+  });
 }
 
 function flattenCatalog(payloads: unknown[]): ChartFigure[] {
@@ -93,7 +155,7 @@ function flattenCatalog(payloads: unknown[]): ChartFigure[] {
       }
     }
   }
-  return figures.sort((a, b) => Number(b.year || 0) - Number(a.year || 0) || a.paper.localeCompare(b.paper) || a.id.localeCompare(b.id));
+  return figures.sort(compareNewest);
 }
 
 function loadCatalog(refresh = false) {
@@ -165,7 +227,7 @@ function ChartDialog({ figures, index, onClose, onStep }: {
   </div>, document.body);
 }
 
-export default function DataChartGallery({ active }: { active: boolean }) {
+export default function DataChartGallery({ active, sort }: { active: boolean; sort: SortMode }) {
   const [category, setCategory] = useState<Category>("data");
   const [chart, setChart] = useState<ChartType>("all");
   const [query, setQuery] = useState("");
@@ -208,15 +270,16 @@ export default function DataChartGallery({ active }: { active: boolean }) {
     return () => { cancelled = true; };
   }, [retry]);
 
-  useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [category, chart, debouncedQuery]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [category, chart, debouncedQuery, sort]);
 
   const activeFilterCount = Number(category !== "data") + Number(category === "data" && chart !== "all");
   const resetFilters = () => { setCategory("data"); setChart("all"); setQuery(""); };
   const figures = useMemo(() => {
     const words = debouncedQuery.toLocaleLowerCase().split(/\s+/).filter(Boolean);
-    return catalog.filter((figure) => allowedFigure(figure, category, chart) && words.every((word) =>
+    const matched = catalog.filter((figure) => allowedFigure(figure, category, chart) && words.every((word) =>
       `${figure.paper} ${figure.caption} ${figure.tags.join(" ")} ${figure.venue} ${figure.year}`.toLocaleLowerCase().includes(word)));
-  }, [catalog, category, chart, debouncedQuery]);
+    return sort === "preferred" ? orderPreferred(matched) : matched;
+  }, [catalog, category, chart, debouncedQuery, sort]);
   const shown = figures.slice(0, visibleCount);
   const selectedIndex = useMemo(() => figures.findIndex((figure) => figure.id === selectedId), [figures, selectedId]);
   const sourceLink = new URL("en/", SOURCE_ROOT);
@@ -242,7 +305,7 @@ export default function DataChartGallery({ active }: { active: boolean }) {
         </div>}
       </div>
     </div>
-    <div className="data-chart-results"><span>{loading ? "Loading full catalogue…" : error ? "Catalogue unavailable" : `Showing ${shown.length.toLocaleString()} of ${figures.length.toLocaleString()} · newest first`}</span><a href={sourceLink.href} target="_blank" rel="noreferrer">Explore more at source <ExternalLink size={13} /></a></div>
+    <div className="data-chart-results"><span>{loading ? "Loading full catalogue…" : error ? "Catalogue unavailable" : `Showing ${shown.length.toLocaleString()} of ${figures.length.toLocaleString()} · ${sort === "preferred" ? "AI venues first, newest within each venue" : "newest first"}`}</span><a href={sourceLink.href} target="_blank" rel="noreferrer">Explore more at source <ExternalLink size={13} /></a></div>
     {loading ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading full figure catalogue…</strong></div>
       : error ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load data charts</strong><p>{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>
         : !figures.length ? <div className="gallery-state"><Search size={25} /><strong>No matching references</strong><p>Try another keyword or chart type.</p></div>
