@@ -35,13 +35,13 @@ test("local identity is persisted and exposed without gating local features", ()
 test("Account settings shows the local profile and device without a login wall", () => {
   assert.match(settings, /"account"/);
   assert.match(settings, /AccountSettingsPanel/);
-  assert.match(account, /Cloud sign-in/);
+  assert.match(account, /Cloud account/);
   assert.match(settings, /Account/);
   assert.match(account, /Local profile/);
   assert.match(account, /Display name/);
   assert.match(account, /This device/);
   assert.match(account, /Local user ID/);
-  assert.match(account, /Not available yet/);
+  assert.match(account, /Sign in to collaborate/);
   assert.match(css, /\.account-device-id code/);
 });
 

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, systemPreferences } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -20,6 +20,9 @@ const journeySnapshots = require("./journey-snapshots.cjs");
 const workbenchSettings = require("./workbench-settings.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
+const { createClient } = require("@supabase/supabase-js");
+const { createSupabaseAuth } = require("./supabase-auth.cjs");
+const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
@@ -547,6 +550,8 @@ async function sanitizeAgentContext(items, workspace) {
 }
 
 const journeySummariesInFlight = new Map();
+let supabaseAuth = null;
+let authReady = Promise.resolve();
 
 app.whenReady().then(() => {
   loadLocalAgentEnvironment();
@@ -559,6 +564,16 @@ app.whenReady().then(() => {
   workbenchNotes.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());
+  const supabaseClient = createClient(supabaseConfig.url, supabaseConfig.publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  supabaseAuth = createSupabaseAuth({
+    client: supabaseClient,
+    storagePath: app.getPath("userData"),
+    safeStorage,
+    configured: Boolean(supabaseConfig.url && supabaseConfig.publishableKey),
+  });
+  authReady = supabaseAuth.initialize();
   installApplicationMenu();
   protocol.handle("archimedes-file", (request) => {
     try {
@@ -1460,6 +1475,23 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
+  ipcMain.handle("auth:get-state", () => authReady.then(() => supabaseAuth.state()));
+  ipcMain.handle("auth:sign-in", async (_event, { email, password } = {}) => {
+    await authReady;
+    return supabaseAuth.signIn(email, password);
+  });
+  ipcMain.handle("auth:sign-up", async (_event, { email, password, displayName } = {}) => {
+    await authReady;
+    return supabaseAuth.signUp(email, password, displayName);
+  });
+  ipcMain.handle("auth:sign-out", async () => {
+    await authReady;
+    return supabaseAuth.signOut();
+  });
+  ipcMain.handle("auth:access-token", async () => {
+    await authReady;
+    return supabaseAuth.accessToken();
+  });
   ipcMain.handle("identity:get", () => localIdentity.localIdentity());
   ipcMain.handle("identity:update", (_event, patch = {}) => {
     const identity = localIdentity.updateLocalIdentity({ displayName: patch.displayName });

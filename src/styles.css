@@ -6699,3 +6699,9 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .library-project-hint-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .library-project-hint .secondary-button { min-height: 30px; white-space: nowrap; }
 @media (max-width: 760px) { .library-project-hint { flex-direction: column; align-items: flex-start; } }
+
+/* Cloud auth in Account settings */
+.account-auth-control { flex: 1; justify-content: flex-start; flex-wrap: wrap; }
+.account-auth-control .settings-text-input { width: 180px; }
+.account-auth-row .settings-row-control { width: 100%; }
+@media (max-width: 720px) { .account-auth-control .settings-text-input { width: 100%; } }

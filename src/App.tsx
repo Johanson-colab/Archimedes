@@ -289,6 +289,7 @@ let previewTerminalSettings: TerminalSettings = {
   externalTerminalLabel: previewPlatform === "win32" ? "Windows Terminal" : previewPlatform === "darwin" ? "Ghostty" : "WezTerm",
 };
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
+let previewAuthState: AuthState = { configured: true, user: null, expiresAt: 0, error: "" };
 let previewLocalIdentity: LocalIdentity = {
   version: 1,
   userId: "usr_preview_local",
@@ -394,6 +395,20 @@ const previewBridge = {
   ...previewLibraryBridge,
   getInitialWorkspace: async () => null,
   getLocalIdentity: async () => structuredClone(previewLocalIdentity),
+  getAuthState: async () => structuredClone(previewAuthState),
+  signIn: async (email: string) => {
+    previewAuthState = { configured: true, user: { id: "usr_preview_cloud", email, displayName: email.split("@")[0] }, expiresAt: Math.floor(Date.now() / 1000) + 3600, error: "" };
+    return structuredClone(previewAuthState);
+  },
+  signUp: async (email: string) => {
+    previewAuthState = { configured: true, user: { id: "usr_preview_cloud", email, displayName: email.split("@")[0] }, expiresAt: Math.floor(Date.now() / 1000) + 3600, error: "" };
+    return structuredClone(previewAuthState);
+  },
+  signOut: async () => {
+    previewAuthState = { configured: true, user: null, expiresAt: 0, error: "" };
+    return structuredClone(previewAuthState);
+  },
+  getAuthAccessToken: async () => "preview-token",
   updateLocalIdentity: async (patch: { displayName: string }) => {
     const displayName = String(patch.displayName || "").replace(/\s+/g, " ").trim();
     if (!displayName || displayName.length > 80) throw new Error("Display names must be between 1 and 80 characters.");
@@ -981,6 +996,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const [localIdentity, setLocalIdentity] = useState<LocalIdentity | null>(null);
+  const [authState, setAuthState] = useState<AuthState | null>(null);
   const theme = resolveTheme(appearance.preset, systemAppearance);
   const themePreference = appearance.preset;
   const setThemePreference = (preset: ThemePreset) => setAppearance((current) => ({ ...current, preset }));
@@ -1300,6 +1316,32 @@ function App() {
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void desktopBridge.getAuthState()
+      .then((state) => { if (!cancelled) setAuthState(state); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  async function signIn(email: string, password: string) {
+    const next = await desktopBridge.signIn(email, password);
+    setAuthState(next);
+    return next;
+  }
+
+  async function signUp(email: string, password: string, displayName?: string) {
+    const next = await desktopBridge.signUp(email, password, displayName);
+    setAuthState(next);
+    return next;
+  }
+
+  async function signOut() {
+    const next = await desktopBridge.signOut();
+    setAuthState(next);
+    return next;
+  }
 
   async function saveLocalIdentity(displayName: string) {
     const identity = await desktopBridge.updateLocalIdentity({ displayName });
@@ -2771,6 +2813,10 @@ function App() {
         identity={localIdentity}
         onSaveIdentity={saveLocalIdentity}
         activeProject={activeProject}
+        authState={authState}
+        onSignIn={signIn}
+        onSignUp={signUp}
+        onSignOut={signOut}
       />
       {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
         bridge={desktopBridge}

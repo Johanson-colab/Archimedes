@@ -4,6 +4,11 @@ interface ResearchDeskBridge {
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
     getLocalIdentity: () => Promise<LocalIdentity>;
+    getAuthState: () => Promise<AuthState>;
+    signIn: (email: string, password: string) => Promise<AuthState>;
+    signUp: (email: string, password: string, displayName?: string) => Promise<AuthState>;
+    signOut: () => Promise<AuthState>;
+    getAuthAccessToken: () => Promise<string | null>;
     updateLocalIdentity: (patch: { displayName: string }) => Promise<LocalIdentity>;
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
@@ -787,6 +792,20 @@ interface WorkspaceSnapshot {
     completed_at: string | null;
   }>;
   actions: AgentAction[];
+}
+
+interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+}
+
+interface AuthState {
+  configured: boolean;
+  user: AuthUser | null;
+  expiresAt: number;
+  error: string;
+  needsConfirmation?: boolean;
 }
 
 interface LocalIdentity {
