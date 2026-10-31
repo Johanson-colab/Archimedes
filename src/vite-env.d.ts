@@ -43,6 +43,8 @@ interface ResearchDeskBridge {
     listProviderModels: (input: ModelCatalogInput, role?: ModelRole) => Promise<ModelCatalogResponse>;
     saveModelConfig: (input: ModelConfigInput, role?: ModelRole) => Promise<PublicModelConfig>;
     testModelConfig: (input: ModelConfigInput, role?: ModelRole) => Promise<ModelConnectionResult>;
+    transcribeSpeech: (audio: ArrayBuffer, mimeType: string, language?: string) => Promise<{ text: string }>;
+    requestMicrophoneAccess: () => Promise<boolean>;
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: () => Promise<ResearchLibrary[]>;

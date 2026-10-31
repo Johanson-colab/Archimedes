@@ -9,6 +9,9 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const app = read("src", "App.tsx");
 const css = read("src", "styles.css");
 const library = read("src", "LibraryView.tsx");
+const voice = read("src", "VoiceInputButton.tsx");
+const main = read("electron", "main.cjs");
+const preload = read("electron", "preload.cjs");
 
 test("conversation composers keep their resting border while focused", () => {
   assert.doesNotMatch(css, /\.conversation-composer:focus-within/);
@@ -50,4 +53,20 @@ test("chat send controls are unfilled up-arrows", () => {
   assert.doesNotMatch(css, /\.paper-ai-compose \.primary-button/);
   assert.match(library, /className="daily-search-send"/);
   assert.match(css, /\.daily-search-send \{[^}]*background: transparent/);
+});
+
+test("main composer supports a minimal voice button beside send", () => {
+  assert.match(app, /<div className="composer-send-cluster">[\s\S]*?<VoiceInputButton[\s\S]*?<button className="conversation-send"/);
+  assert.match(app, /onTranscribe=\{\(audio, mimeType, language\) => desktopBridge\.transcribeSpeech\(audio, mimeType, language\)\}/);
+  assert.match(voice, /MediaRecorder/);
+  assert.match(voice, /getUserMedia/);
+  assert.match(voice, /MAX_RECORDING_MS = 120_000/);
+  assert.match(voice, /<Mic size=\{15\} \/>/);
+  assert.match(voice, /Voice recording failed/);
+  assert.match(css, /\.conversation-voice \{[^}]*background: transparent/);
+  assert.match(css, /\.composer-send-cluster \.conversation-send \{ margin-left: 0; \}/);
+  assert.match(main, /speech:transcribe/);
+  assert.match(main, /speech:request-permission/);
+  assert.match(preload, /transcribeSpeech/);
+  assert.match(preload, /requestMicrophoneAccess/);
 });

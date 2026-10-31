@@ -6520,3 +6520,14 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .artifact-sandbox-note { color: var(--text-faint); font-size: 8.5px; }
 .artifact-sandbox { width: 100%; min-height: 0; flex: 1; background: var(--text-primary); border: 1px solid var(--artifact-preview-border); }
 @media (max-width: 720px) { .artifacts-grid { grid-template-columns: 1fr; } }
+
+/* Voice input sits immediately left of the send control and stays unfilled. */
+.composer-send-cluster { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.composer-send-cluster .conversation-send { margin-left: 0; }
+.conversation-voice { display: grid; width: 30px; height: 30px; flex: 0 0 auto; padding: 0; place-items: center; color: var(--text-muted); background: transparent; border: 0; border-radius: 6px; }
+.conversation-voice:hover:not(:disabled) { color: var(--accent); }
+.conversation-voice.recording { color: var(--accent); }
+.conversation-voice.recording svg { animation: conversation-voice-pulse 1.1s ease-in-out infinite; }
+.conversation-voice:disabled { cursor: default; opacity: .35; }
+@keyframes conversation-voice-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .conversation-voice.recording svg { animation: none; } }
