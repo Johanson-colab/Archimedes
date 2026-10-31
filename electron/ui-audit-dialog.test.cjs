@@ -40,7 +40,7 @@ test("welcome composer stays quiet while resizers keep explicit focus styling", 
 
 test("paper project dialog is dismissible before a project exists", () => {
   const paper = read("src/PaperWritingView.tsx");
-  assert.match(paper, /useDialogFocus<HTMLElement>\(chooserOpen, \(\) => setChooserOpen\(false\)\)/);
+  assert.match(paper, /useDialogFocus<HTMLElement>\(dialogOpen, \(\) => setChooserOpen\(false\)\)/);
   assert.match(paper, /event\.target === event\.currentTarget\) setChooserOpen\(false\)/);
   assert.doesNotMatch(paper, /activeProject && <button[^>]*aria-label="Close project chooser"/);
   assert.match(paper, /<button className="app-dialog-close" onClick=\{\(\) => setChooserOpen\(false\)\} aria-label="Close project chooser">/);
