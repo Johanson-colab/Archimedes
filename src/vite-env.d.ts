@@ -748,6 +748,16 @@ type ReproductionStatus =
   | "draft" | "planned" | "queued" | "provisioning" | "running"
   | "diagnosing" | "verified" | "diverged" | "blocked" | "cancelled";
 
+interface ReproductionStep {
+  id: string;
+  title: string;
+  detail: string;
+  command: string;
+  checkpoint: string;
+  source: string;
+  blocked: string;
+}
+
 interface ReproductionClaim {
   id: string;
   statement: string;
@@ -756,12 +766,14 @@ interface ReproductionClaim {
   expected: number | null;
   unit: string;
   tolerance: number;
+  step: string;
   evidence: { page: number | null; table: string; row: string; column: string; quote: string };
 }
 
 interface ReproductionContract {
   version: number;
   summary: string;
+  steps: ReproductionStep[];
   claims: ReproductionClaim[];
   entrypoint: { command: string; cwd: string; outputs: string[]; evidence: Array<{ path: string; line_count: number }>; unverified: string[] };
   environment: { python: string; cuda: string; install: string[]; system: string[]; source: string };

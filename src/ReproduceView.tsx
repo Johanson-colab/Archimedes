@@ -233,7 +233,27 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         </div>
 
         <section className="reproduce-block">
-          <h2>Claims to verify</h2>
+          <h2>Runbook</h2>
+          <ol className="reproduce-runbook">
+            {contract.steps.map((step, index) => <li className={`reproduce-step${step.blocked ? " blocked" : ""}`} key={step.id}>
+              <span className="reproduce-step-index" aria-hidden="true">{index + 1}</span>
+              <div className="reproduce-step-body">
+                <div className="reproduce-step-head">
+                  <strong>{step.title}</strong>
+                  {step.blocked && <span className="reproduce-tag warn">blocked</span>}
+                </div>
+                {step.detail && <p className="reproduce-step-detail">{step.detail}</p>}
+                {step.command && <pre className="reproduce-step-command">{step.command}</pre>}
+                {step.checkpoint && <p className="reproduce-checkpoint"><Check size={11} />{step.checkpoint}</p>}
+                {step.source && <p className="reproduce-hint">from {step.source}</p>}
+                {step.blocked && <p className="reproduce-hint warn">{step.blocked}</p>}
+              </div>
+            </li>)}
+          </ol>
+        </section>
+
+        <section className="reproduce-block">
+          <h2>Numbers this runbook should produce</h2>
           <ol className="reproduce-claim-list">
             {contract.claims.map((claim, index) => {
               const open = openClaim === claim.id;

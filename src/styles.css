@@ -6848,6 +6848,20 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 
 .reproduce-block { display: grid; gap: 8px; }
 .reproduce-block > h2 { margin: 0; color: var(--text-muted); font-size: 10.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.reproduce-runbook { display: grid; margin: 0; padding: 0; list-style: none; }
+.reproduce-step { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; padding-bottom: 14px; }
+.reproduce-step::before { content: ""; position: absolute; left: 12px; top: 26px; bottom: 0; width: 1px; background: var(--border-soft); }
+.reproduce-step:last-child { padding-bottom: 0; }
+.reproduce-step:last-child::before { display: none; }
+.reproduce-step-index { display: grid; width: 24px; height: 24px; place-items: center; color: var(--text-secondary); background: var(--surface-raised); border: 1px solid var(--border-default); border-radius: 50%; font-family: var(--font-mono); font-size: 10.5px; }
+.reproduce-step.blocked .reproduce-step-index { color: var(--state-warning); border-color: color-mix(in srgb, var(--state-warning) 45%, transparent); }
+.reproduce-step-body { display: grid; min-width: 0; gap: 5px; }
+.reproduce-step-head { display: flex; align-items: center; gap: 8px; }
+.reproduce-step-head strong { color: var(--text-primary); font-size: 12.5px; font-weight: 620; }
+.reproduce-step-detail { margin: 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.55; }
+.reproduce-step-command { margin: 2px 0 0; padding: 8px 10px; overflow: auto; color: var(--text-primary); background: var(--surface-ground); border: 1px solid var(--border-soft); border-radius: 6px; font-family: var(--font-mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; }
+.reproduce-checkpoint { display: flex; align-items: baseline; gap: 5px; margin: 2px 0 0; color: var(--state-success); font-size: 11px; }
+.reproduce-checkpoint svg { flex: 0 0 auto; }
 .reproduce-claim-list { display: grid; overflow: hidden; margin: 0; padding: 0; background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; list-style: none; }
 .reproduce-claim-list > li { border-top: 1px solid var(--border-soft); }
 .reproduce-claim-list > li:first-child { border-top: 0; }

@@ -23,7 +23,7 @@ test("claims keep their evidence and clamp the tolerance", () => {
       evidence: { page: "7", table: "Table 2", row: "VGG16", column: "speedup", quote: "2.43x fewer" },
     }],
   });
-  assert.equal(contract.version, 1);
+  assert.equal(contract.version, 2);
   assert.equal(contract.claims.length, 1);
   assert.equal(contract.claims[0].expected, 2.43);
   assert.equal(contract.claims[0].tolerance, 0.5, "tolerance is capped");
@@ -118,4 +118,31 @@ test("entrypoint evidence survives normalisation", () => {
 test("entrypoint verification is a no-op without a repository", async () => {
   assert.deepEqual(await verifyEntrypoint("/tmp/workspace", "", { command: "python a.py" }), { evidence: [], unverified: [] });
   assert.deepEqual(await verifyEntrypoint("/tmp/workspace", "https://example.com/not-github", { command: "python a.py" }), { evidence: [], unverified: [] });
+});
+
+test("a runbook is kept in order and synthesised when missing", () => {
+  const withSteps = normalizeContract({
+    claims: [{ statement: "Result holds" }],
+    steps: [
+      { id: "clone", title: "Clone the repository", command: "git clone x", checkpoint: "pyproject.toml exists", source: "README.md" },
+      { title: "Install", command: "pip install -e .", blocked: "No requirements file in the repository" },
+      { title: "   " },
+    ],
+  });
+  assert.equal(withSteps.steps.length, 2);
+  assert.equal(withSteps.steps[0].id, "clone");
+  assert.equal(withSteps.steps[0].checkpoint, "pyproject.toml exists");
+  assert.equal(withSteps.steps[1].blocked, "No requirements file in the repository");
+  assert.equal(withSteps.steps[1].id, "step-2", "a missing id falls back to its position");
+
+  const legacy = normalizeContract({
+    claims: [{ statement: "Result holds" }],
+    entrypoint: { command: "python eval.py" },
+    environment: { python: "3.10", install: ["pip install -r requirements.txt"], source: "requirements.txt" },
+  });
+  assert.equal(legacy.steps.length, 3, "old contracts still get a runbook");
+  assert.equal(legacy.steps[2].command, "python eval.py");
+
+  const blocked = normalizeContract({ claims: [{ statement: "Result holds" }] });
+  assert.equal(blocked.steps.at(-1).blocked.length > 0, true, "a missing entrypoint blocks the run step");
 });
