@@ -24,6 +24,7 @@ const { createClient } = require("@supabase/supabase-js");
 const { createSupabaseAuth } = require("./supabase-auth.cjs");
 const { createCollaborationApi } = require("./collaboration-api.cjs");
 const { createLibrarySync } = require("./library-sync.cjs");
+const { createAnnotationSync } = require("./annotation-sync.cjs");
 const { createSupabaseServer } = require("../server/supabase-server.cjs");
 const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
@@ -1278,6 +1279,10 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("collab:list-projects", async () => requireCollaboration().listProjects());
   ipcMain.handle("collab:sync-libraries", async (_event, { projectId } = {}) => createLibrarySync({ store, api: requireCollaboration() }).syncProjectLibraries(projectId));
+  ipcMain.handle("collab:sync-annotations", async (_event, { projectId } = {}) => {
+    await authReady;
+    return createAnnotationSync({ store, api: requireCollaboration() }).syncProjectAnnotations(projectId, { currentCloudUserId: supabaseAuth.state().user?.id || "" });
+  });
   ipcMain.handle("collab:publish-project", async (_event, { projectId } = {}) => {
     const api = requireCollaboration();
     let project = store.getResearchProject(projectId);

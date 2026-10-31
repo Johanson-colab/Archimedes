@@ -447,6 +447,7 @@ function schema(db) {
   ensureColumn(db, "libraries", "project_id", "TEXT");
   ensureColumn(db, "libraries", "cloud_library_id", "TEXT");
   ensureColumn(db, "papers", "cloud_paper_id", "TEXT");
+  ensureColumn(db, "paper_highlights", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "paper_highlights", "project_id", "TEXT");
   ensureColumn(db, "paper_highlights", "author_id", "TEXT");
   ensureColumn(db, "paper_highlights", "visibility", "TEXT NOT NULL DEFAULT 'project'");
@@ -1019,6 +1020,96 @@ function getPaperReader(paperId, projectId = null) {
     ORDER BY page_number ASC, created_at DESC
   `).all(paperId, resolvedProject, localIdentity.userId);
   return { asset: asset ? { ...asset, truncated: Boolean(asset.truncated) } : null, pages, highlights };
+}
+
+function listPaperHighlights(projectId, paperId = null) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) return [];
+  const rows = paperId
+    ? db.prepare("SELECT * FROM paper_highlights WHERE project_id = ? AND paper_id = ? AND (visibility = 'project' OR author_id = ?) ORDER BY page_number ASC, created_at ASC").all(projectId, paperId, localIdentity.userId)
+    : db.prepare("SELECT * FROM paper_highlights WHERE project_id = ? AND (visibility = 'project' OR author_id = ?) ORDER BY page_number ASC, created_at ASC").all(projectId, localIdentity.userId);
+  return rows;
+}
+
+function getOwnPaperReview(paperId, projectId = null) {
+  const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  return db.prepare("SELECT * FROM paper_reviews WHERE project_id = ? AND paper_id = ? AND owner_id = ?").get(resolvedProject, paperId, localIdentity.userId) || null;
+}
+
+function getOwnPaperPresentation(paperId, projectId = null) {
+  const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  return db.prepare("SELECT * FROM paper_presentations WHERE project_id = ? AND paper_id = ? AND owner_id = ?").get(resolvedProject, paperId, localIdentity.userId) || null;
+}
+
+function upsertCloudHighlight(projectId, highlight, { currentCloudUserId = "" } = {}) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) return null;
+  const paper = db.prepare("SELECT id FROM papers WHERE cloud_paper_id = ?").get(String(highlight.paper_id || ""));
+  if (!paper) return null;
+  const authorId = highlight.author_id && highlight.author_id === currentCloudUserId ? localIdentity.userId : String(highlight.author_id || "");
+  const highlightId = String(highlight.id || randomUUID());
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO paper_highlights (id, project_id, paper_id, author_id, visibility, page_number, quote, start_offset, end_offset, note, color, source, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cloud', ?, ?)
+    ON CONFLICT(id) DO UPDATE SET visibility = excluded.visibility, quote = excluded.quote, start_offset = excluded.start_offset,
+      end_offset = excluded.end_offset, note = excluded.note, color = excluded.color, source = 'cloud', updated_at = excluded.updated_at
+  `).run(
+    highlightId, projectId, paper.id, authorId,
+    highlight.visibility === "private" ? "private" : "project",
+    Number(highlight.page_number) || 1, String(highlight.quote || ""),
+    Number.isInteger(highlight.start_offset) ? highlight.start_offset : null,
+    Number.isInteger(highlight.end_offset) ? highlight.end_offset : null,
+    String(highlight.note || ""), String(highlight.color || "green"),
+    String(highlight.created_at || now), String(highlight.updated_at || now),
+  );
+  return db.prepare("SELECT * FROM paper_highlights WHERE id = ?").get(highlightId);
+}
+
+function upsertCloudReview(projectId, review, { currentCloudUserId = "" } = {}) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) return null;
+  const paper = db.prepare("SELECT id FROM papers WHERE cloud_paper_id = ?").get(String(review.paper_id || ""));
+  if (!paper) return null;
+  const ownerId = review.owner_id === currentCloudUserId ? localIdentity.userId : String(review.owner_id || "");
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO paper_reviews (id, project_id, paper_id, owner_id, visibility, review_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(project_id, paper_id, owner_id) DO UPDATE SET visibility = excluded.visibility,
+      review_json = excluded.review_json, updated_at = excluded.updated_at
+  `).run(
+    String(review.id || randomUUID()), projectId, paper.id, ownerId,
+    review.visibility === "project" ? "project" : "private",
+    typeof review.review_json === "string" ? review.review_json : JSON.stringify(review.review_json ?? {}),
+    String(review.created_at || now), String(review.updated_at || now),
+  );
+  return db.prepare("SELECT * FROM paper_reviews WHERE project_id = ? AND paper_id = ? AND owner_id = ?").get(projectId, paper.id, ownerId);
+}
+
+function upsertCloudPresentation(projectId, presentation, { currentCloudUserId = "" } = {}) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) return null;
+  const paper = db.prepare("SELECT id FROM papers WHERE cloud_paper_id = ?").get(String(presentation.paper_id || ""));
+  if (!paper) return null;
+  const ownerId = presentation.owner_id === currentCloudUserId ? localIdentity.userId : String(presentation.owner_id || "");
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO paper_presentations (id, project_id, paper_id, owner_id, visibility, presentation_json, source_review_updated_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(project_id, paper_id, owner_id) DO UPDATE SET visibility = excluded.visibility,
+      presentation_json = excluded.presentation_json, source_review_updated_at = excluded.source_review_updated_at,
+      updated_at = excluded.updated_at
+  `).run(
+    String(presentation.id || randomUUID()), projectId, paper.id, ownerId,
+    presentation.visibility === "project" ? "project" : "private",
+    typeof presentation.presentation_json === "string" ? presentation.presentation_json : JSON.stringify(presentation.presentation_json ?? {}),
+    String(presentation.source_review_updated_at || ""),
+    String(presentation.created_at || now), String(presentation.updated_at || now),
+  );
+  return db.prepare("SELECT * FROM paper_presentations WHERE project_id = ? AND paper_id = ? AND owner_id = ?").get(projectId, paper.id, ownerId);
 }
 
 const PAPER_REVIEWER_IDS = new Set(["related", "method", "experiments", "limitations"]);
@@ -2455,6 +2546,12 @@ module.exports = {
   linkPaperToCloud,
   syncPaperFromCloud,
   applyCloudPaperState,
+  listPaperHighlights,
+  getOwnPaperReview,
+  getOwnPaperPresentation,
+  upsertCloudHighlight,
+  upsertCloudReview,
+  upsertCloudPresentation,
   renameResearchProject,
   setResearchProjectWorkspace,
   createResearchThread,

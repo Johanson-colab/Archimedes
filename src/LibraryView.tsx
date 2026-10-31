@@ -316,7 +316,12 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
     try {
       const result = await bridge.syncProjectLibraries(projectId);
       setLibraries(result.libraries);
-      setCloudNotice(result.warnings?.length ? result.warnings.join(" ") : "Libraries and papers are in sync.");
+      const warnings = [...(result.warnings || [])];
+      if (typeof bridge.syncProjectAnnotations === "function") {
+        const annotations = await bridge.syncProjectAnnotations(projectId);
+        warnings.push(...(annotations.warnings || []));
+      }
+      setCloudNotice(warnings.length ? warnings.join(" ") : "Libraries, papers, and annotations are in sync.");
       onLibraryImported?.();
       if (selectedLibraryId) await loadPapers(selectedLibraryId, localQuery);
     } catch (syncError) {

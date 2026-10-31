@@ -23,6 +23,14 @@ user's JWT; RLS stays enabled and no service-role key is needed.
 - `POST /v1/libraries/{libraryId}/papers`
 - `DELETE /v1/libraries/{libraryId}/papers/{paperId}`
 - `PATCH /v1/papers/{paperId}`
+- `GET /v1/projects/{projectId}/highlights`
+- `POST /v1/projects/{projectId}/highlights`
+- `PATCH /v1/highlights/{highlightId}`
+- `DELETE /v1/highlights/{highlightId}`
+- `GET /v1/projects/{projectId}/papers/{paperId}/review`
+- `PUT /v1/projects/{projectId}/papers/{paperId}/review`
+- `GET /v1/projects/{projectId}/papers/{paperId}/presentation`
+- `PUT /v1/projects/{projectId}/papers/{paperId}/presentation`
 
 The API delegates project creation and member management to the PostgreSQL
 functions `create_project`, `add_project_member_by_email`,
@@ -60,6 +68,14 @@ one project cannot rewrite metadata already used by another project.
 
 `PATCH /v1/papers/{paperId}` writes only the caller's `paper_user_state`
 (reading status, star, notes, tags).
+
+## Annotations
+
+Highlights are project-scoped. Project-visible highlights are readable by all
+project members; private highlights only by their author. Reviews and
+presentations default to private and can be shared explicitly. The Library
+**Sync cloud** action unions local and cloud highlights and reconciles the
+current user's review/presentation by `updated_at`.
 
 ## Desktop integration
 
