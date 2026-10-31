@@ -192,6 +192,51 @@ function createCollaborationApi({ baseUrl, getToken, fetchImpl = globalThis.fetc
     async revokeShareLink(shareId) {
       return request(`/v1/share-links/${encodeURIComponent(shareId)}`, { method: "DELETE" });
     },
+    async listAgentRuns(projectId) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/runs`)).runs || [];
+    },
+    async startAgentRun(projectId, threadId, contextManifest = {}) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/runs`, {
+        method: "POST",
+        body: { thread_id: threadId, context_manifest: contextManifest },
+      })).run;
+    },
+    async getAgentRun(runId) {
+      return (await request(`/v1/runs/${encodeURIComponent(runId)}`)).run;
+    },
+    async joinAgentRun(runId, role = "observer") {
+      return (await request(`/v1/runs/${encodeURIComponent(runId)}/join`, {
+        method: "POST",
+        body: { role },
+      })).run;
+    },
+    async enqueueAgentPrompt(runId, body) {
+      return (await request(`/v1/runs/${encodeURIComponent(runId)}/prompts`, {
+        method: "POST",
+        body: { body },
+      })).run;
+    },
+    async claimAgentPrompt(runId) {
+      return (await request(`/v1/runs/${encodeURIComponent(runId)}/prompts/claim`, { method: "POST" })).prompt;
+    },
+    async finishAgentRun(runId, status) {
+      return (await request(`/v1/runs/${encodeURIComponent(runId)}`, {
+        method: "PATCH",
+        body: { status },
+      })).run;
+    },
+    async requestAgentAction(projectId, action) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/agent-actions`, {
+        method: "POST",
+        body: action,
+      })).action;
+    },
+    async resolveAgentAction(actionId, approved) {
+      return request(`/v1/agent-actions/${encodeURIComponent(actionId)}`, {
+        method: "PATCH",
+        body: { approved },
+      });
+    },
     async redeemShareLink(shareToken) {
       const response = await fetchImpl(`${baseUrl}/v1/public/shares/${encodeURIComponent(shareToken)}`);
       let payload = null;

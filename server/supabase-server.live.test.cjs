@@ -119,6 +119,24 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
     const resolved = await call(second, `/v1/comments/${comment.body.comment.id}`, "PATCH", { resolved_at: new Date().toISOString() });
     assert.equal(resolved.status, 200);
 
+    const run = await call(first, `/v1/projects/${projectId}/runs`, "POST", { thread_id: thread.body.thread.id, context_manifest: { source: "smoke" } });
+    assert.equal(run.status, 201, JSON.stringify(run.body));
+    const joined = await call(second, `/v1/runs/${run.body.run.id}/join`, "POST", { role: "co_prompt" });
+    assert.equal(joined.status, 200, JSON.stringify(joined.body));
+    assert.equal(joined.body.run.participants.length, 2);
+    const queued = await call(second, `/v1/runs/${run.body.run.id}/prompts`, "POST", { body: "Please check the baseline." });
+    assert.equal(queued.status, 201, JSON.stringify(queued.body));
+    const claimed = await call(first, `/v1/runs/${run.body.run.id}/prompts/claim`, "POST");
+    assert.equal(claimed.status, 200);
+    assert.equal(claimed.body.prompt.body, "Please check the baseline.");
+    const action = await call(first, `/v1/projects/${projectId}/agent-actions`, "POST", { run_id: run.body.run.id, kind: "write", payload: { path: "notes.md" } });
+    assert.equal(action.status, 201, JSON.stringify(action.body));
+    const approved = await call(second, `/v1/agent-actions/${action.body.action.id}`, "PATCH", { approved: true });
+    assert.equal(approved.status, 200);
+    const finished = await call(first, `/v1/runs/${run.body.run.id}`, "PATCH", { status: "completed" });
+    assert.equal(finished.status, 200);
+    assert.equal(finished.body.run.status, "completed");
+
     const share = await call(first, `/v1/projects/${projectId}/share-links`, "POST", { resource_type: "thread", resource_id: thread.body.thread.id, role: "viewer", expires_in_days: 7 });
     assert.equal(share.status, 201, JSON.stringify(share.body));
     const guest = await fetch(`${base}/v1/public/shares/${encodeURIComponent(share.body.share.token)}`);

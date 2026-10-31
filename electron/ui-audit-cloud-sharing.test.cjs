@@ -16,6 +16,7 @@ const server = read("server/supabase-server.cjs");
 const sql = read("server/sql/0004_member_management.sql");
 const share = read("src/ThreadShareModal.tsx");
 const shareSql = read("server/sql/0009_share_link_scope.sql");
+const runs = read("src/SharedRunsPanel.tsx");
 const css = read("src/styles.css");
 
 test("desktop hosts the collaboration API and exposes cloud share actions", () => {
@@ -56,6 +57,17 @@ test("thread sharing creates a scoped read-only guest link", () => {
   assert.match(bridge, /interface CloudShareLink/);
   assert.match(shareSql, /does not belong to this project/);
   assert.match(shareSql, /p_resource_type = 'thread'/);
+});
+
+test("shared agent runs expose driver, co-prompt, and approval controls", () => {
+  assert.match(main, /collab:start-agent-run/);
+  assert.match(main, /collab:claim-agent-prompt/);
+  assert.match(main, /collab:resolve-agent-action/);
+  assert.match(runs, /Start run/);
+  assert.match(runs, /Join as co-prompt/);
+  assert.match(runs, /Claim prompt/);
+  assert.match(runs, /Approve/);
+  assert.match(bridge, /interface SharedAgentRun/);
 });
 
 test("API and SQL expose member role updates and removal with role checks", () => {

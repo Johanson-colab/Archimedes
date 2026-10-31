@@ -44,6 +44,15 @@ user's JWT; RLS stays enabled and no service-role key is needed.
 - `POST /v1/projects/{projectId}/share-links`
 - `DELETE /v1/share-links/{shareId}`
 - `GET /v1/public/shares/{token}` (anonymous)
+- `GET /v1/projects/{projectId}/runs`
+- `POST /v1/projects/{projectId}/runs`
+- `GET /v1/runs/{runId}`
+- `PATCH /v1/runs/{runId}`
+- `POST /v1/runs/{runId}/join`
+- `POST /v1/runs/{runId}/prompts`
+- `POST /v1/runs/{runId}/prompts/claim`
+- `POST /v1/projects/{projectId}/agent-actions`
+- `PATCH /v1/agent-actions/{actionId}`
 
 The API delegates project creation and member management to the PostgreSQL
 functions `create_project`, `add_project_member_by_email`,
@@ -111,6 +120,15 @@ Creation requires editor+ and verifies the resource belongs to the project.
 `GET /v1/public/shares/{token}` is the only anonymous route and returns the
 read-only thread snapshot (thread, turns, events, comments) for a valid,
 unrevoked, unexpired token. The thread share dialog exposes copy/create.
+
+## Shared agent runs
+
+A run has one driver. Project members join as `co_prompt` or `observer`.
+Co-prompts are queued in `run_prompts`; only the driver can claim the next
+pending prompt atomically. Actions are requested by an editor and resolved by
+an editor/admin (`resolve_agent_action`). Agent runs use the driver’s JWT and
+never a service-role key. Settings → Members controls start/join/queue/claim,
+completion, and pending approvals.
 
 ## Presence
 

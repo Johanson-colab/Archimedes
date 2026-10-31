@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Cloud, Download, LoaderCircle, Plus, RefreshCw, Share2, Trash2, UserPlus, Users } from "lucide-react";
+import SharedRunsPanel from "./SharedRunsPanel";
 import { useUISettings } from "./i18n";
 
 type ProjectMembersPanelProps = {
   bridge: ResearchDeskBridge;
   project: ResearchProject;
+  activeThreadId?: string | null;
   onProjectsChanged?: () => Promise<void>;
 };
 
@@ -33,7 +35,7 @@ const ACTION_LABELS: Record<string, string> = {
   "comment.deleted": "Comment deleted",
 };
 
-export default function ProjectMembersPanel({ bridge, project, onProjectsChanged }: ProjectMembersPanelProps) {
+export default function ProjectMembersPanel({ bridge, project, activeThreadId, onProjectsChanged }: ProjectMembersPanelProps) {
   const { t } = useUISettings();
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [activity, setActivity] = useState<AuditEvent[]>([]);
@@ -245,6 +247,8 @@ export default function ProjectMembersPanel({ bridge, project, onProjectsChanged
         {cloudNotice && <p className="settings-group-note">{cloudNotice}</p>}
       </div>
     </section>
+
+    {cloudProjectId && <SharedRunsPanel bridge={bridge} projectId={project.id} activeThreadId={activeThreadId} />}
 
     <section className="settings-section">
       <h3 className="settings-section-title">{t("Project members")}</h3>
