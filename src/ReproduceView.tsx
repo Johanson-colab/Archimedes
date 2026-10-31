@@ -303,11 +303,6 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           </section>
         </div>
 
-        {contract.notes.length > 0 && <details className="reproduce-notes">
-          <summary>Planner notes · {contract.notes.length}</summary>
-          <ul>{(contract.notes ?? []).map((note) => <li key={note}>{note}</li>)}</ul>
-        </details>}
-
         <footer className="reproduce-footer">
           <button className="secondary-button" disabled={busy !== ""} onClick={() => void plan()}>
             {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Re-plan
