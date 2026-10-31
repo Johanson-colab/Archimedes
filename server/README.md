@@ -48,6 +48,11 @@ docker compose -f server/docker-compose.yml up --build
 The image sets `DEV_AUTH=false`; replace dev sessions with an OIDC/auth
 provider before exposing the service.
 
+## Supabase API
+
+See [`docs/collaboration-api.md`](../docs/collaboration-api.md) and run
+`npm run server:supabase`.
+
 ## Production gaps
 
 - Real login/OIDC, email delivery, invites, token expiry/rotation
