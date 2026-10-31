@@ -2,9 +2,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SETTINGS_FILE = "workbench-settings.json";
-const PREFERENCES_VERSION = 2;
-const TAB_IDS = ["journey", "trajectory", "files", "changes", "notes", "terminal", "browser"];
-const OPTIONAL_TAB_IDS = ["browser"];
+const PREFERENCES_VERSION = 3;
+const TAB_IDS = ["journey", "trajectory", "files", "changes", "artifacts", "notes", "terminal", "browser"];
+const OPTIONAL_TAB_IDS = ["artifacts", "browser"];
 const DEFAULT_ORDER = [...TAB_IDS];
 const TAB_ID_SET = new Set(TAB_IDS);
 
@@ -36,7 +36,10 @@ function normalize(input = {}) {
     hidden.push(value);
   }
   if (version < PREFERENCES_VERSION) {
-    for (const id of OPTIONAL_TAB_IDS) {
+    // v2 added Browser; v3 added Artifacts. Migration should hide only the
+    // newly introduced tab, never re-hide a tab the user explicitly enabled.
+    const newlyHidden = version < 2 ? OPTIONAL_TAB_IDS : ["artifacts"];
+    for (const id of newlyHidden) {
       if (order.includes(id) && !hidden.includes(id)) hidden.push(id);
     }
   }

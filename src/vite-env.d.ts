@@ -18,6 +18,10 @@ interface ResearchDeskBridge {
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
     listWorkspaceFiles: (workspace: string, directory?: string) => Promise<WorkspaceFileTree>;
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
+    listArtifacts: (threadId: string) => Promise<ResearchArtifact[]>;
+    markArtifactsSeen: (threadId: string) => Promise<{ marked: number }>;
+    countUnseenArtifacts: (threadId: string) => Promise<number>;
+    deleteArtifact: (id: string) => Promise<{ deleted: boolean }>;
     writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
     listLatexProjects: (workspace: string) => Promise<LatexProjectSummary[]>;
     createLatexProject: (workspace: string, directory?: string, template?: string) => Promise<WorkspaceFilePreview>;
@@ -158,6 +162,22 @@ interface WorkspaceFileTree {
   entries: WorkspaceFileEntry[];
   count: number;
   truncated: boolean;
+}
+
+interface ResearchArtifact {
+  id: string;
+  thread_id: string;
+  turn_id: string | null;
+  path: string;
+  title: string;
+  kind: "image" | "pdf" | "csv" | "json" | "markdown" | "html" | "svg" | "text" | "other";
+  size_bytes: number;
+  modified_at: string;
+  version: number;
+  source: "agent" | "run" | "change-set";
+  created_at: string;
+  updated_at: string;
+  seen: boolean;
 }
 
 interface WorkspaceFilePreview {
@@ -761,7 +781,7 @@ interface PublicModelConfig {
 type ProactiveObservationAction =
   | { kind: "insert"; label: string; text: string }
   | { kind: "copy"; label: string; text: string }
-  | { kind: "open"; label: string; target: "chat" | "library" | "daily" | "writing" | "artifacts" };
+  | { kind: "open"; label: string; target: "chat" | "library" | "daily" | "writing" | "files" };
 
 interface ProactiveObservationResult {
   shouldSuggest: true;
@@ -838,7 +858,7 @@ interface AgentRunResult {
 }
 
 interface AgentEvent {
-  type: "status" | "tool" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted";
   title: string;
   detail: string;
   threadId?: string;

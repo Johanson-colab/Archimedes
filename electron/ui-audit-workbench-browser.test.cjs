@@ -21,13 +21,13 @@ test("Browser is an optional workbench tab that starts hidden", () => {
   assert.match(tabs, /optional: true/);
   assert.match(tabs, /OPTIONAL_WORKBENCH_TAB_IDS/);
   assert.match(tabs, /hidden: \[\.\.\.OPTIONAL_WORKBENCH_TAB_IDS\]/);
-  assert.match(tabs, /WORKBENCH_PREFERENCES_VERSION = 2/);
+  assert.match(tabs, /WORKBENCH_PREFERENCES_VERSION = 3/);
   assert.match(tabs, /if \(version < WORKBENCH_PREFERENCES_VERSION\)/);
-  assert.match(workbenchSettings, /OPTIONAL_TAB_IDS = \["browser"\]/);
-  assert.match(workbenchSettings, /PREFERENCES_VERSION = 2/);
-  assert.match(settingsPanel, /workbench-settings-tag/);
-  assert.match(i18n, /"Optional": "可选"/);
-  assert.match(read("src/RightWorkbench.tsx"), /!workbenchTabDefinition\(id\)\.optional/);
+  assert.match(workbenchSettings, /OPTIONAL_TAB_IDS = \["artifacts", "browser"\]/);
+  assert.match(workbenchSettings, /PREFERENCES_VERSION = 3/);
+  assert.doesNotMatch(settingsPanel, /workbench-settings-tag/);
+  assert.doesNotMatch(settingsPanel, /Optional/);
+  assert.match(read("src/RightWorkbench.tsx"), /preferences\.order\.filter\(\(id\) => preferences\.hidden\.includes\(id\)\)/);
 });
 
 test("Browser panel is mounted only after its tab is opened", () => {

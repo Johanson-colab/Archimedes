@@ -694,6 +694,11 @@ app.whenReady().then(() => {
     return file;
   });
 
+  ipcMain.handle("artifacts:list", (_event, input = {}) => store.listArtifacts(input.threadId));
+  ipcMain.handle("artifacts:mark-seen", (_event, input = {}) => store.markArtifactsSeen(input.threadId));
+  ipcMain.handle("artifacts:unseen-count", (_event, input = {}) => store.countUnseenArtifacts(input.threadId));
+  ipcMain.handle("artifacts:delete", (_event, id) => store.deleteArtifact(id));
+
   ipcMain.handle("paper:list-projects", (_event, input = {}) => {
     return latexWorkspace.listLatexProjects(resolveWorkspace(input.workspace));
   });

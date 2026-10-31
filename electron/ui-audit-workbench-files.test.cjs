@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const app = read("src/App.tsx");
 const css = read("src/styles.css");
-const editor = read("src/ArtifactCodeEditor.tsx");
+const editor = read("src/FileCodeEditor.tsx");
 const i18n = read("src/i18n.tsx");
 const settings = read("src/SettingsModal.tsx");
 
@@ -18,7 +18,7 @@ test("workbench and full editor share the tabbed file shell", () => {
   assert.match(app, /artifact-browser-heading/);
   assert.match(app, /mainSection === "writing" \? t\("Paper writing"\) : t\("Files"\)/);
   assert.match(app, /artifact-workbench-body split/);
-  assert.doesNotMatch(app, /className="artifacts-page"/);
+  assert.doesNotMatch(app, /className="files-page"/);
   assert.doesNotMatch(app, /Browse the active folder and inspect files created or changed by Archimedes/);
   assert.match(css, /\.artifact-editor-pane\.compact \{ position: relative; \}/);
   assert.match(css, /\.artifact-tabs-row \{[\s\S]*?height: 38px;/);

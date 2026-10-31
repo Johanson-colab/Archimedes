@@ -9,22 +9,25 @@ const settings = require("./workbench-settings.cjs");
 test("workbench settings normalize unknown and duplicate tabs", () => {
   const normalized = settings.normalize({ order: ["notes", "notes", "unknown"], hidden: ["all"] });
   assert.deepEqual(normalized.order.slice(0, 2), ["notes", "journey"]);
-  assert.equal(new Set(normalized.order).size, 7);
-  assert.deepEqual(normalized.hidden, ["browser"]);
+  assert.equal(new Set(normalized.order).size, 8);
+  assert.deepEqual(normalized.hidden, ["artifacts", "browser"]);
 });
 
 test("workbench settings hide optional tabs by default and keep explicit choices", () => {
   const migrated = settings.normalize({ version: 1, order: ["journey", "terminal"], hidden: [] });
   assert.equal(migrated.version, settings.PREFERENCES_VERSION);
-  assert.deepEqual(migrated.hidden, ["browser"]);
+  assert.deepEqual(migrated.hidden, ["artifacts", "browser"]);
 
-  const enabled = settings.normalize({ version: settings.PREFERENCES_VERSION, order: ["journey", "browser"], hidden: [] });
+  const enabled = settings.normalize({ version: settings.PREFERENCES_VERSION, order: ["journey", "browser", "artifacts"], hidden: [] });
   assert.deepEqual(enabled.hidden, []);
+
+  const v2BrowserEnabled = settings.normalize({ version: 2, order: ["journey", "browser"], hidden: [] });
+  assert.deepEqual(v2BrowserEnabled.hidden, ["artifacts"]);
 });
 
 test("workbench settings always keep one tab visible", () => {
-  const normalized = settings.normalize({ hidden: ["journey", "trajectory", "files", "changes", "notes", "terminal", "browser"] });
-  assert.equal(normalized.hidden.length, 6);
+  const normalized = settings.normalize({ hidden: ["journey", "trajectory", "files", "changes", "artifacts", "notes", "terminal", "browser"] });
+  assert.equal(normalized.hidden.length, 7);
   assert.ok(normalized.order.some((id) => !normalized.hidden.includes(id)));
 });
 
@@ -40,7 +43,7 @@ test("workbench settings persist and reset", () => {
 
     const reset = settings.resetWorkbenchSettings();
     assert.equal(reset.order[0], "journey");
-    assert.deepEqual(reset.hidden, ["browser"]);
+    assert.deepEqual(reset.hidden, ["artifacts", "browser"]);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

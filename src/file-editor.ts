@@ -1,31 +1,31 @@
-export type ArtifactLineEnding = "\n" | "\r\n";
+export type FileLineEnding = "\n" | "\r\n";
 
-export interface ArtifactDraft {
+export interface FileDraft {
   path: string;
   content: string;
   savedContent: string;
-  lineEnding: ArtifactLineEnding;
+  lineEnding: FileLineEnding;
   modifiedAt: string;
 }
 
-export interface ArtifactSelection {
+export interface FileSelection {
   startLine: number;
   endLine: number;
   excerpt: string;
 }
 
-export interface ArtifactComment extends ArtifactSelection {
+export interface FileComment extends FileSelection {
   path: string;
   body: string;
 }
 
-export const MAX_EDITABLE_ARTIFACT_BYTES = 2_000_000;
+export const MAX_EDITABLE_FILE_BYTES = 2_000_000;
 
-export function isEditableArtifact(file: Pick<WorkspaceFilePreview, "kind" | "size"> | null | undefined) {
-  return Boolean(file && (file.kind === "text" || file.kind === "markdown") && file.size <= MAX_EDITABLE_ARTIFACT_BYTES);
+export function isEditableFile(file: Pick<WorkspaceFilePreview, "kind" | "size"> | null | undefined) {
+  return Boolean(file && (file.kind === "text" || file.kind === "markdown") && file.size <= MAX_EDITABLE_FILE_BYTES);
 }
 
-export function detectLineEnding(content: string): ArtifactLineEnding {
+export function detectLineEnding(content: string): FileLineEnding {
   return content.includes("\r\n") ? "\r\n" : "\n";
 }
 
@@ -33,12 +33,12 @@ export function toEditorText(content: string) {
   return content.replace(/\r\n?/g, "\n");
 }
 
-export function fromEditorText(content: string, lineEnding: ArtifactLineEnding) {
+export function fromEditorText(content: string, lineEnding: FileLineEnding) {
   return lineEnding === "\r\n" ? content.replace(/\r?\n/g, "\r\n") : content.replace(/\r\n?/g, "\n");
 }
 
-export function createArtifactDraft(file: WorkspaceFilePreview): ArtifactDraft | null {
-  if (!isEditableArtifact(file) || typeof file.content !== "string") return null;
+export function createFileDraft(file: WorkspaceFilePreview): FileDraft | null {
+  if (!isEditableFile(file) || typeof file.content !== "string") return null;
   const content = toEditorText(file.content);
   return {
     path: file.path,
@@ -49,11 +49,11 @@ export function createArtifactDraft(file: WorkspaceFilePreview): ArtifactDraft |
   };
 }
 
-export function isDraftDirty(draft: ArtifactDraft | null | undefined) {
+export function isDraftDirty(draft: FileDraft | null | undefined) {
   return Boolean(draft && draft.content !== draft.savedContent);
 }
 
-export function prepareArtifactContent(draft: ArtifactDraft) {
+export function prepareFileContent(draft: FileDraft) {
   return fromEditorText(draft.content, draft.lineEnding);
 }
 
@@ -67,10 +67,10 @@ export interface RefreshedArtifactFiles {
  * whose baseline no longer matches the file on disk is reported as a conflict
  * instead of silently replacing the user's edits.
  */
-export function mergeRefreshedArtifactFiles(
+export function mergeRefreshedFiles(
   openFiles: WorkspaceFilePreview[],
   refreshedFiles: WorkspaceFilePreview[],
-  drafts: Record<string, ArtifactDraft>,
+  drafts: Record<string, FileDraft>,
   savingPaths: ReadonlySet<string> = new Set(),
 ): RefreshedArtifactFiles {
   const refreshedByPath = new Map(refreshedFiles.map((file) => [file.path, file]));
@@ -88,7 +88,7 @@ export function mergeRefreshedArtifactFiles(
   return { files, conflicts };
 }
 
-export function markDraftSaved(draft: ArtifactDraft, savedContent: string, modifiedAt: string): ArtifactDraft {
+export function markDraftSaved(draft: FileDraft, savedContent: string, modifiedAt: string): FileDraft {
   return {
     ...draft,
     savedContent,
@@ -96,7 +96,7 @@ export function markDraftSaved(draft: ArtifactDraft, savedContent: string, modif
   };
 }
 
-export function formatArtifactComment(comment: ArtifactComment) {
+export function formatFileComment(comment: FileComment) {
   const range = comment.startLine === comment.endLine
     ? `line ${comment.startLine}`
     : `lines ${comment.startLine}-${comment.endLine}`;

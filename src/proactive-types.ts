@@ -59,7 +59,7 @@ export type ProactiveAction =
   | {
       kind: "open";
       label: string;
-      target: "chat" | "library" | "daily" | "writing" | "artifacts";
+      target: "chat" | "library" | "daily" | "writing" | "files";
       undo?: { label: string; token?: string };
     }
   | {
