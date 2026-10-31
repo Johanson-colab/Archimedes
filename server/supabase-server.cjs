@@ -1,6 +1,7 @@
 const http = require("node:http");
 const { createHash, randomBytes, randomUUID } = require("node:crypto");
 const { createClient } = require("@supabase/supabase-js");
+const Y = require("yjs");
 
 function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
   if (!supabaseUrl || !publishableKey) throw new Error("Supabase URL and publishable key are required.");
@@ -398,6 +399,51 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
             : await supabase.from(table).insert({ ...row, id: randomUUID() }).select("*").single();
           if (result.error) throw apiError(result.error);
           return send(res, 200, { [kind]: result.data });
+        }
+      }
+
+      const documentMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/documents\/(.+)$/);
+      if (documentMatch) {
+        const projectId = documentMatch[1];
+        const docKey = decodeURIComponent(documentMatch[2]);
+        if (!docKey || docKey.length > 200) throw Object.assign(new Error("Invalid document key."), { status: 400 });
+        if (method === "GET") {
+          const { data, error } = await supabase.from("shared_documents")
+            .select("doc_key, state_base64, version, updated_at")
+            .eq("project_id", projectId).eq("doc_key", docKey).maybeSingle();
+          if (error) throw apiError(error);
+          return send(res, 200, {
+            document: data ? { key: data.doc_key, state: data.state_base64, version: data.version, updated_at: data.updated_at } : null,
+          });
+        }
+        if (method === "POST") {
+          const body = await readBody(req);
+          const update = String(body.update || "");
+          if (!update) throw Object.assign(new Error("A Yjs update is required."), { status: 400 });
+          let updateBytes;
+          try { updateBytes = Buffer.from(update, "base64"); } catch { throw Object.assign(new Error("Invalid Yjs update."), { status: 400 }); }
+          for (let attempt = 0; attempt < 4; attempt += 1) {
+            const { data: current, error: readError } = await supabase.from("shared_documents")
+              .select("state_base64, version").eq("project_id", projectId).eq("doc_key", docKey).maybeSingle();
+            if (readError) throw apiError(readError);
+            const doc = new Y.Doc();
+            if (current?.state_base64) Y.applyUpdate(doc, Buffer.from(current.state_base64, "base64"));
+            Y.applyUpdate(doc, updateBytes);
+            const merged = Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
+            const { data, error } = await supabase.rpc("upsert_shared_document", {
+              p_project: projectId,
+              p_key: docKey,
+              p_state_base64: merged,
+              p_expected_version: Number(current?.version) || 0,
+            });
+            if (!error) {
+              return send(res, 200, {
+                document: { key: docKey, state: data.state_base64, version: data.version, updated_at: data.updated_at },
+              });
+            }
+            if (error.code !== "40001" && !/retry/i.test(error.message || "")) throw apiError(error);
+          }
+          throw Object.assign(new Error("The shared document changed repeatedly; reload and retry."), { status: 409 });
         }
       }
 

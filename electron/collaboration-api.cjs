@@ -192,6 +192,15 @@ function createCollaborationApi({ baseUrl, getToken, fetchImpl = globalThis.fetc
     async revokeShareLink(shareId) {
       return request(`/v1/share-links/${encodeURIComponent(shareId)}`, { method: "DELETE" });
     },
+    async getSharedDocument(projectId, docKey) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(docKey)}`)).document;
+    },
+    async applySharedDocumentUpdate(projectId, docKey, update) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(docKey)}`, {
+        method: "POST",
+        body: { update },
+      })).document;
+    },
     async listAgentRuns(projectId) {
       return (await request(`/v1/projects/${encodeURIComponent(projectId)}/runs`)).runs || [];
     },

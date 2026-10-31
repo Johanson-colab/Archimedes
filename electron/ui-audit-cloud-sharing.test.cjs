@@ -17,6 +17,8 @@ const sql = read("server/sql/0004_member_management.sql");
 const share = read("src/ThreadShareModal.tsx");
 const shareSql = read("server/sql/0009_share_link_scope.sql");
 const runs = read("src/SharedRunsPanel.tsx");
+const note = read("src/SharedNoteEditor.tsx");
+const pkg = JSON.parse(read("package.json"));
 const css = read("src/styles.css");
 
 test("desktop hosts the collaboration API and exposes cloud share actions", () => {
@@ -57,6 +59,16 @@ test("thread sharing creates a scoped read-only guest link", () => {
   assert.match(bridge, /interface CloudShareLink/);
   assert.match(shareSql, /does not belong to this project/);
   assert.match(shareSql, /p_resource_type = 'thread'/);
+});
+
+test("shared project note is a CRDT document with optimistic updates", () => {
+  assert.match(main, /collab:get-shared-document/);
+  assert.match(main, /collab:apply-shared-document/);
+  assert.match(note, /new Y\.Doc\(\)/);
+  assert.match(note, /Y\.applyUpdate/);
+  assert.match(note, /applySharedDocumentUpdate/);
+  assert.match(bridge, /interface SharedDocument/);
+  assert.ok(pkg.dependencies.yjs);
 });
 
 test("shared agent runs expose driver, co-prompt, and approval controls", () => {

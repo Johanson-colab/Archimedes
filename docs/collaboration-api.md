@@ -44,6 +44,8 @@ user's JWT; RLS stays enabled and no service-role key is needed.
 - `POST /v1/projects/{projectId}/share-links`
 - `DELETE /v1/share-links/{shareId}`
 - `GET /v1/public/shares/{token}` (anonymous)
+- `GET /v1/projects/{projectId}/documents/{key}`
+- `POST /v1/projects/{projectId}/documents/{key}` (Yjs update)
 - `GET /v1/projects/{projectId}/runs`
 - `POST /v1/projects/{projectId}/runs`
 - `GET /v1/runs/{runId}`
@@ -120,6 +122,14 @@ Creation requires editor+ and verifies the resource belongs to the project.
 `GET /v1/public/shares/{token}` is the only anonymous route and returns the
 read-only thread snapshot (thread, turns, events, comments) for a valid,
 unrevoked, unexpired token. The thread share dialog exposes copy/create.
+
+## CRDT shared notes
+
+`shared_documents` stores a base64 Yjs state per project/key. The API applies
+submitted Yjs updates, merges them into the current state, and writes with an
+optimistic version (`upsert_shared_document`, retrying conflicts). Settings →
+Members exposes a shared project note that uses `Y.Doc` in the renderer and
+polls every two seconds; presence is separate. Only editor+ can write.
 
 ## Shared agent runs
 

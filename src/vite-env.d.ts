@@ -24,6 +24,8 @@ interface ResearchDeskBridge {
     syncProjectLibraries: (projectId: string) => Promise<CloudLibrarySyncResult>;
     syncProjectAnnotations: (projectId: string) => Promise<CloudAnnotationSyncResult>;
     syncProjectThreads: (projectId: string) => Promise<CloudThreadSyncResult>;
+    getSharedDocument: (projectId: string, key: string) => Promise<SharedDocument | null>;
+    applySharedDocumentUpdate: (projectId: string, key: string, update: string) => Promise<SharedDocument>;
     listAgentRuns: (projectId: string) => Promise<SharedAgentRun[]>;
     startAgentRun: (projectId: string, threadId: string, contextManifest?: Record<string, unknown>) => Promise<SharedAgentRun>;
     joinAgentRun: (runId: string, role?: "co_prompt" | "observer") => Promise<SharedAgentRun>;
@@ -903,6 +905,13 @@ interface CloudShareLink {
   url: string;
   role: "viewer" | "commenter";
   expires_at: string;
+}
+
+interface SharedDocument {
+  key: string;
+  state: string;
+  version: number;
+  updated_at: string;
 }
 
 interface SharedRunParticipant {

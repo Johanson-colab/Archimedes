@@ -72,6 +72,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   syncProjectLibraries: (projectId) => ipcRenderer.invoke("collab:sync-libraries", { projectId }),
   syncProjectAnnotations: (projectId) => ipcRenderer.invoke("collab:sync-annotations", { projectId }),
   syncProjectThreads: (projectId) => ipcRenderer.invoke("collab:sync-threads", { projectId }),
+  getSharedDocument: (projectId, key) => ipcRenderer.invoke("collab:get-shared-document", { projectId, key }),
+  applySharedDocumentUpdate: (projectId, key, update) => ipcRenderer.invoke("collab:apply-shared-document", { projectId, key, update }),
   listAgentRuns: (projectId) => ipcRenderer.invoke("collab:list-agent-runs", { projectId }),
   startAgentRun: (projectId, threadId, contextManifest) => ipcRenderer.invoke("collab:start-agent-run", { projectId, threadId, contextManifest }),
   joinAgentRun: (runId, role = "observer") => ipcRenderer.invoke("collab:join-agent-run", { runId, role }),

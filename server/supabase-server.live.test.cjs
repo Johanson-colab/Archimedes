@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const test = require("node:test");
+const Y = require("yjs");
 const { createSupabaseServer } = require("./supabase-server.cjs");
 
 const config = require("../shared/supabase-config.json");
@@ -9,6 +10,10 @@ const password = process.env.SUPABASE_TEST_PASSWORD;
 const email2 = process.env.SUPABASE_TEST_EMAIL_2;
 const password2 = process.env.SUPABASE_TEST_PASSWORD_2;
 const enabled = Boolean(email && password && email2 && password2 && process.env.SUPABASE_LIVE_TESTS === "1");
+
+function encodeUpdate(doc) {
+  return Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
+}
 
 async function signIn(address, pass) {
   const response = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
@@ -118,6 +123,30 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
     assert.equal(commentsForFirst.body.comments[0].body, "Looks good");
     const resolved = await call(second, `/v1/comments/${comment.body.comment.id}`, "PATCH", { resolved_at: new Date().toISOString() });
     assert.equal(resolved.status, 200);
+
+    const emptyDocument = await call(first, `/v1/projects/${projectId}/documents/project-notes`);
+    assert.equal(emptyDocument.status, 200);
+    assert.equal(emptyDocument.body.document, null);
+    const firstDoc = new Y.Doc();
+    firstDoc.getText("text").insert(0, "Hello");
+    const firstUpdate = await call(first, `/v1/projects/${projectId}/documents/project-notes`, "POST", { update: encodeUpdate(firstDoc) });
+    assert.equal(firstUpdate.status, 200, JSON.stringify(firstUpdate.body));
+    const current = firstUpdate.body.document;
+    const docA = new Y.Doc();
+    Y.applyUpdate(docA, Buffer.from(current.state, "base64"));
+    docA.getText("text").insert(5, " A");
+    const docB = new Y.Doc();
+    Y.applyUpdate(docB, Buffer.from(current.state, "base64"));
+    docB.getText("text").insert(5, " B");
+    const updateA = await call(first, `/v1/projects/${projectId}/documents/project-notes`, "POST", { update: encodeUpdate(docA) });
+    assert.equal(updateA.status, 200, JSON.stringify(updateA.body));
+    const updateB = await call(second, `/v1/projects/${projectId}/documents/project-notes`, "POST", { update: encodeUpdate(docB) });
+    assert.equal(updateB.status, 200, JSON.stringify(updateB.body));
+    const merged = await call(second, `/v1/projects/${projectId}/documents/project-notes`);
+    const mergedDoc = new Y.Doc();
+    Y.applyUpdate(mergedDoc, Buffer.from(merged.body.document.state, "base64"));
+    assert.match(mergedDoc.getText("text").toString(), /A/);
+    assert.match(mergedDoc.getText("text").toString(), /B/);
 
     const run = await call(first, `/v1/projects/${projectId}/runs`, "POST", { thread_id: thread.body.thread.id, context_manifest: { source: "smoke" } });
     assert.equal(run.status, 201, JSON.stringify(run.body));

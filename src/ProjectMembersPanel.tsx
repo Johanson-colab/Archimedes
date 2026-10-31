@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Cloud, Download, LoaderCircle, Plus, RefreshCw, Share2, Trash2, UserPlus, Users } from "lucide-react";
 import SharedRunsPanel from "./SharedRunsPanel";
+import SharedNoteEditor from "./SharedNoteEditor";
 import { useUISettings } from "./i18n";
 
 type ProjectMembersPanelProps = {
@@ -248,6 +249,7 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
       </div>
     </section>
 
+    {cloudProjectId && <SharedNoteEditor bridge={bridge} projectId={project.id} />}
     {cloudProjectId && <SharedRunsPanel bridge={bridge} projectId={project.id} activeThreadId={activeThreadId} />}
 
     <section className="settings-section">
