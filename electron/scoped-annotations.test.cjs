@@ -69,13 +69,14 @@ test("highlights are project-scoped and support private visibility", () => {
 test("paper reading state is per user, while paper metadata remains shared", () => {
   const { root, projectA, paper } = setup();
   try {
+    store.addProjectMember({ projectId: projectA.id, userId: "usr_reader_a", role: "editor", displayName: "Reader A" });
+    store.addProjectMember({ projectId: projectA.id, userId: "usr_reader_b", role: "editor", displayName: "Reader B" });
     store.setLocalIdentity({ userId: "usr_reader_a", displayName: "Reader A" });
     store.updatePaper(paper.id, { starred: true, notes: "A private note", tags: ["a"] });
     assert.equal(store.getPaper(paper.id).starred, true);
     assert.equal(store.getPaper(paper.id).notes, "A private note");
 
     store.setLocalIdentity({ userId: "usr_reader_b", displayName: "Reader B" });
-    store.addProjectMember({ projectId: projectA.id, userId: "usr_reader_b", role: "editor", displayName: "Reader B" });
     assert.equal(store.getPaper(paper.id).starred, false);
     assert.equal(store.getPaper(paper.id).notes, "");
     assert.equal(store.getPaper(paper.id).title, "Shared paper");

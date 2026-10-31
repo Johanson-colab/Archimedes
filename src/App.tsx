@@ -347,6 +347,8 @@ const previewArchivedProjects: ResearchProject[] = [];
 const previewThreads: ResearchThreadDetail[] = [];
 const previewThreadSnapshots: Array<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }> = [];
 const previewComments: ResearchComment[] = [];
+const previewProjectMembers: ProjectMember[] = [{ project_id: "preview-general", user_id: "usr_preview_local", role: "owner", joined_at: new Date("2026-01-01T00:00:00.000Z").toISOString(), invited_by: null, display_name: "Local researcher", email: "", avatar_color: "" }];
+const previewAuditEvents: AuditEvent[] = [];
 const previewArchivedThreads: ResearchThreadDetail[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
 const previewActions: AgentAction[] = [];
@@ -537,6 +539,24 @@ const previewBridge = {
     }
     return { deleted: true };
   },
+  listProjectMembers: async (projectId: string) => structuredClone(previewProjectMembers.filter((member) => member.project_id === projectId)),
+  addProjectMember: async (input: { projectId: string; userId: string; role?: ProjectMember["role"]; displayName?: string; email?: string }) => {
+    const member: ProjectMember = { project_id: input.projectId, user_id: input.userId, role: input.role || "commenter", joined_at: new Date().toISOString(), invited_by: previewLocalIdentity.userId, display_name: input.displayName || input.userId, email: input.email || "", avatar_color: "" };
+    previewProjectMembers.push(member);
+    return structuredClone(member);
+  },
+  updateProjectMemberRole: async (projectId: string, userId: string, role: ProjectMember["role"]) => {
+    const member = previewProjectMembers.find((candidate) => candidate.project_id === projectId && candidate.user_id === userId);
+    if (!member || member.role === "owner") return member ? structuredClone(member) : null;
+    member.role = role;
+    return structuredClone(member);
+  },
+  removeProjectMember: async (projectId: string, userId: string) => {
+    const index = previewProjectMembers.findIndex((member) => member.project_id === projectId && member.user_id === userId && member.role !== "owner");
+    if (index >= 0) previewProjectMembers.splice(index, 1);
+    return { removed: index >= 0 };
+  },
+  listAuditEvents: async (projectId?: string | null) => structuredClone([...previewAuditEvents].reverse()),
   listComments: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; includeResolved?: boolean }) => structuredClone(previewComments.filter((comment) => comment.resource_type === input.resourceType && comment.resource_id === input.resourceId && (input.includeResolved !== false || !comment.resolved_at))),
   createComment: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => {
     const now = new Date().toISOString();
@@ -2698,6 +2718,7 @@ function App() {
         onObserveProactive={proactive.observeOnce}
         identity={localIdentity}
         onSaveIdentity={saveLocalIdentity}
+        activeProject={activeProject}
       />
       {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
         bridge={desktopBridge}
