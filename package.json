@@ -21,7 +21,8 @@
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "postinstall": "npm run rebuild:native",
     "server:start": "node server/index.cjs",
-    "server:test": "node --test server/*.test.cjs"
+    "server:test": "node --test server/*.test.cjs",
+    "server:supabase": "node server/index-supabase.cjs"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
