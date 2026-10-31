@@ -41,6 +41,75 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
     return Object.assign(new Error(message), { status });
   }
 
+  function libraryResponse(row) {
+    return {
+      id: row.id,
+      project_id: row.project_id,
+      name: row.name,
+      description: row.description,
+      color: row.color,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      paper_count: Number(row.paper_count?.[0]?.count) || 0,
+    };
+  }
+
+  function paperResponse(row, item = {}, state = null) {
+    return {
+      id: row.id,
+      canonical_key: row.canonical_key,
+      title: row.title,
+      authors: Array.isArray(row.authors_json) ? row.authors_json : [],
+      authors_json: row.authors_json || [],
+      year: row.year,
+      venue: row.venue,
+      abstract: row.abstract,
+      url: row.url,
+      pdf_url: row.pdf_url,
+      doi: row.doi,
+      arxiv_id: row.arxiv_id,
+      s2_id: row.s2_id,
+      source: row.source,
+      citation_count: row.citation_count,
+      github_url: row.github_url,
+      github_stars: row.github_stars,
+      conference: row.conference_json || null,
+      conference_json: row.conference_json || null,
+      added_at: item.added_at || row.created_at,
+      note: item.note || "",
+      reading_status: state?.reading_status || "unread",
+      starred: Boolean(state?.starred),
+      notes: state?.notes || "",
+      tags: Array.isArray(state?.tags_json) ? state.tags_json : [],
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  async function listLibraryPapers(supabase, libraryId, userId) {
+    const { data: items, error } = await supabase
+      .from("library_items")
+      .select("item_id, note, added_at")
+      .eq("library_id", libraryId)
+      .eq("item_type", "paper")
+      .order("added_at", { ascending: false });
+    if (error) throw apiError(error);
+    const ids = (items || []).map((item) => item.item_id);
+    if (!ids.length) return [];
+    const [{ data: papers, error: paperError }, { data: states, error: stateError }] = await Promise.all([
+      supabase.from("papers").select("*").in("id", ids),
+      supabase.from("paper_user_state").select("*").eq("user_id", userId).in("paper_id", ids),
+    ]);
+    if (paperError) throw apiError(paperError);
+    if (stateError) throw apiError(stateError);
+    const paperById = new Map((papers || []).map((paper) => [paper.id, paper]));
+    const stateById = new Map((states || []).map((state) => [state.paper_id, state]));
+    return items.flatMap((item) => {
+      const paper = paperById.get(item.item_id);
+      return paper ? [paperResponse(paper, item, stateById.get(paper.id))] : [];
+    });
+  }
+
   async function projectResponse(supabase, projectId) {
     const { data, error } = await supabase
       .from("projects")
@@ -97,6 +166,132 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
         const { data: projectId, error } = await supabase.rpc("create_project", { p_name: name, p_description: String(body.description || "").slice(0, 500) });
         if (error) throw apiError(error);
         return send(res, 201, { project: await projectResponse(supabase, projectId) });
+      }
+
+      const projectLibrariesMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/libraries$/);
+      if (projectLibrariesMatch) {
+        const projectId = projectLibrariesMatch[1];
+        if (method === "GET") {
+          const { data, error } = await supabase
+            .from("libraries")
+            .select("id, project_id, name, description, color, created_at, updated_at, paper_count:library_items(count)")
+            .eq("project_id", projectId)
+            .order("updated_at", { ascending: false });
+          if (error) throw apiError(error);
+          return send(res, 200, { libraries: (data || []).map(libraryResponse) });
+        }
+        if (method === "POST") {
+          const body = await readBody(req);
+          const name = String(body.name || "").trim();
+          if (!name || name.length > 100) throw Object.assign(new Error("A library name of at most 100 characters is required."), { status: 400 });
+          const { data, error } = await supabase.from("libraries").insert({
+            project_id: projectId,
+            name,
+            description: String(body.description || "").slice(0, 500),
+            color: String(body.color || "#3973c8").slice(0, 32),
+          }).select("id, project_id, name, description, color, created_at, updated_at").single();
+          if (error) throw apiError(error);
+          return send(res, 201, { library: { ...data, paper_count: 0 } });
+        }
+      }
+
+      const libraryMatch = url.pathname.match(/^\/v1\/libraries\/([^/]+)$/);
+      if (libraryMatch) {
+        const libraryId = libraryMatch[1];
+        if (method === "PATCH") {
+          const body = await readBody(req);
+          const patch = {};
+          if (typeof body.name === "string") {
+            if (!body.name.trim() || body.name.trim().length > 100) throw Object.assign(new Error("A library name of at most 100 characters is required."), { status: 400 });
+            patch.name = body.name.trim();
+          }
+          if (typeof body.description === "string") patch.description = body.description.slice(0, 500);
+          if (typeof body.color === "string") patch.color = body.color.slice(0, 32);
+          patch.updated_at = new Date().toISOString();
+          const { data, error } = await supabase.from("libraries").update(patch).eq("id", libraryId)
+            .select("id, project_id, name, description, color, created_at, updated_at").single();
+          if (error) throw apiError(error);
+          return send(res, 200, { library: { ...data, paper_count: 0 } });
+        }
+        if (method === "DELETE") {
+          const { error } = await supabase.from("libraries").delete().eq("id", libraryId);
+          if (error) throw apiError(error);
+          return send(res, 200, { deleted: true });
+        }
+      }
+
+      const libraryPapersMatch = url.pathname.match(/^\/v1\/libraries\/([^/]+)\/papers(?:\/([^/]+))?$/);
+      if (libraryPapersMatch) {
+        const libraryId = libraryPapersMatch[1];
+        const paperId = libraryPapersMatch[2];
+        if (!paperId && method === "GET") {
+          return send(res, 200, { papers: await listLibraryPapers(supabase, libraryId, user.id) });
+        }
+        if (!paperId && method === "POST") {
+          const body = await readBody(req);
+          const paper = body.paper && typeof body.paper === "object" ? body.paper : body;
+          if (!String(paper.title || "").trim() || !String(paper.canonical_key || "").trim()) {
+            throw Object.assign(new Error("A paper title and canonical key are required."), { status: 400 });
+          }
+          const { data: newPaperId, error } = await supabase.rpc("upsert_paper_to_library", {
+            p_library: libraryId,
+            p_paper: {
+              canonical_key: String(paper.canonical_key).slice(0, 500),
+              title: String(paper.title).slice(0, 2000),
+              authors_json: Array.isArray(paper.authors) ? paper.authors : (Array.isArray(paper.authors_json) ? paper.authors_json : []),
+              year: Number.isInteger(paper.year) ? paper.year : null,
+              venue: String(paper.venue || ""),
+              abstract: String(paper.abstract || "").slice(0, 100_000),
+              url: String(paper.url || ""),
+              pdf_url: String(paper.pdf_url || ""),
+              doi: String(paper.doi || ""),
+              arxiv_id: String(paper.arxiv_id || ""),
+              s2_id: String(paper.s2_id || ""),
+              source: String(paper.source || "manual"),
+              citation_count: Number(paper.citation_count) || 0,
+              github_url: String(paper.github_url || ""),
+              github_stars: Number(paper.github_stars) || 0,
+              conference_json: paper.conference || paper.conference_json || null,
+              note: String(paper.note || ""),
+            },
+          });
+          if (error) throw apiError(error);
+          const { data: row, error: readError } = await supabase.from("papers").select("*").eq("id", newPaperId).single();
+          if (readError) throw apiError(readError);
+          return send(res, 201, { paper: paperResponse(row) });
+        }
+        if (paperId && method === "DELETE") {
+          const { error } = await supabase.from("library_items").delete()
+            .eq("library_id", libraryId).eq("item_type", "paper").eq("item_id", paperId);
+          if (error) throw apiError(error);
+          return send(res, 200, { removed: true });
+        }
+      }
+
+      const paperMatch = url.pathname.match(/^\/v1\/papers\/([^/]+)$/);
+      if (paperMatch && method === "PATCH") {
+        const paperId = paperMatch[1];
+        const body = await readBody(req);
+        const readingStatus = body.reading_status;
+        if (readingStatus !== undefined && !["unread", "reading", "read"].includes(readingStatus)) {
+          throw Object.assign(new Error("Unknown reading status."), { status: 400 });
+        }
+        const { data: paper, error: paperError } = await supabase.from("papers").select("id").eq("id", paperId).maybeSingle();
+        if (paperError) throw apiError(paperError);
+        if (!paper) throw Object.assign(new Error("Paper not found."), { status: 404 });
+        const patch = {
+          paper_id: paperId,
+          user_id: user.id,
+          ...(readingStatus === undefined ? {} : { reading_status: readingStatus }),
+          ...(typeof body.starred === "boolean" ? { starred: body.starred } : {}),
+          ...(typeof body.notes === "string" ? { notes: body.notes.slice(0, 100_000) } : {}),
+          ...(Array.isArray(body.tags) ? { tags_json: body.tags } : {}),
+          updated_at: new Date().toISOString(),
+        };
+        const { data, error } = await supabase.from("paper_user_state").upsert(patch, { onConflict: "paper_id,user_id" })
+          .select("paper_id, reading_status, starred, notes, tags_json, updated_at").single();
+        if (error) throw apiError(error);
+        return send(res, 200, { state: data });
       }
 
       const projectMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)$/);

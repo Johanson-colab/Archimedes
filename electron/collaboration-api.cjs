@@ -58,6 +58,42 @@ function createCollaborationApi({ baseUrl, getToken, fetchImpl = globalThis.fetc
         method: "DELETE",
       })).members || [];
     },
+    async listLibraries(projectId) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/libraries`)).libraries || [];
+    },
+    async createLibrary(projectId, { name, description = "", color = "#3973c8" } = {}) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/libraries`, {
+        method: "POST",
+        body: { name, description, color },
+      })).library;
+    },
+    async updateLibrary(libraryId, patch) {
+      return (await request(`/v1/libraries/${encodeURIComponent(libraryId)}`, {
+        method: "PATCH",
+        body: patch,
+      })).library;
+    },
+    async deleteLibrary(libraryId) {
+      return request(`/v1/libraries/${encodeURIComponent(libraryId)}`, { method: "DELETE" });
+    },
+    async listPapers(libraryId) {
+      return (await request(`/v1/libraries/${encodeURIComponent(libraryId)}/papers`)).papers || [];
+    },
+    async addPaper(libraryId, paper) {
+      return (await request(`/v1/libraries/${encodeURIComponent(libraryId)}/papers`, {
+        method: "POST",
+        body: { paper },
+      })).paper;
+    },
+    async removePaper(libraryId, paperId) {
+      return request(`/v1/libraries/${encodeURIComponent(libraryId)}/papers/${encodeURIComponent(paperId)}`, { method: "DELETE" });
+    },
+    async updatePaperState(paperId, patch) {
+      return (await request(`/v1/papers/${encodeURIComponent(paperId)}`, {
+        method: "PATCH",
+        body: patch,
+      })).state;
+    },
   };
 }
 

@@ -37,6 +37,28 @@ test("collaboration API sends the user token and maps project/member routes", as
   assert.match(fake.calls[4].url, /\/v1\/projects\/p1\/members\/u2$/);
 });
 
+test("collaboration API maps library and paper routes", async () => {
+  const fake = fakeApi((url, options) => {
+    if (url.endsWith("/libraries") && options.method === "POST") return { status: 201, body: { library: { id: "lib1" } } };
+    if (url.endsWith("/libraries")) return { status: 200, body: { libraries: [{ id: "lib1" }] } };
+    if (url.endsWith("/libraries/lib1")) return { status: 200, body: { library: { id: "lib1", name: "Renamed" } } };
+    if (url.endsWith("/libraries/lib1/papers") && options.method === "POST") return { status: 201, body: { paper: { id: "paper1" } } };
+    if (url.endsWith("/libraries/lib1/papers")) return { status: 200, body: { papers: [{ id: "paper1" }] } };
+    if (url.endsWith("/libraries/lib1/papers/paper1")) return { status: 200, body: { removed: true } };
+    if (url.endsWith("/papers/paper1")) return { status: 200, body: { state: { reading_status: "read" } } };
+    return { status: 404, body: { error: "missing" } };
+  });
+  const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => "jwt", fetchImpl: fake.fetchImpl });
+
+  assert.deepEqual(await api.listLibraries("p1"), [{ id: "lib1" }]);
+  assert.deepEqual(await api.createLibrary("p1", { name: "Shared" }), { id: "lib1" });
+  assert.deepEqual(await api.addPaper("lib1", { canonical_key: "k", title: "Paper" }), { id: "paper1" });
+  assert.deepEqual(await api.listPapers("lib1"), [{ id: "paper1" }]);
+  assert.deepEqual(await api.updatePaperState("paper1", { reading_status: "read" }), { reading_status: "read" });
+  assert.deepEqual(await api.removePaper("lib1", "paper1"), { removed: true });
+  assert.equal(fake.calls.find((call) => call.url.endsWith("/libraries/lib1/papers") && call.options.method === "POST").options.body, JSON.stringify({ paper: { canonical_key: "k", title: "Paper" } }));
+});
+
 test("collaboration API requires sign-in and surfaces API errors", async () => {
   const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => null, fetchImpl: async () => { throw new Error("should not fetch"); } });
   await assert.rejects(() => api.listProjects(), /Sign in/i);

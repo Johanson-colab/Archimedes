@@ -53,6 +53,27 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
     assert.equal(members.status, 200);
     assert.equal(members.body.members.length, 2);
 
+    const library = await call(first, `/v1/projects/${projectId}/libraries`, "POST", { name: "Shared sources" });
+    assert.equal(library.status, 201, JSON.stringify(library.body));
+    const canonicalKey = `smoke:${Date.now()}`;
+    const addedPaper = await call(first, `/v1/libraries/${library.body.library.id}/papers`, "POST", {
+      paper: { canonical_key: canonicalKey, title: "Smoke test paper", authors: ["Ada Lovelace"], year: 2026 },
+    });
+    assert.equal(addedPaper.status, 201, JSON.stringify(addedPaper.body));
+    const secondLibraries = await call(second, `/v1/projects/${projectId}/libraries`);
+    assert.equal(secondLibraries.status, 200);
+    assert.ok(secondLibraries.body.libraries.some((candidate) => candidate.id === library.body.library.id));
+    const secondPapers = await call(second, `/v1/libraries/${library.body.library.id}/papers`);
+    assert.equal(secondPapers.status, 200);
+    assert.equal(secondPapers.body.papers[0].title, "Smoke test paper");
+    const state = await call(second, `/v1/papers/${addedPaper.body.paper.id}`, "PATCH", { reading_status: "read", starred: true, tags: ["smoke"] });
+    assert.equal(state.status, 200, JSON.stringify(state.body));
+    assert.equal(state.body.state.reading_status, "read");
+    const removePaper = await call(first, `/v1/libraries/${library.body.library.id}/papers/${addedPaper.body.paper.id}`, "DELETE");
+    assert.equal(removePaper.status, 200);
+    const removeLibrary = await call(first, `/v1/libraries/${library.body.library.id}`, "DELETE");
+    assert.equal(removeLibrary.status, 200);
+
     const forbidden = await call(second, `/v1/projects/${projectId}/members`, "POST", { email, role: "viewer" });
     assert.equal(forbidden.status, 403);
 
