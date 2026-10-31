@@ -48,6 +48,7 @@ import TurnRail from "./TurnRail";
 import TerminalPanel from "./TerminalPanel";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
+import ThreadShareModal from "./ThreadShareModal";
 import { useUISettings } from "./i18n";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, formatFileComment, isDraftDirty, isEditableFile, markDraftSaved, mergeRefreshedFiles, prepareFileContent, toEditorText, type FileComment, type FileDraft, type FileSelection } from "./file-editor";
@@ -120,6 +121,7 @@ import {
   Save,
   Search,
   Settings,
+  Share2,
   ShieldCheck,
   ScanSearch,
   Sparkles,
@@ -542,7 +544,7 @@ const previewBridge = {
   createResearchThreadSnapshot: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) throw new Error("Research thread not found.");
-    const snapshot = { id: crypto.randomUUID(), thread_id: thread.id, project_id: thread.project_id, sequence: thread.events?.length || 0, created_at: new Date().toISOString(), manifest: { version: 1, title: thread.title, visibility: thread.visibility, turns: thread.turns.length } };
+    const snapshot = { id: crypto.randomUUID(), thread_id: thread.id, project_id: thread.project_id, sequence: thread.events?.length || 0, created_at: new Date().toISOString(), manifest: { version: 1, thread: { id: thread.id, title: thread.title, visibility: thread.visibility }, sequence: thread.events?.length || 0, turns: thread.turns, events: thread.events ?? [], references: [], artifacts: [] } };
     previewThreadSnapshots.unshift(snapshot);
     return structuredClone(snapshot);
   },
@@ -949,6 +951,7 @@ function App() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
+  const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
@@ -1735,6 +1738,15 @@ function App() {
     }
   }
 
+  async function openThreadShare() {
+    if (!activeThreadId) return;
+    try {
+      setShareSnapshot(await desktopBridge.createResearchThreadSnapshot(activeThreadId));
+    } catch (error) {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not create a snapshot: ${String(error)}` }]);
+    }
+  }
+
   async function changeThreadVisibility(visibility: "project" | "private") {
     if (activeThreadId) {
       try {
@@ -2393,6 +2405,7 @@ function App() {
           <div className="conversation-title"><strong>{mainTitle}</strong></div>
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
+            {activeThreadId && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share thread snapshot")} aria-label={t("Share thread snapshot")}><Share2 size={15} /></button>}
             <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={() => setResearchPanelOpen((open) => !open)}
@@ -2662,6 +2675,13 @@ function App() {
         onObserveProactive={proactive.observeOnce}
         identity={localIdentity}
         onSaveIdentity={saveLocalIdentity}
+      />
+      <ThreadShareModal
+        snapshot={shareSnapshot}
+        threadTitle={activeThread?.title ?? "Research thread"}
+        privateThread={threadVisibility === "private"}
+        onClose={() => setShareSnapshot(null)}
+        onCopy={(text) => desktopBridge.writeClipboardText(text)}
       />
       <NewProjectModal
         open={newProjectOpen}
