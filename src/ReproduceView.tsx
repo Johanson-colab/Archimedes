@@ -59,6 +59,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "">("");
   const [error, setError] = useState("");
   const [planStatus, setPlanStatus] = useState("");
+  const [openClaim, setOpenClaim] = useState<string | null>(null);
 
   const [picking, setPicking] = useState(false);
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
@@ -223,35 +224,47 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       </div> : <>
         <div className="reproduce-summary">
           <p>{contract.summary}</p>
-          <div className="reproduce-meta">
-            <span>{contract.claims.length} claims</span>
-            <span>{contract.entrypoint.command ? "entrypoint found" : "no entrypoint yet"}</span>
-            <span>{contract.repo.url || detail.repo_url || "no repository"}{contract.repo.commit ? ` @ ${contract.repo.commit.slice(0, 7)}` : ""}</span>
-            <span>budget {detail.budget.wallClockMin} min</span>
+          <div className="reproduce-facts">
+            <span className="reproduce-fact">{contract.claims.length} claims</span>
+            <span className={`reproduce-fact ${contract.entrypoint.command ? "ok" : "warn"}`}>{contract.entrypoint.command ? "entrypoint found" : "no entrypoint"}</span>
+            <span className="reproduce-fact">{contract.repo.commit ? contract.repo.commit.slice(0, 7) : "no commit"}</span>
+            <span className="reproduce-fact">{detail.budget.wallClockMin} min</span>
           </div>
         </div>
 
-        <div className="reproduce-claims">
-          {contract.claims.map((claim) => <article className="reproduce-claim" key={claim.id}>
-            <div className="reproduce-claim-head">
-              <strong>{claim.statement}</strong>
-              <span className="reproduce-expected">{expectedLabel(claim)}</span>
-            </div>
-            <div className="reproduce-claim-meta">
-              {claim.dataset && <span>{claim.dataset}</span>}
-              {claim.metric && <span>{claim.metric}</span>}
-              {claim.evidence.page && <span>PDF p. {claim.evidence.page}</span>}
-              {claim.evidence.table && <span>{claim.evidence.table}</span>}
-              <span>±{Math.round(claim.tolerance * 1000) / 10}%</span>
-            </div>
-            {claim.evidence.quote && <blockquote>{claim.evidence.quote}</blockquote>}
-          </article>)}
-        </div>
+        <section className="reproduce-block">
+          <h2>Claims to verify</h2>
+          <ol className="reproduce-claim-list">
+            {contract.claims.map((claim, index) => {
+              const open = openClaim === claim.id;
+              const where = [claim.evidence.table, claim.evidence.page ? `p. ${claim.evidence.page}` : ""].filter(Boolean).join(" · ");
+              return <li className={open ? "open" : ""} key={claim.id}>
+                <button className="reproduce-claim-row" aria-expanded={open} onClick={() => setOpenClaim(open ? null : claim.id)}>
+                  <span className="reproduce-claim-index">{index + 1}</span>
+                  <span className="reproduce-claim-text">{claim.statement}</span>
+                  <span className="reproduce-claim-value">{expectedLabel(claim)}</span>
+                </button>
+                <div className="reproduce-claim-sub">
+                  <span>{claim.dataset ? claim.dataset.split(/\s*\(/)[0].trim() : claim.metric}</span>
+                  {where && <span>{where}</span>}
+                  <span>±{Math.round(claim.tolerance * 1000) / 10}%</span>
+                </div>
+                {open && <div className="reproduce-claim-detail">
+                  {claim.metric && <p><b>Metric</b> {claim.metric}</p>}
+                  {(claim.evidence.row || claim.evidence.column) && <p><b>Where</b> {[claim.evidence.row, claim.evidence.column].filter(Boolean).join(" · ")}</p>}
+                  {claim.evidence.quote && <blockquote>{claim.evidence.quote}</blockquote>}
+                </div>}
+              </li>;
+            })}
+          </ol>
+        </section>
 
         <div className="reproduce-grid">
           <section>
-            <h2>Entrypoint</h2>
-            <pre>{contract.entrypoint.command || "Not identified yet"}</pre>
+            <h2>Entrypoint <span className={`reproduce-tag ${contract.entrypoint.command ? "ok" : "warn"}`}>{contract.entrypoint.command ? "found" : "missing"}</span></h2>
+            {contract.entrypoint.command
+              ? <pre>{contract.entrypoint.command}</pre>
+              : <p className="reproduce-hint">No command in the paper or the repository produces these numbers.</p>}
             {contract.entrypoint.evidence.length > 0 && <ul className="reproduce-evidence">
               {contract.entrypoint.evidence.map((entry) => <li key={entry.path}><code>{entry.path}</code>{entry.line_count ? ` · ${entry.line_count} lines` : ""}</li>)}
             </ul>}
@@ -259,18 +272,21 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
             {contract.entrypoint.outputs.length > 0 && <p className="reproduce-hint">Writes {contract.entrypoint.outputs.join(", ")}</p>}
           </section>
           <section>
-            <h2>Environment</h2>
+            <h2>Environment <span className={`reproduce-tag ${contract.environment.install.length || contract.environment.python ? "ok" : "warn"}`}>{contract.environment.install.length || contract.environment.python ? "found" : "missing"}</span></h2>
             <ul className="reproduce-env">
               {contract.environment.python && <li>Python {contract.environment.python}</li>}
               {contract.environment.cuda && <li>CUDA {contract.environment.cuda}</li>}
               {contract.environment.install.map((step) => <li key={step}><code>{step}</code></li>)}
               {contract.environment.source && <li className="reproduce-hint">from {contract.environment.source}</li>}
-              {!contract.environment.python && !contract.environment.cuda && !contract.environment.install.length && <li className="reproduce-hint">Not identified yet</li>}
+              {!contract.environment.python && !contract.environment.cuda && !contract.environment.install.length && <li className="reproduce-hint">Not identified in the paper or repository.</li>}
             </ul>
           </section>
         </div>
 
-        {contract.notes.length > 0 && <ul className="reproduce-notes">{contract.notes.map((note) => <li key={note}>{note}</li>)}</ul>}
+        {contract.notes.length > 0 && <details className="reproduce-notes">
+          <summary>Planner notes · {contract.notes.length}</summary>
+          <ul>{contract.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+        </details>}
 
         <footer className="reproduce-footer">
           <button className="secondary-button" disabled={busy !== ""} onClick={() => void plan()}>
