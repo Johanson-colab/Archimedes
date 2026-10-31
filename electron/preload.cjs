@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   updateCloudProjectMember: (projectId, userId, role) => ipcRenderer.invoke("collab:update-member", { projectId, userId, role }),
   removeCloudProjectMember: (projectId, userId) => ipcRenderer.invoke("collab:remove-member", { projectId, userId }),
   importCloudProject: (cloudProjectId) => ipcRenderer.invoke("collab:import-project", { cloudProjectId }),
+  syncProjectLibraries: (projectId) => ipcRenderer.invoke("collab:sync-libraries", { projectId }),
   listAuditEvents: (projectId, limit = 100) => ipcRenderer.invoke("audit:list", { projectId, limit }),
   listComments: (input) => ipcRenderer.invoke("comments:list", input),
   createComment: (input) => ipcRenderer.invoke("comments:create", input),

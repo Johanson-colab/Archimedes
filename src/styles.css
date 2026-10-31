@@ -6615,6 +6615,7 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .project-cloud-item strong { overflow: hidden; color: var(--night-ink-soft); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .project-cloud-item small { color: var(--night-faint); font-size: 9px; text-transform: capitalize; }
 .project-cloud-item .secondary-button { flex: 0 0 auto; }
+.library-cloud-notice { margin: 8px 18px 0; padding: 8px 10px; color: var(--night-muted); background: color-mix(in srgb, var(--accent) 6%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent); border-radius: 5px; font-size: 10px; line-height: 1.5; }
 
 /* Reproduce: a background reproduction job, visible from anywhere. Every
    colour comes from a semantic token so both themes work without overrides. */

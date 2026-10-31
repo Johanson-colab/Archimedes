@@ -23,6 +23,7 @@ const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const { createSupabaseAuth } = require("./supabase-auth.cjs");
 const { createCollaborationApi } = require("./collaboration-api.cjs");
+const { createLibrarySync } = require("./library-sync.cjs");
 const { createSupabaseServer } = require("../server/supabase-server.cjs");
 const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
@@ -1276,6 +1277,7 @@ app.whenReady().then(async () => {
     return collaborationApi.status();
   });
   ipcMain.handle("collab:list-projects", async () => requireCollaboration().listProjects());
+  ipcMain.handle("collab:sync-libraries", async (_event, { projectId } = {}) => createLibrarySync({ store, api: requireCollaboration() }).syncProjectLibraries(projectId));
   ipcMain.handle("collab:publish-project", async (_event, { projectId } = {}) => {
     const api = requireCollaboration();
     let project = store.getResearchProject(projectId);

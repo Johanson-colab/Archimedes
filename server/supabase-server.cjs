@@ -50,7 +50,7 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
       color: row.color,
       created_at: row.created_at,
       updated_at: row.updated_at,
-      paper_count: Number(row.paper_count?.[0]?.count) || 0,
+      paper_count: Number(row.paper_count?.[0]?.count ?? row.library_items?.[0]?.count) || 0,
     };
   }
 
@@ -81,6 +81,7 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
       starred: Boolean(state?.starred),
       notes: state?.notes || "",
       tags: Array.isArray(state?.tags_json) ? state.tags_json : [],
+      state_updated_at: state?.updated_at || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
