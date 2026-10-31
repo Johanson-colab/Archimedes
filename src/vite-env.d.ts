@@ -63,6 +63,7 @@ interface ResearchDeskBridge {
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: (projectId?: string | null) => Promise<ResearchLibrary[]>;
+    listLibraryProjects: () => Promise<LibraryProjectSummary[]>;
     createLibrary: (input: { projectId?: string | null; name: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
     updateLibrary: (id: string, patch: { name?: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
     deleteLibrary: (id: string) => Promise<{ deleted: boolean }>;
@@ -523,6 +524,13 @@ interface ContextAttachment {
   paper?: ContextPaperMetadata;
   repository?: PaperRepositorySnapshot;
   image?: ContextImage;
+}
+
+interface LibraryProjectSummary {
+  project_id: string;
+  name: string;
+  library_count: number;
+  paper_count: number;
 }
 
 interface ResearchLibrary {

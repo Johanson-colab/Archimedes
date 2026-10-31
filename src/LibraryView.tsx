@@ -192,9 +192,10 @@ type LibraryViewProps = {
   onAgentRun?: (result: AgentRunResult) => void;
   onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
   onReproduceOpened?: (reproductionId: string) => void;
+  onOpenProject?: (projectId: string) => void;
 };
 
-export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened }: LibraryViewProps) {
+export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject }: LibraryViewProps) {
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -205,6 +206,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   const [error, setError] = useState("");
   const [libraryEditor, setLibraryEditor] = useState<ResearchLibrary | "new" | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [otherProjects, setOtherProjects] = useState<LibraryProjectSummary[]>([]);
 
   const loadLibraries = useCallback(async () => {
     setLoading(true);
@@ -234,6 +236,21 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   }, [bridge]);
 
   useEffect(() => { void loadLibraries(); }, [libraryRefreshVersion, loadLibraries]);
+
+  // A project-scoped library list looks like data loss when the papers live in
+  // another project, so say where they are instead of showing an empty grid.
+  useEffect(() => {
+    if (loading || libraries.length || typeof bridge.listLibraryProjects !== "function") {
+      setOtherProjects([]);
+      return;
+    }
+    let cancelled = false;
+    void bridge.listLibraryProjects().then((projects) => {
+      if (cancelled) return;
+      setOtherProjects(projects.filter((project) => project.project_id !== projectId));
+    }).catch(() => { if (!cancelled) setOtherProjects([]); });
+    return () => { cancelled = true; };
+  }, [bridge, libraries.length, loading, projectId]);
 
   useEffect(() => {
     setSelectedLibraryId(null);
@@ -296,7 +313,16 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
     return <section className="library-page">
       <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button></ToolbarActions>
       {error && <div className="library-error">{error}</div>}
-      {loading && !libraries.length ? <LoadingState /> : <div className="library-card-grid">
+      {loading && !libraries.length ? <LoadingState /> : !libraries.length ? <div className="library-empty">
+        <LibraryGlyph name="" />
+        <strong>No libraries in this project</strong>
+        {otherProjects.length ? <>
+          <span>Your libraries and papers are stored per project. They are not lost.</span>
+          {otherProjects.map((project) => <button className="secondary-button" key={project.project_id} onClick={() => onOpenProject?.(project.project_id)}>
+            {project.name} · {project.library_count} libraries · {project.paper_count} papers
+          </button>)}
+        </> : <span>Create a library to start collecting papers.</span>}
+      </div> : <div className="library-card-grid">
         {libraries.map((library) => <button className="library-card" key={library.id} onClick={() => setSelectedLibraryId(library.id)}>
           <LibraryGlyph name={library.name} />
           <span className="library-card-copy">

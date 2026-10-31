@@ -844,6 +844,8 @@ app.whenReady().then(() => {
     return store.deleteLibrary(id);
   });
 
+  ipcMain.handle("library:list-projects", () => store.listLibraryProjects());
+
   ipcMain.handle("library:list-papers", (_event, { libraryId, query = "" }) => {
     if (typeof libraryId !== "string" || typeof query !== "string" || query.length > 300) {
       throw new Error("A library ID and a short search query are required.");

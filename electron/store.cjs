@@ -418,7 +418,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_library_papers_library ON library_papers(library_id, added_at DESC);
     CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title);
     CREATE INDEX IF NOT EXISTS idx_paper_reader_pages_paper ON paper_reader_pages(paper_id, page_number);
-    CREATE INDEX IF NOT EXISTS idx_paper_highlights_paper ON paper_highlights(project_id, paper_id, page_number, created_at DESC);
+
     CREATE INDEX IF NOT EXISTS idx_paper_user_state_user ON paper_user_state(user_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_paper_chat_threads_thread ON paper_chat_threads(thread_id);
     CREATE INDEX IF NOT EXISTS idx_paper_reviews_updated ON paper_reviews(updated_at DESC);
@@ -908,6 +908,31 @@ function listLibraries(projectId = null) {
     GROUP BY libraries.id
     ORDER BY libraries.updated_at DESC, libraries.name ASC
   `).all(resolvedProject);
+}
+
+/**
+ * Summarises which projects actually hold libraries. The library view is
+ * project-scoped, so an empty project otherwise reads as "my data is gone".
+ */
+function listLibraryProjects() {
+  const db = requireDatabase();
+  return db.prepare(`
+    SELECT research_projects.id AS project_id,
+      research_projects.name AS name,
+      COUNT(DISTINCT libraries.id) AS library_count,
+      COUNT(library_papers.paper_id) AS paper_count
+    FROM research_projects
+    INNER JOIN libraries ON libraries.project_id = research_projects.id
+    LEFT JOIN library_papers ON library_papers.library_id = libraries.id
+    GROUP BY research_projects.id
+    HAVING COUNT(DISTINCT libraries.id) > 0
+    ORDER BY paper_count DESC, research_projects.updated_at DESC
+  `).all().map((row) => ({
+    project_id: row.project_id,
+    name: row.name,
+    library_count: Number(row.library_count) || 0,
+    paper_count: Number(row.paper_count) || 0,
+  }));
 }
 
 function createLibrary({ projectId = null, name, description = "", color = "#3973c8" }) {
@@ -2245,6 +2270,7 @@ module.exports = {
   projectRoleForUser,
   setLocalIdentity,
   createReproduction,
+  listLibraryProjects,
   deleteReproduction,
   getReproduction,
   listReproductions,
