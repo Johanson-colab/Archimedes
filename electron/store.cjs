@@ -433,7 +433,6 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_thread_snapshots_thread ON thread_snapshots(thread_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_audit_events_project ON audit_events(project_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_comments_resource ON comments(project_id, resource_type, resource_id, created_at ASC);
-    CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
   `);
 
   ensureColumn(db, "research_threads", "project_id", "TEXT");
@@ -453,6 +452,7 @@ function schema(db) {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_research_projects_updated ON research_projects(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
   `);
   ensureLocalUser(db);
   const projectId = ensureDefaultProject(db);
