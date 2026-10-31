@@ -71,6 +71,8 @@ function schema(db) {
     CREATE TABLE IF NOT EXISTS research_threads (
       id TEXT PRIMARY KEY NOT NULL,
       project_id TEXT REFERENCES research_projects(id) ON DELETE SET NULL,
+      owner_id TEXT,
+      visibility TEXT NOT NULL DEFAULT 'project',
       title TEXT NOT NULL,
       mode TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -79,6 +81,16 @@ function schema(db) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS thread_snapshots (
+      id TEXT PRIMARY KEY NOT NULL,
+      thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL DEFAULT 0,
+      manifest_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS research_turns (
@@ -288,10 +300,13 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_thread ON research_artifacts(thread_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_unseen ON research_artifacts(thread_id, seen);
     CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id, project_id);
+    CREATE INDEX IF NOT EXISTS idx_thread_snapshots_thread ON thread_snapshots(thread_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
   `);
 
   ensureColumn(db, "research_threads", "project_id", "TEXT");
+  ensureColumn(db, "research_threads", "owner_id", "TEXT");
+  ensureColumn(db, "research_threads", "visibility", "TEXT NOT NULL DEFAULT 'project'");
   ensureColumn(db, "research_threads", "archived_at", "TEXT");
   ensureColumn(db, "research_projects", "workspace_path", "TEXT");
   ensureColumn(db, "research_threads", "workspace_path", "TEXT");
@@ -311,6 +326,8 @@ function schema(db) {
   const projectId = ensureDefaultProject(db);
   ensureProjectOwnership(db);
   db.prepare("UPDATE research_threads SET project_id = ? WHERE project_id IS NULL").run(projectId);
+  db.prepare("UPDATE research_threads SET owner_id = ? WHERE owner_id IS NULL").run(localIdentity.userId);
+  db.prepare("UPDATE research_threads SET visibility = 'project' WHERE visibility IS NULL OR visibility NOT IN ('project', 'private')").run();
   db.prepare("UPDATE libraries SET project_id = ? WHERE project_id IS NULL").run(projectId);
   migrateProjectScopedPaperData(db, projectId);
 }
@@ -623,8 +640,8 @@ function migrateLegacyTasks(db) {
   const projectId = ensureDefaultProject(db);
 
   const insertThread = db.prepare(`
-    INSERT INTO research_threads (id, project_id, title, mode, status, context_summary, created_at, updated_at)
-    VALUES (?, ?, ?, 'idea-spark', ?, '', ?, ?)
+    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, created_at, updated_at)
+    VALUES (?, ?, ?, 'project', ?, 'idea-spark', ?, '', ?, ?)
   `);
   const insertTurn = db.prepare(`
     INSERT INTO research_turns (id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at)
@@ -632,7 +649,7 @@ function migrateLegacyTasks(db) {
   `);
   for (const task of legacyTasks) {
     const threadId = randomUUID();
-    insertThread.run(threadId, projectId, threadTitle(task.prompt), task.status, task.created_at, task.created_at);
+    insertThread.run(threadId, projectId, localIdentity.userId, threadTitle(task.prompt), task.status, task.created_at, task.created_at);
     insertTurn.run(randomUUID(), threadId, task.id, task.prompt, task.response, task.status, task.created_at, task.created_at);
   }
 }
@@ -1408,13 +1425,14 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
       AND (? IS NULL OR research_threads.project_id = ?)
       AND paper_chat_threads.thread_id IS NULL
       AND EXISTS (SELECT 1 FROM project_members WHERE project_members.project_id = research_threads.project_id AND project_members.user_id = ?)
+      AND (research_threads.visibility = 'project' OR research_threads.owner_id = ?)
     GROUP BY research_threads.id
     ORDER BY research_threads.updated_at DESC
     LIMIT 120
-  `).all(archived ? 1 : 0, projectId, projectId, localIdentity.userId);
+  `).all(archived ? 1 : 0, projectId, projectId, localIdentity.userId, localIdentity.userId);
 }
 
-function createResearchThread({ prompt, mode, projectId, workspacePath = "" }) {
+function createResearchThread({ prompt, mode, projectId, workspacePath = "", visibility = "project" }) {
   const db = requireDatabase();
   const selectedProject = projectId
     ? db.prepare("SELECT id, workspace_path FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId)
@@ -1432,6 +1450,8 @@ function createResearchThread({ prompt, mode, projectId, workspacePath = "" }) {
   const thread = {
     id: randomUUID(),
     project_id: resolvedProjectId,
+    owner_id: localIdentity.userId,
+    visibility: visibility === "private" ? "private" : "project",
     title: threadTitle(prompt),
     mode,
     status: "idle",
@@ -1442,11 +1462,85 @@ function createResearchThread({ prompt, mode, projectId, workspacePath = "" }) {
     archived_at: null,
   };
   db.prepare(`
-    INSERT INTO research_threads (id, project_id, title, mode, status, context_summary, workspace_path, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(thread.id, thread.project_id, thread.title, thread.mode, thread.status, thread.context_summary, thread.workspace_path, thread.created_at, thread.updated_at);
+    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, workspace_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(thread.id, thread.project_id, thread.owner_id, thread.visibility, thread.title, thread.mode, thread.status, thread.context_summary, thread.workspace_path, thread.created_at, thread.updated_at);
   db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, resolvedProjectId);
   return { ...thread, turn_count: 0, last_turn_at: now };
+}
+
+function setResearchThreadVisibility(id, visibility) {
+  const db = requireDatabase();
+  const thread = db.prepare("SELECT id, project_id, owner_id FROM research_threads WHERE id = ?").get(id);
+  if (!thread) throw new Error("Research thread not found.");
+  if (!thread.project_id || !canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to change this thread.");
+  const nextVisibility = visibility === "private" ? "private" : "project";
+  db.prepare("UPDATE research_threads SET visibility = ?, updated_at = ? WHERE id = ?").run(nextVisibility, timestamp(), id);
+  return { visibility: nextVisibility };
+}
+
+function createThreadSnapshot(threadId) {
+  const db = requireDatabase();
+  const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(threadId);
+  if (!thread) throw new Error("Research thread not found.");
+  if (!canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this thread.");
+  const turns = db.prepare(`
+    SELECT id, mode, user_message, assistant_message, status, created_at, completed_at
+    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC
+  `).all(threadId);
+  const events = db.prepare(`
+    SELECT id, turn_id, sequence, type, payload_json, created_at
+    FROM research_events WHERE thread_id = ? ORDER BY created_at ASC, sequence ASC
+  `).all(threadId);
+  const references = [];
+  for (const event of events) {
+    if (event.type !== "source_evidence" && event.type !== "tool_result") continue;
+    try {
+      const payload = JSON.parse(event.payload_json);
+      if (payload.url && !references.some((item) => item.url === payload.url)) references.push({ url: payload.url, title: payload.title || "" });
+    } catch {
+      // A malformed historical event should not block the snapshot.
+    }
+  }
+  const sequence = events.reduce((max, event) => Math.max(max, Number(event.sequence) || 0), 0);
+  const manifest = {
+    version: 1,
+    thread: {
+      id: thread.id,
+      project_id: thread.project_id,
+      owner_id: thread.owner_id,
+      visibility: thread.visibility,
+      title: thread.title,
+      mode: thread.mode,
+      created_at: thread.created_at,
+      updated_at: thread.updated_at,
+    },
+    sequence,
+    turns: turns.map((turn) => ({ ...turn, assistant_message: presentStoredAssistantMessage(turn.assistant_message) })),
+    events: events.map((event) => ({ ...event, payload: JSON.parse(event.payload_json) })),
+    references,
+    artifacts: [],
+  };
+  const serialized = JSON.stringify(manifest);
+  if (serialized.length > 5_000_000) throw new Error("This thread is too large to snapshot; archive or split it first.");
+  const id = randomUUID();
+  const now = timestamp();
+  db.prepare(`INSERT INTO thread_snapshots (id, thread_id, project_id, owner_id, sequence, manifest_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, thread.id, thread.project_id, localIdentity.userId, sequence, serialized, now);
+  return { id, thread_id: thread.id, project_id: thread.project_id, sequence, created_at: now, manifest };
+}
+
+function listThreadSnapshots(threadId) {
+  const db = requireDatabase();
+  return db.prepare("SELECT id, thread_id, project_id, owner_id, sequence, created_at FROM thread_snapshots WHERE thread_id = ? ORDER BY created_at DESC").all(threadId);
+}
+
+function getThreadSnapshot(id) {
+  const db = requireDatabase();
+  const row = db.prepare("SELECT * FROM thread_snapshots WHERE id = ?").get(id);
+  if (!row) return null;
+  try { return { ...row, manifest: JSON.parse(row.manifest_json) }; }
+  catch { return null; }
 }
 
 function archiveResearchThread(id, archived = true) {
@@ -1510,6 +1604,7 @@ function getResearchThread(id) {
   const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
   if (!thread) throw new Error("Research thread not found.");
   if (thread.project_id && !canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this research thread.");
+  if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
   const turns = db.prepare(`
     SELECT id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at
     FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC
@@ -1929,7 +2024,11 @@ module.exports = {
   savePaperReview,
   savePaperPresentation,
   setPaperReaderFailed,
+  createThreadSnapshot,
+  getThreadSnapshot,
+  listThreadSnapshots,
   setPaperChatThread,
+  setResearchThreadVisibility,
   setDailyFeedCache,
   startCommand,
   startResearchTurn,

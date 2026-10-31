@@ -6539,3 +6539,8 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .account-device-id code { max-width: 280px; overflow: hidden; color: var(--night-muted); font: 10px var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .account-status { display: inline-flex; height: 22px; align-items: center; padding: 0 7px; color: var(--night-faint); background: var(--night-panel-raised); border: 1px solid var(--night-line-soft); border-radius: 4px; font-size: 9px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
 @media (max-width: 720px) { .account-name-control { width: 100%; flex-wrap: wrap; justify-content: flex-start; } .account-name-control .settings-text-input { width: 100%; } }
+
+/* Thread visibility in the composer */
+.thread-visibility-trigger { flex: 0 0 auto; }
+.thread-visibility-trigger.private { color: var(--accent); }
+.thread-visibility-trigger svg { flex: 0 0 auto; }

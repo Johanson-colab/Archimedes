@@ -1100,6 +1100,7 @@ app.whenReady().then(() => {
       workspace,
       threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
       projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
+      visibility: input.visibility === "private" ? "private" : "project",
       mode,
       reasoningEffort,
       contextLength,
@@ -1148,6 +1149,20 @@ app.whenReady().then(() => {
     if (!result.error && result.summary?.response) store.savePaperReview(paper.id, result, input.projectId);
     return result;
   });
+
+  ipcMain.handle("research-thread:set-visibility", (_event, { threadId, visibility } = {}) => {
+    if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
+    return store.setResearchThreadVisibility(threadId, visibility);
+  });
+  ipcMain.handle("research-thread:create-snapshot", (_event, { threadId } = {}) => {
+    if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
+    return store.createThreadSnapshot(threadId);
+  });
+  ipcMain.handle("research-thread:list-snapshots", (_event, { threadId } = {}) => {
+    if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
+    return store.listThreadSnapshots(threadId);
+  });
+  ipcMain.handle("research-thread:get-snapshot", (_event, snapshotId) => store.getThreadSnapshot(snapshotId));
 
   ipcMain.handle("paper-review:get", (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to restore an evidence review.");

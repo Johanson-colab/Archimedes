@@ -39,6 +39,10 @@ interface ResearchDeskBridge {
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
+  setResearchThreadVisibility: (threadId: string, visibility: "project" | "private") => Promise<{ visibility: "project" | "private" }>;
+  createResearchThreadSnapshot: (threadId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }>;
+  listResearchThreadSnapshots: (threadId: string) => Promise<Array<{ id: string; thread_id: string; project_id: string; owner_id: string; sequence: number; created_at: string }>>;
+  getResearchThreadSnapshot: (snapshotId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> } | null>;
     deleteResearchThread: (id: string) => Promise<{ deleted: boolean }>;
     getModelConfig: (role?: ModelRole) => Promise<PublicModelConfig>;
     getModelCapabilities: (role?: ModelRole) => Promise<ModelCapabilities>;
@@ -82,7 +86,7 @@ interface ResearchDeskBridge {
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string }) => Promise<AgentRunResult>;
     runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
     runProactiveObservation: (input: { context: Record<string, unknown>; screenshot?: { dataUrl: string; width: number; height: number } }) => Promise<ProactiveObservationResult | null>;
     captureProactiveScreenshot: () => Promise<{ dataUrl: string; width: number; height: number; bytes: number } | null>;
@@ -745,6 +749,8 @@ interface ResearchProject {
 interface ResearchThread {
   id: string;
   project_id: string;
+  owner_id?: string | null;
+  visibility?: "project" | "private";
   title: string;
   mode: ResearchMode;
   status: string;
