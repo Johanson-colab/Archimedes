@@ -100,8 +100,18 @@ unlinked local libraries and papers, imports libraries and canonical papers
 from collaborators, and reconciles per-user paper state by timestamp. New cloud
 ids are cached in `libraries.cloud_library_id` and `papers.cloud_paper_id`.
 
+## Presence
+
+`electron/presence.cjs` joins a Supabase Realtime presence channel named
+`project:{projectId}` from the Electron main process. Each window tracks its
+signed-in user and active thread; the renderer only receives IPC updates. The
+toolbar shows collaborator avatars. Presence is ephemeral and never written to
+the collaboration tables.
+
 ## Not included yet
 
 - Invites for users who have not signed up
-- Thread/library/comments sync
+- Guest links
+- Shared agent runs
+- Co-editing
 - Service-role/admin operations

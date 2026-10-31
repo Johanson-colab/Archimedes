@@ -9,6 +9,14 @@ contextBridge.exposeInMainWorld("researchDesk", {
   signUp: (email, password, displayName) => ipcRenderer.invoke("auth:sign-up", { email, password, displayName }),
   signOut: () => ipcRenderer.invoke("auth:sign-out"),
   getAuthAccessToken: () => ipcRenderer.invoke("auth:access-token"),
+  joinProjectPresence: (projectId, threadId = null) => ipcRenderer.invoke("presence:join", { projectId, threadId }),
+  updateProjectPresence: (threadId = null) => ipcRenderer.invoke("presence:update", { threadId }),
+  leaveProjectPresence: () => ipcRenderer.invoke("presence:leave"),
+  onPresenceUpdate: (callback) => {
+    const listener = (_event, members) => callback(members);
+    ipcRenderer.on("presence:update", listener);
+    return () => ipcRenderer.removeListener("presence:update", listener);
+  },
   updateLocalIdentity: (patch) => ipcRenderer.invoke("identity:update", patch),
   setTitleBarTheme: (theme) => ipcRenderer.invoke("window:set-titlebar-theme", theme),
   setUiZoom: (factor) => ipcRenderer.invoke("window:set-ui-zoom", factor),
