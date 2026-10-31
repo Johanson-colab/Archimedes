@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, systemPreferences } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -28,6 +28,7 @@ const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAc
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
 const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
+const speech = require("./speech.cjs");
 const store = require("./store.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
@@ -796,6 +797,17 @@ app.whenReady().then(() => {
   ipcMain.handle("model-config:list-models", (_event, input = {}, role) => modelConfig.listProviderModels(input, role));
 
   ipcMain.handle("model-config:save", (_event, input = {}, role) => modelConfig.saveModelConfig(input, role));
+  ipcMain.handle("speech:transcribe", async (_event, input = {}) => {
+    const config = modelConfig.getActiveModelConfig("agent");
+    return speech.transcribeSpeech({ audio: input.audio, mimeType: input.mimeType, language: input.language }, config);
+  });
+  ipcMain.handle("speech:request-permission", async () => {
+    if (process.platform !== "darwin") return true;
+    const status = systemPreferences.getMediaAccessStatus("microphone");
+    if (status === "granted") return true;
+    if (status === "denied" || status === "restricted") return false;
+    return systemPreferences.askForMediaAccess("microphone");
+  });
 
   ipcMain.handle("model-config:test", (_event, input = {}, role) => modelConfig.testModelConfig(input, role));
 

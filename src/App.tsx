@@ -36,6 +36,7 @@ import { sidebarEntries, type MainSection, type SidebarEntry } from "./sidebar-r
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
 import ChangesView from "./ChangesView";
 import NotesView from "./NotesView";
+import VoiceInputButton from "./VoiceInputButton";
 import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, normalizeWorkbenchPreferences, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
@@ -535,6 +536,8 @@ const previewBridge = {
   listProviderModels: async () => ({ models: [], source: "live" as const }),
   saveModelConfig: async ({ provider, baseUrl, model }: ModelConfigInput) => ({ provider, baseUrl, model, hasApiKey: true, source: "saved" as const }),
   testModelConfig: async ({ model }: ModelConfigInput) => ({ ok: true, latencyMs: 184, resolvedModel: model }),
+  transcribeSpeech: async () => ({ text: "Voice input transcription preview." }),
+  requestMicrophoneAccess: async () => true,
   getWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: false }),
   saveWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: true }),
   readClipboardText: async () => "",
@@ -2867,6 +2870,20 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
     void attachPastedImage(image);
   }
 
+  function appendTranscript(text: string) {
+    const value = text.trim();
+    if (!value) return;
+    setPrompt((current) => current.trim() ? (/\s$/.test(current) ? `${current}${value}` : `${current} ${value}`) : value);
+    setComposerError("");
+    requestAnimationFrame(() => {
+      const textarea = composerRef.current;
+      if (!textarea) return;
+      const end = textarea.value.length;
+      textarea.focus();
+      textarea.setSelectionRange(end, end);
+    });
+  }
+
   function submitCurrentPrompt() {
     if (agentBusy || (!prompt.trim() && !contextItems.some((item) => item.type === "image"))) return;
     const draft = prompt;
@@ -2938,9 +2955,18 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
               aria-hidden="true"
             />
           </div>
-          <button className="conversation-send" onClick={agentBusy ? onInterrupt : submitCurrentPrompt} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? interrupting ? "Stopping task" : "Stop" : "Send"}>
-            {agentBusy ? <Square size={13} fill="currentColor" /> : <ArrowUp size={16} strokeWidth={2.4} />}
-          </button>
+          <div className="composer-send-cluster">
+            <VoiceInputButton
+              onTranscript={appendTranscript}
+              onError={setComposerError}
+              onTranscribe={(audio, mimeType, language) => desktopBridge.transcribeSpeech(audio, mimeType, language)}
+              onRequestPermission={() => desktopBridge.requestMicrophoneAccess()}
+              language={document.documentElement.lang || "en"}
+            />
+            <button className="conversation-send" onClick={agentBusy ? onInterrupt : submitCurrentPrompt} disabled={agentBusy ? !canInterrupt : !prompt.trim() && !contextItems.some((item) => item.type === "image")} title={agentBusy ? interrupting ? "Stopping task" : "Stop" : "Send"}>
+              {agentBusy ? <Square size={13} fill="currentColor" /> : <ArrowUp size={16} strokeWidth={2.4} />}
+            </button>
+          </div>
         </div>
       </div>
       <p className="composer-note">Archimedes can make mistakes. Review sources and workspace changes.</p>

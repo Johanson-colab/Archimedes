@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listProviderModels: (input, role) => ipcRenderer.invoke("model-config:list-models", input, role),
   saveModelConfig: (input, role) => ipcRenderer.invoke("model-config:save", input, role),
   testModelConfig: (input, role) => ipcRenderer.invoke("model-config:test", input, role),
+  transcribeSpeech: (audio, mimeType, language) => ipcRenderer.invoke("speech:transcribe", { audio, mimeType, language }),
+  requestMicrophoneAccess: () => ipcRenderer.invoke("speech:request-permission"),
   getWebSearchConfig: () => ipcRenderer.invoke("web-search:get-config"),
   saveWebSearchConfig: (input) => ipcRenderer.invoke("web-search:save-config", input),
   listLibraries: () => ipcRenderer.invoke("library:list"),
