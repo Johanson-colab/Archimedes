@@ -22,6 +22,7 @@ const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const { createSupabaseAuth } = require("./supabase-auth.cjs");
+const { createAuthFlow } = require("./auth-flow.cjs");
 const { createCollaborationApi } = require("./collaboration-api.cjs");
 const { createLibrarySync } = require("./library-sync.cjs");
 const { createAnnotationSync } = require("./annotation-sync.cjs");
@@ -562,6 +563,7 @@ let authReady = Promise.resolve();
 let collaborationApi = null;
 let collaborationServer = null;
 let presence = null;
+let authFlow = null;
 
 app.whenReady().then(async () => {
   loadLocalAgentEnvironment();
@@ -574,8 +576,14 @@ app.whenReady().then(async () => {
   workbenchNotes.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());
+  const authStorageValues = new Map();
+  const authStorage = {
+    getItem: (key) => authStorageValues.get(key) || null,
+    setItem: (key, value) => { authStorageValues.set(key, value); },
+    removeItem: (key) => { authStorageValues.delete(key); },
+  };
   const supabaseClient = createClient(supabaseConfig.url, supabaseConfig.publishableKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, flowType: "pkce", storage: authStorage },
   });
   supabaseAuth = createSupabaseAuth({
     client: supabaseClient,
@@ -583,7 +591,19 @@ app.whenReady().then(async () => {
     safeStorage,
     configured: Boolean(supabaseConfig.url && supabaseConfig.publishableKey),
   });
-  authReady = supabaseAuth.initialize();
+  authFlow = createAuthFlow({
+    client: supabaseClient,
+    openExternal: (url) => shell.openExternal(url),
+    port: Number(process.env.ARCHIMEDES_AUTH_PORT) || 45871,
+  });
+  authReady = supabaseAuth.initialize().then(async () => {
+    try {
+      const response = await fetch(`${supabaseConfig.url}/auth/v1/settings`, { headers: { apikey: supabaseConfig.publishableKey } });
+      const settings = response.ok ? await response.json() : {};
+      supabaseAuth.setProviders({ email: settings.external?.email !== false, google: Boolean(settings.external?.google), magicLink: process.env.ARCHIMEDES_AUTH_MAGIC_LINK === "1" });
+    } catch { /* provider discovery is best effort */ }
+    return supabaseAuth.state();
+  });
   presence = createPresence({
     createClient,
     supabaseUrl: supabaseConfig.url,
@@ -1608,6 +1628,60 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
   ipcMain.handle("auth:get-state", () => authReady.then(() => supabaseAuth.state()));
+  ipcMain.handle("auth:providers", () => authReady.then(() => supabaseAuth.state().providers));
+  ipcMain.handle("auth:magic-link", async (_event, { email } = {}) => {
+    await authReady;
+    if (!String(email || "").trim()) throw new Error("Enter your email address.");
+    const result = await authFlow.run({
+      mode: "signin",
+      trigger: (redirectTo) => supabaseAuth.sendMagicLink(email, redirectTo),
+    });
+    return supabaseAuth.setSession(result.session);
+  });
+  ipcMain.handle("auth:sign-up-flow", async (_event, { email, password, displayName } = {}) => {
+    await authReady;
+    const result = await authFlow.run({
+      mode: "signup",
+      trigger: async (redirectTo) => supabaseAuth.signUp(email, password, displayName, { emailRedirectTo: redirectTo }),
+    });
+    return supabaseAuth.setSession(result.session);
+  });
+  ipcMain.handle("auth:oauth", async (_event, { provider } = {}) => {
+    await authReady;
+    const providers = supabaseAuth.state().providers;
+    if (provider !== "google" || !providers?.google) throw new Error("Google sign-in is not configured for this project.");
+    const result = await authFlow.run({
+      mode: "signin",
+      trigger: async (redirectTo) => ({ url: await supabaseAuth.startOAuth("google", redirectTo) }),
+    });
+    return supabaseAuth.setSession(result.session);
+  });
+  ipcMain.handle("auth:reset-password", async (_event, { email } = {}) => {
+    await authReady;
+    if (!String(email || "").trim()) throw new Error("Enter your email address.");
+    const result = await authFlow.run({
+      mode: "recovery",
+      trigger: (redirectTo) => supabaseAuth.sendPasswordReset(email, redirectTo),
+    });
+    return { ...(await supabaseAuth.setSession(result.session)), recovery: true };
+  });
+  ipcMain.handle("auth:update-password", async (_event, { password } = {}) => {
+    await authReady;
+    if (String(password || "").length < 8) throw new Error("Use at least 8 characters.");
+    return supabaseAuth.updatePassword(password);
+  });
+  ipcMain.handle("auth:update-profile", async (_event, { displayName } = {}) => {
+    await authReady;
+    return supabaseAuth.updateProfile(displayName);
+  });
+  ipcMain.handle("auth:resend-confirmation", async (_event, { email } = {}) => {
+    await authReady;
+    const result = await authFlow.run({
+      mode: "signup",
+      trigger: (redirectTo) => supabaseAuth.resendConfirmation(email, redirectTo),
+    });
+    return supabaseAuth.setSession(result.session);
+  });
   ipcMain.handle("auth:sign-in", async (_event, { email, password } = {}) => {
     await authReady;
     return supabaseAuth.signIn(email, password);

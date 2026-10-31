@@ -26,6 +26,14 @@ function fakeClient({ signUpSession = false } = {}) {
       async getSession() { return { data: { session }, error: null }; },
       async refreshSession() { return { data: { session }, error: null }; },
       async signOut() { session = null; return { error: null }; },
+      async signInWithOtp(input) { return { data: { input }, error: null }; },
+      async resetPasswordForEmail(email, options) { return { data: { email, options }, error: null }; },
+      async resend(input) { return { data: { input }, error: null }; },
+      async signInWithOAuth(input) { return { data: { url: `https://oauth.example/${input.provider}?redirect=${encodeURIComponent(input.options.redirectTo)}` }, error: null }; },
+      async updateUser(input) {
+        if (input.password) return { data: { user: { id: "user-1", email: "alice@example.com", user_metadata: { full_name: "Alice" } } }, error: null };
+        return { data: { user: { id: "user-1", email: "alice@example.com", user_metadata: { full_name: input.data.full_name } } }, error: null };
+      },
     },
   };
 }
@@ -76,4 +84,27 @@ test("unconfigured auth reports a useful state", async () => {
   assert.equal(state.configured, false);
   assert.equal(state.user, null);
   await assert.rejects(auth.signIn("a@b.com", "x"), /not configured/i);
+});
+
+
+test("email-link, recovery, provider, and profile actions use Supabase auth", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-auth-methods-"));
+  try {
+    const auth = createSupabaseAuth({ client: fakeClient(), storagePath: directory, safeStorage, configured: true });
+    await auth.initialize();
+    assert.equal((await auth.sendMagicLink("alice@example.com", "http://127.0.0.1:45871/auth/callback")).sent, true);
+    assert.equal((await auth.sendPasswordReset("alice@example.com", "http://127.0.0.1:45871/auth/recovery")).sent, true);
+    assert.equal((await auth.resendConfirmation("alice@example.com", "http://127.0.0.1:45871/auth/callback")).sent, true);
+    assert.match(await auth.startOAuth("google", "http://127.0.0.1:45871/auth/callback"), /oauth\.example\/google/);
+    await auth.setSession({ access_token: "access", refresh_token: "refresh", user: { id: "user-1", email: "alice@example.com", user_metadata: { full_name: "Alice" } }, expires_at: Math.floor(Date.now() / 1000) + 3600 });
+    const updated = await auth.updateProfile("Alice L.");
+    assert.equal(updated.user.displayName, "Alice L.");
+    const password = await auth.updatePassword("new-password");
+    assert.equal(password.user.email, "alice@example.com");
+    const providers = auth.setProviders({ email: true, google: true, magicLink: true });
+    assert.equal(providers.providers.google, true);
+    assert.equal(providers.providers.magicLink, true);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });

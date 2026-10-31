@@ -97,15 +97,14 @@ test("Extensions exposes one entry with Skills, MCP servers, and Plugins tabs", 
   assert.match(app, /<ExtensionsView[^>]*workspace=\{executionWorkspace\}/);
 });
 
-test("runtime footer stays a simple Local / Cloud text switch", () => {
+test("account chip is global and runtime moves to the composer", () => {
   assert.match(app, /className="sidebar-runtime"/);
-  assert.match(app, /className="runtime-tabs" role="group" aria-label=\{t\("Runtime location"\)\}/);
-  assert.match(app, /className="runtime-tab active" aria-pressed="true">\{t\("Local"\)\}<\/button>/);
-  assert.match(app, /className="runtime-tab coming"[^>]*>\{t\("Cloud"\)\}<span>\{t\("Soon"\)\}<\/span>/);
-  assert.doesNotMatch(app, /runtime-menu|runtime-button|runtime-folder/);
-  assert.doesNotMatch(app, /Primary folder/);
-  assert.match(css, /\.runtime-tabs \{ display: flex;/);
-  assert.match(css, /\.runtime-tab\.active \{ color: var\(--accent\); \}/);
+  assert.match(app, /<AccountChip authState=\{authState\}/);
+  assert.match(app, /className="composer-runtime-switch" role="group" aria-label="Runtime location"/);
+  assert.match(app, /Cloud runs need an account/);
+  assert.match(css, /\.account-chip \{ display: flex;/);
+  assert.match(css, /\.composer-runtime-switch \{ display: inline-flex;/);
+  assert.doesNotMatch(app, /className="runtime-tabs" role="group"/);
   assert.match(i18n, /"Local": "本地"/);
   assert.match(i18n, /"Cloud": "云端"/);
 });

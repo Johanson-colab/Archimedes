@@ -219,3 +219,7 @@ Archimedes already covers the core loop, but it is not finished. The next layers
 - expanded plugin and MCP-style tool discovery with explicit permission boundaries.
 
 The aim is not to automate research theater. It is to build a reliable research companion that makes the chain from question to evidence to implementation easier to inspect, challenge, and extend.
+
+## Authentication
+
+See [`docs/auth.md`](docs/auth.md) for desktop sign-in, providers, loopback callbacks, and Supabase setup.
