@@ -10,6 +10,7 @@ const main = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
 const bridge = read("src/vite-env.d.ts");
 const app = read("src/App.tsx");
+const share = read("src/ThreadShareModal.tsx");
 const css = read("src/styles.css");
 
 test("threads have owner and visibility, and snapshots are persisted", () => {
@@ -30,6 +31,17 @@ test("thread visibility and snapshot APIs are exposed", () => {
   assert.match(preload, /createResearchThreadSnapshot/);
   assert.match(bridge, /setResearchThreadVisibility: \(threadId: string/);
   assert.match(bridge, /createResearchThreadSnapshot: \(threadId: string\)/);
+});
+
+test("thread snapshots can be inspected and downloaded from a share dialog", () => {
+  assert.match(app, /ThreadShareModal/);
+  assert.match(app, /openThreadShare/);
+  assert.match(app, /Share thread snapshot/);
+  assert.match(share, /Share a snapshot/);
+  assert.match(share, /Copy JSON/);
+  assert.match(share, /Download \.json/);
+  assert.match(share, /Cloud share links and guest access arrive with the collaboration service/);
+  assert.match(css, /\.thread-share-modal/);
 });
 
 test("the composer exposes a project/private thread toggle", () => {

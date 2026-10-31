@@ -30,6 +30,8 @@ test("threads default to project visibility and can become private drafts", () =
     assert.throws(() => store.getResearchThread(thread.id), /private/i);
     store.setLocalIdentity({ userId: "usr_thread_owner", displayName: "Thread Owner" });
     assert.equal(store.setResearchThreadVisibility(thread.id, "project").visibility, "project");
+    const audit = store.listAuditEvents({ projectId: project.id });
+    assert.ok(audit.some((event) => event.action === "thread.visibility_changed"));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -48,6 +50,7 @@ test("thread snapshots capture a frozen manifest and are project-scoped", () => 
     assert.ok(Array.isArray(snapshot.manifest.events));
     assert.equal(store.listThreadSnapshots(thread.id).length, 1);
     assert.equal(store.getThreadSnapshot(snapshot.id).id, snapshot.id);
+    assert.ok(store.listAuditEvents({ projectId: project.id }).some((event) => event.action === "thread.snapshot_created"));
 
     store.setLocalIdentity({ userId: "usr_thread_outsider", displayName: "Outsider" });
     assert.throws(() => store.setResearchThreadVisibility(thread.id, "private"), /permission|access/i);

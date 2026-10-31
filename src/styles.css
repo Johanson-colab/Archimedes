@@ -6544,3 +6544,21 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .thread-visibility-trigger { flex: 0 0 auto; }
 .thread-visibility-trigger.private { color: var(--accent); }
 .thread-visibility-trigger svg { flex: 0 0 auto; }
+
+/* Thread snapshot share dialog */
+.thread-share-modal { width: min(600px, calc(100vw - 32px)); overflow: hidden; color: var(--night-ink); background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 9px; box-shadow: 0 24px 70px color-mix(in srgb, var(--surface-ground) 55%, transparent); }
+.thread-share-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 20px 16px; border-bottom: 1px solid var(--night-line-soft); }
+.thread-share-header h2 { margin: 4px 0 0; font-size: 18px; line-height: 1.2; }
+.thread-share-header p { max-width: 420px; margin: 6px 0 0; overflow: hidden; color: var(--night-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.thread-share-body { display: grid; gap: 13px; padding: 17px 20px; }
+.thread-share-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; background: var(--night-line-soft); border: 1px solid var(--night-line-soft); border-radius: 6px; }
+.thread-share-summary > div { display: grid; gap: 4px; padding: 10px 11px; background: var(--night-panel-raised); }
+.thread-share-summary span { color: var(--night-faint); font-size: 9px; }
+.thread-share-summary strong { overflow: hidden; color: var(--night-ink); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.thread-share-note, .thread-share-warning { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--night-muted); font-size: 10px; line-height: 1.55; }
+.thread-share-note svg { flex: 0 0 auto; margin-top: 1px; color: var(--accent); }
+.thread-share-note > span { min-width: 0; }
+.thread-share-note b { color: var(--night-ink-soft); font-weight: 650; }
+.thread-share-warning { padding: 8px 9px; color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 7%, transparent); border: 1px solid color-mix(in srgb, var(--state-warning) 24%, transparent); border-radius: 5px; }
+.thread-share-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; padding: 12px 20px; border-top: 1px solid var(--night-line-soft); }
+@media (max-width: 620px) { .thread-share-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

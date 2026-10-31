@@ -20,6 +20,27 @@ function timestamp() {
   return new Date().toISOString();
 }
 
+function recordAuditEvent(db, { projectId = null, action, targetType, targetId, metadata = {}, actorType = "user" }) {
+  try {
+    db.prepare(`
+      INSERT INTO audit_events (id, project_id, actor_id, actor_type, action, target_type, target_id, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(randomUUID(), projectId, localIdentity.userId, actorType, action, targetType, targetId, JSON.stringify(metadata), timestamp());
+  } catch {
+    // Audit should not block the user's action if a legacy database is read-only.
+  }
+}
+
+function listAuditEvents({ projectId = null, limit = 100 } = {}) {
+  const db = requireDatabase();
+  const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
+  return db.prepare(`
+    SELECT * FROM audit_events
+    WHERE (? IS NULL OR project_id = ?)
+    ORDER BY created_at DESC LIMIT ?
+  `).all(projectId, projectId, safeLimit).map((event) => ({ ...event, metadata: JSON.parse(event.metadata_json || "{}") }));
+}
+
 function schema(db) {
   db.exec(`
     PRAGMA journal_mode = WAL;
@@ -81,6 +102,18 @@ function schema(db) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS audit_events (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT,
+      actor_id TEXT NOT NULL,
+      actor_type TEXT NOT NULL DEFAULT 'user',
+      action TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS thread_snapshots (
@@ -301,6 +334,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_unseen ON research_artifacts(thread_id, seen);
     CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id, project_id);
     CREATE INDEX IF NOT EXISTS idx_thread_snapshots_thread ON thread_snapshots(thread_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_events_project ON audit_events(project_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
   `);
 
@@ -540,6 +574,7 @@ function addProjectMember({ projectId, userId, role = "viewer", displayName = ""
       updated_at = excluded.updated_at
   `).run(userId.trim(), String(displayName || userId), String(email || ""), now, now);
   ensureProjectMember(db, projectId, userId.trim(), role, localIdentity.userId);
+  recordAuditEvent(db, { projectId, action: "project.member_added", targetType: "user", targetId: userId.trim(), metadata: { role } });
   return listProjectMembers(projectId).find((member) => member.user_id === userId.trim()) || null;
 }
 
@@ -761,6 +796,7 @@ function createLibrary({ projectId = null, name, description = "", color = "#397
   const library = { id: randomUUID(), project_id: resolvedProject, name: name.trim(), description: description.trim(), color, created_at: createdAt, updated_at: createdAt, paper_count: 0 };
   db.prepare("INSERT INTO libraries (id, project_id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .run(library.id, library.project_id, library.name, library.description, library.color, library.created_at, library.updated_at);
+  recordAuditEvent(db, { projectId: resolvedProject, action: "library.created", targetType: "library", targetId: library.id, metadata: { name: library.name } });
   return library;
 }
 
@@ -777,6 +813,7 @@ function updateLibrary(id, patch) {
   };
   db.prepare("UPDATE libraries SET name = ?, description = ?, color = ?, updated_at = ? WHERE id = ?")
     .run(next.name, next.description, next.color, next.updated_at, id);
+  recordAuditEvent(db, { projectId: current.project_id, action: "library.updated", targetType: "library", targetId: id, metadata: { name: next.name } });
   return listLibraries(current.project_id).find((library) => library.id === id);
 }
 
@@ -789,6 +826,7 @@ function deleteLibrary(id) {
   if (Number(count?.count) <= 1) throw new Error("A project needs at least one library.");
   const result = db.prepare("DELETE FROM libraries WHERE id = ?").run(id);
   db.prepare("DELETE FROM papers WHERE id NOT IN (SELECT paper_id FROM library_papers)").run();
+  recordAuditEvent(db, { projectId: current.project_id, action: "library.deleted", targetType: "library", targetId: id });
   return { deleted: result.changes > 0 };
 }
 
@@ -909,6 +947,7 @@ function savePaperReview(paperId, review, projectId = null) {
     VALUES (?, ?, ?, ?, 'private', ?, ?, ?)
     ON CONFLICT(project_id, paper_id, owner_id) DO UPDATE SET review_json = excluded.review_json, updated_at = excluded.updated_at
   `).run(randomUUID(), resolvedProject, paperId, localIdentity.userId, serialized, now, now);
+  recordAuditEvent(db, { projectId: resolvedProject, action: "review.saved", targetType: "paper", targetId: paperId });
   return getPaperReview(paperId, resolvedProject);
 }
 
@@ -1056,6 +1095,7 @@ function savePaperPresentation(paperId, presentation, sourceReviewUpdatedAt, pro
     ON CONFLICT(project_id, paper_id, owner_id) DO UPDATE SET presentation_json = excluded.presentation_json,
       source_review_updated_at = excluded.source_review_updated_at, updated_at = excluded.updated_at
   `).run(randomUUID(), resolvedProject, paperId, localIdentity.userId, JSON.stringify(normalized), sourceReviewUpdatedAt, now, now);
+  recordAuditEvent(db, { projectId: resolvedProject, action: "presentation.saved", targetType: "paper", targetId: paperId });
   return getPaperPresentation(paperId, resolvedProject);
 }
 
@@ -1471,11 +1511,12 @@ function createResearchThread({ prompt, mode, projectId, workspacePath = "", vis
 
 function setResearchThreadVisibility(id, visibility) {
   const db = requireDatabase();
-  const thread = db.prepare("SELECT id, project_id, owner_id FROM research_threads WHERE id = ?").get(id);
+  const thread = db.prepare("SELECT id, project_id, owner_id, visibility FROM research_threads WHERE id = ?").get(id);
   if (!thread) throw new Error("Research thread not found.");
   if (!thread.project_id || !canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to change this thread.");
   const nextVisibility = visibility === "private" ? "private" : "project";
   db.prepare("UPDATE research_threads SET visibility = ?, updated_at = ? WHERE id = ?").run(nextVisibility, timestamp(), id);
+  recordAuditEvent(db, { projectId: thread.project_id, action: "thread.visibility_changed", targetType: "thread", targetId: id, metadata: { from: thread.visibility, to: nextVisibility } });
   return { visibility: nextVisibility };
 }
 
@@ -1527,6 +1568,7 @@ function createThreadSnapshot(threadId) {
   const now = timestamp();
   db.prepare(`INSERT INTO thread_snapshots (id, thread_id, project_id, owner_id, sequence, manifest_json, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, thread.id, thread.project_id, localIdentity.userId, sequence, serialized, now);
+  recordAuditEvent(db, { projectId: thread.project_id, action: "thread.snapshot_created", targetType: "thread", targetId: thread.id, metadata: { snapshotId: id, sequence } });
   return { id, thread_id: thread.id, project_id: thread.project_id, sequence, created_at: now, manifest };
 }
 
@@ -1969,6 +2011,8 @@ function deleteArtifact(id) {
 
 module.exports = {
   addPaper,
+  listAuditEvents,
+  recordAuditEvent,
   addProjectMember,
   canAccessProject,
   listProjectMembers,

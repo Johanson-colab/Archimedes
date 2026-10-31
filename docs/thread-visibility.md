@@ -22,8 +22,12 @@ requires editor access to the owning project.
 - referenced source URLs,
 - an empty artifacts list reserved for the artifact-sharing slice.
 
-Snapshots are local-only in this phase. IPC exposes create/list/get so the
-sharing UI and cloud upload can be built without changing the data model.
+Snapshots are local-only in this phase. The thread toolbar opens a share dialog
+that shows the manifest summary and can copy/download the JSON. IPC exposes
+create/list/get so cloud upload can be built without changing the data model.
+
+`audit_events` records visibility changes, snapshot creation, member additions,
+library changes, and saved reviews/presentations.
 
 ## Still needed
 
