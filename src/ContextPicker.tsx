@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookMarked,
@@ -13,6 +13,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { MenuDivider, MenuLabel, MenuSurface } from "./Menu";
 
 type PickerView = "root" | "libraries" | "papers" | "plugins" | "skills";
 
@@ -32,17 +33,8 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
   const [resources, setResources] = useState<ContextAttachment[]>([]);
   const [selectedLibrary, setSelectedLibrary] = useState<ResearchLibrary | null>(null);
   const [query, setQuery] = useState("");
-  const pickerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const selectedIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent) => {
-      if (pickerRef.current && !event.composedPath().includes(pickerRef.current)) setOpen(false);
-    };
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [open]);
 
   function reset(nextOpen = false) {
     setOpen(nextOpen);
@@ -147,18 +139,18 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
   });
   const title = view === "libraries" ? "Literature Library" : view === "papers" ? selectedLibrary?.name ?? "Papers" : view === "plugins" ? "Plugins" : view === "skills" ? "Skills" : "Add context";
 
-  return <div className="context-picker" ref={pickerRef}>
-      <button className={open ? "composer-add-button active" : "composer-add-button"} onClick={() => reset(!open)} title="Add context" aria-label="Add context" aria-haspopup="dialog" aria-expanded={open}>
+  return <div className="context-picker">
+      <button ref={triggerRef} className={open ? "composer-add-button active" : "composer-add-button"} onClick={() => reset(!open)} title="Add context" aria-label="Add context" aria-haspopup="true" aria-expanded={open}>
         <Plus size={17} />
       </button>
-      {open && <div className="context-picker-menu" role="region" aria-label="Add context">
+      <MenuSurface open={open} onClose={() => setOpen(false)} anchorRef={triggerRef} placement="top-start" width={340} maxHeight={480} className="context-picker-menu" role="group" ariaLabel="Add context">
         {view !== "root" && <div className="context-picker-header"><button onClick={() => { setView(view === "papers" ? "libraries" : "root"); setError(""); }} title="Back"><ArrowLeft size={15} /></button><strong>{title}</strong></div>}
 
         {view === "root" && <>
-          <div className="context-picker-label">Add context</div>
+          <MenuLabel>Add context</MenuLabel>
           <PickerAction icon={<FilePlus2 size={16} />} label="Local file" detail="Attach one or more files" onClick={() => void chooseLocal("file")} />
           <PickerAction icon={<FolderPlus size={16} />} label="Local folder" detail="Give Archimedes access to a folder" onClick={() => void chooseLocal("folder")} />
-          <div className="context-picker-divider" />
+          <MenuDivider />
           <PickerAction icon={<BookMarked size={16} />} label="Literature Library" detail="Add papers from your collections" onClick={() => void showLibraries()} />
           <PickerAction icon={<Plug size={16} />} label="Plugins" detail="Attach an installed plugin" onClick={() => void showResources("plugin")} />
           <PickerAction icon={<Sparkles size={16} />} label="Skills" detail="Attach research instructions" onClick={() => void showResources("skill")} />
@@ -166,7 +158,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
 
         {loading && <div className="context-picker-state"><LoaderCircle className="spin" size={17} />Loading...</div>}
         {!loading && view === "libraries" && <div className="context-picker-list">
-          {libraries.map((library) => <button key={library.id} className="context-list-row" onClick={() => void showPapers(library)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{library.name}</strong><small>{library.paper_count} papers</small></span></button>)}
+          {libraries.map((library) => <button key={library.id} data-menu-item className="menu-item menu-item-rich context-list-row" onClick={() => void showPapers(library)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{library.name}</strong><small>{library.paper_count} papers</small></span></button>)}
           {!libraries.length && <div className="context-picker-state">No literature libraries yet.</div>}
         </div>}
 
@@ -175,7 +167,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
           <div className="context-picker-list">
             {filteredPapers.map((paper) => {
               const id = `paper:${paper.id}`;
-              return <button key={paper.id} className="context-list-row" onClick={() => addPaper(paper)} disabled={selectedIds.has(id)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{paper.title}</strong><small>{paper.authors.slice(0, 2).join(", ") || "Saved paper"}</small></span>{selectedIds.has(id) && <Check size={14} />}</button>;
+              return <button key={paper.id} data-menu-item className="menu-item menu-item-rich context-list-row" onClick={() => addPaper(paper)} disabled={selectedIds.has(id)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{paper.title}</strong><small>{paper.authors.slice(0, 2).join(", ") || "Saved paper"}</small></span>{selectedIds.has(id) && <Check size={14} />}</button>;
             })}
             {!filteredPapers.length && <div className="context-picker-state">No matching papers.</div>}
           </div>
@@ -184,13 +176,13 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
         {!loading && (view === "plugins" || view === "skills") && <>
           <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${view}`} /></label>
           <div className="context-picker-list">
-            {filteredResources.map((resource) => <button key={resource.id} className="context-list-row" onClick={() => addResource(resource)} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
+            {filteredResources.map((resource) => <button key={resource.id} data-menu-item className="menu-item menu-item-rich context-list-row" onClick={() => addResource(resource)} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
             {!filteredResources.length && <div className="context-picker-state">No matching {view} found.</div>}
           </div>
         </>}
 
         {error && <div className="context-picker-error">{error.replace(/^Error:\s*/, "")}</div>}
-      </div>}
+      </MenuSurface>
   </div>;
 }
 
@@ -202,7 +194,7 @@ export function ContextChips({ items, onRemove }: { items: ContextAttachment[]; 
 }
 
 function PickerAction({ icon, label, detail, onClick }: { icon: React.ReactNode; label: string; detail: string; onClick: () => void }) {
-  return <button type="button" className="context-picker-action" onClick={(event) => { event.stopPropagation(); onClick(); }}><span className="context-source-icon">{icon}</span><span><strong>{label}</strong><small>{detail}</small></span></button>;
+  return <button type="button" data-menu-item className="menu-item menu-item-rich context-picker-action" onClick={(event) => { event.stopPropagation(); onClick(); }}><span className="menu-item-icon">{icon}</span><span className="menu-item-body"><strong>{label}</strong><small>{detail}</small></span></button>;
 }
 
 function ContextTypeIcon({ type }: { type: ContextAttachmentType }) {

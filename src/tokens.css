@@ -575,3 +575,54 @@ html:not([data-theme="paper"]) .codex-sidebar {
   --work-review-ring: rgba(201, 162, 39, .58);
   --work-failed: #dc7c83;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Menu system (see issue #203)
+   Shared by every dropdown / overflow menu and menu-style preset.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --menu-surface: rgba(26, 26, 26, .985);
+  --menu-border: rgba(255, 255, 255, .08);
+  --menu-shadow: 0 22px 60px rgba(0, 0, 0, .58), 0 2px 10px rgba(0, 0, 0, .32);
+  --menu-ink: #f2f2f0;
+  --menu-muted: rgba(242, 242, 240, .52);
+  --menu-icon: #a3a3a0;
+  --menu-hover-bg: rgba(255, 255, 255, .065);
+  --menu-hover-ink: #ffffff;
+  --menu-hover-icon: #e8e8e5;
+  --menu-disabled-ink: rgba(242, 242, 240, .38);
+  --menu-disabled-icon: rgba(163, 163, 160, .35);
+  --menu-divider: rgba(255, 255, 255, .085);
+  --menu-shortcut: rgba(242, 242, 240, .46);
+  --menu-danger: #ff9b92;
+  --menu-danger-icon: #ff8f86;
+  --menu-danger-hover-ink: #ffd0cb;
+  --menu-danger-hover-bg: rgba(255, 92, 80, .12);
+  --menu-danger-hover-icon: #ffb0a8;
+  --menu-radius: 12px;
+  --menu-padding: 6px;
+  --menu-item-height: 44px;
+  --menu-item-font: 14px;
+  --menu-z: 130;
+}
+
+:root[data-theme="paper"] {
+  --menu-surface: rgba(255, 255, 255, .985);
+  --menu-border: rgba(32, 30, 26, .10);
+  --menu-shadow: 0 22px 60px rgba(40, 34, 25, .20), 0 2px 10px rgba(40, 34, 25, .08);
+  --menu-ink: #2a2823;
+  --menu-muted: rgba(42, 40, 35, .52);
+  --menu-icon: #7c776e;
+  --menu-hover-bg: rgba(32, 30, 26, .06);
+  --menu-hover-ink: #14120f;
+  --menu-hover-icon: #4d483f;
+  --menu-disabled-ink: rgba(42, 40, 35, .38);
+  --menu-disabled-icon: rgba(124, 119, 110, .35);
+  --menu-divider: rgba(32, 30, 26, .09);
+  --menu-shortcut: rgba(42, 40, 35, .50);
+  --menu-danger: #b33c32;
+  --menu-danger-icon: #b33c32;
+  --menu-danger-hover-ink: #8f2b23;
+  --menu-danger-hover-bg: rgba(179, 60, 50, .10);
+  --menu-danger-hover-icon: #b33c32;
+}

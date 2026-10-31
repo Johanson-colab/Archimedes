@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowUp, MessageSquare, MoreHorizontal, X } from "lucide-react";
+import { ArrowUp, Eye, History, MessageSquare, MoreHorizontal, Settings, X } from "lucide-react";
 import { useUISettings } from "./i18n";
+import { MenuItem, MenuSurface } from "./Menu";
 import { evidenceLabel, formatRelativeTime } from "./proactive-engine";
 import {
   PROACTIVE_SOURCE_LABELS,
@@ -77,7 +78,7 @@ export default function ProactiveAgentPanel({
   const [replyError, setReplyError] = useState("");
   const [historyFilter, setHistoryFilter] = useState<"all" | "active" | "accepted" | "closed">("all");
   const [workspaceOnly, setWorkspaceOnly] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const replyEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -130,22 +131,6 @@ export default function ProactiveAgentPanel({
   useEffect(() => {
     setOpenEvidence(null);
   }, [selected?.id]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [menuOpen]);
 
   useEffect(() => {
     if (!composerOpen) return;
@@ -205,8 +190,9 @@ export default function ProactiveAgentPanel({
         <i className={statusActive ? "agent-proactive-bar active" : "agent-proactive-bar"} aria-hidden="true" />
         <span className="agent-proactive-status-label">{status}</span>
       </span>
-      <div className="agent-proactive-tools" ref={menuRef}>
+      <div className="agent-proactive-tools">
         <button
+          ref={menuTriggerRef}
           className={menuOpen ? "agent-proactive-icon active" : "agent-proactive-icon"}
           onClick={() => setMenuOpen((open) => !open)}
           title={t("More actions")}
@@ -219,11 +205,11 @@ export default function ProactiveAgentPanel({
         <button className="agent-proactive-icon" onClick={onCollapse} title={t("Close Proactive agent")} aria-label={t("Close Proactive agent")}>
           <X size={13} />
         </button>
-        {menuOpen && <div className="agent-proactive-menu" role="menu" aria-label={t("Proactive actions")}>
-          <button role="menuitem" onClick={() => { setMenuOpen(false); controller.observeOnce(); }}>{t("Observe once")}</button>
-          <button role="menuitem" onClick={openHistory}>{t("Suggestion history")}</button>
-          <button role="menuitem" onClick={() => { setMenuOpen(false); onOpenSettings(); }}>{t("Proactive settings")}</button>
-        </div>}
+        <MenuSurface open={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={menuTriggerRef} placement="bottom-end" width={280} className="agent-proactive-menu" ariaLabel={t("Proactive actions")}>
+          <MenuItem icon={<Eye size={18} strokeWidth={1.7} />} onClick={() => { setMenuOpen(false); controller.observeOnce(); }}>{t("Observe once")}</MenuItem>
+          <MenuItem icon={<History size={18} strokeWidth={1.7} />} onClick={openHistory}>{t("Suggestion history")}</MenuItem>
+          <MenuItem icon={<Settings size={18} strokeWidth={1.7} />} onClick={() => { setMenuOpen(false); onOpenSettings(); }}>{t("Proactive settings")}</MenuItem>
+        </MenuSurface>
       </div>
     </header>
 

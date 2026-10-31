@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { MenuSurface } from "./Menu";
 import { useDialogFocus } from "./useDialogFocus";
 import DataChartGallery from "./DataChartGallery";
 
@@ -162,7 +163,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [composerText, setComposerText] = useState("");
   const [aspect, setAspect] = useState<Aspect>("1:1");
   const composerRef = useRef<HTMLInputElement>(null);
-  const filterRef = useRef<HTMLDivElement>(null);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
 
   async function refresh(force = false) {
     setLoading(true); setError("");
@@ -177,17 +178,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
   useEffect(() => { setSelectedId(null); }, [tab]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [filters, query, sort]);
-  useEffect(() => {
-    if (!filterOpen) return;
-    function onPointer(event: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(event.target as Node)) setFilterOpen(false);
-    }
-    function onKey(event: KeyboardEvent) { if (event.key === "Escape") setFilterOpen(false); }
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onPointer); document.removeEventListener("keydown", onKey); };
-  }, [filterOpen]);
-  useEffect(() => { if (reference) composerRef.current?.focus(); }, [reference]);
+ useEffect(() => { if (reference) composerRef.current?.focus(); }, [reference]);
 
   const result = useMemo(() => {
     const matched = figures.filter((figure) => matches(figure, filters, query));
@@ -238,17 +229,17 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     {tab === "gallery" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-gallery" aria-labelledby="image-creation-tab-gallery">
       <div className="image-creation-controls">
         <label className="gallery-search image-creation-search"><Search size={17} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a published diagram, author, or topic" aria-label="Search paper diagrams" /></label>
-        <div className="image-creation-filter" ref={filterRef}>
-          <button type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={filterOpen} title="Filter paper diagrams">
+        <div className="image-creation-filter">
+          <button ref={filterTriggerRef} type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="true" aria-expanded={filterOpen} title="Filter paper diagrams">
             <SlidersHorizontal size={14} />Filters{activeFilterCount > 0 && <b>{activeFilterCount}</b>}
           </button>
-          {filterOpen && <div className="image-creation-filter-panel" role="region" aria-label="Filter paper diagrams">
+          <MenuSurface open={filterOpen} onClose={() => setFilterOpen(false)} anchorRef={filterTriggerRef} placement="bottom-start" width={560} maxHeight={520} className="image-creation-filter-panel" role="group" ariaLabel="Filter paper diagrams">
             <header><strong>Filter paper diagrams</strong><button type="button" onClick={resetFilters} disabled={!activeFilterCount && !query}>Clear all</button></header>
             <Facet label="Venue" value={filters.venue} onChange={(value) => updateFilter("venue", value)} options={[{ value: "all", label: "All" }, ...VENUES.map((venue) => ({ value: venue, label: venue, count: figures.filter((figure) => figure.venue === venue.toLowerCase()).length }))]} />
             <Facet label="Year" value={filters.year} onChange={(value) => updateFilter("year", value)} options={[{ value: "all", label: "All" }, ...YEARS.map((year) => ({ value: year, label: String(year) }))]} />
             <Facet label="Presentation" value={filters.tier} onChange={(value) => updateFilter("tier", value)} options={[{ value: "all", label: "All" }, { value: "best", label: "Awarded" }, { value: "oral", label: "Oral" }, { value: "spotlight", label: "Spotlight" }]} />
             <Facet label="Figure type" value={filters.pattern} onChange={(value) => updateFilter("pattern", value)} options={[{ value: "all", label: "All" }, ...PATTERNS.map(([value, label]) => ({ value, label }))]} />
-          </div>}
+          </MenuSurface>
         </div>
       </div>
       {error && figures.length > 0 && <div className="gallery-notice">The Top-Conf catalogue could not be refreshed. Showing the last successfully loaded catalogue.</div>}

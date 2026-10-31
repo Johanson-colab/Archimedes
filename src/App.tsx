@@ -67,6 +67,7 @@ import { researchStages, stageForMode, type ResearchStage, type ResearchStageId 
 import { useProactiveAgent } from "./useProactiveAgent";
 import type { ProactiveSuggestion } from "./proactive-types";
 import CopyButton from "./CopyButton";
+import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";
 import { useDialogFocus } from "./useDialogFocus";
 import ArchimedesMark from "./brand/ArchimedesMark";
 import ArchimedesWordmark from "./brand/ArchimedesWordmark";
@@ -77,10 +78,12 @@ import {
   CalendarDays,
   Check,
   CircleDot,
+  ClipboardPaste,
   Cloud,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   File,
   FileArchive,
   FileAudio,
@@ -125,6 +128,7 @@ import {
   Radar,
   Route,
   Save,
+  Scissors,
   Search,
   Settings,
   Share2,
@@ -1132,7 +1136,6 @@ function App() {
   const [reproduceId, setReproduceId] = useState<string | null>(null);
   const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("installed");
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [runtimeMenuOpen, setRuntimeMenuOpen] = useState(false);
   const [imageCreationOpened, setImageCreationOpened] = useState(false);
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
@@ -1226,7 +1229,6 @@ function App() {
   const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
   const mainWorkspaceRef = useRef<HTMLDivElement | null>(null);
-  const runtimeMenuRef = useRef<HTMLDivElement | null>(null);
   const threadsRef = useRef<ResearchThread[]>([]);
   const refreshingThreadsRef = useRef(false);
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
@@ -1637,22 +1639,6 @@ function App() {
     }
     setTerminalSettingsOpen(false);
   }
-
-  useEffect(() => {
-    if (!runtimeMenuOpen) return;
-    function handlePointerDown(event: PointerEvent) {
-      if (!runtimeMenuRef.current?.contains(event.target as Node)) setRuntimeMenuOpen(false);
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setRuntimeMenuOpen(false);
-    }
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [runtimeMenuOpen]);
 
   useEffect(() => {
     const handleWorkbenchShortcut = (event: KeyboardEvent) => {
@@ -3161,15 +3147,16 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   composerRequest: { id: string; text: string; mode?: "append" | "replace" } | null;
   onComposerRequestApplied: (id: string) => void;
 }) {
+  const { t } = useUISettings();
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
+  const shortcutModifier = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
   const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
-  const [contextLengthMenuOpen, setContextLengthMenuOpen] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [cloudGateOpen, setCloudGateOpen] = useState(false);
   const [cloudNotice, setCloudNotice] = useState("");
   const [composerError, setComposerError] = useState("");
   const [prompt, setPrompt] = useState("");
-  const reasoningMenuRef = useRef<HTMLDivElement>(null);
+  const reasoningTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
   // Parent activity updates can occur every second. Keep the history's event
@@ -3210,24 +3197,6 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
   const availableThinkingEfforts = reasoningEfforts.filter((effort) => modelCapabilities.thinkingEfforts.includes(effort.id));
   const availableContextLengths = contextLengths.filter((length) => modelCapabilities.contextLengths.includes(length.id));
-
-  useEffect(() => {
-    if (!reasoningMenuOpen) return;
-    const closeMenu = (event: MouseEvent) => {
-      if (!reasoningMenuRef.current?.contains(event.target as Node)) {
-        setReasoningMenuOpen(false);
-        setContextLengthMenuOpen(false);
-      }
-    };
-    document.addEventListener("click", closeMenu);
-    return () => document.removeEventListener("click", closeMenu);
-  }, [reasoningMenuOpen]);
-
-  useEffect(() => {
-    const closeMenu = () => setComposerMenu(null);
-    document.addEventListener("click", closeMenu);
-    return () => document.removeEventListener("click", closeMenu);
-  }, []);
 
   async function attachPastedImage(blob: Blob) {
     if (contextItems.filter((item) => item.type === "image").length >= 4) {
@@ -3352,11 +3321,11 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
           }
         }} placeholder={activeMode.placeholder} rows={3} />
         <ContextChips items={contextItems} onRemove={onRemoveContext} />
-        {composerMenu && <div className="composer-context-menu" role="menu" style={{ left: composerMenu.x, top: composerMenu.y }} onClick={(event) => event.stopPropagation()}>
-          <button role="menuitem" onClick={() => void copySelection(true)} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd}>Cut</button>
-          <button role="menuitem" onClick={() => void copySelection()} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd}>Copy</button>
-          <button role="menuitem" onClick={() => void pasteFromSystemClipboard()}>Paste</button>
-        </div>}
+        <MenuSurface open={Boolean(composerMenu)} onClose={() => setComposerMenu(null)} cursor={composerMenu} placement="bottom-start" width={300} className="composer-context-menu" ariaLabel={t("Composer actions")}>
+          <MenuItem icon={<Scissors size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}X`} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd} onClick={() => { setComposerMenu(null); void copySelection(true); }}>{t("Cut")}</MenuItem>
+          <MenuItem icon={<Copy size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}C`} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd} onClick={() => { setComposerMenu(null); void copySelection(); }}>{t("Copy")}</MenuItem>
+          <MenuItem icon={<ClipboardPaste size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}V`} onClick={() => { setComposerMenu(null); void pasteFromSystemClipboard(); }}>{t("Paste")}</MenuItem>
+        </MenuSurface>
         {composerError && <div className="composer-attachment-error" role="alert">{composerError}</div>}
         <div className="conversation-composer-footer">
           <div className="composer-runtime-switch" role="group" aria-label="Runtime location">
@@ -3366,27 +3335,17 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
             </button>
           </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} onAdd={onAddContext} />
-          <div className="reasoning-effort-picker" ref={reasoningMenuRef}>
-            <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setReasoningMenuOpen((open) => !open); setContextLengthMenuOpen(false); }} title={availableThinkingEfforts.length ? `Thinking effort: ${reasoningEffort}` : "Thinking effort is not exposed by this model"} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>
+          <div className="reasoning-effort-picker">
+            <button ref={reasoningTriggerRef} className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => setReasoningMenuOpen((open) => !open)} title={availableThinkingEfforts.length ? `Thinking effort: ${reasoningEffort}` : "Thinking effort is not exposed by this model"} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>
               <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>Thinking effort · {availableThinkingEfforts.length ? reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1) : "Unavailable"}</span><ChevronDown size={13} />
             </button>
-            {reasoningMenuOpen && <div className="reasoning-effort-menu" role="menu" aria-label="Thinking effort">
-              <div className="reasoning-effort-heading"><strong>Thinking effort</strong></div>
-              {availableThinkingEfforts.map((effort) => <button key={effort.id} className={effort.id === reasoningEffort ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>
-                <span className="reasoning-effort-copy"><strong>{effort.label}</strong></span>
-                <span className="reasoning-option-mark" aria-hidden="true" />
-              </button>)}
-              <div className="reasoning-settings-divider" />
-              <button className={contextLengthMenuOpen ? "context-length-menu-trigger active" : "context-length-menu-trigger"} role="menuitem" aria-haspopup="menu" aria-expanded={contextLengthMenuOpen} onClick={() => setContextLengthMenuOpen((open) => !open)}>
-                <span>Context length</span><span>{contextLength === "extra-long" ? "Extra Long" : "Standard"}</span><ChevronRight size={13} />
-              </button>
-              {contextLengthMenuOpen && <div className="context-length-menu-options" role="menu" aria-label="Context length">
-                {availableContextLengths.map((length) => <button key={length.id} className={length.id === contextLength ? "reasoning-effort-option selected" : "reasoning-effort-option"} role="menuitemradio" aria-checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setContextLengthMenuOpen(false); }}>
-                  <span className="reasoning-effort-copy"><strong>{length.label}</strong></span>
-                  <span className="reasoning-option-mark" aria-hidden="true" />
-                </button>)}
-              </div>}
-            </div>}
+            <MenuSurface open={reasoningMenuOpen} onClose={() => setReasoningMenuOpen(false)} anchorRef={reasoningTriggerRef} placement="top-start" width={268} className="reasoning-effort-menu" ariaLabel={t("Thinking effort")}>
+              <MenuLabel>{t("Thinking effort")}</MenuLabel>
+              {availableThinkingEfforts.map((effort) => <MenuItem key={effort.id} checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>{t(effort.label)}</MenuItem>)}
+              <MenuDivider />
+              <MenuLabel>{t("Context length")}</MenuLabel>
+              {availableContextLengths.map((length) => <MenuItem key={length.id} checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setReasoningMenuOpen(false); }}>{length.id === "extra-long" ? t("Extra Long") : t("Standard")}</MenuItem>)}
+            </MenuSurface>
           </div>
           <button
             className={`composer-tool thread-visibility-trigger ${threadVisibility}`}

@@ -68,10 +68,10 @@ test("a selected session does not keep its project highlighted", () => {
 
 test("project overflow actions collapse into one vertical menu", () => {
   assert.match(sidebar, /<MoreVertical size=\{14\} \/>/);
-  assert.match(sidebar, /className="project-more-menu"[^>]*role="menu"/);
+  assert.match(sidebar, /<MenuSurface[\s\S]{0,500}?className="project-more-menu"/);
   assert.match(sidebar, /Change project folder/);
-  assert.match(sidebar, /className="project-more-divider"/);
-  assert.match(sidebar, /button className="danger" role="menuitem"/);
+  assert.match(sidebar, /<MenuDivider \/>/);
+  assert.match(sidebar, /danger icon=\{<Trash2/);
 });
 
 test("Work row typography matches the Knowledge items", () => {
