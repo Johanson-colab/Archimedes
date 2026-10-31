@@ -7128,3 +7128,8 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .reproduce-evidence li { color: var(--text-secondary); font-size: 11.5px; }
 .reproduce-evidence code { color: var(--accent); font-family: var(--font-mono); font-size: 11.5px; }
 .reproduce-hint.warn { color: var(--state-warning); }
+
+/* The tab strip flexes, so the Reproduce action lives inside it to sit next
+   to Codebase instead of drifting to the right edge. */
+.paper-reader-tablist { display: flex; min-width: 0; align-items: inherit; gap: inherit; }
+.paper-reader-bar .reproduce-tab { flex: 0 0 auto; }
