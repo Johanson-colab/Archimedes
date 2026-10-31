@@ -22,7 +22,8 @@
     "postinstall": "npm run rebuild:native",
     "server:start": "node server/index.cjs",
     "server:test": "node --test server/*.test.cjs",
-    "server:supabase": "node server/index-supabase.cjs"
+    "server:supabase": "node server/index-supabase.cjs",
+    "server:lan": "node server/index-lan.cjs"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",

@@ -48,6 +48,14 @@ docker compose -f server/docker-compose.yml up --build
 The image sets `DEV_AUTH=false`; replace dev sessions with an OIDC/auth
 provider before exposing the service.
 
+## LAN host
+
+```bash
+npm run server:lan
+```
+
+See [`docs/collaboration/lan.md`](../docs/collaboration/lan.md).
+
 ## Supabase API
 
 See [`docs/collaboration-api.md`](../docs/collaboration-api.md) and run
