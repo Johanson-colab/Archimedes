@@ -5,8 +5,9 @@ const { createAuthFlow } = require("./auth-flow.cjs");
 function fakeClient(session = { access_token: "access", refresh_token: "refresh", user: { id: "u1", email: "a@example.com" } }) {
   return {
     auth: {
-      async exchangeCodeForSession(code) {
+      async exchangeCodeForSession(code, options) {
         assert.equal(code, "callback-code");
+        assert.equal(options?.flowId, "flow-test");
         return { data: { session }, error: null };
       },
     },
@@ -20,7 +21,7 @@ test("auth flow opens the system browser and exchanges the loopback code", async
     port: 0,
     openExternal: async (url) => {
       assert.match(url, /^https:\/\/provider\.example\/authorize/);
-      const response = await fetch(`${redirectTo}?code=callback-code`);
+      const response = await fetch(`${redirectTo}?code=callback-code&sb_flow_id=flow-test`);
       assert.equal(response.status, 200);
     },
   });
