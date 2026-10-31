@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { BookOpen, CalendarDays, FilePenLine, ImagePlus, Puzzle, Radar } from "lucide-react";
 
-export type MainSection = "chat" | "extensions" | "library" | "daily" | "benchmark-radar" | "image-creation" | "artifacts" | "writing";
+export type MainSection = "chat" | "extensions" | "library" | "daily" | "benchmark-radar" | "image-creation" | "files" | "writing";
 export type SidebarSection = "knowledge" | "create";
 
 export type SidebarEntry = {

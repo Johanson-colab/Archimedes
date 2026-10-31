@@ -41,6 +41,7 @@ function baseInstructions(mode) {
     "If a public PDF page contains a figure, table, equation, or scanned content that text extraction does not capture, use inspect_pdf_page with a focused question. This requires the selected model endpoint to support image input; if it fails, explain that limitation instead of guessing.",
     "Use tools economically. Once you have enough evidence to answer, stop calling tools and synthesize the result.",
     "Do not propose writing an artifact or running a command unless the user explicitly asks to save, create, edit, implement, or execute something.",
+    "When you create or update a durable research output (figure, PDF, data table, Markdown brief, HTML/SVG page) in the workspace, call add_artifact with its workspace-relative path so it appears in the conversation Artifacts gallery. Do not register routine source edits or temporary files.",
     "Never claim an action completed until its tool result confirms completion.",
     "Keep the final response focused, evidence-aware, and explicit about uncertainty.",
     modeInstructions[mode] || modeInstructions["idea-spark"],

@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { Compass, FolderTree, GitCompareArrows, ListTree, Milestone, NotebookPen, SquareTerminal } from "lucide-react";
+import { Compass, FolderTree, GalleryVerticalEnd, GitCompareArrows, ListTree, Milestone, NotebookPen, SquareTerminal } from "lucide-react";
 
-export type WorkbenchTabId = "journey" | "trajectory" | "files" | "changes" | "notes" | "terminal" | "browser";
+export type WorkbenchTabId = "journey" | "trajectory" | "files" | "changes" | "artifacts" | "notes" | "terminal" | "browser";
 
-export const WORKBENCH_PREFERENCES_VERSION = 2;
+export const WORKBENCH_PREFERENCES_VERSION = 3;
 
 export type WorkbenchTabPreferences = {
   version: typeof WORKBENCH_PREFERENCES_VERSION;
@@ -25,13 +25,14 @@ export const WORKBENCH_TAB_DEFINITIONS: WorkbenchTabDefinition[] = [
   { id: "trajectory", labelKey: "Trajectory", descriptionKey: "Raw agent events and tool calls.", icon: <ListTree size={13} /> },
   { id: "files", labelKey: "Files", descriptionKey: "Browse, preview, and edit workspace files.", icon: <FolderTree size={13} /> },
   { id: "changes", labelKey: "Changes", descriptionKey: "Files changed by the agent in this conversation.", icon: <GitCompareArrows size={13} /> },
+  { id: "artifacts", labelKey: "Artifacts", descriptionKey: "Agent outputs collected from this conversation: figures, PDFs, data, Markdown, and web previews.", icon: <GalleryVerticalEnd size={13} />, optional: true },
   { id: "notes", labelKey: "Notes", descriptionKey: "A scratchpad for ideas and prompt drafts.", icon: <NotebookPen size={13} /> },
   { id: "terminal", labelKey: "Terminal", descriptionKey: "An interactive shell in the workspace.", icon: <SquareTerminal size={13} /> },
   { id: "browser", labelKey: "Browser", descriptionKey: "A lightweight browser for reading pages beside your research. Off by default.", icon: <Compass size={13} />, optional: true },
 ];
 
 export const WORKBENCH_TAB_IDS: WorkbenchTabId[] = WORKBENCH_TAB_DEFINITIONS.map((tab) => tab.id);
-export const DEFAULT_WORKBENCH_TAB_ORDER: WorkbenchTabId[] = ["journey", "trajectory", "files", "changes", "notes", "terminal", "browser"];
+export const DEFAULT_WORKBENCH_TAB_ORDER: WorkbenchTabId[] = ["journey", "trajectory", "files", "changes", "artifacts", "notes", "terminal", "browser"];
 export const OPTIONAL_WORKBENCH_TAB_IDS: WorkbenchTabId[] = WORKBENCH_TAB_DEFINITIONS.filter((tab) => tab.optional).map((tab) => tab.id);
 export const DEFAULT_WORKBENCH_PREFERENCES: WorkbenchTabPreferences = {
   version: WORKBENCH_PREFERENCES_VERSION,
@@ -72,7 +73,10 @@ export function normalizeWorkbenchPreferences(input: unknown): WorkbenchTabPrefe
     hidden.push(value);
   }
   if (version < WORKBENCH_PREFERENCES_VERSION) {
-    for (const id of OPTIONAL_WORKBENCH_TAB_IDS) {
+    // v2 added Browser; v3 added Artifacts. Migration should hide only the
+    // newly introduced tab, never re-hide a tab the user explicitly enabled.
+    const newlyHidden = version < 2 ? OPTIONAL_WORKBENCH_TAB_IDS : (["artifacts"] as WorkbenchTabId[]);
+    for (const id of newlyHidden) {
       if (order.includes(id) && !hidden.includes(id)) hidden.push(id);
     }
   }

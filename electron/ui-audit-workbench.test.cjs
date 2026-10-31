@@ -53,7 +53,7 @@ test("files use a compact workbench pane with drill-down and split modes", () =>
   assert.match(workbench, /workbench-tab-badge/);
   assert.match(workbench, /activeTab === id/);
   assert.match(app, /openWorkbench\("files"\)/);
-  assert.match(app, /<ArtifactsView[\s\S]*?compact[\s\S]*?compactWidth=\{workbenchWidth\}/);
+  assert.match(app, /<FilesView[\s\S]*?compact[\s\S]*?compactWidth=\{workbenchWidth\}/);
   assert.match(app, /const split = compactWidth >= 560/);
   assert.match(app, /artifact-workbench-back/);
   assert.match(app, /Open full editor/);
@@ -126,7 +126,7 @@ test("terminal settings sit in the terminal tab row with a distinct icon", () =>
 
 test("dirty file changes are protected when the workbench closes", () => {
   assert.match(app, /Hide the workbench\? Unsaved file changes stay in the editor\./);
-  assert.match(app, /Object\.values\(artifactDraftsRef\.current\)\.some\(isDraftDirty\)/);
+  assert.match(app, /Object\.values\(fileDraftsRef\.current\)\.some\(isDraftDirty\)/);
 });
 
 test("agent trajectory mirrors the OpenCode context structure", () => {

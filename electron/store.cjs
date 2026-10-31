@@ -203,6 +203,23 @@ function schema(db) {
       fetched_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS research_artifacts (
+      id TEXT PRIMARY KEY NOT NULL,
+      thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
+      turn_id TEXT,
+      path TEXT NOT NULL,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      modified_at TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      source TEXT NOT NULL DEFAULT 'agent',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      seen INTEGER NOT NULL DEFAULT 0,
+      UNIQUE (thread_id, path)
+    ) STRICT;
+
     CREATE INDEX IF NOT EXISTS idx_library_papers_library ON library_papers(library_id, added_at DESC);
     CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title);
     CREATE INDEX IF NOT EXISTS idx_paper_reader_pages_paper ON paper_reader_pages(paper_id, page_number);
@@ -213,6 +230,8 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
+    CREATE INDEX IF NOT EXISTS idx_research_artifacts_thread ON research_artifacts(thread_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_research_artifacts_unseen ON research_artifacts(thread_id, seen);
   `);
 
   ensureColumn(db, "research_threads", "project_id", "TEXT");
@@ -1415,8 +1434,101 @@ function finishCommand(id, exitCode, status = "completed") {
     .run(status, exitCode, timestamp(), id);
 }
 
+function hydrateArtifact(row) {
+  return {
+    id: row.id,
+    thread_id: row.thread_id,
+    turn_id: row.turn_id || null,
+    path: row.path,
+    title: row.title,
+    kind: row.kind,
+    size_bytes: Number(row.size_bytes) || 0,
+    modified_at: row.modified_at,
+    version: Number(row.version) || 1,
+    source: row.source,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    seen: Boolean(row.seen),
+  };
+}
+
+function normalizeArtifactPath(value) {
+  const normalized = String(value || "").replaceAll("\\", "/").replace(/^\/+/, "").trim();
+  if (!normalized || normalized.split("/").includes("..")) throw new Error("Artifact path must stay inside the workspace.");
+  return normalized;
+}
+
+function listArtifacts(threadId) {
+  const db = requireDatabase();
+  if (!threadId) return [];
+  return db.prepare(`
+    SELECT id, thread_id, turn_id, path, title, kind, size_bytes, modified_at, version, source, created_at, updated_at, seen
+    FROM research_artifacts WHERE thread_id = ? ORDER BY updated_at DESC, created_at DESC
+  `).all(threadId).map(hydrateArtifact);
+}
+
+function getArtifact(id) {
+  const db = requireDatabase();
+  const row = db.prepare(`
+    SELECT id, thread_id, turn_id, path, title, kind, size_bytes, modified_at, version, source, created_at, updated_at, seen
+    FROM research_artifacts WHERE id = ?
+  `).get(id);
+  return row ? hydrateArtifact(row) : null;
+}
+
+function upsertArtifact({ threadId, turnId = null, path: artifactPath, title = "", kind = "other", sizeBytes = 0, modifiedAt = timestamp(), source = "agent" } = {}) {
+  const db = requireDatabase();
+  if (!threadId) throw new Error("An artifact needs a research thread.");
+  const thread = db.prepare("SELECT id FROM research_threads WHERE id = ?").get(threadId);
+  if (!thread) throw new Error("Research thread not found.");
+  const normalizedPath = normalizeArtifactPath(artifactPath);
+  const now = timestamp();
+  const existing = db.prepare("SELECT * FROM research_artifacts WHERE thread_id = ? AND path = ?").get(threadId, normalizedPath);
+  const artifactTitle = String(title || existing?.title || normalizedPath.split("/").at(-1) || normalizedPath).trim();
+  if (existing) {
+    const version = Number(existing.version || 1) + 1;
+    db.prepare(`
+      UPDATE research_artifacts
+      SET turn_id = ?, title = ?, kind = ?, size_bytes = ?, modified_at = ?, version = ?, source = ?, updated_at = ?, seen = 0
+      WHERE id = ?
+    `).run(turnId, artifactTitle, kind, Number(sizeBytes) || 0, modifiedAt, version, source, now, existing.id);
+    return getArtifact(existing.id);
+  }
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO research_artifacts (id, thread_id, turn_id, path, title, kind, size_bytes, modified_at, version, source, created_at, updated_at, seen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 0)
+  `).run(id, threadId, turnId, normalizedPath, artifactTitle, kind, Number(sizeBytes) || 0, modifiedAt, source, now, now);
+  return getArtifact(id);
+}
+
+function markArtifactsSeen(threadId) {
+  const db = requireDatabase();
+  if (!threadId) return { marked: 0 };
+  const result = db.prepare("UPDATE research_artifacts SET seen = 1 WHERE thread_id = ? AND seen = 0").run(threadId);
+  return { marked: Number(result.changes) || 0 };
+}
+
+function countUnseenArtifacts(threadId) {
+  const db = requireDatabase();
+  if (!threadId) return 0;
+  const row = db.prepare("SELECT COUNT(*) AS count FROM research_artifacts WHERE thread_id = ? AND seen = 0").get(threadId);
+  return Number(row?.count) || 0;
+}
+
+function deleteArtifact(id) {
+  const db = requireDatabase();
+  return { deleted: Number(db.prepare("DELETE FROM research_artifacts WHERE id = ?").run(id).changes) > 0 };
+}
+
 module.exports = {
   addPaper,
+  countUnseenArtifacts,
+  deleteArtifact,
+  getArtifact,
+  listArtifacts,
+  markArtifactsSeen,
+  upsertArtifact,
   appendCommandOutput,
   appendResearchEvent,
   approveAction,

@@ -15,6 +15,7 @@ const { evidenceForTool } = require("./agent/evidence.cjs");
 const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
 const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
+const { artifactKind } = require("./artifacts.cjs");
 const { listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -292,6 +293,22 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "add_artifact",
+      description: "Register an existing workspace file as a durable artifact in this conversation. Use this after creating or updating an image, PDF, table, notebook export, Markdown brief, or other output the user will want to revisit. Registering is metadata only; it does not write files.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Workspace-relative path of the existing output, such as figures/figure-3.png or notes/research-brief.md." },
+          title: { type: "string", description: "Optional short human-readable title. Defaults to the file name." },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "propose_command",
       description: "Propose a shell command. This never executes immediately; the user must approve it.",
       parameters: {
@@ -506,7 +523,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   emit({
     type: "tool",
     title: name.replaceAll("_", " "),
-    detail: name === "search_academic_papers" ? "Searching scholarly metadata" : name === "web_search" ? "Searching the web" : "Reading research sources",
+    detail: name === "search_academic_papers" ? "Searching scholarly metadata" : name === "web_search" ? "Searching the web" : name === "add_artifact" ? "Registering a durable output" : "Reading research sources",
   });
 
   if (name === "search_academic_papers") {
@@ -638,6 +655,35 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     const { data, url } = await downloadPaperPdf(paper, pdfCache, signal);
     const result = await extractPdfTextData(data, `${paper.title || "paper"}.pdf`, { startPage: args.start_page, endPage: args.end_page, signal });
     return { content: JSON.stringify({ paper_id: args.paper_id, title: paper.title, source_url: url, ...result }) };
+  }
+
+  if (name === "add_artifact") {
+    if (typeof args.path !== "string" || !args.path.trim()) throw new Error("add_artifact needs a workspace-relative path.");
+    const target = workspacePath(root, args.path);
+    const relative = relativePath(root, target);
+    rejectHidden(relative);
+    let stat;
+    try {
+      stat = fs.statSync(target);
+    } catch {
+      throw new Error(`Artifact file does not exist: ${relative}`);
+    }
+    if (!stat.isFile()) throw new Error(`Artifact path is not a file: ${relative}`);
+    const kind = artifactKind(relative);
+    if (kind === "other") throw new Error("Only images, PDFs, CSV/TSV, JSON, Markdown, HTML, SVG, and text outputs can be registered as artifacts.");
+    if (!threadId) throw new Error("Artifacts must belong to an active research thread.");
+    const artifact = store.upsertArtifact({
+      threadId,
+      turnId: turnId || null,
+      path: relative,
+      title: typeof args.title === "string" ? args.title : "",
+      kind,
+      sizeBytes: stat.size,
+      modifiedAt: stat.mtime.toISOString(),
+      source: "agent",
+    });
+    emit({ type: "artifact", title: "Artifact saved", detail: relative });
+    return { content: JSON.stringify({ artifact_id: artifact.id, path: artifact.path, title: artifact.title, kind: artifact.kind, version: artifact.version }) };
   }
 
   if (name === "write_artifact") {
@@ -957,4 +1003,4 @@ function interruptAgent(threadId) {
   return true;
 }
 
-module.exports = { complete, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, translatePaperSelection };
+module.exports = { complete, executeTool, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, translatePaperSelection };

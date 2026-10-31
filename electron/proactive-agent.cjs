@@ -2,7 +2,7 @@ const { complete } = require("./agent.cjs");
 const { getActiveModelConfig } = require("./model-config.cjs");
 
 const SOURCES = new Set(["search", "selection", "latex", "citation", "reader", "repo", "library", "chat"]);
-const OPEN_TARGETS = new Set(["chat", "library", "daily", "writing", "artifacts"]);
+const OPEN_TARGETS = new Set(["chat", "library", "daily", "writing", "files"]);
 
 function clip(value, limit) {
   const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
@@ -43,7 +43,7 @@ function buildObservationMessages(context = {}, screenshot = null) {
     "You are the observer, judge, and tutor for Proactive agent, a quiet research sidekick inside Archimedes.",
     "Decide whether exactly one short suggestion is worth showing now. Silence is the default.",
     "Return JSON only, with no markdown fences:",
-    '{"shouldSuggest":true|false,"source":"search|selection|latex|citation|reader|repo|library|chat","title":"one sentence","whyNow":"why this is useful right now, grounded in the supplied activity and context","evidenceIds":["evidence-id"],"confidence":0.0,"action":{"kind":"insert|copy|open","label":"short verb","text":"draft only","target":"chat|library|daily|writing|artifacts"}}',
+    '{"shouldSuggest":true|false,"source":"search|selection|latex|citation|reader|repo|library|chat","title":"one sentence","whyNow":"why this is useful right now, grounded in the supplied activity and context","evidenceIds":["evidence-id"],"confidence":0.0,"action":{"kind":"insert|copy|open","label":"short verb","text":"draft only","target":"chat|library|daily|writing|files"}}',
     "Rules:",
     "- evidenceIds must contain at least one id from context.evidence. Never invent an id or an evidence label.",
     "- whyNow must describe what the context actually shows, including the activity signal when relevant.",

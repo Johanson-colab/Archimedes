@@ -132,7 +132,7 @@ test("Geist Sans and Geist Mono are bundled locally", () => {
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
   const library = fs.readFileSync(path.join(root, "src", "LibraryView.tsx"), "utf8");
-  const editor = fs.readFileSync(path.join(root, "src", "ArtifactCodeEditor.tsx"), "utf8");
+  const editor = fs.readFileSync(path.join(root, "src", "FileCodeEditor.tsx"), "utf8");
 
   assert.ok(fs.existsSync(path.join(root, "src", "assets", "fonts", "Geist-Variable.woff2")));
   assert.ok(fs.existsSync(path.join(root, "src", "assets", "fonts", "GeistMono-Variable.woff2")));

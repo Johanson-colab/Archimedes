@@ -6,7 +6,7 @@ import { HighlightStyle, LanguageDescription, indentUnit, syntaxHighlighting } f
 import { languages } from "@codemirror/language-data";
 import { markdown } from "@codemirror/lang-markdown";
 import { tags } from "@lezer/highlight";
-import type { ArtifactSelection } from "./artifact-editor";
+import type { FileSelection } from "./file-editor";
 
 const highlightStyle = HighlightStyle.define([
   { tag: tags.comment, color: "var(--code-comment)" },
@@ -47,12 +47,12 @@ async function languageExtension(filePath: string) {
   return description ? (await description.load()).extension : [];
 }
 
-export default function ArtifactCodeEditor({ filePath, value, onChange, onSave, onSelectionChange }: {
+export default function FileCodeEditor({ filePath, value, onChange, onSave, onSelectionChange }: {
   filePath: string;
   value: string;
   onChange: (value: string) => void;
   onSave: () => void;
-  onSelectionChange?: (selection: ArtifactSelection | null) => void;
+  onSelectionChange?: (selection: FileSelection | null) => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
