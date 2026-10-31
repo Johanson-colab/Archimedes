@@ -235,7 +235,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         <section className="reproduce-block">
           <h2>Runbook</h2>
           <ol className="reproduce-runbook">
-            {contract.steps.map((step, index) => <li className={`reproduce-step${step.blocked ? " blocked" : ""}`} key={step.id}>
+            {(contract.steps ?? []).map((step, index) => <li className={`reproduce-step${step.blocked ? " blocked" : ""}`} key={step.id}>
               <span className="reproduce-step-index" aria-hidden="true">{index + 1}</span>
               <div className="reproduce-step-body">
                 <div className="reproduce-step-head">
@@ -255,7 +255,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         <section className="reproduce-block">
           <h2>Numbers this runbook should produce</h2>
           <ol className="reproduce-claim-list">
-            {contract.claims.map((claim, index) => {
+            {(contract.claims ?? []).map((claim, index) => {
               const open = openClaim === claim.id;
               const where = [claim.evidence.table, claim.evidence.page ? `p. ${claim.evidence.page}` : ""].filter(Boolean).join(" · ");
               return <li className={open ? "open" : ""} key={claim.id}>
@@ -305,7 +305,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
 
         {contract.notes.length > 0 && <details className="reproduce-notes">
           <summary>Planner notes · {contract.notes.length}</summary>
-          <ul>{contract.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+          <ul>{(contract.notes ?? []).map((note) => <li key={note}>{note}</li>)}</ul>
         </details>}
 
         <footer className="reproduce-footer">

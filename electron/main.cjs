@@ -33,6 +33,7 @@ const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
+const { normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
@@ -1002,7 +1003,18 @@ app.whenReady().then(async () => {
     return resolveArxivFigure(arxivId);
   });
 
-  ipcMain.handle("reproduction:list", () => store.listReproductions());
+  // Contracts are stored as written. Older ones predate steps, and a partial
+  // write should never crash the renderer, so upgrade on the way out.
+  const presentReproduction = (record) => {
+    if (!record || !record.contract) return record;
+    try {
+      return { ...record, contract: normalizeContract(record.contract, { paperTitle: record.title }) };
+    } catch {
+      return record;
+    }
+  };
+
+  ipcMain.handle("reproduction:list", () => store.listReproductions().map(presentReproduction));
 
   ipcMain.handle("reproduction:create", (_event, input = {}) => {
     const paperId = typeof input.paperId === "string" && input.paperId ? input.paperId : null;
@@ -1018,12 +1030,12 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("reproduction:get", (_event, { id } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
-    return store.getReproduction(id);
+    return presentReproduction(store.getReproduction(id));
   });
 
   ipcMain.handle("reproduction:update", (_event, { id, patch } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
-    return store.updateReproduction(id, patch && typeof patch === "object" ? patch : {});
+    return presentReproduction(store.updateReproduction(id, patch && typeof patch === "object" ? patch : {}));
   });
 
   ipcMain.handle("reproduction:delete", (_event, { id } = {}) => {
@@ -1069,7 +1081,7 @@ app.whenReady().then(async () => {
         runAgent: agent.runAgent,
         emit,
       });
-      return store.updateReproduction(id, { status: "planned", contract, error: "" });
+      return presentReproduction(store.updateReproduction(id, { status: "planned", contract, error: "" }));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Planning failed.";
       store.updateReproduction(id, { status: "draft", error: message });
