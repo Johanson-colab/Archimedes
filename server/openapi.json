@@ -1,0 +1,1626 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Archimedes Collaboration API",
+    "version": "1.0.0",
+    "description": "Contract for async collaboration. Desktop clients remain local-first; the API is the shared write path."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787",
+      "description": "Local/LAN development"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "auth"
+    },
+    {
+      "name": "projects"
+    },
+    {
+      "name": "members"
+    },
+    {
+      "name": "libraries"
+    },
+    {
+      "name": "threads"
+    },
+    {
+      "name": "comments"
+    },
+    {
+      "name": "sync"
+    },
+    {
+      "name": "agent-runs"
+    },
+    {
+      "name": "sharing"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "security": [],
+        "tags": [
+          "auth"
+        ],
+        "operationId": "health",
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dev-session": {
+      "post": {
+        "security": [],
+        "tags": [
+          "auth"
+        ],
+        "operationId": "devSession",
+        "summary": "Development-only session token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevSessionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "me",
+        "summary": "Current user",
+        "responses": {
+          "200": {
+            "description": "Current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "listProjects",
+        "responses": {
+          "200": {
+            "description": "Memberships",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "projects"
+                  ],
+                  "properties": {
+                    "projects": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Project"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "createProject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProject"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "getProject",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/members": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "operationId": "listMembers",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "members"
+                  ],
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Member"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "operationId": "addMember",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMember"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/members/{userId}": {
+      "patch": {
+        "tags": [
+          "members"
+        ],
+        "operationId": "updateMember",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          },
+          {
+            "$ref": "#/components/parameters/UserId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMember"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "operationId": "removeMember",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          },
+          {
+            "$ref": "#/components/parameters/UserId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Removed"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/libraries": {
+      "get": {
+        "tags": [
+          "libraries"
+        ],
+        "operationId": "listLibraries",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Libraries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "libraries"
+                  ],
+                  "properties": {
+                    "libraries": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Library"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "libraries"
+        ],
+        "operationId": "createLibrary",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLibrary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/threads": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "operationId": "listThreads",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "threads"
+                  ],
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Thread"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "operationId": "createThread",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThread"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/threads/{threadId}/snapshots": {
+      "post": {
+        "tags": [
+          "threads",
+          "sharing"
+        ],
+        "operationId": "createSnapshot",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          },
+          {
+            "$ref": "#/components/parameters/ThreadId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSnapshot"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/comments": {
+      "get": {
+        "tags": [
+          "comments"
+        ],
+        "operationId": "listComments",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          },
+          {
+            "name": "resourceType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResourceType"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeResolved",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "comments"
+                  ],
+                  "properties": {
+                    "comments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Comment"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "comments"
+        ],
+        "operationId": "createComment",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateComment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/comments/{commentId}": {
+      "patch": {
+        "tags": [
+          "comments"
+        ],
+        "operationId": "resolveComment",
+        "parameters": [
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveComment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Comment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/sync/push": {
+      "post": {
+        "tags": [
+          "sync"
+        ],
+        "operationId": "pushChanges",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Push result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/sync/pull": {
+      "get": {
+        "tags": [
+          "sync"
+        ],
+        "operationId": "pullChanges",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pull result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{projectId}/agent-runs": {
+      "get": {
+        "tags": [
+          "agent-runs"
+        ],
+        "operationId": "listAgentRuns",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "runs"
+                  ],
+                  "properties": {
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AgentRun"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "agent-runs"
+        ],
+        "operationId": "createAgentRun",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProjectId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "parameters": {
+      "ProjectId": {
+        "name": "projectId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ThreadId": {
+        "name": "threadId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "UserId": {
+        "name": "userId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "required": [
+          "ok",
+          "service"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "service": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "DevSessionInput": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "required": [
+          "token",
+          "user"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "Me": {
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "default_thread_visibility": {
+            "type": "string",
+            "enum": [
+              "project",
+              "private"
+            ]
+          }
+        }
+      },
+      "ProjectEnvelope": {
+        "type": "object",
+        "required": [
+          "project"
+        ],
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          }
+        }
+      },
+      "CreateProject": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "viewer",
+          "commenter",
+          "editor",
+          "admin",
+          "owner"
+        ]
+      },
+      "Member": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MemberEnvelope": {
+        "type": "object",
+        "required": [
+          "member"
+        ],
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/Member"
+          }
+        }
+      },
+      "AddMember": {
+        "type": "object",
+        "required": [
+          "email",
+          "role"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "editor",
+              "admin"
+            ]
+          }
+        }
+      },
+      "UpdateMember": {
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "editor",
+              "admin"
+            ]
+          }
+        }
+      },
+      "Removed": {
+        "type": "object",
+        "required": [
+          "removed"
+        ],
+        "properties": {
+          "removed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Library": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "paper_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "LibraryEnvelope": {
+        "type": "object",
+        "required": [
+          "library"
+        ],
+        "properties": {
+          "library": {
+            "$ref": "#/components/schemas/Library"
+          }
+        }
+      },
+      "CreateLibrary": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          }
+        }
+      },
+      "Thread": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "title",
+          "visibility"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "project",
+              "private"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ThreadEnvelope": {
+        "type": "object",
+        "required": [
+          "thread"
+        ],
+        "properties": {
+          "thread": {
+            "$ref": "#/components/schemas/Thread"
+          }
+        }
+      },
+      "CreateThread": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "project",
+              "private"
+            ]
+          },
+          "mode": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateSnapshot": {
+        "type": "object",
+        "required": [
+          "manifest"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "manifest": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "SnapshotEnvelope": {
+        "type": "object",
+        "required": [
+          "snapshot"
+        ],
+        "properties": {
+          "snapshot": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ResourceType": {
+        "type": "string",
+        "enum": [
+          "thread",
+          "paper",
+          "review",
+          "artifact"
+        ]
+      },
+      "Comment": {
+        "type": "object",
+        "required": [
+          "id",
+          "body",
+          "author_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resource_type": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "resource_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string"
+          },
+          "author_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "author_name": {
+            "type": "string"
+          },
+          "resolved_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CommentEnvelope": {
+        "type": "object",
+        "required": [
+          "comment"
+        ],
+        "properties": {
+          "comment": {
+            "$ref": "#/components/schemas/Comment"
+          }
+        }
+      },
+      "CreateComment": {
+        "type": "object",
+        "required": [
+          "resourceType",
+          "resourceId",
+          "body"
+        ],
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "anchor": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ResolveComment": {
+        "type": "object",
+        "required": [
+          "resolved"
+        ],
+        "properties": {
+          "resolved": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SyncChange": {
+        "type": "object",
+        "required": [
+          "idempotencyKey",
+          "entityType",
+          "entityId",
+          "operation"
+        ],
+        "properties": {
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "upsert",
+              "delete",
+              "append"
+            ]
+          },
+          "clientVersion": {
+            "type": "integer"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "PushRequest": {
+        "type": "object",
+        "required": [
+          "clientId",
+          "changes"
+        ],
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncChange"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "type": "object",
+        "properties": {
+          "entityType": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "serverVersion": {
+            "type": "integer"
+          },
+          "server": {
+            "type": "object"
+          },
+          "client": {
+            "type": "object"
+          }
+        }
+      },
+      "PushResult": {
+        "type": "object",
+        "required": [
+          "cursor",
+          "accepted",
+          "conflicts"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer"
+          },
+          "accepted": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Conflict"
+            }
+          }
+        }
+      },
+      "PullResult": {
+        "type": "object",
+        "required": [
+          "cursor",
+          "changes",
+          "hasMore"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "snapshotRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentRun": {
+        "type": "object",
+        "required": [
+          "id",
+          "thread_id",
+          "driver_id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "driver_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "paused",
+              "completed",
+              "failed",
+              "interrupted"
+            ]
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentRunEnvelope": {
+        "type": "object",
+        "required": [
+          "run"
+        ],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/AgentRun"
+          }
+        }
+      },
+      "CreateAgentRun": {
+        "type": "object",
+        "required": [
+          "threadId"
+        ],
+        "properties": {
+          "threadId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contextManifest": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  }
+}
