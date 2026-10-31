@@ -48,6 +48,7 @@ export default function ProjectMembersPanel({ bridge, project, onProjectsChanged
   const [cloudEmail, setCloudEmail] = useState("");
   const [cloudRole, setCloudRole] = useState<ProjectMember["role"]>("commenter");
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [threadBusy, setThreadBusy] = useState(false);
   const [cloudError, setCloudError] = useState("");
   const [cloudNotice, setCloudNotice] = useState("");
 
@@ -156,6 +157,18 @@ export default function ProjectMembersPanel({ bridge, project, onProjectsChanged
     } finally { setCloudBusy(false); }
   }
 
+  async function syncThreads() {
+    if (threadBusy || typeof bridge.syncProjectThreads !== "function") return;
+    setThreadBusy(true); setCloudError(""); setCloudNotice("");
+    try {
+      const result = await bridge.syncProjectThreads(project.id);
+      setCloudNotice(result.warnings?.length ? result.warnings.join(" ") : t("Threads and comments synced."));
+      await onProjectsChanged?.();
+    } catch (cause) {
+      setCloudError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setThreadBusy(false); }
+  }
+
   async function addCloudMember() {
     const email = cloudEmail.trim();
     if (!email || cloudBusy || typeof bridge.addCloudProjectMember !== "function") return;
@@ -197,6 +210,7 @@ export default function ProjectMembersPanel({ bridge, project, onProjectsChanged
               </div>
               <div className="settings-row-control">
                 <button className="secondary-button" disabled={cloudBusy} onClick={() => void sync()}><RefreshCw size={13} />{t("Sync members")}</button>
+                <button className="secondary-button" disabled={threadBusy} onClick={() => void syncThreads()}><RefreshCw size={13} />{t("Sync threads")}</button>
               </div>
             </div>
             <div className="settings-row project-member-add">

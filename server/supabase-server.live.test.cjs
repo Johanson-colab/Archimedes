@@ -99,6 +99,26 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
     assert.equal(presentationForFirst.status, 200);
     assert.equal(presentationForFirst.body.presentation.presentation_json.title, "Shared deck");
 
+    const thread = await call(first, `/v1/projects/${projectId}/threads`, "POST", { title: "Shared thread", mode: "free-chat", visibility: "project" });
+    assert.equal(thread.status, 201, JSON.stringify(thread.body));
+    const turn = await call(first, `/v1/threads/${thread.body.thread.id}/turns`, "POST", { mode: "free-chat", user_message: "Hello", assistant_message: "Hi", status: "completed" });
+    assert.equal(turn.status, 201, JSON.stringify(turn.body));
+    const event = await call(first, `/v1/threads/${thread.body.thread.id}/events`, "POST", { turn_id: turn.body.turn.id, sequence: 1, type: "assistant_delta", payload: { text: "Hi" } });
+    assert.equal(event.status, 201, JSON.stringify(event.body));
+    const threadForSecond = await call(second, `/v1/threads/${thread.body.thread.id}`);
+    assert.equal(threadForSecond.status, 200);
+    assert.equal(threadForSecond.body.turns[0].user_message, "Hello");
+    assert.equal(threadForSecond.body.events[0].type, "assistant_delta");
+    const renamed = await call(second, `/v1/threads/${thread.body.thread.id}`, "PATCH", { title: "Shared thread edited" });
+    assert.equal(renamed.status, 200);
+    const comment = await call(second, `/v1/projects/${projectId}/comments`, "POST", { resource_type: "thread", resource_id: thread.body.thread.id, body: "Looks good" });
+    assert.equal(comment.status, 201, JSON.stringify(comment.body));
+    const commentsForFirst = await call(first, `/v1/projects/${projectId}/comments?resourceType=thread&resourceId=${thread.body.thread.id}`);
+    assert.equal(commentsForFirst.status, 200);
+    assert.equal(commentsForFirst.body.comments[0].body, "Looks good");
+    const resolved = await call(second, `/v1/comments/${comment.body.comment.id}`, "PATCH", { resolved_at: new Date().toISOString() });
+    assert.equal(resolved.status, 200);
+
     const removeHighlight = await call(first, `/v1/highlights/${highlight.body.highlight.id}`, "DELETE");
     assert.equal(removeHighlight.status, 200);
     const removePaper = await call(first, `/v1/libraries/${library.body.library.id}/papers/${addedPaper.body.paper.id}`, "DELETE");

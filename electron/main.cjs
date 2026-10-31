@@ -25,6 +25,7 @@ const { createSupabaseAuth } = require("./supabase-auth.cjs");
 const { createCollaborationApi } = require("./collaboration-api.cjs");
 const { createLibrarySync } = require("./library-sync.cjs");
 const { createAnnotationSync } = require("./annotation-sync.cjs");
+const { createThreadSync } = require("./thread-sync.cjs");
 const { createSupabaseServer } = require("../server/supabase-server.cjs");
 const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
@@ -1282,6 +1283,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("collab:sync-annotations", async (_event, { projectId } = {}) => {
     await authReady;
     return createAnnotationSync({ store, api: requireCollaboration() }).syncProjectAnnotations(projectId, { currentCloudUserId: supabaseAuth.state().user?.id || "" });
+  });
+  ipcMain.handle("collab:sync-threads", async (_event, { projectId } = {}) => {
+    await authReady;
+    return createThreadSync({ store, api: requireCollaboration() }).syncProjectThreads(projectId, {
+      currentCloudUserId: supabaseAuth.state().user?.id || "",
+      localUserId: localIdentity.localIdentity().userId,
+    });
   });
   ipcMain.handle("collab:publish-project", async (_event, { projectId } = {}) => {
     const api = requireCollaboration();

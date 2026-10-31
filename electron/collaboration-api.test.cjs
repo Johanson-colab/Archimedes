@@ -81,6 +81,32 @@ test("collaboration API maps highlights, reviews, and presentations", async () =
   assert.deepEqual(await api.savePresentation("p1", "paper", { title: "Deck" }, { visibility: "project" }), { id: "p1" });
 });
 
+test("collaboration API maps thread, turn, event, and comment routes", async () => {
+  const fake = fakeApi((url, options) => {
+    if (url.endsWith("/threads") && options.method === "POST") return { status: 201, body: { thread: { id: "t1" } } };
+    if (url.endsWith("/threads")) return { status: 200, body: { threads: [{ id: "t1" }] } };
+    if (url.endsWith("/threads/t1") && options.method === "PATCH") return { status: 200, body: { thread: { id: "t1", title: "Renamed" } } };
+    if (url.endsWith("/threads/t1")) return { status: 200, body: { thread: { id: "t1" }, turns: [], events: [] } };
+    if (url.endsWith("/turns")) return { status: 201, body: { turn: { id: "turn1" } } };
+    if (url.endsWith("/events")) return { status: 201, body: { events: [{ id: "e1" }] } };
+    if (url.endsWith("/comments") && options.method === "POST") return { status: 201, body: { comment: { id: "c1" } } };
+    if (url.includes("/comments?")) return { status: 200, body: { comments: [{ id: "c1" }] } };
+    if (url.endsWith("/comments/c1")) return { status: 200, body: { comment: { id: "c1" } } };
+    return { status: 404, body: { error: "missing" } };
+  });
+  const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => "jwt", fetchImpl: fake.fetchImpl });
+
+  assert.deepEqual(await api.listThreads("p1"), [{ id: "t1" }]);
+  assert.deepEqual(await api.saveThread("p1", { title: "Thread" }), { id: "t1" });
+  assert.equal((await api.getThread("t1")).thread.id, "t1");
+  assert.deepEqual(await api.updateThread("t1", { title: "Renamed" }), { id: "t1", title: "Renamed" });
+  assert.deepEqual(await api.saveTurn("t1", { user_message: "Hi" }), { id: "turn1" });
+  assert.deepEqual(await api.saveEvents("t1", [{ id: "e1" }]), [{ id: "e1" }]);
+  assert.deepEqual(await api.listComments("p1", { resourceType: "thread", resourceId: "t1" }), [{ id: "c1" }]);
+  assert.deepEqual(await api.saveComment("p1", { body: "Hi" }), { id: "c1" });
+  assert.deepEqual(await api.updateComment("c1", { resolved_at: "now" }), { id: "c1" });
+});
+
 test("collaboration API requires sign-in and surfaces API errors", async () => {
   const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => null, fetchImpl: async () => { throw new Error("should not fetch"); } });
   await assert.rejects(() => api.listProjects(), /Sign in/i);

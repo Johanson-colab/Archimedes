@@ -131,6 +131,58 @@ function createCollaborationApi({ baseUrl, getToken, fetchImpl = globalThis.fetc
         body: { presentation, visibility, source_review_updated_at: sourceReviewUpdatedAt },
       })).presentation;
     },
+    async listThreads(projectId) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/threads`)).threads || [];
+    },
+    async saveThread(projectId, thread) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/threads`, {
+        method: "POST",
+        body: thread,
+      })).thread;
+    },
+    async getThread(threadId) {
+      return request(`/v1/threads/${encodeURIComponent(threadId)}`);
+    },
+    async updateThread(threadId, patch) {
+      return (await request(`/v1/threads/${encodeURIComponent(threadId)}`, {
+        method: "PATCH",
+        body: patch,
+      })).thread;
+    },
+    async saveTurn(threadId, turn) {
+      return (await request(`/v1/threads/${encodeURIComponent(threadId)}/turns`, {
+        method: "POST",
+        body: turn,
+      })).turn;
+    },
+    async saveEvents(threadId, events) {
+      return (await request(`/v1/threads/${encodeURIComponent(threadId)}/events`, {
+        method: "POST",
+        body: { events },
+      })).events || [];
+    },
+    async listComments(projectId, { resourceType = "", resourceId = "" } = {}) {
+      const query = new URLSearchParams();
+      if (resourceType) query.set("resourceType", resourceType);
+      if (resourceId) query.set("resourceId", resourceId);
+      const suffix = query.toString() ? `?${query}` : "";
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/comments${suffix}`)).comments || [];
+    },
+    async saveComment(projectId, comment) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/comments`, {
+        method: "POST",
+        body: comment,
+      })).comment;
+    },
+    async updateComment(commentId, patch) {
+      return (await request(`/v1/comments/${encodeURIComponent(commentId)}`, {
+        method: "PATCH",
+        body: patch,
+      })).comment;
+    },
+    async deleteComment(commentId) {
+      return request(`/v1/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" });
+    },
   };
 }
 

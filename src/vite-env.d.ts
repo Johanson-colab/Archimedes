@@ -19,6 +19,7 @@ interface ResearchDeskBridge {
     importCloudProject: (cloudProjectId: string) => Promise<CloudProjectSyncResult>;
     syncProjectLibraries: (projectId: string) => Promise<CloudLibrarySyncResult>;
     syncProjectAnnotations: (projectId: string) => Promise<CloudAnnotationSyncResult>;
+    syncProjectThreads: (projectId: string) => Promise<CloudThreadSyncResult>;
     updateLocalIdentity: (patch: { displayName: string }) => Promise<LocalIdentity>;
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
@@ -863,6 +864,11 @@ interface CloudLibrarySyncResult {
 }
 
 interface CloudAnnotationSyncResult {
+  project: ResearchProject;
+  warnings?: string[];
+}
+
+interface CloudThreadSyncResult {
   project: ResearchProject;
   warnings?: string[];
 }
