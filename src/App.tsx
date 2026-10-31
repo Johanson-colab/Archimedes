@@ -2894,7 +2894,7 @@ function App() {
         initialMode={authModalMode}
         onClose={() => setAuthModalOpen(false)}
         onSignIn={signIn}
-        onSignUp={signUp}
+        onSignUp={signUpAndConfirm}
         onMagicLink={signInWithMagicLink}
         onOAuth={signInWithOAuth}
         onResetPassword={requestPasswordReset}
