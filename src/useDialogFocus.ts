@@ -28,7 +28,7 @@ export function useDialogFocus<T extends HTMLElement>(open: boolean, onClose: ()
     const root = ref.current;
     if (!root) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const first = root.querySelector<HTMLElement>("[autofocus]") ?? focusableElements(root)[0] ?? root;
+    const first = root.querySelector<HTMLElement>("[autofocus], input:not([type='hidden']):not([disabled]), textarea:not([disabled]), select:not([disabled])") ?? focusableElements(root)[0] ?? root;
     const frame = requestAnimationFrame(() => first.focus());
 
     const handleKeyDown = (event: KeyboardEvent) => {

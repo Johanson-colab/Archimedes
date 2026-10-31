@@ -2465,12 +2465,20 @@ function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | 
     setBusy(true);
     try { await onSave({ name: name.trim(), description: description.trim(), color }); } finally { setBusy(false); }
   }
-  return <div className="modal-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal" role="dialog" aria-modal="true" aria-label={editor === "new" ? "New library" : "Edit library"} onMouseDown={(event) => event.stopPropagation()}>
-    <div className="modal-header"><div><span className="eyebrow">Knowledge base</span><h2>{editor === "new" ? "New literature library" : "Edit library"}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
-    <label>Library name<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Agentic RAG" /></label>
-    <label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="What belongs in this research direction?" /></label>
-    <div className="color-picker" aria-label="Library color">{LIBRARY_COLORS.map((swatch) => <button key={swatch} className={color === swatch ? "color-swatch selected" : "color-swatch"} style={{ background: swatch }} onClick={() => setColor(swatch)} title={swatch}>{color === swatch && <Check size={13} />}</button>)}</div>
-    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !name.trim()} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{editor === "new" ? "Create library" : "Save changes"}</button></div>
+  return <div className="modal-backdrop dialog-ref-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="dialog-ref library-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="library-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+    <header className="dialog-ref-header">
+      <div><h2 id="library-editor-title">{editor === "new" ? "New literature library" : "Edit library"}</h2><p>{editor === "new" ? "Libraries keep related papers, notes, and annotations together so you can return to a research direction without rebuilding context." : "Update the name, description, or color of this library."}</p></div>
+      <button className="dialog-ref-close" onClick={onClose} title="Close" aria-label="Close"><X size={18} /></button>
+    </header>
+    <div className="dialog-ref-body">
+      <label className="dialog-ref-field"><span>Library name</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Agentic RAG" /><small>Use a short name that identifies this research direction.</small></label>
+      <label className="dialog-ref-field"><span>Description</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="What belongs in this research direction?" /><small>Optional. Briefly describe the scope of the library.</small></label>
+      <div className="dialog-ref-field"><span>Color</span><div className="color-picker" aria-label="Library color">{LIBRARY_COLORS.map((swatch) => <button key={swatch} className={color === swatch ? "color-swatch selected" : "color-swatch"} style={{ background: swatch }} onClick={() => setColor(swatch)} title={swatch}>{color === swatch && <Check size={13} />}</button>)}</div></div>
+    </div>
+    <footer className="dialog-ref-footer">
+      <button className="secondary-button" onClick={onClose}>Cancel</button>
+      <button className="primary-button" disabled={busy || !name.trim()} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin" size={14} /> : null}{editor === "new" ? "Create library" : "Save changes"}</button>
+    </footer>
   </section></div>;
 }
 
