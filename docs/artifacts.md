@@ -20,6 +20,7 @@ from **Changes** (the complete diff of agent writes).
   latest card and a `vN` marker; there is no version-history UI yet.
 - A dot and badge count explicit artifacts that are unseen since the Artifacts
   tab was last opened.
+- Gallery previews use a 4:3 aspect ratio.
 - Images open a full-screen viewer with previous/next and `Open in Files`.
   Markdown, CSV/TSV, JSON, and HTML/SVG open inline previews. HTML/SVG render in
   a sandboxed iframe with scripts, network, and same-origin access disabled.

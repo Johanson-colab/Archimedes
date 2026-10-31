@@ -2124,7 +2124,7 @@ function App() {
 
   function reviewPendingAction() {
     requestAnimationFrame(() => {
-      document.querySelector(".approval-card")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      document.querySelector(".conversation-approval")?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
   }
 
@@ -2674,16 +2674,15 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
         {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         {pendingAction && <section className="conversation-approval">
-          <div className="approval-icon">{pendingAction.kind === "write" ? <FileText size={16} /> : <SquareTerminal size={16} />}</div>
           <div className="approval-content">
-            <span>{pendingAction.kind === "write" ? "File write requires approval" : "Command requires approval"}</span>
+            <div className="approval-head">
+              <span className="approval-kind">{pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
+              {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
+            </div>
             <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
-            {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
-            {pendingAction.kind === "write" && pendingAction.payload.content && <pre className="proposal-preview">{pendingAction.payload.content.slice(0, 260)}</pre>}
-            <p>{pendingAction.kind === "write" ? "This will write a file inside the selected workspace." : "This will run in the selected workspace and record its output."}</p>
             <div className="approval-actions">
-              <button className="secondary-button" onClick={onReject}><X size={14} />Dismiss</button>
-              <button className="primary-button" onClick={onApprove}>{pendingAction.kind === "write" ? <Check size={14} /> : <Play size={14} />}{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
+              <button className="approval-dismiss" onClick={onReject}>Dismiss</button>
+              <button className="approval-apply" onClick={onApprove}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
             </div>
           </div>
         </section>}

@@ -123,7 +123,7 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
 
   useEffect(() => {
     for (const item of items) {
-      if (item.kind === "image" || item.kind === "markdown" || item.kind === "csv" || item.kind === "json") void loadFile(item.path);
+      if (item.kind === "image" || item.kind === "markdown" || item.kind === "csv" || item.kind === "json" || item.kind === "html" || item.kind === "svg") void loadFile(item.path);
     }
   }, [items, loadFile]);
 
@@ -255,11 +255,12 @@ function ArtifactMiniPreview({ item, file }: { item: ArtifactItem; file?: Worksp
     return <table className="artifact-mini-table"><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{row.slice(0, 3).map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table>;
   }
   if (item.kind === "markdown" && file?.content) {
-    return <div className="artifact-mini-markdown">{file.content.split(/\r?\n/).filter((line) => line.trim()).slice(0, 5).map((line, index) => <span key={index} className={index === 0 ? "title" : ""}>{line.replace(/^#+\s*/, "").replace(/\*\*/g, "")}</span>)}</div>;
+    return <div className="artifact-mini-markdown">{file.content.split(/\r?\n/).filter((line) => line.trim()).slice(0, 8).map((line, index) => <span key={index} className={index === 0 ? "title" : ""}>{line.replace(/^#+\s*/, "").replace(/\*\*/g, "")}</span>)}</div>;
   }
   if (item.kind === "json") return <pre className="artifact-mini-code">{file?.content?.slice(0, 160) ?? "{…}"}</pre>;
-  if (item.kind === "html" || item.kind === "svg") return <div className="artifact-mini-web"><GlobeGlyph />{item.kind.toUpperCase()}</div>;
-  if (item.kind === "pdf") return <div className="artifact-mini-pdf"><FileText size={22} /><span>{artifactTitle(item.path)}</span></div>;
+  if (item.kind === "html") return file?.content ? <iframe className="artifact-mini-frame" title="" sandbox="" srcDoc={file.content} tabIndex={-1} /> : <div className="artifact-mini-web"><GlobeGlyph />HTML</div>;
+  if (item.kind === "svg") return file?.previewUrl ? <img className="artifact-mini-svg" src={file.previewUrl} alt="" /> : file?.content ? <iframe className="artifact-mini-frame" title="" sandbox="" srcDoc={file.content} tabIndex={-1} /> : <div className="artifact-mini-web"><GlobeGlyph />SVG</div>;
+  if (item.kind === "pdf") return <div className="artifact-mini-pdf"><div className="artifact-mini-pdf-page"><span>PDF</span><strong>{artifactTitle(item.path)}</strong><i /><i /><i /><i /></div></div>;
   return <div className="artifact-mini-file"><FileText size={18} /><span>{artifactTypeLabelForPath(item.path)}</span></div>;
 }
 

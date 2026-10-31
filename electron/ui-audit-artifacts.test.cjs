@@ -26,6 +26,9 @@ test("Artifacts is an independent, default-hidden workbench tab", () => {
   assert.match(app, /artifacts: <ArtifactsPanel/);
   assert.match(app, /badges=\{\{[^}]*artifacts: artifactsBadge/);
   assert.match(app, /event\.type === "artifact"/);
+  assert.match(app, /approval-apply/);
+  assert.doesNotMatch(app, /approval-icon/);
+  assert.match(css, /\.approval-apply/);
   assert.match(app, /setArtifactsVersion/);
   assert.match(settings, /<strong>\{t\(tab\.labelKey\)\}<\/strong>/);
   assert.doesNotMatch(settings, /Optional/);
@@ -41,6 +44,7 @@ test("the gallery is a square-card album with grouped output and filters", () =>
   assert.match(panel, /Search artifacts/);
   assert.match(panel, /artifact-card\$\{!item\.seen/);
   assert.match(css, /\.artifact-card \{[^}]*border-radius: 0;/);
+  assert.match(css, /\.artifact-thumb \{[^}]*aspect-ratio: 4 \/ 3;/);
   assert.match(css, /\.artifacts-group h3 \{[^}]*font-size: 11px;[^}]*font-weight: 650;[^}]*text-transform: none;/);
   assert.match(model, /artifactKind/);
   assert.match(model, /markdown/);

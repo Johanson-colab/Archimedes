@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, BookOpen, Check, ChevronDown, FileCode2, Search, SquareTerminal, Wrench } from "lucide-react";
+import { BookOpen, ChevronDown, FileCode2, Search, SquareTerminal, Wrench } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { eventFailedAnswer } from "./journeyEventState";
 
@@ -208,7 +208,7 @@ export default function ChatActivityTimeline({
             <span className="chat-activity-step-label">{step.label}</span>
             <span className="chat-activity-step-detail" title={step.full || step.detail}>{step.detail || step.full || "—"}</span>
             <span className="chat-activity-step-state" aria-label={step.status}>
-              {step.status === "running" ? <span className="chat-activity-pulse" /> : step.status === "waiting" ? <span className="chat-activity-wait" /> : step.status === "error" ? <span className="chat-activity-error">!</span> : <Check size={11} />}
+              {step.status === "running" ? <span className="chat-activity-pulse" /> : step.status === "waiting" ? <span className="chat-activity-wait" /> : step.status === "error" ? <span className="chat-activity-error">!</span> : null}
             </span>
             {chatVerbosity === "high" && step.full && <span className="chat-activity-step-full">{step.full}</span>}
           </div>;
@@ -218,10 +218,7 @@ export default function ChatActivityTimeline({
         </button>}
       </div>}
       {!busy && <div className={`chat-activity-footer${failed ? " failed" : ""}`}>
-        {failed ? <AlertCircle size={11} /> : <Check size={11} />}
         <strong>{failed ? t("Stopped with an error") : t("Completed")}</strong>
-        <span className="chat-activity-footer-sep">·</span>
-        <span>{stepCountLabel}</span>
         {sources > 0 && <><span className="chat-activity-footer-sep">·</span><span>{t("{count} sources", { count: sources })}</span></>}
       </div>}
     </div>
