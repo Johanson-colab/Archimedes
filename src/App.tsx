@@ -580,6 +580,7 @@ const previewBridge = {
   updateCloudProjectMember: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
   removeCloudProjectMember: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
   importCloudProject: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
+  syncProjectLibraries: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
   listAuditEvents: async (projectId?: string | null) => structuredClone([...previewAuditEvents].reverse()),
   listComments: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; includeResolved?: boolean }) => structuredClone(previewComments.filter((comment) => comment.resource_type === input.resourceType && comment.resource_id === input.resourceId && (input.includeResolved !== false || !comment.resolved_at))),
   createComment: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => {

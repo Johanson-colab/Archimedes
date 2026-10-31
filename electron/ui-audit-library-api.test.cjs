@@ -10,6 +10,10 @@ const api = read("electron/collaboration-api.cjs");
 const sql = read("server/sql/0005_library_api.sql");
 const integrity = read("server/sql/0006_library_api_integrity.sql");
 const docs = read("docs/collaboration-api.md");
+const main = read("electron/main.cjs");
+const preload = read("electron/preload.cjs");
+const libraryView = read("src/LibraryView.tsx");
+const bridge = read("src/vite-env.d.ts");
 
 test("library API exposes project libraries, papers, and per-user paper state", () => {
   assert.match(server, /projectLibrariesMatch/);
@@ -21,6 +25,15 @@ test("library API exposes project libraries, papers, and per-user paper state", 
   assert.match(api, /listLibraries/);
   assert.match(api, /addPaper/);
   assert.match(api, /updatePaperState/);
+});
+
+test("desktop library view can push and pull shared libraries", () => {
+  assert.match(main, /collab:sync-libraries/);
+  assert.match(main, /createLibrarySync/);
+  assert.match(preload, /syncProjectLibraries/);
+  assert.match(bridge, /interface CloudLibrarySyncResult/);
+  assert.match(libraryView, /Sync cloud/);
+  assert.match(libraryView, /syncProjectLibraries/);
 });
 
 test("canonical papers are shared without cross-project metadata overwrites", () => {

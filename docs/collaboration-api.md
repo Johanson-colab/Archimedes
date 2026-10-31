@@ -69,6 +69,11 @@ signed-in Supabase access token. Settings → Members can publish a local projec
 sync its members, invite by email, and import a shared project. Pulled members
 are stored with `source = cloud`; the local owner is preserved.
 
+The Library view has a **Sync cloud** action for a shared project. It pushes
+unlinked local libraries and papers, imports libraries and canonical papers
+from collaborators, and reconciles per-user paper state by timestamp. New cloud
+ids are cached in `libraries.cloud_library_id` and `papers.cloud_paper_id`.
+
 ## Not included yet
 
 - Invites for users who have not signed up

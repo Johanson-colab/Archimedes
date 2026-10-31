@@ -53,6 +53,7 @@ import {
   ChevronRight,
   ChevronUp,
   Clock3,
+  Cloud,
   Code2,
   ExternalLink,
   FileCode2,
@@ -207,6 +208,8 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   const [libraryEditor, setLibraryEditor] = useState<ResearchLibrary | "new" | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [otherProjects, setOtherProjects] = useState<LibraryProjectSummary[]>([]);
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudNotice, setCloudNotice] = useState("");
 
   const loadLibraries = useCallback(async () => {
     setLoading(true);
@@ -305,6 +308,24 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
     await Promise.all([loadPapers(selectedLibrary.id, localQuery), loadLibraries()]);
   }
 
+  async function syncLibraries() {
+    if (!projectId || cloudBusy || typeof bridge.syncProjectLibraries !== "function") return;
+    setCloudBusy(true);
+    setCloudNotice("");
+    setError("");
+    try {
+      const result = await bridge.syncProjectLibraries(projectId);
+      setLibraries(result.libraries);
+      setCloudNotice(result.warnings?.length ? result.warnings.join(" ") : "Libraries and papers are in sync.");
+      onLibraryImported?.();
+      if (selectedLibraryId) await loadPapers(selectedLibraryId, localQuery);
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : String(syncError));
+    } finally {
+      setCloudBusy(false);
+    }
+  }
+
   if (mode === "daily") {
     return <DailyDiscovery initialMode={initialDailyMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => {
       await loadLibraries();
@@ -314,8 +335,11 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 
   if (!selectedLibrary) {
     return <section className="library-page">
-      <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button></ToolbarActions>
+      <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button>
+        <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title="Sync shared libraries"><Cloud size={15} />{cloudBusy ? "Syncing…" : "Sync cloud"}</button>
+      </ToolbarActions>
       {error && <div className="library-error">{error}</div>}
+      {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
       {!loading && projectPaperCount === 0 && otherProjects.length > 0 && <div className="library-project-hint">
         <div>
           <strong>This project has no papers yet</strong>
@@ -370,12 +394,14 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
       <button className="icon-button" onClick={() => setSelectedLibraryId(null)} title="All libraries"><ArrowLeft size={17} /></button>
       <div className="library-toolbar"><Search size={15} /><input value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder="Search title, author, abstract, or venue" /><span>{papers.length} papers</span></div>
       <div className="library-header-actions">
+        <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title="Sync shared libraries"><Cloud size={14} />{cloudBusy ? "Syncing…" : "Sync"}</button>
         <button className="icon-button" onClick={() => setLibraryEditor(selectedLibrary)} title="Edit library"><Pencil size={15} /></button>
         <button className="icon-button danger" onClick={() => void deleteLibrary()} title="Delete library"><Trash2 size={15} /></button>
         <button className="primary-button" onClick={() => setImportOpen(true)}><Plus size={15} />Import paper</button>
       </div>
     </header>
     {error && <div className="library-error">{error}</div>}
+    {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
     <div className="library-split">
       <div className="library-paper-list">
         {loading && !papers.length ? <LoadingState /> : papers.length ? papers.map((paper) => <button className={paper.id === selectedPaperId ? "library-paper-row selected" : "library-paper-row"} key={paper.id} onClick={() => setSelectedPaperId(paper.id)}>

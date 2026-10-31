@@ -445,6 +445,8 @@ function schema(db) {
   ensureColumn(db, "research_projects", "cloud_project_id", "TEXT");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
+  ensureColumn(db, "libraries", "cloud_library_id", "TEXT");
+  ensureColumn(db, "papers", "cloud_paper_id", "TEXT");
   ensureColumn(db, "paper_highlights", "project_id", "TEXT");
   ensureColumn(db, "paper_highlights", "author_id", "TEXT");
   ensureColumn(db, "paper_highlights", "visibility", "TEXT NOT NULL DEFAULT 'project'");
@@ -456,6 +458,8 @@ function schema(db) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_research_projects_cloud ON research_projects(cloud_project_id) WHERE cloud_project_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_libraries_cloud ON libraries(cloud_library_id) WHERE cloud_library_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_cloud ON papers(cloud_paper_id) WHERE cloud_paper_id IS NOT NULL;
   `);
   ensureLocalUser(db);
   const projectId = ensureDefaultProject(db);
@@ -890,6 +894,7 @@ function hydratePaper(row) {
     reading_status: state?.reading_status ?? row.reading_status,
     starred: Boolean(state?.starred ?? row.starred),
     notes: state?.notes ?? row.notes,
+    state_updated_at: state?.updated_at ?? null,
   };
 }
 
@@ -904,7 +909,7 @@ function listLibraries(projectId = null) {
   if (!canAccessProject(resolvedProject, "viewer")) return [];
   return db.prepare(`
     SELECT libraries.id, libraries.project_id, libraries.name, libraries.description, libraries.color,
-      libraries.created_at, libraries.updated_at, COUNT(library_papers.paper_id) AS paper_count
+      libraries.cloud_library_id, libraries.created_at, libraries.updated_at, COUNT(library_papers.paper_id) AS paper_count
     FROM libraries
     LEFT JOIN library_papers ON library_papers.library_id = libraries.id
     WHERE libraries.project_id = ?
@@ -943,7 +948,7 @@ function createLibrary({ projectId = null, name, description = "", color = "#397
   const resolvedProject = resolveLibraryProject(projectId);
   if (!canAccessProject(resolvedProject, "editor")) throw new Error("You do not have permission to add libraries to this project.");
   const createdAt = timestamp();
-  const library = { id: randomUUID(), project_id: resolvedProject, name: name.trim(), description: description.trim(), color, created_at: createdAt, updated_at: createdAt, paper_count: 0 };
+  const library = { id: randomUUID(), project_id: resolvedProject, name: name.trim(), description: description.trim(), color, cloud_library_id: null, created_at: createdAt, updated_at: createdAt, paper_count: 0 };
   db.prepare("INSERT INTO libraries (id, project_id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .run(library.id, library.project_id, library.name, library.description, library.color, library.created_at, library.updated_at);
   recordAuditEvent(db, { projectId: resolvedProject, action: "library.created", targetType: "library", targetId: library.id, metadata: { name: library.name } });
@@ -1390,7 +1395,7 @@ function addPaper(libraryId, paper) {
   const conferenceJson = paper.conference && typeof paper.conference === "object" ? JSON.stringify(paper.conference) : null;
   if (conferenceJson && conferenceJson.length > 10000) throw new Error("Conference metadata is too large.");
   const now = timestamp();
-  const key = canonicalPaperKey(paper);
+  const key = String(paper.canonical_key || "").trim() || canonicalPaperKey(paper);
   const existing = db.prepare("SELECT id FROM papers WHERE canonical_key = ?").get(key);
   const paperId = existing?.id || randomUUID();
 
@@ -1423,6 +1428,86 @@ function addPaper(libraryId, paper) {
   db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, paperId, now);
   db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(now, libraryId);
   return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
+}
+
+function linkLibraryToCloud(libraryId, cloudLibraryId) {
+  const db = requireDatabase();
+  const library = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(libraryId);
+  if (!library) throw new Error("Library not found.");
+  if (!canAccessProject(library.project_id, "editor")) throw new Error("You do not have permission to share this library.");
+  const normalized = String(cloudLibraryId || "").trim();
+  if (!normalized) throw new Error("A cloud library is required.");
+  db.prepare("UPDATE libraries SET cloud_library_id = ?, updated_at = ? WHERE id = ?").run(normalized, timestamp(), libraryId);
+  return listLibraries(library.project_id).find((candidate) => candidate.id === libraryId) || null;
+}
+
+function importCloudLibrary(projectId, { cloudLibraryId, name, description = "", color = "#3973c8" } = {}) {
+  const db = requireDatabase();
+  const normalized = String(cloudLibraryId || "").trim();
+  if (!normalized) throw new Error("A cloud library is required.");
+  const existing = db.prepare("SELECT id, project_id FROM libraries WHERE cloud_library_id = ?").get(normalized);
+  if (existing) {
+    return listLibraries(existing.project_id).find((candidate) => candidate.id === existing.id) || null;
+  }
+  const library = createLibrary({ projectId, name: String(name || "Shared library"), description, color });
+  return linkLibraryToCloud(library.id, normalized);
+}
+
+function linkPaperToCloud(paperId, cloudPaperId) {
+  const db = requireDatabase();
+  const normalized = String(cloudPaperId || "").trim();
+  if (!normalized) throw new Error("A cloud paper is required.");
+  db.prepare("UPDATE papers SET cloud_paper_id = ?, updated_at = ? WHERE id = ?").run(normalized, timestamp(), paperId);
+  return getPaper(paperId);
+}
+
+function syncPaperFromCloud(libraryId, cloudPaper) {
+  const db = requireDatabase();
+  const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
+  if (!library) throw new Error("Library not found.");
+  if (!canAccessProject(library.project_id, "editor")) throw new Error("You do not have permission to add papers to this library.");
+  const cloudPaperId = String(cloudPaper.id || "").trim();
+  const canonicalKey = String(cloudPaper.canonical_key || "").trim() || canonicalPaperKey(cloudPaper);
+  let existing = cloudPaperId
+    ? db.prepare("SELECT * FROM papers WHERE cloud_paper_id = ?").get(cloudPaperId)
+    : null;
+  if (!existing) existing = db.prepare("SELECT * FROM papers WHERE canonical_key = ?").get(canonicalKey);
+  if (!existing) {
+    const local = addPaper(libraryId, {
+      ...cloudPaper,
+      canonical_key: canonicalKey,
+      authors: Array.isArray(cloudPaper.authors) ? cloudPaper.authors : [],
+      conference: cloudPaper.conference || undefined,
+    });
+    const linked = linkPaperToCloud(local.id, cloudPaperId || local.id);
+    return applyCloudPaperState(local.id, cloudPaper) || linked;
+  }
+  if (cloudPaperId) db.prepare("UPDATE papers SET cloud_paper_id = COALESCE(cloud_paper_id, ?) WHERE id = ?").run(cloudPaperId, existing.id);
+  db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, existing.id, timestamp());
+  db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(timestamp(), libraryId);
+  return getPaper(existing.id);
+}
+
+function applyCloudPaperState(paperId, state) {
+  if (!state) return getPaper(paperId);
+  const db = requireDatabase();
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(paper_id, user_id) DO UPDATE SET reading_status = excluded.reading_status, starred = excluded.starred,
+      notes = excluded.notes, tags_json = excluded.tags_json, updated_at = excluded.updated_at
+  `).run(
+    paperId,
+    localIdentity.userId,
+    ["unread", "reading", "read"].includes(state.reading_status) ? state.reading_status : "unread",
+    state.starred ? 1 : 0,
+    String(state.notes || ""),
+    JSON.stringify(Array.isArray(state.tags) ? state.tags : (Array.isArray(state.tags_json) ? state.tags_json : [])),
+    String(state.created_at || state.state_updated_at || now),
+    String(state.state_updated_at || now),
+  );
+  return getPaper(paperId);
 }
 
 function updatePaper(id, patch) {
@@ -2365,6 +2450,11 @@ module.exports = {
   linkResearchProjectToCloud,
   importCloudProject,
   syncProjectMembersFromCloud,
+  linkLibraryToCloud,
+  importCloudLibrary,
+  linkPaperToCloud,
+  syncPaperFromCloud,
+  applyCloudPaperState,
   renameResearchProject,
   setResearchProjectWorkspace,
   createResearchThread,

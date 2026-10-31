@@ -17,6 +17,7 @@ interface ResearchDeskBridge {
     updateCloudProjectMember: (projectId: string, userId: string, role: ProjectMember["role"]) => Promise<CloudProjectSyncResult>;
     removeCloudProjectMember: (projectId: string, userId: string) => Promise<CloudProjectSyncResult>;
     importCloudProject: (cloudProjectId: string) => Promise<CloudProjectSyncResult>;
+    syncProjectLibraries: (projectId: string) => Promise<CloudLibrarySyncResult>;
     updateLocalIdentity: (patch: { displayName: string }) => Promise<LocalIdentity>;
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
@@ -552,6 +553,7 @@ interface ResearchLibrary {
   name: string;
   description: string;
   color: string;
+  cloud_library_id?: string | null;
   paper_count: number;
   created_at: string;
   updated_at: string;
@@ -728,6 +730,8 @@ interface LibraryPaper extends AcademicSearchResult {
   starred: boolean;
   notes: string;
   tags: string[];
+  cloud_paper_id?: string | null;
+  state_updated_at?: string | null;
   created_at: string;
   updated_at: string;
   github_url: string;
@@ -848,6 +852,12 @@ interface CloudProject {
 interface CloudProjectSyncResult {
   project: ResearchProject;
   members: ProjectMember[];
+  warnings?: string[];
+}
+
+interface CloudLibrarySyncResult {
+  project: ResearchProject;
+  libraries: ResearchLibrary[];
   warnings?: string[];
 }
 

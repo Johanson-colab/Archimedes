@@ -60,6 +60,8 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
       paper: { canonical_key: canonicalKey, title: "Smoke test paper", authors: ["Ada Lovelace"], year: 2026 },
     });
     assert.equal(addedPaper.status, 201, JSON.stringify(addedPaper.body));
+    const refreshedLibraries = await call(first, `/v1/projects/${projectId}/libraries`);
+    assert.equal(refreshedLibraries.body.libraries.find((candidate) => candidate.id === library.body.library.id).paper_count, 1);
     const secondLibraries = await call(second, `/v1/projects/${projectId}/libraries`);
     assert.equal(secondLibraries.status, 200);
     assert.ok(secondLibraries.body.libraries.some((candidate) => candidate.id === library.body.library.id));
