@@ -31,6 +31,16 @@ user's JWT; RLS stays enabled and no service-role key is needed.
 - `PUT /v1/projects/{projectId}/papers/{paperId}/review`
 - `GET /v1/projects/{projectId}/papers/{paperId}/presentation`
 - `PUT /v1/projects/{projectId}/papers/{paperId}/presentation`
+- `GET /v1/projects/{projectId}/threads`
+- `POST /v1/projects/{projectId}/threads`
+- `GET /v1/threads/{threadId}`
+- `PATCH /v1/threads/{threadId}`
+- `POST /v1/threads/{threadId}/turns`
+- `POST /v1/threads/{threadId}/events`
+- `GET /v1/projects/{projectId}/comments`
+- `POST /v1/projects/{projectId}/comments`
+- `PATCH /v1/comments/{commentId}`
+- `DELETE /v1/comments/{commentId}`
 
 The API delegates project creation and member management to the PostgreSQL
 functions `create_project`, `add_project_member_by_email`,

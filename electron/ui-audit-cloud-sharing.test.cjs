@@ -24,6 +24,8 @@ test("desktop hosts the collaboration API and exposes cloud share actions", () =
   assert.match(main, /collab:import-project/);
   assert.match(main, /collab:update-member/);
   assert.match(main, /collab:remove-member/);
+  assert.match(main, /collab:sync-threads/);
+  assert.match(main, /createThreadSync/);
   assert.match(preload, /publishProject/);
   assert.match(preload, /syncCloudProject/);
   assert.match(bridge, /interface CloudProjectSyncResult/);
@@ -38,6 +40,7 @@ test("member panel exposes cloud sharing, invites, import, and local fallback", 
   assert.match(panel, /Collaborator email/);
   assert.match(panel, /Import/);
   assert.match(panel, /Add a local member/);
+  assert.match(panel, /Sync threads/);
   assert.match(settings, /onProjectsChanged/);
   assert.match(app, /refreshWorkspaceProjects/);
   assert.match(css, /project-cloud-list/);

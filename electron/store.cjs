@@ -2038,6 +2038,99 @@ function deleteInternalPaperReviewThreads() {
   return { threadIds };
 }
 
+function listProjectThreadsForSync(projectId) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) return [];
+  return db.prepare("SELECT * FROM research_threads WHERE project_id = ? ORDER BY created_at ASC").all(projectId);
+}
+
+function listResearchThreadEvents(threadId) {
+  const db = requireDatabase();
+  return db.prepare(`
+    SELECT e.id, e.turn_id, e.sequence, e.type, e.payload_json, e.created_at
+    FROM research_events e
+    JOIN research_turns t ON t.id = e.turn_id
+    WHERE e.thread_id = ?
+    ORDER BY t.created_at ASC, t.rowid ASC, e.sequence ASC
+  `).all(threadId).map((event, index) => ({ ...event, ordinal: index + 1 }));
+}
+
+function listProjectComments(projectId, { resourceType = "", resourceId = "" } = {}) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) return [];
+  const conditions = ["project_id = ?"];
+  const params = [projectId];
+  if (resourceType) { conditions.push("resource_type = ?"); params.push(resourceType); }
+  if (resourceId) { conditions.push("resource_id = ?"); params.push(resourceId); }
+  return db.prepare(`SELECT * FROM comments WHERE ${conditions.join(" AND ")} ORDER BY created_at ASC`).all(...params);
+}
+
+function applyCloudThread(projectId, detail, { currentCloudUserId = "", localUserId = "" } = {}) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  const thread = detail.thread;
+  if (!thread) throw new Error("Cloud thread is missing.");
+  const ownerId = !thread.owner_id || thread.owner_id === currentCloudUserId ? localUserId : thread.owner_id;
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, workspace_path, created_at, updated_at, archived_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET owner_id = excluded.owner_id, visibility = excluded.visibility, title = excluded.title,
+      mode = excluded.mode, status = excluded.status, context_summary = excluded.context_summary,
+      updated_at = excluded.updated_at, archived_at = excluded.archived_at
+  `).run(
+    thread.id, projectId, ownerId, thread.visibility === "private" ? "private" : "project",
+    String(thread.title || "Research thread"), String(thread.mode || "free-chat"), String(thread.status || "idle"),
+    String(thread.context_summary || ""), String(thread.created_at || now), String(thread.updated_at || now), thread.archived_at || null,
+  );
+  for (const turn of detail.turns || []) {
+    db.prepare(`
+      INSERT INTO research_turns (id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at)
+      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET mode = excluded.mode, user_message = excluded.user_message,
+        assistant_message = excluded.assistant_message, status = excluded.status,
+        completed_at = excluded.completed_at
+    `).run(
+      turn.id, thread.id, String(turn.mode || "free-chat"), String(turn.user_message || ""),
+      String(turn.assistant_message || ""), String(turn.status || "completed"),
+      String(turn.created_at || now), turn.completed_at || null,
+    );
+  }
+  for (const event of detail.events || []) {
+    db.prepare(`
+      INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET sequence = excluded.sequence, type = excluded.type,
+        payload_json = excluded.payload_json, created_at = excluded.created_at
+    `).run(
+      event.id, thread.id, event.turn_id, Number(event.sequence) || 1, String(event.type || "event"),
+      typeof event.payload_json === "string" ? event.payload_json : JSON.stringify(event.payload_json || event.payload || {}),
+      String(event.created_at || now),
+    );
+  }
+  return db.prepare("SELECT * FROM research_threads WHERE id = ?").get(thread.id);
+}
+
+function applyCloudComment(projectId, comment, { currentCloudUserId = "", localUserId = "" } = {}) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) return null;
+  const authorId = comment.author_id === currentCloudUserId ? localUserId : String(comment.author_id || "");
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO comments (id, project_id, resource_type, resource_id, parent_id, anchor_json, body, author_id, resolved_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET anchor_json = excluded.anchor_json, body = excluded.body,
+      resolved_at = excluded.resolved_at, updated_at = excluded.updated_at
+  `).run(
+    comment.id, projectId, String(comment.resource_type || "thread"), String(comment.resource_id || ""),
+    comment.parent_id || null,
+    typeof comment.anchor_json === "string" ? comment.anchor_json : JSON.stringify(comment.anchor_json || {}),
+    String(comment.body || ""), authorId, comment.resolved_at || null,
+    String(comment.created_at || now), String(comment.updated_at || now),
+  );
+  return db.prepare("SELECT * FROM comments WHERE id = ?").get(comment.id);
+}
+
 function getResearchThread(id) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
@@ -2552,6 +2645,11 @@ module.exports = {
   upsertCloudHighlight,
   upsertCloudReview,
   upsertCloudPresentation,
+  listProjectThreadsForSync,
+  listResearchThreadEvents,
+  listProjectComments,
+  applyCloudThread,
+  applyCloudComment,
   renameResearchProject,
   setResearchProjectWorkspace,
   createResearchThread,

@@ -387,6 +387,166 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
         }
       }
 
+      const projectThreadsMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/threads$/);
+      if (projectThreadsMatch) {
+        const projectId = projectThreadsMatch[1];
+        if (method === "GET") {
+          const { data, error } = await supabase.from("threads").select("*").eq("project_id", projectId)
+            .order("updated_at", { ascending: false });
+          if (error) throw apiError(error);
+          return send(res, 200, { threads: data || [] });
+        }
+        if (method === "POST") {
+          const body = await readBody(req);
+          if (!String(body.title || "").trim() || !String(body.mode || "").trim()) {
+            throw Object.assign(new Error("A thread title and mode are required."), { status: 400 });
+          }
+          const row = {
+            id: body.id || randomUUID(),
+            project_id: projectId,
+            owner_id: user.id,
+            visibility: body.visibility === "private" ? "private" : "project",
+            title: String(body.title).slice(0, 500),
+            mode: String(body.mode).slice(0, 100),
+            status: String(body.status || "idle").slice(0, 50),
+            context_summary: String(body.context_summary || "").slice(0, 100_000),
+            archived_at: body.archived_at || null,
+          };
+          const { data, error } = await supabase.from("threads").upsert(row, { onConflict: "id" }).select("*").single();
+          if (error) throw apiError(error);
+          return send(res, 201, { thread: data });
+        }
+      }
+
+      const threadMatch = url.pathname.match(/^\/v1\/threads\/([^/]+)$/);
+      if (threadMatch && method === "GET") {
+        const threadId = threadMatch[1];
+        const [{ data: thread, error: threadError }, { data: turns, error: turnsError }, { data: events, error: eventsError }] = await Promise.all([
+          supabase.from("threads").select("*").eq("id", threadId).single(),
+          supabase.from("turns").select("*").eq("thread_id", threadId).order("created_at", { ascending: true }),
+          supabase.from("events").select("*").eq("thread_id", threadId).order("sequence", { ascending: true }),
+        ]);
+        if (threadError) throw apiError(threadError);
+        if (turnsError) throw apiError(turnsError);
+        if (eventsError) throw apiError(eventsError);
+        return send(res, 200, { thread, turns: turns || [], events: events || [] });
+      }
+      if (threadMatch && method === "PATCH") {
+        const threadId = threadMatch[1];
+        const body = await readBody(req);
+        const patch = { updated_at: new Date().toISOString() };
+        for (const key of ["title", "mode", "status", "context_summary"]) {
+          if (typeof body[key] === "string") patch[key] = body[key].slice(0, key === "context_summary" ? 100_000 : 500);
+        }
+        if (body.visibility === "private" || body.visibility === "project") patch.visibility = body.visibility;
+        if (body.archived_at !== undefined) patch.archived_at = body.archived_at;
+        const { data, error } = await supabase.from("threads").update(patch).eq("id", threadId).select("*").single();
+        if (error) throw apiError(error);
+        return send(res, 200, { thread: data });
+      }
+
+      const threadTurnsMatch = url.pathname.match(/^\/v1\/threads\/([^/]+)\/turns$/);
+      if (threadTurnsMatch && method === "POST") {
+        const threadId = threadTurnsMatch[1];
+        const body = await readBody(req);
+        const row = {
+          id: body.id || randomUUID(),
+          thread_id: threadId,
+          author_id: user.id,
+          author_type: "user",
+          mode: String(body.mode || "free-chat").slice(0, 100),
+          user_message: String(body.user_message || "").slice(0, 100_000),
+          assistant_message: String(body.assistant_message || "").slice(0, 500_000),
+          status: String(body.status || "completed").slice(0, 50),
+          created_at: body.created_at || new Date().toISOString(),
+          completed_at: body.completed_at || null,
+        };
+        const { data, error } = await supabase.from("turns").upsert(row, { onConflict: "id" }).select("*").single();
+        if (error) throw apiError(error);
+        return send(res, 201, { turn: data });
+      }
+
+      const threadEventsMatch = url.pathname.match(/^\/v1\/threads\/([^/]+)\/events$/);
+      if (threadEventsMatch && method === "POST") {
+        const threadId = threadEventsMatch[1];
+        const body = await readBody(req);
+        const events = Array.isArray(body.events) ? body.events : [body];
+        const rows = events.map((event) => ({
+          id: event.id || randomUUID(),
+          thread_id: threadId,
+          turn_id: event.turn_id,
+          sequence: Number(event.sequence),
+          actor_id: user.id,
+          actor_type: "user",
+          type: String(event.type || "event").slice(0, 100),
+          payload_json: event.payload ?? event.payload_json ?? {},
+          client_event_id: event.client_event_id || null,
+          created_at: event.created_at || new Date().toISOString(),
+        }));
+        if (rows.some((row) => !row.turn_id || !Number.isInteger(row.sequence))) {
+          throw Object.assign(new Error("Each event needs a turn and sequence."), { status: 400 });
+        }
+        const { data, error } = await supabase.from("events").upsert(rows, { onConflict: "id" }).select("*");
+        if (error) throw apiError(error);
+        return send(res, 201, { events: data || [] });
+      }
+
+      const projectCommentsMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/comments$/);
+      if (projectCommentsMatch) {
+        const projectId = projectCommentsMatch[1];
+        if (method === "GET") {
+          let query = supabase.from("comments").select("*").eq("project_id", projectId).order("created_at", { ascending: true });
+          const resourceType = url.searchParams.get("resourceType");
+          const resourceId = url.searchParams.get("resourceId");
+          if (resourceType) query = query.eq("resource_type", resourceType);
+          if (resourceId) query = query.eq("resource_id", resourceId);
+          const { data, error } = await query;
+          if (error) throw apiError(error);
+          return send(res, 200, { comments: data || [] });
+        }
+        if (method === "POST") {
+          const body = await readBody(req);
+          const resourceType = String(body.resource_type || "");
+          if (!["thread", "paper", "review", "artifact"].includes(resourceType) || !body.resource_id || !String(body.body || "").trim()) {
+            throw Object.assign(new Error("A resource and comment body are required."), { status: 400 });
+          }
+          const row = {
+            id: body.id || randomUUID(),
+            project_id: projectId,
+            resource_type: resourceType,
+            resource_id: body.resource_id,
+            parent_id: body.parent_id || null,
+            anchor_json: body.anchor || body.anchor_json || {},
+            body: String(body.body).slice(0, 20_000),
+            author_id: user.id,
+            resolved_at: body.resolved_at || null,
+          };
+          const { data, error } = await supabase.from("comments").upsert(row, { onConflict: "id" }).select("*").single();
+          if (error) throw apiError(error);
+          return send(res, 201, { comment: data });
+        }
+      }
+
+      const commentMatch = url.pathname.match(/^\/v1\/comments\/([^/]+)$/);
+      if (commentMatch) {
+        const commentId = commentMatch[1];
+        if (method === "PATCH") {
+          const body = await readBody(req);
+          const patch = { updated_at: new Date().toISOString() };
+          if (typeof body.body === "string") patch.body = body.body.slice(0, 20_000);
+          if (body.resolved_at !== undefined) patch.resolved_at = body.resolved_at;
+          if (body.anchor !== undefined || body.anchor_json !== undefined) patch.anchor_json = body.anchor ?? body.anchor_json;
+          const { data, error } = await supabase.from("comments").update(patch).eq("id", commentId).select("*").single();
+          if (error) throw apiError(error);
+          return send(res, 200, { comment: data });
+        }
+        if (method === "DELETE") {
+          const { error } = await supabase.from("comments").delete().eq("id", commentId);
+          if (error) throw apiError(error);
+          return send(res, 200, { deleted: true });
+        }
+      }
+
       const projectMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)$/);
       if (projectMatch && method === "GET") {
         return send(res, 200, { project: await projectResponse(supabase, projectMatch[1]) });
