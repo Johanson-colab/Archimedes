@@ -273,7 +273,7 @@ export function useProactiveAgent({
     }
     radarBusyRef.current = true;
     try {
-      const libraries = await activeBridge.listLibraries();
+      const libraries = await activeBridge.listLibraries(contextRef.current.projectId ?? undefined);
       const since = Date.now() - 24 * 60 * 60 * 1000;
       const additions: Array<{ libraryName: string; paper: LibraryPaper }> = [];
       for (const library of libraries.slice(0, 8)) {

@@ -48,9 +48,9 @@ export const previewLibraryBridge = {
   searchConferencePapers: async (_input: ConferenceSearchOptions): Promise<ConferenceSearchResponse> => {
     throw new Error("Search official conference papers in the Archimedes desktop app. Browser preview does not provide the conference data service.");
   },
-  listLibraries: async () => previewLibraries.map((library) => ({ ...library })),
-  createLibrary: async ({ name, description = "", color = "#3973c8" }: { name: string; description?: string; color?: string }) => {
-    const library: ResearchLibrary = { id: crypto.randomUUID(), name, description, color, paper_count: 0, created_at: now, updated_at: now };
+  listLibraries: async (_projectId?: string | null) => previewLibraries.map((library) => ({ ...library })),
+  createLibrary: async ({ projectId = null, name, description = "", color = "#3973c8" }: { projectId?: string | null; name: string; description?: string; color?: string }) => {
+    const library: ResearchLibrary = { id: crypto.randomUUID(), project_id: projectId, name, description, color, paper_count: 0, created_at: now, updated_at: now };
     previewLibraries.unshift(library);
     previewLinks.set(library.id, new Set());
     return { ...library };

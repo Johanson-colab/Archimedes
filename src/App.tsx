@@ -2391,6 +2391,7 @@ function App() {
               events={events}
               trajectoryEvents={trajectoryEvents}
               workspace={executionWorkspace}
+              projectId={activeProjectId}
               agentBusy={agentBusy}
               interrupting={interrupting}
               pendingAction={pendingAction}
@@ -2733,11 +2734,12 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, workspace, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   workspace: string;
+  projectId?: string | null;
   agentBusy: boolean;
   interrupting: boolean;
   canInterrupt: boolean;
@@ -2952,7 +2954,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, agent
         </div>}
         {composerError && <div className="composer-attachment-error" role="alert">{composerError}</div>}
         <div className="conversation-composer-footer">
-          <ContextPicker bridge={desktopBridge} workspace={workspace} items={contextItems} onAdd={onAddContext} />
+          <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} onAdd={onAddContext} />
           <div className="reasoning-effort-picker" ref={reasoningMenuRef}>
             <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setReasoningMenuOpen((open) => !open); setContextLengthMenuOpen(false); }} title={availableThinkingEfforts.length ? `Thinking effort: ${reasoningEffort}` : "Thinking effort is not exposed by this model"} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>
               <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>Thinking effort · {availableThinkingEfforts.length ? reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1) : "Unavailable"}</span><ChevronDown size={13} />

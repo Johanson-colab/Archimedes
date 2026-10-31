@@ -127,6 +127,7 @@ function schema(db) {
 
     CREATE TABLE IF NOT EXISTS libraries (
       id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       color TEXT NOT NULL DEFAULT '#3973c8',
@@ -259,6 +260,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_thread ON research_artifacts(thread_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_unseen ON research_artifacts(thread_id, seen);
     CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id, project_id);
+    CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
   `);
 
   ensureColumn(db, "research_threads", "project_id", "TEXT");
@@ -266,6 +268,7 @@ function schema(db) {
   ensureColumn(db, "research_projects", "workspace_path", "TEXT");
   ensureColumn(db, "research_threads", "workspace_path", "TEXT");
   ensureColumn(db, "research_projects", "owner_id", "TEXT");
+  ensureColumn(db, "libraries", "project_id", "TEXT");
   ensureColumn(db, "papers", "conference_json", "TEXT NOT NULL DEFAULT 'null'");
   ensureColumn(db, "papers", "github_url", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "papers", "github_stars", "INTEGER NOT NULL DEFAULT 0");
@@ -277,6 +280,20 @@ function schema(db) {
   const projectId = ensureDefaultProject(db);
   ensureProjectOwnership(db);
   db.prepare("UPDATE research_threads SET project_id = ? WHERE project_id IS NULL").run(projectId);
+  db.prepare("UPDATE libraries SET project_id = ? WHERE project_id IS NULL").run(projectId);
+}
+
+function ensureProjectLibraries(db) {
+  const projects = db.prepare("SELECT id FROM research_projects").all();
+  const now = timestamp();
+  for (const project of projects) {
+    const existing = db.prepare("SELECT id FROM libraries WHERE project_id = ? ORDER BY created_at ASC LIMIT 1").get(project.id);
+    if (existing) continue;
+    db.prepare(`
+      INSERT INTO libraries (id, project_id, name, description, color, created_at, updated_at)
+      VALUES (?, ?, 'Project library', 'Papers and sources for this project', '#3973c8', ?, ?)
+    `).run(randomUUID(), project.id, now, now);
+  }
 }
 
 function ensureColumn(db, table, column, definition) {
@@ -418,6 +435,7 @@ function openWorkspace(workspacePath) {
   schema(database);
   migrateLegacyTasks(database);
   seedLibraries(database);
+  ensureProjectLibraries(database);
 
   const updatedAt = timestamp();
   database.prepare(`
@@ -494,7 +512,8 @@ function seedLibraries(db) {
   const seeded = db.prepare("SELECT value FROM workspace_meta WHERE key = 'library_seed_version'").get();
   if (seeded) return;
 
-  const insertLibrary = db.prepare("INSERT OR IGNORE INTO libraries (id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)");
+  const projectId = ensureDefaultProject(db);
+  const insertLibrary = db.prepare("INSERT OR IGNORE INTO libraries (id, project_id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
   const insertPaper = db.prepare(`
     INSERT OR IGNORE INTO papers (
       id, canonical_key, title, authors_json, year, venue, abstract, url, pdf_url, doi, arxiv_id, s2_id,
@@ -507,7 +526,7 @@ function seedLibraries(db) {
   db.exec("BEGIN");
   try {
     for (const library of librarySeeds.libraries) {
-      insertLibrary.run(library.id, library.name, library.description, library.color, createdAt, createdAt);
+      insertLibrary.run(library.id, projectId, library.name, library.description, library.color, createdAt, createdAt);
       for (const paper of library.papers) {
         insertPaper.run(
           paper.id,
@@ -548,31 +567,42 @@ function hydratePaper(row) {
   };
 }
 
-function listLibraries() {
+function resolveLibraryProject(projectId) {
   const db = requireDatabase();
+  return projectId || ensureDefaultProject(db);
+}
+
+function listLibraries(projectId = null) {
+  const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "viewer")) return [];
   return db.prepare(`
-    SELECT libraries.id, libraries.name, libraries.description, libraries.color,
+    SELECT libraries.id, libraries.project_id, libraries.name, libraries.description, libraries.color,
       libraries.created_at, libraries.updated_at, COUNT(library_papers.paper_id) AS paper_count
     FROM libraries
     LEFT JOIN library_papers ON library_papers.library_id = libraries.id
+    WHERE libraries.project_id = ?
     GROUP BY libraries.id
     ORDER BY libraries.updated_at DESC, libraries.name ASC
-  `).all();
+  `).all(resolvedProject);
 }
 
-function createLibrary({ name, description = "", color = "#3973c8" }) {
+function createLibrary({ projectId = null, name, description = "", color = "#3973c8" }) {
   const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "editor")) throw new Error("You do not have permission to add libraries to this project.");
   const createdAt = timestamp();
-  const library = { id: randomUUID(), name: name.trim(), description: description.trim(), color, created_at: createdAt, updated_at: createdAt, paper_count: 0 };
-  db.prepare("INSERT INTO libraries (id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(library.id, library.name, library.description, library.color, library.created_at, library.updated_at);
+  const library = { id: randomUUID(), project_id: resolvedProject, name: name.trim(), description: description.trim(), color, created_at: createdAt, updated_at: createdAt, paper_count: 0 };
+  db.prepare("INSERT INTO libraries (id, project_id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(library.id, library.project_id, library.name, library.description, library.color, library.created_at, library.updated_at);
   return library;
 }
 
 function updateLibrary(id, patch) {
   const db = requireDatabase();
-  const current = db.prepare("SELECT id, name, description, color, created_at, updated_at FROM libraries WHERE id = ?").get(id);
+  const current = db.prepare("SELECT id, project_id, name, description, color, created_at, updated_at FROM libraries WHERE id = ?").get(id);
   if (!current) throw new Error("Library not found.");
+  if (!canAccessProject(current.project_id, "editor")) throw new Error("You do not have permission to edit this library.");
   const next = {
     name: typeof patch.name === "string" ? patch.name.trim() : current.name,
     description: typeof patch.description === "string" ? patch.description.trim() : current.description,
@@ -581,11 +611,16 @@ function updateLibrary(id, patch) {
   };
   db.prepare("UPDATE libraries SET name = ?, description = ?, color = ?, updated_at = ? WHERE id = ?")
     .run(next.name, next.description, next.color, next.updated_at, id);
-  return listLibraries().find((library) => library.id === id);
+  return listLibraries(current.project_id).find((library) => library.id === id);
 }
 
 function deleteLibrary(id) {
   const db = requireDatabase();
+  const current = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(id);
+  if (!current) return { deleted: false };
+  if (!canAccessProject(current.project_id, "editor")) throw new Error("You do not have permission to delete this library.");
+  const count = db.prepare("SELECT COUNT(*) AS count FROM libraries WHERE project_id = ?").get(current.project_id);
+  if (Number(count?.count) <= 1) throw new Error("A project needs at least one library.");
   const result = db.prepare("DELETE FROM libraries WHERE id = ?").run(id);
   db.prepare("DELETE FROM papers WHERE id NOT IN (SELECT paper_id FROM library_papers)").run();
   return { deleted: result.changes > 0 };
@@ -593,6 +628,9 @@ function deleteLibrary(id) {
 
 function listPapers(libraryId, query = "") {
   const db = requireDatabase();
+  const library = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(libraryId);
+  if (!library) throw new Error("Library not found.");
+  if (!canAccessProject(library.project_id, "viewer")) throw new Error("You do not have access to this library.");
   const pattern = `%${query.trim()}%`;
   return db.prepare(`
     SELECT papers.* FROM papers
@@ -970,8 +1008,9 @@ function setPaperChatThread(paperId, threadId) {
 
 function addPaper(libraryId, paper) {
   const db = requireDatabase();
-  const library = db.prepare("SELECT id FROM libraries WHERE id = ?").get(libraryId);
+  const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Choose a valid library before importing a paper.");
+  if (!canAccessProject(library.project_id, "editor")) throw new Error("You do not have permission to add papers to this library.");
   const conferenceJson = paper.conference && typeof paper.conference === "object" ? JSON.stringify(paper.conference) : null;
   if (conferenceJson && conferenceJson.length > 10000) throw new Error("Conference metadata is too large.");
   const now = timestamp();
@@ -1025,6 +1064,9 @@ function updatePaper(id, patch) {
 
 function removePaper(libraryId, paperId) {
   const db = requireDatabase();
+  const library = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(libraryId);
+  if (!library) throw new Error("Library not found.");
+  if (!canAccessProject(library.project_id, "editor")) throw new Error("You do not have permission to remove papers from this library.");
   const result = db.prepare("DELETE FROM library_papers WHERE library_id = ? AND paper_id = ?").run(libraryId, paperId);
   db.prepare("DELETE FROM papers WHERE id = ? AND id NOT IN (SELECT paper_id FROM library_papers)").run(paperId);
   db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(timestamp(), libraryId);
@@ -1093,6 +1135,7 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(project.id, project.owner_id, project.name, project.description, project.workspace_path, project.created_at, project.updated_at);
   ensureProjectMember(db, project.id, project.owner_id, "owner");
+  ensureProjectLibraries(db);
   return project;
 }
 
@@ -1153,6 +1196,8 @@ function deleteResearchProject(id) {
       )
     `).run(id);
     db.prepare("DELETE FROM research_threads WHERE project_id = ?").run(id);
+    db.prepare("DELETE FROM libraries WHERE project_id = ?").run(id);
+    db.prepare("DELETE FROM papers WHERE id NOT IN (SELECT paper_id FROM library_papers)").run();
     db.prepare("DELETE FROM research_projects WHERE id = ?").run(id);
     db.exec("COMMIT");
   } catch (error) {

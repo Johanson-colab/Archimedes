@@ -49,8 +49,8 @@ interface ResearchDeskBridge {
     requestMicrophoneAccess: () => Promise<boolean>;
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
-    listLibraries: () => Promise<ResearchLibrary[]>;
-    createLibrary: (input: { name: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
+    listLibraries: (projectId?: string | null) => Promise<ResearchLibrary[]>;
+    createLibrary: (input: { projectId?: string | null; name: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
     updateLibrary: (id: string, patch: { name?: string; description?: string; color?: string }) => Promise<ResearchLibrary>;
     deleteLibrary: (id: string) => Promise<{ deleted: boolean }>;
     listLibraryPapers: (libraryId: string, query?: string) => Promise<LibraryPaper[]>;
@@ -508,6 +508,7 @@ interface ContextAttachment {
 
 interface ResearchLibrary {
   id: string;
+  project_id?: string | null;
   name: string;
   description: string;
   color: string;

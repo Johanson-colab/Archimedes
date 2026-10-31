@@ -57,7 +57,7 @@ test("new projects choose a folder and existing projects can rebind it", () => {
 });
 
 test("the composer surfaces the effective working folder", () => {
-  assert.match(app, /workspace=\{executionWorkspace\}\s+agentBusy=/);
+  assert.match(app, /workspace=\{executionWorkspace\}\s+projectId=\{activeProjectId\}\s+agentBusy=/);
   assert.match(app, /className="composer-context"><ShieldCheck size=\{13\} \/><span>\{workspace \? workspace\.split/);
 });
 
