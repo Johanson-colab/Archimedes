@@ -10,6 +10,8 @@ const modal = read("src", "SettingsModal.tsx");
 const proactive = read("src", "ProactiveSettingsPanel.tsx");
 const web = read("src", "WebSearchSettingsModal.tsx");
 const terminal = read("src", "TerminalSettingsModal.tsx");
+const i18n = read("src", "i18n.tsx");
+const tokens = read("src", "tokens.css");
 const css = read("src", "styles.css");
 
 test("settings chrome drops the decorative marks", () => {
@@ -37,4 +39,14 @@ test("shared settings action row is styled once", () => {
   assert.match(css, /\.settings-form-actions \{/);
   assert.match(css, /\.settings-text-input-wide \{ width: 100%; \}/);
   assert.match(css, /\.settings-inline-control \{/);
+});
+
+test("text size defaults to 100 percent with 10 percent steps", () => {
+  assert.match(i18n, /TEXT_SIZE_SCALE: Record<TextSize, number> = \{ smaller: 0\.8, small: 0\.9, default: 1, large: 1\.1, larger: 1\.2 \}/);
+  assert.match(modal, /scale: TEXT_SIZE_SCALE\.small/);
+  assert.match(modal, /scale: TEXT_SIZE_SCALE\.default/);
+  assert.match(modal, /Math\.round\(activeSize\.scale \* 100\)/);
+  assert.match(tokens, /\[data-text-size="small"\] \{ --ui-scale: 0\.9; \}/);
+  assert.match(tokens, /\[data-text-size="default"\] \{ --ui-scale: 1; \}/);
+  assert.match(tokens, /\[data-text-size="larger"\] \{ --ui-scale: 1\.2; \}/);
 });

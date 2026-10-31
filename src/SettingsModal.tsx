@@ -8,7 +8,7 @@ import TerminalSettingsModal from "./TerminalSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
-import { useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
+import { TEXT_SIZE_SCALE, useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
 import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type CardStyle, type ContrastIssue, type Density, type DialogStyle, type InputStyle, type MenuStyle, type MotionStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type SurfaceStyles, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -62,11 +62,11 @@ const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNod
 ];
 
 const textSizeSteps: Array<{ id: TextSize; label: string; scale: number }> = [
-  { id: "smaller", label: "Smaller", scale: 1 },
-  { id: "small", label: "Small", scale: 1.05 },
-  { id: "default", label: "Default", scale: 1.1 },
-  { id: "large", label: "Large", scale: 1.15 },
-  { id: "larger", label: "Larger", scale: 1.2 },
+  { id: "smaller", label: "Smaller", scale: TEXT_SIZE_SCALE.smaller },
+  { id: "small", label: "Small", scale: TEXT_SIZE_SCALE.small },
+  { id: "default", label: "Default", scale: TEXT_SIZE_SCALE.default },
+  { id: "large", label: "Large", scale: TEXT_SIZE_SCALE.large },
+  { id: "larger", label: "Larger", scale: TEXT_SIZE_SCALE.larger },
 ];
 
 const verbosityOptions: Array<{ id: ChatVerbosity; label: string; description: string }> = [
