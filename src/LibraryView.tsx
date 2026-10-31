@@ -237,20 +237,23 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 
   useEffect(() => { void loadLibraries(); }, [libraryRefreshVersion, loadLibraries]);
 
-  // A project-scoped library list looks like data loss when the papers live in
-  // another project, so say where they are instead of showing an empty grid.
+  // Every project is created with an empty "Project library", so a zero
+  // library count never happens. Treat "no papers in this project" as the
+  // condition that looks like data loss.
+  const projectPaperCount = libraries.reduce((total, library) => total + (Number(library.paper_count) || 0), 0);
+
   useEffect(() => {
-    if (loading || libraries.length || typeof bridge.listLibraryProjects !== "function") {
+    if (loading || projectPaperCount > 0 || typeof bridge.listLibraryProjects !== "function") {
       setOtherProjects([]);
       return;
     }
     let cancelled = false;
     void bridge.listLibraryProjects().then((projects) => {
       if (cancelled) return;
-      setOtherProjects(projects.filter((project) => project.project_id !== projectId));
+      setOtherProjects(projects.filter((project) => project.project_id !== projectId && project.paper_count > 0));
     }).catch(() => { if (!cancelled) setOtherProjects([]); });
     return () => { cancelled = true; };
-  }, [bridge, libraries.length, loading, projectId]);
+  }, [bridge, loading, projectId, projectPaperCount]);
 
   useEffect(() => {
     setSelectedLibraryId(null);
@@ -313,6 +316,17 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
     return <section className="library-page">
       <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button></ToolbarActions>
       {error && <div className="library-error">{error}</div>}
+      {!loading && projectPaperCount === 0 && otherProjects.length > 0 && <div className="library-project-hint">
+        <div>
+          <strong>This project has no papers yet</strong>
+          <span>Libraries are stored per project. Your papers are not lost — they are in another project.</span>
+        </div>
+        <div className="library-project-hint-actions">
+          {otherProjects.map((project) => <button className="secondary-button" key={project.project_id} onClick={() => onOpenProject?.(project.project_id)}>
+            Open {project.name} · {project.library_count} libraries · {project.paper_count} papers
+          </button>)}
+        </div>
+      </div>}
       {loading && !libraries.length ? <LoadingState /> : !libraries.length ? <div className="library-empty">
         <LibraryGlyph name="" />
         <strong>No libraries in this project</strong>

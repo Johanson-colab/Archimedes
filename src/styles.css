@@ -6691,3 +6691,11 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .library-empty strong { color: var(--text-primary); font-size: 14px; font-weight: 600; }
 .library-empty span { max-width: 46ch; font-size: 12px; line-height: 1.6; }
 .library-empty .secondary-button { min-height: 32px; }
+
+.library-project-hint { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding: 12px 14px; background: color-mix(in srgb, var(--accent) 7%, var(--surface-panel)); border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent); border-radius: 9px; }
+.library-project-hint > div:first-child { display: grid; gap: 3px; }
+.library-project-hint strong { color: var(--text-primary); font-size: 12.5px; font-weight: 620; }
+.library-project-hint span { color: var(--text-muted); font-size: 11.5px; line-height: 1.5; }
+.library-project-hint-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.library-project-hint .secondary-button { min-height: 30px; white-space: nowrap; }
+@media (max-width: 760px) { .library-project-hint { flex-direction: column; align-items: flex-start; } }
