@@ -22,13 +22,14 @@ function createAuthFlow({ client, openExternal, port = 45871, timeoutMs = 300_00
       }
       const error = url.searchParams.get("error_description") || url.searchParams.get("error");
       const code = url.searchParams.get("code");
+      const flowId = url.searchParams.get("sb_flow_id");
       const message = error
         ? "Sign-in failed. You can close this tab and return to Archimedes."
         : "Archimedes is signing you in. You can close this tab.";
       response.writeHead(error ? 400 : 200, { "content-type": "text/html; charset=utf-8" });
       response.end(`<!doctype html><meta charset="utf-8"><title>Archimedes</title><style>body{font:14px system-ui;margin:48px;color:#222}strong{display:block;margin-bottom:8px;font-size:18px}</style><strong>${error ? "Sign-in failed" : "Signed in"}</strong>${message}`);
       if (error) rejectCode(new Error(error));
-      else if (code) resolveCode(code);
+      else if (code) resolveCode({ code, flowId });
       else rejectCode(new Error("The sign-in callback did not include a code."));
     });
 
@@ -44,11 +45,11 @@ function createAuthFlow({ client, openExternal, port = 45871, timeoutMs = 300_00
       const result = await trigger(redirectTo);
       if (result?.session) return { session: result.session, flow: mode, redirectTo };
       if (result?.url) await openExternal(result.url);
-      const code = await Promise.race([
+      const callback = await Promise.race([
         codePromise,
         new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("The browser sign-in timed out. Try again.")), timeoutMs); }),
       ]);
-      const { data, error } = await client.auth.exchangeCodeForSession(code);
+      const { data, error } = await client.auth.exchangeCodeForSession(callback.code, callback.flowId ? { flowId: callback.flowId } : undefined);
       if (error) throw new Error(error.message || "Could not complete sign-in.");
       if (!data?.session) throw new Error("The sign-in callback did not return a session.");
       return { session: data.session, flow: mode, redirectTo };
