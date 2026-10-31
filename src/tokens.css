@@ -73,6 +73,13 @@
   --selected: var(--surface-control-active);
   --selected-row: #2a2a2a;
 
+  /* --- Extension type colors --------------------------------------------- */
+  --extension-skill: #8db39f;
+  --extension-mcp: #94a6c1;
+  --extension-plugin: #b9a17f;
+  --extension-source: #b19cbb;
+  --extension-automation: #bf9b94;
+
   /* --- Layer 3: component tokens (charcoal) ------------------------------- */
   --mono-canvas: #111;
   --mono-sidebar: #1b1b1b;
@@ -261,6 +268,13 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
 
   --selected: #e8e4de;
   --selected-row: #ece5d8;
+
+  /* --- Extension type colors --------------------------------------------- */
+  --extension-skill: #4d7861;
+  --extension-mcp: #526987;
+  --extension-plugin: #7d6747;
+  --extension-source: #6e5b79;
+  --extension-automation: #7d5b55;
 
   /* --- Layer 3: component tokens (paper) ---------------------------------- */
   --mono-canvas: #fbfaf8;

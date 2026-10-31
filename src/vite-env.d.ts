@@ -60,6 +60,14 @@ interface ResearchDeskBridge {
     listSkillCollections: (workspace?: string) => Promise<SkillCollection[]>;
     listSkills: (workspace?: string, collectionId?: string) => Promise<SkillSummary[]>;
     readSkill: (workspace: string | undefined, skillId: string) => Promise<SkillDetail>;
+    listExtensionSources: () => Promise<ExtensionSource[]>;
+    saveExtensionSources: (sources: ExtensionSource[]) => Promise<ExtensionSource[]>;
+    resetExtensionSources: () => Promise<ExtensionSource[]>;
+    listExtensions: (input: { workspace?: string; limit?: number; refresh?: boolean }) => Promise<ExtensionFeed>;
+    previewExtension: (input: { id: string; workspace?: string }) => Promise<ExtensionPreview>;
+    installExtension: (input: { id: string; workspace?: string; scope?: "workspace" | "global" }) => Promise<ExtensionInstallResult>;
+    listInstalledExtensions: (workspace?: string) => Promise<{ skills: ContextAttachment[]; plugins: ContextAttachment[] }>;
+    readExtensionFile: (path: string, workspace?: string) => Promise<{ filename: string; content: string }>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
     listWorkspaceFiles: (workspace: string, directory?: string) => Promise<WorkspaceFileTree>;
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
@@ -222,6 +230,75 @@ interface SkillSummary {
 
 interface SkillDetail extends SkillSummary {
   content: string;
+}
+
+type ExtensionType = "skill" | "mcp" | "plugin" | "source" | "automation";
+
+type ExtensionSourceType = "archimedes" | "json" | "github" | "mcp" | "npm";
+
+interface ExtensionSource {
+  id: string;
+  name: string;
+  type: ExtensionSourceType;
+  url: string;
+  query?: string;
+  token?: string;
+  enabled: boolean;
+  builtin?: boolean;
+  count?: number;
+  total?: number;
+  lastSync?: string;
+  error?: string;
+}
+
+interface ExtensionMarketplaceItem {
+  id: string;
+  canonicalId: string;
+  name: string;
+  type: ExtensionType;
+  description: string;
+  version: string;
+  author: string;
+  license: string;
+  homepage: string;
+  sourceUrl: string;
+  permissions: string[];
+  installs: number;
+  size: number;
+  updatedAt: string;
+  source: string;
+  sourceId: string;
+  sourceType: ExtensionSourceType;
+  files?: Array<{ path: string; content: string }>;
+  config?: Record<string, unknown> | null;
+  repo?: string;
+  packageName?: string;
+  installed?: boolean;
+  installedVersion?: string;
+  installedPath?: string;
+  installedScope?: "workspace" | "global" | "";
+  updateAvailable?: boolean;
+}
+
+interface ExtensionFeed {
+  items: ExtensionMarketplaceItem[];
+  total: number;
+  sources: ExtensionSource[];
+  syncedAt: string;
+}
+
+interface ExtensionPreview {
+  id: string;
+  filename: string;
+  language: string;
+  content: string;
+  item: ExtensionMarketplaceItem;
+}
+
+interface ExtensionInstallResult {
+  item: ExtensionMarketplaceItem;
+  path: string;
+  scope: "workspace" | "global";
 }
 
 interface WorkspaceFileTree {
@@ -564,6 +641,7 @@ interface ContextAttachment {
   name: string;
   path?: string;
   detail?: string;
+  description?: string;
   paper?: ContextPaperMetadata;
   repository?: PaperRepositorySnapshot;
   image?: ContextImage;

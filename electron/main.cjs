@@ -48,6 +48,7 @@ const { preparePaperReader } = require("./library-reader.cjs");
 const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");
 const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");
 const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");
+const extensionMarketplace = require("./extensions-marketplace.cjs");
 
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
@@ -448,18 +449,26 @@ function installedSkills(workspace) {
     for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
       if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name.startsWith(".")) continue;
       const skillPath = path.join(root, entry.name);
-      if (!fs.existsSync(path.join(skillPath, "SKILL.md"))) continue;
+      const manifest = path.join(skillPath, "SKILL.md");
+      if (!fs.existsSync(manifest)) continue;
       const key = fs.realpathSync(skillPath);
       if (seen.has(key)) continue;
       seen.add(key);
-      results.push(contextItem("skill", skillPath, path.relative(workspace, skillPath).startsWith("..") ? "Installed skill" : "Workspace skill"));
+      const parsed = skillCatalog.parseSkillDocument(fs.readFileSync(manifest, "utf8"), entry.name);
+      const item = contextItem("skill", skillPath, path.relative(workspace, skillPath).startsWith("..") ? "Installed skill" : "Workspace skill");
+      item.name = parsed.name || item.name;
+      item.description = parsed.description;
+      results.push(item);
     }
   }
   for (const skill of skillCatalog.listSkills(workspace)) {
     const key = fs.realpathSync(skill.path);
     if (seen.has(key)) continue;
     seen.add(key);
-    results.push(contextItem("skill", skill.path, `${skill.collectionName} · ${skill.category}`));
+    const item = contextItem("skill", skill.path, `${skill.collectionName} · ${skill.category}`);
+    item.name = skill.name;
+    item.description = skill.description;
+    results.push(item);
   }
   return results.sort((left, right) => left.name.localeCompare(right.name)).slice(0, 400);
 }
@@ -574,6 +583,7 @@ app.whenReady().then(async () => {
   journeySnapshots.initialize(app.getPath("userData"));
   workbenchSettings.initialize(app.getPath("userData"));
   workbenchNotes.initialize(app.getPath("userData"));
+  extensionMarketplace.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());
   const authStorageValues = new Map();
@@ -727,6 +737,36 @@ app.whenReady().then(async () => {
     const skill = skillCatalog.readSkill(resolveWorkspace(input.workspace), input.skillId);
     allowedContextPaths.add(path.resolve(skill.path));
     return skill;
+  });
+
+  ipcMain.handle("extensions:sources-list", () => extensionMarketplace.listSources());
+  ipcMain.handle("extensions:sources-save", (_event, sources) => extensionMarketplace.saveSources(sources));
+  ipcMain.handle("extensions:sources-reset", () => extensionMarketplace.resetSources());
+  ipcMain.handle("extensions:list", (_event, input = {}) => extensionMarketplace.listExtensions({
+    workspace: resolveWorkspace(input.workspace),
+    limit: input.limit,
+    refresh: Boolean(input.refresh),
+  }));
+  ipcMain.handle("extensions:preview", (_event, input = {}) => extensionMarketplace.previewExtension({
+    id: input.id,
+    workspace: resolveWorkspace(input.workspace),
+  }));
+  ipcMain.handle("extensions:install", (_event, input = {}) => extensionMarketplace.installExtension({
+    id: input.id,
+    workspace: resolveWorkspace(input.workspace),
+    scope: input.scope === "global" ? "global" : "workspace",
+  }));
+  ipcMain.handle("extensions:list-installed", (_event, input = {}) => ({
+    skills: installedSkills(resolveWorkspace(input.workspace)),
+    plugins: installedPlugins(),
+  }));
+  ipcMain.handle("extensions:read-local", (_event, input = {}) => {
+    const target = path.resolve(String(input.path || ""));
+    if (!allowedContextPaths.has(target)) throw new Error("This skill is not available in the current context.");
+    const manifest = path.join(target, "SKILL.md");
+    if (!fs.existsSync(manifest) || !fs.statSync(manifest).isFile()) throw new Error("SKILL.md was not found for this skill.");
+    if (fs.statSync(manifest).size > 500_000) throw new Error("This SKILL.md is too large to preview.");
+    return { filename: "SKILL.md", content: fs.readFileSync(manifest, "utf8") };
   });
 
   ipcMain.handle("workspace:open", (event, requestedWorkspace) => {
