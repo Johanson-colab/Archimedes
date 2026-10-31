@@ -6980,7 +6980,7 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .journey-map-scrim,
 .artifact-lightbox {
   z-index: 100;
-  background: color-mix(in srgb, var(--surface-ground) 62%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 24%, transparent);
   backdrop-filter: blur(7px);
 }
 .journey-map-scrim { background: var(--workbench-ground); backdrop-filter: none; }
