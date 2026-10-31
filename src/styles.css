@@ -6531,3 +6531,11 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .conversation-voice:disabled { cursor: default; opacity: .35; }
 @keyframes conversation-voice-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .conversation-voice.recording svg { animation: none; } }
+
+/* Local identity / collaboration foundation */
+.account-name-control { gap: 7px; }
+.account-name-control .settings-text-input { width: 220px; }
+.account-save { min-height: 34px; padding-inline: 12px; }
+.account-device-id code { max-width: 280px; overflow: hidden; color: var(--night-muted); font: 10px var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.account-status { display: inline-flex; height: 22px; align-items: center; padding: 0 7px; color: var(--night-faint); background: var(--night-panel-raised); border: 1px solid var(--night-line-soft); border-radius: 4px; font-size: 9px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+@media (max-width: 720px) { .account-name-control { width: 100%; flex-wrap: wrap; justify-content: flex-start; } .account-name-control .settings-text-input { width: 100%; } }

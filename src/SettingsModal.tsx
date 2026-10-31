@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, X } from "lucide-react";
+import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, UserRound, X } from "lucide-react";
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import type { ProactiveSettings } from "./proactive-types";
@@ -7,12 +7,13 @@ import ModelSettingsModal from "./ModelSettingsModal";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
+import AccountSettingsPanel from "./AccountSettingsPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { TEXT_SIZE_SCALE, useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
 import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type CardStyle, type ContrastIssue, type Density, type DialogStyle, type InputStyle, type MenuStyle, type MotionStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type SurfaceStyles, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 
-export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about";
+export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about" | "account";
 
 type SettingsModalProps = {
   open: boolean;
@@ -46,10 +47,13 @@ type SettingsModalProps = {
   onResetProactiveHistory: () => void;
   proactiveHistoryCount: number;
   onObserveProactive: () => void;
+  identity: LocalIdentity | null;
+  onSaveIdentity: (displayName: string) => Promise<LocalIdentity>;
 };
 
 const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNode }> = [
   { id: "general", label: "General", icon: <SlidersHorizontal size={15} /> },
+  { id: "account", label: "Account", icon: <UserRound size={15} /> },
   { id: "journey", label: "Journey", icon: <Route size={15} /> },
   { id: "proactive", label: "Proactive agent", icon: <Sparkles size={15} /> },
   { id: "appearance", label: "Appearance", icon: <Palette size={15} /> },
@@ -107,6 +111,8 @@ export default function SettingsModal({
   onResetProactiveHistory,
   proactiveHistoryCount,
   onObserveProactive,
+  identity,
+  onSaveIdentity,
 }: SettingsModalProps) {
   const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
@@ -230,6 +236,7 @@ export default function SettingsModal({
 
   const sectionHeadings: Record<SettingsSection, { title: string; description: string }> = {
     general: { title: t("General"), description: t("Preferences that apply across Archimedes.") },
+    account: { title: t("Account"), description: t("Local identity and device") },
     journey: { title: t("Journey"), description: t("How the AI summarizes long runs and when the map appears.") },
     proactive: { title: t("Proactive agent"), description: t("Opt-in L0 signals, evidence, and interruption limits.") },
     appearance: { title: t("Appearance"), description: t("Theme and fonts") },
@@ -262,6 +269,8 @@ export default function SettingsModal({
 
         <div className={embedded ? "settings-body settings-body-embedded" : "settings-body"}>
           <div className="settings-content">
+            {section === "account" && <AccountSettingsPanel identity={identity} onSave={onSaveIdentity} />}
+
             {section === "general" && <div className="settings-sections">
               <section className="settings-section">
                 <h3 className="settings-section-title">{t("Interface")}</h3>

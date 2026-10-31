@@ -4,10 +4,17 @@ const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
+const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles.cjs");
 
 const OUTPUT_LIMIT = 200_000;
 let database;
 let activeWorkspace;
+let localIdentity = {
+  userId: "local-user",
+  displayName: "Local user",
+  deviceId: "local-device",
+  deviceName: "This device",
+};
 
 function timestamp() {
   return new Date().toISOString();
@@ -32,14 +39,33 @@ function schema(db) {
       created_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY NOT NULL,
+      display_name TEXT NOT NULL,
+      email TEXT NOT NULL DEFAULT '',
+      avatar_color TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS research_projects (
       id TEXT PRIMARY KEY NOT NULL,
+      owner_id TEXT,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       workspace_path TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS project_members (
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      joined_at TEXT NOT NULL,
+      invited_by TEXT,
+      PRIMARY KEY (project_id, user_id)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS research_threads (
@@ -232,12 +258,14 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_thread ON research_artifacts(thread_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_unseen ON research_artifacts(thread_id, seen);
+    CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id, project_id);
   `);
 
   ensureColumn(db, "research_threads", "project_id", "TEXT");
   ensureColumn(db, "research_threads", "archived_at", "TEXT");
   ensureColumn(db, "research_projects", "workspace_path", "TEXT");
   ensureColumn(db, "research_threads", "workspace_path", "TEXT");
+  ensureColumn(db, "research_projects", "owner_id", "TEXT");
   ensureColumn(db, "papers", "conference_json", "TEXT NOT NULL DEFAULT 'null'");
   ensureColumn(db, "papers", "github_url", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "papers", "github_stars", "INTEGER NOT NULL DEFAULT 0");
@@ -245,7 +273,9 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_projects_updated ON research_projects(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
   `);
+  ensureLocalUser(db);
   const projectId = ensureDefaultProject(db);
+  ensureProjectOwnership(db);
   db.prepare("UPDATE research_threads SET project_id = ? WHERE project_id IS NULL").run(projectId);
 }
 
@@ -254,15 +284,100 @@ function ensureColumn(db, table, column, definition) {
   if (!columns.some((entry) => entry.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
+function ensureLocalUser(db) {
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO users (id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name, updated_at = excluded.updated_at
+  `).run(localIdentity.userId, localIdentity.displayName, now, now);
+}
+
+function ensureProjectMember(db, projectId, userId, role, invitedBy = null) {
+  if (!isProjectRole(role)) throw new Error("Unknown project role.");
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO project_members (project_id, user_id, role, joined_at, invited_by) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(project_id, user_id) DO UPDATE SET role = excluded.role
+  `).run(projectId, userId, role, now, invitedBy);
+}
+
+function ensureProjectOwnership(db) {
+  const projects = db.prepare("SELECT id, owner_id FROM research_projects").all();
+  for (const project of projects) {
+    const ownerId = project.owner_id || localIdentity.userId;
+    if (!project.owner_id) {
+      db.prepare("UPDATE research_projects SET owner_id = ?, updated_at = ? WHERE id = ?").run(ownerId, timestamp(), project.id);
+    }
+    const member = db.prepare("SELECT role FROM project_members WHERE project_id = ? AND user_id = ?").get(project.id, ownerId);
+    if (!member) ensureProjectMember(db, project.id, ownerId, "owner");
+  }
+}
+
+function setLocalIdentity(identity) {
+  if (!identity || typeof identity.userId !== "string" || !identity.userId.trim()) return localIdentity;
+  localIdentity = {
+    userId: identity.userId.trim(),
+    displayName: String(identity.displayName || "Local user").trim() || "Local user",
+    deviceId: String(identity.deviceId || ""),
+    deviceName: String(identity.deviceName || ""),
+  };
+  if (database) ensureLocalUser(database);
+  return localIdentity;
+}
+
+function listProjectMembers(projectId) {
+  const db = requireDatabase();
+  return db.prepare(`
+    SELECT project_members.project_id, project_members.user_id, project_members.role,
+      project_members.joined_at, project_members.invited_by,
+      COALESCE(users.display_name, project_members.user_id) AS display_name,
+      COALESCE(users.email, '') AS email,
+      COALESCE(users.avatar_color, '') AS avatar_color
+    FROM project_members
+    LEFT JOIN users ON users.id = project_members.user_id
+    WHERE project_members.project_id = ?
+    ORDER BY CASE project_members.role
+      WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'editor' THEN 2
+      WHEN 'commenter' THEN 3 ELSE 4 END, project_members.joined_at ASC
+  `).all(projectId).map((member) => ({ ...member, role: normalizeRole(member.role) }));
+}
+
+function projectRoleForUser(projectId, userId = localIdentity.userId) {
+  const db = requireDatabase();
+  const row = db.prepare("SELECT role FROM project_members WHERE project_id = ? AND user_id = ?").get(projectId, userId);
+  return row ? normalizeRole(row.role) : null;
+}
+
+function canAccessProject(projectId, requiredRole = "viewer", userId = localIdentity.userId) {
+  return hasRole(projectRoleForUser(projectId, userId), requiredRole);
+}
+
+function addProjectMember({ projectId, userId, role = "viewer", displayName = "", email = "" } = {}) {
+  const db = requireDatabase();
+  if (typeof projectId !== "string" || !projectId) throw new Error("A project is required.");
+  if (typeof userId !== "string" || !userId.trim()) throw new Error("A user is required.");
+  if (!isProjectRole(role)) throw new Error("Unknown project role.");
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO users (id, display_name, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET display_name = CASE WHEN excluded.display_name = '' THEN users.display_name ELSE excluded.display_name END,
+      email = CASE WHEN excluded.email = '' THEN users.email ELSE excluded.email END,
+      updated_at = excluded.updated_at
+  `).run(userId.trim(), String(displayName || userId), String(email || ""), now, now);
+  ensureProjectMember(db, projectId, userId.trim(), role, localIdentity.userId);
+  return listProjectMembers(projectId).find((member) => member.user_id === userId.trim()) || null;
+}
+
 function ensureDefaultProject(db) {
   const existing = db.prepare("SELECT id FROM research_projects WHERE archived_at IS NULL ORDER BY created_at ASC LIMIT 1").get();
   if (existing) return existing.id;
   const id = randomUUID();
   const now = timestamp();
   db.prepare(`
-    INSERT INTO research_projects (id, name, description, workspace_path, created_at, updated_at)
-    VALUES (?, 'General', 'Default research project', ?, ?, ?)
-  `).run(id, activeWorkspace ?? null, now, now);
+    INSERT INTO research_projects (id, owner_id, name, description, workspace_path, created_at, updated_at)
+    VALUES (?, ?, 'General', 'Default research project', ?, ?, ?)
+  `).run(id, localIdentity.userId, activeWorkspace ?? null, now, now);
+  ensureProjectMember(db, id, localIdentity.userId, "owner");
   return id;
 }
 
@@ -949,9 +1064,10 @@ function listResearchProjects({ archived = false } = {}) {
     LEFT JOIN research_threads ON research_threads.project_id = research_projects.id
     LEFT JOIN paper_chat_threads ON paper_chat_threads.thread_id = research_threads.id
     WHERE CASE WHEN ? = 1 THEN research_projects.archived_at IS NOT NULL ELSE research_projects.archived_at IS NULL END
+      AND EXISTS (SELECT 1 FROM project_members WHERE project_members.project_id = research_projects.id AND project_members.user_id = ?)
     GROUP BY research_projects.id
     ORDER BY COALESCE(MAX(research_threads.updated_at), research_projects.updated_at) DESC
-  `).all(archived ? 1 : 0, archived ? 1 : 0);
+  `).all(archived ? 1 : 0, archived ? 1 : 0, localIdentity.userId);
 }
 
 function createResearchProject({ name, description = "", workspacePath = "" }) {
@@ -962,6 +1078,7 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
   const resolvedWorkspace = normalizeWorkspacePath(workspacePath) || activeWorkspace;
   const project = {
     id: randomUUID(),
+    owner_id: localIdentity.userId,
     name: normalizedName,
     description: String(description || "").slice(0, 500),
     workspace_path: resolvedWorkspace,
@@ -972,9 +1089,10 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
     last_chat_at: null,
   };
   db.prepare(`
-    INSERT INTO research_projects (id, name, description, workspace_path, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(project.id, project.name, project.description, project.workspace_path, project.created_at, project.updated_at);
+    INSERT INTO research_projects (id, owner_id, name, description, workspace_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.owner_id, project.name, project.description, project.workspace_path, project.created_at, project.updated_at);
+  ensureProjectMember(db, project.id, project.owner_id, "owner");
   return project;
 }
 
@@ -1059,10 +1177,11 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
     WHERE CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END
       AND (? IS NULL OR research_threads.project_id = ?)
       AND paper_chat_threads.thread_id IS NULL
+      AND EXISTS (SELECT 1 FROM project_members WHERE project_members.project_id = research_threads.project_id AND project_members.user_id = ?)
     GROUP BY research_threads.id
     ORDER BY research_threads.updated_at DESC
     LIMIT 120
-  `).all(archived ? 1 : 0, projectId, projectId);
+  `).all(archived ? 1 : 0, projectId, projectId, localIdentity.userId);
 }
 
 function createResearchThread({ prompt, mode, projectId, workspacePath = "" }) {
@@ -1070,6 +1189,7 @@ function createResearchThread({ prompt, mode, projectId, workspacePath = "" }) {
   const selectedProject = projectId
     ? db.prepare("SELECT id, workspace_path FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId)
     : null;
+  if (projectId && (!selectedProject || !canAccessProject(projectId, "editor"))) throw new Error("You do not have access to create a thread in this project.");
   const resolvedProjectId = selectedProject?.id || ensureDefaultProject(db);
   const projectWorkspace = selectedProject?.workspace_path
     || db.prepare("SELECT workspace_path FROM research_projects WHERE id = ?").get(resolvedProjectId)?.workspace_path;
@@ -1159,6 +1279,7 @@ function getResearchThread(id) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
   if (!thread) throw new Error("Research thread not found.");
+  if (thread.project_id && !canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this research thread.");
   const turns = db.prepare(`
     SELECT id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at
     FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC
@@ -1523,6 +1644,11 @@ function deleteArtifact(id) {
 
 module.exports = {
   addPaper,
+  addProjectMember,
+  canAccessProject,
+  listProjectMembers,
+  projectRoleForUser,
+  setLocalIdentity,
   countUnseenArtifacts,
   deleteArtifact,
   getArtifact,

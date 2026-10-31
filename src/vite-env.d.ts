@@ -3,6 +3,8 @@
 interface ResearchDeskBridge {
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
+    getLocalIdentity: () => Promise<LocalIdentity>;
+    updateLocalIdentity: (patch: { displayName: string }) => Promise<LocalIdentity>;
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
     chooseWorkspace: () => Promise<string | null>;
@@ -716,8 +718,19 @@ interface WorkspaceSnapshot {
   actions: AgentAction[];
 }
 
+interface LocalIdentity {
+  version: 1;
+  userId: string;
+  displayName: string;
+  deviceId: string;
+  deviceName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface ResearchProject {
   id: string;
+  owner_id?: string | null;
   name: string;
   description: string;
   workspace_path: string | null;
