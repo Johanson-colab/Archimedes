@@ -1150,6 +1150,23 @@ app.whenReady().then(() => {
     return result;
   });
 
+  ipcMain.handle("comments:list", (_event, { workspace, projectId, resourceType, resourceId, includeResolved = true } = {}) => {
+    if (workspace) store.openWorkspace(resolveWorkspace(workspace));
+    return store.listComments({ projectId, resourceType, resourceId, includeResolved });
+  });
+  ipcMain.handle("comments:create", (_event, { workspace, projectId, resourceType, resourceId, body, parentId, anchor } = {}) => {
+    if (workspace) store.openWorkspace(resolveWorkspace(workspace));
+    return store.createComment({ projectId, resourceType, resourceId, body, parentId, anchor });
+  });
+  ipcMain.handle("comments:resolve", (_event, { workspace, id, resolved = true } = {}) => {
+    if (workspace) store.openWorkspace(resolveWorkspace(workspace));
+    return store.setCommentResolved(id, resolved);
+  });
+  ipcMain.handle("comments:delete", (_event, { workspace, id } = {}) => {
+    if (workspace) store.openWorkspace(resolveWorkspace(workspace));
+    return store.deleteComment(id);
+  });
+
   ipcMain.handle("research-thread:set-visibility", (_event, { threadId, visibility } = {}) => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
     return store.setResearchThreadVisibility(threadId, visibility);

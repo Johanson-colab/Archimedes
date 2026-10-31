@@ -31,6 +31,74 @@ function recordAuditEvent(db, { projectId = null, action, targetType, targetId, 
   }
 }
 
+function assertCommentResource(projectId, resourceType, resourceId) {
+  const db = requireDatabase();
+  if (!projectId || !canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  if (!["thread", "paper", "review", "artifact"].includes(resourceType)) throw new Error("Unknown comment resource.");
+  if (resourceType === "thread") {
+    const thread = db.prepare("SELECT id, project_id, owner_id, visibility FROM research_threads WHERE id = ?").get(resourceId);
+    if (!thread) throw new Error("Research thread not found.");
+    if (thread.project_id !== projectId) throw new Error("This thread belongs to a different project.");
+    if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
+  }
+  if (resourceType === "paper" && !db.prepare("SELECT 1 FROM papers WHERE id = ?").get(resourceId)) throw new Error("Paper not found.");
+}
+
+function listComments({ projectId, resourceType, resourceId, includeResolved = true } = {}) {
+  const db = requireDatabase();
+  assertCommentResource(projectId, resourceType, resourceId);
+  return db.prepare(`
+    SELECT comments.*, COALESCE(users.display_name, comments.author_id) AS author_name
+    FROM comments
+    LEFT JOIN users ON users.id = comments.author_id
+    WHERE comments.project_id = ? AND comments.resource_type = ? AND comments.resource_id = ?
+      AND (? = 1 OR comments.resolved_at IS NULL)
+    ORDER BY comments.created_at ASC
+  `).all(projectId, resourceType, resourceId, includeResolved ? 1 : 0).map((comment) => ({ ...comment, anchor: JSON.parse(comment.anchor_json || "{}") }));
+}
+
+function createComment({ projectId, resourceType, resourceId, body, parentId = null, anchor = {} } = {}) {
+  const db = requireDatabase();
+  assertCommentResource(projectId, resourceType, resourceId);
+  if (!canAccessProject(projectId, "commenter")) throw new Error("You do not have permission to comment in this project.");
+  const text = String(body || "").trim();
+  if (!text || text.length > 10_000) throw new Error("Comments must be between 1 and 10000 characters.");
+  if (parentId) {
+    const parent = db.prepare("SELECT id FROM comments WHERE id = ? AND project_id = ? AND resource_type = ? AND resource_id = ?").get(parentId, projectId, resourceType, resourceId);
+    if (!parent) throw new Error("The parent comment was not found.");
+  }
+  const now = timestamp();
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO comments (id, project_id, resource_type, resource_id, parent_id, anchor_json, body, author_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, projectId, resourceType, resourceId, parentId, JSON.stringify(anchor && typeof anchor === "object" ? anchor : {}), text, localIdentity.userId, now, now);
+  recordAuditEvent(db, { projectId, action: "comment.created", targetType: resourceType, targetId: resourceId, metadata: { commentId: id, parentId } });
+  return listComments({ projectId, resourceType, resourceId }).find((comment) => comment.id === id) || null;
+}
+
+function setCommentResolved(id, resolved = true) {
+  const db = requireDatabase();
+  const comment = db.prepare("SELECT * FROM comments WHERE id = ?").get(id);
+  if (!comment) throw new Error("Comment not found.");
+  if (!canAccessProject(comment.project_id, "commenter")) throw new Error("You do not have access to this comment.");
+  if (comment.author_id !== localIdentity.userId && !canAccessProject(comment.project_id, "editor")) throw new Error("Only the author or an editor can resolve this comment.");
+  const now = timestamp();
+  db.prepare("UPDATE comments SET resolved_at = ?, updated_at = ? WHERE id = ?").run(resolved ? now : null, now, id);
+  recordAuditEvent(db, { projectId: comment.project_id, action: resolved ? "comment.resolved" : "comment.reopened", targetType: comment.resource_type, targetId: comment.resource_id, metadata: { commentId: id } });
+  return listComments({ projectId: comment.project_id, resourceType: comment.resource_type, resourceId: comment.resource_id }).find((item) => item.id === id) || null;
+}
+
+function deleteComment(id) {
+  const db = requireDatabase();
+  const comment = db.prepare("SELECT * FROM comments WHERE id = ?").get(id);
+  if (!comment) return { deleted: false };
+  if (comment.author_id !== localIdentity.userId && !canAccessProject(comment.project_id, "admin")) throw new Error("Only the author or an admin can delete this comment.");
+  const result = db.prepare("DELETE FROM comments WHERE id = ?").run(id);
+  recordAuditEvent(db, { projectId: comment.project_id, action: "comment.deleted", targetType: comment.resource_type, targetId: comment.resource_id, metadata: { commentId: id } });
+  return { deleted: result.changes > 0 };
+}
+
 function listAuditEvents({ projectId = null, limit = 100 } = {}) {
   const db = requireDatabase();
   const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
@@ -102,6 +170,20 @@ function schema(db) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS comments (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      parent_id TEXT,
+      anchor_json TEXT NOT NULL DEFAULT '{}',
+      body TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      resolved_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS audit_events (
@@ -335,6 +417,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id, project_id);
     CREATE INDEX IF NOT EXISTS idx_thread_snapshots_thread ON thread_snapshots(thread_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_audit_events_project ON audit_events(project_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_comments_resource ON comments(project_id, resource_type, resource_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
   `);
 
@@ -2011,6 +2094,10 @@ function deleteArtifact(id) {
 
 module.exports = {
   addPaper,
+  createComment,
+  deleteComment,
+  listComments,
+  setCommentResolved,
   listAuditEvents,
   recordAuditEvent,
   addProjectMember,

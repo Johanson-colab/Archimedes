@@ -40,6 +40,10 @@ interface ResearchDeskBridge {
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
   setResearchThreadVisibility: (threadId: string, visibility: "project" | "private") => Promise<{ visibility: "project" | "private" }>;
+  listComments: (input: { workspace?: string; projectId: string; resourceType: ResearchComment["resource_type"]; resourceId: string; includeResolved?: boolean }) => Promise<ResearchComment[]>;
+  createComment: (input: { workspace?: string; projectId: string; resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => Promise<ResearchComment | null>;
+  resolveComment: (input: { workspace?: string; id: string; resolved?: boolean }) => Promise<ResearchComment | null>;
+  deleteComment: (input: { workspace?: string; id: string }) => Promise<{ deleted: boolean }>;
   createResearchThreadSnapshot: (threadId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }>;
   listResearchThreadSnapshots: (threadId: string) => Promise<Array<{ id: string; thread_id: string; project_id: string; owner_id: string; sequence: number; created_at: string }>>;
   getResearchThreadSnapshot: (snapshotId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> } | null>;
@@ -744,6 +748,22 @@ interface ResearchProject {
   updated_at: string;
   archived_at: string | null;
   last_chat_at: string | null;
+}
+
+interface ResearchComment {
+  id: string;
+  project_id: string;
+  resource_type: "thread" | "paper" | "review" | "artifact";
+  resource_id: string;
+  parent_id: string | null;
+  anchor_json: string;
+  anchor: Record<string, unknown>;
+  body: string;
+  author_id: string;
+  author_name: string;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface ResearchThread {
