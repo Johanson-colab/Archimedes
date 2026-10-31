@@ -2346,6 +2346,12 @@ function App() {
 
   function toggleProactiveDock() {
     if (proactive.settings.mode === "off") {
+      // A configured model is enough to start; avoid forcing a trip to Settings.
+      if (proactive.modelReady) {
+        proactive.setSettings({ mode: "auto" });
+        proactive.setOpen(true);
+        return;
+      }
       setSettingsSection("proactive");
       setSettingsOpen(true);
       return;
@@ -2372,7 +2378,7 @@ function App() {
     { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
     { id: "open-chat", group: t("Work"), label: t("Open current chat"), icon: <MessageCircle size={15} />, run: () => setMainSection("chat") },
     { id: "research-path", group: t("Panels"), label: t("Research path"), detail: researchPanelOpen ? t("Hide the Research path panel") : t("Show the Research path panel"), icon: <Route size={15} />, run: () => setResearchPanelOpen((open) => !open) },
-    { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? t("Set up proactive suggestions") : t("Review suggestions"), icon: <Sparkles size={15} />, run: toggleProactiveDock },
+    { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? (proactive.modelReady ? t("Start proactive suggestions") : t("Set up proactive suggestions")) : t("Review suggestions"), icon: <Sparkles size={15} />, run: toggleProactiveDock },
     { id: "proactive-settings", group: t("System"), label: t("Proactive settings"), icon: <ShieldCheck size={15} />, run: () => { setSettingsSection("proactive"); setSettingsOpen(true); } },
     ...moduleCommands,
     { id: "extensions-skills", group: t("Extensions"), label: t("Skills"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("skills"); setMainSection("extensions"); } },
@@ -2463,7 +2469,7 @@ function App() {
             <button
               className={proactive.open ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={toggleProactiveDock}
-              title={proactive.settings.mode === "off" ? t("Set up Proactive agent") : proactive.open ? t("Hide Proactive agent") : t("Show Proactive agent")}
+              title={proactive.settings.mode === "off" ? (proactive.modelReady ? t("Start Proactive agent") : t("Set up Proactive agent")) : proactive.open ? t("Hide Proactive agent") : t("Show Proactive agent")}
               aria-label={proactive.open ? t("Hide Proactive agent") : t("Show Proactive agent")}
               aria-pressed={proactive.open}
             >
@@ -2714,7 +2720,7 @@ function App() {
         proactiveSettings={proactive.settings}
         onChangeProactiveSettings={(patch) => {
           proactive.setSettings(patch);
-          if (proactive.settings.mode === "off" && patch.mode && patch.mode !== "off") proactive.setOpen(true);
+          if (proactive.settings.mode === "off" && patch.mode && patch.mode !== "off" && patch.mode !== "random") proactive.setOpen(true);
         }}
         onResetProactiveHistory={proactive.resetHistory}
         proactiveHistoryCount={proactive.state.suggestions.length}

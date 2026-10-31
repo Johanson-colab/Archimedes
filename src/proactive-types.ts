@@ -1,4 +1,4 @@
-export type ProactiveMode = "off" | "manual" | "auto";
+export type ProactiveMode = "off" | "manual" | "auto" | "random";
 
 export type ProactiveSource =
   | "search"

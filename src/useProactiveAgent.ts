@@ -163,11 +163,17 @@ export function useProactiveAgent({
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("archimedes-proactive-open", String(open && state.settings.mode !== "off"));
+      // Random mode is signal-driven: never restore an open panel on reload.
+      const persistOpen = state.settings.mode === "random" ? false : open && state.settings.mode !== "off";
+      window.localStorage.setItem("archimedes-proactive-open", String(persistOpen));
     } catch {
       // Best-effort layout persistence.
     }
   }, [open, state.settings.mode]);
+
+  useEffect(() => {
+    if (state.settings.mode === "random") setOpen(false);
+  }, [state.settings.mode]);
 
   useEffect(() => {
     return subscribeProactiveSignals((signal) => {
@@ -235,6 +241,19 @@ export function useProactiveAgent({
     return () => window.clearInterval(timer);
   }, []);
 
+  // Random mode only reveals the floating panel when the agent actually has
+  // something to say. Other modes keep the panel under the user's control.
+  const presentSignal = useCallback((signal: ProactiveSignal) => {
+    const now = Date.now();
+    const current = stateRef.current;
+    if (recordSignal(current, signal, now) === current) return;
+    setState((state) => recordSignal(state, signal, Date.now()));
+    if (current.settings.mode === "random" && !isQuietHours(current.settings, now)) {
+      setOpen(true);
+      setPanelView("inbox");
+    }
+  }, []);
+
   // Citation checking is cheap and deterministic, so Auto mode can run it on
   // every new answer instead of waiting for a manual review.
   useEffect(() => {
@@ -246,22 +265,23 @@ export function useProactiveAgent({
     }
     if (citationMessageRef.current === latest.id) return;
     citationMessageRef.current = latest.id;
-    if (stateRef.current.settings.mode !== "auto" || !stateRef.current.settings.sources.citation) return;
+    const mode = stateRef.current.settings.mode;
+    if ((mode !== "auto" && mode !== "random") || !stateRef.current.settings.sources.citation) return;
     const signal = citationSignalFromMessages(messages, contextRef.current);
     if (!signal) return;
-    setState((current) => recordSignal(current, {
+    presentSignal({
       ...signal,
       origin: "auto",
       whyNow: "A recent answer states results without a source. This appeared automatically after the turn finished.",
       dedupeWindowMs: 30 * 60 * 1000,
-    }, Date.now()));
-  }, [messages]);
+    });
+  }, [messages, presentSignal]);
 
   // Daily library radar. This is the cheap, offline half of issue #78's P0:
   // one digest per day instead of watching arXiv or repository commits.
   const checkRadar = useCallback(async () => {
     const current = stateRef.current;
-    if (current.settings.mode !== "auto" || !current.settings.sources.library) return;
+    if ((current.settings.mode !== "auto" && current.settings.mode !== "random") || !current.settings.sources.library) return;
     if (radarBusyRef.current) return;
     const activeBridge = bridgeRef.current;
     if (!activeBridge?.listLibraries || !activeBridge?.listLibraryPapers) return;
@@ -315,14 +335,14 @@ export function useProactiveAgent({
         origin: "auto",
         dedupeWindowMs: 20 * 60 * 60 * 1000,
       };
-      setState((stateNow) => recordSignal(stateNow, signal, Date.now()));
+      presentSignal(signal);
     } finally {
       radarBusyRef.current = false;
     }
-  }, []);
+  }, [presentSignal]);
 
   useEffect(() => {
-    if (state.settings.mode !== "auto" || !state.settings.sources.library) return;
+    if ((state.settings.mode !== "auto" && state.settings.mode !== "random") || !state.settings.sources.library) return;
     void checkRadar();
     const timer = window.setInterval(() => void checkRadar(), 30 * 60 * 1000);
     return () => window.clearInterval(timer);
@@ -404,13 +424,13 @@ export function useProactiveAgent({
       });
       if (!signal) return null;
       if (origin === "manual") signal.origin = "manual";
-      setState((current) => recordSignal(current, signal, Date.now()));
+      presentSignal(signal);
       return signal;
     } finally {
       observingRef.current = false;
       setObserving(false);
     }
-  }, [buildContext]);
+  }, [buildContext, presentSignal]);
 
   // Seconds-level observer. It only fires when the activity bar is above the
   // calm threshold, the user has opted into live observation, and the daily
@@ -418,7 +438,7 @@ export function useProactiveAgent({
   useEffect(() => {
     const timer = window.setInterval(() => {
       const current = stateRef.current;
-      if (current.settings.mode !== "auto" || !current.settings.liveObservation) return;
+      if ((current.settings.mode !== "auto" && current.settings.mode !== "random") || !current.settings.liveObservation) return;
       if (!modelReadyRef.current) return;
       if (observingRef.current) return;
       const now = Date.now();

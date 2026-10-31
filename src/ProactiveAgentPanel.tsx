@@ -112,14 +112,16 @@ export default function ProactiveAgentPanel({
             ? t("Paused while typing")
             : controller.observing
               ? t("Observing now")
-              : mode === "auto" && !controller.modelReady
+              : (mode === "auto" || mode === "random") && !controller.modelReady
                 ? t("Proactive model not configured")
                 : mode === "auto"
                   ? t("Watching context")
-                  : mode === "manual"
-                    ? t("Manual review")
-                    : t("Off");
-  const statusActive = mode !== "off" && !limited && (mode !== "auto" || controller.modelReady);
+                  : mode === "random"
+                    ? t("Watching quietly")
+                    : mode === "manual"
+                      ? t("Manual review")
+                      : t("Off");
+  const statusActive = mode !== "off" && !limited && ((mode !== "auto" && mode !== "random") || controller.modelReady);
 
   useEffect(() => {
     if (selectedId && !sorted.some((suggestion) => suggestion.id === selectedId)) setSelectedId(null);
@@ -298,10 +300,12 @@ export default function ProactiveAgentPanel({
         <p>{t("It reads only app context — paper pages, selections, searches, and build errors. No screenshots, no background model calls.")}</p>
         <button className="primary-button" onClick={() => controller.setSettings({ mode: "manual" })}>{t("Enable manual review")}</button>
       </div> : <div className="agent-proactive-empty">
-        <strong>{mode === "manual" ? t("Ready when you are") : t("No suggestions right now")}</strong>
+        <strong>{mode === "manual" ? t("Ready when you are") : mode === "random" ? t("Watching quietly") : t("No suggestions right now")}</strong>
         <p>{mode === "manual"
           ? t("Use Observe once to review the latest answer, or turn on Auto in settings to watch for 0-result searches, repeated selections, and failed builds.")
-          : t("Watching for 0-result searches, repeated selections, and failed LaTeX builds. Suggestions stay here until you open the panel.")}</p>
+          : mode === "random"
+            ? t("The panel stays closed until there is something worth sharing, then opens by itself.")
+            : t("Watching for 0-result searches, repeated selections, and failed LaTeX builds. Suggestions stay here until you open the panel.")}</p>
         <div className="agent-proactive-empty-actions">
           <button className="secondary-button" onClick={controller.observeOnce}>{t("Observe once")}</button>
           <button className="agent-proactive-text-button" onClick={onOpenSettings}>{t("Open settings")}</button>
