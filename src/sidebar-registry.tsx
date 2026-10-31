@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { BookOpen, CalendarDays, FilePenLine, ImagePlus, Puzzle, Radar } from "lucide-react";
+import { BookOpen, CalendarDays, FilePenLine, FlaskConical, ImagePlus, Puzzle, Radar } from "lucide-react";
 
-export type MainSection = "chat" | "extensions" | "library" | "daily" | "benchmark-radar" | "image-creation" | "files" | "writing";
+export type MainSection = "chat" | "extensions" | "library" | "daily" | "benchmark-radar" | "image-creation" | "files" | "writing" | "reproduce";
 export type SidebarSection = "knowledge" | "create";
 
 export type SidebarEntry = {
@@ -27,6 +27,7 @@ export const coreSidebarEntries: SidebarEntry[] = [
   { id: "daily", commandId: "open-daily-papers", section: "knowledge", labelKey: "Daily papers", icon: <CalendarDays size={15} />, order: 20, destination: { type: "section", section: "daily" } },
   { id: "benchmark-radar", commandId: "open-benchmark-radar", section: "knowledge", labelKey: "Benchmark Radar", icon: <Radar size={15} />, order: 30, destination: { type: "section", section: "benchmark-radar" } },
   { id: "extensions", commandId: "open-extensions", section: "knowledge", labelKey: "Extensions", icon: <Puzzle size={15} />, order: 40, destination: { type: "section", section: "extensions" } },
+  { id: "reproduce", commandId: "open-reproduce", section: "create", labelKey: "Reproduce", icon: <FlaskConical size={15} />, order: 5, destination: { type: "section", section: "reproduce" } },
   { id: "writing", commandId: "open-paper-writing", section: "create", labelKey: "Paper writing", icon: <FilePenLine size={15} />, order: 10, destination: { type: "section", section: "writing" } },
   { id: "image-creation", commandId: "open-image-creation", section: "create", labelKey: "Image creation", icon: <ImagePlus size={15} />, order: 20, destination: { type: "section", section: "image-creation" } },
 ];

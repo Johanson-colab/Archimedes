@@ -70,6 +70,12 @@ interface ResearchDeskBridge {
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
     getDailyFigure?: (arxivId: string) => Promise<string>;
+    listReproductions: () => Promise<Reproduction[]>;
+    createReproduction: (input: ReproductionCreateInput) => Promise<Reproduction>;
+    getReproduction: (id: string) => Promise<Reproduction | null>;
+    updateReproduction: (id: string, patch: ReproductionPatch) => Promise<Reproduction>;
+    deleteReproduction: (id: string) => Promise<boolean>;
+    planReproduction: (id: string) => Promise<Reproduction>;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
@@ -606,6 +612,49 @@ interface DailyPaper extends AcademicSearchResult {
   github_url: string;
   github_stars: number;
 }
+
+type ReproductionStatus =
+  | "draft" | "planned" | "queued" | "provisioning" | "running"
+  | "diagnosing" | "verified" | "diverged" | "blocked" | "cancelled";
+
+interface ReproductionClaim {
+  id: string;
+  statement: string;
+  dataset: string;
+  metric: string;
+  expected: number | null;
+  unit: string;
+  tolerance: number;
+  evidence: { page: number | null; table: string; row: string; column: string; quote: string };
+}
+
+interface ReproductionContract {
+  version: number;
+  summary: string;
+  claims: ReproductionClaim[];
+  entrypoint: { command: string; cwd: string; outputs: string[] };
+  environment: { python: string; cuda: string; install: string[]; system: string[]; source: string };
+  repo: { url: string; commit: string };
+  notes: string[];
+  frozen_at: string | null;
+}
+
+interface Reproduction {
+  id: string;
+  paper_id: string | null;
+  repo_url: string;
+  title: string;
+  status: ReproductionStatus;
+  source: { kind?: string; paper_id?: string; repo_url?: string };
+  contract: ReproductionContract | null;
+  budget: { wallClockMin: number; gpuHours: number; maxFixAttempts: number };
+  error: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ReproductionCreateInput { paperId?: string | null; repoUrl?: string; title?: string; budget?: Partial<Reproduction["budget"]> }
+interface ReproductionPatch { title?: string; status?: ReproductionStatus; contract?: ReproductionContract | null; budget?: Partial<Reproduction["budget"]>; error?: string; repoUrl?: string }
 
 interface DailyDiscoveryResponse {
   papers: DailyPaper[];

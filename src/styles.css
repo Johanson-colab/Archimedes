@@ -6605,3 +6605,84 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .project-activity-row strong { color: var(--night-ink-soft); font-size: 10px; font-weight: 550; }
 .project-activity-row small { color: var(--night-faint); font-size: 8.5px; }
 .project-activity-empty { display: flex; align-items: center; gap: 7px; padding: 18px 14px; color: var(--night-faint); font-size: 10px; }
+
+/* Reproduce: a background reproduction job, visible from anywhere. Every
+   colour comes from a semantic token so both themes work without overrides. */
+.reproduce-page { display: flex; width: min(100%, 1080px); min-height: 100%; margin: 0 auto; flex-direction: column; gap: 18px; padding: 26px clamp(18px, 3vw, 40px) 60px; color: var(--text-primary); }
+.reproduce-header { display: flex; align-items: center; gap: 10px; }
+.reproduce-header h1 { flex: 1; min-width: 0; margin: 0; overflow: hidden; font-size: 18px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.reproduce-header-actions { display: flex; align-items: center; gap: 8px; }
+.reproduce-back { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 5px 8px; color: var(--text-secondary); background: transparent; border: 0; border-radius: var(--radius-control); font-size: 12px; }
+.reproduce-back:hover { color: var(--text-primary); background: var(--surface-soft); }
+.reproduce-tab { color: var(--accent) !important; }
+.reproduce-tab:hover { background: color-mix(in srgb, var(--accent) 10%, transparent) !important; }
+
+.reproduce-status { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 650; }
+.reproduce-status.idle { color: var(--text-muted); background: var(--surface-soft); }
+.reproduce-status.ready { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.reproduce-status.waiting { color: var(--text-secondary); background: var(--surface-raised); }
+.reproduce-status.working { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.reproduce-status.warning { color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 16%, transparent); }
+.reproduce-status.good { color: var(--state-success); background: color-mix(in srgb, var(--state-success) 16%, transparent); }
+.reproduce-status.bad { color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 16%, transparent); }
+
+.reproduce-list { display: grid; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-panel); overflow: hidden; }
+.reproduce-row { display: flex; width: 100%; align-items: center; gap: 12px; padding: 13px 14px; color: var(--text-primary); background: transparent; border: 0; border-top: 1px solid var(--border-soft); text-align: left; }
+.reproduce-row:first-child { border-top: 0; }
+.reproduce-row:hover { background: var(--surface-raised); }
+.reproduce-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); }
+.reproduce-dot.working, .reproduce-dot.ready { background: var(--accent); }
+.reproduce-dot.waiting { background: var(--text-faint); }
+.reproduce-dot.warning { background: var(--state-warning); }
+.reproduce-dot.good { background: var(--state-success); }
+.reproduce-dot.bad { background: var(--state-danger); }
+.reproduce-row-main { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.reproduce-row-main strong { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.reproduce-row-main small { overflow: hidden; color: var(--text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.reproduce-row-time { flex: 0 0 auto; color: var(--text-faint); font-size: 11px; }
+
+.reproduce-empty { display: grid; justify-items: center; gap: 8px; padding: 52px 20px; color: var(--text-muted); text-align: center; }
+.reproduce-empty strong { color: var(--text-primary); font-size: 14px; font-weight: 600; }
+.reproduce-empty span { max-width: 46ch; font-size: 12px; line-height: 1.6; }
+
+.reproduce-picker { display: grid; gap: 10px; padding: 12px; background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; }
+.reproduce-picker-bar { display: flex; align-items: center; gap: 8px; }
+.reproduce-picker-bar select, .reproduce-picker-bar input { min-height: 30px; padding: 0 9px; color: var(--text-primary); background: var(--surface-raised); border: 1px solid var(--border-default); border-radius: var(--radius-control); font-size: 12px; }
+.reproduce-picker-bar input { flex: 1; min-width: 0; }
+.reproduce-picker-list { display: grid; max-height: 320px; overflow: auto; }
+.reproduce-picker-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 6px; color: var(--text-primary); background: transparent; border: 0; border-top: 1px solid var(--border-soft); text-align: left; }
+.reproduce-picker-row:hover { background: var(--surface-raised); }
+.reproduce-picker-row span { flex: 1; min-width: 0; overflow: hidden; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.reproduce-picker-row small { flex: 0 0 auto; color: var(--text-muted); font-size: 11px; }
+
+.reproduce-blank { display: grid; justify-items: center; gap: 10px; padding: 48px 20px; color: var(--text-muted); text-align: center; }
+.reproduce-blank strong { color: var(--text-primary); font-size: 14px; }
+.reproduce-blank span { max-width: 52ch; font-size: 12px; line-height: 1.6; }
+.reproduce-note { padding: 8px 10px; border-radius: 6px; font-size: 12px; }
+.reproduce-note.bad { color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 12%, transparent); }
+
+.reproduce-summary { display: grid; gap: 8px; padding: 14px 16px; background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; }
+.reproduce-summary p { margin: 0; font-size: 13px; line-height: 1.6; }
+.reproduce-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--text-muted); font-size: 11px; }
+
+.reproduce-claims { display: grid; gap: 8px; }
+.reproduce-claim { display: grid; gap: 6px; padding: 12px 14px; background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; }
+.reproduce-claim-head { display: flex; align-items: baseline; gap: 10px; }
+.reproduce-claim-head strong { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.5; }
+.reproduce-expected { flex: 0 0 auto; color: var(--accent); font-family: var(--font-mono); font-size: 12px; }
+.reproduce-claim-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.reproduce-claim-meta span { padding: 2px 7px; color: var(--text-secondary); background: var(--surface-soft); border-radius: 999px; font-size: 10.5px; }
+.reproduce-claim blockquote { margin: 0; padding: 6px 10px; color: var(--text-muted); border-left: 2px solid var(--border-default); font-size: 11.5px; line-height: 1.55; }
+
+.reproduce-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.reproduce-grid section { padding: 12px 14px; background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; }
+.reproduce-grid h2 { margin: 0 0 8px; color: var(--text-secondary); font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.reproduce-grid pre { margin: 0; padding: 9px 10px; overflow: auto; color: var(--text-primary); background: var(--surface-ground); border-radius: 6px; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.reproduce-env { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.reproduce-env code { color: var(--text-secondary); font-family: var(--font-mono); font-size: 11.5px; }
+
+.reproduce-notes { display: grid; gap: 6px; margin: 0; padding: 12px 16px 12px 32px; color: var(--text-secondary); background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; font-size: 12px; line-height: 1.6; }
+.reproduce-hint { margin: 0; color: var(--text-faint); font-size: 11px; }
+.reproduce-queued { padding: 8px 12px; background: var(--surface-soft); border-radius: 8px; }
+.reproduce-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
+@media (max-width: 820px) { .reproduce-grid { grid-template-columns: minmax(0, 1fr); } }

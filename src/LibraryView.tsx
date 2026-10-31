@@ -57,6 +57,7 @@ import {
   ExternalLink,
   FileCode2,
   FileText,
+  FlaskConical,
   Folder,
   FolderOpen,
   GitBranch,
@@ -190,9 +191,10 @@ type LibraryViewProps = {
   onLibraryImported?: () => void;
   onAgentRun?: (result: AgentRunResult) => void;
   onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
+  onReproduceOpened?: (reproductionId: string) => void;
 };
 
-export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted }: LibraryViewProps) {
+export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened }: LibraryViewProps) {
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -319,6 +321,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
       projectId={projectId}
       onAgentRun={onAgentRun}
       onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted}
+      onReproduceOpened={onReproduceOpened}
     />;
   }
 
@@ -555,15 +558,33 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
   </div>;
 });
 
-function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, onAgentRun, onInternalReviewThreadsDeleted }: {
+function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened }: {
   paper: ReaderLibraryPaper; library: ResearchLibrary; onBack: () => void;
   onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>;
-  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; onAgentRun?: (result: AgentRunResult) => void; onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
+  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; onAgentRun?: (result: AgentRunResult) => void; onInternalReviewThreadsDeleted?: (threadIds: string[]) => void; onReproduceOpened?: (reproductionId: string) => void;
 }) {
   const { language, t } = useUISettings();
   const [reader, setReader] = useState<PaperReaderState | null>(null);
   const [busy, setBusy] = useState<"remote" | "local" | null>(null);
+  const [reproducing, setReproducing] = useState(false);
   const [error, setError] = useState("");
+
+  async function startReproduction() {
+    setReproducing(true);
+    setError("");
+    try {
+      const created = await bridge.createReproduction({
+        paperId: paper.id,
+        repoUrl: projectUrl || paper.url || "",
+        title: paper.title,
+      });
+      onReproduceOpened?.(created.id);
+    } catch (reproductionError) {
+      setError(reproductionError instanceof Error ? reproductionError.message : "Could not start a reproduction.");
+    } finally {
+      setReproducing(false);
+    }
+  }
   const [pageNumber, setPageNumber] = useState(1);
   const [pdfZoom, setPdfZoom] = useState(1);
   const [query, setQuery] = useState("");
@@ -1031,7 +1052,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     </button>
     <header id="paper-reader-bar" className="paper-reader-bar" title={`${library.name} · ${paper.title}`} inert={!readerChromeOpen}>
       <button className="reader-back-button" onClick={onBack} title={`${t("Library")} · ${library.name}`} aria-label={t("Library")}><ChevronLeft size={15} /></button>
-      <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />{t("Original paper")}</button><button className={readerView === "review" ? "active" : ""} role="tab" aria-selected={readerView === "review"} onClick={() => { setReaderView("review"); setChatOpen(false); }}><BookOpen size={16} />{t("Review")}</button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div>
+      <div className="paper-reader-tabs" role="tablist"><button className={readerView === "paper" ? "active" : ""} role="tab" aria-selected={readerView === "paper"} onClick={() => setReaderView("paper")}><FileText size={16} />{t("Original paper")}</button><button className={readerView === "review" ? "active" : ""} role="tab" aria-selected={readerView === "review"} onClick={() => { setReaderView("review"); setChatOpen(false); }}><BookOpen size={16} />{t("Review")}</button>{projectUrl && <button className={readerView === "project" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "project"} title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={16} />Project</button>}{projectUrl && isGithubRepositoryLink(projectUrl) && <button className={readerView === "codebase" ? "paper-project-tab active" : "paper-project-tab"} role="tab" aria-selected={readerView === "codebase"} title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={16} />Codebase</button>}</div><button className="paper-project-tab reproduce-tab" title={t("Reproduce this paper in the background")} disabled={reproducing} onClick={() => void startReproduction()}>{reproducing ? <LoaderCircle className="spin" size={16} /> : <FlaskConical size={16} />}{t("Reproduce")}</button>
       <div className="reader-header-actions">
         {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title={t("Open source")}><ExternalLink size={15} /></a>}
         <button className="reader-icon-button" title={paper.starred ? t("Unstar paper") : t("Star paper")} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={15} fill={paper.starred ? "currentColor" : "none"} /></button>

@@ -378,6 +378,20 @@ function schema(db) {
       PRIMARY KEY (paper_id, user_id)
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS reproductions (
+      id TEXT PRIMARY KEY NOT NULL,
+      paper_id TEXT REFERENCES papers(id) ON DELETE SET NULL,
+      repo_url TEXT NOT NULL DEFAULT '',
+      title TEXT NOT NULL,
+      status TEXT NOT NULL,
+      source_json TEXT NOT NULL,
+      contract_json TEXT,
+      budget_json TEXT NOT NULL,
+      error TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
       cache_key TEXT PRIMARY KEY NOT NULL,
       response_json TEXT NOT NULL,
@@ -409,6 +423,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_paper_chat_threads_thread ON paper_chat_threads(thread_id);
     CREATE INDEX IF NOT EXISTS idx_paper_reviews_updated ON paper_reviews(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_paper_presentations_updated ON paper_presentations(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_reproductions_updated ON reproductions(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
@@ -2116,6 +2131,104 @@ function deleteArtifact(id) {
   return { deleted: Number(db.prepare("DELETE FROM research_artifacts WHERE id = ?").run(id).changes) > 0 };
 }
 
+const REPRODUCTION_STATUSES = new Set([
+  "draft", "planned", "queued", "provisioning", "running",
+  "diagnosing", "verified", "diverged", "blocked", "cancelled",
+]);
+
+const DEFAULT_REPRODUCTION_BUDGET = Object.freeze({ wallClockMin: 45, gpuHours: 2, maxFixAttempts: 3 });
+
+function normalizeReproductionBudget(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const bound = (raw, fallback, min, max) => {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.round(parsed))) : fallback;
+  };
+  return {
+    wallClockMin: bound(input.wallClockMin, DEFAULT_REPRODUCTION_BUDGET.wallClockMin, 1, 24 * 60),
+    gpuHours: bound(input.gpuHours, DEFAULT_REPRODUCTION_BUDGET.gpuHours, 0, 24 * 30),
+    maxFixAttempts: bound(input.maxFixAttempts, DEFAULT_REPRODUCTION_BUDGET.maxFixAttempts, 0, 10),
+  };
+}
+
+function reproductionRow(row) {
+  if (!row) return null;
+  const parse = (value, fallback) => {
+    if (!value) return fallback;
+    try { return JSON.parse(value); } catch { return fallback; }
+  };
+  return {
+    id: row.id,
+    paper_id: row.paper_id || null,
+    repo_url: row.repo_url || "",
+    title: row.title,
+    status: REPRODUCTION_STATUSES.has(row.status) ? row.status : "draft",
+    source: parse(row.source_json, {}) || {},
+    contract: parse(row.contract_json, null),
+    budget: normalizeReproductionBudget(parse(row.budget_json, {})),
+    error: row.error || "",
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function createReproduction(input = {}) {
+  const db = requireDatabase();
+  const now = timestamp();
+  const id = randomUUID();
+  const paperId = typeof input.paperId === "string" && input.paperId ? input.paperId : null;
+  const source = input.source && typeof input.source === "object" ? input.source : {};
+  const paper = paperId ? db.prepare("SELECT title FROM papers WHERE id = ?").get(paperId) : null;
+  const title = String(input.title || paper?.title || source.repo_url || "Untitled reproduction").slice(0, 300);
+  const status = REPRODUCTION_STATUSES.has(input.status) ? input.status : "draft";
+  db.prepare(`INSERT INTO reproductions
+      (id, paper_id, repo_url, title, status, source_json, contract_json, budget_json, error, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, '', ?, ?)`).run(
+    id, paperId, String(input.repoUrl || "").slice(0, 2_000), title, status,
+    JSON.stringify(source), JSON.stringify(normalizeReproductionBudget(input.budget)), now, now,
+  );
+  return getReproduction(id);
+}
+
+function getReproduction(id) {
+  const db = requireDatabase();
+  return reproductionRow(db.prepare("SELECT * FROM reproductions WHERE id = ?").get(String(id || "")));
+}
+
+function listReproductions(limit = 100) {
+  const db = requireDatabase();
+  const bound = Math.min(500, Math.max(1, Math.trunc(Number(limit) || 100)));
+  return db.prepare("SELECT * FROM reproductions ORDER BY updated_at DESC LIMIT ?").all(bound).map(reproductionRow);
+}
+
+function updateReproduction(id, patch = {}) {
+  const db = requireDatabase();
+  const current = getReproduction(id);
+  if (!current) throw new Error("That reproduction does not exist.");
+  const next = {
+    title: typeof patch.title === "string" && patch.title.trim() ? patch.title.trim().slice(0, 300) : current.title,
+    status: REPRODUCTION_STATUSES.has(patch.status) ? patch.status : current.status,
+    repoUrl: typeof patch.repoUrl === "string" ? patch.repoUrl.slice(0, 2_000) : current.repo_url,
+    source: patch.source && typeof patch.source === "object" ? patch.source : current.source,
+    contract: "contract" in patch ? patch.contract : current.contract,
+    budget: "budget" in patch ? normalizeReproductionBudget(patch.budget) : current.budget,
+    error: typeof patch.error === "string" ? patch.error.slice(0, 4_000) : current.error,
+  };
+  db.prepare(`UPDATE reproductions
+      SET title = ?, status = ?, repo_url = ?, source_json = ?, contract_json = ?, budget_json = ?, error = ?, updated_at = ?
+      WHERE id = ?`).run(
+    next.title, next.status, next.repoUrl, JSON.stringify(next.source),
+    next.contract ? JSON.stringify(next.contract) : null, JSON.stringify(next.budget), next.error, timestamp(), String(id),
+  );
+  return getReproduction(id);
+}
+
+function deleteReproduction(id) {
+  const db = requireDatabase();
+  db.prepare("DELETE FROM reproductions WHERE id = ?").run(String(id || ""));
+  return true;
+}
+
 module.exports = {
   addPaper,
   createComment,
@@ -2131,6 +2244,11 @@ module.exports = {
   listProjectMembers,
   projectRoleForUser,
   setLocalIdentity,
+  createReproduction,
+  deleteReproduction,
+  getReproduction,
+  listReproductions,
+  updateReproduction,
   countUnseenArtifacts,
   deleteArtifact,
   getArtifact,

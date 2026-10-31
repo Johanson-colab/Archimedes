@@ -22,6 +22,7 @@ const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
+const { planReproduction } = require("./reproduction/planner.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -895,6 +896,64 @@ app.whenReady().then(() => {
   ipcMain.handle("library:daily-figure", async (_event, { arxivId } = {}) => {
     if (typeof arxivId !== "string" || !arxivId.trim()) throw new Error("An arXiv id is required.");
     return resolveArxivFigure(arxivId);
+  });
+
+  ipcMain.handle("reproduction:list", () => store.listReproductions());
+
+  ipcMain.handle("reproduction:create", (_event, input = {}) => {
+    const paperId = typeof input.paperId === "string" && input.paperId ? input.paperId : null;
+    if (paperId && !store.getPaper(paperId)) throw new Error("That paper does not exist in this workspace.");
+    return store.createReproduction({
+      paperId,
+      repoUrl: typeof input.repoUrl === "string" ? input.repoUrl : "",
+      title: typeof input.title === "string" ? input.title : "",
+      source: { kind: paperId ? "paper" : "repo", paper_id: paperId || undefined, repo_url: input.repoUrl || undefined },
+      budget: input.budget,
+    });
+  });
+
+  ipcMain.handle("reproduction:get", (_event, { id } = {}) => {
+    if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
+    return store.getReproduction(id);
+  });
+
+  ipcMain.handle("reproduction:update", (_event, { id, patch } = {}) => {
+    if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
+    return store.updateReproduction(id, patch && typeof patch === "object" ? patch : {});
+  });
+
+  ipcMain.handle("reproduction:delete", (_event, { id } = {}) => {
+    if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
+    return store.deleteReproduction(id);
+  });
+
+  ipcMain.handle("reproduction:plan", async (_event, { id } = {}) => {
+    const reproduction = store.getReproduction(id);
+    if (!reproduction) throw new Error("That reproduction does not exist.");
+    if (reproduction.contract && reproduction.status !== "draft") {
+      throw new Error("This reproduction already has an approved contract.");
+    }
+    if (!reproduction.paper_id) throw new Error("Reproduction planning is only available for papers.");
+    const paper = store.getPaper(reproduction.paper_id);
+    if (!paper) throw new Error("The paper for this reproduction is missing.");
+    const reader = store.getPaperReader(reproduction.paper_id);
+    const review = store.getPaperReview(reproduction.paper_id);
+    store.updateReproduction(id, { status: "draft", error: "" });
+    try {
+      const contract = await planReproduction({
+        paper,
+        pages: reader.pages || [],
+        review: review?.review || review,
+        repoUrl: reproduction.repo_url,
+        config: modelConfig.getActiveModelConfig(),
+        complete: agent.complete,
+      });
+      return store.updateReproduction(id, { status: "planned", contract, error: "" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Planning failed.";
+      store.updateReproduction(id, { status: "draft", error: message });
+      throw error;
+    }
   });
 
   ipcMain.handle("library:deep-search", async (_event, input = {}) => {
