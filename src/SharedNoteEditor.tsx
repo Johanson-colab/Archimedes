@@ -7,6 +7,9 @@ type SharedNoteEditorProps = {
   bridge: ResearchDeskBridge;
   projectId: string;
   docKey?: string;
+  initialText?: string;
+  onTextChange?: (text: string) => void;
+  title?: string;
 };
 
 function decodeState(value: string | undefined) {
@@ -21,7 +24,7 @@ function encodeState(value: Uint8Array) {
   return btoa(binary);
 }
 
-export default function SharedNoteEditor({ bridge, projectId, docKey = "project-notes" }: SharedNoteEditorProps) {
+export default function SharedNoteEditor({ bridge, projectId, docKey = "project-notes", initialText = "", onTextChange, title }: SharedNoteEditorProps) {
   const { t } = useUISettings();
   const [value, setValue] = useState("");
   const [status, setStatus] = useState<"loading" | "ready" | "saving" | "error">("loading");
@@ -31,6 +34,9 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
   const textRef = useRef<Y.Text | null>(null);
   const applyingRemote = useRef(false);
   const versionRef = useRef(0);
+  const initialTextRef = useRef(initialText);
+  const onTextChangeRef = useRef(onTextChange);
+  onTextChangeRef.current = onTextChange;
 
   useEffect(() => {
     let cancelled = false;
@@ -40,7 +46,9 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
     textRef.current = text;
     let debounce: number | null = null;
     const observer = () => {
-      if (cancelled || applyingRemote.current) return;
+      if (cancelled) return;
+      onTextChangeRef.current?.(text.toString());
+      if (applyingRemote.current) return;
       setValue(text.toString());
       if (debounce) window.clearTimeout(debounce);
       debounce = window.setTimeout(() => {
@@ -76,7 +84,19 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
           versionRef.current = document.version;
           setVersion(document.version);
           setValue(text.toString());
+          onTextChangeRef.current?.(text.toString());
           applyingRemote.current = false;
+        } else if (!document && initialTextRef.current) {
+          applyingRemote.current = true;
+          text.insert(0, initialTextRef.current);
+          applyingRemote.current = false;
+          setValue(text.toString());
+          onTextChangeRef.current?.(text.toString());
+          const saved = await bridge.applySharedDocumentUpdate?.(projectId, docKey, encodeState(Y.encodeStateAsUpdate(doc)));
+          if (saved) {
+            versionRef.current = saved.version;
+            setVersion(saved.version);
+          }
         }
         setStatus("ready");
         setError("");
@@ -110,7 +130,7 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
   }
 
   return <section className="settings-section shared-note">
-    <h3 className="settings-section-title"><NotebookPen size={15} />{t("Shared project note")}</h3>
+    <h3 className="settings-section-title"><NotebookPen size={15} />{title || t("Shared project note")}</h3>
     <div className="settings-group">
       <textarea className="shared-note-editor" value={value} onChange={(event) => update(event.target.value)} placeholder={t("Write a note together. Edits merge as you type.")} rows={7} aria-label={t("Shared project note")} />
       <div className="shared-note-footer">

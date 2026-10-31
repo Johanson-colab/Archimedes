@@ -2675,7 +2675,7 @@ function App() {
             <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} />
           )}
           <div className={mainSection === "writing" ? "paper-writing-view-cache" : "paper-writing-view-cache hidden"} aria-hidden={mainSection !== "writing"}>
-            {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
+            {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} />}
           </div>
         </div>
         <AgentLayer

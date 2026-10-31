@@ -19,6 +19,7 @@ const shareSql = read("server/sql/0009_share_link_scope.sql");
 const runs = read("src/SharedRunsPanel.tsx");
 const note = read("src/SharedNoteEditor.tsx");
 const pkg = JSON.parse(read("package.json"));
+const writing = read("src/PaperWritingView.tsx");
 const css = read("src/styles.css");
 
 test("desktop hosts the collaboration API and exposes cloud share actions", () => {
@@ -72,6 +73,13 @@ test("shared project note is a CRDT document with optimistic updates", () => {
   assert.match(note, /applySharedDocumentUpdate/);
   assert.match(bridge, /interface SharedDocument/);
   assert.ok(pkg.dependencies.yjs);
+});
+
+test("LaTeX source can use the shared CRDT document", () => {
+  assert.match(writing, /SharedNoteEditor/);
+  assert.match(writing, /Co-editing/);
+  assert.match(writing, /docKey=\{`latex:/);
+  assert.match(writing, /onTextChange/);
 });
 
 test("shared agent runs expose driver, co-prompt, and approval controls", () => {
