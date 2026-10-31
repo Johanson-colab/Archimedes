@@ -13,7 +13,7 @@ const INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";
 const MONO_FONT_STORAGE_KEY = "archimedes-mono-font";
 const FILE_ICON_STYLE_STORAGE_KEY = "archimedes-file-icon-style";
 const CHAT_VERBOSITY_STORAGE_KEY = "archimedes-chat-verbosity";
-const TEXT_SCALE: Record<TextSize, number> = { smaller: 1, small: 1.05, default: 1.1, large: 1.15, larger: 1.2 };
+export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 0.9, default: 1, large: 1.1, larger: 1.2 };
 
 const translations: Record<string, string> = {
   // Application chrome
@@ -1069,7 +1069,7 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
     root.dataset.textSize = textSize;
     if (typeof window.researchDesk?.setUiZoom === "function") {
       root.dataset.uiZoom = "native";
-      void window.researchDesk.setUiZoom(TEXT_SCALE[textSize]).catch(() => {
+      void window.researchDesk.setUiZoom(TEXT_SIZE_SCALE[textSize]).catch(() => {
         root.dataset.uiZoom = "css";
       });
     } else {

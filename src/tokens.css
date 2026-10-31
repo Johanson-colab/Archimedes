@@ -186,10 +186,10 @@
 }
 
 /* Text size preference maps to a UI scale when native zoom is unavailable. */
-html[data-ui-zoom="css"][data-text-size="smaller"] { --ui-scale: 1; }
-html[data-ui-zoom="css"][data-text-size="small"] { --ui-scale: 1.05; }
-html[data-ui-zoom="css"][data-text-size="default"] { --ui-scale: 1.1; }
-html[data-ui-zoom="css"][data-text-size="large"] { --ui-scale: 1.15; }
+html[data-ui-zoom="css"][data-text-size="smaller"] { --ui-scale: 0.8; }
+html[data-ui-zoom="css"][data-text-size="small"] { --ui-scale: 0.9; }
+html[data-ui-zoom="css"][data-text-size="default"] { --ui-scale: 1; }
+html[data-ui-zoom="css"][data-text-size="large"] { --ui-scale: 1.1; }
 html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
 
 
