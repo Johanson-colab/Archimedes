@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { normalizeContract, normalizeTolerance } = require("./reproduction/contract.cjs");
 const { pageDigest, planReproduction } = require("./reproduction/planner.cjs");
+const { verifyEntrypoint } = require("./reproduction/repository-context.cjs");
 
 test("a contract without a verifiable claim is rejected", () => {
   assert.throws(() => normalizeContract({ claims: [] }), /no verifiable claim/);
@@ -68,28 +69,53 @@ test("the page digest prefers result pages and keeps page markers", () => {
   assert.match(digest, /\[page 1\]/);
 });
 
-test("planning parses the model reply and normalises it", async () => {
+test("planning runs the agent and normalises its contract", async () => {
   const reply = JSON.stringify({
     summary: "Reproduce Table 2",
     claims: [{ id: "c1", statement: "VGG16 reaches parity", expected: 2.43, evidence: { page: 8, table: "Table 2" } }],
     entrypoint: { command: "python -m eval" },
   });
+  const seen = {};
   const contract = await planReproduction({
-    paper: { title: "Dream-RSI", abstract: "A paper." },
+    paper: { id: "p1", title: "Dream-RSI", abstract: "A paper." },
     pages: [{ page_number: 8, text: "Table 2 ..." }],
     repoUrl: "https://github.com/example/repo",
-    config: { apiKey: "k", model: "m", baseUrl: "https://example.test" },
-    complete: async () => ({ content: `Here you go:\n${reply}\n` }),
+    workspace: "/tmp/workspace",
+    runAgent: async (input) => {
+      Object.assign(seen, input);
+      return { response: `Here you go:\n${reply}\n` };
+    },
   });
   assert.equal(contract.claims[0].expected, 2.43);
   assert.equal(contract.entrypoint.command, "python -m eval");
+  assert.equal(seen.transient, true, "planning must not create a visible thread");
+  assert.equal(seen.contextItems[0].id, "paper:p1");
+  assert.match(seen.prompt, /reproduction contract/i);
 });
 
-test("planning fails loudly when the model returns nothing usable", async () => {
+test("planning fails loudly when the agent returns no contract", async () => {
   await assert.rejects(planReproduction({
-    paper: { title: "Dream-RSI" },
+    paper: { id: "p1", title: "Dream-RSI" },
     pages: [],
-    config: {},
-    complete: async () => ({ content: "I could not find any tables." }),
+    workspace: "/tmp/workspace",
+    runAgent: async () => ({ response: "I could not find any tables." }),
   }), /did not return a contract/);
+});
+
+test("entrypoint evidence survives normalisation", () => {
+  const contract = normalizeContract({
+    claims: [{ statement: "Result holds" }],
+    entrypoint: {
+      command: "python scripts/eval.py",
+      evidence: [{ path: "scripts/eval.py", line_count: 120 }, { nope: true }],
+      unverified: ["weights/ckpt.pt", 7],
+    },
+  });
+  assert.deepEqual(contract.entrypoint.evidence, [{ path: "scripts/eval.py", line_count: 120 }]);
+  assert.deepEqual(contract.entrypoint.unverified, ["weights/ckpt.pt"]);
+});
+
+test("entrypoint verification is a no-op without a repository", async () => {
+  assert.deepEqual(await verifyEntrypoint("/tmp/workspace", "", { command: "python a.py" }), { evidence: [], unverified: [] });
+  assert.deepEqual(await verifyEntrypoint("/tmp/workspace", "https://example.com/not-github", { command: "python a.py" }), { evidence: [], unverified: [] });
 });

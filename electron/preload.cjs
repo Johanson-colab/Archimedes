@@ -135,7 +135,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   getReproduction: (id) => ipcRenderer.invoke("reproduction:get", { id }),
   updateReproduction: (id, patch) => ipcRenderer.invoke("reproduction:update", { id, patch }),
   deleteReproduction: (id) => ipcRenderer.invoke("reproduction:delete", { id }),
-  planReproduction: (id) => ipcRenderer.invoke("reproduction:plan", { id }),
+  planReproduction: (id, workspace) => ipcRenderer.invoke("reproduction:plan", { id, workspace }),
   deepSearchPapers: (input) => ipcRenderer.invoke("library:deep-search", input),
   getBenchmarkRadarData: () => ipcRenderer.invoke("benchmark-radar:get-data"),
   searchConferencePapers: (input) => ipcRenderer.invoke("library:search-conferences", input),
@@ -226,6 +226,11 @@ contextBridge.exposeInMainWorld("researchDesk", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("paper-presentation:event", listener);
     return () => ipcRenderer.removeListener("paper-presentation:event", listener);
+  },
+  onReproductionPlanEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("reproduction:plan-event", listener);
+    return () => ipcRenderer.removeListener("reproduction:plan-event", listener);
   },
   onMenuNewChat: (callback) => {
     const listener = () => callback();

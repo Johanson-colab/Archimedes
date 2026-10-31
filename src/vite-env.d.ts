@@ -127,7 +127,8 @@ interface ResearchDeskBridge {
     getReproduction: (id: string) => Promise<Reproduction | null>;
     updateReproduction: (id: string, patch: ReproductionPatch) => Promise<Reproduction>;
     deleteReproduction: (id: string) => Promise<boolean>;
-    planReproduction: (id: string) => Promise<Reproduction>;
+    planReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
+    onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
@@ -762,7 +763,7 @@ interface ReproductionContract {
   version: number;
   summary: string;
   claims: ReproductionClaim[];
-  entrypoint: { command: string; cwd: string; outputs: string[] };
+  entrypoint: { command: string; cwd: string; outputs: string[]; evidence: Array<{ path: string; line_count: number }>; unverified: string[] };
   environment: { python: string; cuda: string; install: string[]; system: string[]; source: string };
   repo: { url: string; commit: string };
   notes: string[];

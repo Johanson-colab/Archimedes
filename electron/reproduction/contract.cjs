@@ -68,6 +68,16 @@ function normalizeEntrypoint(input) {
     outputs: Array.isArray(entry.outputs)
       ? entry.outputs.filter((item) => typeof item === "string").map((item) => text(item, 400)).filter(Boolean).slice(0, 10)
       : [],
+    // Paths the planner claims exist; filled from the checkout, not the model.
+    evidence: Array.isArray(entry.evidence)
+      ? entry.evidence
+        .filter((item) => item && typeof item.path === "string")
+        .map((item) => ({ path: text(item.path, 400), line_count: Math.max(0, Number(item.line_count) || 0) }))
+        .slice(0, 12)
+      : [],
+    unverified: Array.isArray(entry.unverified)
+      ? entry.unverified.filter((item) => typeof item === "string").map((item) => text(item, 400)).filter(Boolean).slice(0, 12)
+      : [],
   };
 }
 

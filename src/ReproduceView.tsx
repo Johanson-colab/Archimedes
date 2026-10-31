@@ -58,6 +58,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "">("");
   const [error, setError] = useState("");
+  const [planStatus, setPlanStatus] = useState("");
 
   const [picking, setPicking] = useState(false);
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
@@ -80,6 +81,13 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   }, [bridge]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    const off = bridge.onReproductionPlanEvent?.((payload) => {
+      if (payload?.detail) setPlanStatus(payload.detail);
+    });
+    return () => off?.();
+  }, [bridge]);
 
   useEffect(() => {
     if (!selectedId) { setDetail(null); return; }
@@ -134,6 +142,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     if (!detail) return;
     setBusy("plan");
     setError("");
+    setPlanStatus("Starting…");
     try {
       const next = await bridge.planReproduction(detail.id);
       setDetail(next);
@@ -144,6 +153,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       if (next) setDetail(next);
     } finally {
       setBusy("");
+      setPlanStatus("");
     }
   }, [bridge, detail, refresh]);
 
@@ -207,15 +217,16 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         {detail.error && <div className="reproduce-note bad">{detail.error}</div>}
         <button className="primary-button" disabled={busy !== ""} onClick={() => void plan()}>
           {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <FlaskConical size={14} />}
-          {busy === "plan" ? "Reading the paper…" : "Generate plan"}
+          {busy === "plan" ? "Planning…" : "Generate plan"}
         </button>
+        {busy === "plan" && planStatus && <span className="reproduce-hint">{planStatus}</span>}
       </div> : <>
         <div className="reproduce-summary">
           <p>{contract.summary}</p>
           <div className="reproduce-meta">
             <span>{contract.claims.length} claims</span>
             <span>{contract.entrypoint.command ? "entrypoint found" : "no entrypoint yet"}</span>
-            <span>{contract.repo.url || detail.repo_url || "no repository"}</span>
+            <span>{contract.repo.url || detail.repo_url || "no repository"}{contract.repo.commit ? ` @ ${contract.repo.commit.slice(0, 7)}` : ""}</span>
             <span>budget {detail.budget.wallClockMin} min</span>
           </div>
         </div>
@@ -241,6 +252,10 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           <section>
             <h2>Entrypoint</h2>
             <pre>{contract.entrypoint.command || "Not identified yet"}</pre>
+            {contract.entrypoint.evidence.length > 0 && <ul className="reproduce-evidence">
+              {contract.entrypoint.evidence.map((entry) => <li key={entry.path}><code>{entry.path}</code>{entry.line_count ? ` · ${entry.line_count} lines` : ""}</li>)}
+            </ul>}
+            {contract.entrypoint.unverified.length > 0 && <p className="reproduce-hint warn">Not in the repository: {contract.entrypoint.unverified.join(", ")}</p>}
             {contract.entrypoint.outputs.length > 0 && <p className="reproduce-hint">Writes {contract.entrypoint.outputs.join(", ")}</p>}
           </section>
           <section>

@@ -33,6 +33,7 @@ const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
+const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -1030,7 +1031,7 @@ app.whenReady().then(async () => {
     return store.deleteReproduction(id);
   });
 
-  ipcMain.handle("reproduction:plan", async (_event, { id } = {}) => {
+  ipcMain.handle("reproduction:plan", async (event, { id, workspace } = {}) => {
     const reproduction = store.getReproduction(id);
     if (!reproduction) throw new Error("That reproduction does not exist.");
     if (reproduction.contract && reproduction.status !== "draft") {
@@ -1039,17 +1040,34 @@ app.whenReady().then(async () => {
     if (!reproduction.paper_id) throw new Error("Reproduction planning is only available for papers.");
     const paper = store.getPaper(reproduction.paper_id);
     if (!paper) throw new Error("The paper for this reproduction is missing.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
+    store.openWorkspace(dataWorkspace);
     const reader = store.getPaperReader(reproduction.paper_id);
     const review = store.getPaperReview(reproduction.paper_id);
     store.updateReproduction(id, { status: "draft", error: "" });
+    const emit = (payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send("reproduction:plan-event", { paperId: reproduction.paper_id, ...payload });
+    };
     try {
+      let repoItem = null;
+      if (reproduction.repo_url) {
+        emit({ type: "planning", detail: "Cloning the repository…" });
+        repoItem = await prepareRepositoryItem(dataWorkspace, reproduction.repo_url).catch((error) => {
+          emit({ type: "warning", detail: `Repository unavailable: ${error instanceof Error ? error.message : "clone failed"}` });
+          return null;
+        });
+      }
+      emit({ type: "planning", detail: repoItem ? "Reading the paper and the repository…" : "Reading the paper…" });
       const contract = await planReproduction({
         paper,
         pages: reader.pages || [],
         review: review?.review || review,
         repoUrl: reproduction.repo_url,
-        config: modelConfig.getActiveModelConfig(),
-        complete: agent.complete,
+        repoItem,
+        workspace: dataWorkspace,
+        runAgent: agent.runAgent,
+        emit,
       });
       return store.updateReproduction(id, { status: "planned", contract, error: "" });
     } catch (error) {
