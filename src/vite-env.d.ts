@@ -24,6 +24,14 @@ interface ResearchDeskBridge {
     syncProjectLibraries: (projectId: string) => Promise<CloudLibrarySyncResult>;
     syncProjectAnnotations: (projectId: string) => Promise<CloudAnnotationSyncResult>;
     syncProjectThreads: (projectId: string) => Promise<CloudThreadSyncResult>;
+    listAgentRuns: (projectId: string) => Promise<SharedAgentRun[]>;
+    startAgentRun: (projectId: string, threadId: string, contextManifest?: Record<string, unknown>) => Promise<SharedAgentRun>;
+    joinAgentRun: (runId: string, role?: "co_prompt" | "observer") => Promise<SharedAgentRun>;
+    enqueueAgentPrompt: (runId: string, body: string) => Promise<SharedAgentRun>;
+    claimAgentPrompt: (runId: string) => Promise<SharedRunPrompt | null>;
+    finishAgentRun: (runId: string, status: "paused" | "completed" | "failed" | "interrupted") => Promise<SharedAgentRun>;
+    requestAgentAction: (projectId: string, action: Record<string, unknown>) => Promise<SharedRunAction>;
+    resolveAgentAction: (actionId: string, approved: boolean) => Promise<{ resolved: boolean }>;
     createShareLink: (input: { projectId: string; resourceType?: "thread" | "paper" | "review"; resourceId: string; role?: "viewer" | "commenter"; expiresInDays?: number }) => Promise<CloudShareLink>;
     revokeShareLink: (shareId: string) => Promise<{ revoked: boolean }>;
     redeemShareLink: (token: string) => Promise<GuestShareSnapshot>;
@@ -895,6 +903,53 @@ interface CloudShareLink {
   url: string;
   role: "viewer" | "commenter";
   expires_at: string;
+}
+
+interface SharedRunParticipant {
+  run_id: string;
+  user_id: string;
+  role: "driver" | "co_prompt" | "observer";
+  joined_at: string;
+}
+
+interface SharedRunPrompt {
+  id: string;
+  project_id: string;
+  run_id: string;
+  author_id: string;
+  body: string;
+  status: "pending" | "consumed" | "rejected";
+  created_at: string;
+  consumed_at: string | null;
+  consumed_by: string | null;
+}
+
+interface SharedRunAction {
+  id: string;
+  project_id: string;
+  run_id: string | null;
+  turn_id: string | null;
+  kind: "write" | "command";
+  payload_json: Record<string, unknown>;
+  status: "pending" | "approved" | "rejected";
+  requested_by: string;
+  approved_by: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+interface SharedAgentRun {
+  id: string;
+  project_id: string;
+  thread_id: string;
+  driver_id: string;
+  status: "running" | "paused" | "completed" | "failed" | "interrupted";
+  context_manifest_json: Record<string, unknown>;
+  started_at: string;
+  ended_at: string | null;
+  participants: SharedRunParticipant[];
+  actions: SharedRunAction[];
+  prompts: SharedRunPrompt[];
 }
 
 interface GuestShareSnapshot {

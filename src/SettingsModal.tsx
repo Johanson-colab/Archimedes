@@ -51,6 +51,7 @@ type SettingsModalProps = {
   identity: LocalIdentity | null;
   onSaveIdentity: (displayName: string) => Promise<LocalIdentity>;
   activeProject: ResearchProject | null;
+  activeThreadId?: string | null;
   onProjectsChanged?: () => Promise<void>;
   authState: AuthState | null;
   onSignIn: (email: string, password: string) => Promise<AuthState>;
@@ -122,6 +123,7 @@ export default function SettingsModal({
   identity,
   onSaveIdentity,
   activeProject,
+  activeThreadId,
   onProjectsChanged,
   authState,
   onSignIn,
@@ -285,7 +287,7 @@ export default function SettingsModal({
         <div className={embedded ? "settings-body settings-body-embedded" : "settings-body"}>
           <div className="settings-content">
             {section === "account" && <AccountSettingsPanel identity={identity} onSave={onSaveIdentity} authState={authState} onSignIn={onSignIn} onSignUp={onSignUp} onSignOut={onSignOut} />}
-            {section === "members" && (activeProject ? <ProjectMembersPanel bridge={bridge} project={activeProject} onProjectsChanged={onProjectsChanged} /> : <div className="project-members-empty">{t("Select a project to manage members.")}</div>)}
+            {section === "members" && (activeProject ? <ProjectMembersPanel bridge={bridge} project={activeProject} activeThreadId={activeThreadId} onProjectsChanged={onProjectsChanged} /> : <div className="project-members-empty">{t("Select a project to manage members.")}</div>)}
 
             {section === "general" && <div className="settings-sections">
               <section className="settings-section">

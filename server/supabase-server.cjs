@@ -401,6 +401,119 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
         }
       }
 
+      async function runDetail(run) {
+        const [{ data: participants, error: participantError }, { data: actions, error: actionError }, { data: prompts, error: promptError }] = await Promise.all([
+          supabase.from("run_participants").select("*").eq("run_id", run.id).order("joined_at", { ascending: true }),
+          supabase.from("agent_actions").select("*").eq("run_id", run.id).order("created_at", { ascending: true }),
+          supabase.from("run_prompts").select("*").eq("run_id", run.id).order("created_at", { ascending: true }),
+        ]);
+        if (participantError) throw apiError(participantError);
+        if (actionError) throw apiError(actionError);
+        if (promptError) throw apiError(promptError);
+        return { ...run, participants: participants || [], actions: actions || [], prompts: prompts || [] };
+      }
+
+      const projectRunsMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/runs$/);
+      if (projectRunsMatch) {
+        const projectId = projectRunsMatch[1];
+        if (method === "GET") {
+          const { data, error } = await supabase.from("agent_runs").select("*").eq("project_id", projectId)
+            .order("started_at", { ascending: false }).limit(50);
+          if (error) throw apiError(error);
+          return send(res, 200, { runs: await Promise.all((data || []).map(runDetail)) });
+        }
+        if (method === "POST") {
+          const body = await readBody(req);
+          if (!body.thread_id) throw Object.assign(new Error("A thread is required."), { status: 400 });
+          const { data: runId, error } = await supabase.rpc("start_agent_run", {
+            p_project: projectId,
+            p_thread: body.thread_id,
+            p_context: body.context_manifest || {},
+          });
+          if (error) throw apiError(error);
+          const { data: run, error: readError } = await supabase.from("agent_runs").select("*").eq("id", runId).single();
+          if (readError) throw apiError(readError);
+          return send(res, 201, { run: await runDetail(run) });
+        }
+      }
+
+      const runMatch = url.pathname.match(/^\/v1\/runs\/([^/]+)$/);
+      if (runMatch) {
+        const runId = runMatch[1];
+        if (method === "GET") {
+          const { data: run, error } = await supabase.from("agent_runs").select("*").eq("id", runId).single();
+          if (error) throw apiError(error);
+          return send(res, 200, { run: await runDetail(run) });
+        }
+        if (method === "PATCH") {
+          const body = await readBody(req);
+          const { error } = await supabase.rpc("finish_agent_run", { p_run: runId, p_status: String(body.status || "") });
+          if (error) throw apiError(error);
+          const { data: run, error: readError } = await supabase.from("agent_runs").select("*").eq("id", runId).single();
+          if (readError) throw apiError(readError);
+          return send(res, 200, { run: await runDetail(run) });
+        }
+      }
+
+      const runJoinMatch = url.pathname.match(/^\/v1\/runs\/([^/]+)\/join$/);
+      if (runJoinMatch && method === "POST") {
+        const body = await readBody(req);
+        const { error } = await supabase.rpc("join_agent_run", { p_run: runJoinMatch[1], p_role: body.role === "co_prompt" ? "co_prompt" : "observer" });
+        if (error) throw apiError(error);
+        const { data: run, error: readError } = await supabase.from("agent_runs").select("*").eq("id", runJoinMatch[1]).single();
+        if (readError) throw apiError(readError);
+        return send(res, 200, { run: await runDetail(run) });
+      }
+
+      const runPromptsMatch = url.pathname.match(/^\/v1\/runs\/([^/]+)\/prompts$/);
+      if (runPromptsMatch && method === "POST") {
+        const body = await readBody(req);
+        const { error } = await supabase.rpc("enqueue_run_prompt", { p_run: runPromptsMatch[1], p_body: String(body.body || "") });
+        if (error) throw apiError(error);
+        const { data: run, error: readError } = await supabase.from("agent_runs").select("*").eq("id", runPromptsMatch[1]).single();
+        if (readError) throw apiError(readError);
+        return send(res, 201, { run: await runDetail(run) });
+      }
+
+      const runClaimMatch = url.pathname.match(/^\/v1\/runs\/([^/]+)\/prompts\/claim$/);
+      if (runClaimMatch && method === "POST") {
+        const { data, error } = await supabase.rpc("claim_run_prompt", { p_run: runClaimMatch[1] });
+        if (error) throw apiError(error);
+        return send(res, 200, { prompt: data || null });
+      }
+
+      const projectAgentActionsMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/agent-actions$/);
+      if (projectAgentActionsMatch && method === "POST") {
+        const body = await readBody(req);
+        if (!["write", "command"].includes(body.kind) || !body.payload || typeof body.payload !== "object") {
+          throw Object.assign(new Error("A write or command action with a payload is required."), { status: 400 });
+        }
+        if (body.run_id) {
+          const { data: run, error: runError } = await supabase.from("agent_runs").select("project_id").eq("id", body.run_id).maybeSingle();
+          if (runError) throw apiError(runError);
+          if (!run || run.project_id !== projectAgentActionsMatch[1]) throw Object.assign(new Error("The run does not belong to this project."), { status: 400 });
+        }
+        const { data, error } = await supabase.from("agent_actions").insert({
+          project_id: projectAgentActionsMatch[1],
+          run_id: body.run_id || null,
+          turn_id: body.turn_id || null,
+          kind: body.kind,
+          payload_json: body.payload,
+          status: "pending",
+          requested_by: user.id,
+        }).select("*").single();
+        if (error) throw apiError(error);
+        return send(res, 201, { action: data });
+      }
+
+      const agentActionMatch = url.pathname.match(/^\/v1\/agent-actions\/([^/]+)$/);
+      if (agentActionMatch && method === "PATCH") {
+        const body = await readBody(req);
+        const { error } = await supabase.rpc("resolve_agent_action", { p_action: agentActionMatch[1], p_approve: Boolean(body.approved) });
+        if (error) throw apiError(error);
+        return send(res, 200, { resolved: true });
+      }
+
       const projectShareLinksMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/share-links$/);
       if (projectShareLinksMatch && method === "POST") {
         const projectId = projectShareLinksMatch[1];

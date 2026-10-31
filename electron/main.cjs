@@ -1300,6 +1300,14 @@ app.whenReady().then(async () => {
       localUserId: localIdentity.localIdentity().userId,
     });
   });
+  ipcMain.handle("collab:list-agent-runs", async (_event, { projectId } = {}) => requireCollaboration().listAgentRuns(projectId));
+  ipcMain.handle("collab:start-agent-run", async (_event, { projectId, threadId, contextManifest } = {}) => requireCollaboration().startAgentRun(projectId, threadId, contextManifest));
+  ipcMain.handle("collab:join-agent-run", async (_event, { runId, role } = {}) => requireCollaboration().joinAgentRun(runId, role));
+  ipcMain.handle("collab:enqueue-agent-prompt", async (_event, { runId, body } = {}) => requireCollaboration().enqueueAgentPrompt(runId, body));
+  ipcMain.handle("collab:claim-agent-prompt", async (_event, { runId } = {}) => requireCollaboration().claimAgentPrompt(runId));
+  ipcMain.handle("collab:finish-agent-run", async (_event, { runId, status } = {}) => requireCollaboration().finishAgentRun(runId, status));
+  ipcMain.handle("collab:request-agent-action", async (_event, { projectId, action } = {}) => requireCollaboration().requestAgentAction(projectId, action));
+  ipcMain.handle("collab:resolve-agent-action", async (_event, { actionId, approved } = {}) => requireCollaboration().resolveAgentAction(actionId, approved));
   ipcMain.handle("collab:create-share-link", async (_event, { projectId, resourceType = "thread", resourceId, role = "viewer", expiresInDays = 7 } = {}) => {
     return requireCollaboration().createShareLink(projectId, { resourceType, resourceId, role, expiresInDays });
   });

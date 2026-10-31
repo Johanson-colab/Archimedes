@@ -121,6 +121,29 @@ test("collaboration API creates, redeems, and revokes guest share links", async 
   assert.equal(fake.calls.find((call) => call.url.includes("/v1/public/shares/tok")).options, undefined);
 });
 
+test("collaboration API maps shared agent-run controls", async () => {
+  const fake = fakeApi((url, options) => {
+    if (url.endsWith("/runs") && options.method === "POST") return { status: 201, body: { run: { id: "run1" } } };
+    if (url.endsWith("/runs")) return { status: 200, body: { runs: [{ id: "run1" }] } };
+    if (url.endsWith("/join")) return { status: 200, body: { run: { id: "run1" } } };
+    if (url.endsWith("/prompts") && options.method === "POST") return { status: 201, body: { run: { id: "run1" } } };
+    if (url.endsWith("/prompts/claim")) return { status: 200, body: { prompt: { id: "q1", body: "Check" } } };
+    if (url.endsWith("/runs/run1") && options.method === "PATCH") return { status: 200, body: { run: { id: "run1", status: "completed" } } };
+    if (url.endsWith("/agent-actions") && options.method === "POST") return { status: 201, body: { action: { id: "a1" } } };
+    if (url.endsWith("/agent-actions/a1")) return { status: 200, body: { resolved: true } };
+    return { status: 404, body: { error: "missing" } };
+  });
+  const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => "jwt", fetchImpl: fake.fetchImpl });
+  assert.deepEqual(await api.listAgentRuns("p1"), [{ id: "run1" }]);
+  assert.deepEqual(await api.startAgentRun("p1", "t1"), { id: "run1" });
+  assert.deepEqual(await api.joinAgentRun("run1", "co_prompt"), { id: "run1" });
+  assert.deepEqual(await api.enqueueAgentPrompt("run1", "Check"), { id: "run1" });
+  assert.deepEqual(await api.claimAgentPrompt("run1"), { id: "q1", body: "Check" });
+  assert.deepEqual(await api.finishAgentRun("run1", "completed"), { id: "run1", status: "completed" });
+  assert.deepEqual(await api.requestAgentAction("p1", { kind: "write" }), { id: "a1" });
+  assert.deepEqual(await api.resolveAgentAction("a1", true), { resolved: true });
+});
+
 test("collaboration API requires sign-in and surfaces API errors", async () => {
   const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => null, fetchImpl: async () => { throw new Error("should not fetch"); } });
   await assert.rejects(() => api.listProjects(), /Sign in/i);
