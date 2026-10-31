@@ -8,7 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
 const app = read("src", "App.tsx");
 const css = read("src", "styles.css");
-const tokens = read("src", "tokens.css");
+const library = read("src", "LibraryView.tsx");
 
 test("conversation composers keep their resting border while focused", () => {
   assert.doesNotMatch(css, /\.conversation-composer:focus-within/);
@@ -37,12 +37,17 @@ test("chat-like side inputs share the quiet focus contract", () => {
   }
 });
 
-test("the chat send control is a neutral circular up-arrow", () => {
+test("chat send controls are unfilled up-arrows", () => {
   assert.match(app, /<ArrowUp size=\{16\} strokeWidth=\{2\.4\} \/>/);
   assert.doesNotMatch(app, /SendHorizontal/);
-  assert.match(tokens, /--chat-send-bg: #34332f/);
-  assert.match(css, /\.conversation-send,[\s\S]*?border-radius: 50%;/);
-  assert.match(css, /\.conversation-send:hover,[\s\S]*?background: var\(--chat-send-bg-hover\);/);
-  assert.match(css, /\.conversation-send:disabled,[\s\S]*?background: var\(--chat-send-disabled-bg\);/);
-  assert.doesNotMatch(css, /\.conversation-send \{ color: var\(--accent-ink\); background: var\(--accent\)/);
+  assert.match(css, /\.conversation-send,[\s\S]*?background: transparent;[\s\S]*?border-radius: 6px;/);
+  assert.match(css, /\.conversation-send:hover,[\s\S]*?color: var\(--accent\);[\s\S]*?background: transparent;/);
+  assert.match(css, /\.conversation-send:disabled,[\s\S]*?opacity: \.35;/);
+  assert.match(library, /className="paper-ai-send"/);
+  assert.match(library, /<ArrowUp size=\{15\} \/>/);
+  assert.doesNotMatch(library, /<Send size=\{14\} \/>/);
+  assert.match(css, /\.paper-ai-send \{[^}]*background: transparent/);
+  assert.doesNotMatch(css, /\.paper-ai-compose \.primary-button/);
+  assert.match(library, /className="daily-search-send"/);
+  assert.match(css, /\.daily-search-send \{[^}]*background: transparent/);
 });
