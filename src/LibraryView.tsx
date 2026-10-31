@@ -378,7 +378,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
           <span className="library-card-meta"><b>{library.paper_count}</b> papers<ExternalLink size={13} /></span>
         </button>)}
       </div>}
-      <LibraryEditor editor={libraryEditor} onClose={() => setLibraryEditor(null)} onSave={saveLibrary} />
+      <LibraryEditor editor={libraryEditor} active={active} onClose={() => setLibraryEditor(null)} onSave={saveLibrary} />
     </section>;
   }
 
@@ -420,8 +420,8 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
       </div>
       <PaperInspector paper={selectedPaper} onUpdate={updatePaper} onRemove={removePaper} onRead={() => selectedPaper && setReaderPaperId(selectedPaper.id)} />
     </div>
-    <LibraryEditor editor={libraryEditor} onClose={() => setLibraryEditor(null)} onSave={saveLibrary} />
-    <PaperImportModal open={importOpen} bridge={bridge} library={selectedLibrary} onClose={() => setImportOpen(false)} onImport={importPaper} />
+    <LibraryEditor editor={libraryEditor} active={active} onClose={() => setLibraryEditor(null)} onSave={saveLibrary} />
+    <PaperImportModal open={active && importOpen} bridge={bridge} library={selectedLibrary} onClose={() => setImportOpen(false)} onImport={importPaper} />
   </section>;
 }
 
@@ -2451,8 +2451,9 @@ function normalizePaperMathLine(line: string) {
   return result;
 }
 
-function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | "new" | null; onClose: () => void; onSave: (input: { name: string; description: string; color: string }) => Promise<void> }) {
-  const dialogRef = useDialogFocus<HTMLElement>(Boolean(editor), onClose);
+function LibraryEditor({ editor, active = true, onClose, onSave }: { editor: ResearchLibrary | "new" | null; active?: boolean; onClose: () => void; onSave: (input: { name: string; description: string; color: string }) => Promise<void> }) {
+  const dialogOpen = Boolean(editor) && active;
+  const dialogRef = useDialogFocus<HTMLElement>(dialogOpen, onClose);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(LIBRARY_COLORS[0]);
@@ -2462,7 +2463,7 @@ function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | 
     setDescription(editor && editor !== "new" ? editor.description : "");
     setColor(editor && editor !== "new" ? editor.color : LIBRARY_COLORS[0]);
   }, [editor]);
-  if (!editor) return null;
+  if (!editor || !active) return null;
   async function submit() {
     if (!name.trim()) return;
     setBusy(true);
