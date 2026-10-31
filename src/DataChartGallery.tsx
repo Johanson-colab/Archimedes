@@ -211,8 +211,8 @@ function ChartDialog({ figures, index, onClose, onStep }: {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onStep]);
-  return createPortal(<div className="gallery-dialog-backdrop" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="gallery-dialog chart-reference-dialog" role="dialog" aria-modal="true" aria-label={`${chartLabel(figure)} from ${figure.paper}`} onMouseDown={(event) => event.stopPropagation()}>
+  return createPortal(<div className="gallery-dialog-backdrop app-dialog-overlay" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="gallery-dialog chart-reference-dialog app-dialog app-dialog-gallery" role="dialog" aria-modal="true" aria-label={`${chartLabel(figure)} from ${figure.paper}`} onMouseDown={(event) => event.stopPropagation()}>
       <header><span>{index + 1} / {figures.length}</span><button type="button" onClick={onClose} title="Close" aria-label="Close"><X size={20} /></button></header>
       <div className="gallery-dialog-content">
         <button type="button" onClick={() => onStep(-1)} title="Previous" aria-label="Previous figure"><ArrowLeft size={21} /></button>
@@ -298,7 +298,7 @@ export default function DataChartGallery({ active, sort }: { active: boolean; so
         <button type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={filterOpen} title="Filter data charts">
           <SlidersHorizontal size={14} />Filters{activeFilterCount > 0 && <b>{activeFilterCount}</b>}
         </button>
-        {filterOpen && <div className="image-creation-filter-panel data-chart-filter-panel" role="dialog" aria-label="Filter data charts">
+        {filterOpen && <div className="image-creation-filter-panel data-chart-filter-panel" role="region" aria-label="Filter data charts">
           <header><strong>Filter data charts</strong><button type="button" onClick={resetFilters} disabled={!activeFilterCount && !query}>Clear all</button></header>
           <div className="gallery-facet"><span className="gallery-facet-label">Content</span><div className="gallery-facet-options"><button type="button" className={category === "data" ? "selected" : ""} aria-pressed={category === "data"} onClick={() => setCategory("data")}>Data charts</button><button type="button" className={category === "table" ? "selected" : ""} aria-pressed={category === "table"} onClick={() => setCategory("table")}>Tables</button></div></div>
           {category === "data" && <div className="gallery-facet"><span className="gallery-facet-label">Chart type</span><div className="gallery-facet-options"><button type="button" className={chart === "all" ? "selected" : ""} aria-pressed={chart === "all"} onClick={() => setChart("all")}>All</button>{CHART_TYPES.map((item) => <button type="button" key={item.id} className={chart === item.id ? "selected" : ""} aria-pressed={chart === item.id} onClick={() => setChart(item.id)}>{item.label}</button>)}</div></div>}

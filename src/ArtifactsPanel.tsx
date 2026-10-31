@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import DialogPortal from "./DialogPortal";
+import { useDialogFocus } from "./useDialogFocus";
 import { ArrowLeft, ArrowRight, FileText, Image as ImageIcon, LoaderCircle, Maximize2, RefreshCw, Search, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -66,6 +68,7 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
   const [seenPaths, setSeenPaths] = useState<Set<string>>(new Set());
   const [loadedFiles, setLoadedFiles] = useState<Record<string, LoadedFile>>({});
   const [imageIndex, setImageIndex] = useState(0);
+  const previewDialogRef = useDialogFocus<HTMLElement>(Boolean(preview), () => setPreview(null));
   const seenThreadRef = useRef("");
   const loadedFilesRef = useRef<Record<string, LoadedFile>>({});
 
@@ -189,8 +192,8 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
       const item = imageItems[imageIndex];
       const loaded = item ? loadedFiles[item.path] : undefined;
       const url = loaded?.file?.previewUrl;
-      return <div className="artifact-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}>
-        <section className="artifact-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Artifact image preview" onMouseDown={(event) => event.stopPropagation()}>
+      return <DialogPortal><div className="artifact-lightbox app-dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}>
+        <section ref={previewDialogRef} tabIndex={-1} className="artifact-lightbox-dialog app-dialog app-dialog-lightbox" role="dialog" aria-modal="true" aria-label="Artifact image preview" onMouseDown={(event) => event.stopPropagation()}>
           <header className="artifact-lightbox-head">
             <div><strong className="artifact-lightbox-title">{item?.title ?? "Artifact"}</strong><span className="artifact-lightbox-meta">{item ? `${item.version > 1 ? `v${item.version} · ` : ""}${turnLabel(item, currentTurnId)}` : ""}</span></div>
             <span className="artifact-lightbox-count">{imageItems.length ? `${imageIndex + 1} / ${imageItems.length}` : ""}</span>
@@ -209,15 +212,15 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
             </div>
           </footer>
         </section>
-      </div>;
+      </div></DialogPortal>;
     })()}
 
     {preview?.kind === "file" && (() => {
       const item = items.find((candidate) => candidate.path === preview.path);
       if (!item) return null;
       const loaded = loadedFiles[item.path];
-      return <div className="artifact-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}>
-        <section className="artifact-preview-dialog" role="dialog" aria-modal="true" aria-label="Artifact preview" onMouseDown={(event) => event.stopPropagation()}>
+      return <DialogPortal><div className="artifact-lightbox app-dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}>
+        <section ref={previewDialogRef} tabIndex={-1} className="artifact-preview-dialog app-dialog app-dialog-preview" role="dialog" aria-modal="true" aria-label="Artifact preview" onMouseDown={(event) => event.stopPropagation()}>
           <header className="artifact-lightbox-head">
             <div><strong className="artifact-lightbox-title">{item.title}</strong><span className="artifact-lightbox-meta">{artifactTypeLabelForPath(item.path)} · {turnLabel(item, currentTurnId)}</span></div>
             <button className="artifact-lightbox-close" onClick={() => setPreview(null)} aria-label="Close preview"><X size={15} /></button>
@@ -230,7 +233,7 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
             <div className="artifact-lightbox-actions"><button onClick={() => onOpenFile(item.path)}>Open in Files</button></div>
           </footer>
         </section>
-      </div>;
+      </div></DialogPortal>;
     })()}
   </div>;
 }

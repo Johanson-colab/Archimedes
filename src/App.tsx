@@ -32,6 +32,8 @@ import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
 import ExtensionsView, { type ExtensionsTab } from "./ExtensionsView";
+import { useConfirm } from "./ConfirmDialog";
+import DialogPortal from "./DialogPortal";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { sidebarEntries, type MainSection, type SidebarEntry } from "./sidebar-registry";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
@@ -160,7 +162,7 @@ type TimelineEvent = {
 };
 
 type PendingAction = AgentAction & { source: "agent" | "manual" };
-type Modal = "file" | "evidence" | "search" | "source" | null;
+type Modal = "file" | null;
 type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ReasoningEffort = "low" | "medium" | "high";
 type ContextLength = "standard" | "extra-long";
@@ -1109,6 +1111,7 @@ function readContextLength(): ContextLength {
 }
 
 function App() {
+  const confirm = useConfirm();
   const { t } = useUISettings();
   const [appearance, setAppearance] = useState<AppearanceSettings>(readAppearance);
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
@@ -1213,10 +1216,6 @@ function App() {
   const [fileConflicts, setFileConflicts] = useState<Record<string, string>>({});
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
   const [composerRequest, setComposerRequest] = useState<{ id: string; text: string; mode?: "append" | "replace" } | null>(null);
-  const [evidenceTitle, setEvidenceTitle] = useState("");
-  const [evidenceUrl, setEvidenceUrl] = useState("");
-  const [searchQuery, setSearchQuery] = useState("retrieval budget reasoning");
-  const [selectedSource, setSelectedSource] = useState("");
   const activeThreadIdRef = useRef<string | null>(null);
   const threadOpenRequestRef = useRef(0);
   const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
@@ -1688,8 +1687,8 @@ function App() {
     setWorkbenchTab("trajectory");
   }
 
-  function closeWorkbench() {
-    if (Object.values(fileDraftsRef.current).some(isDraftDirty) && !window.confirm("Hide the workbench? Unsaved file changes stay in the editor.")) return;
+  async function closeWorkbench() {
+    if (Object.values(fileDraftsRef.current).some(isDraftDirty) && !(await confirm({ title: "Hide the workbench?", description: "Unsaved file changes stay in the editor.", confirmLabel: "Hide workbench" }))) return;
     setWorkbenchOpen(false);
   }
 
@@ -1906,7 +1905,7 @@ function App() {
   }
 
   async function loadWorkspace(workspacePath: string) {
-    if (Object.values(fileDraftsRef.current).some(isDraftDirty) && !window.confirm("Discard unsaved artifact changes?")) return;
+    if (Object.values(fileDraftsRef.current).some(isDraftDirty) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
     clearPendingAssistantDeltas();
     setWorkspaceReady(false);
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
@@ -2381,8 +2380,8 @@ function App() {
     ensureFileDraft(file);
   }
 
-  function closeFilePane(filePath: string) {
-    if (isDraftDirty(fileDraftsRef.current[filePath]) && !window.confirm(`Discard unsaved changes to ${filePath}?`)) return;
+  async function closeFilePane(filePath: string) {
+    if (isDraftDirty(fileDraftsRef.current[filePath]) && !(await confirm({ title: "Discard unsaved changes?", description: `${filePath} has changes that have not been saved.`, confirmLabel: "Discard changes", destructive: true }))) return;
     const current = openFilesRef.current;
     const closedIndex = current.findIndex((file) => file.path === filePath);
     if (closedIndex < 0) return;
@@ -2479,15 +2478,6 @@ function App() {
     setModal(null);
     await refreshWorkspaceFiles();
     await openFilePane(normalizedName);
-  }
-
-  function addEvidence(title = evidenceTitle, url = evidenceUrl) {
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) return;
-    setPapers((current) => [...current, { title: trimmedTitle, meta: url.trim() || "Manually added source", score: "New" }]);
-    setEvidenceTitle("");
-    setEvidenceUrl("");
-    setModal(null);
   }
 
   function clearThreadPendingAction() {
@@ -2943,19 +2933,11 @@ function App() {
       </div>}
 
       <WorkspaceModal
-        modal={modal ?? (selectedSource ? "source" : null)}
+        modal={modal}
         fileName={fileName}
-        evidenceTitle={evidenceTitle}
-        evidenceUrl={evidenceUrl}
-        searchQuery={searchQuery}
-        selectedSource={selectedSource}
         onFileName={setFileName}
-        onEvidenceTitle={setEvidenceTitle}
-        onEvidenceUrl={setEvidenceUrl}
-        onSearchQuery={setSearchQuery}
-        onClose={() => { setModal(null); setSelectedSource(""); }}
+        onClose={() => setModal(null)}
         onCreateFile={() => void createFile()}
-        onAddEvidence={addEvidence}
       />
       <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={executionWorkspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
       <AuthModal
@@ -4009,20 +3991,14 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   </div>;
 }
 
-function WorkspaceModal({ modal, fileName, evidenceTitle, evidenceUrl, searchQuery, selectedSource, onFileName, onEvidenceTitle, onEvidenceUrl, onSearchQuery, onClose, onCreateFile, onAddEvidence }: { modal: Modal; fileName: string; evidenceTitle: string; evidenceUrl: string; searchQuery: string; selectedSource: string; onFileName: (value: string) => void; onEvidenceTitle: (value: string) => void; onEvidenceUrl: (value: string) => void; onSearchQuery: (value: string) => void; onClose: () => void; onCreateFile: () => void; onAddEvidence: () => void }) {
+function WorkspaceModal({ modal, fileName, onFileName, onClose, onCreateFile }: { modal: Modal; fileName: string; onFileName: (value: string) => void; onClose: () => void; onCreateFile: () => void }) {
   const dialogRef = useDialogFocus<HTMLElement>(Boolean(modal), onClose);
   if (!modal) return null;
-  const firstTerm = searchQuery.toLowerCase().trim().split(" ")[0];
-  const previewResults = initialPapers.filter((paper) => !firstTerm || paper.title.toLowerCase().includes(firstTerm));
-  const title = modal === "file" ? "New workspace file" : modal === "evidence" ? "Add evidence" : modal === "search" ? "Search research" : "Source record";
-
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
-    <div className="modal-header"><div><span className="eyebrow">Archimedes workspace</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
-    {modal === "file" && <><p>Create a file in the workspace, then open it in the Files view.</p><label>File name<input autoFocus value={fileName} onChange={(event) => onFileName(event.target.value)} placeholder="literature-gap.md" onKeyDown={(event) => event.key === "Enter" && onCreateFile()} /></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onCreateFile}><Plus size={14} />Create draft</button></div></>}
-    {modal === "evidence" && <><p>Add a paper, dataset, or web source to the current evidence ledger.</p><label>Title<input autoFocus value={evidenceTitle} onChange={(event) => onEvidenceTitle(event.target.value)} placeholder="Paper or source title" /></label><label>URL or citation<input value={evidenceUrl} onChange={(event) => onEvidenceUrl(event.target.value)} placeholder="https://... or Author et al., 2025" onKeyDown={(event) => event.key === "Enter" && onAddEvidence()} /></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onAddEvidence}><Plus size={14} />Add evidence</button></div></>}
-    {modal === "search" && <><p>Search is a local preview catalogue for now; choose a result, then add it to the evidence ledger.</p><label>Research query<input autoFocus value={searchQuery} onChange={(event) => onSearchQuery(event.target.value)} /></label><div className="search-results">{previewResults.length ? previewResults.map((paper) => <button key={paper.title} className="search-result" onClick={() => { onEvidenceTitle(paper.title); onEvidenceUrl(`${paper.meta} · preview catalogue`); }}><Search size={15} /><span>{paper.title}</span><Plus size={14} /></button>) : <p>No local preview matches. Use Add evidence to enter a source manually.</p>}</div><div className="modal-actions"><button className="secondary-button" onClick={onClose}>Close</button><button className="primary-button" onClick={onAddEvidence}><Plus size={14} />Add selected</button></div></>}
-    {modal === "source" && <><p><strong>{selectedSource}</strong></p><p>This is a linked-source detail placeholder. The next data layer will persist a citation, source URL, extracted passage, and its connection to a claim.</p><div className="modal-actions"><button className="primary-button" onClick={onClose}>Close record</button></div></>}
-  </section></div>;
+  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal app-dialog app-dialog-sm" role="dialog" aria-modal="true" aria-labelledby="workspace-file-title" onMouseDown={(event) => event.stopPropagation()}>
+    <header className="modal-header"><div><h2 id="workspace-file-title">New workspace file</h2><p>Create a file in the workspace, then open it in the Files view.</p></div><button className="app-dialog-close" onClick={onClose} aria-label="Close"><X size={16} /></button></header>
+    <label>File name<input autoFocus value={fileName} onChange={(event) => onFileName(event.target.value)} placeholder="literature-gap.md" onKeyDown={(event) => event.key === "Enter" && onCreateFile()} /></label>
+    <footer className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onCreateFile}><Plus size={14} />Create draft</button></footer>
+  </section></div></DialogPortal>;
 }
 
 export default App;

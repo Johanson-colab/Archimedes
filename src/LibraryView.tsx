@@ -33,6 +33,7 @@ import { isDensePdfProse, mergePdfVisualRegions, pdfCaptionKind } from "./pdf-vi
 import { buildPdfHighlightSegments, PDF_HIGHLIGHT_COLORS } from "./pdf-highlight-segments";
 import { useUISettings, type Language } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
+import { useConfirm } from "./ConfirmDialog";
 import ToolbarActions from "./ToolbarActions";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
@@ -87,6 +88,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import DialogPortal from "./DialogPortal";
 
 const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
 const PAPER_CHAT_DEFAULT_WIDTH = 354;
@@ -197,6 +199,7 @@ type LibraryViewProps = {
 };
 
 export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject }: LibraryViewProps) {
+  const confirm = useConfirm();
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -283,7 +286,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   }
 
   async function deleteLibrary() {
-    if (!selectedLibrary || !window.confirm(`Delete "${selectedLibrary.name}"? Papers shared with other libraries are kept.`)) return;
+    if (!selectedLibrary || !(await confirm({ title: `Delete "${selectedLibrary.name}"?`, description: "Papers shared with other libraries are kept.", confirmLabel: "Delete library", destructive: true }))) return;
     await bridge.deleteLibrary(selectedLibrary.id);
     setSelectedLibraryId(null);
     setPapers([]);
@@ -297,7 +300,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   }
 
   async function removePaper() {
-    if (!selectedLibrary || !selectedPaper || !window.confirm(`Remove "${selectedPaper.title}" from this library?`)) return;
+    if (!selectedLibrary || !selectedPaper || !(await confirm({ title: "Remove paper?", description: `"${selectedPaper.title}" will be removed from this library.`, confirmLabel: "Remove paper", destructive: true }))) return;
     await bridge.removeLibraryPaper(selectedLibrary.id, selectedPaper.id);
     await Promise.all([loadPapers(selectedLibrary.id, localQuery), loadLibraries()]);
   }
@@ -2465,7 +2468,7 @@ function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | 
     setBusy(true);
     try { await onSave({ name: name.trim(), description: description.trim(), color }); } finally { setBusy(false); }
   }
-  return <div className="modal-backdrop dialog-ref-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="dialog-ref library-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="library-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+  return <DialogPortal><div className="modal-backdrop dialog-ref-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="dialog-ref library-editor-dialog app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-labelledby="library-editor-title" onMouseDown={(event) => event.stopPropagation()}>
     <header className="dialog-ref-header">
       <div><h2 id="library-editor-title">{editor === "new" ? "New literature library" : "Edit library"}</h2><p>{editor === "new" ? "Libraries keep related papers, notes, and annotations together so you can return to a research direction without rebuilding context." : "Update the name, description, or color of this library."}</p></div>
       <button className="dialog-ref-close" onClick={onClose} title="Close" aria-label="Close"><X size={18} /></button>
@@ -2479,7 +2482,7 @@ function LibraryEditor({ editor, onClose, onSave }: { editor: ResearchLibrary | 
       <button className="secondary-button" onClick={onClose}>Cancel</button>
       <button className="primary-button" disabled={busy || !name.trim()} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin" size={14} /> : null}{editor === "new" ? "Create library" : "Save changes"}</button>
     </footer>
-  </section></div>;
+  </section></div></DialogPortal>;
 }
 
 function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: boolean; bridge: ResearchDeskBridge; library: ResearchLibrary; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void> }) {
@@ -2519,7 +2522,7 @@ function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: 
       setAdding(null);
     }
   }
-  return <div className="modal-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal paper-import-modal" role="dialog" aria-modal="true" aria-label="Import paper" onMouseDown={(event) => event.stopPropagation()}>
+  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal paper-import-modal app-dialog app-dialog-lg" role="dialog" aria-modal="true" aria-label="Import paper" onMouseDown={(event) => event.stopPropagation()}>
     <div className="modal-header"><div><span className="eyebrow">Import into {library.name}</span><h2>Find academic papers</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
     <p>Search by title, topic, DOI, arXiv URL, or arXiv ID. arXiv links are resolved directly; other queries use Semantic Scholar and OpenAlex.</p>
     <div className="external-search-box"><Search size={16} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void search()} placeholder="e.g. adaptive retrieval or 2401.18059" /><button className="primary-button" disabled={searching || !query.trim()} onClick={() => void search()}>{searching ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div>
@@ -2530,7 +2533,7 @@ function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: 
       const isAdding = adding === key;
       return <article className="external-paper" key={key}><div><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")} · {paper.year ?? "n.d."} · {paper.venue || paper.source}</small></div><button className={isImported ? "secondary-button imported" : "outline-button"} disabled={isImported || Boolean(adding)} onClick={() => void add(paper)}>{isImported ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isImported ? "Added" : isAdding ? "Adding" : "Add"}</button></article>;
     })}</div>
-  </section></div>;
+  </section></div></DialogPortal>;
 }
 
 function readableError(error: unknown, fallback: string) {

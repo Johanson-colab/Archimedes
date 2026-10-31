@@ -137,8 +137,8 @@ function FigureDialog({ figure, index, total, onClose, onStep }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onStep]);
   const source = paperUrl(figure);
-  return createPortal(<div className="gallery-dialog-backdrop" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="gallery-dialog" role="dialog" aria-modal="true" aria-label={`Figure from ${figure.title}`} onMouseDown={(event) => event.stopPropagation()}>
+  return createPortal(<div className="gallery-dialog-backdrop app-dialog-overlay" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="gallery-dialog app-dialog app-dialog-gallery" role="dialog" aria-modal="true" aria-label={`Figure from ${figure.title}`} onMouseDown={(event) => event.stopPropagation()}>
       <header><span>{index + 1} / {total.toLocaleString()}</span><button type="button" title="Close figure" aria-label="Close figure" onClick={onClose}><X size={20} /></button></header>
       <div className="gallery-dialog-content"><button type="button" aria-label="Previous figure" title="Previous figure" onClick={() => onStep(-1)}><ArrowLeft size={21} /></button><img src={imageUrl(figure)} alt={`Figure from ${figure.title}`} /><button type="button" aria-label="Next figure" title="Next figure" onClick={() => onStep(1)}><ArrowRight size={21} /></button></div>
       <footer><div><span className="gallery-dialog-kicker">{figure.venue.toUpperCase()} {figure.year} · {patternLabel(figure.pattern)}{tierName(figure) ? ` · ${tierName(figure)}` : ""}</span><h2>{figure.title}</h2><p>{figure.authors.join(", ")}</p></div><div className="gallery-dialog-links">{source && <a href={source} target="_blank" rel="noreferrer">Open paper <ExternalLink size={14} /></a>}<a href={imageUrl(figure)} target="_blank" rel="noreferrer">Image source <ExternalLink size={14} /></a></div></footer>
@@ -242,7 +242,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           <button type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={filterOpen} title="Filter paper diagrams">
             <SlidersHorizontal size={14} />Filters{activeFilterCount > 0 && <b>{activeFilterCount}</b>}
           </button>
-          {filterOpen && <div className="image-creation-filter-panel" role="dialog" aria-label="Filter paper diagrams">
+          {filterOpen && <div className="image-creation-filter-panel" role="region" aria-label="Filter paper diagrams">
             <header><strong>Filter paper diagrams</strong><button type="button" onClick={resetFilters} disabled={!activeFilterCount && !query}>Clear all</button></header>
             <Facet label="Venue" value={filters.venue} onChange={(value) => updateFilter("venue", value)} options={[{ value: "all", label: "All" }, ...VENUES.map((venue) => ({ value: venue, label: venue, count: figures.filter((figure) => figure.venue === venue.toLowerCase()).length }))]} />
             <Facet label="Year" value={filters.year} onChange={(value) => updateFilter("year", value)} options={[{ value: "all", label: "All" }, ...YEARS.map((year) => ({ value: year, label: String(year) }))]} />

@@ -125,7 +125,9 @@ test("terminal settings sit in the terminal tab row with a distinct icon", () =>
 });
 
 test("dirty file changes are protected when the workbench closes", () => {
-  assert.match(app, /Hide the workbench\? Unsaved file changes stay in the editor\./);
+  assert.match(app, /Hide the workbench\?/);
+  assert.match(app, /Unsaved file changes stay in the editor\./);
+  assert.match(app, /confirm\(\{ title: "Hide the workbench\?"/);
   assert.match(app, /Object\.values\(fileDraftsRef\.current\)\.some\(isDraftDirty\)/);
 });
 

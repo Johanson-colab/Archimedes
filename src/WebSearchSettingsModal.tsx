@@ -5,7 +5,6 @@ import exaLogo from "@lobehub/icons-static-svg/icons/exa-color.svg";
 import firecrawlLogo from "@lobehub/icons-static-svg/icons/firecrawl-color.svg";
 import tavilyLogo from "@lobehub/icons-static-svg/icons/tavily-color.svg";
 import { useUISettings } from "./i18n";
-import { useDialogFocus } from "./useDialogFocus";
 
 function brandIcon(src: string) {
   return <img className="web-data-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
@@ -20,7 +19,6 @@ const providers: Array<{ id: WebSearchProviderId; name: string; description: str
 
 export default function WebSearchSettingsModal({ bridge, open, onClose, embedded = false }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; embedded?: boolean }) {
   const { t } = useUISettings();
-  const dialogRef = useDialogFocus<HTMLElement>(open && !embedded, onClose);
   const [provider, setProvider] = useState<WebSearchProviderId>("brave");
   const [configured, setConfigured] = useState<WebSearchProviderId[]>([]);
   const [apiKey, setApiKey] = useState("");
@@ -121,7 +119,5 @@ export default function WebSearchSettingsModal({ bridge, open, onClose, embedded
       </div>
       <footer className="model-settings-footer"><span>{hasSelectedKey ? t("{provider} key saved", { provider: selected.name }) : t("Add a key to activate this provider")}</span><div><button className="secondary-button" onClick={onClose}>{t("Close")}</button><button className="primary-button" onClick={() => void save()} disabled={saving || (!apiKey.trim() && !hasSelectedKey)}><Save size={14} />{t("Use {provider}", { provider: selected.name })}</button></div></footer>
     </>;
-  return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="web-search-modal" role="dialog" aria-modal="true" aria-label="Web search settings" onMouseDown={(event) => event.stopPropagation()}>{content}</section>
-  </div>;
+  return <section className="settings-embedded web-search-modal" aria-label="Web search settings">{content}</section>;
 }

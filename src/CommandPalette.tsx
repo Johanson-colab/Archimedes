@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
+import DialogPortal from "./DialogPortal";
 
 export type PaletteCommand = {
   id: string;
@@ -73,8 +74,8 @@ export default function CommandPalette({ open, commands, onClose }: {
     return result;
   }, []);
 
-  return <div className="command-palette-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}>
+  return <DialogPortal><div className="command-palette-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="command-palette app-dialog app-dialog-md app-dialog-palette" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}>
       <div className="command-palette-search"><Search size={16} /><input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setSelected(0); }} placeholder="Search commands, pages, and panels" aria-label="Search commands" onKeyDown={(event) => {
         if (event.key === "ArrowDown") {
           event.preventDefault();
@@ -102,5 +103,5 @@ export default function CommandPalette({ open, commands, onClose }: {
       </div>
       <footer className="command-palette-footer"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></footer>
     </section>
-  </div>;
+  </div></DialogPortal>;
 }

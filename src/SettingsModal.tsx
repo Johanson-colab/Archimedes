@@ -13,6 +13,7 @@ import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { TEXT_SIZE_SCALE, useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
 import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type CardStyle, type ContrastIssue, type Density, type DialogStyle, type InputStyle, type MenuStyle, type MotionStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type SurfaceStyles, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
+import DialogPortal from "./DialogPortal";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about" | "account" | "members";
 
@@ -268,8 +269,8 @@ export default function SettingsModal({
   };
   const heading = sectionHeadings[section];
 
-  return <div className="modal-backdrop settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="settings-modal" role="dialog" aria-modal="true" aria-label={t("Settings")} onMouseDown={(event) => event.stopPropagation()}>
+  return <DialogPortal><div className="modal-backdrop settings-backdrop" role="presentation" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="settings-modal app-dialog app-dialog-settings" role="dialog" aria-modal="true" aria-label={t("Settings")} onMouseDown={(event) => event.stopPropagation()}>
       <aside className="settings-sidebar">
         <div className="settings-brand"><div><strong>Archimedes</strong><span>{t("Settings")}</span></div></div>
         <nav className="settings-nav" aria-label={t("Settings sections")}>
@@ -700,7 +701,7 @@ export default function SettingsModal({
         </div>
       </div>
     </section>
-  </div>;
+  </div></DialogPortal>;
 }
 
 

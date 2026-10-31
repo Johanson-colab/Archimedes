@@ -3,6 +3,7 @@ import { Cloud, Download, LoaderCircle, Plus, RefreshCw, Share2, Trash2, UserPlu
 import SharedRunsPanel from "./SharedRunsPanel";
 import SharedNoteEditor from "./SharedNoteEditor";
 import { useUISettings } from "./i18n";
+import { useConfirm } from "./ConfirmDialog";
 
 type ProjectMembersPanelProps = {
   bridge: ResearchDeskBridge;
@@ -37,6 +38,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export default function ProjectMembersPanel({ bridge, project, activeThreadId, onProjectsChanged }: ProjectMembersPanelProps) {
+  const confirm = useConfirm();
   const { t } = useUISettings();
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [activity, setActivity] = useState<AuditEvent[]>([]);
@@ -125,7 +127,7 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
   }
 
   async function remove(member: ProjectMember) {
-    if (!window.confirm(`Remove ${member.display_name} from this project?`)) return;
+    if (!(await confirm({ title: "Remove member?", description: `${member.display_name} will lose access to this project.`, confirmLabel: "Remove member", destructive: true }))) return;
     setError("");
     try {
       if (member.source === "cloud" && cloudProjectId && typeof bridge.removeCloudProjectMember === "function") {

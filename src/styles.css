@@ -6967,3 +6967,159 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
   .extensions-search { flex: 1 1 180px; }
   .extensions-table-head, .extensions-entry-row { grid-template-columns: minmax(0, 1fr) 62px 94px 62px 84px; gap: 8px; }
 }
+
+/* Unified dialog skin. Individual components keep their layout, but share the
+   same overlay, shell, header, footer and control tokens. */
+.app-dialog-overlay { position: fixed; inset: 0; display: grid; padding: 20px; place-items: center; }
+.app-dialog-overlay,
+.modal-backdrop,
+.gallery-dialog-backdrop,
+.paper-create-backdrop,
+.command-palette-backdrop,
+.extensions-modal-backdrop,
+.journey-map-scrim,
+.artifact-lightbox {
+  z-index: 100;
+  background: color-mix(in srgb, var(--surface-ground) 62%, transparent);
+  backdrop-filter: blur(7px);
+}
+.journey-map-scrim { background: var(--workbench-ground); backdrop-filter: none; }
+.command-palette-backdrop.app-dialog-overlay { display: flex; align-items: flex-start; justify-content: center; padding: min(12vh, 120px) 20px 20px; }
+.app-dialog {
+  color: var(--night-ink);
+  background: var(--night-panel);
+  border: 1px solid var(--night-line);
+  border-radius: 10px;
+  box-shadow: var(--dialog-shadow-lg);
+}
+.app-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.app-dialog-header h2 { display: flex; align-items: center; gap: 7px; }
+.app-dialog :is(.modal-header) .eyebrow { display: none; }
+.app-dialog .thread-share-header .eyebrow, .app-dialog .thread-comments-header .eyebrow, .app-dialog .page-kicker { display: none; }
+.app-dialog-body { min-height: 0; padding: 18px 20px; overflow: auto; }
+.app-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.app-dialog-sm { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 40px); }
+.app-dialog-md { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 40px); }
+.app-dialog-lg { width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 40px); }
+.app-dialog-settings { width: min(980px, calc(100vw - 40px)); height: min(720px, calc(100vh - 40px)); }
+.app-dialog-gallery { width: min(1180px, 96vw); max-height: 92vh; }
+.app-dialog-lightbox { width: min(1040px, 94vw); max-height: 90vh; }
+.app-dialog-preview { width: min(820px, 92vw); max-height: 88vh; }
+.app-dialog-full { width: calc(100vw - 24px); height: calc(100vh - 24px); max-height: none; border-radius: 10px; }
+.app-dialog-palette { max-height: min(480px, 72vh); }
+.app-dialog :is(.settings-header, .auth-header, .thread-share-header, .thread-comments-header, .artifact-lightbox-head, .extensions-modal > header, .dialog-ref-header, .app-dialog-header) {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--night-line);
+}
+.app-dialog :is(.settings-header h2, .auth-header h2, .thread-share-header h2, .thread-comments-header h2, .artifact-lightbox-title, .extensions-modal h2, .dialog-ref-header h2, .app-dialog-header h2) {
+  margin: 0;
+  color: var(--night-ink);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.app-dialog :is(.settings-header p, .thread-share-header p, .thread-comments-header p, .dialog-ref-header p, .app-dialog-header p) {
+  margin: 5px 0 0;
+  color: var(--night-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.app-dialog :is(.settings-close, .auth-close, .artifact-lightbox-close, .dialog-ref-close, .app-dialog-close) {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--night-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+.app-dialog :is(.settings-close, .auth-close, .artifact-lightbox-close, .dialog-ref-close, .app-dialog-close):hover { color: var(--night-ink); background: var(--night-panel-raised); }
+.app-dialog :is(.modal-actions, .app-dialog-footer, .thread-share-footer, .command-palette-footer, .artifact-lightbox-foot, .thread-comments-composer) {
+  border-top: 1px solid var(--night-line);
+}
+.app-dialog :is(.modal-actions, .app-dialog-footer, .thread-share-footer) { padding: 14px 20px; }
+.app-dialog :is(.modal-actions, .app-dialog-footer, .thread-share-footer, .thread-comments-composer) :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.app-dialog .command-palette-search { padding: 10px 12px; }
+.app-dialog .command-palette-footer { padding: 7px 12px; }
+.command-palette.app-dialog { width: min(560px, 100%); }
+.app-dialog .command-palette-search input { font-size: 12px; }
+.app-dialog .thread-share-body { padding: 16px 20px; }
+.app-dialog .thread-comments-list { padding: 14px 20px; }
+.app-dialog .thread-comments-composer { padding: 12px 20px; }
+.app-dialog .thread-comments-composer textarea { min-height: 64px; }
+.app-dialog .settings-body { padding: 18px 20px; }
+.app-dialog .settings-sidebar { border-color: var(--night-line); }
+.app-dialog .auth-body { padding: 16px 20px 20px; }
+.app-dialog .auth-intro { margin: 12px 20px 0; font-size: 11px; }
+.app-dialog .auth-field { gap: 5px; font-size: 11px; }
+.app-dialog .auth-field input { min-height: 34px; font-size: 12px; }
+.app-dialog .gallery-dialog > header { height: 38px; padding: 0 10px 0 16px; }
+.app-dialog .gallery-dialog footer { padding: 14px 20px; }
+.app-dialog .gallery-dialog footer h2 { font-size: 16px; }
+.app-dialog .gallery-dialog footer p { font-size: 10px; }
+.app-dialog .gallery-dialog-content { min-height: 0; }
+.app-dialog .artifact-lightbox-head { padding: 0 10px 0 16px; }
+.app-dialog .artifact-lightbox-foot { padding: 0 12px 0 16px; }
+.app-dialog .journey-map-header { height: 54px; padding: 0 18px; }
+.app-dialog .journey-map-header h2 { font-size: 16px; }
+.app-dialog .journey-map-header p { font-size: 9px; }
+.extensions-modal.app-dialog { width: min(560px, calc(100vw - 32px)); padding: 0; gap: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
+.app-dialog .extensions-install-body { display: grid; gap: 13px; }
+.app-dialog .extensions-install-meta { margin: 0; }
+.app-dialog .extensions-install-permissions, .app-dialog .extensions-scope-field { margin: 0; }
+.app-dialog .extensions-sources-body { display: grid; gap: 10px; }
+.app-dialog .extensions-sources-footer .extensions-reset { margin-right: auto; }
+.app-dialog .extensions-sources-footer span { flex: 1; }
+.app-dialog .dialog-ref-header { padding: 20px 22px 16px; }
+.app-dialog .dialog-ref-body { padding: 18px 22px 20px; gap: 16px; }
+.app-dialog .dialog-ref-footer { padding: 14px 22px; }
+.app-dialog .dialog-ref-header h2 { font-size: 20px; }
+.app-dialog .dialog-ref-header p { font-size: 11px; }
+.app-dialog .dialog-ref-field { gap: 6px; font-size: 11px; }
+.app-dialog .dialog-ref-field input, .app-dialog .dialog-ref-field textarea { min-height: 34px; font-size: 12px; }
+.app-dialog .dialog-ref-field textarea { min-height: 92px; }
+.app-dialog .dialog-ref-field small { font-size: 9px; }
+.dialog-ref.app-dialog { width: min(620px, calc(100vw - 32px)); }
+.paper-project-dialog.app-dialog { padding: 0; }
+.paper-project-dialog.app-dialog h2 { font-size: 18px; }
+.paper-project-dialog.app-dialog p { font-size: 10px; }
+.paper-project-body { padding: 18px 20px 20px; }
+.paper-project-dialog.app-dialog .paper-project-options { margin-top: 0; }
+.paper-project-dialog.app-dialog .paper-project-options form,
+.paper-project-dialog.app-dialog .paper-project-import { padding: 16px 14px 14px; background: var(--surface-canvas); border-color: var(--night-line); border-radius: 7px; row-gap: 10px; }
+.paper-project-dialog.app-dialog .paper-project-options input,
+.paper-project-dialog.app-dialog .paper-project-options select { height: 34px; padding: 0 9px; font-size: 11px; background: var(--night-panel); border-color: var(--night-line); border-radius: 6px; }
+.paper-project-dialog.app-dialog .paper-project-options button { min-height: 32px; font-size: 10px; }
+.paper-project-dialog.app-dialog .paper-existing-projects { display: grid; gap: 5px; margin-top: 12px; }
+.paper-project-dialog.app-dialog .paper-existing-projects h3 { margin: 0 0 3px; color: var(--night-muted); font-size: 10px; font-weight: 600; }
+.paper-project-dialog.app-dialog .paper-existing-projects button { min-height: 34px; padding: 0 9px; }
+
+.paper-create-dialog.app-dialog { padding: 20px; }
+.paper-create-dialog.app-dialog h2 { font-size: 17px; }
+.paper-create-dialog.app-dialog p { font-size: 10px; margin-bottom: 14px; }
+.paper-create-dialog.app-dialog input { height: 34px; font-size: 12px; }
+.project-remove-modal.app-dialog { padding: 18px; }
+.workspace-modal.app-dialog .modal-header { padding-bottom: 11px; }
+.workspace-modal.app-dialog .modal-header h2 { font-size: 17px; }
+.workspace-modal.app-dialog > p { margin: 12px 0; font-size: 11px; }
+.workspace-modal.app-dialog label { font-size: 10px; }
+.workspace-modal.app-dialog input, .workspace-modal.app-dialog textarea { min-height: 32px; font-size: 11px; border-radius: 6px; }
+.workspace-modal.app-dialog .modal-actions { margin-top: 14px; padding: 12px 0 0; }
+.paper-import-modal.app-dialog { padding: 18px; }
+.paper-import-modal.app-dialog .modal-header h2 { font-size: 18px; }
+.model-settings-modal.app-dialog,
+.web-search-modal.app-dialog { background: var(--night-panel); border-color: var(--night-line); }
+.model-settings-modal.app-dialog :is(.model-settings-header, .model-settings-footer) { border-color: var(--night-line); }
+.theme-paper .app-dialog { background: var(--surface-panel); border-color: var(--border-default); }
+.theme-paper .app-dialog :is(.settings-header, .auth-header, .thread-share-header, .thread-comments-header, .artifact-lightbox-head, .extensions-modal > header, .dialog-ref-header, .app-dialog-header, .modal-actions, .app-dialog-footer, .thread-share-footer, .command-palette-footer, .artifact-lightbox-foot, .thread-comments-composer) { border-color: var(--border-soft); }
+@media (max-width: 720px) {
+  .app-dialog-sm, .app-dialog-md, .app-dialog-lg, .app-dialog-settings { width: calc(100vw - 20px); max-height: calc(100vh - 20px); }
+  .app-dialog-full { width: calc(100vw - 12px); height: calc(100vh - 12px); }
+}

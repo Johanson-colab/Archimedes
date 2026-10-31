@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Copy, Download, Link2, LoaderCircle, Share2, X } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
+import DialogPortal from "./DialogPortal";
 
 type ThreadShareSnapshot = Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>>;
 
@@ -54,8 +55,8 @@ export default function ThreadShareModal({ snapshot, bridge, projectId, threadId
     }
   }
 
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="thread-share-modal" role="dialog" aria-modal="true" aria-label="Share thread snapshot" onMouseDown={(event) => event.stopPropagation()}>
+  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="thread-share-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-label="Share thread snapshot" onMouseDown={(event) => event.stopPropagation()}>
       <header className="thread-share-header">
         <div><span className="eyebrow">Asynchronous sharing</span><h2>Share a snapshot</h2><p>{threadTitle}</p></div>
         <button className="settings-close" onClick={onClose} aria-label="Close share dialog"><X size={16} /></button>
@@ -84,5 +85,5 @@ export default function ThreadShareModal({ snapshot, bridge, projectId, threadId
         <button className="primary-button" onClick={onClose}><Check size={13} />Done</button>
       </footer>
     </section>
-  </div>;
+  </div></DialogPortal>;
 }

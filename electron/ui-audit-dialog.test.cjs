@@ -17,16 +17,17 @@ test("shared dialog hook implements escape, tab trapping, scroll lock and focus 
 test("all modal surfaces use the shared dialog contract", () => {
   for (const file of [
     "src/App.tsx",
-    "src/ModelSettingsModal.tsx",
-    "src/WebSearchSettingsModal.tsx",
     "src/LibraryView.tsx",
     "src/ProjectSidebar.tsx",
     "src/PaperWritingView.tsx",
     "src/ImageCreationView.tsx",
+    "src/ArtifactsPanel.tsx",
+    "src/ExtensionsView.tsx",
   ]) {
     const source = read(file);
     assert.match(source, /useDialogFocus/, `${file} should use useDialogFocus`);
-    assert.match(source, /tabIndex=\{-1\}/, `${file} should expose a focusable dialog root`);
+    assert.match(source, /app-dialog/, `${file} should use the shared dialog skin`);
+    assert.match(source, /DialogPortal|createPortal/, `${file} should portal its dialog`);
   }
 });
 
@@ -42,5 +43,5 @@ test("paper project dialog is dismissible before a project exists", () => {
   assert.match(paper, /useDialogFocus<HTMLElement>\(chooserOpen, \(\) => setChooserOpen\(false\)\)/);
   assert.match(paper, /event\.target === event\.currentTarget\) setChooserOpen\(false\)/);
   assert.doesNotMatch(paper, /activeProject && <button[^>]*aria-label="Close project chooser"/);
-  assert.match(paper, /<button className="reader-icon-button" onClick=\{\(\) => setChooserOpen\(false\)\} aria-label="Close project chooser">/);
+  assert.match(paper, /<button className="app-dialog-close" onClick=\{\(\) => setChooserOpen\(false\)\} aria-label="Close project chooser">/);
 });

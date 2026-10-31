@@ -151,7 +151,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
       <button className={open ? "composer-add-button active" : "composer-add-button"} onClick={() => reset(!open)} title="Add context" aria-label="Add context" aria-haspopup="dialog" aria-expanded={open}>
         <Plus size={17} />
       </button>
-      {open && <div className="context-picker-menu" role="dialog" aria-label="Add context">
+      {open && <div className="context-picker-menu" role="region" aria-label="Add context">
         {view !== "root" && <div className="context-picker-header"><button onClick={() => { setView(view === "papers" ? "libraries" : "root"); setError(""); }} title="Back"><ArrowLeft size={15} /></button><strong>{title}</strong></div>}
 
         {view === "root" && <>

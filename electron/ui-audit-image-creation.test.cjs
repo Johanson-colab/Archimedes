@@ -42,7 +42,7 @@ test("Data charts is a separate tab with chart types and tables, but no field or
   assert.match(charts, /EXCLUDED_CHARTS = new Set\(\["area", "other", "mixed"\]\)/);
   assert.match(charts, /figure\.chart_types\.some\(\(type\) => EXCLUDED_CHARTS\.has\(type\)\)/);
   assert.match(charts, /img\.paperfigure\.net/);
-  assert.match(charts, /image-creation-filter-panel data-chart-filter-panel" role="dialog"/);
+  assert.match(charts, /image-creation-filter-panel data-chart-filter-panel" role="region"/);
   assert.match(charts, /className="image-creation-controls data-chart-controls"/);
   assert.doesNotMatch(charts, /searchParams\.set\("area"|searchParams\.set\("venue"|Filter by venue|Research field/);
   assert.match(charts, /data\/index-\$\{index\}\.json/);
@@ -74,7 +74,7 @@ test("images lead and text is a single secondary line", () => {
 
 test("filter facets fold into one popover instead of a permanent block", () => {
   assert.match(view, /className=\{filterOpen \? "image-creation-filter-button active" : "image-creation-filter-button"\}/);
-  assert.match(view, /image-creation-filter-panel" role="dialog"/);
+  assert.match(view, /image-creation-filter-panel" role="region"/);
   assert.match(view, /Clear all/);
   assert.match(css, /\.image-creation-filter-panel \{[^}]*position: absolute/);
 });
