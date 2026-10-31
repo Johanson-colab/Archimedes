@@ -41,6 +41,9 @@ user's JWT; RLS stays enabled and no service-role key is needed.
 - `POST /v1/projects/{projectId}/comments`
 - `PATCH /v1/comments/{commentId}`
 - `DELETE /v1/comments/{commentId}`
+- `POST /v1/projects/{projectId}/share-links`
+- `DELETE /v1/share-links/{shareId}`
+- `GET /v1/public/shares/{token}` (anonymous)
 
 The API delegates project creation and member management to the PostgreSQL
 functions `create_project`, `add_project_member_by_email`,
@@ -99,6 +102,15 @@ The Library view has a **Sync cloud** action for a shared project. It pushes
 unlinked local libraries and papers, imports libraries and canonical papers
 from collaborators, and reconciles per-user paper state by timestamp. New cloud
 ids are cached in `libraries.cloud_library_id` and `papers.cloud_paper_id`.
+
+## Guest share links
+
+Thread sharing creates a 192-bit token, stores only its SHA-256 hash, and
+returns an `archimedes://share/{token}` link that expires after 1–365 days.
+Creation requires editor+ and verifies the resource belongs to the project.
+`GET /v1/public/shares/{token}` is the only anonymous route and returns the
+read-only thread snapshot (thread, turns, events, comments) for a valid,
+unrevoked, unexpired token. The thread share dialog exposes copy/create.
 
 ## Presence
 

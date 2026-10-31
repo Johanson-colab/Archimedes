@@ -119,6 +119,18 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
     const resolved = await call(second, `/v1/comments/${comment.body.comment.id}`, "PATCH", { resolved_at: new Date().toISOString() });
     assert.equal(resolved.status, 200);
 
+    const share = await call(first, `/v1/projects/${projectId}/share-links`, "POST", { resource_type: "thread", resource_id: thread.body.thread.id, role: "viewer", expires_in_days: 7 });
+    assert.equal(share.status, 201, JSON.stringify(share.body));
+    const guest = await fetch(`${base}/v1/public/shares/${encodeURIComponent(share.body.share.token)}`);
+    assert.equal(guest.status, 200);
+    const guestBody = await guest.json();
+    assert.equal(guestBody.share.thread.title, "Shared thread edited");
+    assert.equal(guestBody.share.turns[0].user_message, "Hello");
+    const revoked = await call(first, `/v1/share-links/${share.body.share.id}`, "DELETE");
+    assert.equal(revoked.status, 200);
+    const expiredGuest = await fetch(`${base}/v1/public/shares/${encodeURIComponent(share.body.share.token)}`);
+    assert.equal(expiredGuest.status, 404);
+
     const removeHighlight = await call(first, `/v1/highlights/${highlight.body.highlight.id}`, "DELETE");
     assert.equal(removeHighlight.status, 200);
     const removePaper = await call(first, `/v1/libraries/${library.body.library.id}/papers/${addedPaper.body.paper.id}`, "DELETE");

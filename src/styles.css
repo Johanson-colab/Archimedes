@@ -6564,6 +6564,9 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .thread-share-note > span { min-width: 0; }
 .thread-share-note b { color: var(--night-ink-soft); font-weight: 650; }
 .thread-share-warning { padding: 8px 9px; color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 7%, transparent); border: 1px solid color-mix(in srgb, var(--state-warning) 24%, transparent); border-radius: 5px; }
+.thread-share-link { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 9px; background: var(--night-panel-raised); border: 1px solid var(--night-line-soft); border-radius: 5px; }
+.thread-share-link code { min-width: 0; flex: 1; overflow: hidden; color: var(--night-ink-soft); font: 9.5px var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.thread-share-link small { width: 100%; color: var(--night-faint); font-size: 9px; }
 .thread-share-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; padding: 12px 20px; border-top: 1px solid var(--night-line-soft); }
 @media (max-width: 620px) { .thread-share-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
