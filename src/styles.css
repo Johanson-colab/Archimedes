@@ -6562,3 +6562,27 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .thread-share-warning { padding: 8px 9px; color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 7%, transparent); border: 1px solid color-mix(in srgb, var(--state-warning) 24%, transparent); border-radius: 5px; }
 .thread-share-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; padding: 12px 20px; border-top: 1px solid var(--night-line-soft); }
 @media (max-width: 620px) { .thread-share-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Thread comments */
+.thread-comments-modal { display: grid; width: min(660px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 48px)); grid-template-rows: auto minmax(160px, 1fr) auto; overflow: hidden; color: var(--night-ink); background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 9px; box-shadow: 0 24px 70px color-mix(in srgb, var(--surface-ground) 55%, transparent); }
+.thread-comments-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 18px 20px 14px; border-bottom: 1px solid var(--night-line-soft); }
+.thread-comments-header h2 { margin: 4px 0 0; font-size: 18px; }
+.thread-comments-header p { max-width: 500px; margin: 5px 0 0; overflow: hidden; color: var(--night-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.thread-comments-list { min-height: 0; overflow: auto; padding: 10px 14px; }
+.thread-comment { position: relative; margin: 0 0 8px; padding: 10px 11px; color: var(--night-ink-soft); background: var(--night-panel-raised); border: 1px solid var(--night-line-soft); border-radius: 5px; }
+.thread-comment.resolved { opacity: .58; }
+.thread-comment header { display: flex; align-items: baseline; gap: 8px; }
+.thread-comment header strong { color: var(--night-ink); font-size: 10.5px; font-weight: 650; }
+.thread-comment header span { color: var(--night-faint); font-size: 8.5px; }
+.thread-comment p { margin: 6px 0 0; color: var(--night-ink-soft); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+.thread-comment-resolve { margin-top: 7px; padding: 0; color: var(--night-muted); background: transparent; font-size: 9px; }
+.thread-comment-resolve:hover { color: var(--accent); }
+.thread-comment-resolve svg { vertical-align: -2px; margin-right: 3px; }
+.thread-comments-empty { display: flex; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--night-muted); text-align: center; }
+.thread-comments-empty strong { color: var(--night-ink); font-size: 11px; font-weight: 600; }
+.thread-comments-empty span { max-width: 300px; color: var(--night-faint); font-size: 10px; line-height: 1.5; }
+.thread-comments-error { margin: 0 0 8px; padding: 7px 9px; color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 7%, transparent); border: 1px solid color-mix(in srgb, var(--state-danger) 24%, transparent); border-radius: 4px; font-size: 10px; }
+.thread-comments-composer { display: grid; gap: 7px; padding: 12px 14px; border-top: 1px solid var(--night-line-soft); }
+.thread-comments-composer textarea { width: 100%; resize: vertical; min-height: 66px; padding: 9px 10px; color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-line); border-radius: 5px; outline: 0; font: 11px/1.5 inherit; }
+.thread-comments-composer textarea:focus { border-color: var(--accent); }
+.thread-comments-composer > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--night-faint); font-size: 9px; }

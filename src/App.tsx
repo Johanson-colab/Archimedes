@@ -49,6 +49,7 @@ import TerminalPanel from "./TerminalPanel";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import ThreadShareModal from "./ThreadShareModal";
+import ThreadCommentsModal from "./ThreadCommentsModal";
 import { useUISettings } from "./i18n";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, formatFileComment, isDraftDirty, isEditableFile, markDraftSaved, mergeRefreshedFiles, prepareFileContent, toEditorText, type FileComment, type FileDraft, type FileSelection } from "./file-editor";
@@ -345,6 +346,7 @@ const previewProjects: ResearchProject[] = [{ id: "preview-general", name: "Gene
 const previewArchivedProjects: ResearchProject[] = [];
 const previewThreads: ResearchThreadDetail[] = [];
 const previewThreadSnapshots: Array<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }> = [];
+const previewComments: ResearchComment[] = [];
 const previewArchivedThreads: ResearchThreadDetail[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
 const previewActions: AgentAction[] = [];
@@ -534,6 +536,24 @@ const previewBridge = {
       }
     }
     return { deleted: true };
+  },
+  listComments: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; includeResolved?: boolean }) => structuredClone(previewComments.filter((comment) => comment.resource_type === input.resourceType && comment.resource_id === input.resourceId && (input.includeResolved !== false || !comment.resolved_at))),
+  createComment: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => {
+    const now = new Date().toISOString();
+    const comment: ResearchComment = { id: crypto.randomUUID(), project_id: "preview-general", resource_type: input.resourceType, resource_id: input.resourceId, parent_id: input.parentId || null, anchor_json: JSON.stringify(input.anchor || {}), anchor: input.anchor || {}, body: input.body, author_id: previewLocalIdentity.userId, author_name: previewLocalIdentity.displayName, resolved_at: null, created_at: now, updated_at: now };
+    previewComments.push(comment);
+    return structuredClone(comment);
+  },
+  resolveComment: async (input: { id: string; resolved?: boolean }) => {
+    const comment = previewComments.find((candidate) => candidate.id === input.id);
+    if (!comment) return null;
+    comment.resolved_at = input.resolved === false ? null : new Date().toISOString();
+    return structuredClone(comment);
+  },
+  deleteComment: async (input: { id: string }) => {
+    const index = previewComments.findIndex((comment) => comment.id === input.id);
+    if (index >= 0) previewComments.splice(index, 1);
+    return { deleted: index >= 0 };
   },
   setResearchThreadVisibility: async (threadId: string, visibility: "project" | "private") => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId) || previewArchivedThreads.find((candidate) => candidate.id === threadId);
@@ -952,6 +972,7 @@ function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
   const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
@@ -1039,6 +1060,7 @@ function App() {
   const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? null;
   useEffect(() => {
     if (activeThread?.visibility === "private" || activeThread?.visibility === "project") setThreadVisibility(activeThread.visibility);
+    if (!activeThreadId) setCommentsOpen(false);
   }, [activeThread?.visibility, activeThreadId]);
   // Research data lives in the primary workspace. Agent tools, files, terminal,
   // and paper writing operate inside the session folder: session snapshot →
@@ -2406,6 +2428,7 @@ function App() {
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
             {activeThreadId && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share thread snapshot")} aria-label={t("Share thread snapshot")}><Share2 size={15} /></button>}
+            {activeThreadId && <button className="quiet-icon-button" onClick={() => setCommentsOpen(true)} title={t("Thread comments")} aria-label={t("Thread comments")}><MessageSquareText size={15} /></button>}
             <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={() => setResearchPanelOpen((open) => !open)}
@@ -2676,6 +2699,14 @@ function App() {
         identity={localIdentity}
         onSaveIdentity={saveLocalIdentity}
       />
+      {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
+        bridge={desktopBridge}
+        workspace={workspace}
+        projectId={activeThread?.project_id || activeProjectId || ""}
+        threadId={activeThreadId}
+        threadTitle={activeThread?.title ?? t("Research thread")}
+        onClose={() => setCommentsOpen(false)}
+      />}
       <ThreadShareModal
         snapshot={shareSnapshot}
         threadTitle={activeThread?.title ?? "Research thread"}
