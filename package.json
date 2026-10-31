@@ -17,9 +17,11 @@
     "audit:theme": "node scripts/theme-audit.mjs",
     "check:theme": "node scripts/check-theme-tokens.mjs",
     "codemod:theme": "node scripts/codemod-theme-colors.mjs",
-    "test": "node --test electron/*.test.cjs electron/agent/*.test.cjs && node scripts/check-theme-tokens.mjs",
+    "test": "node --test electron/*.test.cjs electron/agent/*.test.cjs server/*.test.cjs && node scripts/check-theme-tokens.mjs",
     "rebuild:native": "electron-rebuild -f -w node-pty",
-    "postinstall": "npm run rebuild:native"
+    "postinstall": "npm run rebuild:native",
+    "server:start": "node server/index.cjs",
+    "server:test": "node --test server/*.test.cjs"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
