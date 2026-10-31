@@ -1,6 +1,6 @@
 # Rollout plan
 
-Implemented through PR #192: auth, project/member sync, libraries/papers, annotations, threads/comments, presence, guest links, shared agent runs, CRDT notes, and admin export/audit. LaTeX co-editing is reusing the shared-document primitive; LAN host mode is `npm run server:lan`. Remaining enterprise work is tracked in `governance.md`.
+Implemented through PR #194: auth, project/member sync, libraries/papers, annotations, threads/comments, presence, guest links, shared agent runs, CRDT notes, and admin export/audit. LaTeX co-editing reuses the shared-document primitive; LAN host mode is `npm run server:lan`. Remaining enterprise work is tracked in `governance.md`.
 
 Solo developer target: **12–15 short-lived PRs**, one branch per PR, at most two
 open at once, stack depth at most two.
