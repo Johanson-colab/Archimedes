@@ -6623,6 +6623,11 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .project-cloud-item small { color: var(--night-faint); font-size: 9px; text-transform: capitalize; }
 .project-cloud-item .secondary-button { flex: 0 0 auto; }
 .library-cloud-notice { margin: 8px 18px 0; padding: 8px 10px; color: var(--night-muted); background: color-mix(in srgb, var(--accent) 6%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent); border-radius: 5px; font-size: 10px; line-height: 1.5; }
+.latex-coedit-pane { height: 100%; overflow: auto; padding: 12px; }
+.latex-coedit-pane .settings-section { border: 0; }
+.latex-coedit-pane .settings-section-title { position: sticky; top: 0; z-index: 1; background: var(--night-panel); }
+.latex-coedit-pane .shared-note-editor { min-height: min(58vh, 620px); font: 12px/1.6 var(--font-mono); }
+.latex-editor-body.coediting { display: none; }
 .shared-note-editor { width: 100%; min-height: 120px; resize: vertical; padding: 10px 12px; color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-line-soft); border-radius: 5px; outline: 0; font: 11px/1.55 inherit; }
 .shared-note-editor:focus { border-color: var(--accent); }
 .shared-note-footer { display: flex; justify-content: space-between; gap: 10px; padding: 7px 12px; color: var(--night-faint); font-size: 9px; }

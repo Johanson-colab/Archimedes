@@ -138,7 +138,9 @@ The Members panel exposes **Export**. No token hashes are included.
 submitted Yjs updates, merges them into the current state, and writes with an
 optimistic version (`upsert_shared_document`, retrying conflicts). Settings →
 Members exposes a shared project note that uses `Y.Doc` in the renderer and
-polls every two seconds; presence is separate. Only editor+ can write.
+polls every two seconds; presence is separate. Only editor+ can write. The
+Paper writing toolbar has **Co-edit**, which uses the same Yjs document keyed by
+LaTeX file path; remote text changes flow into the local draft and auto-save.
 
 ## Shared agent runs
 
