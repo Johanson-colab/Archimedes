@@ -53,7 +53,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   requestMicrophoneAccess: () => ipcRenderer.invoke("speech:request-permission"),
   getWebSearchConfig: () => ipcRenderer.invoke("web-search:get-config"),
   saveWebSearchConfig: (input) => ipcRenderer.invoke("web-search:save-config", input),
-  listLibraries: () => ipcRenderer.invoke("library:list"),
+  listLibraries: (projectId) => ipcRenderer.invoke("library:list", { projectId }),
   createLibrary: (input) => ipcRenderer.invoke("library:create", input),
   updateLibrary: (id, patch) => ipcRenderer.invoke("library:update", { id, patch }),
   deleteLibrary: (id) => ipcRenderer.invoke("library:delete", id),

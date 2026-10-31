@@ -824,7 +824,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));
 
-  ipcMain.handle("library:list", () => store.listLibraries());
+  ipcMain.handle("library:list", (_event, input = {}) => store.listLibraries(input.projectId ?? null));
 
   ipcMain.handle("library:create", (_event, input) => {
     if (!input || typeof input.name !== "string" || !input.name.trim() || input.name.length > 120) {

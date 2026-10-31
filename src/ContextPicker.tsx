@@ -16,9 +16,10 @@ import {
 
 type PickerView = "root" | "libraries" | "papers" | "plugins" | "skills";
 
-export default function ContextPicker({ bridge, workspace, items, onAdd }: {
+export default function ContextPicker({ bridge, workspace, projectId, items, onAdd }: {
   bridge: ResearchDeskBridge;
   workspace: string;
+  projectId?: string | null;
   items: ContextAttachment[];
   onAdd: (items: ContextAttachment[]) => void;
 }) {
@@ -68,7 +69,7 @@ export default function ContextPicker({ bridge, workspace, items, onAdd }: {
     setLoading(true);
     setError("");
     try {
-      setLibraries(await bridge.listLibraries());
+      setLibraries(await bridge.listLibraries(projectId ?? undefined));
     } catch (reason) {
       setError(String(reason));
     } finally {

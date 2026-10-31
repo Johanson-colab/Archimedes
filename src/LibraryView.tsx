@@ -207,7 +207,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   const loadLibraries = useCallback(async () => {
     setLoading(true);
     try {
-      const nextLibraries = await bridge.listLibraries();
+      const nextLibraries = await bridge.listLibraries(projectId ?? undefined);
       setLibraries(nextLibraries);
       setError("");
     } catch (loadError) {
@@ -215,7 +215,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
     } finally {
       setLoading(false);
     }
-  }, [bridge]);
+  }, [bridge, projectId]);
 
   const loadPapers = useCallback(async (libraryId: string, query = "") => {
     setLoading(true);
@@ -234,6 +234,13 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   useEffect(() => { void loadLibraries(); }, [libraryRefreshVersion, loadLibraries]);
 
   useEffect(() => {
+    setSelectedLibraryId(null);
+    setSelectedPaperId(null);
+    setReaderPaperId(null);
+    setPapers([]);
+  }, [projectId]);
+
+  useEffect(() => {
     if (!selectedLibraryId) return;
     const timeout = window.setTimeout(() => void loadPapers(selectedLibraryId, localQuery), 160);
     return () => window.clearTimeout(timeout);
@@ -244,7 +251,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
   const readerPaper = papers.find((paper) => paper.id === readerPaperId) ?? null;
 
   async function saveLibrary(input: { name: string; description: string; color: string }) {
-    if (libraryEditor === "new") await bridge.createLibrary(input);
+    if (libraryEditor === "new") await bridge.createLibrary({ ...input, projectId: projectId ?? null });
     else if (libraryEditor) await bridge.updateLibrary(libraryEditor.id, input);
     setLibraryEditor(null);
     await loadLibraries();
