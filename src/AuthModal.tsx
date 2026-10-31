@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDialogFocus } from "./useDialogFocus";
+import DialogPortal from "./DialogPortal";
 
 type AuthModalProps = {
   open: boolean;
@@ -130,8 +131,8 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
         ? "Reset password"
         : "Sign in";
 
-  return <div className="modal-backdrop auth-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="auth-modal" role="dialog" aria-modal="true" aria-label="Sign in to Archimedes" onMouseDown={(event) => event.stopPropagation()}>
+  return <DialogPortal><div className="modal-backdrop auth-backdrop" role="presentation" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="auth-modal app-dialog app-dialog-sm" role="dialog" aria-modal="true" aria-label="Sign in to Archimedes" onMouseDown={(event) => event.stopPropagation()}>
       <header className="auth-header">
         <h2>{title}</h2>
         <button className="auth-close" onClick={onClose} aria-label="Close sign-in">×</button>
@@ -192,5 +193,5 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
         <span>By continuing you agree to the <button onClick={() => onOpenExternal("https://github.com/Johanson-colab/Archimedes/blob/main/docs/legal/terms.md")}>Terms</button> and <button onClick={() => onOpenExternal("https://github.com/Johanson-colab/Archimedes/blob/main/docs/legal/privacy.md")}>Privacy Policy</button>.</span>
       </footer>
     </section>
-  </div>;
+  </div></DialogPortal>;
 }

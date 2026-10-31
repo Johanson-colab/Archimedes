@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, MessageSquareText, Send, X } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
+import DialogPortal from "./DialogPortal";
 
 type ThreadCommentsModalProps = {
   bridge: ResearchDeskBridge;
@@ -58,8 +59,8 @@ export default function ThreadCommentsModal({ bridge, workspace, projectId, thre
     }
   }
 
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="thread-comments-modal" role="dialog" aria-modal="true" aria-label="Thread comments" onMouseDown={(event) => event.stopPropagation()}>
+  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="thread-comments-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-label="Thread comments" onMouseDown={(event) => event.stopPropagation()}>
       <header className="thread-comments-header">
         <div><span className="eyebrow">Thread discussion</span><h2>Comments</h2><p>{threadTitle}</p></div>
         <button className="settings-close" onClick={onClose} aria-label="Close comments"><X size={16} /></button>
@@ -77,5 +78,5 @@ export default function ThreadCommentsModal({ bridge, workspace, projectId, thre
         <div><span>Commenter access required · ⌘↵ to send</span><button className="primary-button" disabled={!draft.trim() || sending} onClick={() => void submit()}><Send size={12} />{sending ? "Sending…" : "Comment"}</button></div>
       </div>
     </section>
-  </div>;
+  </div></DialogPortal>;
 }

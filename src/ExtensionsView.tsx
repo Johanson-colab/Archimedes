@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import DialogPortal from "./DialogPortal";
+import { useDialogFocus } from "./useDialogFocus";
 import {
   Check,
   Download,
@@ -211,6 +213,7 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
   const closeTimer = useRef<number | null>(null);
   const suppressHover = useRef(false);
   const previewCache = useRef(new Map<string, HoverPreviewState>());
+  const installDialogRef = useDialogFocus<HTMLElement>(Boolean(installItem), () => setInstallItem(null));
 
   useEffect(() => {
     let active = true;
@@ -559,25 +562,26 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
       refreshFeed();
     }} />}
 
-    {installItem && <div className="extensions-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setInstallItem(null); }}>
-      <section className="extensions-modal" role="dialog" aria-modal="true" aria-labelledby="extensions-install-title">
-        <header><div><span className="page-kicker">Install extension</span><h2 id="extensions-install-title">{installItem.name}</h2></div><button className="extensions-icon-button" onClick={() => setInstallItem(null)} aria-label="Close"><X size={15} /></button></header>
-        <p>{installItem.description}</p>
-        <dl className="extensions-install-meta">
-          <div><dt>Source</dt><dd>{installItem.source}</dd></div>
-          <div><dt>Version</dt><dd>{installItem.version}</dd></div>
-          <div><dt>License</dt><dd>{installItem.license}</dd></div>
-          <div><dt>Size</dt><dd>{formatBytes(installItem.size)}</dd></div>
-        </dl>
-        <div className="extensions-install-permissions"><strong>Permissions</strong><span>{installItem.permissions.length ? installItem.permissions.join(" · ") : "No special permissions declared."}</span></div>
-        <fieldset className="extensions-scope-field"><legend>Install for</legend>
-          <label><input type="radio" name="extension-scope" checked={installScope === "workspace"} onChange={() => setInstallScope("workspace")} /><span>Workspace</span><small>.agents/skills</small></label>
-          <label><input type="radio" name="extension-scope" checked={installScope === "global"} onChange={() => setInstallScope("global")} /><span>Global</span><small>~/.agents/skills</small></label>
-        </fieldset>
-        {installError && <div className="skills-error">{installError}</div>}
-        <footer><button className="secondary-button" onClick={() => setInstallItem(null)}>Cancel</button><button className="primary-button" onClick={() => void confirmInstall()} disabled={installBusy}>{installBusy ? <LoaderCircle className="spin" size={13} /> : <Download size={13} />}{installItem.updateAvailable ? "Update" : "Install"}</button></footer>
+    {installItem && <DialogPortal><div className="extensions-modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setInstallItem(null); }}>
+      <section ref={installDialogRef} tabIndex={-1} className="extensions-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-labelledby="extensions-install-title">
+        <header className="app-dialog-header"><div><h2 id="extensions-install-title">{installItem.name}</h2><p>{installItem.description}</p></div><button className="app-dialog-close" onClick={() => setInstallItem(null)} aria-label="Close"><X size={15} /></button></header>
+        <div className="app-dialog-body extensions-install-body">
+          <dl className="extensions-install-meta">
+            <div><dt>Source</dt><dd>{installItem.source}</dd></div>
+            <div><dt>Version</dt><dd>{installItem.version}</dd></div>
+            <div><dt>License</dt><dd>{installItem.license}</dd></div>
+            <div><dt>Size</dt><dd>{formatBytes(installItem.size)}</dd></div>
+          </dl>
+          <div className="extensions-install-permissions"><strong>Permissions</strong><span>{installItem.permissions.length ? installItem.permissions.join(" · ") : "No special permissions declared."}</span></div>
+          <fieldset className="extensions-scope-field"><legend>Install for</legend>
+            <label><input type="radio" name="extension-scope" checked={installScope === "workspace"} onChange={() => setInstallScope("workspace")} /><span>Workspace</span><small>.agents/skills</small></label>
+            <label><input type="radio" name="extension-scope" checked={installScope === "global"} onChange={() => setInstallScope("global")} /><span>Global</span><small>~/.agents/skills</small></label>
+          </fieldset>
+          {installError && <div className="skills-error">{installError}</div>}
+        </div>
+        <footer className="app-dialog-footer"><button className="secondary-button" onClick={() => setInstallItem(null)}>Cancel</button><button className="primary-button" onClick={() => void confirmInstall()} disabled={installBusy}>{installBusy ? <LoaderCircle className="spin" size={13} /> : <Download size={13} />}{installItem.updateAvailable ? "Update" : "Install"}</button></footer>
       </section>
-    </div>}
+    </div></DialogPortal>}
   </section>;
 }
 
@@ -592,6 +596,7 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
   const [newSource, setNewSource] = useState({ name: "", type: "json" as ExtensionSourceType, url: "", token: "" });
   const [adding, setAdding] = useState(false);
+  const sourceDialogRef = useDialogFocus<HTMLElement>(true, onClose);
 
   useEffect(() => {
     if (sources.length) {
@@ -659,10 +664,10 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
     }
   }
 
-  return <div className="extensions-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="extensions-modal extensions-source-modal" role="dialog" aria-modal="true" aria-labelledby="extensions-sources-title">
-      <header><div><span className="page-kicker">Marketplace</span><h2 id="extensions-sources-title">Sources</h2></div><button className="extensions-icon-button" onClick={onClose} aria-label="Close"><X size={15} /></button></header>
-      <p>Enable public registries or add a JSON index. Results are deduplicated across sources.</p>
+  return <DialogPortal><div className="extensions-modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section ref={sourceDialogRef} tabIndex={-1} className="extensions-modal extensions-source-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-labelledby="extensions-sources-title">
+      <header className="app-dialog-header"><div><h2 id="extensions-sources-title">Sources</h2><p>Enable public registries or add a JSON index. Results are deduplicated across sources.</p></div><button className="app-dialog-close" onClick={onClose} aria-label="Close"><X size={15} /></button></header>
+      <div className="app-dialog-body extensions-sources-body">
       <div className="extensions-source-list">
         {draft.map((source) => <div className="extensions-source-row" key={source.id}>
           <label className="extensions-source-toggle"><input type="checkbox" checked={source.enabled} onChange={(event) => updateSource(source.id, { enabled: event.target.checked })} /><span>{source.name}</span></label>
@@ -678,7 +683,8 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
         <div className="extensions-form-actions"><button className="secondary-button" onClick={() => setAdding(false)}>Cancel</button><button className="primary-button" onClick={addSource}>Add source</button></div>
       </div> : <button className="extensions-add-source" onClick={() => setAdding(true)}><Plus size={13} />Add source</button>}
       {error && <div className="skills-error">{error}</div>}
-      <footer><button className="extensions-reset" onClick={() => void reset()} disabled={saving}>Reset defaults</button><span /><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={() => void save()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={13} /> : <Settings2 size={13} />}Save sources</button></footer>
+      </div>
+      <footer className="app-dialog-footer extensions-sources-footer"><button className="extensions-reset" onClick={() => void reset()} disabled={saving}>Reset defaults</button><span /><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={() => void save()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={13} /> : <Settings2 size={13} />}Save sources</button></footer>
     </section>
-  </div>;
+  </div></DialogPortal>;
 }

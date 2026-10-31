@@ -221,6 +221,7 @@ const translations: Record<string, string> = {
   "Choose a folder for this project": "为此项目选择文件夹",
   "New chats inherit this folder as their working directory. You can change it later.": "新对话会继承此文件夹作为工作目录，之后也可以更改。",
   "A project groups related chats and runs them inside one folder. Every chat keeps its own history.": "项目把相关对话归在一起，并在同一个文件夹中运行；每个对话仍保留独立历史。",
+  "Use a short name that makes the project easy to find later.": "使用一个简短名称，方便之后快速找到项目。",
   "{name} and its {chats}, research turns, and recorded Agent actions will be permanently deleted. Files in the project folder are not deleted.": "{name} 及其 {chats}、研究轮次和 Agent 操作记录将被永久删除。项目文件夹中的文件不会被删除。",
   "Could not rename project: {error}": "无法重命名项目：{error}",
   "Research workspace": "研究工作区",

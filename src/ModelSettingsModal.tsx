@@ -22,7 +22,6 @@ import moonshotLogo from "./assets/providers/moonshot.jpg";
 import openaiLogo from "./assets/providers/openai.png";
 import qwenLogo from "./assets/providers/qwen.png";
 import { useUISettings } from "./i18n";
-import { useDialogFocus } from "./useDialogFocus";
 
 type ProviderId = ModelProviderId;
 
@@ -54,7 +53,6 @@ const providers: Array<{
 export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent" }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole }) {
   const { t } = useUISettings();
   const proactiveRole = role === "proactive";
-  const dialogRef = useDialogFocus<HTMLElement>(open && !embedded, onClose);
   const [provider, setProvider] = useState<ProviderId>("custom");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
@@ -233,10 +231,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         <div>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Cancel")}</button>}<button className="primary-button" onClick={() => void save()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{saving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{t("Save model")}</button></div>
       </footer>
     </>;
-  if (embedded) return <section className="settings-embedded model-settings-modal" aria-label="Model settings">{content}</section>;
-  return <div className="modal-backdrop model-settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="model-settings-modal" role="dialog" aria-modal="true" aria-label="Model settings" onMouseDown={(event) => event.stopPropagation()}>{content}</section>
-  </div>;
+  return <section className="settings-embedded model-settings-modal" aria-label="Model settings">{content}</section>;
 }
 
 export { providers };

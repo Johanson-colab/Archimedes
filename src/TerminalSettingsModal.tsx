@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight, Settings2, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
+import DialogPortal from "./DialogPortal";
 
 type TerminalSettingsModalProps = {
   open: boolean;
@@ -268,7 +269,7 @@ export default function TerminalSettingsModal({ open, mode, settings, workspace,
       </div>
     </>;
   if (embedded) return <section className="settings-embedded terminal-settings-modal" aria-label="Terminal settings">{content}</section>;
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="workspace-modal terminal-settings-modal" role="dialog" aria-modal="true" aria-label={mode === "onboarding" ? "Choose your terminal" : "Terminal settings"} onMouseDown={(event) => event.stopPropagation()}>{content}</section>
-  </div>;
+  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}>
+    <section ref={dialogRef} tabIndex={-1} className="workspace-modal terminal-settings-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-label={mode === "onboarding" ? "Choose your terminal" : "Terminal settings"} onMouseDown={(event) => event.stopPropagation()}>{content}</section>
+  </div></DialogPortal>;
 }

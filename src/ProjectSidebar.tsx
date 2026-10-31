@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Check, ChevronDown, FolderOpen, MessageSquarePlus, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, ChevronDown, FolderOpen, MessageSquarePlus, MoreVertical, Plus, Trash2, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
+import DialogPortal from "./DialogPortal";
 
 export type WorkFilter = "all" | "running" | "review" | "automations" | "archived";
 
@@ -272,15 +273,21 @@ export function NewProjectModal({ open, name, onName, workspacePath, onWorkspace
   const { t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   if (!open) return null;
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-create-modal" role="dialog" aria-modal="true" aria-label={t("New project")} onMouseDown={(event) => event.stopPropagation()}>
-    <header className="modal-header"><div><span className="eyebrow">{t("Research workspace")}</span><h2>{t("New project")}</h2></div></header>
-    <p>{t("A project groups related chats and runs them inside one folder. Every chat keeps its own history.")}</p>
-    <label>{t("Project name")}<input autoFocus value={name} onChange={(event) => onName(event.target.value)} placeholder={t("Agent reliability study")} maxLength={100} onKeyDown={(event) => event.key === "Enter" && onCreate()} /></label>
-    <label>{t("Project folder")}<span className="project-folder-field"><FolderOpen size={14} /><input value={workspacePath} onChange={(event) => onWorkspacePath(event.target.value)} placeholder={t("Choose a folder for this project")} /><button type="button" className="secondary-button" onClick={onChooseFolder}>{t("Choose")}</button></span></label>
-    <p className="project-folder-hint">{t("New chats inherit this folder as their working directory. You can change it later.")}</p>
-    {error && <p className="project-rename-error" role="alert">{error}</p>}
-    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="primary-button" onClick={onCreate} disabled={!name.trim() || !workspacePath.trim()}><Plus size={14} />{t("Create project")}</button></div>
-  </section></div>;
+  return <DialogPortal><div className="modal-backdrop dialog-ref-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="dialog-ref project-create-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-labelledby="new-project-title" onMouseDown={(event) => event.stopPropagation()}>
+    <header className="dialog-ref-header">
+      <div><h2 id="new-project-title">{t("New project")}</h2><p>{t("A project groups related chats and runs them inside one folder. Every chat keeps its own history.")}</p></div>
+      <button className="dialog-ref-close" onClick={onClose} aria-label={t("Close")}><X size={18} /></button>
+    </header>
+    <div className="dialog-ref-body">
+      <label className="dialog-ref-field"><span>{t("Project name")}</span><input autoFocus value={name} onChange={(event) => onName(event.target.value)} placeholder={t("Agent reliability study")} maxLength={100} onKeyDown={(event) => event.key === "Enter" && onCreate()} /><small>{t("Use a short name that makes the project easy to find later.")}</small></label>
+      <label className="dialog-ref-field"><span>{t("Project folder")}</span><span className="dialog-ref-folder"><FolderOpen size={15} /><input value={workspacePath} onChange={(event) => onWorkspacePath(event.target.value)} placeholder={t("Choose a folder for this project")} /><button type="button" className="secondary-button" onClick={onChooseFolder}>{t("Choose")}</button></span><small>{t("New chats inherit this folder as their working directory. You can change it later.")}</small></label>
+      {error && <p className="project-rename-error" role="alert">{error}</p>}
+    </div>
+    <footer className="dialog-ref-footer">
+      <button className="secondary-button" onClick={onClose}>{t("Cancel")}</button>
+      <button className="primary-button" onClick={onCreate} disabled={!name.trim() || !workspacePath.trim()}>{t("Create project")}</button>
+    </footer>
+  </section></div></DialogPortal>;
 }
 
 export function ProjectRemoveModal({ project, onClose, onRemove }: { project: ResearchProject | null; onClose: () => void; onRemove: () => void }) {
@@ -288,21 +295,21 @@ export function ProjectRemoveModal({ project, onClose, onRemove }: { project: Re
   const dialogRef = useDialogFocus<HTMLElement>(Boolean(project), onClose);
   if (!project) return null;
   const chatLabel = project.chat_count === 1 ? t("1 chat") : t("{count} chats", { count: project.chat_count });
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-remove-modal" role="dialog" aria-modal="true" aria-label={t("Remove {name}", { name: project.name })} onMouseDown={(event) => event.stopPropagation()}>
-    <header className="modal-header"><div><span className="eyebrow">{t("Permanent action")}</span><h2>{t("Remove project?")}</h2></div></header>
+  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-remove-modal app-dialog app-dialog-sm" role="dialog" aria-modal="true" aria-label={t("Remove {name}", { name: project.name })} onMouseDown={(event) => event.stopPropagation()}>
+    <header className="modal-header"><div><h2>{t("Remove project?")}</h2></div><button className="app-dialog-close" onClick={onClose} aria-label={t("Close")}><X size={16} /></button></header>
     <p>{t("{name} and its {chats}, research turns, and recorded Agent actions will be permanently deleted. Files in the project folder are not deleted.", { name: project.name, chats: chatLabel })}</p>
     <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="danger-button" onClick={onRemove}><Trash2 size={14} />{t("Remove project")}</button></div>
-  </section></div>;
+  </section></div></DialogPortal>;
 }
 
 export function ThreadRemoveModal({ thread, error, onClose, onRemove }: { thread: ResearchThread | null; error: string; onClose: () => void; onRemove: () => void }) {
   const { t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(Boolean(thread), onClose);
   if (!thread) return null;
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-remove-modal" role="dialog" aria-modal="true" aria-label={t("Delete chat?")} onMouseDown={(event) => event.stopPropagation()}>
-    <header className="modal-header"><div><span className="eyebrow">{t("Permanent action")}</span><h2>{t("Delete chat?")}</h2></div></header>
+  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal project-remove-modal app-dialog app-dialog-sm" role="dialog" aria-modal="true" aria-label={t("Delete chat?")} onMouseDown={(event) => event.stopPropagation()}>
+    <header className="modal-header"><div><h2>{t("Delete chat?")}</h2></div><button className="app-dialog-close" onClick={onClose} aria-label={t("Close")}><X size={16} /></button></header>
     <p>{t("{title}, its research turns, recorded Agent actions, and chat history will be permanently deleted.", { title: thread.title })}</p>
     {error && <p className="project-rename-error" role="alert">{error}</p>}
     <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="danger-button" onClick={onRemove}><Trash2 size={14} />{t("Delete chat")}</button></div>
-  </section></div>;
+  </section></div></DialogPortal>;
 }

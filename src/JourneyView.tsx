@@ -1275,8 +1275,8 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       <p className="journey-outline-hint">{t("Click a chapter to expand. Open map for the full tree.")}</p>
       {dock}
     </div>}
-    {mapOpen && typeof document !== "undefined" && createPortal(<div className="journey-map-scrim" role="presentation" onMouseDown={() => setMapOpen(false)}>
-      <section ref={mapDialogRef} tabIndex={-1} className="journey-map" role="dialog" aria-modal="true" aria-label={t("Journey map")} onMouseDown={(event) => event.stopPropagation()}>
+    {mapOpen && typeof document !== "undefined" && createPortal(<div className="journey-map-scrim app-dialog-overlay" role="presentation" onMouseDown={() => setMapOpen(false)}>
+      <section ref={mapDialogRef} tabIndex={-1} className="journey-map app-dialog app-dialog-full" role="dialog" aria-modal="true" aria-label={t("Journey map")} onMouseDown={(event) => event.stopPropagation()}>
         <header className="journey-map-header">
           <div><h2>{t("Journey map")}</h2><p>{thread?.title || t("New research task")} · {plural(steps, t("step"))} · {plural(chapters.length, t("chapter"))}</p></div>
           <div className="journey-map-tools">
