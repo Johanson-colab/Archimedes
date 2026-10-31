@@ -1300,6 +1300,8 @@ app.whenReady().then(async () => {
       localUserId: localIdentity.localIdentity().userId,
     });
   });
+  ipcMain.handle("collab:export-project", async (_event, { projectId } = {}) => requireCollaboration().exportProject(projectId));
+  ipcMain.handle("collab:list-remote-audit", async (_event, { projectId } = {}) => requireCollaboration().listAuditEvents(projectId));
   ipcMain.handle("collab:get-shared-document", async (_event, { projectId, key } = {}) => requireCollaboration().getSharedDocument(projectId, key));
   ipcMain.handle("collab:apply-shared-document", async (_event, { projectId, key, update } = {}) => requireCollaboration().applySharedDocumentUpdate(projectId, key, update));
   ipcMain.handle("collab:list-agent-runs", async (_event, { projectId } = {}) => requireCollaboration().listAgentRuns(projectId));

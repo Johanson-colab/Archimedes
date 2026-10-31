@@ -52,6 +52,7 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
   const [cloudRole, setCloudRole] = useState<ProjectMember["role"]>("commenter");
   const [cloudBusy, setCloudBusy] = useState(false);
   const [threadBusy, setThreadBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [cloudError, setCloudError] = useState("");
   const [cloudNotice, setCloudNotice] = useState("");
 
@@ -160,6 +161,24 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
     } finally { setCloudBusy(false); }
   }
 
+  async function exportProject() {
+    if (exportBusy || typeof bridge.exportProject !== "function") return;
+    setExportBusy(true); setCloudError(""); setCloudNotice("");
+    try {
+      const bundle = await bridge.exportProject(project.id);
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${project.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "project"}-export.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setCloudNotice(t("Project export downloaded."));
+    } catch (cause) {
+      setCloudError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setExportBusy(false); }
+  }
+
   async function syncThreads() {
     if (threadBusy || typeof bridge.syncProjectThreads !== "function") return;
     setThreadBusy(true); setCloudError(""); setCloudNotice("");
@@ -214,6 +233,7 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
               <div className="settings-row-control">
                 <button className="secondary-button" disabled={cloudBusy} onClick={() => void sync()}><RefreshCw size={13} />{t("Sync members")}</button>
                 <button className="secondary-button" disabled={threadBusy} onClick={() => void syncThreads()}><RefreshCw size={13} />{t("Sync threads")}</button>
+                <button className="secondary-button" disabled={exportBusy} onClick={() => void exportProject()}><Download size={13} />{exportBusy ? t("Exporting…") : t("Export")}</button>
               </div>
             </div>
             <div className="settings-row project-member-add">

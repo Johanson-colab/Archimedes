@@ -44,6 +44,8 @@ user's JWT; RLS stays enabled and no service-role key is needed.
 - `POST /v1/projects/{projectId}/share-links`
 - `DELETE /v1/share-links/{shareId}`
 - `GET /v1/public/shares/{token}` (anonymous)
+- `GET /v1/projects/{projectId}/export` (admin/owner)
+- `GET /v1/projects/{projectId}/audit` (admin/owner)
 - `GET /v1/projects/{projectId}/documents/{key}`
 - `POST /v1/projects/{projectId}/documents/{key}` (Yjs update)
 - `GET /v1/projects/{projectId}/runs`
@@ -122,6 +124,13 @@ Creation requires editor+ and verifies the resource belongs to the project.
 `GET /v1/public/shares/{token}` is the only anonymous route and returns the
 read-only thread snapshot (thread, turns, events, comments) for a valid,
 unrevoked, unexpired token. The thread share dialog exposes copy/create.
+
+## Governance and export
+
+Project admins/owners can download a JSON bundle of project metadata, members,
+libraries, canonical papers, threads, turns, events, comments, annotations,
+snapshots, runs, prompts, and audit events. Audit events are admin/owner-only.
+The Members panel exposes **Export**. No token hashes are included.
 
 ## CRDT shared notes
 

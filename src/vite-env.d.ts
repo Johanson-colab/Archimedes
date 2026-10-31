@@ -24,6 +24,8 @@ interface ResearchDeskBridge {
     syncProjectLibraries: (projectId: string) => Promise<CloudLibrarySyncResult>;
     syncProjectAnnotations: (projectId: string) => Promise<CloudAnnotationSyncResult>;
     syncProjectThreads: (projectId: string) => Promise<CloudThreadSyncResult>;
+    exportProject: (projectId: string) => Promise<Record<string, unknown>>;
+    listRemoteAudit: (projectId: string) => Promise<Array<Record<string, unknown>>>;
     getSharedDocument: (projectId: string, key: string) => Promise<SharedDocument | null>;
     applySharedDocumentUpdate: (projectId: string, key: string, update: string) => Promise<SharedDocument>;
     listAgentRuns: (projectId: string) => Promise<SharedAgentRun[]>;
