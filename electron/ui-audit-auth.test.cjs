@@ -56,7 +56,7 @@ test("the account chip, auth modal, and composer gate keep local work available"
   assert.match(chip, /Cloud agents & sync/);
   assert.match(chip, /Sign out/);
   assert.match(chip, /account-menu/);
-  assert.match(modal, /Your research stays local by default/);
+  assert.match(modal, /Local projects, papers, and agent runs always work/);
   assert.match(modal, /Continue without an account/);
   assert.match(modal, /Continue with Google/);
   assert.match(modal, /Email me a sign-in link/);

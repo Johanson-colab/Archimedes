@@ -46,6 +46,25 @@ but magic links, OAuth callbacks, and password-reset links cannot return to the
 desktop app. The UI hides magic link/reset unless `ARCHIMEDES_AUTH_MAGIC_LINK=1`;
 Google is hidden unless Supabase reports it enabled.
 
+## Email rate limits
+
+Supabase enforces email sending limits at the project/auth-provider level, not
+inside Archimedes. If one registration trips the limit, the project is using
+the low default built-in email service or a very low `Email sent` rate limit.
+
+Recommended fixes in the Supabase dashboard:
+
+1. Authentication → Rate Limits: raise email sending/signup limits for the
+   beta cohort.
+2. Authentication → SMTP: connect a real provider (Resend, SendGrid, Postmark,
+   etc.) instead of the shared built-in mailer.
+3. For a private beta only, `mailer_autoconfirm` can be enabled so signup does
+   not need a confirmation email. Do not keep this on for public signup.
+
+The desktop UI coalesces email actions and shows a countdown after a rate-limit
+error; it cannot bypass the server-side limit. Password sign-in does not consume
+the email-send quota.
+
 ## Upload boundary
 
 Cloud runs upload the prompt, explicitly attached files, and selected context.

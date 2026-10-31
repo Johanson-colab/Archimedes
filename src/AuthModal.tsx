@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, CheckCircle2, Globe2, KeyRound, Laptop, LoaderCircle, LockKeyhole, Mail, ShieldCheck, UserRound, X } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
 
 type AuthModalProps = {
@@ -18,6 +17,13 @@ type AuthModalProps = {
 
 type Mode = "choice" | "password" | "signup" | "reset" | "recovery";
 
+function readableAuthError(message: string) {
+  if (/rate limit|too many|after \d+ seconds/i.test(message)) {
+    return "Email sending is rate-limited right now. Wait a few minutes, or sign in with your password.";
+  }
+  return message;
+}
+
 export default function AuthModal({ open, authState, initialMode = "choice", onClose, onSignIn, onSignUp, onMagicLink, onOAuth, onResetPassword, onUpdatePassword, onOpenExternal }: AuthModalProps) {
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -28,6 +34,8 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [emailCooldownUntil, setEmailCooldownUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     if (!open) return;
@@ -39,8 +47,15 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
     setDisplayName("");
   }, [initialMode, open]);
 
+  useEffect(() => {
+    if (!open || emailCooldownUntil <= Date.now()) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [emailCooldownUntil, open]);
+
   if (!open) return null;
   const providers = authState?.providers || { email: true, google: false, magicLink: false };
+  const emailCooldown = Math.max(0, Math.ceil((emailCooldownUntil - now) / 1000));
   const changingPassword = Boolean(authState?.user) && mode === "password";
 
   async function run(action: () => Promise<AuthState | void>, success = "") {
@@ -52,7 +67,13 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
       await action();
       if (success) setNotice(success);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const message = cause instanceof Error ? cause.message : String(cause);
+      const seconds = Number(message.match(/(?:after|in)\s+(\d+)\s+seconds?/i)?.[1] || 60);
+      if (/rate limit|too many|after \d+ seconds/i.test(message)) {
+        setEmailCooldownUntil(Date.now() + Math.max(30, seconds) * 1000);
+        setNow(Date.now());
+      }
+      setError(readableAuthError(message));
     } finally {
       setBusy(false);
     }
@@ -61,7 +82,7 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
   function magic() {
     if (!email.trim()) { setError("Enter your email address first."); return; }
     void run(async () => {
-      setNotice("Waiting for the email link. Finish signing in in your browser.");
+      setNotice("Check your email. Finish signing in in the browser.");
       await onMagicLink(email.trim());
       onClose();
     });
@@ -78,7 +99,7 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
     void run(async () => {
       const next = await onSignUp(email.trim(), password, displayName.trim());
       if (next.needsConfirmation) {
-        setNotice("Check your email to confirm the account, then sign in here. Your local data is unaffected.");
+        setNotice("Check your email to confirm the account, then sign in here.");
         setMode("choice");
       } else {
         onClose();
@@ -89,7 +110,7 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
   function reset() {
     if (!email.trim()) { setError("Enter the email for your account."); return; }
     void run(async () => {
-      setNotice("Check your email for the reset link. This window will continue when you return.");
+      setNotice("Check your email for the reset link.");
       const next = await onResetPassword(email.trim());
       if (next.recovery) setMode("recovery");
     });
@@ -98,75 +119,77 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
   function savePassword() {
     if (password.length < 8) { setError("Use at least 8 characters."); return; }
     if (password !== confirmPassword) { setError("The passwords do not match."); return; }
-    void run(async () => { await onUpdatePassword(password); onClose(); }, "Password updated.");
+    void run(async () => { await onUpdatePassword(password); onClose(); });
   }
+
+  const title = mode === "recovery" || changingPassword
+    ? "Choose a new password"
+    : mode === "signup"
+      ? "Create account"
+      : mode === "reset"
+        ? "Reset password"
+        : "Sign in";
 
   return <div className="modal-backdrop auth-backdrop" role="presentation" onMouseDown={onClose}>
     <section ref={dialogRef} tabIndex={-1} className="auth-modal" role="dialog" aria-modal="true" aria-label="Sign in to Archimedes" onMouseDown={(event) => event.stopPropagation()}>
       <header className="auth-header">
-        <div>
-          <span className="eyebrow">Archimedes account</span>
-          <h2>{mode === "recovery" || changingPassword ? "Choose a new password" : mode === "signup" ? "Create your account" : "Sign in to collaborate"}</h2>
-        </div>
-        <button className="settings-close" onClick={onClose} aria-label="Close sign-in"><X size={16} /></button>
+        <h2>{title}</h2>
+        <button className="auth-close" onClick={onClose} aria-label="Close sign-in">×</button>
       </header>
 
-      {mode !== "recovery" && <div className="auth-local-first">
-        <span className="auth-local-icon"><Laptop size={17} /></span>
-        <div><strong>Your research stays local by default.</strong><p>Projects, papers, and local agent runs work without an account. Cloud runs upload only the prompt, explicit attachments, and selected context. Sync is opt-in per project.</p></div>
-      </div>}
+      {mode !== "recovery" && !changingPassword && <p className="auth-intro">Local projects, papers, and agent runs always work without an account. Cloud runs upload only the prompt, explicit attachments, and selected context.</p>}
 
       <div className="auth-body">
         {error && <div className="auth-error">{error}</div>}
-        {notice && <div className="auth-notice"><CheckCircle2 size={14} /><span>{notice}</span></div>}
+        {notice && <div className="auth-notice">{notice}</div>}
 
         {(mode === "choice" || mode === "password") && !changingPassword && <>
-          {providers.google && <button className="auth-provider" disabled={busy} onClick={() => void run(async () => { await onOAuth("google"); onClose(); })}><Globe2 size={16} /><span>Continue with Google</span><ArrowRight size={14} /></button>}
-          <label className="auth-field"><span>Email</span><div><Mail size={14} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" autoComplete="email" autoFocus onKeyDown={(event) => { if (event.key === "Enter") passwordSignIn(); }} /></div></label>
-          <label className="auth-field"><span>Password</span><div><LockKeyhole size={14} /><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" autoComplete="current-password" onKeyDown={(event) => { if (event.key === "Enter") passwordSignIn(); }} /></div></label>
-          <button className="primary-button auth-primary" disabled={busy || !providers.email} onClick={passwordSignIn}>{busy ? <LoaderCircle className="spin" size={14} /> : <KeyRound size={14} />}{busy ? "Signing in…" : "Sign in"}</button>
-          {providers.magicLink && <button className="secondary-button auth-primary" disabled={busy || !email.trim() || !providers.email} onClick={magic}><Mail size={14} />{busy ? "Waiting for browser…" : "Email me a sign-in link"}</button>}
+          {providers.google && <button className="secondary-button auth-submit" disabled={busy} onClick={() => void run(async () => { await onOAuth("google"); onClose(); })}>Continue with Google</button>}
+          <label className="auth-field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" autoComplete="email" autoFocus onKeyDown={(event) => { if (event.key === "Enter") passwordSignIn(); }} /></label>
+          <label className="auth-field"><span>Password</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" autoComplete="current-password" onKeyDown={(event) => { if (event.key === "Enter") passwordSignIn(); }} /></label>
+          <button className="primary-button auth-submit" disabled={busy || !providers.email} onClick={passwordSignIn}>{busy ? "Signing in…" : "Sign in"}</button>
+          {providers.magicLink && <button className="secondary-button auth-submit" disabled={busy || !email.trim() || !providers.email || emailCooldown > 0} onClick={magic}>{emailCooldown > 0 ? `Try again in ${emailCooldown}s` : busy ? "Waiting for browser…" : "Email me a sign-in link"}</button>}
           <div className="auth-links">
             {providers.magicLink && <button onClick={() => setMode("reset")}>Forgot password?</button>}
-            <button onClick={() => setMode("signup")}><UserRound size={12} />Create account</button>
+            <button onClick={() => setMode("signup")}>Create account</button>
           </div>
           {!providers.email && <p className="auth-hint">Email sign-in is disabled for this project.</p>}
         </>}
 
         {changingPassword && <>
-          <p className="auth-hint">You are signed in as {authState?.user?.email}. Your local data is unaffected.</p>
-          <label className="auth-field"><span>New password</span><div><LockKeyhole size={14} /><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" autoFocus /></div></label>
-          <label className="auth-field"><span>Confirm password</span><div><LockKeyhole size={14} /><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" autoComplete="new-password" onKeyDown={(event) => { if (event.key === "Enter") savePassword(); }} /></div></label>
-          <button className="primary-button auth-primary" disabled={busy} onClick={savePassword}>{busy ? <LoaderCircle className="spin" size={14} /> : <KeyRound size={14} />}{busy ? "Saving…" : "Update password"}</button>
+          <p className="auth-hint">Signed in as {authState?.user?.email}.</p>
+          <label className="auth-field"><span>New password</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" autoFocus /></label>
+          <label className="auth-field"><span>Confirm password</span><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" autoComplete="new-password" onKeyDown={(event) => { if (event.key === "Enter") savePassword(); }} /></label>
+          <button className="primary-button auth-submit" disabled={busy} onClick={savePassword}>{busy ? "Saving…" : "Update password"}</button>
         </>}
 
         {mode === "signup" && <>
-          <label className="auth-field"><span>Display name</span><div><UserRound size={14} /><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Ada Lovelace" autoComplete="name" autoFocus /></div></label>
-          <label className="auth-field"><span>Email</span><div><Mail size={14} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" autoComplete="email" /></div></label>
-          <label className="auth-field"><span>Password</span><div><LockKeyhole size={14} /><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" /></div></label>
-          <label className="auth-field"><span>Confirm password</span><div><LockKeyhole size={14} /><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" autoComplete="new-password" onKeyDown={(event) => { if (event.key === "Enter") createAccount(); }} /></div></label>
-          <button className="primary-button auth-primary" disabled={busy} onClick={createAccount}>{busy ? <LoaderCircle className="spin" size={14} /> : <UserRound size={14} />}{busy ? "Creating account…" : "Create account"}</button>
+          <label className="auth-field"><span>Display name</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Ada Lovelace" autoComplete="name" autoFocus /></label>
+          <label className="auth-field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" autoComplete="email" /></label>
+          <label className="auth-field"><span>Password</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" /></label>
+          <label className="auth-field"><span>Confirm password</span><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" autoComplete="new-password" onKeyDown={(event) => { if (event.key === "Enter") createAccount(); }} /></label>
+          <button className="primary-button auth-submit" disabled={busy || emailCooldown > 0} onClick={createAccount}>{emailCooldown > 0 ? `Try again in ${emailCooldown}s` : busy ? "Creating account…" : "Create account"}</button>
           <div className="auth-links"><button onClick={() => setMode("choice")}>Back to sign in</button></div>
         </>}
 
         {mode === "reset" && <>
-          <p className="auth-hint">We will email a secure reset link. Your local data is not affected.</p>
-          <label className="auth-field"><span>Email</span><div><Mail size={14} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" autoComplete="email" autoFocus /></div></label>
-          <button className="primary-button auth-primary" disabled={busy || !email.trim()} onClick={reset}>{busy ? <LoaderCircle className="spin" size={14} /> : <Mail size={14} />}{busy ? "Waiting for browser…" : "Send reset link"}</button>
-          <div className="auth-links"><button onClick={() => setMode("password")}>Back to password sign-in</button></div>
+          <p className="auth-hint">We will email a secure reset link.</p>
+          <label className="auth-field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" autoComplete="email" autoFocus /></label>
+          <button className="primary-button auth-submit" disabled={busy || !email.trim() || emailCooldown > 0} onClick={reset}>{emailCooldown > 0 ? `Try again in ${emailCooldown}s` : busy ? "Waiting for browser…" : "Send reset link"}</button>
+          <div className="auth-links"><button onClick={() => setMode("choice")}>Back to sign in</button></div>
         </>}
 
         {mode === "recovery" && <>
-          <p className="auth-hint">The reset link is verified. Choose a new password for your account.</p>
-          <label className="auth-field"><span>New password</span><div><LockKeyhole size={14} /><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" autoFocus /></div></label>
-          <label className="auth-field"><span>Confirm password</span><div><LockKeyhole size={14} /><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" autoComplete="new-password" onKeyDown={(event) => { if (event.key === "Enter") savePassword(); }} /></div></label>
-          <button className="primary-button auth-primary" disabled={busy} onClick={savePassword}>{busy ? <LoaderCircle className="spin" size={14} /> : <KeyRound size={14} />}{busy ? "Saving…" : "Save new password"}</button>
+          <p className="auth-hint">The reset link is verified. Choose a new password.</p>
+          <label className="auth-field"><span>New password</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" autoFocus /></label>
+          <label className="auth-field"><span>Confirm password</span><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" autoComplete="new-password" onKeyDown={(event) => { if (event.key === "Enter") savePassword(); }} /></label>
+          <button className="primary-button auth-submit" disabled={busy} onClick={savePassword}>{busy ? "Saving…" : "Save new password"}</button>
         </>}
       </div>
 
       <footer className="auth-footer">
         <button className="auth-skip" onClick={onClose}>Continue without an account</button>
-        <span><ShieldCheck size={11} />By continuing you agree to the <button onClick={() => onOpenExternal("https://github.com/Johanson-colab/Archimedes/blob/main/docs/legal/terms.md")}>Terms</button> and <button onClick={() => onOpenExternal("https://github.com/Johanson-colab/Archimedes/blob/main/docs/legal/privacy.md")}>Privacy Policy</button>.</span>
+        <span>By continuing you agree to the <button onClick={() => onOpenExternal("https://github.com/Johanson-colab/Archimedes/blob/main/docs/legal/terms.md")}>Terms</button> and <button onClick={() => onOpenExternal("https://github.com/Johanson-colab/Archimedes/blob/main/docs/legal/privacy.md")}>Privacy Policy</button>.</span>
       </footer>
     </section>
   </div>;

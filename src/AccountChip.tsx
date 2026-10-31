@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronUp, Cloud, Laptop, LogIn, LogOut, Settings, ShieldCheck, UserRound } from "lucide-react";
+import { ChevronUp, Cloud, Laptop, LogIn, LogOut, Settings, ShieldCheck } from "lucide-react";
 import { useUISettings } from "./i18n";
 
 type AccountChipProps = {
@@ -35,7 +35,7 @@ export default function AccountChip({ authState, identity, onOpenAuth, onOpenAcc
   return <div className="account-chip-wrap" ref={rootRef}>
     {open && <div className="account-menu" role="menu" aria-label={t("Account menu")}>
       <div className="account-menu-header">
-        <span className="account-avatar large">{user ? (user.displayName || user.email).slice(0, 1).toUpperCase() : <UserRound size={17} />}</span>
+        {user && <span className="account-avatar large">{(user.displayName || user.email).slice(0, 1).toUpperCase()}</span>}
         <div><strong>{user ? user.displayName || user.email : t("Not signed in")}</strong><small>{user ? user.email : t("Local mode")}</small></div>
         <span className="account-plan">{user ? t("Free plan") : t("Local")}</span>
       </div>
@@ -51,10 +51,10 @@ export default function AccountChip({ authState, identity, onOpenAuth, onOpenAcc
         <button className="account-menu-primary" role="menuitem" onClick={() => { setOpen(false); onOpenAuth(); }}><LogIn size={14} />{t("Sign in or create account")}</button>
       </>}
     </div>}
-    <button className={user ? "account-chip signed-in" : "account-chip"} onClick={() => setOpen((current) => !current)} aria-haspopup="menu" aria-expanded={open} title={t("Account")}>
-      <span className="account-avatar">{user ? (user.displayName || user.email).slice(0, 1).toUpperCase() : <UserRound size={16} />}</span>
+    <button className={user ? "account-chip signed-in" : "account-chip guest"} onClick={() => setOpen((current) => !current)} aria-haspopup="menu" aria-expanded={open} title={t("Account")}>
+      {user && <span className="account-avatar">{(user.displayName || user.email).slice(0, 1).toUpperCase()}</span>}
       <span className="account-chip-copy"><strong>{user ? user.displayName || user.email : t("Sign in")}</strong><small>{user ? `${t("Cloud")} · ${t("Free plan")}` : t("Cloud agents & sync")}</small></span>
-      <ChevronUp size={13} className={open ? "account-chevron open" : "account-chevron"} />
+      {user && <ChevronUp size={13} className={open ? "account-chevron open" : "account-chevron"} />}
     </button>
   </div>;
 }
