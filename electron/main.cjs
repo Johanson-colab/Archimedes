@@ -26,6 +26,7 @@ const { createCollaborationApi } = require("./collaboration-api.cjs");
 const { createLibrarySync } = require("./library-sync.cjs");
 const { createAnnotationSync } = require("./annotation-sync.cjs");
 const { createThreadSync } = require("./thread-sync.cjs");
+const { createPresence } = require("./presence.cjs");
 const { createSupabaseServer } = require("../server/supabase-server.cjs");
 const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
@@ -273,6 +274,7 @@ function createWindow(workspace) {
   browserWindow.on("closed", () => {
     closeWindowTerminals(senderId);
     stopWorkspaceWatcher(senderId);
+    void presence?.leave(String(senderId));
     const token = windowPreviewTokens.get(senderId);
     if (token) previewTokenWorkspaces.delete(token);
     windowPreviewTokens.delete(senderId);
@@ -559,6 +561,7 @@ let supabaseAuth = null;
 let authReady = Promise.resolve();
 let collaborationApi = null;
 let collaborationServer = null;
+let presence = null;
 
 app.whenReady().then(async () => {
   loadLocalAgentEnvironment();
@@ -581,6 +584,12 @@ app.whenReady().then(async () => {
     configured: Boolean(supabaseConfig.url && supabaseConfig.publishableKey),
   });
   authReady = supabaseAuth.initialize();
+  presence = createPresence({
+    createClient,
+    supabaseUrl: supabaseConfig.url,
+    publishableKey: supabaseConfig.publishableKey,
+    getToken: () => supabaseAuth.accessToken(),
+  });
   try {
     collaborationServer = createSupabaseServer({ supabaseUrl: supabaseConfig.url, publishableKey: supabaseConfig.publishableKey });
     const address = await collaborationServer.listen(0, "127.0.0.1");
@@ -1598,6 +1607,29 @@ app.whenReady().then(async () => {
     await authReady;
     return supabaseAuth.accessToken();
   });
+  ipcMain.handle("presence:join", async (event, { projectId, threadId = null } = {}) => {
+    await authReady;
+    const user = supabaseAuth.state().user;
+    if (!user) throw new Error("Sign in to see live collaborators.");
+    if (!presence) throw new Error("Presence is not available.");
+    await presence.join(String(event.sender.id), projectId, {
+      userId: user.id,
+      displayName: user.displayName || user.email,
+      email: user.email,
+      threadId,
+    }, (members) => {
+      if (!event.sender.isDestroyed()) event.sender.send("presence:update", members);
+    });
+    return { joined: true };
+  });
+  ipcMain.handle("presence:update", async (event, { threadId = null } = {}) => {
+    await presence?.update(String(event.sender.id), { thread_id: threadId });
+    return { updated: true };
+  });
+  ipcMain.handle("presence:leave", async (event) => {
+    await presence?.leave(String(event.sender.id));
+    return { left: true };
+  });
   ipcMain.handle("identity:get", () => localIdentity.localIdentity());
   ipcMain.handle("identity:update", (_event, patch = {}) => {
     const identity = localIdentity.updateLocalIdentity({ displayName: patch.displayName });
@@ -1714,4 +1746,5 @@ app.on("activate", () => {
 app.on("before-quit", () => {
   closeAllTerminals();
   collaborationServer?.close?.();
+  void presence?.closeAll();
 });

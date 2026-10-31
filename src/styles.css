@@ -1122,6 +1122,10 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 }
 
 .main-toolbar-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 3px; }
+.presence-stack { display: flex; align-items: center; margin-right: 5px; padding-left: 8px; }
+.presence-avatar { display: grid; width: 22px; height: 22px; margin-left: -6px; place-items: center; color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-panel); border-radius: 50%; font-size: 8px; font-weight: 700; }
+.presence-avatar:first-child { margin-left: 0; }
+.presence-avatar.more { color: var(--night-muted); font-size: 7.5px; }
 .conversation-title { min-width: 0; }
 .conversation-title strong, .conversation-title span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-title strong { max-width: min(62vw, 660px); color: #33332f; font-size: 12px; font-weight: 680; }

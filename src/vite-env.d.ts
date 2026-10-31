@@ -10,6 +10,10 @@ interface ResearchDeskBridge {
     signOut: () => Promise<AuthState>;
     getAuthAccessToken: () => Promise<string | null>;
     getCollaborationStatus: () => Promise<CollaborationStatus>;
+    joinProjectPresence: (projectId: string, threadId?: string | null) => Promise<{ joined: boolean }>;
+    updateProjectPresence: (threadId?: string | null) => Promise<{ updated: boolean }>;
+    leaveProjectPresence: () => Promise<{ left: boolean }>;
+    onPresenceUpdate: (callback: (members: PresenceMember[]) => void) => () => void;
     listCloudProjects: () => Promise<CloudProject[]>;
     publishProject: (projectId: string) => Promise<CloudProjectSyncResult>;
     syncCloudProject: (projectId: string) => Promise<CloudProjectSyncResult>;
@@ -837,6 +841,15 @@ interface CollaborationStatus {
   user: { id: string; email: string; displayName: string } | null;
   baseUrl?: string;
   error?: string;
+}
+
+interface PresenceMember {
+  key: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  threadId: string | null;
+  onlineAt: string;
 }
 
 interface CloudProject {

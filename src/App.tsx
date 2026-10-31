@@ -573,6 +573,10 @@ const previewBridge = {
     return { removed: index >= 0 };
   },
   getCollaborationStatus: async () => ({ signedIn: false, user: null, error: "Cloud collaboration is available in the desktop app." }),
+  joinProjectPresence: async () => ({ joined: false }),
+  updateProjectPresence: async () => ({ updated: false }),
+  leaveProjectPresence: async () => ({ left: true }),
+  onPresenceUpdate: () => () => {},
   listCloudProjects: async () => [],
   publishProject: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
   syncCloudProject: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
@@ -1008,6 +1012,7 @@ function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const [localIdentity, setLocalIdentity] = useState<LocalIdentity | null>(null);
   const [authState, setAuthState] = useState<AuthState | null>(null);
+  const [presenceMembers, setPresenceMembers] = useState<PresenceMember[]>([]);
   const theme = resolveTheme(appearance.preset, systemAppearance);
   const themePreference = appearance.preset;
   const setThemePreference = (preset: ThemePreset) => setAppearance((current) => ({ ...current, preset }));
@@ -1125,6 +1130,21 @@ function App() {
     if (activeThread?.visibility === "private" || activeThread?.visibility === "project") setThreadVisibility(activeThread.visibility);
     if (!activeThreadId) setCommentsOpen(false);
   }, [activeThread?.visibility, activeThreadId]);
+  useEffect(() => {
+    if (!activeProjectId || !authState?.user || typeof desktopBridge?.joinProjectPresence !== "function") {
+      setPresenceMembers([]);
+      return;
+    }
+    const dispose = desktopBridge.onPresenceUpdate?.(setPresenceMembers);
+    void desktopBridge.joinProjectPresence(activeProjectId, activeThreadId).catch(() => setPresenceMembers([]));
+    return () => {
+      dispose?.();
+      void desktopBridge.leaveProjectPresence?.();
+    };
+  }, [activeProjectId, authState?.user?.id]);
+  useEffect(() => {
+    if (activeProjectId && authState?.user) void desktopBridge.updateProjectPresence?.(activeThreadId);
+  }, [activeProjectId, activeThreadId, authState?.user?.id]);
   // Research data lives in the primary workspace. Agent tools, files, terminal,
   // and paper writing operate inside the session folder: session snapshot →
   // project folder → primary workspace.
@@ -2559,6 +2579,10 @@ function App() {
           <div className="conversation-title"><strong>{mainTitle}</strong></div>
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
+            {presenceMembers.length > 0 && <div className="presence-stack" title={presenceMembers.map((member) => member.displayName).join(", ")} aria-label={`${presenceMembers.length} collaborators online`}>
+              {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
+              {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
+            </div>}
             {activeThreadId && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share thread snapshot")} aria-label={t("Share thread snapshot")}><Share2 size={15} /></button>}
             {activeThreadId && <button className="quiet-icon-button" onClick={() => setCommentsOpen(true)} title={t("Thread comments")} aria-label={t("Thread comments")}><MessageSquareText size={15} /></button>}
             <button
