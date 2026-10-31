@@ -183,6 +183,22 @@ function createCollaborationApi({ baseUrl, getToken, fetchImpl = globalThis.fetc
     async deleteComment(commentId) {
       return request(`/v1/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" });
     },
+    async createShareLink(projectId, { resourceType, resourceId, role = "viewer", expiresInDays = 7 } = {}) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/share-links`, {
+        method: "POST",
+        body: { resource_type: resourceType, resource_id: resourceId, role, expires_in_days: expiresInDays },
+      })).share;
+    },
+    async revokeShareLink(shareId) {
+      return request(`/v1/share-links/${encodeURIComponent(shareId)}`, { method: "DELETE" });
+    },
+    async redeemShareLink(shareToken) {
+      const response = await fetchImpl(`${baseUrl}/v1/public/shares/${encodeURIComponent(shareToken)}`);
+      let payload = null;
+      try { payload = await response.json(); } catch { /* empty */ }
+      if (!response.ok) throw new Error(payload?.error || "This share link is invalid or has expired.");
+      return payload.share;
+    },
   };
 }
 

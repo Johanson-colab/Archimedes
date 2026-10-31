@@ -107,6 +107,20 @@ test("collaboration API maps thread, turn, event, and comment routes", async () 
   assert.deepEqual(await api.updateComment("c1", { resolved_at: "now" }), { id: "c1" });
 });
 
+test("collaboration API creates, redeems, and revokes guest share links", async () => {
+  const fake = fakeApi((url, options) => {
+    if (url.endsWith("/share-links") && options.method === "POST") return { status: 201, body: { share: { id: "s1", token: "tok", url: "archimedes://share/tok" } } };
+    if (url.includes("/v1/public/shares/tok")) return { status: 200, body: { share: { id: "s1", thread: { title: "Shared" } } } };
+    if (url.endsWith("/share-links/s1") && options.method === "DELETE") return { status: 200, body: { revoked: true } };
+    return { status: 404, body: { error: "missing" } };
+  });
+  const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => "jwt", fetchImpl: fake.fetchImpl });
+  assert.equal((await api.createShareLink("p1", { resourceType: "thread", resourceId: "t1" })).id, "s1");
+  assert.equal((await api.redeemShareLink("tok")).thread.title, "Shared");
+  assert.deepEqual(await api.revokeShareLink("s1"), { revoked: true });
+  assert.equal(fake.calls.find((call) => call.url.includes("/v1/public/shares/tok")).options, undefined);
+});
+
 test("collaboration API requires sign-in and surfaces API errors", async () => {
   const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => null, fetchImpl: async () => { throw new Error("should not fetch"); } });
   await assert.rejects(() => api.listProjects(), /Sign in/i);

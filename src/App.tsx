@@ -587,6 +587,9 @@ const previewBridge = {
   syncProjectLibraries: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
   syncProjectAnnotations: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
   syncProjectThreads: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
+  createShareLink: async () => { throw new Error("Cloud sharing is available in the desktop app."); },
+  revokeShareLink: async () => ({ revoked: false }),
+  redeemShareLink: async () => { throw new Error("Guest links are available in the desktop app."); },
   listAuditEvents: async (projectId?: string | null) => structuredClone([...previewAuditEvents].reverse()),
   listComments: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; includeResolved?: boolean }) => structuredClone(previewComments.filter((comment) => comment.resource_type === input.resourceType && comment.resource_id === input.resourceId && (input.includeResolved !== false || !comment.resolved_at))),
   createComment: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => {
@@ -2872,6 +2875,9 @@ function App() {
       />}
       <ThreadShareModal
         snapshot={shareSnapshot}
+        bridge={desktopBridge}
+        projectId={activeThread?.project_id || activeProjectId || ""}
+        threadId={activeThreadId || ""}
         threadTitle={activeThread?.title ?? "Research thread"}
         privateThread={threadVisibility === "private"}
         onClose={() => setShareSnapshot(null)}

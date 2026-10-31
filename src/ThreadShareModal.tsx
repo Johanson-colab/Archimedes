@@ -1,18 +1,25 @@
-import { Check, Copy, Download, Share2, X } from "lucide-react";
+import { useState } from "react";
+import { Check, Copy, Download, Link2, LoaderCircle, Share2, X } from "lucide-react";
 import { useDialogFocus } from "./useDialogFocus";
 
 type ThreadShareSnapshot = Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>>;
 
 type ThreadShareModalProps = {
   snapshot: ThreadShareSnapshot | null;
+  bridge: ResearchDeskBridge;
+  projectId: string;
+  threadId: string;
   threadTitle: string;
   privateThread: boolean;
   onClose: () => void;
   onCopy: (text: string) => Promise<void>;
 };
 
-export default function ThreadShareModal({ snapshot, threadTitle, privateThread, onClose, onCopy }: ThreadShareModalProps) {
+export default function ThreadShareModal({ snapshot, bridge, projectId, threadId, threadTitle, privateThread, onClose, onCopy }: ThreadShareModalProps) {
   const dialogRef = useDialogFocus<HTMLElement>(Boolean(snapshot), onClose);
+  const [shareLink, setShareLink] = useState<CloudShareLink | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkError, setLinkError] = useState("");
   if (!snapshot) return null;
   const manifest = snapshot.manifest as { turns?: unknown[]; events?: unknown[]; references?: unknown[]; sequence?: number };
   const turns = Array.isArray(manifest.turns) ? manifest.turns.length : 0;
@@ -34,6 +41,19 @@ export default function ThreadShareModal({ snapshot, threadTitle, privateThread,
     await onCopy(JSON.stringify(snapshot.manifest, null, 2));
   }
 
+  async function createGuestLink() {
+    if (linkBusy || typeof bridge.createShareLink !== "function") return;
+    setLinkBusy(true);
+    setLinkError("");
+    try {
+      setShareLink(await bridge.createShareLink({ projectId, resourceType: "thread", resourceId: threadId, role: "viewer", expiresInDays: 7 }));
+    } catch (cause) {
+      setLinkError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setLinkBusy(false);
+    }
+  }
+
   return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
     <section ref={dialogRef} tabIndex={-1} className="thread-share-modal" role="dialog" aria-modal="true" aria-label="Share thread snapshot" onMouseDown={(event) => event.stopPropagation()}>
       <header className="thread-share-header">
@@ -47,8 +67,16 @@ export default function ThreadShareModal({ snapshot, threadTitle, privateThread,
           <div><span>Sources</span><strong>{references}</strong></div>
           <div><span>Visibility</span><strong>{privateThread ? "Private draft" : "Project"}</strong></div>
         </div>
-        <p className="thread-share-note"><Share2 size={13} /><span>The snapshot freezes the thread at sequence <b>{snapshot.sequence}</b>. Cloud share links and guest access arrive with the collaboration service; this JSON is local-only.</span></p>
+        <p className="thread-share-note"><Share2 size={13} /><span>The snapshot freezes the thread at sequence <b>{snapshot.sequence}</b>. Cloud share links and guest access arrive with the collaboration service; create a read-only guest link below.</span></p>
         {privateThread && <p className="thread-share-warning">This is a private draft. Creating a snapshot does not change its visibility.</p>}
+        <div className="thread-share-link">
+          {shareLink ? <>
+            <code>{shareLink.url}</code>
+            <button className="secondary-button" onClick={() => void onCopy(shareLink.url)}><Copy size={13} />Copy link</button>
+            <small>Expires {new Date(shareLink.expires_at).toLocaleString()} · {shareLink.role}</small>
+          </> : <button className="secondary-button" disabled={linkBusy} onClick={() => void createGuestLink()}>{linkBusy ? <LoaderCircle className="spin" size={13} /> : <Link2 size={13} />}{linkBusy ? "Creating…" : "Create read-only guest link"}</button>}
+          {linkError && <p className="settings-group-note warning">{linkError}</p>}
+        </div>
       </div>
       <footer className="thread-share-footer">
         <button className="secondary-button" onClick={() => void copy()}><Copy size={13} />Copy JSON</button>

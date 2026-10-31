@@ -1300,6 +1300,11 @@ app.whenReady().then(async () => {
       localUserId: localIdentity.localIdentity().userId,
     });
   });
+  ipcMain.handle("collab:create-share-link", async (_event, { projectId, resourceType = "thread", resourceId, role = "viewer", expiresInDays = 7 } = {}) => {
+    return requireCollaboration().createShareLink(projectId, { resourceType, resourceId, role, expiresInDays });
+  });
+  ipcMain.handle("collab:revoke-share-link", async (_event, { shareId } = {}) => requireCollaboration().revokeShareLink(shareId));
+  ipcMain.handle("collab:redeem-share-link", async (_event, { token } = {}) => requireCollaboration().redeemShareLink(token));
   ipcMain.handle("collab:publish-project", async (_event, { projectId } = {}) => {
     const api = requireCollaboration();
     let project = store.getResearchProject(projectId);

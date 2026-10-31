@@ -1,5 +1,5 @@
 const http = require("node:http");
-const { randomUUID } = require("node:crypto");
+const { createHash, randomBytes, randomUUID } = require("node:crypto");
 const { createClient } = require("@supabase/supabase-js");
 
 function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
@@ -139,6 +139,20 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
       const url = new URL(req.url || "/", "http://localhost");
       const method = req.method || "GET";
       if (method === "GET" && url.pathname === "/health") return send(res, 200, { ok: true, service: "archimedes-supabase-api", version: 1 });
+
+      const publicShareMatch = url.pathname.match(/^\/v1\/public\/shares\/([^/]+)$/);
+      if (publicShareMatch && method === "GET") {
+        const shareToken = decodeURIComponent(publicShareMatch[1]);
+        if (!shareToken || shareToken.length > 500) throw Object.assign(new Error("Share link not found."), { status: 404 });
+        const hash = createHash("sha256").update(shareToken).digest("hex");
+        const anonymous = createClient(supabaseUrl, publishableKey, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        });
+        const { data, error } = await anonymous.rpc("redeem_share_link", { p_token_hash: hash });
+        if (error) throw apiError(error);
+        if (!data) throw Object.assign(new Error("This share link is invalid or has expired."), { status: 404 });
+        return send(res, 200, { share: data });
+      }
 
       const token = tokenFrom(req);
       if (!token) throw Object.assign(new Error("Authentication required."), { status: 401 });
@@ -385,6 +399,45 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
           if (result.error) throw apiError(result.error);
           return send(res, 200, { [kind]: result.data });
         }
+      }
+
+      const projectShareLinksMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/share-links$/);
+      if (projectShareLinksMatch && method === "POST") {
+        const projectId = projectShareLinksMatch[1];
+        const body = await readBody(req);
+        const resourceType = String(body.resource_type || "");
+        if (!body.resource_id || !["thread", "paper", "review"].includes(resourceType)) {
+          throw Object.assign(new Error("A supported resource and resource id are required."), { status: 400 });
+        }
+        const days = Math.min(365, Math.max(1, Number(body.expires_in_days) || 7));
+        const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+        const shareToken = randomBytes(24).toString("base64url");
+        const hash = createHash("sha256").update(shareToken).digest("hex");
+        const { data: shareId, error } = await supabase.rpc("create_share_link", {
+          p_project: projectId,
+          p_resource_type: resourceType,
+          p_resource_id: body.resource_id,
+          p_role: body.role === "commenter" ? "commenter" : "viewer",
+          p_token_hash: hash,
+          p_expires_at: expiresAt,
+        });
+        if (error) throw apiError(error);
+        return send(res, 201, {
+          share: {
+            id: shareId,
+            token: shareToken,
+            url: `archimedes://share/${shareToken}`,
+            role: body.role === "commenter" ? "commenter" : "viewer",
+            expires_at: expiresAt,
+          },
+        });
+      }
+
+      const shareLinkMatch = url.pathname.match(/^\/v1\/share-links\/([^/]+)$/);
+      if (shareLinkMatch && method === "DELETE") {
+        const { error } = await supabase.rpc("revoke_share_link", { p_id: shareLinkMatch[1] });
+        if (error) throw apiError(error);
+        return send(res, 200, { revoked: true });
       }
 
       const projectThreadsMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/threads$/);

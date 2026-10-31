@@ -14,6 +14,8 @@ const settings = read("src/SettingsModal.tsx");
 const api = read("electron/collaboration-api.cjs");
 const server = read("server/supabase-server.cjs");
 const sql = read("server/sql/0004_member_management.sql");
+const share = read("src/ThreadShareModal.tsx");
+const shareSql = read("server/sql/0009_share_link_scope.sql");
 const css = read("src/styles.css");
 
 test("desktop hosts the collaboration API and exposes cloud share actions", () => {
@@ -44,6 +46,16 @@ test("member panel exposes cloud sharing, invites, import, and local fallback", 
   assert.match(settings, /onProjectsChanged/);
   assert.match(app, /refreshWorkspaceProjects/);
   assert.match(css, /project-cloud-list/);
+});
+
+test("thread sharing creates a scoped read-only guest link", () => {
+  assert.match(main, /collab:create-share-link/);
+  assert.match(main, /collab:redeem-share-link/);
+  assert.match(share, /Create read-only guest link/);
+  assert.match(share, /createShareLink/);
+  assert.match(bridge, /interface CloudShareLink/);
+  assert.match(shareSql, /does not belong to this project/);
+  assert.match(shareSql, /p_resource_type = 'thread'/);
 });
 
 test("API and SQL expose member role updates and removal with role checks", () => {

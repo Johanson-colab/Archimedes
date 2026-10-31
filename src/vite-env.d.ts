@@ -24,6 +24,9 @@ interface ResearchDeskBridge {
     syncProjectLibraries: (projectId: string) => Promise<CloudLibrarySyncResult>;
     syncProjectAnnotations: (projectId: string) => Promise<CloudAnnotationSyncResult>;
     syncProjectThreads: (projectId: string) => Promise<CloudThreadSyncResult>;
+    createShareLink: (input: { projectId: string; resourceType?: "thread" | "paper" | "review"; resourceId: string; role?: "viewer" | "commenter"; expiresInDays?: number }) => Promise<CloudShareLink>;
+    revokeShareLink: (shareId: string) => Promise<{ revoked: boolean }>;
+    redeemShareLink: (token: string) => Promise<GuestShareSnapshot>;
     updateLocalIdentity: (patch: { displayName: string }) => Promise<LocalIdentity>;
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
@@ -884,6 +887,27 @@ interface CloudAnnotationSyncResult {
 interface CloudThreadSyncResult {
   project: ResearchProject;
   warnings?: string[];
+}
+
+interface CloudShareLink {
+  id: string;
+  token: string;
+  url: string;
+  role: "viewer" | "commenter";
+  expires_at: string;
+}
+
+interface GuestShareSnapshot {
+  id: string;
+  project_id: string;
+  resource_type: string;
+  resource_id: string;
+  role: string;
+  expires_at: string;
+  thread?: Record<string, unknown>;
+  turns?: Array<Record<string, unknown>>;
+  events?: Array<Record<string, unknown>>;
+  comments?: Array<Record<string, unknown>>;
 }
 
 interface ResearchProject {
