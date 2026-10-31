@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-31",
+  "items": [
+    {
+      "id": "archimedes/paper-review",
+      "name": "Paper Review",
+      "type": "skill",
+      "description": "Reviewer-style manuscript critique focused on claims, evidence, and revision priorities.",
+      "version": "1.4.2",
+      "author": "Archimedes",
+      "license": "MIT",
+      "homepage": "https://github.com/Johanson-colab/Archimedes",
+      "permissions": ["read:workspace", "write:artifacts"],
+      "installs": 1284,
+      "updatedAt": "2026-10-18",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "content": "---\nname: Paper Review\ndescription: Reviewer-style manuscript critique focused on claims, evidence, and revision priorities.\n---\n\n# Paper Review\n\nRead the manuscript as a demanding but constructive reviewer. Separate what the paper claims from what the evidence actually supports.\n\n## Workflow\n\n1. Identify the central claim and the evidence offered for it.\n2. Flag unsupported transitions, missing baselines, and ambiguous definitions.\n3. Rank revisions by the amount of scientific confidence they add.\n4. Keep the report short enough to act on.\n\n## Output\n\nReturn a prioritized review with sections for summary, major concerns, minor concerns, and recommended next experiments.\n"
+        }
+      ]
+    },
+    {
+      "id": "archimedes/literature-scout",
+      "name": "Literature Scout",
+      "type": "skill",
+      "description": "Turn a research question into a traceable literature map with evidence gaps.",
+      "version": "2.1.0",
+      "author": "Archimedes",
+      "license": "MIT",
+      "homepage": "https://github.com/Johanson-colab/Archimedes",
+      "permissions": ["read:workspace", "network:search", "write:artifacts"],
+      "installs": 986,
+      "updatedAt": "2026-10-12",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "content": "---\nname: Literature Scout\ndescription: Turn a research question into a traceable literature map with evidence gaps.\n---\n\n# Literature Scout\n\nBuild a literature map that a researcher can audit rather than a list of vaguely relevant papers.\n\n## Workflow\n\n1. Restate the question as a testable search strategy.\n2. Group results by method, population, and claim.\n3. Record citations and retrieval dates for every included paper.\n4. Mark contradictions, replication status, and open gaps.\n\n## Output\n\nProduce a compact table plus a short synthesis. Do not cite a paper that was not actually read.\n"
+        }
+      ]
+    },
+    {
+      "id": "archimedes/figure-craft",
+      "name": "Figure Craft",
+      "type": "skill",
+      "description": "Critique and refine publication figures for legibility, honesty, and narrative fit.",
+      "version": "1.0.6",
+      "author": "Archimedes",
+      "license": "MIT",
+      "homepage": "https://github.com/Johanson-colab/Archimedes",
+      "permissions": ["read:workspace", "write:artifacts"],
+      "installs": 742,
+      "updatedAt": "2026-10-08",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "content": "---\nname: Figure Craft\ndescription: Critique and refine publication figures for legibility, honesty, and narrative fit.\n---\n\n# Figure Craft\n\nTreat each figure as an argument. Check whether the visual encoding makes the intended comparison obvious without exaggeration.\n\n## Review checklist\n\n- Axis ranges, units, and sample sizes are visible.\n- Color encodes one variable and remains readable in grayscale.\n- Error bars and uncertainty are defined.\n- The caption states what the reader should conclude.\n\n## Output\n\nList the highest-impact fixes first, then provide a revised caption and a concrete layout suggestion.\n"
+        }
+      ]
+    },
+    {
+      "id": "archimedes/replication-package",
+      "name": "Replication Package",
+      "type": "skill",
+      "description": "Assemble a runnable replication package with provenance and expected outputs.",
+      "version": "1.2.3",
+      "author": "Archimedes",
+      "license": "MIT",
+      "homepage": "https://github.com/Johanson-colab/Archimedes",
+      "permissions": ["read:workspace", "execute:commands", "write:workspace"],
+      "installs": 611,
+      "updatedAt": "2026-09-29",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "content": "---\nname: Replication Package\ndescription: Assemble a runnable replication package with provenance and expected outputs.\n---\n\n# Replication Package\n\nCreate a package that another researcher can run from a clean checkout.\n\n## Workflow\n\n1. Inventory data, code, environments, and generated outputs.\n2. Pin dependencies and document required system tools.\n3. Add a smoke test with a small fixture.\n4. Record expected checksums or summary statistics.\n\n## Output\n\nProduce a README, environment file, run script, and a short provenance table. Call out anything that cannot be redistributed.\n"
+        }
+      ]
+    },
+    {
+      "id": "archimedes/zotero-mcp",
+      "name": "Zotero",
+      "type": "mcp",
+      "description": "Search a local Zotero library and pull citation metadata into the conversation.",
+      "version": "0.9.4",
+      "author": "Zotero community",
+      "license": "AGPL-3.0",
+      "homepage": "https://www.zotero.org/",
+      "permissions": ["read:library", "local:network"],
+      "installs": 2306,
+      "updatedAt": "2026-10-21",
+      "config": {
+        "mcpServers": {
+          "zotero": {
+            "command": "npx",
+            "args": ["-y", "@zotero/mcp-server"]
+          }
+        }
+      }
+    },
+    {
+      "id": "archimedes/overleaf-source",
+      "name": "Overleaf",
+      "type": "source",
+      "description": "Keep a manuscript workspace synchronized with an Overleaf project.",
+      "version": "1.1.0",
+      "author": "Archimedes",
+      "license": "MIT",
+      "homepage": "https://www.overleaf.com/",
+      "permissions": ["read:workspace", "write:workspace", "network:overleaf"],
+      "installs": 438,
+      "updatedAt": "2026-10-02",
+      "config": {
+        "provider": "overleaf",
+        "sync": "manual"
+      }
+    },
+    {
+      "id": "archimedes/daily-digest",
+      "name": "Daily Digest",
+      "type": "automation",
+      "description": "Collect new papers in a saved search and prepare a short morning brief.",
+      "version": "0.8.2",
+      "author": "Archimedes",
+      "license": "MIT",
+      "homepage": "https://github.com/Johanson-colab/Archimedes",
+      "permissions": ["network:search", "write:artifacts"],
+      "installs": 355,
+      "updatedAt": "2026-09-24",
+      "config": {
+        "schedule": "weekdays 08:00",
+        "output": "workbench"
+      }
+    },
+    {
+      "id": "archimedes/git-hygiene",
+      "name": "Git Hygiene",
+      "type": "plugin",
+      "description": "Check diffs for accidental artifacts, secrets, and unreviewed generated files.",
+      "version": "1.3.0",
+      "author": "Archimedes",
+      "license": "MIT",
+      "homepage": "https://github.com/Johanson-colab/Archimedes",
+      "permissions": ["read:workspace", "execute:git"],
+      "installs": 276,
+      "updatedAt": "2026-10-19",
+      "config": {
+        "commands": ["git status --short", "git diff --check"]
+      }
+    },
+    {
+      "id": "archimedes/semantic-scholar-mcp",
+      "name": "Semantic Scholar",
+      "type": "mcp",
+      "description": "Resolve papers, citations, and related work through the Semantic Scholar API.",
+      "version": "1.0.1",
+      "author": "Semantic Scholar",
+      "license": "Apache-2.0",
+      "homepage": "https://www.semanticscholar.org/",
+      "permissions": ["network:api"],
+      "installs": 1902,
+      "updatedAt": "2026-10-15",
+      "config": {
+        "mcpServers": {
+          "semantic-scholar": {
+            "command": "npx",
+            "args": ["-y", "@semanticscholar/mcp-server"]
+          }
+        }
+      }
+    }
+  ]
+}

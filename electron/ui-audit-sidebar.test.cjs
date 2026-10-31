@@ -88,13 +88,17 @@ test("running uses the Journey-style sheen and review keeps an open ring", () =>
   assert.match(css, /\.work-group \.project-chat-list \{[^}]*border-left: 0/);
 });
 
-test("Extensions exposes one entry with Skills, MCP servers, and Plugins tabs", () => {
-  assert.match(extensions, /id: "skills", label: "Skills"/);
-  assert.match(extensions, /id: "mcp", label: "MCP servers"/);
-  assert.match(extensions, /id: "plugins", label: "Plugins"/);
-  assert.match(extensions, /<SkillsView[^>]*embed/);
-  assert.match(extensions, /listContextResources\("plugin"/);
+test("Extensions uses Installed, Available, and Updates with Workbench tabs", () => {
+  assert.match(extensions, /Installed/);
+  assert.match(extensions, /Available/);
+  assert.match(extensions, /Updates/);
+  assert.match(extensions, /workbench-tab active/);
+  assert.match(extensions, /listExtensions/);
+  assert.match(extensions, /previewExtension/);
+  assert.match(extensions, /installExtension/);
+  assert.match(extensions, /SourceManager/);
   assert.match(app, /<ExtensionsView[^>]*workspace=\{executionWorkspace\}/);
+  assert.match(app, /setExtensionsTab\("installed"\)/);
 });
 
 test("account chip is global and runtime moves to the composer", () => {

@@ -393,6 +393,41 @@ function emitPreviewAgentEvent(payload: AgentEvent) {
   for (const listener of previewAgentListeners) listener(payload);
 }
 
+const previewExtensionSources: ExtensionSource[] = [
+  { id: "archimedes", name: "Archimedes index", type: "archimedes", url: "", enabled: true, builtin: true, count: 8, total: 8 },
+  { id: "github", name: "GitHub", type: "github", url: "https://api.github.com/search/repositories?q=topic%3Aclaude-skills", enabled: true, builtin: true, count: 12, total: 13654 },
+  { id: "mcp-registry", name: "MCP Registry", type: "mcp", url: "https://registry.modelcontextprotocol.io/v0/servers", enabled: true, builtin: true, count: 12, total: 12 },
+  { id: "npm", name: "npm", type: "npm", url: "https://registry.npmjs.org/-/v1/search?text=keywords%3Amcp-server", enabled: true, builtin: true, count: 12, total: 10814 },
+];
+
+const previewExtensionItems: ExtensionMarketplaceItem[] = [
+  ...previewSkills.slice(0, 4).map((skill, index) => ({
+    id: `archimedes/${skill.id.split("/").pop()}`,
+    canonicalId: `archimedes/${skill.id.split("/").pop()}`,
+    name: skill.name,
+    type: "skill" as const,
+    description: skill.description,
+    version: ["1.4.2", "2.1.0", "1.0.6", "1.2.3"][index],
+    author: "Archimedes",
+    license: "MIT",
+    homepage: "https://github.com/Johanson-colab/Archimedes",
+    sourceUrl: "https://github.com/Johanson-colab/Archimedes",
+    permissions: ["read:workspace", "write:artifacts"],
+    installs: [1284, 986, 742, 611][index],
+    size: [4200, 3600, 2800, 5100][index],
+    updatedAt: "2026-10-18",
+    source: "Archimedes index",
+    sourceId: "archimedes",
+    sourceType: "archimedes" as const,
+    files: [{ path: "SKILL.md", content: skill.content }],
+    config: null,
+  })),
+  { id: "archimedes/zotero-mcp", canonicalId: "archimedes/zotero-mcp", name: "Zotero", type: "mcp", description: "Search a local Zotero library and pull citation metadata into the conversation.", version: "0.9.4", author: "Zotero community", license: "AGPL-3.0", homepage: "https://www.zotero.org/", sourceUrl: "https://www.zotero.org/", permissions: ["read:library", "local:network"], installs: 2306, size: 0, updatedAt: "2026-10-21", source: "Archimedes index", sourceId: "archimedes", sourceType: "archimedes", config: { mcpServers: { zotero: { command: "npx", args: ["-y", "@zotero/mcp-server"] } } } },
+  { id: "archimedes/overleaf-source", canonicalId: "archimedes/overleaf-source", name: "Overleaf", type: "source", description: "Keep a manuscript workspace synchronized with an Overleaf project.", version: "1.1.0", author: "Archimedes", license: "MIT", homepage: "https://www.overleaf.com/", sourceUrl: "https://www.overleaf.com/", permissions: ["read:workspace", "network:overleaf"], installs: 438, size: 0, updatedAt: "2026-10-02", source: "Archimedes index", sourceId: "archimedes", sourceType: "archimedes", config: { provider: "overleaf" } },
+  { id: "archimedes/git-hygiene", canonicalId: "archimedes/git-hygiene", name: "Git Hygiene", type: "plugin", description: "Check diffs for accidental artifacts, secrets, and unreviewed generated files.", version: "1.3.0", author: "Archimedes", license: "MIT", homepage: "https://github.com/Johanson-colab/Archimedes", sourceUrl: "https://github.com/Johanson-colab/Archimedes", permissions: ["read:workspace", "execute:git"], installs: 276, size: 0, updatedAt: "2026-10-19", source: "Archimedes index", sourceId: "archimedes", sourceType: "archimedes", config: { commands: ["git status --short"] } },
+  { id: "archimedes/daily-digest", canonicalId: "archimedes/daily-digest", name: "Daily Digest", type: "automation", description: "Collect new papers in a saved search and prepare a short morning brief.", version: "0.8.2", author: "Archimedes", license: "MIT", homepage: "https://github.com/Johanson-colab/Archimedes", sourceUrl: "https://github.com/Johanson-colab/Archimedes", permissions: ["network:search", "write:artifacts"], installs: 355, size: 0, updatedAt: "2026-09-24", source: "Archimedes index", sourceId: "archimedes", sourceType: "archimedes", config: { schedule: "weekdays 08:00" } },
+];
+
 const previewBridge = {
   ...previewLibraryBridge,
   getInitialWorkspace: async () => null,
@@ -445,6 +480,41 @@ const previewBridge = {
     const skill = previewSkills.find((candidate) => candidate.id === skillId);
     if (!skill) throw new Error("Skill not found.");
     return structuredClone(skill);
+  },
+  listExtensionSources: async () => structuredClone(previewExtensionSources),
+  saveExtensionSources: async (sources: ExtensionSource[]) => sources,
+  resetExtensionSources: async () => structuredClone(previewExtensionSources),
+  listExtensions: async () => ({
+    items: structuredClone(previewExtensionItems),
+    total: previewExtensionItems.length,
+    sources: structuredClone(previewExtensionSources),
+    syncedAt: new Date().toISOString(),
+  }),
+  previewExtension: async ({ id }: { id: string }) => {
+    const item = previewExtensionItems.find((candidate) => candidate.id === id);
+    if (!item) throw new Error("Extension not found.");
+    const file = item.files?.[0];
+    return {
+      id,
+      filename: file?.path || (item.type === "mcp" ? "mcp.json" : "README.md"),
+      language: item.type === "mcp" ? "json" : "markdown",
+      content: file?.content || (item.config ? JSON.stringify(item.config, null, 2) : item.description),
+      item: structuredClone(item),
+    };
+  },
+  installExtension: async ({ id }: { id: string }) => {
+    const item = previewExtensionItems.find((candidate) => candidate.id === id);
+    if (!item) throw new Error("Extension not found.");
+    return { item: { ...structuredClone(item), installed: true }, path: `/preview/.agents/skills/${item.name.toLowerCase().replaceAll(/\s+/g, "-")}`, scope: "workspace" as const };
+  },
+  listInstalledExtensions: async () => ({
+    skills: previewSkills.map((skill) => ({ id: `skill:${skill.path}`, type: "skill" as const, name: skill.name, path: skill.path, detail: `${skill.collectionName} · ${skill.category}`, description: skill.description })),
+    plugins: [],
+  }),
+  readExtensionFile: async (path: string) => {
+    const skill = previewSkills.find((candidate) => candidate.path === path);
+    if (!skill) throw new Error("Skill not found.");
+    return { filename: "SKILL.md", content: skill.content };
   },
   getResearchSnapshot: async () => previewSnapshot(),
   openWorkspace: async (workspacePath?: string) => {
@@ -1057,7 +1127,7 @@ function App() {
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [reproduceId, setReproduceId] = useState<string | null>(null);
-  const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("skills");
+  const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("installed");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [runtimeMenuOpen, setRuntimeMenuOpen] = useState(false);
   const [imageCreationOpened, setImageCreationOpened] = useState(false);
@@ -2576,9 +2646,9 @@ function App() {
     { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? (proactive.modelReady ? t("Start proactive suggestions") : t("Set up proactive suggestions")) : t("Review suggestions"), icon: <Sparkles size={15} />, run: toggleProactiveDock },
     { id: "proactive-settings", group: t("System"), label: t("Proactive settings"), icon: <ShieldCheck size={15} />, run: () => { setSettingsSection("proactive"); setSettingsOpen(true); } },
     ...moduleCommands,
-    { id: "extensions-skills", group: t("Extensions"), label: t("Skills"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("skills"); setMainSection("extensions"); } },
-    { id: "extensions-mcp", group: t("Extensions"), label: t("MCP servers"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("mcp"); setMainSection("extensions"); } },
-    { id: "extensions-plugins", group: t("Extensions"), label: t("Plugins"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("plugins"); setMainSection("extensions"); } },
+    { id: "extensions-installed", group: t("Extensions"), label: t("Installed extensions"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("installed"); setMainSection("extensions"); } },
+    { id: "extensions-available", group: t("Extensions"), label: t("Browse extensions"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("available"); setMainSection("extensions"); } },
+    { id: "extensions-updates", group: t("Extensions"), label: t("Extension updates"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("updates"); setMainSection("extensions"); } },
     { id: "files", group: t("Panels"), label: t("Files"), detail: t("Open the workbench file browser"), icon: <FolderOpen size={15} />, run: () => openWorkbench("files") },
     { id: "terminal", group: t("Panels"), label: t("Terminal"), detail: executionWorkspace, icon: <SquareTerminal size={15} />, run: () => openWorkbench("terminal") },
     { id: "journey", group: t("Panels"), label: t("Journey"), icon: <Flag size={15} />, run: () => openWorkbench("journey") },
