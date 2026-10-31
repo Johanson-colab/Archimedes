@@ -1150,6 +1150,15 @@ app.whenReady().then(() => {
     return result;
   });
 
+  ipcMain.handle("project:list-members", (_event, { projectId } = {}) => {
+    if (typeof projectId !== "string" || !projectId) throw new Error("A project is required.");
+    return store.listProjectMembers(projectId);
+  });
+  ipcMain.handle("project:add-member", (_event, input = {}) => store.addProjectMember(input));
+  ipcMain.handle("project:update-member", (_event, { projectId, userId, role } = {}) => store.updateProjectMemberRole(projectId, userId, role));
+  ipcMain.handle("project:remove-member", (_event, { projectId, userId } = {}) => store.removeProjectMember(projectId, userId));
+  ipcMain.handle("audit:list", (_event, { projectId = null, limit = 100 } = {}) => store.listAuditEvents({ projectId, limit }));
+
   ipcMain.handle("comments:list", (_event, { workspace, projectId, resourceType, resourceId, includeResolved = true } = {}) => {
     if (workspace) store.openWorkspace(resolveWorkspace(workspace));
     return store.listComments({ projectId, resourceType, resourceId, includeResolved });

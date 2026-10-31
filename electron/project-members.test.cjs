@@ -48,6 +48,12 @@ test("new projects record an owner and support explicit members and roles", () =
     assert.equal(store.canAccessProject(project.id, "commenter", "usr_viewer"), true);
     const members = store.listProjectMembers(project.id);
     assert.deepEqual(members.map((member) => member.role), ["owner", "commenter"]);
+    store.updateProjectMemberRole(project.id, "usr_viewer", "editor");
+    assert.equal(store.projectRoleForUser(project.id, "usr_viewer"), "editor");
+    assert.ok(store.listAuditEvents({ projectId: project.id }).some((event) => event.action === "project.member_role_changed"));
+    assert.equal(store.removeProjectMember(project.id, "usr_viewer").removed, true);
+    assert.equal(store.projectRoleForUser(project.id, "usr_viewer"), null);
+    assert.throws(() => store.removeProjectMember(project.id, "usr_local_test"), /owner/i);
     assert.ok(store.listResearchProjects().some((candidate) => candidate.id === project.id));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

@@ -6586,3 +6586,22 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .thread-comments-composer textarea { width: 100%; resize: vertical; min-height: 66px; padding: 9px 10px; color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-line); border-radius: 5px; outline: 0; font: 11px/1.5 inherit; }
 .thread-comments-composer textarea:focus { border-color: var(--accent); }
 .thread-comments-composer > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--night-faint); font-size: 9px; }
+
+/* Project members and activity */
+.project-member-row { gap: 12px; }
+.project-member-avatar { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-line-soft); border-radius: 50%; font-size: 10px; font-weight: 650; }
+.project-member-avatar.add { color: var(--night-muted); }
+.project-member-role { width: 120px; }
+.project-member-add { align-items: center; }
+.project-member-add .settings-row-control { flex: 1; justify-content: flex-start; flex-wrap: wrap; }
+.project-member-add .settings-text-input { width: 180px; }
+.project-members-loading, .project-members-empty { display: flex; align-items: center; gap: 7px; padding: 22px; color: var(--night-muted); font-size: 11px; }
+.project-members-loading svg { animation: artifact-spin 1s linear infinite; }
+.project-activity { display: grid; gap: 0; }
+.project-activity-row { display: flex; align-items: flex-start; gap: 9px; padding: 9px 14px; border-top: 1px solid var(--night-line-soft); }
+.project-activity-row:first-child { border-top: 0; }
+.project-activity-dot { width: 5px; height: 5px; flex: 0 0 auto; margin-top: 5px; background: var(--accent); border-radius: 50%; }
+.project-activity-row div { display: grid; gap: 2px; }
+.project-activity-row strong { color: var(--night-ink-soft); font-size: 10px; font-weight: 550; }
+.project-activity-row small { color: var(--night-faint); font-size: 8.5px; }
+.project-activity-empty { display: flex; align-items: center; gap: 7px; padding: 18px 14px; color: var(--night-faint); font-size: 10px; }

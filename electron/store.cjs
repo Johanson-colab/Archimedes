@@ -617,6 +617,29 @@ function setLocalIdentity(identity) {
   return localIdentity;
 }
 
+function updateProjectMemberRole(projectId, userId, role) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "admin")) throw new Error("You do not have permission to change project members.");
+  if (!isProjectRole(role)) throw new Error("Unknown project role.");
+  const current = db.prepare("SELECT role FROM project_members WHERE project_id = ? AND user_id = ?").get(projectId, userId);
+  if (!current) throw new Error("Project member not found.");
+  if (current.role === "owner" || role === "owner") throw new Error("Project ownership cannot be changed here.");
+  db.prepare("UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?").run(role, projectId, userId);
+  recordAuditEvent(db, { projectId, action: "project.member_role_changed", targetType: "user", targetId: userId, metadata: { from: current.role, to: role } });
+  return listProjectMembers(projectId).find((member) => member.user_id === userId) || null;
+}
+
+function removeProjectMember(projectId, userId) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "admin")) throw new Error("You do not have permission to remove project members.");
+  const current = db.prepare("SELECT role FROM project_members WHERE project_id = ? AND user_id = ?").get(projectId, userId);
+  if (!current) throw new Error("Project member not found.");
+  if (current.role === "owner") throw new Error("The project owner cannot be removed.");
+  const result = db.prepare("DELETE FROM project_members WHERE project_id = ? AND user_id = ?").run(projectId, userId);
+  recordAuditEvent(db, { projectId, action: "project.member_removed", targetType: "user", targetId: userId });
+  return { removed: result.changes > 0 };
+}
+
 function listProjectMembers(projectId) {
   const db = requireDatabase();
   return db.prepare(`
@@ -647,6 +670,7 @@ function canAccessProject(projectId, requiredRole = "viewer", userId = localIden
 function addProjectMember({ projectId, userId, role = "viewer", displayName = "", email = "" } = {}) {
   const db = requireDatabase();
   if (typeof projectId !== "string" || !projectId) throw new Error("A project is required.");
+  if (!canAccessProject(projectId, "admin")) throw new Error("You do not have permission to add project members.");
   if (typeof userId !== "string" || !userId.trim()) throw new Error("A user is required.");
   if (!isProjectRole(role)) throw new Error("Unknown project role.");
   const now = timestamp();
@@ -2101,6 +2125,8 @@ module.exports = {
   listAuditEvents,
   recordAuditEvent,
   addProjectMember,
+  removeProjectMember,
+  updateProjectMemberRole,
   canAccessProject,
   listProjectMembers,
   projectRoleForUser,

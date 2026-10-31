@@ -40,6 +40,11 @@ interface ResearchDeskBridge {
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
   setResearchThreadVisibility: (threadId: string, visibility: "project" | "private") => Promise<{ visibility: "project" | "private" }>;
+  listProjectMembers: (projectId: string) => Promise<ProjectMember[]>;
+  addProjectMember: (input: { projectId: string; userId: string; role?: ProjectMember["role"]; displayName?: string; email?: string }) => Promise<ProjectMember | null>;
+  updateProjectMemberRole: (projectId: string, userId: string, role: ProjectMember["role"]) => Promise<ProjectMember | null>;
+  removeProjectMember: (projectId: string, userId: string) => Promise<{ removed: boolean }>;
+  listAuditEvents: (projectId?: string | null, limit?: number) => Promise<AuditEvent[]>;
   listComments: (input: { workspace?: string; projectId: string; resourceType: ResearchComment["resource_type"]; resourceId: string; includeResolved?: boolean }) => Promise<ResearchComment[]>;
   createComment: (input: { workspace?: string; projectId: string; resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => Promise<ResearchComment | null>;
   resolveComment: (input: { workspace?: string; id: string; resolved?: boolean }) => Promise<ResearchComment | null>;
@@ -748,6 +753,30 @@ interface ResearchProject {
   updated_at: string;
   archived_at: string | null;
   last_chat_at: string | null;
+}
+
+interface ProjectMember {
+  project_id: string;
+  user_id: string;
+  role: "viewer" | "commenter" | "editor" | "admin" | "owner";
+  joined_at: string;
+  invited_by: string | null;
+  display_name: string;
+  email: string;
+  avatar_color: string;
+}
+
+interface AuditEvent {
+  id: string;
+  project_id: string | null;
+  actor_id: string;
+  actor_type: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  metadata_json: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 interface ResearchComment {
