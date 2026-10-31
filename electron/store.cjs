@@ -442,6 +442,8 @@ function schema(db) {
   ensureColumn(db, "research_projects", "workspace_path", "TEXT");
   ensureColumn(db, "research_threads", "workspace_path", "TEXT");
   ensureColumn(db, "research_projects", "owner_id", "TEXT");
+  ensureColumn(db, "research_projects", "cloud_project_id", "TEXT");
+  ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
   ensureColumn(db, "paper_highlights", "project_id", "TEXT");
   ensureColumn(db, "paper_highlights", "author_id", "TEXT");
@@ -451,6 +453,7 @@ function schema(db) {
   ensureColumn(db, "papers", "github_stars", "INTEGER NOT NULL DEFAULT 0");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_research_projects_updated ON research_projects(updated_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_research_projects_cloud ON research_projects(cloud_project_id) WHERE cloud_project_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
   `);
@@ -659,7 +662,7 @@ function listProjectMembers(projectId) {
   const db = requireDatabase();
   return db.prepare(`
     SELECT project_members.project_id, project_members.user_id, project_members.role,
-      project_members.joined_at, project_members.invited_by,
+      project_members.joined_at, project_members.invited_by, project_members.source,
       COALESCE(users.display_name, project_members.user_id) AS display_name,
       COALESCE(users.email, '') AS email,
       COALESCE(users.avatar_color, '') AS avatar_color
@@ -1513,6 +1516,7 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
     name: normalizedName,
     description: String(description || "").slice(0, 500),
     workspace_path: resolvedWorkspace,
+    cloud_project_id: null,
     created_at: now,
     updated_at: now,
     archived_at: null,
@@ -1526,6 +1530,76 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
   ensureProjectMember(db, project.id, project.owner_id, "owner");
   ensureProjectLibraries(db);
   return project;
+}
+
+function getResearchProject(id) {
+  const db = requireDatabase();
+  return db.prepare("SELECT * FROM research_projects WHERE id = ?").get(id) || null;
+}
+
+function linkResearchProjectToCloud(id, cloudProjectId) {
+  const db = requireDatabase();
+  if (!canAccessProject(id, "admin")) throw new Error("You do not have permission to share this project.");
+  const normalized = String(cloudProjectId || "").trim();
+  if (!normalized) throw new Error("A cloud project is required.");
+  const existing = db.prepare("SELECT id FROM research_projects WHERE cloud_project_id = ? AND id <> ?").get(normalized, id);
+  if (existing) throw new Error("That cloud project is already linked to another local project.");
+  db.prepare("UPDATE research_projects SET cloud_project_id = ?, updated_at = ? WHERE id = ?").run(normalized, timestamp(), id);
+  recordAuditEvent(db, { projectId: id, action: "project.cloud_linked", targetType: "project", targetId: normalized });
+  return getResearchProject(id);
+}
+
+function importCloudProject({ cloudProjectId, name, description = "" } = {}) {
+  const db = requireDatabase();
+  const normalized = String(cloudProjectId || "").trim();
+  if (!normalized) throw new Error("A cloud project is required.");
+  const existing = db.prepare("SELECT * FROM research_projects WHERE cloud_project_id = ?").get(normalized);
+  if (existing) return existing;
+  const project = createResearchProject({ name, description });
+  return linkResearchProjectToCloud(project.id, normalized);
+}
+
+function syncProjectMembersFromCloud(projectId, members = [], { currentEmail = "" } = {}) {
+  const db = requireDatabase();
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  const email = String(currentEmail || "").trim().toLowerCase();
+  const now = timestamp();
+  const remoteIds = [];
+  db.exec("BEGIN");
+  try {
+    for (const member of Array.isArray(members) ? members : []) {
+      const remoteId = String(member?.user_id || "").trim();
+      if (!remoteId) continue;
+      const memberEmail = String(member.email || "").trim().toLowerCase();
+      if (email && memberEmail === email) continue;
+      let memberRole = normalizeRole(member.role);
+      if (memberRole === "owner") memberRole = "admin";
+      const userId = remoteId;
+      db.prepare(`
+        INSERT INTO users (id, display_name, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET display_name = CASE WHEN excluded.display_name = '' THEN users.display_name ELSE excluded.display_name END,
+          email = CASE WHEN excluded.email = '' THEN users.email ELSE excluded.email END,
+          updated_at = excluded.updated_at
+      `).run(userId, String(member.display_name || memberEmail || remoteId), memberEmail, now, now);
+      db.prepare(`
+        INSERT INTO project_members (project_id, user_id, role, joined_at, invited_by, source) VALUES (?, ?, ?, ?, NULL, 'cloud')
+        ON CONFLICT(project_id, user_id) DO UPDATE SET role = excluded.role, source = 'cloud'
+      `).run(projectId, userId, memberRole, String(member.joined_at || now));
+      remoteIds.push(userId);
+    }
+    if (remoteIds.length) {
+      const placeholders = remoteIds.map(() => "?").join(", ");
+      db.prepare(`DELETE FROM project_members WHERE project_id = ? AND source = 'cloud' AND user_id NOT IN (${placeholders})`).run(projectId, ...remoteIds);
+    } else {
+      db.prepare("DELETE FROM project_members WHERE project_id = ? AND source = 'cloud'").run(projectId);
+    }
+    db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, projectId);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return listProjectMembers(projectId);
 }
 
 function setResearchProjectWorkspace(id, workspacePath) {
@@ -2287,6 +2361,10 @@ module.exports = {
   createLibrary,
   createAction,
   createResearchProject,
+  getResearchProject,
+  linkResearchProjectToCloud,
+  importCloudProject,
+  syncProjectMembersFromCloud,
   renameResearchProject,
   setResearchProjectWorkspace,
   createResearchThread,

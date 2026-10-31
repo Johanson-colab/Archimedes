@@ -9,6 +9,14 @@ interface ResearchDeskBridge {
     signUp: (email: string, password: string, displayName?: string) => Promise<AuthState>;
     signOut: () => Promise<AuthState>;
     getAuthAccessToken: () => Promise<string | null>;
+    getCollaborationStatus: () => Promise<CollaborationStatus>;
+    listCloudProjects: () => Promise<CloudProject[]>;
+    publishProject: (projectId: string) => Promise<CloudProjectSyncResult>;
+    syncCloudProject: (projectId: string) => Promise<CloudProjectSyncResult>;
+    addCloudProjectMember: (projectId: string, email: string, role?: ProjectMember["role"]) => Promise<CloudProjectSyncResult>;
+    updateCloudProjectMember: (projectId: string, userId: string, role: ProjectMember["role"]) => Promise<CloudProjectSyncResult>;
+    removeCloudProjectMember: (projectId: string, userId: string) => Promise<CloudProjectSyncResult>;
+    importCloudProject: (cloudProjectId: string) => Promise<CloudProjectSyncResult>;
     updateLocalIdentity: (patch: { displayName: string }) => Promise<LocalIdentity>;
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
@@ -818,9 +826,35 @@ interface LocalIdentity {
   updatedAt: string;
 }
 
+interface CollaborationStatus {
+  signedIn: boolean;
+  user: { id: string; email: string; displayName: string } | null;
+  baseUrl?: string;
+  error?: string;
+}
+
+interface CloudProject {
+  id: string;
+  org_id: string;
+  owner_id: string;
+  name: string;
+  description: string;
+  role: ProjectMember["role"] | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+interface CloudProjectSyncResult {
+  project: ResearchProject;
+  members: ProjectMember[];
+  warnings?: string[];
+}
+
 interface ResearchProject {
   id: string;
   owner_id?: string | null;
+  cloud_project_id?: string | null;
   name: string;
   description: string;
   workspace_path: string | null;
@@ -835,6 +869,7 @@ interface ProjectMember {
   project_id: string;
   user_id: string;
   role: "viewer" | "commenter" | "editor" | "admin" | "owner";
+  source?: "local" | "cloud";
   joined_at: string;
   invited_by: string | null;
   display_name: string;

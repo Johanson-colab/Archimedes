@@ -55,6 +55,16 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
 
     const forbidden = await call(second, `/v1/projects/${projectId}/members`, "POST", { email, role: "viewer" });
     assert.equal(forbidden.status, 403);
+
+    const secondUser = added.body.members.find((member) => member.email === email2);
+    assert.ok(secondUser);
+    const promoted = await call(first, `/v1/projects/${projectId}/members/${secondUser.user_id}`, "PATCH", { role: "admin" });
+    assert.equal(promoted.status, 200, JSON.stringify(promoted.body));
+    assert.equal(promoted.body.members.find((member) => member.user_id === secondUser.user_id).role, "admin");
+
+    const removed = await call(first, `/v1/projects/${projectId}/members/${secondUser.user_id}`, "DELETE");
+    assert.equal(removed.status, 200, JSON.stringify(removed.body));
+    assert.equal(removed.body.members.length, 1);
   } finally {
     await app.close();
   }

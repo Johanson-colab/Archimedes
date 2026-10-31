@@ -572,6 +572,14 @@ const previewBridge = {
     if (index >= 0) previewProjectMembers.splice(index, 1);
     return { removed: index >= 0 };
   },
+  getCollaborationStatus: async () => ({ signedIn: false, user: null, error: "Cloud collaboration is available in the desktop app." }),
+  listCloudProjects: async () => [],
+  publishProject: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
+  syncCloudProject: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
+  addCloudProjectMember: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
+  updateCloudProjectMember: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
+  removeCloudProjectMember: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
+  importCloudProject: async () => { throw new Error("Cloud collaboration is available in the desktop app."); },
   listAuditEvents: async (projectId?: string | null) => structuredClone([...previewAuditEvents].reverse()),
   listComments: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; includeResolved?: boolean }) => structuredClone(previewComments.filter((comment) => comment.resource_type === input.resourceType && comment.resource_id === input.resourceId && (input.includeResolved !== false || !comment.resolved_at))),
   createComment: async (input: { resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => {
@@ -1960,6 +1968,14 @@ function App() {
     }
   }
 
+  async function refreshWorkspaceProjects() {
+    const snapshot = await desktopBridge.openWorkspace(workspace);
+    setProjects(snapshot.projects);
+    setArchivedProjects(snapshot.archivedProjects ?? []);
+    setThreads(snapshot.threads);
+    setArchivedThreads(snapshot.archivedThreads);
+  }
+
   async function changeProjectWorkspace(project: ResearchProject) {
     if (agentBusy) return;
     const selected = await desktopBridge.chooseWorkspace();
@@ -2813,6 +2829,7 @@ function App() {
         identity={localIdentity}
         onSaveIdentity={saveLocalIdentity}
         activeProject={activeProject}
+        onProjectsChanged={refreshWorkspaceProjects}
         authState={authState}
         onSignIn={signIn}
         onSignUp={signUp}

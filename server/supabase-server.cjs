@@ -99,18 +99,21 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
         return send(res, 201, { project: await projectResponse(supabase, projectId) });
       }
 
-      const projectMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)(?:\/(members))?$/);
-      if (projectMatch) {
-        const projectId = projectMatch[1];
-        const section = projectMatch[2];
-        if (!section && method === "GET") return send(res, 200, { project: await projectResponse(supabase, projectId) });
+      const projectMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)$/);
+      if (projectMatch && method === "GET") {
+        return send(res, 200, { project: await projectResponse(supabase, projectMatch[1]) });
+      }
 
-        if (section === "members" && method === "GET") {
+      const membersMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/members(?:\/([^/]+))?$/);
+      if (membersMatch) {
+        const projectId = membersMatch[1];
+        const memberId = membersMatch[2];
+        if (!memberId && method === "GET") {
           const { data, error } = await supabase.rpc("list_project_members", { p_project: projectId });
           if (error) throw apiError(error);
           return send(res, 200, { members: data || [] });
         }
-        if (section === "members" && method === "POST") {
+        if (!memberId && method === "POST") {
           const body = await readBody(req);
           const email = String(body.email || "").trim().toLowerCase();
           const role = String(body.role || "viewer");
@@ -122,6 +125,25 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
           const { data, error: listError } = await supabase.rpc("list_project_members", { p_project: projectId });
           if (listError) throw apiError(listError);
           return send(res, 201, { members: data || [] });
+        }
+        if (memberId && method === "PATCH") {
+          const body = await readBody(req);
+          const role = String(body.role || "");
+          if (!["viewer", "commenter", "editor", "admin"].includes(role)) {
+            throw Object.assign(new Error("A non-owner role is required."), { status: 400 });
+          }
+          const { error } = await supabase.rpc("update_project_member_role", { p_project: projectId, p_user: memberId, p_role: role });
+          if (error) throw apiError(error);
+          const { data, error: listError } = await supabase.rpc("list_project_members", { p_project: projectId });
+          if (listError) throw apiError(listError);
+          return send(res, 200, { members: data || [] });
+        }
+        if (memberId && method === "DELETE") {
+          const { error } = await supabase.rpc("remove_project_member", { p_project: projectId, p_user: memberId });
+          if (error) throw apiError(error);
+          const { data, error: listError } = await supabase.rpc("list_project_members", { p_project: projectId });
+          if (listError) throw apiError(listError);
+          return send(res, 200, { members: data || [] });
         }
       }
 
