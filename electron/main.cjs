@@ -19,6 +19,7 @@ const journeySettings = require("./journey-settings.cjs");
 const journeySnapshots = require("./journey-snapshots.cjs");
 const workbenchSettings = require("./workbench-settings.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
+const localIdentity = require("./local-identity.cjs");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
@@ -555,6 +556,8 @@ app.whenReady().then(() => {
   journeySnapshots.initialize(app.getPath("userData"));
   workbenchSettings.initialize(app.getPath("userData"));
   workbenchNotes.initialize(app.getPath("userData"));
+  localIdentity.initialize(app.getPath("userData"));
+  store.setLocalIdentity(localIdentity.localIdentity());
   installApplicationMenu();
   protocol.handle("archimedes-file", (request) => {
     try {
@@ -1355,6 +1358,12 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
+  ipcMain.handle("identity:get", () => localIdentity.localIdentity());
+  ipcMain.handle("identity:update", (_event, patch = {}) => {
+    const identity = localIdentity.updateLocalIdentity({ displayName: patch.displayName });
+    store.setLocalIdentity(identity);
+    return identity;
+  });
   ipcMain.handle("workbench:get-settings", () => workbenchSettings.workbenchSettings());
   ipcMain.handle("workbench:save-settings", (_event, input = {}) => workbenchSettings.saveWorkbenchSettings(input));
   ipcMain.handle("workbench:reset-settings", () => workbenchSettings.resetWorkbenchSettings());

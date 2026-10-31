@@ -283,6 +283,15 @@ let previewTerminalSettings: TerminalSettings = {
   externalTerminalLabel: previewPlatform === "win32" ? "Windows Terminal" : previewPlatform === "darwin" ? "Ghostty" : "WezTerm",
 };
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
+let previewLocalIdentity: LocalIdentity = {
+  version: 1,
+  userId: "usr_preview_local",
+  displayName: "Local researcher",
+  deviceId: "dev_preview_device",
+  deviceName: "Browser preview",
+  createdAt: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+  updatedAt: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+};
 const previewFileContents = new Map<string, string>();
 const previewArtifactImages: Record<string, string> = {
   "figures/figure-3.png": "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/images/cvpr/final/cvpr2023-Boutros_CR-FIQA_Face_Image_Quality_Assessment_by_Learning_Sample_Relative_Classifiability_CVPR_2023_paper.jpg",
@@ -374,6 +383,13 @@ function emitPreviewAgentEvent(payload: AgentEvent) {
 const previewBridge = {
   ...previewLibraryBridge,
   getInitialWorkspace: async () => null,
+  getLocalIdentity: async () => structuredClone(previewLocalIdentity),
+  updateLocalIdentity: async (patch: { displayName: string }) => {
+    const displayName = String(patch.displayName || "").replace(/\s+/g, " ").trim();
+    if (!displayName || displayName.length > 80) throw new Error("Display names must be between 1 and 80 characters.");
+    previewLocalIdentity = { ...previewLocalIdentity, displayName, updatedAt: new Date().toISOString() };
+    return structuredClone(previewLocalIdentity);
+  },
   chooseWorkspace: async () => DEFAULT_WORKSPACE || "Browser preview workspace",
   watchWorkspace: async (workspace: string) => workspace,
   revealWorkspace: async () => ({ opened: true }),
@@ -889,6 +905,7 @@ function App() {
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  const [localIdentity, setLocalIdentity] = useState<LocalIdentity | null>(null);
   const theme = resolveTheme(appearance.preset, systemAppearance);
   const themePreference = appearance.preset;
   const setThemePreference = (preset: ThemePreset) => setAppearance((current) => ({ ...current, preset }));
@@ -1187,6 +1204,20 @@ function App() {
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void desktopBridge.getLocalIdentity()
+      .then((identity) => { if (!cancelled) setLocalIdentity(identity); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  async function saveLocalIdentity(displayName: string) {
+    const identity = await desktopBridge.updateLocalIdentity({ displayName });
+    setLocalIdentity(identity);
+    return identity;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -2590,6 +2621,8 @@ function App() {
         onResetProactiveHistory={proactive.resetHistory}
         proactiveHistoryCount={proactive.state.suggestions.length}
         onObserveProactive={proactive.observeOnce}
+        identity={localIdentity}
+        onSaveIdentity={saveLocalIdentity}
       />
       <NewProjectModal
         open={newProjectOpen}

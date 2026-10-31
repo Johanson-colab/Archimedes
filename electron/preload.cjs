@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 contextBridge.exposeInMainWorld("researchDesk", {
   platform: process.platform,
   getInitialWorkspace: () => ipcRenderer.invoke("window:initial-workspace"),
+  getLocalIdentity: () => ipcRenderer.invoke("identity:get"),
+  updateLocalIdentity: (patch) => ipcRenderer.invoke("identity:update", patch),
   setTitleBarTheme: (theme) => ipcRenderer.invoke("window:set-titlebar-theme", theme),
   setUiZoom: (factor) => ipcRenderer.invoke("window:set-ui-zoom", factor),
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
