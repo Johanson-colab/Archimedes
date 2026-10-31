@@ -1,0 +1,64 @@
+function createCollaborationApi({ baseUrl, getToken, fetchImpl = globalThis.fetch } = {}) {
+  if (typeof baseUrl !== "string" || !baseUrl) throw new Error("A collaboration API URL is required.");
+  if (typeof getToken !== "function") throw new Error("A token provider is required.");
+  if (typeof fetchImpl !== "function") throw new Error("Fetch is not available.");
+
+  async function request(path, { method = "GET", body } = {}) {
+    const token = await getToken();
+    if (!token) throw new Error("Sign in to your cloud account to collaborate.");
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${token}`,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch { /* empty response */ }
+    if (!response.ok) throw new Error(payload?.error || `Collaboration request failed (${response.status}).`);
+    return payload;
+  }
+
+  return {
+    async status() {
+      try {
+        const result = await request("/v1/me");
+        return { signedIn: true, user: result.user, baseUrl };
+      } catch (error) {
+        return { signedIn: false, user: null, baseUrl, error: error instanceof Error ? error.message : String(error) };
+      }
+    },
+    async listProjects() {
+      return (await request("/v1/projects")).projects || [];
+    },
+    async createProject({ name, description = "" } = {}) {
+      return (await request("/v1/projects", { method: "POST", body: { name, description } })).project;
+    },
+    async getProject(projectId) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}`)).project;
+    },
+    async listMembers(projectId) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/members`)).members || [];
+    },
+    async addMember(projectId, { email, role = "viewer" } = {}) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/members`, {
+        method: "POST",
+        body: { email, role },
+      })).members || [];
+    },
+    async updateMember(projectId, userId, role) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, {
+        method: "PATCH",
+        body: { role },
+      })).members || [];
+    },
+    async removeMember(projectId, userId) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+      })).members || [];
+    },
+  };
+}
+
+module.exports = { createCollaborationApi };

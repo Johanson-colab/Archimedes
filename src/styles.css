@@ -6605,6 +6605,16 @@ html[data-menu-style="glass"] :is(.proactive-menu, .agent-proactive-menu, .proje
 .project-activity-row strong { color: var(--night-ink-soft); font-size: 10px; font-weight: 550; }
 .project-activity-row small { color: var(--night-faint); font-size: 8.5px; }
 .project-activity-empty { display: flex; align-items: center; gap: 7px; padding: 18px 14px; color: var(--night-faint); font-size: 10px; }
+.project-cloud-row { gap: 12px; }
+.project-cloud-row .settings-row-title { display: inline-flex; align-items: center; gap: 5px; }
+.project-cloud-row code { color: var(--night-muted); font: 10px var(--font-mono); }
+.project-cloud-list { display: grid; gap: 1px; margin-top: 1px; border-top: 1px solid var(--night-line-soft); }
+.project-cloud-list > .settings-group-note { padding: 10px 14px 4px; }
+.project-cloud-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; }
+.project-cloud-item > div { display: grid; gap: 2px; min-width: 0; }
+.project-cloud-item strong { overflow: hidden; color: var(--night-ink-soft); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.project-cloud-item small { color: var(--night-faint); font-size: 9px; text-transform: capitalize; }
+.project-cloud-item .secondary-button { flex: 0 0 auto; }
 
 /* Reproduce: a background reproduction job, visible from anywhere. Every
    colour comes from a semantic token so both themes work without overrides. */

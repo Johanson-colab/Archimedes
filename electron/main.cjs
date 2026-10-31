@@ -22,6 +22,8 @@ const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const { createSupabaseAuth } = require("./supabase-auth.cjs");
+const { createCollaborationApi } = require("./collaboration-api.cjs");
+const { createSupabaseServer } = require("../server/supabase-server.cjs");
 const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
@@ -552,8 +554,10 @@ async function sanitizeAgentContext(items, workspace) {
 const journeySummariesInFlight = new Map();
 let supabaseAuth = null;
 let authReady = Promise.resolve();
+let collaborationApi = null;
+let collaborationServer = null;
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
@@ -574,6 +578,16 @@ app.whenReady().then(() => {
     configured: Boolean(supabaseConfig.url && supabaseConfig.publishableKey),
   });
   authReady = supabaseAuth.initialize();
+  try {
+    collaborationServer = createSupabaseServer({ supabaseUrl: supabaseConfig.url, publishableKey: supabaseConfig.publishableKey });
+    const address = await collaborationServer.listen(0, "127.0.0.1");
+    collaborationApi = createCollaborationApi({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      getToken: () => supabaseAuth.accessToken(),
+    });
+  } catch (error) {
+    console.error("Could not start the local collaboration API.", error);
+  }
   installApplicationMenu();
   protocol.handle("archimedes-file", (request) => {
     try {
@@ -1235,6 +1249,83 @@ app.whenReady().then(() => {
   ipcMain.handle("project:remove-member", (_event, { projectId, userId } = {}) => store.removeProjectMember(projectId, userId));
   ipcMain.handle("audit:list", (_event, { projectId = null, limit = 100 } = {}) => store.listAuditEvents({ projectId, limit }));
 
+  function requireCollaboration() {
+    if (!collaborationApi) throw new Error("The collaboration service is not available. Restart Archimedes and try again.");
+    return collaborationApi;
+  }
+
+  async function currentCloudEmail() {
+    await authReady;
+    return supabaseAuth.state().user?.email || "";
+  }
+
+  async function syncCloudProject(projectId) {
+    const project = store.getResearchProject(projectId);
+    if (!project) throw new Error("Research project not found.");
+    if (!project.cloud_project_id) throw new Error("Share this project before syncing cloud members.");
+    const [members, email] = await Promise.all([
+      requireCollaboration().listMembers(project.cloud_project_id),
+      currentCloudEmail(),
+    ]);
+    return { project: store.getResearchProject(projectId), members: store.syncProjectMembersFromCloud(projectId, members, { currentEmail: email }) };
+  }
+
+  ipcMain.handle("collab:status", async () => {
+    await authReady;
+    if (!collaborationApi) return { signedIn: false, user: null, error: "The collaboration service is not available." };
+    return collaborationApi.status();
+  });
+  ipcMain.handle("collab:list-projects", async () => requireCollaboration().listProjects());
+  ipcMain.handle("collab:publish-project", async (_event, { projectId } = {}) => {
+    const api = requireCollaboration();
+    let project = store.getResearchProject(projectId);
+    if (!project) throw new Error("Research project not found.");
+    if (!store.canAccessProject(projectId, "admin")) throw new Error("You do not have permission to share this project.");
+    if (!project.cloud_project_id) {
+      const cloud = await api.createProject({ name: project.name, description: project.description });
+      project = store.linkResearchProjectToCloud(projectId, cloud.id);
+    }
+    const warnings = [];
+    for (const member of store.listProjectMembers(projectId)) {
+      if (member.role === "owner" || !member.email) continue;
+      try {
+        await api.addMember(project.cloud_project_id, { email: member.email, role: member.role === "owner" ? "admin" : member.role });
+      } catch (error) {
+        warnings.push(`${member.display_name || member.email}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return { ...(await syncCloudProject(projectId)), warnings };
+  });
+  ipcMain.handle("collab:sync-project", async (_event, { projectId } = {}) => syncCloudProject(projectId));
+  ipcMain.handle("collab:add-member", async (_event, { projectId, email, role = "viewer" } = {}) => {
+    const project = store.getResearchProject(projectId);
+    if (!project) throw new Error("Research project not found.");
+    if (!project.cloud_project_id) throw new Error("Share this project before inviting cloud members.");
+    await requireCollaboration().addMember(project.cloud_project_id, { email, role });
+    return syncCloudProject(projectId);
+  });
+  ipcMain.handle("collab:update-member", async (_event, { projectId, userId, role } = {}) => {
+    const project = store.getResearchProject(projectId);
+    if (!project?.cloud_project_id) throw new Error("This project is not linked to the cloud.");
+    await requireCollaboration().updateMember(project.cloud_project_id, userId, role);
+    return syncCloudProject(projectId);
+  });
+  ipcMain.handle("collab:remove-member", async (_event, { projectId, userId } = {}) => {
+    const project = store.getResearchProject(projectId);
+    if (!project?.cloud_project_id) throw new Error("This project is not linked to the cloud.");
+    await requireCollaboration().removeMember(project.cloud_project_id, userId);
+    return syncCloudProject(projectId);
+  });
+  ipcMain.handle("collab:import-project", async (_event, { cloudProjectId } = {}) => {
+    const cloudProject = await requireCollaboration().getProject(cloudProjectId);
+    const project = store.importCloudProject({
+      cloudProjectId: cloudProject.id,
+      name: cloudProject.name,
+      description: cloudProject.description,
+    });
+    return syncCloudProject(project.id);
+  });
+
   ipcMain.handle("comments:list", (_event, { workspace, projectId, resourceType, resourceId, includeResolved = true } = {}) => {
     if (workspace) store.openWorkspace(resolveWorkspace(workspace));
     return store.listComments({ projectId, resourceType, resourceId, includeResolved });
@@ -1605,4 +1696,7 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
 });
 
-app.on("before-quit", closeAllTerminals);
+app.on("before-quit", () => {
+  closeAllTerminals();
+  collaborationServer?.close?.();
+});

@@ -13,10 +13,13 @@ user's JWT; RLS stays enabled and no service-role key is needed.
 - `GET /v1/projects/{projectId}`
 - `GET /v1/projects/{projectId}/members`
 - `POST /v1/projects/{projectId}/members`
+- `PATCH /v1/projects/{projectId}/members/{userId}`
+- `DELETE /v1/projects/{projectId}/members/{userId}`
 
-The API delegates project creation and member insertion to the PostgreSQL
-functions `create_project`, `add_project_member_by_email`, and
-`list_project_members`. Those functions are `SECURITY DEFINER` but scoped to
+The API delegates project creation and member management to the PostgreSQL
+functions `create_project`, `add_project_member_by_email`,
+`list_project_members`, `update_project_member_role`, and
+`remove_project_member`. Those functions are `SECURITY DEFINER` but scoped to
 `auth.uid()`, revoke `anon`, and re-check project roles.
 
 ## Run
@@ -36,12 +39,20 @@ SUPABASE_LIVE_TESTS=1 node --test server/supabase-server.live.test.cjs
 ```
 
 It signs in two test users, creates a project, adds the second user, lists the
-members, and verifies a non-admin cannot add members. Without
+members, promotes and removes that member, and verifies a non-admin cannot add
+members. Without
 `SUPABASE_LIVE_TESTS=1`, the test is skipped and `npm test` stays offline.
+
+## Desktop integration
+
+The Electron main process starts this API on an ephemeral loopback port. The
+renderer never holds a service-role key: it calls IPC methods that use the
+signed-in Supabase access token. Settings → Members can publish a local project,
+sync its members, invite by email, and import a shared project. Pulled members
+are stored with `source = cloud`; the local owner is preserved.
 
 ## Not included yet
 
-- Desktop project/member sync and share UI (next PR)
 - Invites for users who have not signed up
 - Thread/library/comments sync
 - Service-role/admin operations
