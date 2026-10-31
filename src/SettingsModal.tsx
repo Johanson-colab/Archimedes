@@ -51,6 +51,10 @@ type SettingsModalProps = {
   identity: LocalIdentity | null;
   onSaveIdentity: (displayName: string) => Promise<LocalIdentity>;
   activeProject: ResearchProject | null;
+  authState: AuthState | null;
+  onSignIn: (email: string, password: string) => Promise<AuthState>;
+  onSignUp: (email: string, password: string, displayName?: string) => Promise<AuthState>;
+  onSignOut: () => Promise<AuthState>;
 };
 
 const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNode }> = [
@@ -117,6 +121,10 @@ export default function SettingsModal({
   identity,
   onSaveIdentity,
   activeProject,
+  authState,
+  onSignIn,
+  onSignUp,
+  onSignOut,
 }: SettingsModalProps) {
   const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
@@ -274,7 +282,7 @@ export default function SettingsModal({
 
         <div className={embedded ? "settings-body settings-body-embedded" : "settings-body"}>
           <div className="settings-content">
-            {section === "account" && <AccountSettingsPanel identity={identity} onSave={onSaveIdentity} />}
+            {section === "account" && <AccountSettingsPanel identity={identity} onSave={onSaveIdentity} authState={authState} onSignIn={onSignIn} onSignUp={onSignUp} onSignOut={onSignOut} />}
             {section === "members" && (activeProject ? <ProjectMembersPanel bridge={bridge} project={activeProject} /> : <div className="project-members-empty">{t("Select a project to manage members.")}</div>)}
 
             {section === "general" && <div className="settings-sections">
