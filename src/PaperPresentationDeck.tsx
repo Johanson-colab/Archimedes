@@ -497,7 +497,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     let mounted = true;
     setRestoring(true);
     setError("");
-    void bridge.getPaperPresentation(paper.id, workspace).then((saved) => {
+    void bridge.getPaperPresentation(paper.id, workspace, projectId).then((saved) => {
       if (!mounted) return;
       setPresentation(saved);
       setLivePresentation(null);
@@ -566,7 +566,7 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
   }
 
   async function reveal() {
-    try { await bridge.revealPaperPresentation(paper.id, workspace); }
+    try { await bridge.revealPaperPresentation(paper.id, workspace, projectId); }
     catch (revealError) { setError(revealError instanceof Error ? revealError.message : String(revealError)); }
   }
 

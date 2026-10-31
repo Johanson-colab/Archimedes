@@ -617,11 +617,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
 
   const loadReader = useCallback(async () => {
     try {
-      const next = await bridge.getLibraryPaperReader(paper.id, workspace);
+      const next = await bridge.getLibraryPaperReader(paper.id, workspace, projectId);
       setReader(next);
       if (next.pages[0]) setPageNumber((current) => Math.min(Math.max(1, current), next.pages.at(-1)?.page_number ?? 1));
     } catch (loadError) { setError(readableError(loadError, "Could not load the paper reader.")); }
-  }, [bridge, paper.id, workspace]);
+  }, [bridge, paper.id, projectId, workspace]);
   useEffect(() => { void loadReader(); }, [loadReader]);
   useEffect(() => {
     let active = true;
@@ -631,7 +631,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setChatMessages([]);
     setStreamingChatText(null);
     activePaperRunIdRef.current = null;
-    void bridge.getLibraryPaperChatThread(paper.id, workspace).then((thread) => {
+    void bridge.getLibraryPaperChatThread(paper.id, workspace, projectId).then((thread) => {
       if (!active) return;
       if (thread) {
         const messages = thread.messages
@@ -713,8 +713,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setBusy(kind); setError("");
     try {
       const next = kind === "remote"
-        ? await bridge.prepareLibraryPaperReader(paper.id, workspace)
-        : await bridge.attachLibraryPaperPdf(paper.id, workspace);
+        ? await bridge.prepareLibraryPaperReader(paper.id, workspace, projectId)
+        : await bridge.attachLibraryPaperPdf(paper.id, workspace, projectId);
       setReader(next);
       setPageNumber(next.pages[0]?.page_number ?? 1);
     } catch (prepareError) { setError(readableError(prepareError, "Could not prepare the original PDF.")); }
@@ -772,7 +772,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         page_number: currentPage.page_number, quote: selection, note, color,
         start_offset: start >= 0 ? start : undefined,
         end_offset: start >= 0 ? start + selection.length : undefined,
-      }, workspace);
+      }, workspace, projectId);
       setReader((current) => current ? { ...current, highlights: [...current.highlights, item] } : current);
       if (note.trim()) setHighlightListOpen(true);
       closeSelection();
@@ -780,7 +780,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   }
   async function deleteHighlight(id: string) {
     try {
-      await bridge.deleteLibraryPaperHighlight(id, workspace);
+      await bridge.deleteLibraryPaperHighlight(id, workspace, projectId);
       setReader((current) => current ? { ...current, highlights: current.highlights.filter((highlight) => highlight.id !== id) } : current);
       closeSelection();
     } catch (deleteError) { setError(readableError(deleteError, "Could not remove this highlight.")); }
@@ -888,7 +888,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       });
       setChatThreadId(result.threadId);
       setChatMessages((current) => [...current, { role: "assistant", text: result.response }]);
-      try { await bridge.setLibraryPaperChatThread(paper.id, result.threadId, workspace); }
+      try { await bridge.setLibraryPaperChatThread(paper.id, result.threadId, workspace, projectId); }
       catch (saveError) { setError(readableError(saveError, "The paper conversation completed but could not be saved.")); }
       onAgentRun?.(result);
     } catch (askError) {

@@ -114,7 +114,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     const restoreId = ++restoreIdRef.current;
     setView("review");
     setReviewUpdatedAt("");
-    void bridge.getPaperReview(paper.id, workspace).then((saved) => {
+    void bridge.getPaperReview(paper.id, workspace, projectId).then((saved) => {
       if (!mounted || restoreId !== restoreIdRef.current || runIdRef.current || !saved) return;
       const restoredRuns = initialRuns();
       for (const report of saved.specialists) {
@@ -173,7 +173,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         : result.supervisor.reason);
       setSummary({ status: "complete", response: result.summary.response, error: "" });
       setStage("The review memorandum is ready. Open any reading to inspect its evidence trail.");
-      const saved = await bridge.getPaperReview(paper.id, workspace);
+      const saved = await bridge.getPaperReview(paper.id, workspace, projectId);
       if (saved) setReviewUpdatedAt(saved.updated_at);
     } catch (error) {
       const message = reviewError(error);

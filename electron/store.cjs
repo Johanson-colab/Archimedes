@@ -191,7 +191,10 @@ function schema(db) {
 
     CREATE TABLE IF NOT EXISTS paper_highlights (
       id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT,
       paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      author_id TEXT,
+      visibility TEXT NOT NULL DEFAULT 'project',
       page_number INTEGER NOT NULL,
       quote TEXT NOT NULL,
       start_offset INTEGER,
@@ -203,25 +206,49 @@ function schema(db) {
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS paper_chat_threads (
-      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
       thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, paper_id)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS paper_reviews (
-      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      owner_id TEXT NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'private',
       review_json TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      UNIQUE (project_id, paper_id, owner_id)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS paper_presentations (
-      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      owner_id TEXT NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'private',
       presentation_json TEXT NOT NULL,
       source_review_updated_at TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      UNIQUE (project_id, paper_id, owner_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS paper_user_state (
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      reading_status TEXT NOT NULL DEFAULT 'unread',
+      starred INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (paper_id, user_id)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
@@ -250,7 +277,8 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_library_papers_library ON library_papers(library_id, added_at DESC);
     CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title);
     CREATE INDEX IF NOT EXISTS idx_paper_reader_pages_paper ON paper_reader_pages(paper_id, page_number);
-    CREATE INDEX IF NOT EXISTS idx_paper_highlights_paper ON paper_highlights(paper_id, page_number, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_paper_highlights_paper ON paper_highlights(project_id, paper_id, page_number, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_paper_user_state_user ON paper_user_state(user_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_paper_chat_threads_thread ON paper_chat_threads(thread_id);
     CREATE INDEX IF NOT EXISTS idx_paper_reviews_updated ON paper_reviews(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_paper_presentations_updated ON paper_presentations(updated_at DESC);
@@ -269,6 +297,9 @@ function schema(db) {
   ensureColumn(db, "research_threads", "workspace_path", "TEXT");
   ensureColumn(db, "research_projects", "owner_id", "TEXT");
   ensureColumn(db, "libraries", "project_id", "TEXT");
+  ensureColumn(db, "paper_highlights", "project_id", "TEXT");
+  ensureColumn(db, "paper_highlights", "author_id", "TEXT");
+  ensureColumn(db, "paper_highlights", "visibility", "TEXT NOT NULL DEFAULT 'project'");
   ensureColumn(db, "papers", "conference_json", "TEXT NOT NULL DEFAULT 'null'");
   ensureColumn(db, "papers", "github_url", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "papers", "github_stars", "INTEGER NOT NULL DEFAULT 0");
@@ -281,6 +312,116 @@ function schema(db) {
   ensureProjectOwnership(db);
   db.prepare("UPDATE research_threads SET project_id = ? WHERE project_id IS NULL").run(projectId);
   db.prepare("UPDATE libraries SET project_id = ? WHERE project_id IS NULL").run(projectId);
+  migrateProjectScopedPaperData(db, projectId);
+}
+
+function tableColumns(db, table) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name);
+}
+
+function createPaperReviewsTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS paper_reviews (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      owner_id TEXT NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'private',
+      review_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (project_id, paper_id, owner_id)
+    ) STRICT;
+  `);
+}
+
+function createPaperPresentationsTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS paper_presentations (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      owner_id TEXT NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'private',
+      presentation_json TEXT NOT NULL,
+      source_review_updated_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (project_id, paper_id, owner_id)
+    ) STRICT;
+  `);
+}
+
+function createPaperChatThreadsTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS paper_chat_threads (
+      project_id TEXT NOT NULL,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, paper_id)
+    ) STRICT;
+  `);
+}
+
+function migrateProjectScopedPaperData(db, projectId) {
+  const now = timestamp();
+  const ownerId = localIdentity.userId;
+  db.prepare("UPDATE paper_highlights SET project_id = ? WHERE project_id IS NULL").run(projectId);
+  db.prepare("UPDATE paper_highlights SET author_id = ? WHERE author_id IS NULL").run(ownerId);
+  db.prepare(`
+    INSERT OR IGNORE INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
+    SELECT id, ?, reading_status, starred, notes, tags_json, created_at, updated_at FROM papers
+  `).run(ownerId);
+
+  if (!tableColumns(db, "paper_reviews").includes("project_id")) {
+    db.exec("ALTER TABLE paper_reviews RENAME TO paper_reviews_legacy");
+    createPaperReviewsTable(db);
+    const legacyReviews = db.prepare("SELECT * FROM paper_reviews_legacy").all();
+    for (const row of legacyReviews) {
+      const reviewJson = typeof row.review_json === "string"
+        ? row.review_json
+        : JSON.stringify({ specialists: JSON.parse(row.specialists_json || "[]"), supervisor: { reason: row.audit || "" }, summary: { response: row.summary || "" } });
+      db.prepare(`INSERT INTO paper_reviews (id, project_id, paper_id, owner_id, visibility, review_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'private', ?, ?, ?)`)
+        .run(randomUUID(), projectId, row.paper_id, ownerId, reviewJson, row.created_at || now, row.updated_at || now);
+    }
+    db.exec("DROP TABLE paper_reviews_legacy");
+  }
+
+  if (!tableColumns(db, "paper_presentations").includes("project_id")) {
+    db.exec("ALTER TABLE paper_presentations RENAME TO paper_presentations_legacy");
+    createPaperPresentationsTable(db);
+    const legacyPresentations = db.prepare("SELECT * FROM paper_presentations_legacy").all();
+    for (const row of legacyPresentations) {
+      db.prepare(`INSERT INTO paper_presentations (id, project_id, paper_id, owner_id, visibility, presentation_json, source_review_updated_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'private', ?, ?, ?, ?)`)
+        .run(randomUUID(), projectId, row.paper_id, ownerId, row.presentation_json, row.source_review_updated_at || "", row.created_at || now, row.updated_at || now);
+    }
+    db.exec("DROP TABLE paper_presentations_legacy");
+  }
+
+  if (!tableColumns(db, "paper_chat_threads").includes("project_id")) {
+    db.exec("ALTER TABLE paper_chat_threads RENAME TO paper_chat_threads_legacy");
+    createPaperChatThreadsTable(db);
+    const legacyThreads = db.prepare("SELECT * FROM paper_chat_threads_legacy").all();
+    for (const row of legacyThreads) {
+      db.prepare(`INSERT INTO paper_chat_threads (project_id, paper_id, thread_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)`)
+        .run(projectId, row.paper_id, row.thread_id, row.created_at || now, row.updated_at || now);
+    }
+    db.exec("DROP TABLE paper_chat_threads_legacy");
+  }
+  db.prepare("UPDATE research_threads SET project_id = ? WHERE id IN (SELECT thread_id FROM paper_chat_threads WHERE project_id = ?)").run(projectId, projectId);
+
+  db.exec(`
+    DROP INDEX IF EXISTS idx_paper_highlights_paper;
+    CREATE INDEX IF NOT EXISTS idx_paper_highlights_paper ON paper_highlights(project_id, paper_id, page_number, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_paper_reviews_project ON paper_reviews(project_id, paper_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_paper_presentations_project ON paper_presentations(project_id, paper_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_paper_chat_threads_thread ON paper_chat_threads(thread_id);
+  `);
 }
 
 function ensureProjectLibraries(db) {
@@ -557,13 +698,21 @@ function seedLibraries(db) {
   }
 }
 
+function paperUserState(paperId, userId = localIdentity.userId) {
+  const row = requireDatabase().prepare("SELECT * FROM paper_user_state WHERE paper_id = ? AND user_id = ?").get(paperId, userId);
+  return row || null;
+}
+
 function hydratePaper(row) {
+  const state = paperUserState(row.id);
   return {
     ...row,
     authors: JSON.parse(row.authors_json || "[]"),
-    tags: JSON.parse(row.tags_json || "[]"),
+    tags: JSON.parse(state?.tags_json ?? row.tags_json ?? "[]"),
     conference: JSON.parse(row.conference_json || "null") || undefined,
-    starred: Boolean(row.starred),
+    reading_status: state?.reading_status ?? row.reading_status,
+    starred: Boolean(state?.starred ?? row.starred),
+    notes: state?.notes ?? row.notes,
   };
 }
 
@@ -635,10 +784,11 @@ function listPapers(libraryId, query = "") {
   return db.prepare(`
     SELECT papers.* FROM papers
     INNER JOIN library_papers ON library_papers.paper_id = papers.id
+    LEFT JOIN paper_user_state ON paper_user_state.paper_id = papers.id AND paper_user_state.user_id = ?
     WHERE library_papers.library_id = ?
       AND (? = '' OR papers.title LIKE ? OR papers.abstract LIKE ? OR papers.authors_json LIKE ? OR papers.venue LIKE ?)
-    ORDER BY papers.starred DESC, papers.year DESC, library_papers.added_at DESC
-  `).all(libraryId, query.trim(), pattern, pattern, pattern, pattern).map(hydratePaper);
+    ORDER BY COALESCE(paper_user_state.starred, papers.starred) DESC, papers.year DESC, library_papers.added_at DESC
+  `).all(localIdentity.userId, libraryId, query.trim(), pattern, pattern, pattern, pattern).map(hydratePaper);
 }
 
 function getPaper(id) {
@@ -647,11 +797,17 @@ function getPaper(id) {
   return paper ? hydratePaper(paper) : null;
 }
 
-function getPaperReader(paperId) {
+function getPaperReader(paperId, projectId = null) {
   const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "viewer")) throw new Error("You do not have access to this paper in this project.");
   const asset = db.prepare("SELECT * FROM paper_reader_assets WHERE paper_id = ?").get(paperId);
   const pages = db.prepare("SELECT page_number, text FROM paper_reader_pages WHERE paper_id = ? ORDER BY page_number ASC").all(paperId);
-  const highlights = db.prepare("SELECT * FROM paper_highlights WHERE paper_id = ? ORDER BY page_number ASC, created_at DESC").all(paperId);
+  const highlights = db.prepare(`
+    SELECT * FROM paper_highlights
+    WHERE paper_id = ? AND project_id = ? AND (visibility = 'project' OR author_id = ?)
+    ORDER BY page_number ASC, created_at DESC
+  `).all(paperId, resolvedProject, localIdentity.userId);
   return { asset: asset ? { ...asset, truncated: Boolean(asset.truncated) } : null, pages, highlights };
 }
 
@@ -683,9 +839,12 @@ function normalizePaperReview(review) {
   };
 }
 
-function getPaperReview(paperId) {
+function getPaperReview(paperId, projectId = null) {
   const db = requireDatabase();
-  const row = db.prepare("SELECT * FROM paper_reviews WHERE paper_id = ?").get(paperId);
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "viewer")) return null;
+  let row = db.prepare("SELECT * FROM paper_reviews WHERE project_id = ? AND paper_id = ? AND owner_id = ?").get(resolvedProject, paperId, localIdentity.userId);
+  if (!row) row = db.prepare("SELECT * FROM paper_reviews WHERE project_id = ? AND paper_id = ? AND visibility = 'project' ORDER BY updated_at DESC LIMIT 1").get(resolvedProject, paperId);
   if (!row) return null;
   try {
     // Version 0.1.0 originally stored the complete review as review_json.
@@ -716,32 +875,24 @@ function getPaperReview(paperId) {
   }
 }
 
-function savePaperReview(paperId, review) {
+function savePaperReview(paperId, review, projectId = null) {
   const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "editor")) throw new Error("You do not have permission to save a review in this project.");
   if (!db.prepare("SELECT 1 FROM papers WHERE id = ?").get(paperId)) throw new Error("Paper not found.");
   const normalized = normalizePaperReview(review);
   const now = timestamp();
-  const columns = db.prepare("PRAGMA table_info(paper_reviews)").all().map((column) => column.name);
-  if (columns.includes("review_json")) {
-    const serialized = JSON.stringify({
-      specialists: normalized.specialists,
-      supervisor: { reason: normalized.audit },
-      summary: { response: normalized.summary },
-    });
-    db.prepare(`
-      INSERT INTO paper_reviews (paper_id, review_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(paper_id) DO UPDATE SET review_json = excluded.review_json, updated_at = excluded.updated_at
-    `).run(paperId, serialized, now, now);
-    return getPaperReview(paperId);
-  }
+  const serialized = JSON.stringify({
+    specialists: normalized.specialists,
+    supervisor: { reason: normalized.audit },
+    summary: { response: normalized.summary },
+  });
   db.prepare(`
-    INSERT INTO paper_reviews (paper_id, specialists_json, audit, summary, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(paper_id) DO UPDATE SET specialists_json = excluded.specialists_json, audit = excluded.audit,
-      summary = excluded.summary, updated_at = excluded.updated_at
-  `).run(paperId, JSON.stringify(normalized.specialists), normalized.audit, normalized.summary, now, now);
-  return getPaperReview(paperId);
+    INSERT INTO paper_reviews (id, project_id, paper_id, owner_id, visibility, review_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'private', ?, ?, ?)
+    ON CONFLICT(project_id, paper_id, owner_id) DO UPDATE SET review_json = excluded.review_json, updated_at = excluded.updated_at
+  `).run(randomUUID(), resolvedProject, paperId, localIdentity.userId, serialized, now, now);
+  return getPaperReview(paperId, resolvedProject);
 }
 
 const PAPER_PRESENTATION_SECTIONS = ["background", "related_work", "method", "experiments", "limitations"];
@@ -855,9 +1006,12 @@ function normalizePaperPresentation(presentation) {
   };
 }
 
-function getPaperPresentation(paperId) {
+function getPaperPresentation(paperId, projectId = null) {
   const db = requireDatabase();
-  const row = db.prepare("SELECT * FROM paper_presentations WHERE paper_id = ?").get(paperId);
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "viewer")) return null;
+  let row = db.prepare("SELECT * FROM paper_presentations WHERE project_id = ? AND paper_id = ? AND owner_id = ?").get(resolvedProject, paperId, localIdentity.userId);
+  if (!row) row = db.prepare("SELECT * FROM paper_presentations WHERE project_id = ? AND paper_id = ? AND visibility = 'project' ORDER BY updated_at DESC LIMIT 1").get(resolvedProject, paperId);
   if (!row) return null;
   try {
     return {
@@ -871,19 +1025,21 @@ function getPaperPresentation(paperId) {
   }
 }
 
-function savePaperPresentation(paperId, presentation, sourceReviewUpdatedAt) {
+function savePaperPresentation(paperId, presentation, sourceReviewUpdatedAt, projectId = null) {
   const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "editor")) throw new Error("You do not have permission to save a presentation in this project.");
   if (!db.prepare("SELECT 1 FROM papers WHERE id = ?").get(paperId)) throw new Error("Paper not found.");
   if (!String(sourceReviewUpdatedAt || "").trim()) throw new Error("The source review timestamp is required.");
   const normalized = normalizePaperPresentation(presentation);
   const now = timestamp();
   db.prepare(`
-    INSERT INTO paper_presentations (paper_id, presentation_json, source_review_updated_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(paper_id) DO UPDATE SET presentation_json = excluded.presentation_json,
+    INSERT INTO paper_presentations (id, project_id, paper_id, owner_id, visibility, presentation_json, source_review_updated_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'private', ?, ?, ?, ?)
+    ON CONFLICT(project_id, paper_id, owner_id) DO UPDATE SET presentation_json = excluded.presentation_json,
       source_review_updated_at = excluded.source_review_updated_at, updated_at = excluded.updated_at
-  `).run(paperId, JSON.stringify(normalized), sourceReviewUpdatedAt, now, now);
-  return getPaperPresentation(paperId);
+  `).run(randomUUID(), resolvedProject, paperId, localIdentity.userId, JSON.stringify(normalized), sourceReviewUpdatedAt, now, now);
+  return getPaperPresentation(paperId, resolvedProject);
 }
 
 function replacePaperReaderAsset(paperId, asset) {
@@ -961,49 +1117,62 @@ function findPaperPassages(paperId, query) {
   return hits;
 }
 
-function createPaperHighlight(paperId, input) {
+function createPaperHighlight(paperId, input, projectId = null) {
   const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "commenter")) throw new Error("You do not have permission to annotate this project.");
   const pageNumber = Number(input?.page_number);
   const quote = String(input?.quote || "").trim();
   if (!Number.isInteger(pageNumber) || pageNumber < 1 || !quote || quote.length > 5_000) throw new Error("Choose a valid page and a short text selection.");
   if (!db.prepare("SELECT 1 FROM paper_reader_pages WHERE paper_id = ? AND page_number = ?").get(paperId, pageNumber)) throw new Error("That page has not been indexed yet.");
   const now = timestamp();
   const id = randomUUID();
-  db.prepare(`INSERT INTO paper_highlights (id, paper_id, page_number, quote, start_offset, end_offset, note, color, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, paperId, pageNumber, quote, Number.isInteger(input.start_offset) ? input.start_offset : null,
+  const visibility = input?.visibility === "private" ? "private" : "project";
+  db.prepare(`INSERT INTO paper_highlights (id, project_id, paper_id, author_id, visibility, page_number, quote, start_offset, end_offset, note, color, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, resolvedProject, paperId, localIdentity.userId, visibility, pageNumber, quote,
+      Number.isInteger(input.start_offset) ? input.start_offset : null,
       Number.isInteger(input.end_offset) ? input.end_offset : null, String(input.note || "").slice(0, 5_000),
       ["green", "yellow", "blue", "pink", "red"].includes(input.color) ? input.color : "green", now, now);
   return db.prepare("SELECT * FROM paper_highlights WHERE id = ?").get(id);
 }
 
-function deletePaperHighlight(id) {
+function deletePaperHighlight(id, projectId = null) {
   const db = requireDatabase();
+  const highlight = db.prepare("SELECT id, project_id, author_id FROM paper_highlights WHERE id = ?").get(id);
+  if (!highlight) return { deleted: false };
+  if (projectId && highlight.project_id && projectId !== highlight.project_id) throw new Error("This annotation belongs to a different project.");
+  const resolvedProject = projectId || highlight.project_id || ensureDefaultProject(db);
+  if (!canAccessProject(resolvedProject, "commenter")) throw new Error("You do not have permission to remove this annotation.");
+  if (highlight.author_id !== localIdentity.userId && !canAccessProject(resolvedProject, "editor")) throw new Error("You can only remove your own annotations.");
   return { deleted: db.prepare("DELETE FROM paper_highlights WHERE id = ?").run(id).changes > 0 };
 }
 
-function getPaperChatThread(paperId) {
+function getPaperChatThread(paperId, projectId = null) {
   const db = requireDatabase();
-  const row = db.prepare("SELECT thread_id FROM paper_chat_threads WHERE paper_id = ?").get(paperId);
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "viewer")) return null;
+  const row = db.prepare("SELECT thread_id FROM paper_chat_threads WHERE project_id = ? AND paper_id = ?").get(resolvedProject, paperId);
   if (!row) return null;
   try { return getResearchThread(row.thread_id); }
   catch {
-    db.prepare("DELETE FROM paper_chat_threads WHERE paper_id = ?").run(paperId);
+    db.prepare("DELETE FROM paper_chat_threads WHERE project_id = ? AND paper_id = ?").run(resolvedProject, paperId);
     return null;
   }
 }
 
-function setPaperChatThread(paperId, threadId) {
+function setPaperChatThread(paperId, threadId, projectId = null) {
   const db = requireDatabase();
+  const resolvedProject = resolveLibraryProject(projectId);
+  if (!canAccessProject(resolvedProject, "editor")) throw new Error("You do not have permission to save a paper chat in this project.");
   if (!db.prepare("SELECT 1 FROM papers WHERE id = ?").get(paperId)) throw new Error("Paper not found.");
   if (!db.prepare("SELECT 1 FROM research_threads WHERE id = ?").get(threadId)) throw new Error("Research thread not found.");
   const now = timestamp();
-  db.prepare(`INSERT INTO paper_chat_threads (paper_id, thread_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(paper_id) DO UPDATE SET thread_id = excluded.thread_id, updated_at = excluded.updated_at`).run(paperId, threadId, now, now);
-  // Paper-reader chats are private to their paper and should not crowd the project sidebar.
-  db.prepare("UPDATE research_threads SET project_id = NULL, updated_at = ? WHERE id = ?").run(now, threadId);
-  return getPaperChatThread(paperId);
+  db.prepare(`INSERT INTO paper_chat_threads (project_id, paper_id, thread_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(project_id, paper_id) DO UPDATE SET thread_id = excluded.thread_id, updated_at = excluded.updated_at`).run(resolvedProject, paperId, threadId, now, now);
+  db.prepare("UPDATE research_threads SET project_id = ?, updated_at = ? WHERE id = ?").run(resolvedProject, now, threadId);
+  return getPaperChatThread(paperId, resolvedProject);
 }
 
 function addPaper(libraryId, paper) {
@@ -1031,6 +1200,10 @@ function addPaper(libraryId, paper) {
       paper.github_url || "", Number(paper.github_stars) || 0, now, now,
     );
   }
+  db.prepare(`
+    INSERT OR IGNORE INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
+    VALUES (?, ?, 'unread', 0, '', '[]', ?, ?)
+  `).run(paperId, localIdentity.userId, now, now);
   if (paper.github_url) {
     db.prepare("UPDATE papers SET github_url = CASE WHEN github_url = '' THEN ? ELSE github_url END, github_stars = MAX(github_stars, ?), updated_at = ? WHERE id = ?")
       .run(paper.github_url, Number(paper.github_stars) || 0, now, paperId);
@@ -1049,16 +1222,28 @@ function updatePaper(id, patch) {
   const db = requireDatabase();
   const current = db.prepare("SELECT * FROM papers WHERE id = ?").get(id);
   if (!current) throw new Error("Paper not found.");
+  const state = paperUserState(id) || {
+    reading_status: current.reading_status,
+    starred: current.starred,
+    notes: current.notes,
+    tags_json: current.tags_json,
+    created_at: current.created_at,
+  };
   const next = {
     title: typeof patch.title === "string" ? patch.title.trim() : current.title,
-    reading_status: ["unread", "reading", "read"].includes(patch.reading_status) ? patch.reading_status : current.reading_status,
-    starred: typeof patch.starred === "boolean" ? Number(patch.starred) : current.starred,
-    notes: typeof patch.notes === "string" ? patch.notes : current.notes,
-    tags_json: Array.isArray(patch.tags) ? JSON.stringify(patch.tags) : current.tags_json,
+    reading_status: ["unread", "reading", "read"].includes(patch.reading_status) ? patch.reading_status : state.reading_status,
+    starred: typeof patch.starred === "boolean" ? Number(patch.starred) : state.starred,
+    notes: typeof patch.notes === "string" ? patch.notes : state.notes,
+    tags_json: Array.isArray(patch.tags) ? JSON.stringify(patch.tags) : state.tags_json,
     updated_at: timestamp(),
   };
-  db.prepare("UPDATE papers SET title = ?, reading_status = ?, starred = ?, notes = ?, tags_json = ?, updated_at = ? WHERE id = ?")
-    .run(next.title, next.reading_status, next.starred, next.notes, next.tags_json, next.updated_at, id);
+  db.prepare("UPDATE papers SET title = ?, updated_at = ? WHERE id = ?").run(next.title, next.updated_at, id);
+  db.prepare(`
+    INSERT INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(paper_id, user_id) DO UPDATE SET reading_status = excluded.reading_status, starred = excluded.starred,
+      notes = excluded.notes, tags_json = excluded.tags_json, updated_at = excluded.updated_at
+  `).run(id, localIdentity.userId, next.reading_status, next.starred, next.notes, next.tags_json, state.created_at || next.updated_at, next.updated_at);
   return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(id));
 }
 
