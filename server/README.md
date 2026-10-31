@@ -1,7 +1,10 @@
 # Archimedes collaboration server
 
 A dependency-free Node 24 HTTP service and SQLite store for the first async
-collaboration foundation.
+collaboration foundation. The production contract lives in
+[`docs/collaboration`](../docs/collaboration/README.md), with the PostgreSQL
+schema in [`server/sql/0001_collaboration.sql`](sql/0001_collaboration.sql) and
+the API surface in [`server/openapi.json`](openapi.json).
 
 ## What exists
 
