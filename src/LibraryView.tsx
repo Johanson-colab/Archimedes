@@ -45,6 +45,7 @@ import {
   Boxes,
   Brain,
   CalendarDays,
+  ArrowUp,
   Database,
   Check,
   ChevronDown,
@@ -75,7 +76,6 @@ import {
   RefreshCw,
   Save,
   Search,
-  Send,
   ShieldCheck,
   Square,
   Sparkles,
@@ -544,7 +544,7 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
       </div>}
       <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (shouldSubmitPaperChatKey(event)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? t("Ask about the selected code…") : t("Ask about the paper…")} rows={1} />
     </div>
-    <button className="primary-button" disabled={busy ? !canInterrupt || cancelling : !draft.trim()} onClick={busy ? onInterrupt : submit}>{busy ? <><Square size={13} fill="currentColor" />{cancelling ? t("Stopping") : t("Stop")}</> : <><Send size={14} />{t("Send")}</>}</button>
+    <button className="paper-ai-send" disabled={busy ? !canInterrupt || cancelling : !draft.trim()} onClick={busy ? onInterrupt : submit} title={busy ? (cancelling ? t("Stopping") : t("Stop")) : t("Send")} aria-label={busy ? (cancelling ? t("Stopping") : t("Stop")) : t("Send")}>{busy ? <Square size={13} fill="currentColor" /> : <ArrowUp size={15} />}</button>
   </div>;
 });
 
@@ -2596,7 +2596,9 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     <div className={searchKind === "deep" ? "daily-search-panel deep" : "daily-search-panel"}>
       <div className="daily-search-kind" role="tablist" aria-label="Paper search type"><button className={searchKind === "quick" ? "active" : ""} role="tab" aria-selected={searchKind === "quick"} onClick={() => changeSearchKind("quick")}><Search size={13} />Quick search</button><button className={searchKind === "deep" ? "active" : ""} role="tab" aria-selected={searchKind === "deep"} onClick={() => changeSearchKind("deep")}><Sparkles size={13} />Deep search</button></div>
       <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
-        <button className="primary-button" disabled={loading || !query.trim()} onClick={() => void submitSearch()}>{loading ? <LoaderCircle className="spin" size={14} /> : searchKind === "deep" ? <Sparkles size={14} /> : <Search size={14} />}{searchKind === "deep" ? "Deep search" : "Search"}</button>
+        {searchKind === "deep"
+          ? <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title="Deep search" aria-label="Deep search">{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
+          : <button className="primary-button" disabled={loading || !query.trim()} onClick={() => void submitSearch()}>{loading ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button>}
       </div>
       {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}</span></div>}
     </div>
