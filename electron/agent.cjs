@@ -844,12 +844,12 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], emit = () => {}, browser, transient = false }) {
+async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], emit = () => {}, browser, transient = false }) {
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
   };
-  const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace });
+  const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace, visibility });
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
   const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });
   const turn = transient

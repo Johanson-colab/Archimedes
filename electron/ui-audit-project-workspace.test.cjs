@@ -24,7 +24,7 @@ test("projects persist a bound folder and sessions snapshot their inherited fold
 test("agent and review runs separate the data workspace from the execution folder", () => {
   assert.match(main, /const dataWorkspace = workspaceForWindow\(BrowserWindow\.fromWebContents\(event\.sender\)\) \|\| workspace;/);
   assert.match(main, /store\.openWorkspace\(dataWorkspace\);/);
-  assert.match(agent, /createResearchThread\(\{ prompt, mode, projectId, workspacePath: workspace \}\)/);
+  assert.match(agent, /createResearchThread\(\{ prompt, mode, projectId, workspacePath: workspace, visibility \}\)/);
   assert.match(main, /ipcMain\.handle\("research-project:set-workspace"/);
   assert.match(preload, /setResearchProjectWorkspace: \(id, workspacePath\)/);
   assert.match(types, /setResearchProjectWorkspace: \(id: string, workspacePath: string\)/);
@@ -57,7 +57,7 @@ test("new projects choose a folder and existing projects can rebind it", () => {
 });
 
 test("the composer surfaces the effective working folder", () => {
-  assert.match(app, /workspace=\{executionWorkspace\}\s+projectId=\{activeProjectId\}\s+agentBusy=/);
+  assert.match(app, /workspace=\{executionWorkspace\}\s+projectId=\{activeProjectId\}\s+threadVisibility=\{threadVisibility\}\s+onThreadVisibility=/);
   assert.match(app, /className="composer-context"><ShieldCheck size=\{13\} \/><span>\{workspace \? workspace\.split/);
 });
 

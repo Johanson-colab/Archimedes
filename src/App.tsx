@@ -101,6 +101,7 @@ import {
   Laptop,
   Lightbulb,
   LoaderCircle,
+  Lock,
   Maximize2,
   MessageCircle,
   MessageSquareText,
@@ -124,6 +125,7 @@ import {
   Sparkles,
   Square,
   SquareTerminal,
+  Users,
   X,
 } from "lucide-react";
 
@@ -340,6 +342,7 @@ const previewTasks: SavedTask[] = [];
 const previewProjects: ResearchProject[] = [{ id: "preview-general", name: "General", description: "Default research project", workspace_path: DEFAULT_WORKSPACE || null, chat_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, last_chat_at: null }];
 const previewArchivedProjects: ResearchProject[] = [];
 const previewThreads: ResearchThreadDetail[] = [];
+const previewThreadSnapshots: Array<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }> = [];
 const previewArchivedThreads: ResearchThreadDetail[] = [];
 const previewCommands: WorkspaceSnapshot["commands"] = [];
 const previewActions: AgentAction[] = [];
@@ -530,6 +533,21 @@ const previewBridge = {
     }
     return { deleted: true };
   },
+  setResearchThreadVisibility: async (threadId: string, visibility: "project" | "private") => {
+    const thread = previewThreads.find((candidate) => candidate.id === threadId) || previewArchivedThreads.find((candidate) => candidate.id === threadId);
+    if (!thread) throw new Error("Research thread not found.");
+    thread.visibility = visibility === "private" ? "private" : "project";
+    return { visibility: thread.visibility };
+  },
+  createResearchThreadSnapshot: async (threadId: string) => {
+    const thread = previewThreads.find((candidate) => candidate.id === threadId);
+    if (!thread) throw new Error("Research thread not found.");
+    const snapshot = { id: crypto.randomUUID(), thread_id: thread.id, project_id: thread.project_id, sequence: thread.events?.length || 0, created_at: new Date().toISOString(), manifest: { version: 1, title: thread.title, visibility: thread.visibility, turns: thread.turns.length } };
+    previewThreadSnapshots.unshift(snapshot);
+    return structuredClone(snapshot);
+  },
+  listResearchThreadSnapshots: async (threadId: string) => structuredClone(previewThreadSnapshots.filter((snapshot) => snapshot.thread_id === threadId)),
+  getResearchThreadSnapshot: async (snapshotId: string) => structuredClone(previewThreadSnapshots.find((snapshot) => snapshot.id === snapshotId) || null),
   archiveResearchThread: async (id: string, archived = true) => {
     const source = archived ? previewThreads : previewArchivedThreads;
     const target = archived ? previewArchivedThreads : previewThreads;
@@ -559,13 +577,13 @@ const previewBridge = {
   readClipboardText: async () => "",
   writeClipboardText: async () => undefined,
   readClipboardImage: async () => null,
-  runAgent: async ({ prompt, workspace, threadId, projectId, mode, reasoningEffort = "medium", contextLength = "standard", contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[] }) => {
+  runAgent: async ({ prompt, workspace, threadId, projectId, visibility = "project", mode, reasoningEffort = "medium", contextLength = "standard", contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[] }) => {
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
       const resolvedProjectId = projectId || previewProjects[0]?.id || "preview-general";
       const projectWorkspace = previewProjects.find((candidate) => candidate.id === resolvedProjectId)?.workspace_path;
-      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, title: prompt.slice(0, 72), mode, status: "running", context_summary: "", workspace_path: workspace || projectWorkspace || previewWorkspace, pending_actions: 0, turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
+      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, owner_id: previewLocalIdentity.userId, visibility: visibility === "private" ? "private" : "project", title: prompt.slice(0, 72), mode, status: "running", context_summary: "", workspace_path: workspace || projectWorkspace || previewWorkspace, pending_actions: 0, turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
       previewThreads.unshift(thread);
     }
     const turnId = crypto.randomUUID();
@@ -930,6 +948,7 @@ function App() {
   const [archivedThreads, setArchivedThreads] = useState<ResearchThread[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
@@ -1015,6 +1034,9 @@ function App() {
   const refreshingThreadsRef = useRef(false);
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? null;
+  useEffect(() => {
+    if (activeThread?.visibility === "private" || activeThread?.visibility === "project") setThreadVisibility(activeThread.visibility);
+  }, [activeThread?.visibility, activeThreadId]);
   // Research data lives in the primary workspace. Agent tools, files, terminal,
   // and paper writing operate inside the session folder: session snapshot →
   // project folder → primary workspace.
@@ -1713,6 +1735,19 @@ function App() {
     }
   }
 
+  async function changeThreadVisibility(visibility: "project" | "private") {
+    if (activeThreadId) {
+      try {
+        await desktopBridge.setResearchThreadVisibility(activeThreadId, visibility);
+        setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, visibility } : thread));
+      } catch (error) {
+        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not change thread visibility: ${String(error)}` }]);
+        return;
+      }
+    }
+    setThreadVisibility(visibility);
+  }
+
   function startNewTask(projectId = activeProjectId) {
     if (agentBusy) return;
     setMainSection("chat");
@@ -1721,6 +1756,7 @@ function App() {
     if (projectId) setActiveProjectId(projectId);
     activeThreadIdRef.current = null;
     setActiveThreadId(null);
+    setThreadVisibility("project");
     setMessages(initialMessages);
     setTrajectoryEvents([]);
     setPendingAction(null);
@@ -1906,7 +1942,7 @@ function App() {
     setEvents([{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       if (submittedThreadId === null) {
         const draftNote = noteValuesRef.current[draftNoteKey] ?? "";
@@ -2392,6 +2428,8 @@ function App() {
               trajectoryEvents={trajectoryEvents}
               workspace={executionWorkspace}
               projectId={activeProjectId}
+              threadVisibility={threadVisibility}
+              onThreadVisibility={(visibility) => void changeThreadVisibility(visibility)}
               agentBusy={agentBusy}
               interrupting={interrupting}
               pendingAction={pendingAction}
@@ -2734,12 +2772,14 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   workspace: string;
   projectId?: string | null;
+  threadVisibility: "project" | "private";
+  onThreadVisibility: (visibility: "project" | "private") => void;
   agentBusy: boolean;
   interrupting: boolean;
   canInterrupt: boolean;
@@ -2977,6 +3017,15 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
               </div>}
             </div>}
           </div>
+          <button
+            className={`composer-tool thread-visibility-trigger ${threadVisibility}`}
+            onClick={() => onThreadVisibility(threadVisibility === "private" ? "project" : "private")}
+            title={threadVisibility === "private" ? "Only you can see this thread" : "Project members can see this thread"}
+            aria-label={threadVisibility === "private" ? "Make thread project-visible" : "Make thread private"}
+          >
+            {threadVisibility === "private" ? <Lock size={12} /> : <Users size={12} />}
+            <span>{threadVisibility === "private" ? "Private draft" : "Project thread"}</span>
+          </button>
           <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
           <div
             className={`context-usage ${contextUsageState}`}
