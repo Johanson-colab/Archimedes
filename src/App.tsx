@@ -866,6 +866,20 @@ const previewBridge = {
 
 const FileCodeEditor = lazy(() => import("./FileCodeEditor"));
 
+const ACTIVE_PROJECT_STORAGE_PREFIX = "archimedes-active-project:";
+
+function preferredProjectKey(workspacePath: string) {
+  return `${ACTIVE_PROJECT_STORAGE_PREFIX}${workspacePath}`;
+}
+
+function readPreferredProject(workspacePath: string) {
+  try { return window.localStorage.getItem(preferredProjectKey(workspacePath)) || null; } catch { return null; }
+}
+
+function rememberPreferredProject(workspacePath: string, projectId: string) {
+  try { window.localStorage.setItem(preferredProjectKey(workspacePath), projectId); } catch { /* storage is optional */ }
+}
+
 const desktopBridge: ResearchDeskBridge = window.researchDesk ?? previewBridge;
 const MAX_PASTED_IMAGE_BYTES = 6 * 1024 * 1024;
 const PASTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -1152,6 +1166,11 @@ function App() {
   useEffect(() => {
     writeAppearance(appearance);
   }, [appearance]);
+
+  useEffect(() => {
+    if (!workspace || !activeProjectId) return;
+    rememberPreferredProject(workspace, activeProjectId);
+  }, [activeProjectId, workspace]);
 
   useEffect(() => {
     const handleSettingsShortcut = (event: KeyboardEvent) => {
@@ -1697,8 +1716,32 @@ function App() {
     setFileErrors({});
     setWorkspaceReady(true);
 
-    if (snapshot.threads.length) {
-      const thread = await desktopBridge.getResearchThread(snapshot.threads[0].id, snapshot.workspace);
+    // Reopen the project the user was last looking at. Falling back to the most
+    // recent thread alone lands people in whichever project they last chatted
+    // in, which can be a project with no libraries at all.
+    const knownProjects = new Set((snapshot.projects ?? []).map((project) => project.id));
+    const rememberedProject = readPreferredProject(snapshot.workspace);
+    let restoreProjectId = rememberedProject && knownProjects.has(rememberedProject) ? rememberedProject : null;
+
+    // First launch after this change: if the most recent thread sits in a
+    // project with no papers, start in the project that actually holds them
+    // instead of opening an empty library.
+    if (!restoreProjectId && snapshot.threads.length && typeof desktopBridge.listLibraryProjects === "function") {
+      const recentProject = snapshot.threads[0].project_id;
+      const summary = await desktopBridge.listLibraryProjects().catch(() => []);
+      const recentHasPapers = summary.some((entry) => entry.project_id === recentProject && entry.paper_count > 0);
+      if (!recentHasPapers) {
+        const populated = summary.find((entry) => entry.paper_count > 0 && knownProjects.has(entry.project_id));
+        if (populated) restoreProjectId = populated.project_id;
+      }
+    }
+
+    const restoreThread = restoreProjectId
+      ? snapshot.threads.find((candidate) => candidate.project_id === restoreProjectId) ?? null
+      : snapshot.threads[0] ?? null;
+
+    if (restoreThread) {
+      const thread = await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
       setEvents([]);
@@ -1711,7 +1754,7 @@ function App() {
       setTrajectoryEvents([]);
       setEvents([]);
       setActiveThreadId(null);
-      setActiveProjectId(snapshot.projects?.[0]?.id ?? null);
+      setActiveProjectId(restoreProjectId ?? snapshot.projects?.[0]?.id ?? null);
       setChangeSets([]);
     }
 
