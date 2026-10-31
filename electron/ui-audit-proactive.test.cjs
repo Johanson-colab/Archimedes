@@ -146,6 +146,7 @@ test("proactive settings expose mode, budget, quiet hours, and L0 sources", () =
   assert.match(settingsPanel, /Off/);
   assert.match(settingsPanel, /Manual/);
   assert.match(settingsPanel, /Auto/);
+  assert.match(settingsPanel, /Random/);
   assert.match(settingsPanel, /Daily budget/);
   assert.match(settingsPanel, /Quiet hours/);
   assert.match(settingsPanel, /Search with 0 results/);
@@ -268,4 +269,14 @@ test("the research path is thread-scoped and can be pinned globally", () => {
   assert.match(researchPath, /onTogglePin/);
   assert.match(researchPath, /Open pinned thread/);
   assert.match(researchPath, /threadInactive/);
+});
+
+test("configured model starts auto from the dock and random mode opens on signals", () => {
+  assert.match(app, /function toggleProactiveDock\(\)[\s\S]*?proactive\.settings\.mode === "off"[\s\S]*?proactive\.modelReady[\s\S]*?proactive\.setSettings\(\{ mode: "auto" \}\)[\s\S]*?proactive\.setOpen\(true\)/);
+  assert.match(hook, /const presentSignal = useCallback[\s\S]*?settings\.mode === "random"[\s\S]*?setOpen\(true\)/);
+  assert.match(hook, /const persistOpen = state\.settings\.mode === "random" \? false/);
+  assert.match(hook, /if \(state\.settings\.mode === "random"\) setOpen\(false\)/);
+  assert.match(hook, /\(mode !== "auto" && mode !== "random"\)/);
+  assert.match(proactive, /mode === "random"/);
+  assert.match(types, /ProactiveMode = "off" \| "manual" \| "auto" \| "random"/);
 });

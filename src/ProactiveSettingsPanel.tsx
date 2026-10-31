@@ -8,6 +8,7 @@ const MODES: Array<{ id: ProactiveSettings["mode"]; label: string; description: 
   { id: "off", label: "Off", description: "No signals, no suggestions. Nothing is collected." },
   { id: "manual", label: "Manual", description: "Only when you ask Proactive agent to look at the current context." },
   { id: "auto", label: "Auto", description: "Watch L0 signals and observe the active context in seconds-level bursts." },
+  { id: "random", label: "Random", description: "Stay closed until Proactive agent has something to say, then pop up automatically." },
 ];
 
 function Row({ title, description, hint, children, stacked = false }: { title: string; description: string; hint?: string; children: React.ReactNode; stacked?: boolean }) {
