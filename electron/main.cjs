@@ -331,8 +331,8 @@ function workspaceForWindow(browserWindow) {
   return browserWindow ? windowWorkspaces.get(browserWindow.webContents.id) : undefined;
 }
 
-function readerStateForWindow(senderId, workspace, paperId) {
-  const reader = store.getPaperReader(paperId);
+function readerStateForWindow(senderId, workspace, paperId, projectId = null) {
+  const reader = store.getPaperReader(paperId, projectId);
   if (!reader.asset?.relative_path || reader.asset.status !== "ready") return reader;
   try {
     const target = workspaceFiles.workspacePath(workspace, reader.asset.relative_path);
@@ -922,26 +922,26 @@ app.whenReady().then(() => {
     return store.removePaper(libraryId, paperId);
   });
 
-  ipcMain.handle("library:get-reader", (event, { paperId, workspace } = {}) => {
+  ipcMain.handle("library:get-reader", (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     store.openWorkspace(resolvedWorkspace);
-    return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
+    return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId, projectId);
   });
 
-  ipcMain.handle("library:get-paper-chat-thread", (_event, { paperId, workspace } = {}) => {
+  ipcMain.handle("library:get-paper-chat-thread", (_event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     store.openWorkspace(resolveWorkspace(workspace));
-    return store.getPaperChatThread(paperId);
+    return store.getPaperChatThread(paperId, projectId);
   });
 
-  ipcMain.handle("library:set-paper-chat-thread", (_event, { paperId, threadId, workspace } = {}) => {
+  ipcMain.handle("library:set-paper-chat-thread", (_event, { paperId, threadId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string" || typeof threadId !== "string") throw new Error("A paper and research thread are required.");
     store.openWorkspace(resolveWorkspace(workspace));
-    return store.setPaperChatThread(paperId, threadId);
+    return store.setPaperChatThread(paperId, threadId, projectId);
   });
 
-  ipcMain.handle("library:prepare-reader", async (event, { paperId, workspace } = {}) => {
+  ipcMain.handle("library:prepare-reader", async (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     store.openWorkspace(resolvedWorkspace);
@@ -950,14 +950,14 @@ app.whenReady().then(() => {
     try {
       const asset = await preparePaperReader({ workspace: resolvedWorkspace, paper });
       store.replacePaperReaderAsset(paperId, asset);
-      return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
+      return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId, projectId);
     } catch (error) {
       store.setPaperReaderFailed(paperId, error instanceof Error ? error.message : String(error));
       throw error;
     }
   });
 
-  ipcMain.handle("library:attach-reader-pdf", async (event, { paperId, workspace } = {}) => {
+  ipcMain.handle("library:attach-reader-pdf", async (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     store.openWorkspace(resolvedWorkspace);
@@ -967,11 +967,11 @@ app.whenReady().then(() => {
     const result = browserWindow
       ? await dialog.showOpenDialog(browserWindow, { title: "Attach paper PDF", properties: ["openFile"], filters: [{ name: "PDF", extensions: ["pdf"] }] })
       : await dialog.showOpenDialog({ title: "Attach paper PDF", properties: ["openFile"], filters: [{ name: "PDF", extensions: ["pdf"] }] });
-    if (result.canceled || !result.filePaths[0]) return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
+    if (result.canceled || !result.filePaths[0]) return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId, projectId);
     try {
       const asset = await preparePaperReader({ workspace: resolvedWorkspace, paper, localPath: result.filePaths[0] });
       store.replacePaperReaderAsset(paperId, asset);
-      return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId);
+      return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId, projectId);
     } catch (error) {
       store.setPaperReaderFailed(paperId, error instanceof Error ? error.message : String(error));
       throw error;
@@ -984,16 +984,16 @@ app.whenReady().then(() => {
     return store.findPaperPassages(paperId, query);
   });
 
-  ipcMain.handle("library:create-highlight", (_event, { paperId, input, workspace } = {}) => {
+  ipcMain.handle("library:create-highlight", (_event, { paperId, input, workspace, projectId } = {}) => {
     if (typeof paperId !== "string" || !input || typeof input !== "object") throw new Error("A paper and text selection are required.");
     store.openWorkspace(resolveWorkspace(workspace));
-    return store.createPaperHighlight(paperId, input);
+    return store.createPaperHighlight(paperId, input, projectId);
   });
 
-  ipcMain.handle("library:delete-highlight", (_event, { id, workspace } = {}) => {
+  ipcMain.handle("library:delete-highlight", (_event, { id, workspace, projectId } = {}) => {
     if (typeof id !== "string") throw new Error("A highlight is required.");
     store.openWorkspace(resolveWorkspace(workspace));
-    return store.deletePaperHighlight(id);
+    return store.deletePaperHighlight(id, projectId);
   });
 
   ipcMain.handle("library:translate-selection", async (_event, { text } = {}) => {
@@ -1145,16 +1145,16 @@ app.whenReady().then(() => {
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit,
     });
-    if (!result.error && result.summary?.response) store.savePaperReview(paper.id, result);
+    if (!result.error && result.summary?.response) store.savePaperReview(paper.id, result, input.projectId);
     return result;
   });
 
-  ipcMain.handle("paper-review:get", (event, { paperId, workspace } = {}) => {
+  ipcMain.handle("paper-review:get", (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to restore an evidence review.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
-    return store.getPaperReview(paperId);
+    return store.getPaperReview(paperId, projectId);
   });
 
   ipcMain.handle("paper-presentation:run", async (event, input) => {
@@ -1165,7 +1165,7 @@ app.whenReady().then(() => {
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
     store.openWorkspace(dataWorkspace);
     const requestedSourceMode = input.sourceMode === "paper" ? "paper" : "review";
-    const review = store.getPaperReview(input.paper.id);
+    const review = store.getPaperReview(input.paper.id, input.projectId);
     if (requestedSourceMode === "review" && !review) {
       throw new Error("Finish and save the text review, or choose Generate from original paper.");
     }
@@ -1227,18 +1227,18 @@ app.whenReady().then(() => {
     const sourceMarker = requestedSourceMode === "review"
       ? review.updated_at
       : `paper:${reader.asset.updated_at || reader.asset.sha256 || "prepared"}`;
-    const saved = store.savePaperPresentation(paper.id, { ...presentationPlan, artifact }, sourceMarker);
+    const saved = store.savePaperPresentation(paper.id, { ...presentationPlan, artifact }, sourceMarker, input.projectId);
     const token = createPreviewToken(event.sender.id, dataWorkspace);
     return { ...saved, artifact: { ...saved.artifact,
       preview_url: `archimedes-file://${token}/${saved.artifact.pdf_path.split("/").map(encodeURIComponent).join("/")}?v=${Date.now()}` } };
   });
 
-  ipcMain.handle("paper-presentation:get", (event, { paperId, workspace } = {}) => {
+  ipcMain.handle("paper-presentation:get", (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to restore a presentation.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
-    const saved = store.getPaperPresentation(paperId);
+    const saved = store.getPaperPresentation(paperId, projectId);
     if (!saved?.artifact || !["pptd", "pptx"].includes(saved.artifact.kind)) return saved;
     try {
       workspaceFiles.workspacePath(dataWorkspace, saved.artifact.pdf_path);
@@ -1250,12 +1250,12 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("paper-presentation:reveal", (event, { paperId, workspace } = {}) => {
+  ipcMain.handle("paper-presentation:reveal", (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to locate a presentation.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
-    const artifact = store.getPaperPresentation(paperId)?.artifact;
+    const artifact = store.getPaperPresentation(paperId, projectId)?.artifact;
     if (!artifact || !["pptd", "pptx"].includes(artifact.kind)) throw new Error("This paper has no saved presentation.");
     const pptxPath = workspaceFiles.workspacePath(dataWorkspace, artifact.pptx_path);
     if (!fs.existsSync(pptxPath)) throw new Error("The saved presentation file is missing.");

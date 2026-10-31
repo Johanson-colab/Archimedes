@@ -34,9 +34,9 @@ test("all-specialist failure preserves the original errors for the workbench", (
 });
 
 test("completed reviews are saved and restored when the review tab remounts", () => {
-  assert.match(main, /store\.savePaperReview\(paper\.id, result\)/);
+  assert.match(main, /store\.savePaperReview\(paper\.id, result, input\.projectId\)/);
   assert.match(main, /ipcMain\.handle\("paper-review:get"/);
-  assert.match(review, /bridge\.getPaperReview\(paper\.id, workspace\)/);
+  assert.match(review, /bridge\.getPaperReview\(paper\.id, workspace, projectId\)/);
   assert.match(review, /Saved review restored/);
 });
 
@@ -44,7 +44,7 @@ test("text review and generated presentation remain independent outputs", () => 
   assert.match(review, /ReactMarkdown/);
   assert.match(review, /Text review/);
   assert.match(review, /PaperPresentationDeck/);
-  assert.match(main, /store\.getPaperReview\(input\.paper\.id\)/);
+  assert.match(main, /store\.getPaperReview\(input\.paper\.id, input\.projectId\)/);
   assert.match(main, /store\.savePaperPresentation/);
   assert.match(main, /ipcMain\.handle\("paper-presentation:get"/);
   assert.match(kimiSlidesSkill, /never alter the saved review/);
