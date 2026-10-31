@@ -71,6 +71,36 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
     const state = await call(second, `/v1/papers/${addedPaper.body.paper.id}`, "PATCH", { reading_status: "read", starred: true, tags: ["smoke"] });
     assert.equal(state.status, 200, JSON.stringify(state.body));
     assert.equal(state.body.state.reading_status, "read");
+
+    const highlight = await call(first, `/v1/projects/${projectId}/highlights`, "POST", {
+      paper_id: addedPaper.body.paper.id, page_number: 1, quote: "A shared quote", color: "yellow", visibility: "project",
+    });
+    assert.equal(highlight.status, 201, JSON.stringify(highlight.body));
+    const highlightsForSecond = await call(second, `/v1/projects/${projectId}/highlights?paperId=${addedPaper.body.paper.id}`);
+    assert.equal(highlightsForSecond.status, 200);
+    assert.equal(highlightsForSecond.body.highlights[0].quote, "A shared quote");
+
+    const review = await call(second, `/v1/projects/${projectId}/papers/${addedPaper.body.paper.id}/review`, "PUT", {
+      review: { specialists: [{ id: "related", status: "complete", response: "ok" }], supervisor: { reason: "ok" }, summary: { response: "Summary" } },
+      visibility: "project",
+    });
+    assert.equal(review.status, 200, JSON.stringify(review.body));
+    const reviewForFirst = await call(first, `/v1/projects/${projectId}/papers/${addedPaper.body.paper.id}/review`);
+    assert.equal(reviewForFirst.status, 200);
+    assert.equal(reviewForFirst.body.review.review_json.summary.response, "Summary");
+
+    const presentation = await call(second, `/v1/projects/${projectId}/papers/${addedPaper.body.paper.id}/presentation`, "PUT", {
+      presentation: { title: "Shared deck", slides: [] },
+      visibility: "project",
+      source_review_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    assert.equal(presentation.status, 200, JSON.stringify(presentation.body));
+    const presentationForFirst = await call(first, `/v1/projects/${projectId}/papers/${addedPaper.body.paper.id}/presentation`);
+    assert.equal(presentationForFirst.status, 200);
+    assert.equal(presentationForFirst.body.presentation.presentation_json.title, "Shared deck");
+
+    const removeHighlight = await call(first, `/v1/highlights/${highlight.body.highlight.id}`, "DELETE");
+    assert.equal(removeHighlight.status, 200);
     const removePaper = await call(first, `/v1/libraries/${library.body.library.id}/papers/${addedPaper.body.paper.id}`, "DELETE");
     assert.equal(removePaper.status, 200);
     const removeLibrary = await call(first, `/v1/libraries/${library.body.library.id}`, "DELETE");

@@ -34,6 +34,10 @@ test("desktop library view can push and pull shared libraries", () => {
   assert.match(bridge, /interface CloudLibrarySyncResult/);
   assert.match(libraryView, /Sync cloud/);
   assert.match(libraryView, /syncProjectLibraries/);
+  assert.match(libraryView, /syncProjectAnnotations/);
+  assert.match(main, /collab:sync-annotations/);
+  assert.match(main, /createAnnotationSync/);
+  assert.match(bridge, /interface CloudAnnotationSyncResult/);
 });
 
 test("canonical papers are shared without cross-project metadata overwrites", () => {

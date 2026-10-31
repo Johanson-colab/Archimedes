@@ -1,4 +1,5 @@
 const http = require("node:http");
+const { randomUUID } = require("node:crypto");
 const { createClient } = require("@supabase/supabase-js");
 
 function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
@@ -293,6 +294,97 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
           .select("paper_id, reading_status, starred, notes, tags_json, updated_at").single();
         if (error) throw apiError(error);
         return send(res, 200, { state: data });
+      }
+
+      const projectHighlightsMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/highlights$/);
+      if (projectHighlightsMatch) {
+        const projectId = projectHighlightsMatch[1];
+        if (method === "GET") {
+          let query = supabase.from("paper_highlights").select("*").eq("project_id", projectId)
+            .order("page_number", { ascending: true }).order("created_at", { ascending: true });
+          const paperId = url.searchParams.get("paperId");
+          if (paperId) query = query.eq("paper_id", paperId);
+          const { data, error } = await query;
+          if (error) throw apiError(error);
+          return send(res, 200, { highlights: data || [] });
+        }
+        if (method === "POST") {
+          const body = await readBody(req);
+          const pageNumber = Number(body.page_number);
+          const quote = String(body.quote || "").trim();
+          if (!body.paper_id || !Number.isInteger(pageNumber) || pageNumber < 1 || !quote || quote.length > 5_000) {
+            throw Object.assign(new Error("A paper, page, and text selection are required."), { status: 400 });
+          }
+          const { data, error } = await supabase.from("paper_highlights").insert({
+            id: body.id || randomUUID(),
+            project_id: projectId,
+            paper_id: body.paper_id,
+            author_id: user.id,
+            visibility: body.visibility === "private" ? "private" : "project",
+            page_number: pageNumber,
+            quote,
+            start_offset: Number.isInteger(body.start_offset) ? body.start_offset : null,
+            end_offset: Number.isInteger(body.end_offset) ? body.end_offset : null,
+            note: String(body.note || "").slice(0, 5_000),
+            color: ["green", "yellow", "blue", "pink", "red"].includes(body.color) ? body.color : "green",
+          }).select("*").single();
+          if (error) throw apiError(error);
+          return send(res, 201, { highlight: data });
+        }
+      }
+
+      const highlightMatch = url.pathname.match(/^\/v1\/highlights\/([^/]+)$/);
+      if (highlightMatch) {
+        const highlightId = highlightMatch[1];
+        if (method === "PATCH") {
+          const body = await readBody(req);
+          const patch = {};
+          if (typeof body.note === "string") patch.note = body.note.slice(0, 5_000);
+          if (["green", "yellow", "blue", "pink", "red"].includes(body.color)) patch.color = body.color;
+          if (body.visibility === "private" || body.visibility === "project") patch.visibility = body.visibility;
+          patch.updated_at = new Date().toISOString();
+          const { data, error } = await supabase.from("paper_highlights").update(patch).eq("id", highlightId).select("*").single();
+          if (error) throw apiError(error);
+          return send(res, 200, { highlight: data });
+        }
+        if (method === "DELETE") {
+          const { error } = await supabase.from("paper_highlights").delete().eq("id", highlightId);
+          if (error) throw apiError(error);
+          return send(res, 200, { deleted: true });
+        }
+      }
+
+      const paperAnnotationMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/papers\/([^/]+)\/(review|presentation)$/);
+      if (paperAnnotationMatch) {
+        const [, projectId, paperId, kind] = paperAnnotationMatch;
+        const table = kind === "review" ? "paper_reviews" : "paper_presentations";
+        if (method === "GET") {
+          const { data, error } = await supabase.from(table).select("*")
+            .eq("project_id", projectId).eq("paper_id", paperId)
+            .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+          if (error) throw apiError(error);
+          return send(res, 200, { [kind]: data || null });
+        }
+        if (method === "PUT") {
+          const body = await readBody(req);
+          const payload = kind === "review" ? (body.review || body.review_json) : (body.presentation || body.presentation_json);
+          if (!payload || typeof payload !== "object") throw Object.assign(new Error(`A ${kind} object is required.`), { status: 400 });
+          const existing = await supabase.from(table).select("id").eq("project_id", projectId).eq("paper_id", paperId).eq("owner_id", user.id).maybeSingle();
+          if (existing.error) throw apiError(existing.error);
+          const row = {
+            project_id: projectId,
+            paper_id: paperId,
+            owner_id: user.id,
+            visibility: body.visibility === "project" ? "project" : "private",
+            [`${kind}_json`]: payload,
+            ...(kind === "presentation" ? { source_review_updated_at: String(body.source_review_updated_at || "") } : {}),
+          };
+          const result = existing.data?.id
+            ? await supabase.from(table).update(row).eq("id", existing.data.id).select("*").single()
+            : await supabase.from(table).insert({ ...row, id: randomUUID() }).select("*").single();
+          if (result.error) throw apiError(result.error);
+          return send(res, 200, { [kind]: result.data });
+        }
       }
 
       const projectMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)$/);

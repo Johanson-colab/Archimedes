@@ -59,6 +59,28 @@ test("collaboration API maps library and paper routes", async () => {
   assert.equal(fake.calls.find((call) => call.url.endsWith("/libraries/lib1/papers") && call.options.method === "POST").options.body, JSON.stringify({ paper: { canonical_key: "k", title: "Paper" } }));
 });
 
+test("collaboration API maps highlights, reviews, and presentations", async () => {
+  const fake = fakeApi((url, options) => {
+    if (url.includes("/highlights") && options.method === "POST") return { status: 201, body: { highlight: { id: "h1" } } };
+    if (url.includes("/highlights") && options.method === "DELETE") return { status: 200, body: { deleted: true } };
+    if (url.includes("/highlights")) return { status: 200, body: { highlights: [{ id: "h1" }] } };
+    if (url.endsWith("/review") && options.method === "PUT") return { status: 200, body: { review: { id: "r1" } } };
+    if (url.endsWith("/review")) return { status: 200, body: { review: { id: "r1" } } };
+    if (url.endsWith("/presentation") && options.method === "PUT") return { status: 200, body: { presentation: { id: "p1" } } };
+    if (url.endsWith("/presentation")) return { status: 200, body: { presentation: { id: "p1" } } };
+    return { status: 404, body: { error: "missing" } };
+  });
+  const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => "jwt", fetchImpl: fake.fetchImpl });
+
+  assert.deepEqual(await api.listHighlights("p1"), [{ id: "h1" }]);
+  assert.deepEqual(await api.addHighlight("p1", { paper_id: "paper", page_number: 1, quote: "q" }), { id: "h1" });
+  assert.deepEqual(await api.deleteHighlight("h1"), { deleted: true });
+  assert.deepEqual(await api.getReview("p1", "paper"), { id: "r1" });
+  assert.deepEqual(await api.saveReview("p1", "paper", { summary: {} }, "project"), { id: "r1" });
+  assert.deepEqual(await api.getPresentation("p1", "paper"), { id: "p1" });
+  assert.deepEqual(await api.savePresentation("p1", "paper", { title: "Deck" }, { visibility: "project" }), { id: "p1" });
+});
+
 test("collaboration API requires sign-in and surfaces API errors", async () => {
   const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => null, fetchImpl: async () => { throw new Error("should not fetch"); } });
   await assert.rejects(() => api.listProjects(), /Sign in/i);

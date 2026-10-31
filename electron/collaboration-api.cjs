@@ -94,6 +94,43 @@ function createCollaborationApi({ baseUrl, getToken, fetchImpl = globalThis.fetc
         body: patch,
       })).state;
     },
+    async listHighlights(projectId, paperId = "") {
+      const query = paperId ? `?paperId=${encodeURIComponent(paperId)}` : "";
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/highlights${query}`)).highlights || [];
+    },
+    async addHighlight(projectId, highlight) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/highlights`, {
+        method: "POST",
+        body: highlight,
+      })).highlight;
+    },
+    async updateHighlight(highlightId, patch) {
+      return (await request(`/v1/highlights/${encodeURIComponent(highlightId)}`, {
+        method: "PATCH",
+        body: patch,
+      })).highlight;
+    },
+    async deleteHighlight(highlightId) {
+      return request(`/v1/highlights/${encodeURIComponent(highlightId)}`, { method: "DELETE" });
+    },
+    async getReview(projectId, paperId) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/papers/${encodeURIComponent(paperId)}/review`)).review;
+    },
+    async saveReview(projectId, paperId, review, visibility = "private") {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/papers/${encodeURIComponent(paperId)}/review`, {
+        method: "PUT",
+        body: { review, visibility },
+      })).review;
+    },
+    async getPresentation(projectId, paperId) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/papers/${encodeURIComponent(paperId)}/presentation`)).presentation;
+    },
+    async savePresentation(projectId, paperId, presentation, { visibility = "private", sourceReviewUpdatedAt = "" } = {}) {
+      return (await request(`/v1/projects/${encodeURIComponent(projectId)}/papers/${encodeURIComponent(paperId)}/presentation`, {
+        method: "PUT",
+        body: { presentation, visibility, source_review_updated_at: sourceReviewUpdatedAt },
+      })).presentation;
+    },
   };
 }
 
