@@ -51,6 +51,8 @@ import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import ThreadShareModal from "./ThreadShareModal";
 import ThreadCommentsModal from "./ThreadCommentsModal";
+import AccountChip from "./AccountChip";
+import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
 import PaperWritingView, { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, formatFileComment, isDraftDirty, isEditableFile, markDraftSaved, mergeRefreshedFiles, prepareFileContent, toEditorText, type FileComment, type FileDraft, type FileSelection } from "./file-editor";
@@ -289,7 +291,7 @@ let previewTerminalSettings: TerminalSettings = {
   externalTerminalLabel: previewPlatform === "win32" ? "Windows Terminal" : previewPlatform === "darwin" ? "Ghostty" : "WezTerm",
 };
 let previewWorkspace = DEFAULT_WORKSPACE || "Browser preview workspace";
-let previewAuthState: AuthState = { configured: true, user: null, expiresAt: 0, error: "" };
+let previewAuthState: AuthState = { configured: true, user: null, expiresAt: 0, error: "", providers: { email: true, google: false } };
 let previewLocalIdentity: LocalIdentity = {
   version: 1,
   userId: "usr_preview_local",
@@ -396,6 +398,23 @@ const previewBridge = {
   getInitialWorkspace: async () => null,
   getLocalIdentity: async () => structuredClone(previewLocalIdentity),
   getAuthState: async () => structuredClone(previewAuthState),
+  getAuthProviders: async () => structuredClone(previewAuthState.providers || { email: true, google: false }),
+  signInWithMagicLink: async (email: string) => {
+    previewAuthState = { configured: true, user: { id: "usr_preview_cloud", email, displayName: email.split("@")[0] }, expiresAt: Math.floor(Date.now() / 1000) + 3600, error: "", providers: { email: true, google: false } };
+    return structuredClone(previewAuthState);
+  },
+  signUpAndConfirm: async (email: string) => {
+    previewAuthState = { configured: true, user: { id: "usr_preview_cloud", email, displayName: email.split("@")[0] }, expiresAt: Math.floor(Date.now() / 1000) + 3600, error: "", providers: { email: true, google: false } };
+    return structuredClone(previewAuthState);
+  },
+  signInWithOAuth: async () => { throw new Error("Google sign-in is not configured."); },
+  requestPasswordReset: async (email: string) => ({ ...(await desktopBridge.signIn(email, "")), recovery: true }),
+  updateCloudPassword: async () => structuredClone(previewAuthState),
+  updateCloudProfile: async (displayName: string) => {
+    if (previewAuthState.user) previewAuthState = { ...previewAuthState, user: { ...previewAuthState.user, displayName } };
+    return structuredClone(previewAuthState);
+  },
+  resendConfirmation: async () => structuredClone(previewAuthState),
   signIn: async (email: string) => {
     previewAuthState = { configured: true, user: { id: "usr_preview_cloud", email, displayName: email.split("@")[0] }, expiresAt: Math.floor(Date.now() / 1000) + 3600, error: "" };
     return structuredClone(previewAuthState);
@@ -1027,6 +1046,8 @@ function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const [localIdentity, setLocalIdentity] = useState<LocalIdentity | null>(null);
   const [authState, setAuthState] = useState<AuthState | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"choice" | "password" | "signup" | "reset" | "recovery">("choice");
   const [presenceMembers, setPresenceMembers] = useState<PresenceMember[]>([]);
   const theme = resolveTheme(appearance.preset, systemAppearance);
   const themePreference = appearance.preset;
@@ -1385,6 +1406,41 @@ function App() {
 
   async function signOut() {
     const next = await desktopBridge.signOut();
+    setAuthState(next);
+    return next;
+  }
+
+  function openAuth(mode: "choice" | "password" | "signup" | "reset" | "recovery" = "choice") {
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+  }
+
+  async function signUpAndConfirm(email: string, password: string, displayName?: string) {
+    const next = await desktopBridge.signUpAndConfirm(email, password, displayName);
+    setAuthState(next);
+    return next;
+  }
+
+  async function signInWithMagicLink(email: string) {
+    const next = await desktopBridge.signInWithMagicLink(email);
+    setAuthState(next);
+    return next;
+  }
+
+  async function signInWithOAuth(provider: "google") {
+    const next = await desktopBridge.signInWithOAuth(provider);
+    setAuthState(next);
+    return next;
+  }
+
+  async function requestPasswordReset(email: string) {
+    const next = await desktopBridge.requestPasswordReset(email);
+    setAuthState(next);
+    return next;
+  }
+
+  async function updateCloudPassword(password: string) {
+    const next = await desktopBridge.updateCloudPassword(password);
     setAuthState(next);
     return next;
   }
@@ -2579,10 +2635,7 @@ function App() {
         />
 
         <div className="sidebar-runtime">
-          <div className="runtime-tabs" role="group" aria-label={t("Runtime location")}>
-            <button className="runtime-tab active" aria-pressed="true">{t("Local")}</button>
-            <button className="runtime-tab coming" aria-pressed="false" disabled title={t("Coming in a later update")}>{t("Cloud")}<span>{t("Soon")}</span></button>
-          </div>
+          <AccountChip authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
           <button className="sidebar-settings-button" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}><Settings size={15} strokeWidth={1.7} /></button>
         </div>
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
@@ -2637,6 +2690,8 @@ function App() {
               projectId={activeProjectId}
               threadVisibility={threadVisibility}
               onThreadVisibility={(visibility) => void changeThreadVisibility(visibility)}
+              cloudSignedIn={Boolean(authState?.user)}
+              onRequestSignIn={() => openAuth("choice")}
               agentBusy={agentBusy}
               interrupting={interrupting}
               pendingAction={pendingAction}
@@ -2833,6 +2888,19 @@ function App() {
         onAddEvidence={addEvidence}
       />
       <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={executionWorkspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
+      <AuthModal
+        open={authModalOpen}
+        authState={authState}
+        initialMode={authModalMode}
+        onClose={() => setAuthModalOpen(false)}
+        onSignIn={signIn}
+        onSignUp={signUp}
+        onMagicLink={signInWithMagicLink}
+        onOAuth={signInWithOAuth}
+        onResetPassword={requestPasswordReset}
+        onUpdatePassword={updateCloudPassword}
+        onOpenExternal={(url) => { void desktopBridge.openExternalUrl?.(url); }}
+      />
       <SettingsModal
         open={settingsOpen}
         section={settingsSection}
@@ -2877,6 +2945,7 @@ function App() {
         onSignIn={signIn}
         onSignUp={signUp}
         onSignOut={signOut}
+        onOpenAuth={(mode) => { setSettingsOpen(false); openAuth(mode || "choice"); }}
       />
       {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
         bridge={desktopBridge}
@@ -3005,7 +3074,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -3023,6 +3092,8 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   contextLength: ContextLength;
   modelCapabilities: ModelCapabilities;
   contextItems: ContextAttachment[];
+  cloudSignedIn: boolean;
+  onRequestSignIn: () => void;
   onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength) => void;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
@@ -3042,6 +3113,8 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
   const [contextLengthMenuOpen, setContextLengthMenuOpen] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
+  const [cloudGateOpen, setCloudGateOpen] = useState(false);
+  const [cloudNotice, setCloudNotice] = useState("");
   const [composerError, setComposerError] = useState("");
   const [prompt, setPrompt] = useState("");
   const reasoningMenuRef = useRef<HTMLDivElement>(null);
@@ -3213,6 +3286,13 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
       <div className="conversation-composer">
+        {cloudGateOpen && <div className="cloud-gate" role="status">
+          <span className="cloud-gate-icon"><Cloud size={16} /></span>
+          <div><strong>Cloud runs need an account</strong><span>Your draft, attachments, and selected context stay here. Sign in to use cloud agents and sync; local work stays available.</span></div>
+          <button className="primary-button" onClick={() => { setCloudGateOpen(false); onRequestSignIn(); }}>Sign in</button>
+          <button className="secondary-button" onClick={() => setCloudGateOpen(false)}>Stay local</button>
+        </div>}
+        {cloudNotice && <div className="cloud-gate notice"><span className="cloud-gate-icon"><Cloud size={16} /></span><div><strong>{cloudNotice}</strong><span>Local runs remain fully available.</span></div><button className="secondary-button" onClick={() => setCloudNotice("")}>Dismiss</button></div>}
         <textarea ref={composerRef} value={prompt} onChange={(event) => setPrompt(event.target.value)} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
@@ -3227,6 +3307,12 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
         </div>}
         {composerError && <div className="composer-attachment-error" role="alert">{composerError}</div>}
         <div className="conversation-composer-footer">
+          <div className="composer-runtime-switch" role="group" aria-label="Runtime location">
+            <button className="active" aria-pressed="true">Local</button>
+            <button className={cloudSignedIn ? "cloud signed-in" : "cloud locked"} aria-pressed="false" onClick={() => cloudSignedIn ? setCloudNotice("Cloud runtime is coming soon.") : setCloudGateOpen(true)} title={cloudSignedIn ? "Cloud runtime is coming soon" : "Sign in to use cloud runs"}>
+              {!cloudSignedIn && <Lock size={10} />}Cloud<span>{cloudSignedIn ? "Soon" : "Locked"}</span>
+            </button>
+          </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} onAdd={onAddContext} />
           <div className="reasoning-effort-picker" ref={reasoningMenuRef}>
             <button className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setReasoningMenuOpen((open) => !open); setContextLengthMenuOpen(false); }} title={availableThinkingEfforts.length ? `Thinking effort: ${reasoningEffort}` : "Thinking effort is not exposed by this model"} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>

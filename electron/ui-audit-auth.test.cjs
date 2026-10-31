@@ -11,6 +11,9 @@ const auth = read("electron/supabase-auth.cjs");
 const bridge = read("src/vite-env.d.ts");
 const app = read("src/App.tsx");
 const account = read("src/AccountSettingsPanel.tsx");
+const modal = read("src/AuthModal.tsx");
+const chip = read("src/AccountChip.tsx");
+const flow = read("electron/auth-flow.cjs");
 const settings = read("src/SettingsModal.tsx");
 const config = JSON.parse(read("shared/supabase-config.json"));
 const pkg = JSON.parse(read("package.json"));
@@ -46,4 +49,24 @@ test("Account settings exposes cloud sign-in without replacing local identity", 
   assert.match(settings, /authState/);
   assert.match(app, /getAuthState/);
   assert.match(app, /onSignIn=\{signIn\}/);
+});
+
+
+test("the account chip, auth modal, and composer gate keep local work available", () => {
+  assert.match(chip, /Cloud agents & sync/);
+  assert.match(chip, /Sign out/);
+  assert.match(chip, /account-menu/);
+  assert.match(modal, /Your research stays local by default/);
+  assert.match(modal, /Continue without an account/);
+  assert.match(modal, /Continue with Google/);
+  assert.match(modal, /Email me a sign-in link/);
+  assert.match(modal, /Create account/);
+  assert.match(modal, /Terms/);
+  assert.match(flow, /exchangeCodeForSession/);
+  assert.match(main, /auth:magic-link/);
+  assert.match(main, /auth:oauth/);
+  assert.match(main, /auth:reset-password/);
+  assert.match(main, /flowType: "pkce"/);
+  assert.match(app, /Cloud runs need an account/);
+  assert.match(app, /cloudSignedIn/);
 });

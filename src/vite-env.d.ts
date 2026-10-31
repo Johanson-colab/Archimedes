@@ -8,6 +8,14 @@ interface ResearchDeskBridge {
     signIn: (email: string, password: string) => Promise<AuthState>;
     signUp: (email: string, password: string, displayName?: string) => Promise<AuthState>;
     signOut: () => Promise<AuthState>;
+    getAuthProviders: () => Promise<AuthProviders>;
+    signInWithMagicLink: (email: string) => Promise<AuthState>;
+    signUpAndConfirm: (email: string, password: string, displayName?: string) => Promise<AuthState>;
+    signInWithOAuth: (provider: "google") => Promise<AuthState>;
+    requestPasswordReset: (email: string) => Promise<AuthState & { recovery: boolean }>;
+    updateCloudPassword: (password: string) => Promise<AuthState>;
+    updateCloudProfile: (displayName: string) => Promise<AuthState>;
+    resendConfirmation: (email: string) => Promise<AuthState>;
     getAuthAccessToken: () => Promise<string | null>;
     getCollaborationStatus: () => Promise<CollaborationStatus>;
     joinProjectPresence: (projectId: string, threadId?: string | null) => Promise<{ joined: boolean }>;
@@ -833,11 +841,18 @@ interface AuthUser {
   displayName: string;
 }
 
+interface AuthProviders {
+  email: boolean;
+  google: boolean;
+  magicLink?: boolean;
+}
+
 interface AuthState {
   configured: boolean;
   user: AuthUser | null;
   expiresAt: number;
   error: string;
+  providers?: AuthProviders;
   needsConfirmation?: boolean;
 }
 
