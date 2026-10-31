@@ -166,6 +166,14 @@ test("two Supabase users can share a project through the API", { skip: !enabled 
     assert.equal(finished.status, 200);
     assert.equal(finished.body.run.status, "completed");
 
+    const exported = await call(first, `/v1/projects/${projectId}/export`);
+    assert.equal(exported.status, 200, JSON.stringify(exported.body));
+    assert.equal(exported.body.export.project.id, projectId);
+    assert.equal(exported.body.export.threads.length, 1);
+    assert.equal(exported.body.export.turns.length, 1);
+    const forbiddenExport = await call(second, `/v1/projects/${projectId}/export`);
+    assert.equal(forbiddenExport.status, 403);
+
     const share = await call(first, `/v1/projects/${projectId}/share-links`, "POST", { resource_type: "thread", resource_id: thread.body.thread.id, role: "viewer", expires_in_days: 7 });
     assert.equal(share.status, 201, JSON.stringify(share.body));
     const guest = await fetch(`${base}/v1/public/shares/${encodeURIComponent(share.body.share.token)}`);

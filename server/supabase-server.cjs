@@ -113,12 +113,13 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
     });
   }
 
-  async function projectResponse(supabase, projectId) {
-    const { data, error } = await supabase
+  async function projectResponse(supabase, projectId, userId = "") {
+    let query = supabase
       .from("projects")
       .select("id, org_id, owner_id, name, description, default_thread_visibility, workspace_mode, created_at, updated_at, archived_at, project_members!inner(user_id, role)")
-      .eq("id", projectId)
-      .single();
+      .eq("id", projectId);
+    if (userId) query = query.eq("project_members.user_id", userId);
+    const { data, error } = await query.single();
     if (error) throw apiError(error);
     return {
       id: data.id,
@@ -182,7 +183,7 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
         if (!name || name.length > 100) throw Object.assign(new Error("A project name of at most 100 characters is required."), { status: 400 });
         const { data: projectId, error } = await supabase.rpc("create_project", { p_name: name, p_description: String(body.description || "").slice(0, 500) });
         if (error) throw apiError(error);
-        return send(res, 201, { project: await projectResponse(supabase, projectId) });
+        return send(res, 201, { project: await projectResponse(supabase, projectId, user.id) });
       }
 
       const projectLibrariesMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/libraries$/);
@@ -400,6 +401,61 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
           if (result.error) throw apiError(result.error);
           return send(res, 200, { [kind]: result.data });
         }
+      }
+
+      const projectExportMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/export$/);
+      if (projectExportMatch && method === "GET") {
+        const projectId = projectExportMatch[1];
+        const project = await projectResponse(supabase, projectId, user.id);
+        if (!["admin", "owner"].includes(project.role)) throw Object.assign(new Error("Only project admins can export this project."), { status: 403 });
+        const projectTables = ["libraries", "threads", "comments", "paper_highlights", "paper_reviews", "paper_presentations", "thread_snapshots", "agent_runs", "run_prompts", "audit_events"];
+        const queries = await Promise.all(projectTables.map((table) => supabase.from(table).select("*").eq("project_id", projectId)));
+        const failed = queries.find((result) => result.error);
+        if (failed?.error) throw apiError(failed.error);
+        const [{ data: members, error: memberError }, { data: libraryRows, error: libraryError }] = await Promise.all([
+          supabase.rpc("list_project_members", { p_project: projectId }),
+          supabase.from("libraries").select("id").eq("project_id", projectId),
+        ]);
+        if (memberError) throw apiError(memberError);
+        if (libraryError) throw apiError(libraryError);
+        const libraryIds = (libraryRows || []).map((row) => row.id);
+        let papers = [];
+        if (libraryIds.length) {
+          const { data: items, error: itemError } = await supabase.from("library_items").select("item_id").in("library_id", libraryIds).eq("item_type", "paper");
+          if (itemError) throw apiError(itemError);
+          const ids = [...new Set((items || []).map((item) => item.item_id))];
+          if (ids.length) {
+            const { data, error } = await supabase.from("papers").select("*").in("id", ids);
+            if (error) throw apiError(error);
+            papers = data || [];
+          }
+        }
+        const threadIds = (queries[projectTables.indexOf("threads")].data || []).map((thread) => thread.id);
+        let turns = [];
+        let events = [];
+        if (threadIds.length) {
+          const [{ data: turnRows, error: turnError }, { data: eventRows, error: eventError }] = await Promise.all([
+            supabase.from("turns").select("*").in("thread_id", threadIds),
+            supabase.from("events").select("*").in("thread_id", threadIds),
+          ]);
+          if (turnError) throw apiError(turnError);
+          if (eventError) throw apiError(eventError);
+          turns = turnRows || [];
+          events = eventRows || [];
+        }
+        const bundle = { exported_at: new Date().toISOString(), project, members: members || [], papers, turns, events };
+        projectTables.forEach((table, index) => { bundle[table] = queries[index].data || []; });
+        return send(res, 200, { export: bundle });
+      }
+
+      const projectAuditMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/audit$/);
+      if (projectAuditMatch && method === "GET") {
+        const projectId = projectAuditMatch[1];
+        const project = await projectResponse(supabase, projectId, user.id);
+        if (!["admin", "owner"].includes(project.role)) throw Object.assign(new Error("Only project admins can read audit events."), { status: 403 });
+        const { data, error } = await supabase.from("audit_events").select("*").eq("project_id", projectId).order("created_at", { ascending: false }).limit(500);
+        if (error) throw apiError(error);
+        return send(res, 200, { events: data || [] });
       }
 
       const documentMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/documents\/(.+)$/);
@@ -761,7 +817,7 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
 
       const projectMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)$/);
       if (projectMatch && method === "GET") {
-        return send(res, 200, { project: await projectResponse(supabase, projectMatch[1]) });
+        return send(res, 200, { project: await projectResponse(supabase, projectMatch[1], user.id) });
       }
 
       const membersMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/members(?:\/([^/]+))?$/);

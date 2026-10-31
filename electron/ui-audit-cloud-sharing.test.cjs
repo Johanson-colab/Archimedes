@@ -64,6 +64,9 @@ test("thread sharing creates a scoped read-only guest link", () => {
 test("shared project note is a CRDT document with optimistic updates", () => {
   assert.match(main, /collab:get-shared-document/);
   assert.match(main, /collab:apply-shared-document/);
+  assert.match(main, /collab:export-project/);
+  assert.match(panel, /exportProject/);
+  assert.match(panel, /Project export downloaded/);
   assert.match(note, /new Y\.Doc\(\)/);
   assert.match(note, /Y\.applyUpdate/);
   assert.match(note, /applySharedDocumentUpdate/);

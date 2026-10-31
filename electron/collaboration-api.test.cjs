@@ -121,6 +121,17 @@ test("collaboration API creates, redeems, and revokes guest share links", async 
   assert.equal(fake.calls.find((call) => call.url.includes("/v1/public/shares/tok")).options, undefined);
 });
 
+test("collaboration API exports a project and reads admin audit events", async () => {
+  const fake = fakeApi((url) => {
+    if (url.endsWith("/export")) return { status: 200, body: { export: { project: { id: "p1" }, threads: [] } } };
+    if (url.endsWith("/audit")) return { status: 200, body: { events: [{ action: "project.member_added" }] } };
+    return { status: 404, body: { error: "missing" } };
+  });
+  const api = createCollaborationApi({ baseUrl: "http://127.0.0.1:9", getToken: async () => "jwt", fetchImpl: fake.fetchImpl });
+  assert.deepEqual(await api.exportProject("p1"), { project: { id: "p1" }, threads: [] });
+  assert.deepEqual(await api.listAuditEvents("p1"), [{ action: "project.member_added" }]);
+});
+
 test("collaboration API maps CRDT shared document reads and updates", async () => {
   const fake = fakeApi((url, options) => {
     if (url.includes("/documents/project-notes") && options.method === "POST") return { status: 200, body: { document: { key: "project-notes", state: "c3RhdGU=", version: 2 } } };
