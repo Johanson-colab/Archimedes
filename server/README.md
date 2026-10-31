@@ -1,0 +1,57 @@
+# Archimedes collaboration server
+
+A dependency-free Node 24 HTTP service and SQLite store for the first async
+collaboration foundation.
+
+## What exists
+
+- Dev session tokens (development only)
+- Users
+- Projects and project roles (`viewer` < `commenter` < `editor` < `admin` < `owner`)
+- Project member listing/addition
+- Project-scoped comments with resolve
+- Thread snapshot upload
+
+## Run
+
+```bash
+npm run server:start
+# or
+PORT=8787 DB_PATH=./data/collab.db node server/index.cjs
+```
+
+Health:
+
+```bash
+curl http://127.0.0.1:8787/health
+```
+
+Dev session (only when `DEV_AUTH` is not `false`):
+
+```bash
+curl -X POST http://127.0.0.1:8787/v1/dev-session \
+  -H 'content-type: application/json' \
+  -d '{"email":"alice@example.com","displayName":"Alice"}'
+```
+
+Then send `Authorization: Bearer <token>`.
+
+## Docker
+
+```bash
+docker compose -f server/docker-compose.yml up --build
+```
+
+The image sets `DEV_AUTH=false`; replace dev sessions with an OIDC/auth
+provider before exposing the service.
+
+## Production gaps
+
+- Real login/OIDC, email delivery, invites, token expiry/rotation
+- TLS/reverse proxy and rate limiting
+- Postgres instead of SQLite for multi-node deployment
+- WebSocket presence/live events
+- Object storage for PDFs/artifacts
+- Sync/outbox protocol and desktop integration
+- Audit export, retention, data residency, SSO/SCIM
+- Full-text/vector search with ACL filtering
