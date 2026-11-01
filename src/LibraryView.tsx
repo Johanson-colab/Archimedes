@@ -33,7 +33,6 @@ import { isDensePdfProse, mergePdfVisualRegions, pdfCaptionKind } from "./pdf-vi
 import { buildPdfHighlightSegments, PDF_HIGHLIGHT_COLORS } from "./pdf-highlight-segments";
 import { useUISettings, type Language } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
-import { useDialogFocus } from "./useDialogFocus";
 import { useConfirm } from "./ConfirmDialog";
 import { Tabs, Tab, FilterGroup, FilterButton } from "./Tabs";
 import ToolbarActions from "./ToolbarActions";
@@ -90,7 +89,9 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import DialogPortal from "./DialogPortal";
+import { StateView } from "./StateView";
+import { Dialog } from "./Dialog";
+import { InlineNotice } from "./InlineNotice";
 
 const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
 const PAPER_CHAT_DEFAULT_WIDTH = 354;
@@ -348,7 +349,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
       <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button>
         <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title="Sync shared libraries"><Cloud size={15} />{cloudBusy ? "Syncing…" : "Sync cloud"}</button>
       </ToolbarActions>
-      {error && <div className="library-error">{error}</div>}
+      {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
       {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
       {!loading && projectPaperCount === 0 && otherProjects.length > 0 && <div className="library-project-hint">
         <div>
@@ -361,16 +362,15 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
           </button>)}
         </div>
       </div>}
-      {loading && !libraries.length ? <LoadingState /> : !libraries.length ? <div className="library-empty">
-        <LibraryGlyph name="" />
-        <strong>No libraries in this project</strong>
-        {otherProjects.length ? <>
-          <span>Your libraries and papers are stored per project. They are not lost.</span>
-          {otherProjects.map((project) => <button className="secondary-button" key={project.project_id} onClick={() => onOpenProject?.(project.project_id)}>
-            {project.name} · {project.library_count} libraries · {project.paper_count} papers
-          </button>)}
-        </> : <span>Create a library to start collecting papers.</span>}
-      </div> : <div className="library-card-grid">
+      {loading && !libraries.length ? <LoadingState /> : !libraries.length ? <StateView
+        className="library-empty"
+        icon={<LibraryGlyph name="" />}
+        title="No libraries in this project"
+        description={otherProjects.length ? "Your libraries and papers are stored per project. They are not lost." : "Create a library to start collecting papers."}
+        action={otherProjects.length ? <>{otherProjects.map((project) => <button className="secondary-button" key={project.project_id} onClick={() => onOpenProject?.(project.project_id)}>
+          {project.name} · {project.library_count} libraries · {project.paper_count} papers
+        </button>)}</> : undefined}
+      /> : <div className="library-card-grid">
         {libraries.map((library) => <button className="library-card" key={library.id} onClick={() => setSelectedLibraryId(library.id)}>
           <LibraryGlyph name={library.name} />
           <span className="library-card-copy">
@@ -410,7 +410,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
         <button className="primary-button" onClick={() => setImportOpen(true)}><Plus size={15} />Import paper</button>
       </div>
     </header>
-    {error && <div className="library-error">{error}</div>}
+    {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
     {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
     <div className="library-split">
       <div className="library-paper-list">
@@ -418,7 +418,7 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
           <span className="paper-row-year">{paper.year ?? "—"}</span>
           <span><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")}{paper.authors.length > 3 ? " et al." : ""}</small></span>
           {paper.starred && <Star size={13} fill="currentColor" />}
-        </button>) : <div className="empty-library"><BookOpen size={22} /><strong>No matching papers</strong><span>Import a paper or change the search query.</span></div>}
+        </button>) : <StateView className="empty-library" icon={<BookOpen size={22} />} title="No matching papers" description="Import a paper or change the search query." />}
       </div>
       <PaperInspector paper={selectedPaper} onUpdate={updatePaper} onRemove={removePaper} onRead={() => selectedPaper && setReaderPaperId(selectedPaper.id)} />
     </div>
@@ -1173,7 +1173,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>{t("Open the original paper")}</h2><p>{paper.pdf_url ? t("The public PDF can be cached locally and opened in the reader.") : t("Attach a local PDF to open the original paper here.")}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? t("Preparing…") : t("Prepare PDF")}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{t("Attach PDF")}</button></div>
         </div>}
-        {(error || reader?.asset?.error) && <div className="reader-runtime-error">{error || reader?.asset?.error}</div>}
+        {(error || reader?.asset?.error) && <InlineNotice tone="danger" className="reader-runtime-error">{error || reader?.asset?.error}</InlineNotice>}
         </>}
       </main>}
       {codebaseVisited && projectUrl && isGithubRepositoryLink(projectUrl) && <main key={projectUrl} className={readerView === "codebase" ? "codebase-reader" : "codebase-reader codebase-reader-inactive"} aria-hidden={readerView !== "codebase"}>
@@ -1445,7 +1445,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
       </section>
     </div>
     {referenceChoices && <div className="codebase-reference-choices" role="group" aria-label="Choose a matching repository file"><strong>Multiple files match “{referenceChoices.target.path}”. Choose one:</strong>{referenceChoices.paths.map((candidate) => <button key={candidate} onClick={() => void openFilePath({ ...referenceChoices.target, path: candidate })}>{candidate}</button>)}<button onClick={() => setReferenceChoices(null)}>Cancel</button></div>}
-    {browserError && <div className="reader-runtime-error">{browserError}</div>}
+    {browserError && <InlineNotice tone="danger" className="reader-runtime-error">{browserError}</InlineNotice>}
   </div>;
 });
 
@@ -2466,7 +2466,6 @@ function normalizePaperMathLine(line: string) {
 
 function LibraryEditor({ editor, active = true, onClose, onSave }: { editor: ResearchLibrary | "new" | null; active?: boolean; onClose: () => void; onSave: (input: { name: string; description: string; color: string }) => Promise<void> }) {
   const dialogOpen = Boolean(editor) && active;
-  const dialogRef = useDialogFocus<HTMLElement>(dialogOpen, onClose);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(LIBRARY_COLORS[0]);
@@ -2482,7 +2481,7 @@ function LibraryEditor({ editor, active = true, onClose, onSave }: { editor: Res
     setBusy(true);
     try { await onSave({ name: name.trim(), description: description.trim(), color }); } finally { setBusy(false); }
   }
-  return <DialogPortal><div className="modal-backdrop dialog-ref-backdrop" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="dialog-ref library-editor-dialog app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-labelledby="library-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+  return <Dialog open={dialogOpen} onClose={onClose} size="md" className="dialog-ref library-editor-dialog" overlayClassName="modal-backdrop dialog-ref-backdrop" ariaLabelledBy="library-editor-title">
     <header className="dialog-ref-header">
       <div><h2 id="library-editor-title">{editor === "new" ? "New literature library" : "Edit library"}</h2><p>{editor === "new" ? "Libraries keep related papers, notes, and annotations together so you can return to a research direction without rebuilding context." : "Update the name, description, or color of this library."}</p></div>
       <button className="dialog-ref-close" onClick={onClose} title="Close" aria-label="Close"><X size={18} /></button>
@@ -2496,11 +2495,10 @@ function LibraryEditor({ editor, active = true, onClose, onSave }: { editor: Res
       <button className="secondary-button" onClick={onClose}>Cancel</button>
       <button className="primary-button" disabled={busy || !name.trim()} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin" size={14} /> : null}{editor === "new" ? "Create library" : "Save changes"}</button>
     </footer>
-  </section></div></DialogPortal>;
+  </Dialog>;
 }
 
 function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: boolean; bridge: ResearchDeskBridge; library: ResearchLibrary; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void> }) {
-  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AcademicSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -2536,18 +2534,18 @@ function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: 
       setAdding(null);
     }
   }
-  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal paper-import-modal app-dialog app-dialog-lg" role="dialog" aria-modal="true" aria-label="Import paper" onMouseDown={(event) => event.stopPropagation()}>
+  return <Dialog open={open} onClose={onClose} size="lg" className="workspace-modal paper-import-modal" ariaLabel="Import paper">
     <div className="modal-header"><div><span className="eyebrow">Import into {library.name}</span><h2>Find academic papers</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
     <p>Search by title, topic, DOI, arXiv URL, or arXiv ID. arXiv links are resolved directly; other queries use Semantic Scholar and OpenAlex.</p>
     <div className="external-search-box"><Search size={16} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void search()} placeholder="e.g. adaptive retrieval or 2401.18059" /><button className="primary-button" disabled={searching || !query.trim()} onClick={() => void search()}>{searching ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div>
-    {error && <div className="library-error" role="alert">{error}</div>}
+    {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
     <div className="external-results">{results.map((paper) => {
       const key = paper.external_id || paper.title;
       const isImported = imported.has(key);
       const isAdding = adding === key;
       return <article className="external-paper" key={key}><div><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")} · {paper.year ?? "n.d."} · {paper.venue || paper.source}</small></div><button className={isImported ? "secondary-button imported" : "outline-button"} disabled={isImported || Boolean(adding)} onClick={() => void add(paper)}>{isImported ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isImported ? "Added" : isAdding ? "Adding" : "Add"}</button></article>;
     })}</div>
-  </section></div></DialogPortal>;
+  </Dialog>;
 }
 
 function readableError(error: unknown, fallback: string) {
@@ -2729,8 +2727,8 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       </div>
       {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}</span></div>}
     </div>
-    {error && <div className={deepResponse ? "daily-search-warning" : "library-error"} role="alert">{error}</div>}
-    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <div className="daily-empty daily-feed-failed"><RefreshCw size={28} /><strong>Could not load the live feed</strong><span>arXiv may be responding slowly. Your library is unaffected.</span><button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button></div> : !visiblePapers.length ? <div className="daily-empty"><CalendarDays size={28} /><strong>No papers found</strong><span>Try another topic, expand the date range, or use a broader keyword.</span></div> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    {error && <InlineNotice tone={deepResponse ? "warning" : "danger"} className={deepResponse ? "daily-search-warning" : "library-error"}>{error}</InlineNotice>}
+    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<CalendarDays size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;
@@ -2757,9 +2755,9 @@ function DeepSearchResults({ response, loading, error, targetLibrary, added, add
   adding: string | null;
   onSave: (paper: AcademicSearchResult) => Promise<void>;
 }) {
-  if (loading && !response) return <div className="daily-deep-progress"><LoaderCircle className="spin" size={22} /><strong>Expanding and matching your research request</strong><span>Understanding methods and domains, searching multiple scholarly indexes, deduplicating, then reranking titles and abstracts.</span></div>;
-  if (error && !response) return <div className="daily-empty daily-feed-failed"><Search size={28} /><strong>Deep search could not finish</strong><span>Check the model configuration or try a shorter, more specific research request.</span></div>;
-  if (!response?.results.length) return <div className="daily-empty"><Search size={28} /><strong>No deep-search results yet</strong><span>Describe the research problem, preferred methods, and evaluation setting, then start a deep search.</span></div>;
+  if (loading && !response) return <StateView tone="loading" className="daily-deep-progress" icon={<LoaderCircle className="spin" size={22} />} title="Expanding and matching your research request" description="Understanding methods and domains, searching multiple scholarly indexes, deduplicating, then reranking titles and abstracts." />;
+  if (error && !response) return <StateView tone="error" className="daily-empty daily-feed-failed" icon={<Search size={28} />} title="Deep search could not finish" description="Check the model configuration or try a shorter, more specific research request." />;
+  if (!response?.results.length) return <StateView className="daily-empty" icon={<Search size={28} />} title="No deep-search results yet" description="Describe the research problem, preferred methods, and evaluation setting, then start a deep search." />;
   const planTags = [
     ...response.plan.domains.map((value) => ({ kind: "Domain", value })),
     ...response.plan.methods.map((value) => ({ kind: "Method", value })),
@@ -2792,5 +2790,5 @@ function formatFeedTime(value: string) {
 }
 
 function LoadingState() {
-  return <div className="library-loading"><LoaderCircle className="spin" size={18} />Loading research records…</div>;
+  return <StateView tone="loading" className="library-loading" icon={<LoaderCircle className="spin" size={18} />} title="Loading research records…" />;
 }

@@ -5,6 +5,7 @@ import exaLogo from "@lobehub/icons-static-svg/icons/exa-color.svg";
 import firecrawlLogo from "@lobehub/icons-static-svg/icons/firecrawl-color.svg";
 import tavilyLogo from "@lobehub/icons-static-svg/icons/tavily-color.svg";
 import { useUISettings } from "./i18n";
+import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 
 function brandIcon(src: string) {
   return <img className="web-data-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
@@ -52,48 +53,39 @@ export default function WebSearchSettingsModal({ bridge, open, onClose, embedded
   if (embedded) return <div className="settings-sections">
     <p className="settings-group-note">{t("Choose the search service Archimedes uses. Your own API key stays on this device.")}</p>
 
-    <section className="settings-section">
-      <h3 className="settings-section-title">{t("Provider")}</h3>
-      <div className="settings-group">
-        <div className="settings-row">
-          <div className="settings-row-copy">
-            <span className="settings-row-title">{t("Search provider")}</span>
-            <p className="settings-row-description">{t("Used for web search and page discovery in new Agent turns.")}</p>
-            <span className="settings-row-hint">{t(selected.description)}</span>
-          </div>
-          <div className="settings-row-control">
-            <select className="settings-select" value={provider} aria-label={t("Search provider")} onChange={(event) => { setProvider(event.target.value as WebSearchProviderId); setApiKey(""); setFeedback(""); }}>
-              {providers.map((item) => <option key={item.id} value={item.id}>{item.name}{configured.includes(item.id) ? ` · ${t("configured")}` : ""}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div className="settings-row-copy">
-            <span className="settings-row-title">{t("Provider console")}</span>
-            <p className="settings-row-description">{t("Create or rotate a key in the provider dashboard.")}</p>
-          </div>
-          <div className="settings-row-control">
-            <a className="settings-link" href={selected.link} target="_blank" rel="noreferrer">{t("Get a {provider} API key", { provider: selected.name })}<ExternalLink size={12} /></a>
-          </div>
-        </div>
-      </div>
-    </section>
+    <SettingsSection title={t("Provider")}>
+      <SettingsGroup>
+        <SettingsRow
+          title={t("Search provider")}
+          description={t("Used for web search and page discovery in new Agent turns.")}
+          hint={t(selected.description)}
+        >
+          <select className="settings-select" value={provider} aria-label={t("Search provider")} onChange={(event) => { setProvider(event.target.value as WebSearchProviderId); setApiKey(""); setFeedback(""); }}>
+            {providers.map((item) => <option key={item.id} value={item.id}>{item.name}{configured.includes(item.id) ? ` · ${t("configured")}` : ""}</option>)}
+          </select>
+        </SettingsRow>
+        <SettingsRow
+          title={t("Provider console")}
+          description={t("Create or rotate a key in the provider dashboard.")}
+        >
+          <a className="settings-link" href={selected.link} target="_blank" rel="noreferrer">{t("Get a {provider} API key", { provider: selected.name })}<ExternalLink size={12} /></a>
+        </SettingsRow>
+      </SettingsGroup>
+    </SettingsSection>
 
-    <section className="settings-section">
-      <h3 className="settings-section-title">{t("API key")}</h3>
-      <div className="settings-group">
-        <div className="settings-row settings-row-stacked">
-          <div className="settings-row-copy">
-            <span className="settings-row-title"><KeyRound size={13} />{selected.name}</span>
-            <p className="settings-row-description">{hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })}</p>
-          </div>
-          <div className="settings-row-control">
-            <input className="settings-text-input settings-text-input-wide" id="web-search-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })} autoComplete="off" spellCheck={false} />
-          </div>
-        </div>
-      </div>
+    <SettingsSection title={t("API key")}>
+      <SettingsGroup>
+        <SettingsRow
+          stacked
+          title={selected.name}
+          icon={<KeyRound size={13} />}
+          description={hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })}
+        >
+          <input className="settings-text-input settings-text-input-wide" id="web-search-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })} autoComplete="off" spellCheck={false} />
+        </SettingsRow>
+      </SettingsGroup>
       <p className="settings-group-note">{t("Keys are stored in Electron user data and never included in Agent messages. Search queries are sent directly to the selected provider.")}</p>
-    </section>
+    </SettingsSection>
 
     <div className="settings-form-actions">
       <span className={feedback ? "settings-form-status" : "settings-form-status muted"} role="status">{feedback || (hasSelectedKey ? t("{provider} key saved", { provider: selected.name }) : t("Add a key to activate this provider"))}</span>

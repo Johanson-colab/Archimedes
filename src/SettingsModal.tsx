@@ -12,8 +12,8 @@ import ProjectMembersPanel from "./ProjectMembersPanel";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
 import { TEXT_SIZE_SCALE, useUISettings, type ChatVerbosity, type InterfaceFont, type Language, type MonoFont, type TextSize } from "./i18n";
 import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type CardStyle, type ContrastIssue, type Density, type DialogStyle, type InputStyle, type MenuStyle, type MotionStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type SurfaceStyles, type ThemePack, type ThemePreset } from "./appearance";
-import { useDialogFocus } from "./useDialogFocus";
-import DialogPortal from "./DialogPortal";
+import { Dialog } from "./Dialog";
+import { SettingsChoiceGroup, SettingsRow, SettingsSection as SettingsSectionView } from "./SettingsPrimitives";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about" | "account" | "members";
 
@@ -134,7 +134,6 @@ export default function SettingsModal({
   onOpenAuth,
 }: SettingsModalProps) {
   const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
-  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
   const [scope, setScope] = useState<SurfaceScope | "global">("global");
   const [pendingPack, setPendingPack] = useState<ThemePack | null>(null);
   const [packWarnings, setPackWarnings] = useState<ContrastIssue[]>([]);
@@ -269,8 +268,7 @@ export default function SettingsModal({
   };
   const heading = sectionHeadings[section];
 
-  return <DialogPortal><div className="modal-backdrop settings-backdrop" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="settings-modal app-dialog app-dialog-settings" role="dialog" aria-modal="true" aria-label={t("Settings")} onMouseDown={(event) => event.stopPropagation()}>
+  return <Dialog open={open} onClose={onClose} size="settings" className="settings-modal" overlayClassName="modal-backdrop settings-backdrop" ariaLabel={t("Settings")}>
       <aside className="settings-sidebar">
         <div className="settings-brand"><div><strong>Archimedes</strong><span>{t("Settings")}</span></div></div>
         <nav className="settings-nav" aria-label={t("Settings sections")}>
@@ -293,28 +291,24 @@ export default function SettingsModal({
             {section === "members" && (activeProject ? <ProjectMembersPanel bridge={bridge} project={activeProject} activeThreadId={activeThreadId} onProjectsChanged={onProjectsChanged} /> : <div className="project-members-empty">{t("Select a project to manage members.")}</div>)}
 
             {section === "general" && <div className="settings-sections">
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Interface")}</h3>
+              <SettingsSectionView title={t("Interface")}>
                 <div className="settings-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Language")}</span>
-                      <p className="settings-row-description">{t("Choose the language for the Archimedes interface.")}</p>
-                    </div>
-                    <div className="settings-row-control">
+                  <SettingsRow
+                    title={<>{t("Language")}</>}
+                    description={<>{t("Choose the language for the Archimedes interface.")}</>}
+                  >
                       <select className="settings-select" value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label={t("Language")}>
                         <option value="en">English</option>
                         <option value="zh">简体中文</option>
                       </select>
-                    </div>
-                  </div>
 
-                  <div className="settings-row settings-row-stacked">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Text size")}</span>
-                      <p className="settings-row-description">{t("Text size scales the whole interface for easier reading.")}</p>
-                    </div>
-                    <div className="settings-row-control">
+                  </SettingsRow>
+
+                  <SettingsRow
+                    stacked
+                    title={<>{t("Text size")}</>}
+                    description={<>{t("Text size scales the whole interface for easier reading.")}</>}
+                  >
                       <div className="settings-slider">
                         <div className="settings-slider-head">
                           <span className="settings-slider-label">{t(activeSize.label)}</span>
@@ -335,28 +329,28 @@ export default function SettingsModal({
                           {textSizeSteps.map((item) => <button key={item.id} type="button" className={textSize === item.id ? "active" : ""} aria-pressed={textSize === item.id} onClick={() => setTextSize(item.id)}>{t(item.label)}</button>)}
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
 
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Conversation")}</h3>
-                <div className="settings-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Chat verbosity")}</span>
-                      <p className="settings-row-description">{t("Controls how much agent activity appears inline in chat.")}</p>
-                      <span className="settings-row-hint">{t(activeVerbosity.description)}</span>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Chat verbosity")}>
-                        {verbosityOptions.map((item) => <button key={item.id} className={chatVerbosity === item.id ? "active" : ""} aria-pressed={chatVerbosity === item.id} onClick={() => setChatVerbosity(item.id)}>{t(item.label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
+                  </SettingsRow>
                 </div>
-              </section>
+                            </SettingsSectionView>
+
+              <SettingsSectionView title={t("Conversation")}>
+                <div className="settings-group">
+                  <SettingsRow
+                    title={<>{t("Chat verbosity")}</>}
+                    description={<>{t("Controls how much agent activity appears inline in chat.")}</>}
+                    hint={<>{t(activeVerbosity.description)}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={chatVerbosity}
+                        label={t("Chat verbosity")}
+                        options={verbosityOptions.map((item) => ({ value: item.id, label: t(item.label) }))}
+                        onChange={setChatVerbosity}
+                      />
+
+                  </SettingsRow>
+                </div>
+                            </SettingsSectionView>
             </div>}
 
             {section === "journey" && <JourneySettingsPanel
@@ -377,227 +371,228 @@ export default function SettingsModal({
           />}
 
           {section === "appearance" && <div className="settings-sections">
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Theme")}</h3>
+              <SettingsSectionView title={t("Theme")}>
                 <div className="settings-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Interface theme")}</span>
-                      <p className="settings-row-description">{t("Choose how Archimedes looks. System follows the operating system.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Theme")}>
-                        <button className={themePreference === "charcoal" ? "active" : ""} onClick={() => onThemePreferenceChange("charcoal")} aria-pressed={themePreference === "charcoal"}><Moon size={13} />{t("Charcoal")}</button>
-                        <button className={themePreference === "system" ? "active" : ""} onClick={() => onThemePreferenceChange("system")} aria-pressed={themePreference === "system"}><Monitor size={13} />{t("System")}</button>
-                        <button className={themePreference === "paper" ? "active" : ""} onClick={() => onThemePreferenceChange("paper")} aria-pressed={themePreference === "paper"}><Sun size={13} />{t("Paper")}</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
+                  <SettingsRow
+                    title={<>{t("Interface theme")}</>}
+                    description={<>{t("Choose how Archimedes looks. System follows the operating system.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={themePreference}
+                        label={t("Theme")}
+                        options={[
+                          { value: "charcoal", label: t("Charcoal"), icon: <Moon size={13} /> },
+                          { value: "system", label: t("System"), icon: <Monitor size={13} /> },
+                          { value: "paper", label: t("Paper"), icon: <Sun size={13} /> },
+                        ]}
+                        onChange={onThemePreferenceChange}
+                      />
 
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Customize")}</h3>
+                  </SettingsRow>
+                </div>
+                            </SettingsSectionView>
+
+              <SettingsSectionView title={t("Customize")}>
                 <div className="settings-group settings-appearance-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Apply to")}</span>
-                      <p className="settings-row-description">{t("Button, dialog, shape, and shadow can be scoped; density, radius, motion, input, card, and menu stay global.")}</p>
-                    </div>
-                    <div className="settings-row-control settings-appearance-control">
-                      <div className="settings-choice" role="group" aria-label={t("Apply to")}>
-                        {([["global", "Global"], ["reader", "Reader"], ["writing", "Writing"], ["agent", "Agent"]] as Array<[SurfaceScope | "global", string]>).map(([id, label]) => <button key={id} className={scope === id ? "active" : ""} aria-pressed={scope === id} onClick={() => setScope(id)}>{t(label)}</button>)}
-                      </div>
+                  <SettingsRow
+                    controlClassName="settings-appearance-control"
+                    title={<>{t("Apply to")}</>}
+                    description={<>{t("Button, dialog, shape, and shadow can be scoped; density, radius, motion, input, card, and menu stay global.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={scope}
+                        label={t("Apply to")}
+                        options={([["global", "Global"], ["reader", "Reader"], ["writing", "Writing"], ["agent", "Agent"]] as Array<[SurfaceScope | "global", string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={setScope}
+                      />
                       {scope !== "global" && <button className="secondary-button" onClick={clearScope} disabled={!appearance.surfaces?.[scope]}>{t("Reset this surface")}</button>}
-                    </div>
-                  </div>
+
+                  </SettingsRow>
                   {scopeIssues.length > 0 && <div className="settings-contrast-warning" role="status">
                     <strong>{t("Contrast warning")}</strong>
                     <span>{scopeIssues[0].pair} · {scopeIssues[0].ratio.toFixed(1)}:1 / {scopeIssues[0].minimum}:1{scopeIssues.length > 1 ? ` · +${scopeIssues.length - 1}` : ""}</span>
                   </div>}
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Accent color")}</span>
-                      <p className="settings-row-description">{t("Used for primary actions, focus rings, and highlights.")}</p>
-                    </div>
-                    <div className="settings-row-control settings-appearance-control">
+                  <SettingsRow
+                    controlClassName="settings-appearance-control"
+                    title={<>{t("Accent color")}</>}
+                    description={<>{t("Used for primary actions, focus rings, and highlights.")}</>}
+                  >
                       <input className="settings-color-input" type="color" value={accentValue} aria-label={t("Accent color")} onChange={(event) => updateOverride({ accent: event.target.value })} />
                       <code className="settings-value">{accentValue}</code>
                       <button className="secondary-button" onClick={() => clearOverride("accent")} disabled={accentResetDisabled}>{t("Reset")}</button>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Surface color")}</span>
-                      <p className="settings-row-description">{t("Derives the ground, panel, borders, and readable text for the whole shell.")}</p>
-                    </div>
-                    <div className="settings-row-control settings-appearance-control">
+
+                  </SettingsRow>
+                  <SettingsRow
+                    controlClassName="settings-appearance-control"
+                    title={<>{t("Surface color")}</>}
+                    description={<>{t("Derives the ground, panel, borders, and readable text for the whole shell.")}</>}
+                  >
                       <input className="settings-color-input" type="color" value={surfaceValue} aria-label={t("Surface color")} onChange={(event) => updateOverride({ surface: event.target.value })} />
                       <code className="settings-value">{surfaceValue}</code>
                       <button className="secondary-button" onClick={() => clearOverride("surface")} disabled={surfaceResetDisabled}>{t("Reset")}</button>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Surface depth")}</span>
-                      <p className="settings-row-description">{t("How far panels and borders step away from the base surface.")}</p>
-                    </div>
-                    <div className="settings-row-control settings-appearance-control">
+
+                  </SettingsRow>
+                  <SettingsRow
+                    controlClassName="settings-appearance-control"
+                    title={<>{t("Surface depth")}</>}
+                    description={<>{t("How far panels and borders step away from the base surface.")}</>}
+                  >
                       <input className="settings-range-input" type="range" min={SURFACE_DEPTH_MIN} max={SURFACE_DEPTH_MAX} step={1} value={surfaceDepthValue} disabled={!hasSurface} aria-label={t("Surface depth")} onChange={(event) => updateOverride({ surfaceDepth: Number(event.target.value) })} />
                       <code className="settings-value">{surfaceDepthValue}</code>
                       <button className="secondary-button" onClick={() => clearOverride("surfaceDepth")} disabled={depthResetDisabled}>{t("Reset")}</button>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Density")}</span>
-                      <p className="settings-row-description">{t("Spacing for controls, settings rows, and navigation.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Density")}>
-                        {([["compact", "Compact"], ["comfortable", "Comfortable"], ["spacious", "Spacious"]] as Array<[Density, string]>).map(([id, label]) => <button key={id} className={densityValue === id ? "active" : ""} aria-pressed={densityValue === id} onClick={() => updateGlobalOverride({ density: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Control radius")}</span>
-                      <p className="settings-row-description">{t("Corner radius for buttons, inputs, and controls.")}</p>
-                    </div>
-                    <div className="settings-row-control settings-appearance-control">
+
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Density")}</>}
+                    description={<>{t("Spacing for controls, settings rows, and navigation.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={densityValue}
+                        label={t("Density")}
+                        options={([["compact", "Compact"], ["comfortable", "Comfortable"], ["spacious", "Spacious"]] as Array<[Density, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(density) => updateGlobalOverride({ density })}
+                      />
+
+                  </SettingsRow>
+                  <SettingsRow
+                    controlClassName="settings-appearance-control"
+                    title={<>{t("Control radius")}</>}
+                    description={<>{t("Corner radius for buttons, inputs, and controls.")}</>}
+                  >
                       <input className="settings-range-input" type="range" min={CONTROL_RADIUS_MIN} max={CONTROL_RADIUS_MAX} step={1} value={radiusValue} aria-label={t("Control radius")} onChange={(event) => updateGlobalOverride({ controlRadius: Number(event.target.value) })} />
                       <code className="settings-value">{radiusValue}px</code>
                       <button className="secondary-button" onClick={() => clearOverride("controlRadius")} disabled={appearance.overrides.controlRadius === undefined}>{t("Reset")}</button>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Custom theme")}</span>
-                      <p className="settings-row-description">{t("Accent, surface, density, and radius apply to both Charcoal and Paper.")}</p>
-                    </div>
-                    <div className="settings-row-control">
+
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Custom theme")}</>}
+                    description={<>{t("Accent, surface, density, and radius apply to both Charcoal and Paper.")}</>}
+                  >
                       <button className="secondary-button" onClick={() => onAppearanceChange(normalizeAppearance({ version: 1, preset: appearance.preset }))} disabled={!hasOverrides}>{t("Reset custom theme")}</button>
-                    </div>
-                  </div>
-                </div>
-              </section>
 
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Style")}</h3>
+                  </SettingsRow>
+                </div>
+                            </SettingsSectionView>
+
+              <SettingsSectionView title={t("Style")}>
                 <div className="settings-group settings-appearance-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Button style")}</span>
-                      <p className="settings-row-description">{t("Fill, border, and hover treatment for primary and secondary buttons.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Button style")}>
-                        {([["solid", "Solid"], ["soft", "Soft"], ["outline", "Outline style"], ["ghost", "Ghost"]] as Array<[ButtonStyle, string]>).map(([id, label]) => <button key={id} className={buttonStyle === id ? "active" : ""} aria-pressed={buttonStyle === id} onClick={() => updateStyles({ button: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Dialog style")}</span>
-                      <p className="settings-row-description">{t("Elevation and surface treatment for dialogs and menus.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Dialog style")}>
-                        {([["elevated", "Elevated"], ["flat", "Flat"], ["outlined", "Outlined"], ["glass", "Glass"]] as Array<[DialogStyle, string]>).map(([id, label]) => <button key={id} className={dialogStyle === id ? "active" : ""} aria-pressed={dialogStyle === id} onClick={() => updateStyles({ dialog: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Shape")}</span>
-                      <p className="settings-row-description">{t("Corner radius across buttons and dialogs.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Shape")}>
-                        {([["sharp", "Sharp"], ["soft", "Soft"], ["rounded", "Rounded"]] as Array<[ShapeStyle, string]>).map(([id, label]) => <button key={id} className={shapeStyle === id ? "active" : ""} aria-pressed={shapeStyle === id} onClick={() => updateStyles({ shape: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Shadow")}</span>
-                      <p className="settings-row-description">{t("Depth for buttons and dialogs.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Shadow")}>
-                        {([["default", "Default"], ["none", "None"], ["subtle", "Subtle"], ["deep", "Deep"]] as Array<[ShadowStyle, string]>).map(([id, label]) => <button key={id} className={shadowStyle === id ? "active" : ""} aria-pressed={shadowStyle === id} onClick={() => updateStyles({ shadow: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
+                  <SettingsRow
+                    title={<>{t("Button style")}</>}
+                    description={<>{t("Fill, border, and hover treatment for primary and secondary buttons.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={buttonStyle}
+                        label={t("Button style")}
+                        options={([["solid", "Solid"], ["soft", "Soft"], ["outline", "Outline style"], ["ghost", "Ghost"]] as Array<[ButtonStyle, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(button) => updateStyles({ button })}
+                      />
 
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Components")}</h3>
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Dialog style")}</>}
+                    description={<>{t("Elevation and surface treatment for dialogs and menus.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={dialogStyle}
+                        label={t("Dialog style")}
+                        options={([["elevated", "Elevated"], ["flat", "Flat"], ["outlined", "Outlined"], ["glass", "Glass"]] as Array<[DialogStyle, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(dialog) => updateStyles({ dialog })}
+                      />
+
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Shape")}</>}
+                    description={<>{t("Corner radius across buttons and dialogs.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={shapeStyle}
+                        label={t("Shape")}
+                        options={([["sharp", "Sharp"], ["soft", "Soft"], ["rounded", "Rounded"]] as Array<[ShapeStyle, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(shape) => updateStyles({ shape })}
+                      />
+
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Shadow")}</>}
+                    description={<>{t("Depth for buttons and dialogs.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={shadowStyle}
+                        label={t("Shadow")}
+                        options={([["default", "Default"], ["none", "None"], ["subtle", "Subtle"], ["deep", "Deep"]] as Array<[ShadowStyle, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(shadow) => updateStyles({ shadow })}
+                      />
+
+                  </SettingsRow>
+                </div>
+                            </SettingsSectionView>
+
+              <SettingsSectionView title={t("Components")}>
                 <div className="settings-group settings-appearance-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Input style")}</span>
-                      <p className="settings-row-description">{t("Field fill and border treatment across the app.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Input style")}>
-                        {([["default", "Default"], ["filled", "Filled"], ["outlined", "Outlined"], ["ghost", "Ghost"]] as Array<[InputStyle, string]>).map(([id, label]) => <button key={id} className={inputStyle === id ? "active" : ""} aria-pressed={inputStyle === id} onClick={() => updateGlobalStyles({ input: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Card style")}</span>
-                      <p className="settings-row-description">{t("Panel fill and border treatment across the app.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Card style")}>
-                        {([["default", "Default"], ["flat", "Flat"], ["outlined", "Outlined"]] as Array<[CardStyle, string]>).map(([id, label]) => <button key={id} className={cardStyle === id ? "active" : ""} aria-pressed={cardStyle === id} onClick={() => updateGlobalStyles({ card: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Menu style")}</span>
-                      <p className="settings-row-description">{t("Popup fill, border, and blur treatment across the app.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Menu style")}>
-                        {([["default", "Default"], ["flat", "Flat"], ["outlined", "Outlined"], ["glass", "Glass"]] as Array<[MenuStyle, string]>).map(([id, label]) => <button key={id} className={menuStyle === id ? "active" : ""} aria-pressed={menuStyle === id} onClick={() => updateGlobalStyles({ menu: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Motion")}</span>
-                      <p className="settings-row-description">{t("Animation and transition intensity across the app.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice" role="group" aria-label={t("Motion")}>
-                        {([["full", "Full"], ["reduced", "Reduced"], ["none", "None"]] as Array<[MotionStyle, string]>).map(([id, label]) => <button key={id} className={motionStyle === id ? "active" : ""} aria-pressed={motionStyle === id} onClick={() => updateGlobalStyles({ motion: id })}>{t(label)}</button>)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
+                  <SettingsRow
+                    title={<>{t("Input style")}</>}
+                    description={<>{t("Field fill and border treatment across the app.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={inputStyle}
+                        label={t("Input style")}
+                        options={([["default", "Default"], ["filled", "Filled"], ["outlined", "Outlined"], ["ghost", "Ghost"]] as Array<[InputStyle, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(input) => updateGlobalStyles({ input })}
+                      />
 
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Theme pack")}</h3>
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Card style")}</>}
+                    description={<>{t("Panel fill and border treatment across the app.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={cardStyle}
+                        label={t("Card style")}
+                        options={([["default", "Default"], ["flat", "Flat"], ["outlined", "Outlined"]] as Array<[CardStyle, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(card) => updateGlobalStyles({ card })}
+                      />
+
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Menu style")}</>}
+                    description={<>{t("Popup fill, border, and blur treatment across the app.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={menuStyle}
+                        label={t("Menu style")}
+                        options={([["default", "Default"], ["flat", "Flat"], ["outlined", "Outlined"], ["glass", "Glass"]] as Array<[MenuStyle, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(menu) => updateGlobalStyles({ menu })}
+                      />
+
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Motion")}</>}
+                    description={<>{t("Animation and transition intensity across the app.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        value={motionStyle}
+                        label={t("Motion")}
+                        options={([["full", "Full"], ["reduced", "Reduced"], ["none", "None"]] as Array<[MotionStyle, string]>).map(([id, label]) => ({ value: id, label: t(label) }))}
+                        onChange={(motion) => updateGlobalStyles({ motion })}
+                      />
+
+                  </SettingsRow>
+                </div>
+                            </SettingsSectionView>
+
+              <SettingsSectionView title={t("Theme pack")}>
                 <div className="settings-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Share this appearance")}</span>
-                      <p className="settings-row-description">{t("Export the current appearance or import a shared .archtheme.json file.")}</p>
-                    </div>
-                    <div className="settings-row-control">
+                  <SettingsRow
+                    title={<>{t("Share this appearance")}</>}
+                    description={<>{t("Export the current appearance or import a shared .archtheme.json file.")}</>}
+                  >
                       <div className="settings-appearance-control">
                         <button className="secondary-button" onClick={exportPack}>{t("Export")}</button>
                         <button className="secondary-button" onClick={() => packInputRef.current?.click()}>{t("Import")}</button>
                         <input ref={packInputRef} className="settings-file-input" type="file" accept=".json,.archtheme.json,application/json" aria-label={t("Import theme pack")} onChange={(event) => void importPack(event.target.files?.[0])} />
                       </div>
-                    </div>
-                  </div>
+
+                  </SettingsRow>
                   {packError && <p className="settings-pack-error" role="alert">{packError}</p>}
                   {pendingPack && <div className="settings-pack-preview">
                     <div>
@@ -613,57 +608,55 @@ export default function SettingsModal({
                     </div>
                   </div>}
                 </div>
-              </section>
+                            </SettingsSectionView>
 
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Fonts")}</h3>
+              <SettingsSectionView title={t("Fonts")}>
                 <div className="settings-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Interface font")}</span>
-                      <p className="settings-row-description">{t("Used for conversation, navigation, and interface text.")}</p>
-                    </div>
-                    <div className="settings-row-control">
+                  <SettingsRow
+                    title={<>{t("Interface font")}</>}
+                    description={<>{t("Used for conversation, navigation, and interface text.")}</>}
+                  >
                       <select className="settings-select" value={interfaceFont} onChange={(event) => setInterfaceFont(event.target.value as InterfaceFont)} aria-label={t("Interface font")}>
                         <option value="geist">{t("Geist Sans")}</option>
                         <option value="system">{t("System")}</option>
                       </select>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title"><Code2 size={13} />{t("Code font")}</span>
-                      <p className="settings-row-description">{t("Used for code, terminal output, and trajectory detail.")}</p>
-                    </div>
-                    <div className="settings-row-control">
+
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<><Code2 size={13} />{t("Code font")}</>}
+                    description={<>{t("Used for code, terminal output, and trajectory detail.")}</>}
+                  >
                       <select className="settings-select" value={monoFont} onChange={(event) => setMonoFont(event.target.value as MonoFont)} aria-label={t("Code font")}>
                         <option value="geist-mono">{t("Geist Mono")}</option>
                         <option value="system">{t("System mono")}</option>
                       </select>
-                    </div>
-                  </div>
-                </div>
-              </section>
 
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Files")}</h3>
-                <div className="settings-group">
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("File icons")}</span>
-                      <p className="settings-row-description">{t("Choose the icon palette for file trees.")}</p>
-                    </div>
-                    <div className="settings-row-control">
-                      <div className="settings-choice file-icon-choice" role="group" aria-label={t("File icons")}>
-                        <button className={fileIconStyle === "city-lights" ? "active" : ""} aria-pressed={fileIconStyle === "city-lights"} onClick={() => setFileIconStyle("city-lights")}>{t("City Lights")}</button>
-                        <button className={fileIconStyle === "material" ? "active" : ""} aria-pressed={fileIconStyle === "material"} onClick={() => setFileIconStyle("material")}>{t("Material")}</button>
-                        <button className={fileIconStyle === "seti" ? "active" : ""} aria-pressed={fileIconStyle === "seti"} onClick={() => setFileIconStyle("seti")}>{t("Seti")}</button>
-                        <button className={fileIconStyle === "monochrome" ? "active" : ""} aria-pressed={fileIconStyle === "monochrome"} onClick={() => setFileIconStyle("monochrome")}>{t("Monochrome")}</button>
-                      </div>
-                    </div>
-                  </div>
+                  </SettingsRow>
                 </div>
-              </section>
+                            </SettingsSectionView>
+
+              <SettingsSectionView title={t("Files")}>
+                <div className="settings-group">
+                  <SettingsRow
+                    title={<>{t("File icons")}</>}
+                    description={<>{t("Choose the icon palette for file trees.")}</>}
+                  >
+                      <SettingsChoiceGroup
+                        className="file-icon-choice"
+                        value={fileIconStyle}
+                        label={t("File icons")}
+                        options={[
+                          { value: "city-lights", label: t("City Lights") },
+                          { value: "material", label: t("Material") },
+                          { value: "seti", label: t("Seti") },
+                          { value: "monochrome", label: t("Monochrome") },
+                        ]}
+                        onChange={setFileIconStyle}
+                      />
+
+                  </SettingsRow>
+                </div>
+                            </SettingsSectionView>
             </div>}
 
             {section === "workbench" && <WorkbenchSettingsPanel preferences={workbenchPreferences} onChange={onChangeWorkbenchPreferences} onReset={onResetWorkbenchPreferences} />}
@@ -675,21 +668,20 @@ export default function SettingsModal({
               : <div className="settings-empty">{t("Loading terminal settings…")}</div>)}
 
             {section === "workspace" && <div className="settings-sections">
-              <section className="settings-section">
-                <h3 className="settings-section-title">{t("Folder")}</h3>
+              <SettingsSectionView title={t("Folder")}>
                 <div className="settings-group">
-                  <div className="settings-row settings-row-stacked">
-                    <div className="settings-row-copy">
-                      <span className="settings-row-title">{t("Current workspace")}</span>
-                      <p className="settings-row-description">{workspaceName || t("Opening workspace")} · {workspaceReady ? t("Workspace connected") : t("Opening workspace")}</p>
-                    </div>
-                    <div className="settings-row-control settings-workspace-control">
+                  <SettingsRow
+                    stacked
+                    controlClassName="settings-workspace-control"
+                    title={<>{t("Current workspace")}</>}
+                    description={<>{workspaceName || t("Opening workspace")} · {workspaceReady ? t("Workspace connected") : t("Opening workspace")}</>}
+                  >
                       <code className="settings-path">{workspace || "—"}</code>
                       <button className="primary-button" onClick={onChooseWorkspace} disabled={agentBusy}><FolderOpen size={14} />{t("Change folder")}</button>
-                    </div>
-                  </div>
+
+                  </SettingsRow>
                 </div>
-              </section>
+                            </SettingsSectionView>
             </div>}
 
             {section === "about" && <div className="settings-about">
@@ -700,8 +692,7 @@ export default function SettingsModal({
           </div>
         </div>
       </div>
-    </section>
-  </div></DialogPortal>;
+  </Dialog>;
 }
 
 

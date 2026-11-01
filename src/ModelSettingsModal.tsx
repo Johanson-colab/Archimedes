@@ -23,7 +23,6 @@ import openaiLogo from "./assets/providers/openai.png";
 import qwenLogo from "./assets/providers/qwen.png";
 import { useUISettings } from "./i18n";
 import { MenuSurface } from "./Menu";
-import { useDialogFocus } from "./useDialogFocus";
 
 type ProviderId = ModelProviderId;
 

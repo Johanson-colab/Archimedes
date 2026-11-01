@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, LoaderCircle, Pause, Play, Send, UserPlus, X } from "lucide-react";
 import { useUISettings } from "./i18n";
+import { SettingsRow } from "./SettingsPrimitives";
 
 type SharedRunsPanelProps = {
   bridge: ResearchDeskBridge;
@@ -112,13 +113,14 @@ export default function SharedRunsPanel({ bridge, projectId, activeThreadId }: S
   return <section className="settings-section shared-runs">
     <h3 className="settings-section-title">{t("Shared agent runs")}</h3>
     <div className="settings-group">
-      <div className="settings-row project-cloud-row">
-        <div className="settings-row-copy">
-          <span className="settings-row-title"><Play size={14} />{t("Single driver, co-prompt queue")}</span>
-          <p className="settings-row-description">{activeThreadId ? t("Start a shared run for the current thread.") : t("Open a research thread to start a shared run.")}</p>
-        </div>
-        <div className="settings-row-control"><button className="primary-button" disabled={!activeThreadId || busy} onClick={() => void start()}><Play size={13} />{t("Start run")}</button></div>
-      </div>
+      <SettingsRow
+        className="project-cloud-row"
+        title={t("Single driver, co-prompt queue")}
+        icon={<Play size={14} />}
+        description={activeThreadId ? t("Start a shared run for the current thread.") : t("Open a research thread to start a shared run.")}
+      >
+        <button className="primary-button" disabled={!activeThreadId || busy} onClick={() => void start()}><Play size={13} />{t("Start run")}</button>
+      </SettingsRow>
       {loading ? <div className="project-members-loading"><LoaderCircle size={14} />{t("Loading runs…")}</div> : runs.length ? <>
         <div className="shared-run-list">
           {runs.map((run) => <button key={run.id} className={run.id === selectedRunId ? "shared-run-item active" : "shared-run-item"} onClick={() => setSelectedRunId(run.id)}>

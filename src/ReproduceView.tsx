@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, ChevronLeft, FlaskConical, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
 
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 const STATUS_LABELS: Record<ReproductionStatus, string> = {
   draft: "Draft",
   planned: "Plan ready",
@@ -195,7 +197,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   if (selectedId) {
     if (!detail) {
       return <section className="reproduce-page">
-        <div className="reproduce-empty"><LoaderCircle className="spin" size={20} /><span>Opening reproduction…</span></div>
+        <StateView tone="loading" className="reproduce-empty" icon={<LoaderCircle className="spin" size={20} />} description="Opening reproduction…" />
       </section>;
     }
     const contract = detail.contract;
@@ -209,7 +211,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         </div>
       </header>
 
-      {error && <div className="library-error" role="alert">{error}</div>}
+      {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
 
       {!contract ? <div className="reproduce-blank">
         <FlaskConical size={26} />
@@ -327,7 +329,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       </div>
     </header>
 
-    {error && <div className="library-error" role="alert">{error}</div>}
+    {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
 
     {picking && <div className="reproduce-picker">
       <div className="reproduce-picker-bar">
@@ -338,8 +340,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         <button className="quiet-icon-button" onClick={() => setPicking(false)}>Cancel</button>
       </div>
       <div className="reproduce-picker-list">
-        {pickerLoading && <div className="reproduce-empty"><LoaderCircle className="spin" size={16} /></div>}
-        {!pickerLoading && !papers.length && <div className="reproduce-empty">No paper matches. Import it into a library first.</div>}
+        {pickerLoading && <StateView tone="loading" compact className="reproduce-empty" icon={<LoaderCircle className="spin" size={16} />} />}
+        {!pickerLoading && !papers.length && <StateView compact className="reproduce-empty" description="No paper matches. Import it into a library first." />}
         {papers.map((paper) => <button key={paper.id} className="reproduce-picker-row" disabled={busy !== ""} onClick={() => void create(paper)}>
           <span>{paper.title}</span>
           <small>{paper.year || ""} {paper.github_url ? "· GitHub" : ""}</small>
@@ -347,13 +349,14 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       </div>
     </div>}
 
-    {loading ? <div className="reproduce-empty"><LoaderCircle className="spin" size={20} /><span>Loading…</span></div>
-      : !items.length ? <div className="reproduce-empty">
-          <FlaskConical size={26} />
-          <strong>No reproductions yet</strong>
-          <span>Open a paper and choose Reproduce, or start from a paper in your library.</span>
-          <button className="secondary-button" onClick={() => void openPicker()}><Plus size={14} />New</button>
-        </div>
+    {loading ? <StateView tone="loading" className="reproduce-empty" icon={<LoaderCircle className="spin" size={20} />} description="Loading…" />
+      : !items.length ? <StateView
+          className="reproduce-empty"
+          icon={<FlaskConical size={26} />}
+          title="No reproductions yet"
+          description="Open a paper and choose Reproduce, or start from a paper in your library."
+          action={<button className="secondary-button" onClick={() => void openPicker()}><Plus size={14} />New</button>}
+        />
       : <div className="reproduce-list">{items.map((item) => <button className="reproduce-row" key={item.id} onClick={() => onSelect(item.id)}>
           <span className={`reproduce-dot ${STATUS_TONE[item.status]}`} aria-hidden="true" />
           <span className="reproduce-row-main">

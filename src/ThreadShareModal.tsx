@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Check, Copy, Download, Link2, LoaderCircle, Share2, X } from "lucide-react";
-import { useDialogFocus } from "./useDialogFocus";
-import DialogPortal from "./DialogPortal";
+import { Dialog } from "./Dialog";
 
 type ThreadShareSnapshot = Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>>;
 
@@ -17,7 +16,6 @@ type ThreadShareModalProps = {
 };
 
 export default function ThreadShareModal({ snapshot, bridge, projectId, threadId, threadTitle, privateThread, onClose, onCopy }: ThreadShareModalProps) {
-  const dialogRef = useDialogFocus<HTMLElement>(Boolean(snapshot), onClose);
   const [shareLink, setShareLink] = useState<CloudShareLink | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkError, setLinkError] = useState("");
@@ -55,8 +53,7 @@ export default function ThreadShareModal({ snapshot, bridge, projectId, threadId
     }
   }
 
-  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="thread-share-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-label="Share thread snapshot" onMouseDown={(event) => event.stopPropagation()}>
+  return <Dialog open onClose={onClose} size="md" className="thread-share-modal" ariaLabel="Share thread snapshot">
       <header className="thread-share-header">
         <div><span className="eyebrow">Asynchronous sharing</span><h2>Share a snapshot</h2><p>{threadTitle}</p></div>
         <button className="settings-close" onClick={onClose} aria-label="Close share dialog"><X size={16} /></button>
@@ -84,6 +81,5 @@ export default function ThreadShareModal({ snapshot, bridge, projectId, threadId
         <button className="secondary-button" onClick={download}><Download size={13} />Download .json</button>
         <button className="primary-button" onClick={onClose}><Check size={13} />Done</button>
       </footer>
-    </section>
-  </div></DialogPortal>;
+  </Dialog>;
 }

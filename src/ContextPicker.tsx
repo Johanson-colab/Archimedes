@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { MenuDivider, MenuLabel, MenuSurface } from "./Menu";
 
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 type PickerView = "root" | "libraries" | "papers" | "plugins" | "skills";
 
 export default function ContextPicker({ bridge, workspace, projectId, items, onAdd }: {
@@ -156,10 +158,10 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
           <PickerAction icon={<Sparkles size={16} />} label="Skills" detail="Attach research instructions" onClick={() => void showResources("skill")} />
         </>}
 
-        {loading && <div className="context-picker-state"><LoaderCircle className="spin" size={17} />Loading...</div>}
+        {loading && <StateView tone="loading" compact className="context-picker-state" icon={<LoaderCircle className="spin" size={17} />} description="Loading..." />}
         {!loading && view === "libraries" && <div className="context-picker-list">
           {libraries.map((library) => <button key={library.id} data-menu-item className="menu-item menu-item-rich context-list-row" onClick={() => void showPapers(library)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{library.name}</strong><small>{library.paper_count} papers</small></span></button>)}
-          {!libraries.length && <div className="context-picker-state">No literature libraries yet.</div>}
+          {!libraries.length && <StateView compact className="context-picker-state" description="No literature libraries yet." />}
         </div>}
 
         {!loading && view === "papers" && <>
@@ -169,7 +171,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
               const id = `paper:${paper.id}`;
               return <button key={paper.id} data-menu-item className="menu-item menu-item-rich context-list-row" onClick={() => addPaper(paper)} disabled={selectedIds.has(id)}><span className="context-source-icon"><BookMarked size={15} /></span><span><strong>{paper.title}</strong><small>{paper.authors.slice(0, 2).join(", ") || "Saved paper"}</small></span>{selectedIds.has(id) && <Check size={14} />}</button>;
             })}
-            {!filteredPapers.length && <div className="context-picker-state">No matching papers.</div>}
+            {!filteredPapers.length && <StateView compact className="context-picker-state" description="No matching papers." />}
           </div>
         </>}
 
@@ -177,11 +179,11 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
           <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${view}`} /></label>
           <div className="context-picker-list">
             {filteredResources.map((resource) => <button key={resource.id} data-menu-item className="menu-item menu-item-rich context-list-row" onClick={() => addResource(resource)} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
-            {!filteredResources.length && <div className="context-picker-state">No matching {view} found.</div>}
+            {!filteredResources.length && <StateView compact className="context-picker-state" description={`No matching ${view} found.`} />}
           </div>
         </>}
 
-        {error && <div className="context-picker-error">{error.replace(/^Error:\s*/, "")}</div>}
+        {error && <InlineNotice tone="danger" className="context-picker-error">{error.replace(/^Error:\s*/, "")}</InlineNotice>}
       </MenuSurface>
   </div>;
 }
