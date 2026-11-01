@@ -14,14 +14,13 @@ test("reader back, tabs, and actions share one compact bar", () => {
   assert.match(library, /<header id="paper-reader-bar" className="paper-reader-bar" title=\{`\$\{library\.name\} · \$\{paper\.title\}`\} inert=\{!readerChromeOpen\}>/);
   assert.match(library, /<button className="reader-back-button"[^>]*aria-label=\{t\("Library"\)\}[^>]*><ChevronLeft size=\{15\} \/><\/button>/);
   assert.doesNotMatch(library, /<ChevronLeft size=\{15\} \/>\{t\("Library"\)\}/);
-  assert.match(library, /<div className="paper-reader-tabs"><div className="paper-reader-tablist" role="tablist">/);
-  // Reproduce sits inside the tab strip so it stays next to Codebase; the strip
-  // flexes, so a sibling would drift to the right edge.
-  assert.match(library, /Codebase<\/button>\}<\/div><button className="paper-project-tab reproduce-tab"/);
-  assert.match(css, /\.paper-reader-bar \.reproduce-tab \{ flex: 0 0 auto; \}/);
+  assert.match(library, /<div className="paper-reader-tabs">/);
+  assert.match(library, /<Tabs value=\{readerView\}/);
+  assert.match(library, /className="paper-reader-action reproduce-tab"/);
+  assert.match(css, /\.paper-reader-action\.reproduce-tab \{ color: var\(--accent\); \}/);
   assert.match(library, /<div className="reader-header-actions">/);
   assert.match(css, /\.paper-workbench-page \{ grid-template-rows: 44px minmax\(0, 1fr\); \}/);
-  assert.match(css, /\.paper-reader-bar \.paper-reader-tabs button \{ height: 43px;/);
+  assert.match(css, /\.paper-reader-bar \.paper-reader-tabs \.ui-tab \{ height: 32px;/);
 });
 
 test("reader controls start open and can be toggled without hovering", () => {

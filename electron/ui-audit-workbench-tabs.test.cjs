@@ -22,7 +22,8 @@ test("workbench tabs are registry-driven, reorderable, and configurable", () => 
   assert.match(tabs, /DEFAULT_WORKBENCH_TAB_ORDER: WorkbenchTabId\[\] = \["journey", "trajectory", "files", "changes", "artifacts", "notes", "terminal", "browser"\]/);
   assert.match(tabs, /hidden: \[\.\.\.OPTIONAL_WORKBENCH_TAB_IDS\]/);
   assert.match(tabs, /setWorkbenchTabVisibility/);
-  assert.match(right, /role="tablist"/);
+  assert.match(right, /<Tabs value=\{activeTab\}/);
+  assert.match(read("src/Tabs.tsx"), /role="tablist"/);
   assert.match(right, /draggable/);
   assert.match(right, /onDrop=/);
   assert.match(right, /Customize tabs…/);

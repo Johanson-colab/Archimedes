@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Bookmark, BookmarkCheck, ExternalLink, LibraryBig, LoaderCircle, Radar, Search } from "lucide-react";
 import ToolbarActions from "./ToolbarActions";
+import { Tabs, Tab } from "./Tabs";
 
 type RadarTab = "radar" | "library";
 type TimeWindow = "latest" | "30d" | "90d";
@@ -130,11 +131,13 @@ export default function BenchmarkRadarView() {
   return <main className="benchmark-radar-page">
     <ToolbarActions><span className="module-toolbar-note"><Radar size={12} />Updated {data.updatedAt || "locally"} · {data.library.length.toLocaleString()} indexed</span></ToolbarActions>
 
-    <nav className="benchmark-tabs" aria-label="Benchmark Radar view">
-      <button className={tab === "radar" ? "active" : ""} onClick={() => setTab("radar")}><Radar size={16} />Radar</button>
-      <button className={tab === "library" ? "active" : ""} onClick={() => setTab("library")}><LibraryBig size={16} />Library</button>
+    <div className="benchmark-tabs-row">
+      <Tabs value={tab} onChange={(value) => setTab(value as typeof tab)} label="Benchmark Radar view" className="benchmark-tabs">
+        <Tab value="radar" icon={<Radar size={14} />}>Radar</Tab>
+        <Tab value="library" icon={<LibraryBig size={14} />}>Library</Tab>
+      </Tabs>
       <span>{saved.size} saved</span>
-    </nav>
+    </div>
 
     {tab === "radar" ? <section className="benchmark-radar-content">
       <div className="benchmark-intro"><div><h2>Emerging AI benchmarks</h2><p>New public evaluations from the latest Benchmark Radar release feed, ranked by observable attention where signals are available.</p></div><strong>{radarRecords.length}<small> latest releases</small></strong></div>

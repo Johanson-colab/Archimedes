@@ -10,6 +10,7 @@ import {
   type ProactiveEvidence,
 } from "./proactive-types";
 import type { ProactiveAgentController } from "./useProactiveAgent";
+import { FilterGroup, FilterButton } from "./Tabs";
 
 function hasCjkLabel(label: string) {
   return /[\u3400-\u9fff]/.test(label);
@@ -219,9 +220,11 @@ export default function ProactiveAgentPanel({
         <b>{t("{count} outputs", { count: sorted.length })}</b>
         <button onClick={backToLatest}>{t("Back to latest")}</button>
       </div>
-      <div className="agent-proactive-history-filters" role="tablist" aria-label={t("Suggestion history filter")}>
-        {([["all", t("All")], ["active", t("Active")], ["accepted", t("Accepted")], ["closed", t("Closed")]] as const).map(([id, label]) =>
-          <button key={id} role="tab" aria-selected={historyFilter === id} className={historyFilter === id ? "active" : ""} onClick={() => setHistoryFilter(id)}>{label}{id === "active" && openCount > 0 ? ` ${openCount}` : ""}</button>)}
+      <div className="agent-proactive-history-filters">
+        <FilterGroup label={t("Suggestion history filter")} className="agent-proactive-filter-tabs">
+          {([["all", t("All")], ["active", t("Active")], ["accepted", t("Accepted")], ["closed", t("Closed")]] as const).map(([id, label]) =>
+            <FilterButton key={id} active={historyFilter === id} onClick={() => setHistoryFilter(id)}>{label}{id === "active" && openCount > 0 ? ` ${openCount}` : ""}</FilterButton>)}
+        </FilterGroup>
         <button className={workspaceOnly ? "agent-proactive-history-scope active" : "agent-proactive-history-scope"} aria-pressed={workspaceOnly} onClick={() => setWorkspaceOnly((value) => !value)} title={t("Only suggestions for the current workspace")}>{t("This workspace")}</button>
       </div>
       <div className="agent-proactive-history-list">

@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCa
 import { MenuSurface } from "./Menu";
 import { useDialogFocus } from "./useDialogFocus";
 import DataChartGallery from "./DataChartGallery";
+import { Tabs, Tab } from "./Tabs";
 
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
@@ -199,13 +200,11 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   }
 
   return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
-    <div className="image-creation-tabs" role="tablist" aria-label="Image creation views">
-      <button type="button" role="tab" id="image-creation-tab-gallery" aria-selected={tab === "gallery"} aria-controls="image-creation-panel-gallery" tabIndex={tab === "gallery" ? 0 : -1} className={tab === "gallery" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("gallery")}>
-        Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small>
-      </button>
-      <button type="button" role="tab" id="image-creation-tab-charts" aria-selected={tab === "charts"} aria-controls="image-creation-panel-charts" tabIndex={tab === "charts" ? 0 : -1} className={tab === "charts" ? "image-creation-tab active" : "image-creation-tab"} onClick={() => setTab("charts")}>
-        Data charts
-      </button>
+    <div className="image-creation-tabs">
+      <Tabs value={tab} onChange={(value) => setTab(value as "gallery" | "charts")} label="Image creation views" className="workbench-tabs image-creation-tablist">
+        <Tab value="gallery" id="image-creation-tab-gallery" controls="image-creation-panel-gallery" className="workbench-tab">Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small></Tab>
+        <Tab value="charts" id="image-creation-tab-charts" controls="image-creation-panel-charts" className="workbench-tab">Data charts</Tab>
+      </Tabs>
       <div className="image-creation-actions">
         {tab === "gallery" && <label className="image-creation-sort">
           <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort paper diagrams">

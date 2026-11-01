@@ -50,7 +50,7 @@ test("workbench supports keyboard toggle and resizing", () => {
 
 test("files use a compact workbench pane with drill-down and split modes", () => {
   assert.match(tabs, /FolderTree/);
-  assert.match(workbench, /workbench-tab-badge/);
+  assert.match(fs.readFileSync(path.join(root, "src", "Tabs.tsx"), "utf8"), /ui-tab-badge/);
   assert.match(workbench, /activeTab === id/);
   assert.match(app, /openWorkbench\("files"\)/);
   assert.match(app, /<FilesView[\s\S]*?compact[\s\S]*?compactWidth=\{workbenchWidth\}/);
@@ -134,7 +134,8 @@ test("dirty file changes are protected when the workbench closes", () => {
 test("agent trajectory mirrors the OpenCode context structure", () => {
   assert.match(tabs, /id: "journey"[^\n]*labelKey: "Journey"/);
   assert.match(tabs, /id: "trajectory"[^\n]*labelKey: "Trajectory"/);
-  assert.match(workbench, /\{tab\.icon\}<span>\{t\(tab\.labelKey\)\}<\/span>/);
+  assert.match(workbench, /<Tab/);
+  assert.match(workbench, /\{t\(tab\.labelKey\)\}/);
   assert.match(trajectory, /trajectory-stats/);
   assert.match(trajectory, /Session ID/);
   assert.match(trajectory, /Raw events/);
