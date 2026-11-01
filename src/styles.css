@@ -5285,6 +5285,8 @@ html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
 .reader-paper-glyph > svg { color: var(--accent) !important; }
 .conversation-sources a { color: var(--accent) !important; }
 .reader-selection-action { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-ink) !important; }
+.artifact-tab.active { box-shadow: inset 0 2px var(--accent) !important; }
+.terminal-tab.active { box-shadow: inset 0 -2px var(--accent) !important; }
 .reader-progress-track span { background: var(--accent) !important; }
 .quiet-icon-button.active {
   background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
