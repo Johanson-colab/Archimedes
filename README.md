@@ -5,10 +5,10 @@
 > 面向研究全流程的科研智能体工作台：把找论文、读论文、看项目代码、组织证据、开展实验和写作放回同一个可追溯的桌面应用中。
 
 <p align="center">
-  <img src="docs/assets/readme/archimedes-hero.png" alt="Archimedes showing a source-grounded research chat with citations and workspace changes, daily paper discovery, a project literature library, and the Extensions marketplace">
+  <img src="docs/assets/readme/archimedes-hero.png" alt="Sixteen Archimedes screenshots in light and dark themes: research chat with citations and workspace changes, original paper reader, daily paper discovery, Extensions marketplace, Workbench Files and Changes, paper writing with PDF preview, and the image-creation gallery">
 </p>
 
-<p align="center"><em>Research chat with evidence and workspace changes · Daily paper discovery · Project literature library · Extensions marketplace. Sample project shown; research content is illustrative.</em></p>
+<p align="center"><em>Eight light-mode and eight dark-mode screens: research chat, original paper reader, Daily papers, Extensions, Workbench Files and Changes, paper writing, and image creation. Sample project shown; research content is illustrative.</em></p>
 
 Archimedes is not a generic chat shell with a paper list attached. Its center of gravity is the research loop: question → sources → evidence → implementation → experiment → writing. It runs as an Electron desktop application, keeps workspace data local by default, and leaves model and search providers configurable rather than locked to one vendor.
 
