@@ -52,6 +52,10 @@
   --surface-soft: var(--graphite-750);
   --surface-control: #262626;
   --surface-control-active: #363636;
+  --canvas-paper: #141414;
+  --canvas-grid: #252525;
+  --canvas-sticky-ink: #2f2a20;
+  --canvas-shadow: 0 18px 38px rgba(0, 0, 0, .34);
 
   --border-default: var(--graphite-550);
   --border-soft: var(--graphite-600);
@@ -248,6 +252,10 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
   --surface-soft: var(--paper-300);
   --surface-control: #f0ede8;
   --surface-control-active: #e4dfd8;
+  --canvas-paper: #f4f1ea;
+  --canvas-grid: #e5ded2;
+  --canvas-sticky-ink: #2f2a20;
+  --canvas-shadow: 0 18px 38px rgba(60, 52, 42, .14);
 
   --border-default: var(--paper-400);
   --border-soft: var(--paper-350);

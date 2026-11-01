@@ -26,6 +26,7 @@ import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typesc
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import ConferenceDiscovery from "./ConferenceDiscovery";
 import PaperReviewWorkbench from "./PaperReviewWorkbench";
+import PaperCanvas, { type PaperCanvasInsert, type PaperCanvasSource } from "./PaperCanvas";
 import { equationTokens, findEquationRects } from "./pdf-equations";
 import { applyPdfSearchHighlights } from "./pdf-search-highlights";
 import { findPdfHorizontalRules, findRuledTableRect, findTextTableRect } from "./pdf-table-regions";
@@ -63,6 +64,7 @@ import {
   FlaskConical,
   Folder,
   FolderOpen,
+  Frame,
   GitBranch,
   Flame,
   GraduationCap,
@@ -682,7 +684,9 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [chatWidth, setChatWidth] = useState(readPaperChatWidth);
   const chatResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
-  const [readerView, setReaderView] = useState<"paper" | "review" | "project" | "codebase">("paper");
+  const [readerView, setReaderView] = useState<"paper" | "canvas" | "review" | "project" | "codebase">("paper");
+  const [canvasInsert, setCanvasInsert] = useState<PaperCanvasInsert | null>(null);
+  const [canvasFocusHighlight, setCanvasFocusHighlight] = useState<PaperHighlight | null>(null);
   const [readerChromeOpen, setReaderChromeOpen] = useState(true);
   const [codebaseVisited, setCodebaseVisited] = useState(false);
   const [codeNavigationTarget, setCodeNavigationTarget] = useState<CodeNavigationTarget | null>(null);
@@ -757,6 +761,49 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
 
   function clearSelection() { setSelection(""); setSelectionAnchor(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
   function closeSelection() { clearSelection(); setTranslationPopover(null); }
+  function openCanvasSource(source: PaperCanvasSource) {
+    setReaderView("paper");
+    setChatOpen(false);
+    setPageNumber(Math.max(1, source.page));
+    if (source.quote) {
+      const focus: PaperHighlight = {
+        id: `canvas-focus-${Date.now()}`,
+        paper_id: paper.id,
+        page_number: source.page,
+        quote: source.quote,
+        start_offset: null,
+        end_offset: null,
+        note: "Source from Canvas",
+        color: "yellow",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setCanvasFocusHighlight(focus);
+      window.setTimeout(() => setCanvasFocusHighlight((current) => current?.id === focus.id ? null : current), 5_000);
+    } else {
+      setCanvasFocusHighlight(null);
+    }
+  }
+  function addSelectionToCanvas() {
+    if (!selection) return;
+    setCanvasInsert({ nonce: Date.now(), type: "quote", page: pageNumber, quote: selection, highlightId: selectedHighlight?.id });
+    setReaderView("canvas");
+    setChatOpen(false);
+    clearSelection();
+  }
+  function addHighlightToCanvas(highlight: PaperHighlight) {
+    setCanvasInsert({ nonce: Date.now(), type: "quote", page: highlight.page_number, quote: highlight.quote, highlightId: highlight.id, caption: highlight.note || undefined });
+    setReaderView("canvas");
+    setChatOpen(false);
+    setHighlightListOpen(false);
+  }
+  function addFigureToCanvas() {
+    if (!figureCapture?.image.image) return;
+    setCanvasInsert({ nonce: Date.now(), type: "figure", page: figureCapture.pageNumber, image: figureCapture.image.image, caption: figureCapture.nearbyText || undefined });
+    setFigureCapture(null);
+    setReaderView("canvas");
+    setChatOpen(false);
+  }
   function receiveFigureCapture(capture: PaperFigureCapture) {
     setFigureCapture(capture);
     setChatOpen(true);
@@ -1130,8 +1177,9 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     <header id="paper-reader-bar" className="paper-reader-bar" title={`${library.name} · ${paper.title}`} inert={!readerChromeOpen}>
       <button className="reader-back-button" onClick={onBack} title={`${t("Library")} · ${library.name}`} aria-label={t("Library")}><ChevronLeft size={15} /></button>
       <div className="paper-reader-tabs">
-        <Tabs value={readerView} onChange={(value) => { setReaderView(value as "paper" | "review"); if (value === "review") setChatOpen(false); }} label={t("Paper reader views")} className="paper-reader-tablist">
+        <Tabs value={readerView} onChange={(value) => { setReaderView(value as "paper" | "canvas" | "review"); if (value === "review" || value === "canvas") setChatOpen(false); }} label={t("Paper reader views")} className="paper-reader-tablist">
           <Tab value="paper" icon={<FileText size={14} />}>{t("Original paper")}</Tab>
+          <Tab value="canvas" icon={<Frame size={14} />}>{t("Canvas")}</Tab>
           <Tab value="review" icon={<BookOpen size={14} />}>{t("Review")}</Tab>
         </Tabs>
         {projectUrl && <button className="paper-reader-action" title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={14} />Project</button>}
@@ -1141,11 +1189,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <div className="reader-header-actions">
         {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title={t("Open source")}><ExternalLink size={15} /></a>}
         <button className="reader-icon-button" title={paper.starred ? t("Unstar paper") : t("Star paper")} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={15} fill={paper.starred ? "currentColor" : "none"} /></button>
-        {readerView !== "review" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}<span>{t("Ask AI")}</span></button>}
+        {readerView !== "review" && readerView !== "canvas" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}<span>{t("Ask AI")}</span></button>}
       </div>
     </header>
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
-      {readerView === "review" ? <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} pdfUrl={reader?.asset?.preview_url || ""} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} /> : readerView !== "codebase" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
+      {readerView === "review" ? <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} pdfUrl={reader?.asset?.preview_url || ""} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} /> : readerView !== "codebase" && readerView !== "canvas" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
         {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
         {ready ? <>
           <div className="paper-reader-toolbar" inert={!readerChromeOpen}>
@@ -1164,11 +1212,12 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             <header><div><StickyNote size={15} /><strong>{t("Highlights & notes")}</strong></div><button onClick={() => setHighlightListOpen(false)} title={t("Close")}><X size={14} /></button></header>
             <div>{reader?.highlights.length ? reader.highlights.map((highlight) => <article key={highlight.id}>
               <button className="paper-highlight-entry" onClick={() => { setPageNumber(highlight.page_number); setHighlightListOpen(false); }}><span><i className={`paper-highlight-dot ${highlight.color}`} />{t("Page {page}", { page: highlight.page_number })}</span><p>{highlight.quote}</p>{highlight.note && <small>{highlight.note}</small>}</button>
+              <button className="paper-highlight-canvas" onClick={() => addHighlightToCanvas(highlight)} title={t("Add to canvas")} aria-label={t("Add to canvas")}><Frame size={13} /></button>
               <button className="paper-highlight-delete" onClick={() => void deleteHighlight(highlight.id)} title={t("Delete this highlight or note")}><Trash2 size={13} /></button>
             </article>) : <p className="paper-highlight-empty">{t("No highlights or notes yet.")}</p>}</div>
           </aside>}
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={reader?.highlights ?? []} searchQuery={activeSearchQuery} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
+          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={canvasFocusHighlight ? [...(reader?.highlights ?? []), canvasFocusHighlight] : (reader?.highlights ?? [])} searchQuery={activeSearchQuery} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>{t("Open the original paper")}</h2><p>{paper.pdf_url ? t("The public PDF can be cached locally and opened in the reader.") : t("Attach a local PDF to open the original paper here.")}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? t("Preparing…") : t("Prepare PDF")}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{t("Attach PDF")}</button></div>
@@ -1179,17 +1228,31 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       {codebaseVisited && projectUrl && isGithubRepositoryLink(projectUrl) && <main key={projectUrl} className={readerView === "codebase" ? "codebase-reader" : "codebase-reader codebase-reader-inactive"} aria-hidden={readerView !== "codebase"}>
         <RepositoryCodebaseView bridge={bridge} url={projectUrl} workspace={workspace} checkout={checkout} loading={checkoutLoading} error={checkoutError} onClone={cloneForAudit} onAddToChat={addCodeSelectionToChat} navigationTarget={codeNavigationTarget} />
       </main>}
-      {chatOpen && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
+      <main key={`canvas-${paper.id}`} className={readerView === "canvas" ? "paper-canvas-reader" : "paper-canvas-reader paper-canvas-reader-inactive"} aria-hidden={readerView !== "canvas"}>
+        <PaperCanvas
+          bridge={bridge}
+          workspace={workspace}
+          projectId={projectId}
+          paperId={paper.id}
+          paperTitle={paper.title}
+          currentPage={pageNumber}
+          active={readerView === "canvas"}
+          insertRequest={canvasInsert}
+          onInsertHandled={(nonce) => setCanvasInsert((current) => current?.nonce === nonce ? null : current)}
+          onOpenSource={openCanvasSource}
+        />
+      </main>
+      {chatOpen && readerView !== "canvas" && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
       <aside className="paper-ai-panel">
         <header><div><span className="eyebrow">Archimedes</span><h2>{t("Paper chat")}</h2><Tabs value={aiMode} onChange={(value) => { if (value === "audit" && !checkout) { if (projectUrl) openCodebase(projectUrl); return; } setAiMode(value as typeof aiMode); }} label="Evidence mode" variant="segmented" className="paper-ai-mode-toggle"><Tab value="brief">{t("Paper briefing")}</Tab><Tab value="audit" title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>{t("Code audit")}</Tab></Tabs></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title={t("Read the full paper again")}><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")}><X size={16} /></button></div></header>
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={askPaperSuggestion} onOpenCodePath={openCodePath} />
         {selection && <div className="paper-ai-context"><span>{t("p. {page} selection", { page: pageNumber })}</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
+        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p><button className="paper-ai-figure-canvas" onClick={addFigureToCanvas} title={t("Send to canvas")}><Frame size={12} /><span>{t("Send to canvas")}</span></button></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} droppedAttachments={droppedAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} onRemoveDropped={(id) => setDroppedAttachments((current) => current.filter((item) => item.id !== id))} onDropFiles={(files, repositoryPath) => void attachPaperChatDrop(files, repositoryPath)} />
       </aside></>}
     </div>
-    {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
-      <button ref={highlightTriggerRef} aria-haspopup="menu" aria-expanded={highlightPickerOpen} onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />{t("Highlight")}</button><button onClick={translateSelection}><Languages size={15} />{t("Translate")}</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />{t("Comment")}</button><button onClick={openAskForSelection}><Bot size={15} />{t("Ask AI")}</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />{t("Delete highlight")}</button>}
+    {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 430, Math.max(12, selectionAnchor.x - 170)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
+      <button ref={highlightTriggerRef} aria-haspopup="menu" aria-expanded={highlightPickerOpen} onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />{t("Highlight")}</button><button onClick={translateSelection}><Languages size={15} />{t("Translate")}</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />{t("Comment")}</button><button onClick={openAskForSelection}><Bot size={15} />{t("Ask AI")}</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />{t("Delete highlight")}</button>}<button className="add-to-canvas-action" onClick={addSelectionToCanvas}><Frame size={15} />{t("Add to canvas")}</button>
       <MenuSurface open={highlightPickerOpen} onClose={() => setHighlightPickerOpen(false)} anchorRef={highlightTriggerRef} placement="bottom-start" width={220} className="paper-highlight-picker" ariaLabel={t("Highlight color")}>
         {HIGHLIGHT_COLORS.map((color) => <MenuItem key={color.value} checked={selectedHighlight?.color === color.value} icon={<span className="highlight-dot" style={{ background: PDF_HIGHLIGHT_COLORS[color.value ?? "yellow"] ?? "transparent" }} />} onClick={() => { setHighlightPickerOpen(false); void saveHighlight("", color.value); }}>{t(color.label)}</MenuItem>)}
       </MenuSurface>
