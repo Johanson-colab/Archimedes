@@ -7,6 +7,7 @@ import { Tabs, Tab } from "./Tabs";
 import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
+import { useUISettings } from "./i18n";
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
 const PAGE_SIZE = 48;
@@ -110,6 +111,7 @@ function Facet({ label, options, value, onChange }: {
 function FigureCard({ figure, onOpen, onUseTemplate }: {
   figure: Figure; onOpen: () => void; onUseTemplate: () => void;
 }) {
+  const { t } = useUISettings();
   const [failed, setFailed] = useState(false);
   return <article className="image-creation-card">
     <button type="button" className="image-creation-card-image" onClick={onOpen}
@@ -122,7 +124,7 @@ function FigureCard({ figure, onOpen, onUseTemplate }: {
     </button>
     <button type="button" className="image-creation-card-use" onClick={onUseTemplate}
       title={`Use "${figure.title}" as a template`}>
-      <Sparkles size={12} />Use as template
+      <Sparkles size={12} />{t("Use as template")}
     </button>
   </article>;
 }
@@ -147,6 +149,7 @@ function FigureDialog({ figure, index, total, onClose, onStep }: {
 }
 
 export default function ImageCreationView({ active, onBrowseProceedings }: { active: boolean; onBrowseProceedings: () => void }) {
+  const { t } = useUISettings();
   const [figures, setFigures] = useState<Figure[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -158,7 +161,13 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"gallery" | "charts">("gallery");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [reference, setReference] = useState<Figure | null>(null);
+  const [references, setReferences] = useState<Figure[]>([]);
+  const [forgeOpen, setForgeOpen] = useState(false);
+  const [paperTitle, setPaperTitle] = useState("");
+  const [paperContent, setPaperContent] = useState("");
+  const [figureType, setFigureType] = useState("framework");
+  const [figurePlan, setFigurePlan] = useState("");
+  const [planConfirmed, setPlanConfirmed] = useState(false);
   const [composerText, setComposerText] = useState("");
   const [aspect, setAspect] = useState<Aspect>("1:1");
   const composerRef = useRef<HTMLInputElement>(null);
@@ -177,7 +186,6 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
   useEffect(() => { setSelectedId(null); }, [tab]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [filters, query, sort]);
- useEffect(() => { if (reference) composerRef.current?.focus(); }, [reference]);
 
   const result = useMemo(() => {
     const matched = figures.filter((figure) => matches(figure, filters, query));
@@ -193,8 +201,9 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const step = (direction: number) => { if (selectedIndex >= 0) setSelectedId(result[(selectedIndex + direction + result.length) % result.length].id); };
   const resetFilters = () => { setQuery(""); setFilters(INITIAL_FILTERS); };
   function useAsTemplate(figure: Figure) {
-    setReference(figure);
-    setComposerText("Adapt this figure for ");
+    setReferences((current) => current.some((item) => item.id === figure.id) || current.length >= 6 ? current : [...current, figure]);
+    setPlanConfirmed(false);
+    setForgeOpen(true);
   }
 
   return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
@@ -253,14 +262,10 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     {tab === "gallery" && <><div className="image-creation-fade" aria-hidden="true" />
     <div className="image-creation-composer-dock">
       <div className="image-creation-composer">
-        {reference && <div className="image-creation-reference">
-          <img src={imageUrl(reference)} alt="" />
-          <span><b>{reference.venue.toUpperCase()} {reference.year}</b><em>{reference.title}</em></span>
-          <button type="button" onClick={() => setReference(null)} title="Remove reference figure" aria-label="Remove reference figure"><X size={13} /></button>
-        </div>}
+        {references.length > 0 && <button type="button" className="image-creation-reference" onClick={() => setForgeOpen(true)}>{t("Selected references: {count}", { count: references.length })}</button>}
         <div className="image-creation-composer-box">
           <button type="button" className="image-creation-attach" disabled title="Attaching a reference image is coming soon" aria-label="Attach a reference image"><Plus size={16} /></button>
-          <input ref={composerRef} className="image-creation-composer-input" value={composerText} onChange={(event) => setComposerText(event.target.value)} placeholder={reference ? "Describe how to adapt this figure…" : "Describe an image to generate…"} aria-label="Describe an image" />
+          <input ref={composerRef} className="image-creation-composer-input" value={composerText} onChange={(event) => { setComposerText(event.target.value); setPlanConfirmed(false); }} placeholder={t("Describe a figure to plan…")} aria-label={t("Describe a figure to plan…")} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) setForgeOpen(true); }} />
           <label className="image-creation-aspect">
             <select value={aspect} onChange={(event) => setAspect(event.target.value as Aspect)} aria-label="Aspect ratio">
               {ASPECTS.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -268,12 +273,29 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
             <ChevronDown size={10} aria-hidden="true" />
           </label>
           <span className="image-creation-model" title="Image generation will arrive with the image model backend"><ImagePlus size={12} />Image model · Soon</span>
-          <button type="button" className="image-creation-send" disabled title="Image generation is coming soon" aria-label="Generate image"><ArrowUp size={15} /></button>
+          <button type="button" className="image-creation-send" onClick={() => setForgeOpen(true)} title={t("Open FigureForge")} aria-label={t("Open FigureForge")}><ArrowUp size={15} /></button>
         </div>
-        <p className="image-creation-composer-note">Image generation is coming soon. Check each paper's license before reuse.</p>
+        <p className="image-creation-composer-note">{t("Plan your figure now; AI generation is coming later.")}</p>
       </div>
     </div></>}
 
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
+    {active && <Dialog open={forgeOpen} onClose={() => setForgeOpen(false)} size="lg" className="figure-forge-dialog" ariaLabel={t("FigureForge planning workspace")}>
+      <header className="figure-forge-header"><div><strong>FigureForge</strong><p>{t("Plan a paper figure with references")}</p></div><button type="button" onClick={() => setForgeOpen(false)} aria-label={t("Close")}><X size={18} /></button></header>
+      <div className="figure-forge-body">
+        <p className="figure-forge-notice">{t("This is a manual planning draft. AI analysis, PDF import and image generation are not available yet. Nothing here is saved after leaving this view.")}</p>
+        <label>{t("Paper title")}<input value={paperTitle} onChange={(event) => { setPaperTitle(event.target.value); setPlanConfirmed(false); }} /></label>
+        <label>{t("Abstract or paper content")}<textarea rows={4} value={paperContent} onChange={(event) => { setPaperContent(event.target.value); setPlanConfirmed(false); }} /></label>
+        <label>{t("Figure type")}<select value={figureType} onChange={(event) => { setFigureType(event.target.value); setPlanConfirmed(false); }}>{[["framework", "Framework"], ["architecture", "Architecture"], ["pipeline", "Pipeline"], ["conceptual", "Concept"], ["custom", "Custom"]].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+        <label>{t("Drawing requirements")}<textarea rows={2} value={composerText} onChange={(event) => { setComposerText(event.target.value); setPlanConfirmed(false); }} /></label>
+        <section className="figure-forge-references"><div className="figure-forge-section-heading"><strong>{t("References ({count}/6)", { count: references.length })}</strong><button type="button" onClick={() => setForgeOpen(false)}>{t("Browse references")}</button></div>
+          {references.length === 0 ? <p>{t("Choose Use as template on a gallery image to add a reference.")}</p> : references.map((figure) => <div className="figure-forge-reference" key={figure.id}><img src={imageUrl(figure)} alt="" /><div><strong>{figure.title}</strong><span>{figure.venue.toUpperCase()} · {figure.year}</span><a href={paperUrl(figure)} target="_blank" rel="noreferrer">{t("Open paper")}</a></div><button type="button" onClick={() => { setReferences((current) => current.filter((item) => item.id !== figure.id)); setPlanConfirmed(false); }} aria-label={t("Remove reference")}> <X size={16} /></button></div>)}
+          {references.length >= 6 && <p>{t("Maximum of 6 references. Remove one before adding another.")}</p>}
+        </section>
+        <label>{t("Figure plan")}<textarea rows={5} value={figurePlan} onChange={(event) => { setFigurePlan(event.target.value); setPlanConfirmed(false); }} placeholder={t("Describe the layout, modules, connections and visual style.")} /></label>
+        <p>{t("References belong to their authors. Check each paper's license before reuse.")}</p>
+        <div className="figure-forge-footer"><button type="button" disabled={!figurePlan.trim()} onClick={() => setPlanConfirmed(true)}>{t("Confirm plan")}</button>{planConfirmed && <span role="status">{t("Plan confirmed for this session. Image generation is not available yet.")}</span>}</div>
+      </div>
+    </Dialog>}
   </main>;
 }
