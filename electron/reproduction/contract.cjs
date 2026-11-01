@@ -209,7 +209,9 @@ function normalizeContract(input, { paperTitle = "" } = {}) {
       commit: text(value.repo?.commit, 80),
     },
     notes: Array.isArray(value.notes) ? value.notes.map((item) => text(item, 400)).filter(Boolean).slice(0, 10) : [],
-    frozen_at: null,
+    // Approval is the gate the runner checks; normalising it away would silently
+    // un-freeze a contract the user already approved.
+    frozen_at: typeof value.frozen_at === "string" && value.frozen_at ? value.frozen_at : null,
   };
 }
 

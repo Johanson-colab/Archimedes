@@ -185,3 +185,11 @@ test("plans written before checkpoints still render", () => {
   assert.ok(legacy.steps.every((step) => step.check.kind === "manual"));
   assert.match(legacy.steps[0].check.reason, /predates checkpoints/);
 });
+
+test("an approved contract stays frozen when it is read back", () => {
+  // Approval is what unlocks Run; normalising the timestamp away would un-freeze
+  // a plan the user already signed off on.
+  const approved = { claims: [{ statement: "Result holds" }], frozen_at: "2026-11-01T10:00:00.000Z" };
+  assert.equal(normalizeContract(approved).frozen_at, "2026-11-01T10:00:00.000Z");
+  assert.equal(normalizeContract({ claims: [{ statement: "Result holds" }] }).frozen_at, null);
+});
