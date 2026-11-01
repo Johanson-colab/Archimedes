@@ -4,6 +4,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { BookOpen, Check, ChevronLeft, ChevronRight, ExternalLink, FileText, GraduationCap, LoaderCircle, Plus, RefreshCw, Search } from "lucide-react";
 import conferenceCatalog from "../shared/conferences.json";
+import { FilterGroup, FilterButton } from "./Tabs";
 
 const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }> = [
   { id: "all", label: "All" }, { id: "oral", label: "Oral" }, { id: "spotlight", label: "Spotlight" },
@@ -66,11 +67,11 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
       <label>Year<select aria-label="Conference year" value={year} onChange={(event) => { setYear(Number(event.target.value)); setOffset(0); }}>
         {[2026, 2025, 2024, 2023].map((item) => <option key={item} value={item}>{item}</option>)}
       </select></label>
-      <div className="conference-presentation-tabs" role="tablist" aria-label="Presentation format">
-        {PRESENTATIONS.map((item) => <button key={item.id} role="tab" aria-selected={presentation === item.id} className={presentation === item.id ? "active" : ""} onClick={() => { setPresentation(item.id); setOffset(0); }}>
+      <FilterGroup label="Presentation format" className="conference-presentation-tabs">
+        {PRESENTATIONS.map((item) => <FilterButton key={item.id} active={presentation === item.id} onClick={() => { setPresentation(item.id); setOffset(0); }}>
           {item.label}{response && <small>{item.id === "all" ? response.catalog_total : response.presentation_counts[item.id]}</small>}
-        </button>)}
-      </div>
+        </FilterButton>)}
+      </FilterGroup>
       <button className="secondary-button conference-refresh" title="Refresh official catalog" disabled={loading} onClick={() => void load(true)}><RefreshCw size={14} />Refresh</button>
     </div>
     <div className="daily-search-row">

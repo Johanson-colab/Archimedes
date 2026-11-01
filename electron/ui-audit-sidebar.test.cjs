@@ -92,7 +92,8 @@ test("Extensions uses Installed, Available, and Updates with Workbench tabs", ()
   assert.match(extensions, /Installed/);
   assert.match(extensions, /Available/);
   assert.match(extensions, /Updates/);
-  assert.match(extensions, /workbench-tab active/);
+  assert.match(extensions, /<Tabs value=\{tab\}/);
+  assert.match(extensions, /<Tab key=\{item\.id\} value=\{item\.id\}/);
   assert.match(extensions, /listExtensions/);
   assert.match(extensions, /previewExtension/);
   assert.match(extensions, /installExtension/);

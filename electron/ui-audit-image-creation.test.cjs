@@ -22,7 +22,8 @@ test("Paper diagrams is a view inside Image creation, not a second Create destin
 });
 
 test("the page keeps Paper diagrams and Data charts in one tab row without Templates", () => {
-  assert.match(view, /className="image-creation-tabs" role="tablist"/);
+  assert.match(view, /className="image-creation-tabs">/);
+  assert.match(view, /<Tabs value=\{tab\}/);
   assert.match(view, />\s*Paper diagrams <small>/);
   assert.match(view, />\s*Data charts\s*</);
   assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard/);
@@ -34,7 +35,7 @@ test("the page keeps Paper diagrams and Data charts in one tab row without Templ
 });
 
 test("Data charts is a separate tab with chart types and tables, but no field or venue filter", () => {
-  assert.match(view, /role="tab" id="image-creation-tab-charts"/);
+  assert.match(view, /<Tab value="charts" id="image-creation-tab-charts"/);
   assert.match(view, /<DataChartGallery active=\{active\} sort=\{chartSort\} \/>/);
   assert.match(view, /<option value="preferred">Sort: AI venues first<\/option>/);
   assert.match(view, /<option value="newest">Sort: Newest across all<\/option>/);

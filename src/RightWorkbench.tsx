@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ellipsis } from "lucide-react";
 import { useUISettings } from "./i18n";
+import { Tabs, Tab } from "./Tabs";
 import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";
 import {
   moveWorkbenchTab,
@@ -146,18 +147,18 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
   return <aside className={`${open ? "right-workbench open" : "right-workbench"}${width < COMPACT_TABS_WIDTH ? " compact-tabs" : ""}`} aria-label={t("Workbench")} aria-hidden={!open} inert={!open}>
     <div className="workbench-resize-handle" role="separator" aria-orientation="vertical" aria-label={t("Resize workbench")} aria-valuemin={WORKBENCH_MIN_WIDTH} aria-valuemax={maxWorkbenchWidth()} aria-valuenow={width} tabIndex={0} onPointerDown={startResize} onDoubleClick={() => onWidthChange(defaultWorkbenchWidth())} onKeyDown={handleResizeKey}><span /></div>
     <header className="workbench-header">
-      <div className="workbench-tabs" role="tablist" aria-label={t("Workbench panels")}>
+      <Tabs value={activeTab} onChange={(value) => onTabChange(value as WorkbenchTabId)} label={t("Workbench panels")} className="workbench-tabs">
         {visibleTabs.map((id) => {
           const tab = workbenchTabDefinition(id);
-          const index = visibleTabs.indexOf(id);
-          const badge = tabBadge(badges[id]);
-          return <button
+          const count = badges[id];
+          return <Tab
             key={id}
-            className={`workbench-tab${activeTab === id ? " active" : ""}${dragging === id ? " dragging" : ""}${dropTarget === id && dragging && dragging !== id ? " drop-target" : ""}`}
-            role="tab"
-            aria-selected={activeTab === id}
+            value={id}
+            controls={`workbench-panel-${id}`}
+            icon={tab.icon}
+            badge={count && count > 0 ? (count > 99 ? "99+" : count) : undefined}
+            className={`workbench-tab${dragging === id ? " dragging" : ""}${dropTarget === id && dragging && dragging !== id ? " drop-target" : ""}`}
             draggable
-            onClick={() => onTabChange(id)}
             onContextMenu={(event) => {
               event.preventDefault();
               setContextMenu({ id, x: event.clientX, y: event.clientY });
@@ -189,20 +190,18 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
             }}
             onDragEnd={finishDrag}
             title={`${t(tab.labelKey)} · ${t("Drag to reorder")}`}
-          >
-            {tab.icon}<span>{t(tab.labelKey)}</span>{badge}
-          </button>;
+          >{t(tab.labelKey)}</Tab>;
         })}
-        <button
-          ref={moreButtonRef}
+      </Tabs>
+      <button
+        ref={moreButtonRef}
           className="workbench-tab-more"
           onClick={() => { setMoreOpen((current) => !current); setContextMenu(null); }}
           title={t("More tabs")}
           aria-label={t("More tabs")}
           aria-haspopup="menu"
           aria-expanded={moreOpen}
-        ><Ellipsis size={15} /></button>
-      </div>
+      ><Ellipsis size={15} /></button>
 
       <MenuSurface open={moreOpen} onClose={() => setMoreOpen(false)} anchorRef={moreButtonRef} placement="bottom-end" width={260} className="workbench-menu workbench-more-menu" ariaLabel={t("Workbench tabs")}>
         {hiddenTabs.length > 0 && <>
@@ -231,7 +230,7 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
       <div className="workbench-content">
         {preferences.order.filter((id) => visited.has(id)).map((id) => {
           const tab = workbenchTabDefinition(id);
-          return <div className={`workbench-panel${id === "terminal" ? " workbench-terminal-panel" : ""}`} role="tabpanel" aria-label={t(tab.labelKey)} hidden={activeTab !== id} key={id}>
+          return <div className={`workbench-panel${id === "terminal" ? " workbench-terminal-panel" : ""}`} id={`workbench-panel-${id}`} role="tabpanel" aria-label={t(tab.labelKey)} hidden={activeTab !== id} key={id}>
             {panels[id]}
           </div>;
         })}

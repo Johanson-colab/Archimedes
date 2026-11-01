@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Tabs, Tab } from "./Tabs";
 import DialogPortal from "./DialogPortal";
 import { useDialogFocus } from "./useDialogFocus";
 import {
@@ -430,12 +431,9 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
 
   return <section className="skills-page extensions-page">
     <div className="extensions-toolbar">
-      <div className="workbench-tabs extensions-tabs" role="tablist" aria-label="Extensions">
-        {tabs.map((item) => <button key={item.id} role="tab" aria-selected={tab === item.id} className={tab === item.id ? "workbench-tab active" : "workbench-tab"} onClick={() => switchTab(item.id)}>
-          {item.label}
-          {counts[item.id] > 0 && <span className="extensions-tab-count">{item.id === "available" && counts.available > 999 ? formatCount(counts.available) : counts[item.id]}</span>}
-        </button>)}
-      </div>
+      <Tabs value={tab} onChange={(value) => switchTab(value as ExtensionsTab)} label="Extensions" className="workbench-tabs extensions-tabs">
+        {tabs.map((item) => <Tab key={item.id} value={item.id} badge={counts[item.id] > 0 ? (item.id === "available" && counts.available > 999 ? formatCount(counts.available) : counts[item.id]) : undefined}>{item.label}</Tab>)}
+      </Tabs>
       <div className="extensions-controls">
         <label className="extensions-search"><Search size={13} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" aria-label="Search extensions" /></label>
         <select className="extensions-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as ExtensionTypeFilter)} aria-label="Filter by type">
