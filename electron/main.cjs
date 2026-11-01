@@ -35,6 +35,7 @@ const modelConfig = require("./model-config.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
 const { normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
+const { runPreflight } = require("./reproduction/preflight.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -1048,6 +1049,20 @@ app.whenReady().then(async () => {
   ipcMain.handle("reproduction:delete", (_event, { id } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
     return store.deleteReproduction(id);
+  });
+
+  ipcMain.handle("reproduction:preflight", async (event, { id, workspace } = {}) => {
+    const record = presentReproduction(store.getReproduction(id));
+    if (!record) throw new Error("That reproduction does not exist.");
+    if (!record.contract) throw new Error("Generate a plan before checking it.");
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
+    store.openWorkspace(dataWorkspace);
+    return runPreflight({
+      workspace: dataWorkspace,
+      repoUrl: record.contract.repo?.url || record.repo_url,
+      steps: record.contract.steps,
+    });
   });
 
   ipcMain.handle("reproduction:plan", async (event, { id, workspace } = {}) => {

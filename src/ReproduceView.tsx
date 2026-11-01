@@ -45,6 +45,30 @@ function readable(value: unknown, fallback: string) {
   return message.replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, "").trim() || fallback;
 }
 
+function statusLabel(status: ReproductionCheckStatus) {
+  if (status === "passed") return "passed";
+  if (status === "failed") return "failed";
+  if (status === "needs-run") return "needs run";
+  if (status === "blocked") return "blocked";
+  return "manual";
+}
+
+function preflightSummary(results: Record<string, { status: ReproductionCheckStatus }>) {
+  const counts = { passed: 0, failed: 0, needsRun: 0, manual: 0 } as Record<string, number>;
+  for (const entry of Object.values(results)) {
+    if (entry.status === "passed") counts.passed += 1;
+    else if (entry.status === "failed" || entry.status === "blocked") counts.failed += 1;
+    else if (entry.status === "needs-run") counts.needsRun += 1;
+    else counts.manual += 1;
+  }
+  return [
+    counts.passed ? `${counts.passed} passed` : "",
+    counts.failed ? `${counts.failed} failed` : "",
+    counts.needsRun ? `${counts.needsRun} need a run` : "",
+    counts.manual ? `${counts.manual} manual` : "",
+  ].filter(Boolean).join(" · ");
+}
+
 function checkLabel(check: ReproductionStep["check"]) {
   if (check.kind === "manual") return check.reason;
   if (check.kind === "file_exists") return `${check.path} exists`;
@@ -70,6 +94,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [error, setError] = useState("");
   const [planStatus, setPlanStatus] = useState("");
   const [openClaim, setOpenClaim] = useState<string | null>(null);
+  const [preflight, setPreflight] = useState<Record<string, { status: ReproductionCheckStatus; detail: string }> | null>(null);
+  const [checking, setChecking] = useState(false);
 
   const [picking, setPicking] = useState(false);
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
@@ -104,7 +130,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     if (!selectedId) { setDetail(null); return; }
     let cancelled = false;
     void bridge.getReproduction(selectedId).then((record) => {
-      if (!cancelled) setDetail(record);
+      if (cancelled) return;
+      setDetail(record);
+      setPreflight(null);
     }).catch((detailError) => { if (!cancelled) setError(readable(detailError, "Could not open this reproduction.")); });
     return () => { cancelled = true; };
   }, [bridge, selectedId]);
@@ -167,6 +195,20 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setPlanStatus("");
     }
   }, [bridge, detail, refresh]);
+
+  const checkFiles = useCallback(async () => {
+    if (!detail) return;
+    setChecking(true);
+    setError("");
+    try {
+      const result = await bridge.preflightReproduction(detail.id);
+      setPreflight(Object.fromEntries(result.results.map((entry) => [entry.id, { status: entry.status, detail: entry.detail }])));
+    } catch (checkError) {
+      setError(readable(checkError, "Could not check the repository."));
+    } finally {
+      setChecking(false);
+    }
+  }, [bridge, detail]);
 
   const approve = useCallback(async () => {
     if (!detail?.contract) return;
@@ -243,13 +285,22 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         </div>
 
         <section className="reproduce-block">
-          <h2>Runbook</h2>
+          <h2>Runbook
+            {contract.repo.url || detail.repo_url
+              ? <button className="reproduce-preflight" disabled={checking} onClick={() => void checkFiles()}>
+                  {checking ? <LoaderCircle className="spin" size={11} /> : <RefreshCw size={11} />}
+                  {checking ? "Checking…" : "Check files"}
+                </button>
+              : null}
+          </h2>
+          {preflight && <p className="reproduce-preflight-summary">{preflightSummary(preflight)}</p>}
           <ol className="reproduce-runbook">
             {(contract.steps ?? []).map((step, index) => <li className={`reproduce-step${step.blocked ? " blocked" : ""}`} key={step.id}>
               <span className="reproduce-step-index" aria-hidden="true">{index + 1}</span>
               <div className="reproduce-step-body">
                 <div className="reproduce-step-head">
                   <strong>{step.title}</strong>
+                  {preflight?.[step.id] && <span className={`reproduce-check-status ${preflight[step.id].status}`}>{statusLabel(preflight[step.id].status)}</span>}
                   {step.blocked && <span className="reproduce-tag warn">blocked</span>}
                 </div>
                 {step.detail && <p className="reproduce-step-detail">{step.detail}</p>}
@@ -261,6 +312,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                 </p>}
                 {step.source && <p className="reproduce-hint">from {step.source}</p>}
                 {step.blocked && <p className="reproduce-hint warn">{step.blocked}</p>}
+                {preflight?.[step.id]?.detail && preflight[step.id].status === "failed" && <p className="reproduce-hint bad">{preflight[step.id].detail}</p>}
               </div>
             </li>)}
           </ol>

@@ -6787,6 +6787,15 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 .reproduce-checkpoint { display: flex; align-items: baseline; gap: 5px; margin: 2px 0 0; color: var(--state-success); font-size: 11px; }
 .reproduce-checkpoint.manual { color: var(--state-warning); }
 .reproduce-checkpoint > span:first-of-type { min-width: 0; }
+.reproduce-preflight { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 1px 7px; color: var(--text-secondary); background: var(--surface-raised); border: 1px solid var(--border-soft); border-radius: 999px; font-size: 9.5px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.reproduce-preflight:hover { color: var(--text-primary); border-color: var(--border-default); }
+.reproduce-preflight-summary { margin: 0 0 4px; color: var(--text-muted); font-size: 10.5px; }
+.reproduce-check-status { padding: 1px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 650; }
+.reproduce-check-status.passed { color: var(--state-success); background: color-mix(in srgb, var(--state-success) 14%, transparent); }
+.reproduce-check-status.failed { color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 14%, transparent); }
+.reproduce-check-status.needs-run { color: var(--text-muted); background: var(--surface-soft); }
+.reproduce-check-status.manual, .reproduce-check-status.blocked { color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 14%, transparent); }
+.reproduce-hint.bad { color: var(--state-danger); }
 .reproduce-check-kind { flex: 0 0 auto; padding: 0 5px; color: var(--text-faint); background: var(--surface-soft); border-radius: 4px; font-family: var(--font-mono); font-size: 9px; }
 .reproduce-checkpoint svg { flex: 0 0 auto; }
 .reproduce-claim-list { display: grid; overflow: hidden; margin: 0; padding: 0; background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; list-style: none; }

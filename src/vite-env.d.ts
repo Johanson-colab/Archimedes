@@ -128,6 +128,7 @@ interface ResearchDeskBridge {
     updateReproduction: (id: string, patch: ReproductionPatch) => Promise<Reproduction>;
     deleteReproduction: (id: string) => Promise<boolean>;
     planReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
+    preflightReproduction: (id: string, workspace?: string) => Promise<ReproductionPreflight>;
     onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
@@ -804,6 +805,13 @@ interface Reproduction {
   error: string;
   created_at: string;
   updated_at: string;
+}
+
+type ReproductionCheckStatus = "passed" | "failed" | "needs-run" | "manual" | "blocked";
+
+interface ReproductionPreflight {
+  commit: string;
+  results: Array<{ id: string; status: ReproductionCheckStatus; detail: string }>;
 }
 
 interface ReproductionCreateInput { paperId?: string | null; repoUrl?: string; title?: string; budget?: Partial<Reproduction["budget"]> }
