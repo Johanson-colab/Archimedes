@@ -2,6 +2,17 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { completeAnthropic, toAnthropicRequest } = require("./anthropic.cjs");
 
+test("large reconstruction output is opt-in and rejects Anthropic truncation", async () => {
+  const request = toAnthropicRequest({ model: "vision" }, [], { allowTools: false, allowLargeOutput: true, maxOutputTokens: 32768 });
+  assert.equal(request.max_tokens, 32768);
+  assert.equal(toAnthropicRequest({ model: "vision" }, [], { allowTools: false, maxOutputTokens: 32768 }).max_tokens, 8192);
+  const original = global.fetch;
+  global.fetch = async () => ({ ok: true, headers: { get: () => "application/json" }, json: async () => ({ stop_reason: "max_tokens", content: [{ type: "text", text: "{}" }] }) });
+  try {
+    await assert.rejects(completeAnthropic({ baseUrl: "https://example.test", model: "vision", apiKey: "test" }, [], { requireComplete: true }), /truncated/);
+  } finally { global.fetch = original; }
+});
+
 test("translates tool calls and results into Anthropic message blocks", () => {
   const request = toAnthropicRequest({ model: "claude-sonnet-4-6" }, [
     { role: "system", content: "Research carefully." },

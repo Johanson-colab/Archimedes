@@ -8,6 +8,15 @@ import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
 import { useUISettings } from "./i18n";
+import { loadRetrievalIndex, prepareSemanticQuery, searchRetrievalIndex, type RetrievalIndex } from "./figureforge/retrieval.mjs";
+import { sanitizeFigureSvg } from "./figureforge/sanitize-svg.mjs";
+import type { FigureScene } from "./figureforge/reconstruction.mjs";
+import { parseSvgScene } from "./figureforge/vendor/svg-scene.mjs";
+import { sceneToSvgString } from "./figureforge/vendor/reconstruction-renderer.mjs";
+import { reconstructWithTopConf } from "./figureforge/reconstruction-workflow.mjs";
+import { exportFigureScene } from "./figureforge/export";
+import { selectRelevantPdfPages } from "./figureforge/pdf-sections.mjs";
+import { verifyImageRatio, verifyImageResolution } from "./figureforge/vendor/aspect-ratio.mjs";
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
 const PAGE_SIZE = 48;
@@ -18,7 +27,7 @@ const PATTERNS = [
   ["architecture", "Architecture"], ["teaser", "Teaser"], ["taxonomy", "Taxonomy"],
   ["results", "Results"], ["comparison", "Comparison"],
 ] as const;
-const ASPECTS = ["1:1", "4:3", "16:9"] as const;
+const ASPECTS = ["1:1", "3:2", "4:3", "16:9"] as const;
 type Aspect = typeof ASPECTS[number];
 
 type Figure = {
@@ -162,22 +171,56 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [tab, setTab] = useState<"gallery" | "charts">("gallery");
   const [filterOpen, setFilterOpen] = useState(false);
   const [references, setReferences] = useState<Figure[]>([]);
+  const [uploadedReferences, setUploadedReferences] = useState<Array<{ id: string; name: string; file: File; url: string }>>([]);
+  const [uploadingReferences, setUploadingReferences] = useState(false);
+  const uploadedReferencesRef = useRef(uploadedReferences);
   const [forgeOpen, setForgeOpen] = useState(false);
   const [paperTitle, setPaperTitle] = useState("");
   const [paperContent, setPaperContent] = useState("");
   const [pdfName, setPdfName] = useState("");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfStatus, setPdfStatus] = useState("");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [forgeError, setForgeError] = useState("");
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [retrievalStatus, setRetrievalStatus] = useState("");
+  const [recommendations, setRecommendations] = useState<Array<{ figure: Figure; score: number | null }>>([]);
+  const [visibleRecommendations, setVisibleRecommendations] = useState(60);
+  const [forgeMethod, setForgeMethod] = useState<"direct" | "two-stage">("two-stage");
+  const [visionModel, setVisionModel] = useState("");
+  const [forgeProvider, setForgeProvider] = useState("configured");
+  const [forgeBaseUrl, setForgeBaseUrl] = useState("");
+  const [forgeApiKey, setForgeApiKey] = useState("");
+  const [parseModel, setParseModel] = useState("");
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelsBusy, setModelsBusy] = useState(false);
+  const [outputMode, setOutputMode] = useState<"svg" | "bitmap">("svg");
+  const [imageModel, setImageModel] = useState("");
+  const [imageResolution, setImageResolution] = useState("1K");
+  const [styleGuide, setStyleGuide] = useState("");
+  const [generatedSvg, setGeneratedSvg] = useState("");
+  const [svgWarnings, setSvgWarnings] = useState<string[]>([]);
+  const [generatedBitmap, setGeneratedBitmap] = useState("");
+  const [generationBusy, setGenerationBusy] = useState(false);
+  const [reconstructionFile, setReconstructionFile] = useState<File | null>(null);
+  const [reconstructionBusy, setReconstructionBusy] = useState(false);
+  const [reconstructionStatus, setReconstructionStatus] = useState("");
+  const [reconstructedScene, setReconstructedScene] = useState<FigureScene | null>(null);
+  const [exportSource, setExportSource] = useState<"svg" | "bitmap">("bitmap");
+  const [exportFormat, setExportFormat] = useState<"svg" | "pptx" | "vsdx" | "drawio">("svg");
+  const [exportFont, setExportFont] = useState("");
+  const retrievalRef = useRef<RetrievalIndex | null>(null);
+  const retrievalSequence = useRef(0);
   const pdfSequence = useRef(0);
+  const pdfPages = useRef<string[]>([]);
   const [figureType, setFigureType] = useState("framework");
   const [figurePlan, setFigurePlan] = useState("");
-  const [planConfirmed, setPlanConfirmed] = useState(false);
   const [composerText, setComposerText] = useState("");
   const [aspect, setAspect] = useState<Aspect>("1:1");
   const composerRef = useRef<HTMLInputElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  const connection = forgeProvider === "configured" ? undefined : { provider: forgeProvider, baseUrl: forgeBaseUrl, apiKey: forgeApiKey, model: parseModel };
 
   async function refresh(force = false) {
     setLoading(true); setError("");
@@ -190,6 +233,8 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   }
   useEffect(() => { void refresh(); }, []);
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
+  useEffect(() => { uploadedReferencesRef.current = uploadedReferences; }, [uploadedReferences]);
+  useEffect(() => () => { uploadedReferencesRef.current.forEach((item) => URL.revokeObjectURL(item.url)); }, []);
   useEffect(() => { setSelectedId(null); }, [tab]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [filters, query, sort]);
 
@@ -207,47 +252,227 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const step = (direction: number) => { if (selectedIndex >= 0) setSelectedId(result[(selectedIndex + direction + result.length) % result.length].id); };
   const resetFilters = () => { setQuery(""); setFilters(INITIAL_FILTERS); };
   function useAsTemplate(figure: Figure) {
-    setReferences((current) => current.some((item) => item.id === figure.id) || current.length >= 6 ? current : [...current, figure]);
-    setPlanConfirmed(false);
+    if (uploadingReferences) return;
+    setReferences((current) => current.some((item) => item.id === figure.id) || current.length + uploadedReferences.length >= 10 ? current : [...current, figure]);
     setForgeOpen(true);
   }
   async function importPaper(file: File | undefined) {
     if (!file) return;
     const sequence = ++pdfSequence.current;
-    setPaperContent(""); setPaperTitle(""); setPdfName(""); setPdfStatus(""); setForgeError(""); setFigurePlan(""); setPlanConfirmed(false);
+    pdfPages.current = []; setPaperContent(""); setPaperTitle(""); setPdfName(""); setPdfFile(null); setPdfStatus(""); setForgeError(""); setFigurePlan("");
     if (!file.name.toLowerCase().endsWith(".pdf") || file.size > 25 * 1024 * 1024) { setForgeError(t("Choose a PDF smaller than 25 MB.")); return; }
     setPdfBusy(true);
     try {
       const { pdfjs } = await import("./pdf-runtime");
       const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-      let extracted = "";
+      const pages: string[] = [];
+      let extractedLength = 0;
       let pagesRead = 0;
       try {
-        for (let pageNumber = 1; pageNumber <= Math.min(doc.numPages, 50) && extracted.length < 60_000; pageNumber++) {
+        for (let pageNumber = 1; pageNumber <= Math.min(doc.numPages, 100) && extractedLength < 600_000; pageNumber++) {
           const page = await doc.getPage(pageNumber);
           const content = await page.getTextContent();
           const text = content.items.map((item) => "str" in item ? item.str : "").join(" ");
-          extracted += `\n[Page ${pageNumber}]\n${text}\n`;
+          const pageText = `\n[Page ${pageNumber}]\n${text}\n`; pages.push(pageText); extractedLength += pageText.length;
           pagesRead = pageNumber;
           page.cleanup();
         }
       } finally { await doc.destroy(); }
       if (sequence !== pdfSequence.current) return;
-      if (extracted.replace(/\[Page \d+\]/g, "").trim().length < 100) throw new Error(t("No readable PDF text found. Scanned PDFs are not supported yet."));
-      setPaperContent(extracted.slice(0, 60_000)); setPdfName(file.name);
-      setPdfStatus(t("Extracted {pages} of {total} pages locally; up to 60,000 characters will be sent.", { pages: pagesRead, total: doc.numPages }));
+      const extracted = selectRelevantPdfPages(pages, composerText);
+      pdfPages.current = pages; setPaperContent(extracted); setPdfName(file.name); setPdfFile(file);
+      setPdfStatus(extracted.replace(/\[Page \d+\]/g, "").trim().length < 100
+        ? t("No local text found; native PDF analysis requires a provider that supports documents.")
+        : t("Extracted {pages} of {total} pages locally; up to 60,000 characters are available for fallback.", { pages: pagesRead, total: doc.numPages }));
     } catch (error) {
       if (sequence === pdfSequence.current) setForgeError(error instanceof Error ? error.message : String(error));
     } finally { if (sequence === pdfSequence.current) setPdfBusy(false); }
   }
   async function analyzePaper() {
     if (!window.researchDesk?.prepareFigurePlan) { setForgeError(t("Paper analysis is available in the desktop app after restarting it.")); return; }
-    setAnalysisBusy(true); setForgeError(""); setFigurePlan(""); setPlanConfirmed(false);
+    setAnalysisBusy(true); setForgeError(""); setFigurePlan("");
     try {
-      const result = await window.researchDesk.prepareFigurePlan({ paperText: paperContent, figureType, requirements: [paperTitle && `Title: ${paperTitle}`, composerText].filter(Boolean).join("\n"), language });
+      const pdfData = pdfFile ? await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => typeof reader.result === "string" ? resolve(reader.result.replace(/^data:[^;]*;base64,/, "data:application/pdf;base64,")) : reject(new Error("Could not read the PDF.")); reader.onerror = () => reject(new Error("Could not read the PDF.")); reader.readAsDataURL(pdfFile); }) : undefined;
+      const result = await window.researchDesk.prepareFigurePlan({ paperText: pdfPages.current.length ? selectRelevantPdfPages(pdfPages.current, composerText) : paperContent, pdfData, figureType, requirements: [paperTitle && `Title: ${paperTitle}`, composerText].filter(Boolean).join("\n"), language, connection });
       setFigurePlan(result.plan);
+      setPdfStatus(result.source === "pdf" ? t("Paper analyzed using native PDF input.") : t("Paper analyzed using extracted text.") );
     } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
     finally { setAnalysisBusy(false); }
+  }
+  async function refreshFigureModels() {
+    if (!window.researchDesk?.listProviderModels) { setForgeError(t("Figure generation requires the desktop app after restarting it.")); return; }
+    const endpoints: Record<string, string> = { infistar: "https://infistar.cc/v1", nonelinear: "https://api.nonelinear.com.cn/v1", openai: "https://api.openai.com/v1", ark: "https://ark.cn-beijing.volces.com/api/v3", siliconflow: "https://api.siliconflow.cn/v1", glm: "https://open.bigmodel.cn/api/paas/v4", qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1", moonshot: "https://api.moonshot.cn/v1", anthropic: "https://api.anthropic.com/v1" };
+    setModelsBusy(true); setForgeError("");
+    try {
+      const saved = forgeProvider === "configured" ? await window.researchDesk.getModelConfig("agent") : null;
+      const baseUrl = saved?.baseUrl || (forgeProvider === "custom" ? forgeBaseUrl : endpoints[forgeProvider]);
+      const provider = saved?.provider || (forgeProvider === "anthropic" ? "anthropic" : "custom");
+      const result = await window.researchDesk.listProviderModels({ provider, baseUrl, apiKey: forgeProvider === "configured" ? undefined : forgeApiKey }, "agent");
+      setAvailableModels(result.models);
+    } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
+    finally { setModelsBusy(false); }
+  }
+  async function findReferences() {
+    const sequence = ++retrievalSequence.current;
+    const query = (figurePlan || paperContent || composerText).slice(0, 10_000);
+    setSearchBusy(true); setForgeError(""); setRetrievalStatus(t("Loading the reference index…"));
+    try {
+      const index = retrievalRef.current ?? await loadRetrievalIndex();
+      retrievalRef.current = index;
+      const candidates = index.data.figs.map((figure, i) => ({ figure, i })).filter(({ figure }) =>
+        (filters.venue === "all" || figure.venue === filters.venue.toLowerCase()) &&
+        (filters.year === "all" || figure.year === filters.year) &&
+        (filters.pattern === "all" || figure.pattern === filters.pattern) &&
+        (filters.tier === "all" || (filters.tier === "best" ? Boolean(figure.award) : figure.tier === filters.tier && !figure.award))
+      ).map(({ i }) => i);
+      const show = (vector?: number[]) => {
+        if (retrievalSequence.current !== sequence) return;
+        setRecommendations(searchRetrievalIndex(index, query, candidates, vector).filter(({ figure }) => isFigure(figure)) as Array<{ figure: Figure; score: number | null }>);
+      };
+      setVisibleRecommendations(60); show();
+      if (!query.trim()) { setRetrievalStatus(t("Showing references without relevance ranking.")); return; }
+      setRetrievalStatus(t("Keyword results ready; semantic model is loading locally…"));
+      const worker = new Worker(new URL("./figureforge/semantic-worker.ts", import.meta.url), { type: "module" });
+      try {
+        const vector = new Promise<number[]>((resolve, reject) => {
+          const timer = window.setTimeout(() => reject(new Error("Semantic model timed out.")), 180_000);
+          worker.onmessage = (event: MessageEvent<{ vector?: number[]; error?: string }>) => { clearTimeout(timer); event.data.vector ? resolve(event.data.vector) : reject(new Error(event.data.error || "Semantic model failed.")); };
+          worker.onerror = () => { clearTimeout(timer); reject(new Error("Semantic worker failed.")); };
+          worker.postMessage({ id: sequence, text: prepareSemanticQuery(index, query) });
+        });
+        const [embedding] = await Promise.all([vector, index.loadEmbeddings()]);
+        show(embedding);
+        if (retrievalSequence.current === sequence) setRetrievalStatus(t("CLIP and keyword results ready."));
+      } catch (error) {
+        if (retrievalSequence.current === sequence) setRetrievalStatus(`${t("Semantic search unavailable; showing keyword results.")} ${error instanceof Error ? error.message : String(error)}`);
+      } finally { worker.terminate(); }
+    } catch (error) {
+      if (retrievalSequence.current === sequence) setForgeError(error instanceof Error ? error.message : String(error));
+    } finally { if (retrievalSequence.current === sequence) setSearchBusy(false); }
+  }
+  async function referenceDataUrls() {
+    const remote = references.map(async (figure) => {
+      const response = await fetch(imageUrl(figure), { signal: AbortSignal.timeout(30_000) });
+      if (!response.ok) throw new Error(`Reference image HTTP ${response.status}`);
+      return response.blob();
+    });
+    const blobs = await Promise.all([...remote, ...uploadedReferences.map(async (item) => item.file)]);
+    return Promise.all(blobs.map(async (blob) => {
+      if (blob.size > 20_000_000 || !/^image\/(jpeg|png|webp)$/.test(blob.type)) throw new Error("Invalid or oversized reference image.");
+      const image = await createImageBitmap(blob);
+      try {
+        if (image.width * image.height > 40_000_000) throw new Error("Reference image dimensions exceed the limit.");
+        const scale = Math.min(1, 1024 / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale)); canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Could not process reference image.");
+        context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/jpeg", 0.85);
+      } finally { image.close(); }
+    }));
+  }
+  async function addUploadedReferences(files: FileList | null) {
+    if (!files) return;
+    if (uploadingReferences) return;
+    setForgeError("");
+    const available = 10 - references.length - uploadedReferences.length;
+    const input = Array.from(files);
+    if (input.length > available) { setForgeError(t("Maximum of 10 references. Remove one before adding another.")); return; }
+    const added: Array<{ id: string; name: string; file: File; url: string }> = [];
+    setUploadingReferences(true);
+    try {
+      for (const file of input) {
+        if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 20_000_000) throw new Error(t("Choose PNG, JPEG or WebP images under 20 MB."));
+        const bitmap = await createImageBitmap(file);
+        const pixels = bitmap.width * bitmap.height; bitmap.close();
+        if (pixels > 40_000_000) throw new Error(t("A reference image exceeds 40 million pixels."));
+        added.push({ id: crypto.randomUUID(), name: file.name, file, url: URL.createObjectURL(file) });
+      }
+      setUploadedReferences((current) => [...current, ...added]);
+    } catch (error) {
+      added.forEach((item) => URL.revokeObjectURL(item.url));
+      setForgeError(error instanceof Error ? error.message : String(error));
+    } finally { setUploadingReferences(false); }
+  }
+  async function generateFigure() {
+    if (!window.researchDesk?.generateFigureSvg || !window.researchDesk?.generateFigureBitmap || !window.researchDesk?.analyzeFigureReferences) { setForgeError(t("Figure generation requires the desktop app after restarting it.")); return; }
+    setGenerationBusy(true); setForgeError(""); setGeneratedSvg(""); setSvgWarnings([]); setGeneratedBitmap(""); setStyleGuide(""); setReconstructedScene(null); setReconstructionStatus("");
+    try {
+      const images = await referenceDataUrls();
+      let guide = "";
+      let selectedImages = images;
+      if (forgeMethod === "two-stage") {
+        const analysis = await window.researchDesk.analyzeFigureReferences({ references: images, plan: figurePlan, model: visionModel.trim() || undefined, connection });
+        guide = analysis.guide; setStyleGuide(guide);
+        selectedImages = analysis.representative.map((index) => images[index - 1]).filter(Boolean);
+      }
+      if (outputMode === "svg") {
+        const output = await window.researchDesk.generateFigureSvg({ references: selectedImages, plan: figurePlan, guide, method: forgeMethod, model: visionModel.trim() || undefined, aspect, connection });
+        const svg = sanitizeFigureSvg(output.svg);
+        setGeneratedSvg(svg);
+        const scene = parseSvgScene(svg);
+        setSvgWarnings(scene.warnings);
+        if (!scene.nodes.length) throw new Error("The generated SVG contains no exportable editable objects.");
+        setReconstructedScene({ ...scene, svgSource: true } as FigureScene); setExportSource("svg");
+      } else {
+        const output = await window.researchDesk.generateFigureBitmap({ references: selectedImages, plan: figurePlan, guide, method: forgeMethod, model: imageModel.trim(), aspect, resolution: imageResolution, connection });
+        const imageResponse = await fetch(output.image, { signal: AbortSignal.timeout(30_000) });
+        if (!imageResponse.ok) throw new Error("Could not load the generated image for size verification.");
+        const bitmap = await createImageBitmap(await imageResponse.blob());
+        try {
+          if (!verifyImageRatio(bitmap.width, bitmap.height, aspect) || !verifyImageResolution(bitmap.width, bitmap.height, imageResolution, output.requestedSize)) throw new Error(`Generated image ${bitmap.width}×${bitmap.height} does not match the requested ${aspect} ${imageResolution}.`);
+        } finally { bitmap.close(); }
+        setGeneratedBitmap(output.image);
+      }
+    } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
+    finally { setGenerationBusy(false); }
+  }
+  function downloadSvg() {
+    if (!generatedSvg) return;
+    const url = URL.createObjectURL(new Blob([generatedSvg], { type: "image/svg+xml" }));
+    const link = document.createElement("a"); link.href = url; link.download = "figure.svg"; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function reconstructBitmap() {
+    if (!window.researchDesk?.requestReconstructionEvidence) { setForgeError(t("Figure generation requires the desktop app after restarting it.")); return; }
+    setReconstructionBusy(true); setForgeError(""); setReconstructionStatus(""); setReconstructedScene(null);
+    try {
+      let blob: Blob;
+      if (reconstructionFile) blob = reconstructionFile;
+      else if (generatedBitmap) {
+        const response = await fetch(generatedBitmap, { signal: AbortSignal.timeout(30_000) });
+        if (!response.ok) throw new Error(`Image HTTP ${response.status}`);
+        blob = await response.blob();
+      } else throw new Error(t("Upload or generate a bitmap first."));
+      if (!/^image\/(jpeg|png|webp)$/.test(blob.type) || blob.size > 40_000_000) throw new Error(t("Choose a PNG, JPEG or WebP under 40 MB."));
+      const image = await createImageBitmap(blob);
+      try {
+        if (image.width * image.height > 40_000_000) throw new Error(t("A reference image exceeds 40 million pixels."));
+        const canvas = document.createElement("canvas"); canvas.width = image.width; canvas.height = image.height;
+        const context = canvas.getContext("2d"); if (!context) throw new Error("Could not process bitmap.");
+        context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+        const result = await reconstructWithTopConf(canvas, dataUrl, (input) => window.researchDesk.requestReconstructionEvidence({ ...input, model: visionModel.trim() || undefined, connection }), () => setReconstructionStatus(t("Recognizing and checking editable objects…")));
+        setReconstructedScene(result.scene); setExportSource("bitmap");
+        setReconstructionStatus(result.audit.finalValidation?.state === "passed" && result.audit.tilePassComplete ? t("Reconstruction checks passed. Review the result before use.") : t("Reconstruction could not be fully verified. Check for missing or misplaced objects before use."));
+      } finally { image.close(); }
+    } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
+    finally { setReconstructionBusy(false); }
+  }
+  async function downloadReconstruction() {
+    if (!reconstructedScene) return;
+    try {
+      let originalSvg = generatedSvg;
+      if (exportSource === "svg" && exportFormat === "svg" && exportFont) {
+        const document = new DOMParser().parseFromString(originalSvg, "image/svg+xml");
+        document.querySelectorAll("text,tspan").forEach((element) => element.setAttribute("font-family", exportFont));
+        originalSvg = new XMLSerializer().serializeToString(document.documentElement);
+      }
+      const blob = exportSource === "svg" && exportFormat === "svg" ? new Blob([originalSvg], { type: "image/svg+xml" }) : await exportFigureScene(reconstructedScene, exportFormat, exportFont);
+      const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `figure.${exportFormat}`; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
   }
 
   return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
@@ -306,20 +531,20 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     {tab === "gallery" && <><div className="image-creation-fade" aria-hidden="true" />
     <div className="image-creation-composer-dock">
       <div className="image-creation-composer">
-        {references.length > 0 && <button type="button" className="image-creation-reference" onClick={() => setForgeOpen(true)}>{t("Selected references: {count}", { count: references.length })}</button>}
+        {references.length + uploadedReferences.length > 0 && <button type="button" className="image-creation-reference" onClick={() => setForgeOpen(true)}>{t("Selected references: {count}", { count: references.length + uploadedReferences.length })}</button>}
         <div className="image-creation-composer-box">
           <button type="button" className="image-creation-attach" disabled title="Attaching a reference image is coming soon" aria-label="Attach a reference image"><Plus size={16} /></button>
-          <input ref={composerRef} className="image-creation-composer-input" value={composerText} onChange={(event) => { setComposerText(event.target.value); setPlanConfirmed(false); }} placeholder={t("Describe a figure to plan…")} aria-label={t("Describe a figure to plan…")} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) setForgeOpen(true); }} />
+          <input ref={composerRef} className="image-creation-composer-input" value={composerText} onChange={(event) => { setComposerText(event.target.value); }} placeholder={t("Describe a figure to plan…")} aria-label={t("Describe a figure to plan…")} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) setForgeOpen(true); }} />
           <label className="image-creation-aspect">
             <select value={aspect} onChange={(event) => setAspect(event.target.value as Aspect)} aria-label="Aspect ratio">
               {ASPECTS.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
             <ChevronDown size={10} aria-hidden="true" />
           </label>
-          <span className="image-creation-model" title="Image generation will arrive with the image model backend"><ImagePlus size={12} />Image model · Soon</span>
+          <span className="image-creation-model"><ImagePlus size={12} />FigureForge</span>
           <button type="button" className="image-creation-send" onClick={() => setForgeOpen(true)} title={t("Open FigureForge")} aria-label={t("Open FigureForge")}><ArrowUp size={15} /></button>
         </div>
-        <p className="image-creation-composer-note">{t("Plan your figure now; AI generation is coming later.")}</p>
+        <p className="image-creation-composer-note">{t("Open FigureForge to find references and generate a figure.")}</p>
       </div>
     </div></>}
 
@@ -327,26 +552,72 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     {active && <Dialog open={forgeOpen} onClose={() => setForgeOpen(false)} size="lg" className="figure-forge-dialog" ariaLabel={t("FigureForge planning workspace")}>
       <header className="figure-forge-header"><div><strong>FigureForge</strong><p>{t("Plan a paper figure with references")}</p></div><button type="button" onClick={() => setForgeOpen(false)} aria-label={t("Close")}><X size={18} /></button></header>
       <div className="figure-forge-body">
-        <p className="figure-forge-notice">{t("Upload a PDF to extract its text locally. AI planning uses your configured main model; reference-image analysis and image generation are not available yet. Drafts are not saved.")}</p>
+        <h2 className="figure-forge-step">{t("1. Paper content")}</h2>
+        <p className="figure-forge-notice">{t("Upload a PDF to extract its text locally. AI features use your configured model provider and may incur charges. Drafts are not saved.")}</p>
         <label>{t("Upload paper PDF")}<input type="file" accept=".pdf,application/pdf" disabled={pdfBusy || analysisBusy} onChange={(event) => { void importPaper(event.target.files?.[0]); event.target.value = ""; }} /></label>
         {pdfBusy && <p role="status">{t("Reading PDF locally…")}</p>}
         {pdfName && <p role="status">{pdfName} · {pdfStatus}</p>}
         <details><summary>{t("Optional: enter or review paper text")}</summary>
-          <label>{t("Paper title")}<input value={paperTitle} disabled={analysisBusy} onChange={(event) => { setPaperTitle(event.target.value); setPlanConfirmed(false); }} /></label>
-          <label>{t("Abstract or paper content")}<textarea rows={5} value={paperContent} disabled={analysisBusy} onChange={(event) => { setPaperContent(event.target.value.slice(0, 60_000)); setPlanConfirmed(false); }} /></label>
+          <label>{t("Paper title")}<input value={paperTitle} disabled={analysisBusy} onChange={(event) => { setPaperTitle(event.target.value); }} /></label>
+          <label>{t("Abstract or paper content")}<textarea rows={5} value={paperContent} disabled={analysisBusy} onChange={(event) => { pdfPages.current = []; setPdfFile(null); setPdfStatus(t("Using manually edited paper text.")); setPaperContent(event.target.value.slice(0, 60_000)); }} /></label>
         </details>
-        <label>{t("Figure type")}<select value={figureType} disabled={analysisBusy} onChange={(event) => { setFigureType(event.target.value); setPlanConfirmed(false); }}>{[["framework", "Framework"], ["architecture", "Architecture"], ["pipeline", "Pipeline"], ["conceptual", "Concept"], ["custom", "Custom"]].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-        <label>{t("Drawing requirements")}<textarea rows={2} value={composerText} disabled={analysisBusy} onChange={(event) => { setComposerText(event.target.value); setPlanConfirmed(false); }} /></label>
-        <section className="figure-forge-references"><div className="figure-forge-section-heading"><strong>{t("References ({count}/6)", { count: references.length })}</strong><button type="button" onClick={() => setForgeOpen(false)}>{t("Browse references")}</button></div>
-          {references.length === 0 ? <p>{t("Choose Use as template on a gallery image to add a reference.")}</p> : references.map((figure) => <div className="figure-forge-reference" key={figure.id}><img src={imageUrl(figure)} alt="" /><div><strong>{figure.title}</strong><span>{figure.venue.toUpperCase()} · {figure.year}</span><a href={paperUrl(figure)} target="_blank" rel="noreferrer">{t("Open paper")}</a></div><button type="button" onClick={() => { setReferences((current) => current.filter((item) => item.id !== figure.id)); setPlanConfirmed(false); }} aria-label={t("Remove reference")}> <X size={16} /></button></div>)}
-          {references.length >= 6 && <p>{t("Maximum of 6 references. Remove one before adding another.")}</p>}
+        <label>{t("Figure type")}<select value={figureType} disabled={analysisBusy} onChange={(event) => { setFigureType(event.target.value); }}>{[["framework", "Framework"], ["architecture", "Architecture"], ["pipeline", "Pipeline"], ["conceptual", "Concept"], ["custom", "Custom"]].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+        <section className="figure-forge-generation"><strong>{t("Paper analysis model and provider")}</strong>
+          <label>{t("Provider")}<select value={forgeProvider} disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} onChange={(event) => { setForgeProvider(event.target.value); setForgeApiKey(""); setAvailableModels([]); }}><option value="configured">{t("Use Archimedes main model")}</option><option value="infistar">Infistar</option><option value="nonelinear">NoneLinear</option><option value="openai">OpenAI</option><option value="ark">Volcengine Ark</option><option value="siliconflow">SiliconFlow</option><option value="glm">Zhipu GLM</option><option value="qwen">Qwen</option><option value="moonshot">Moonshot</option><option value="anthropic">Anthropic</option><option value="custom">{t("Custom OpenAI-compatible")}</option></select></label>
+          {forgeProvider !== "configured" && <><label>{t("API key (this session only)")}<input type="password" autoComplete="off" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={forgeApiKey} onChange={(event) => setForgeApiKey(event.target.value)} /></label><label>{t("Paper analysis model")}<input list="figure-forge-models" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={parseModel} onChange={(event) => setParseModel(event.target.value)} /></label>{forgeProvider === "custom" && <label>{t("Model API base URL")}<input type="url" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={forgeBaseUrl} onChange={(event) => setForgeBaseUrl(event.target.value)} placeholder="https://example.com/v1" /></label>}<p>{t("This key stays in memory for this session and is not saved to the project.")}</p></>}
+          <datalist id="figure-forge-models">{availableModels.map((model) => <option key={model} value={model} />)}</datalist>
+          <button type="button" disabled={modelsBusy} onClick={() => void refreshFigureModels()}>{modelsBusy ? t("Loading models…") : t("Refresh model list")}</button>
         </section>
-        <p>{t("Analyze paper sends the extracted text and drawing requirements to your configured model provider and may incur charges. Reference images are not sent or analyzed in this step.")}</p>
-        <div className="figure-forge-footer"><button type="button" disabled={pdfBusy || analysisBusy || paperContent.trim().length < 100} onClick={() => void analyzePaper()}>{analysisBusy ? t("Analyzing paper…") : t("Analyze paper and draft plan")}</button></div>
+        <label>{t("Drawing requirements")}<textarea rows={2} value={composerText} disabled={analysisBusy} onChange={(event) => { setComposerText(event.target.value); }} /></label>
+        <p>{t("Analyzing sends your PDF and requirements to the selected model provider; if PDF input is rejected, readable extracted text is used instead. This may incur charges. Reference images are not sent in this step.")}</p>
+        <div className="figure-forge-footer"><button type="button" disabled={pdfBusy || analysisBusy || (!pdfFile && paperContent.trim().length < 100)} onClick={() => void analyzePaper()}>{analysisBusy ? t("Analyzing paper…") : t("Analyze paper and draft plan")}</button></div>
         {forgeError && <p role="alert">{forgeError}</p>}
-        <label>{t("Figure plan")}<textarea rows={5} value={figurePlan} disabled={analysisBusy} onChange={(event) => { setFigurePlan(event.target.value); setPlanConfirmed(false); }} placeholder={t("Analyze the paper to draft a plan, then review and edit it.")} /></label>
+        <label>{t("Figure plan")}<textarea rows={5} value={figurePlan} disabled={analysisBusy} onChange={(event) => { setFigurePlan(event.target.value); }} placeholder={t("Analyze the paper to draft a plan, then review and edit it.")} /></label>
+        <section className="figure-forge-search"><div className="figure-forge-section-heading"><strong>{t("2. Find and select references")}</strong><button type="button" disabled={searchBusy} onClick={() => void findReferences()}>{searchBusy ? t("Searching…") : t("Search references")}</button></div>
+          <div className="figure-forge-filter-row">
+            <label>{t("Figure type")}<select value={filters.pattern} onChange={(event) => updateFilter("pattern", event.target.value)}><option value="all">{t("All")}</option>{PATTERNS.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+            <label>{t("Venue")}<select value={filters.venue} onChange={(event) => updateFilter("venue", event.target.value)}><option value="all">{t("All")}</option>{VENUES.map((venue) => <option key={venue} value={venue}>{venue}</option>)}</select></label>
+            <label>{t("Year")}<select value={filters.year} onChange={(event) => updateFilter("year", event.target.value === "all" ? "all" : Number(event.target.value))}><option value="all">{t("All")}</option>{YEARS.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+            <label>{t("Presentation")}<select value={filters.tier} onChange={(event) => updateFilter("tier", event.target.value)}><option value="all">{t("All")}</option><option value="best">{t("Awarded")}</option><option value="oral">Oral</option><option value="spotlight">Spotlight</option></select></label>
+          </div>
+          <p>{t("Search uses the paper plan or text. Gallery filters also apply. First use downloads the CLIP model; your query is processed locally.")}</p>
+          {retrievalStatus && <p role="status">{retrievalStatus}</p>}
+          <div className="figure-forge-results">{recommendations.slice(0, visibleRecommendations).map(({ figure, score }) => { const selected = references.some((item) => item.id === figure.id); return <button type="button" key={figure.id} aria-pressed={selected} disabled={generationBusy || uploadingReferences || (!selected && references.length + uploadedReferences.length >= 10)} onClick={() => { setReferences((current) => selected ? current.filter((item) => item.id !== figure.id) : [...current, figure]); }}><img src={imageUrl(figure)} alt="" loading="lazy" /><span>{figure.title}</span><small>{figure.venue.toUpperCase()} · {figure.year}{score !== null ? ` · ${score}` : ""}</small><b>{selected ? t("Selected") : t("Select reference")}</b></button>; })}</div>
+          {visibleRecommendations < recommendations.length && <button type="button" onClick={() => setVisibleRecommendations((count) => count + 60)}>{t("Show more references")}</button>}
+        </section>
+        <section className="figure-forge-references"><div className="figure-forge-section-heading"><strong>{t("References ({count}/10)", { count: references.length + uploadedReferences.length })}</strong><button type="button" disabled={generationBusy || uploadingReferences} onClick={() => setForgeOpen(false)}>{t("Browse references")}</button></div>
+          <label className="figure-forge-upload">{t("Upload reference images")}<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={generationBusy || uploadingReferences} onChange={(event) => { void addUploadedReferences(event.target.files); event.target.value = ""; }} /></label>
+          {references.length + uploadedReferences.length === 0 && <p>{t("Choose Use as template on a gallery image to add a reference.")}</p>}
+          {references.map((figure) => <div className="figure-forge-reference" key={figure.id}><img src={imageUrl(figure)} alt="" /><div><strong>{figure.title}</strong><span>{figure.venue.toUpperCase()} · {figure.year}</span><a href={paperUrl(figure)} target="_blank" rel="noreferrer">{t("Open paper")}</a></div><button type="button" disabled={generationBusy} onClick={() => { setReferences((current) => current.filter((item) => item.id !== figure.id)); }} aria-label={t("Remove reference")}> <X size={16} /></button></div>)}
+          {uploadedReferences.map((item) => <div className="figure-forge-reference" key={item.id}><img src={item.url} alt="" /><div><strong>{item.name}</strong><span>{t("Uploaded reference")}</span></div><button type="button" disabled={generationBusy} onClick={() => { URL.revokeObjectURL(item.url); setUploadedReferences((current) => current.filter((value) => value.id !== item.id)); }} aria-label={t("Remove reference")}><X size={16} /></button></div>)}
+          {references.length + uploadedReferences.length >= 10 && <p>{t("Maximum of 10 references. Remove one before adding another.")}</p>}
+        </section>
+        <section className="figure-forge-generation"><strong>{t("3. Generate figure")}</strong>
+          <label>{t("Generation method")}<select value={forgeMethod} disabled={generationBusy} onChange={(event) => setForgeMethod(event.target.value as "direct" | "two-stage")}><option value="two-stage">{t("Two-stage: analyze then generate")}</option><option value="direct">{t("Direct generation")}</option></select></label>
+          <label>{t("Output format")}<select value={outputMode} disabled={generationBusy} onChange={(event) => setOutputMode(event.target.value as "svg" | "bitmap")}><option value="svg">SVG</option><option value="bitmap">{t("AI bitmap")}</option></select></label>
+          <label>{t("Aspect ratio")}<select value={aspect} disabled={generationBusy} onChange={(event) => setAspect(event.target.value as Aspect)}>{ASPECTS.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          {outputMode === "bitmap" && <label>{t("Resolution")}<select value={imageResolution} disabled={generationBusy} onChange={(event) => setImageResolution(event.target.value)}><option>1K</option><option>2K</option><option>4K</option></select></label>}
+          <label>{t("Vision model override (optional)")}<input list="figure-forge-models" value={visionModel} disabled={generationBusy || reconstructionBusy} onChange={(event) => setVisionModel(event.target.value)} placeholder={t("Uses the configured main model by default")} /></label>
+          {outputMode === "bitmap" && <label>{t("Image generation model")}<input list="figure-forge-models" value={imageModel} disabled={generationBusy} onChange={(event) => setImageModel(event.target.value)} placeholder="gpt-image-1" /></label>}
+          <p>{t("Selected reference images and your plan will be sent to the configured model provider. Use a model that supports images; charges may apply.")}</p>
+          <p>{t("Two-stage requires 4–10 references; direct generation requires 2–4.")}</p>
+          <button type="button" disabled={generationBusy || reconstructionBusy || uploadingReferences || !figurePlan.trim() || (outputMode === "bitmap" && !imageModel.trim()) || references.length + uploadedReferences.length < (forgeMethod === "two-stage" ? 4 : 2) || (forgeMethod === "direct" && references.length + uploadedReferences.length > 4)} onClick={() => void generateFigure()}>{generationBusy ? t("Generating…") : t("Generate draft")}</button>
+          {styleGuide && <details><summary>{t("Reference analysis")}</summary><pre>{styleGuide}</pre></details>}
+          {generatedSvg && <div className="figure-forge-output"><img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(generatedSvg)}`} alt={t("Generated figure preview")} /><button type="button" onClick={downloadSvg}>{t("Download SVG")}</button></div>}
+          {svgWarnings.length > 0 && <p role="status">{svgWarnings.join("; ")}</p>}
+          {generatedBitmap && <div className="figure-forge-output"><img src={generatedBitmap} alt={t("Generated figure preview")} /><a href={generatedBitmap} download="figure.png" target="_blank" rel="noreferrer">{t("Download bitmap")}</a></div>}
+        </section>
+        <section className="figure-forge-generation"><strong>{t("4. Reconstruct and export editable figure")}</strong>
+          <label>{t("Upload a bitmap or use the generated image")}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={reconstructionBusy} onChange={(event) => { setReconstructionFile(event.target.files?.[0] ?? null); setReconstructedScene(null); }} /></label>
+          <p>{t("Reconstruction sends the bitmap and rendered comparisons to the configured vision model in multiple requests. This may incur charges; check results before use.")}</p>
+          <button type="button" disabled={reconstructionBusy || generationBusy || (!reconstructionFile && !generatedBitmap)} onClick={() => void reconstructBitmap()}>{reconstructionBusy ? t("Reconstructing…") : t("Reconstruct editable objects")}</button>
+          {reconstructionStatus && <p role="status">{reconstructionStatus}</p>}
+          {reconstructedScene && <><div className="figure-forge-output"><img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(exportSource === "svg" ? generatedSvg : sceneToSvgString(reconstructedScene))}`} alt={t("Reconstructed figure preview")} /></div>
+            <label>{t("Export format")}<select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as typeof exportFormat)}><option value="svg">SVG</option><option value="pptx">PPTX</option><option value="vsdx">VSDX</option><option value="drawio">draw.io</option></select></label>
+            <label>{t("Export font")}<select value={exportFont} onChange={(event) => setExportFont(event.target.value)}><option value="">{t("Keep generated fonts")}</option><option>Arial</option><option>Helvetica</option><option>Times New Roman</option><option>Noto Sans</option></select></label>
+            <button type="button" onClick={() => void downloadReconstruction()}>{t("Export editable figure")}</button></>}
+        </section>
         <p>{t("References belong to their authors. Check each paper's license before reuse.")}</p>
-        <div className="figure-forge-footer"><button type="button" disabled={!figurePlan.trim()} onClick={() => setPlanConfirmed(true)}>{t("Confirm plan")}</button>{planConfirmed && <span role="status">{t("Plan confirmed for this session. Image generation is not available yet.")}</span>}</div>
       </div>
     </Dialog>}
   </main>;

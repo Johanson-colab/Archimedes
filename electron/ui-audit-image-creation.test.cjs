@@ -70,7 +70,7 @@ test("images lead and text is a single secondary line", () => {
   assert.match(css, /\.image-creation-reference \{/);
   assert.match(view, /Use as template/);
   assert.match(view, /setReferences\(\(current\) => current\.some/);
-  assert.match(view, /current\.length >= 6/);
+  assert.match(view, /current\.length \+ uploadedReferences\.length >= 10/);
   assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard/);
 });
 
@@ -81,15 +81,14 @@ test("filter facets fold into one popover instead of a permanent block", () => {
   assert.match(css, /\.menu-surface \{/);
 });
 
-test("the composer is present but does not pretend image generation is shipped", () => {
+test("the composer opens FigureForge and generation requires a plan", () => {
   assert.match(view, /className="image-creation-composer-dock"/);
   assert.match(view, /Describe a figure to plan/);
-  assert.match(view, /Image model · Soon/);
-  assert.match(view, /reference-image analysis and image generation are not available yet/);
+  assert.match(view, /Open FigureForge to find references and generate a figure/);
+  assert.match(view, /AI features use your configured model provider and may incur charges/);
   assert.match(view, /type="file" accept="\.pdf,application\/pdf"/);
-  assert.match(view, /prepareFigurePlan\(\{ paperText: paperContent/);
-  assert.match(view, /disabled=\{!figurePlan\.trim\(\)\}/);
-  assert.match(view, /setPlanConfirmed\(false\)/);
+  assert.match(view, /prepareFigurePlan\(\{ paperText: pdfPages\.current\.length/);
+  assert.match(view, /disabled=\{generationBusy \|\| reconstructionBusy \|\| uploadingReferences \|\| !figurePlan\.trim\(\)/);
   assert.match(view, /current\.filter\(\(item\) => item\.id !== figure\.id\)/);
   assert.match(css, /\.image-creation-composer-dock \{[^}]*position: fixed/);
   assert.match(css, /\.image-creation-fade \{[^}]*position: fixed/);
