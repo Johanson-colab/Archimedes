@@ -39,6 +39,7 @@ const { runPreflight } = require("./reproduction/preflight.cjs");
 const { runRunbook } = require("./reproduction/runner.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
+const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
@@ -929,6 +930,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("model-config:test", (_event, input = {}, role) => modelConfig.testModelConfig(input, role));
 
   ipcMain.handle("proactive:reply", (_event, input = {}) => proactiveAgent.runProactiveReply(input));
+  const figureConfig = (input) => figureForge.resolveFigureConfig(input.connection, modelConfig.getActiveModelConfig("agent"));
+  ipcMain.handle("figure-forge:prepare", (_event, input = {}) => figureForge.prepareFigurePlan(input, { config: figureConfig(input), complete: agent.complete }));
+  ipcMain.handle("figure-forge:analyze-references", (_event, input = {}) => figureForge.analyzeReferences(input, { config: figureConfig(input), complete: agent.complete }));
+  ipcMain.handle("figure-forge:generate-svg", (_event, input = {}) => figureForge.generateSvg(input, { config: figureConfig(input), complete: agent.complete }));
+  ipcMain.handle("figure-forge:generate-bitmap", (_event, input = {}) => figureForge.generateBitmap(input, { config: figureConfig(input) }));
+  ipcMain.handle("figure-forge:reconstruct", (_event, input = {}) => figureForge.reconstructFigure(input, { config: figureConfig(input), complete: agent.complete }));
+  ipcMain.handle("figure-forge:reconstruction-evidence", (_event, input = {}) => figureForge.requestReconstructionEvidence(input, { config: figureConfig(input), complete: agent.complete }));
 
   ipcMain.handle("proactive:observe", (_event, input = {}) => proactiveAgent.runProactiveObservation(input));
 

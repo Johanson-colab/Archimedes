@@ -733,9 +733,9 @@ function applyDelta(accumulator, delta, onTextDelta) {
   }
 }
 
-async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens }) {
-  const tokenLimit = Number.isFinite(Number(maxOutputTokens)) ? Math.max(64, Math.min(8192, Math.round(Number(maxOutputTokens)))) : 0;
-  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens: tokenLimit });
+async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, requireComplete = false }) {
+  const tokenLimit = Number.isFinite(Number(maxOutputTokens)) ? Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32768 : 8192, Math.round(Number(maxOutputTokens)))) : 0;
+  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens: tokenLimit, allowLargeOutput, requireComplete });
   const nativeReasoning = openAiReasoningOptions(config, reasoningEffort);
   const request = { model: config.model, messages, stream: true, ...nativeReasoning };
   if (tokenLimit) request.max_tokens = tokenLimit;
@@ -754,6 +754,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     }
     const body = await fallback.json();
     const choice = body?.choices?.[0];
+    if (requireComplete && choice?.finish_reason === "length") throw new Error("Model output was truncated; reconstruction cannot safely use it.");
     const responseMessage = choice?.message || (typeof choice?.text === "string" ? { role: "assistant", content: choice.text } : null);
     if (!responseMessage) throw new Error("The model returned neither a compatible stream nor a complete response message.");
     const normalized = normalizeAssistantMessage(responseMessage);
@@ -792,6 +793,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("text/event-stream") || !response.body) {
     const body = await response.json();
+    if (requireComplete && body?.choices?.[0]?.finish_reason === "length") throw new Error("Model output was truncated; reconstruction cannot safely use it.");
     const message = body?.choices?.[0]?.message;
     if (!message) throw new Error("The model response did not contain a message.");
     const normalized = normalizeAssistantMessage(message);
@@ -814,6 +816,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
       if (!serialized || serialized === "[DONE]") continue;
       let body;
       try { body = JSON.parse(serialized); } catch { continue; }
+      if (requireComplete && body?.choices?.[0]?.finish_reason === "length") throw new Error("Model output was truncated; reconstruction cannot safely use it.");
       applyDelta(message, body?.choices?.[0]?.delta || {}, (delta) => contentGuard.push(delta));
     }
     if (done) break;

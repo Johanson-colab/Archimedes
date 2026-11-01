@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 
+type FigureForgeConnection = { provider: string; baseUrl?: string; apiKey?: string; model?: string };
 interface ResearchDeskBridge {
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
@@ -169,6 +170,12 @@ interface ResearchDeskBridge {
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string }) => Promise<AgentRunResult>;
     runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
+    prepareFigurePlan: (input: { paperText: string; pdfData?: string; figureType: string; requirements: string; language: "en" | "zh"; connection?: FigureForgeConnection }) => Promise<{ plan: string; model: string; provider: string; source: "pdf" | "text" }>;
+    analyzeFigureReferences: (input: { references: string[]; plan: string; model?: string; connection?: FigureForgeConnection }) => Promise<{ contract: import("./figureforge/design-contract.mjs").DesignContract; representative: number[]; imageRefs: number[] }>;
+    generateFigureSvg: (input: { references: string[]; plan: string; guide: string; method: "direct" | "two-stage"; model?: string; aspect?: string; connection?: FigureForgeConnection }) => Promise<{ svg: string }>;
+    generateFigureBitmap: (input: { references: string[]; plan: string; guide: string; method: "direct" | "two-stage"; model: string; aspect?: string; resolution?: string; connection?: FigureForgeConnection }) => Promise<{ image: string; requestedSize: string }>;
+    reconstructFigure: (input: { image: string; width: number; height: number; model?: string; connection?: FigureForgeConnection }) => Promise<{ nodes: unknown[]; width: number; height: number }>;
+    requestReconstructionEvidence: (input: { images: string[]; width: number; height: number; task: Record<string, unknown>; model?: string; connection?: FigureForgeConnection }) => Promise<Record<string, unknown>>;
     runProactiveObservation: (input: { context: Record<string, unknown>; screenshot?: { dataUrl: string; width: number; height: number } }) => Promise<ProactiveObservationResult | null>;
     captureProactiveScreenshot: () => Promise<{ dataUrl: string; width: number; height: number; bytes: number } | null>;
     runPaperReview: (input: PaperReviewInput) => Promise<PaperReviewResult>;

@@ -10,6 +10,22 @@ function successfulResponse() {
   };
 }
 
+test("large tool-free reconstruction requests reject truncated model output", async () => {
+  const originalFetch = global.fetch;
+  let sent;
+  global.fetch = async (_url, options) => {
+    sent = JSON.parse(options.body);
+    return { ok: true, headers: { get: () => "application/json" }, json: async () => ({ choices: [{ message: { role: "assistant", content: "{}" }, finish_reason: "length" }] }) };
+  };
+  try {
+    const config = { provider: "custom", baseUrl: "https://example.test/v1", model: "vision", apiKey: "test-key" };
+    await assert.rejects(complete(config, [{ role: "user", content: "Test" }], { allowTools: false, maxOutputTokens: 32768, allowLargeOutput: true, requireComplete: true }), /truncated/);
+    assert.equal(sent.max_tokens, 32768);
+    await complete(config, [{ role: "user", content: "Test" }], { allowTools: false, maxOutputTokens: 32768 });
+    assert.equal(sent.max_tokens, 8192);
+  } finally { global.fetch = originalFetch; }
+});
+
 test("retries OpenAI-compatible models with max_completion_tokens when requested", async () => {
   const originalFetch = global.fetch;
   const requests = [];

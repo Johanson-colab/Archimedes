@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { readLocale } = require("./locale-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const main = fs.readFileSync(path.join(root, "src", "main.tsx"), "utf8");
@@ -128,7 +129,8 @@ test("remaining knowledge surfaces keep an 11px floor", () => {
 
 test("Geist Sans and Geist Mono are bundled locally", () => {
   const settings = fs.readFileSync(path.join(root, "src", "SettingsModal.tsx"), "utf8");
-  const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
+  const i18n = readLocale();
+  const i18nSource = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
   const library = fs.readFileSync(path.join(root, "src", "LibraryView.tsx"), "utf8");
@@ -143,9 +145,9 @@ test("Geist Sans and Geist Mono are bundled locally", () => {
   assert.match(typography, /GeistMono-Variable\.woff2/);
   assert.match(tokens, /html\[data-interface-font="geist"\] \{[\s\S]*?--font-ui: "Geist"/);
   assert.match(tokens, /html\[data-mono-font="geist-mono"\] \{[\s\S]*?--font-mono: "Geist Mono"/);
-  assert.match(i18n, /return window\.localStorage\.getItem\(INTERFACE_FONT_STORAGE_KEY\) === "system" \? "system" : "geist"/);
-  assert.match(i18n, /return window\.localStorage\.getItem\(MONO_FONT_STORAGE_KEY\) === "system" \? "system" : "geist-mono"/);
-  assert.match(i18n, /document\.documentElement\.dataset\.interfaceFont = interfaceFont/);
+  assert.match(i18nSource, /return window\.localStorage\.getItem\(INTERFACE_FONT_STORAGE_KEY\) === "system" \? "system" : "geist"/);
+  assert.match(i18nSource, /return window\.localStorage\.getItem\(MONO_FONT_STORAGE_KEY\) === "system" \? "system" : "geist-mono"/);
+  assert.match(i18nSource, /document\.documentElement\.dataset\.interfaceFont = interfaceFont/);
   assert.match(settings, /t\("Interface font"\)/);
   assert.match(settings, /t\("Code font"\)/);
   assert.match(settings, /setInterfaceFont/);

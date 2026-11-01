@@ -2,13 +2,14 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { readLocale } = require("./locale-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const rail = fs.readFileSync(path.join(root, "src", "TurnRail.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const tokens = fs.readFileSync(path.join(root, "src", "tokens.css"), "utf8");
-const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
+const i18n = readLocale();
 
 test("conversation turns get a rail inside the scroll area", () => {
   assert.match(app, /import TurnRail from "\.\/TurnRail"/);

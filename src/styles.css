@@ -4996,14 +4996,14 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 .project-more-menu button.danger:hover { color: #ffb4b4; background: color-mix(in srgb, var(--night-danger) 12%, transparent); }
 .project-more-divider { height: 1px; margin: 3px 2px; background: var(--sb-line); }
 
-/* Image creation: the gallery is the page, with a persistent compose dock. */
+/* Image creation galleries and FigureForge workspace. */
 .image-creation-view-cache { min-height: 0; }
 .image-creation-view-cache.hidden { display: none; }
 .image-creation-page {
   width: min(100%, 1570px);
   min-height: 100%;
   margin: 0 auto;
-  padding: 18px clamp(18px, 3vw, 46px) 150px;
+  padding: 18px clamp(18px, 3vw, 46px) 36px;
   color: var(--night-ink);
   background: var(--night-ground);
 }
@@ -5022,6 +5022,7 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 .image-creation-tab small { color: var(--night-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 .image-creation-tab.active small { color: var(--night-muted); }
 .image-creation-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.image-creation-forge-button { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; padding: 0 12px; color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; white-space: nowrap; }
 .image-creation-sort {
   position: relative; display: inline-flex; height: 30px; align-items: center;
   color: var(--night-ink-soft); border: 1px solid var(--night-line); border-radius: 6px;
@@ -5108,109 +5109,192 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 .image-creation-card:hover .image-creation-card-use,
 .image-creation-card:focus-within .image-creation-card-use { opacity: 1; transform: none; }
 @media (hover: none) { .image-creation-card-use { opacity: 1; transform: none; } }
-.image-creation-fade {
-  position: fixed; z-index: 25; right: var(--workbench-width, 0px); bottom: 0; left: var(--sidebar-width, 0px);
-  height: 150px; pointer-events: none;
-  background: linear-gradient(to top, var(--night-ground) 0%, var(--night-ground) 52%, color-mix(in srgb, var(--night-ground) 90%, transparent) 74%, transparent 100%);
-}
-.image-creation-composer-dock {
-  position: fixed; z-index: 30; right: var(--workbench-width, 0px); bottom: 16px; left: var(--sidebar-width, 0px);
-  display: flex; justify-content: center; padding: 0 clamp(18px, 3vw, 46px); pointer-events: none;
-}
-.image-creation-composer { width: min(720px, 100%); pointer-events: auto; }
-.image-creation-composer-box {
-  display: flex; min-height: 54px; align-items: center; gap: 9px; padding: 7px 7px 7px 9px;
-  background: color-mix(in srgb, var(--night-panel) 94%, transparent);
-  border: 1px solid var(--night-line); border-radius: 12px;
-  box-shadow: 0 18px 46px rgba(0, 0, 0, .5); backdrop-filter: blur(18px);
-}
-.image-creation-attach {
-  display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center;
-  color: var(--night-ink-soft); background: transparent; border: 1px solid var(--night-line);
-  border-radius: 50%;
-}
-.image-creation-attach:disabled { cursor: default; opacity: .55; }
-.image-creation-composer-input {
-  min-width: 0; flex: 1; padding: 5px 2px; color: var(--night-ink);
-  background: transparent; border: 0; outline: none; font: inherit; font-size: 12.5px;
-}
-.image-creation-composer-input::placeholder { color: var(--night-faint); }
-.image-creation-aspect {
-  position: relative; display: inline-flex; height: 26px; flex: 0 0 auto; align-items: center;
-  color: var(--night-ink-soft); border: 1px solid var(--night-line); border-radius: 6px;
-}
-.image-creation-aspect select {
-  height: 100%; padding: 0 21px 0 8px; color: inherit; background: transparent; border: 0;
-  outline: none; appearance: none; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer;
-}
-.image-creation-aspect svg { position: absolute; right: 6px; pointer-events: none; }
-.image-creation-model {
-  display: inline-flex; height: 26px; flex: 0 0 auto; align-items: center; gap: 5px; padding: 0 8px;
-  color: var(--night-muted); border: 1px dashed var(--night-line); border-radius: 6px;
-  font-size: 10px; font-weight: 620; white-space: nowrap;
-}
-.image-creation-send {
-  display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center;
-  color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 50%;
-}
-.image-creation-send:disabled { cursor: default; opacity: .55; }
-.image-creation-composer-note { margin: 7px 0 0; color: var(--night-muted); font-size: 9.5px; text-align: center; }
-.image-creation-reference {
-  display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 9px;
-  margin: 0 0 7px; padding: 6px 8px; color: var(--night-ink-soft);
-  background: color-mix(in srgb, var(--night-panel) 94%, transparent);
-  border: 1px solid var(--night-line); border-radius: 8px; backdrop-filter: blur(18px);
-}
-.image-creation-reference img { width: 44px; height: 31px; flex: 0 0 auto; object-fit: cover; border-radius: 4px; }
-.image-creation-reference span { display: grid; min-width: 0; gap: 1px; }
-.image-creation-reference b { color: var(--night-muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
-.image-creation-reference em { overflow: hidden; color: var(--night-ink); font-size: 10.5px; font-style: normal; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
-.image-creation-reference button {
-  display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center;
-  color: var(--night-muted); background: transparent; border-radius: 4px;
-}
-.image-creation-reference button:hover { color: var(--night-ink); background: var(--night-panel-soft); }
+/* ---------------------------------------------------------------------------
+   FigureForge workspace
+   A four-step workspace: a persistent status rail, then one card per step with
+   the primary action in the card header so the page reads top-down without
+   hunting for the button. Configuration lives behind disclosures so the
+   default path (main model) needs no setup at all.
+   --------------------------------------------------------------------------- */
+.figure-forge-page { width: min(100%, 1040px); margin: 0 auto; color: var(--night-ink); }
 
-.codex-shell.sidebar-hidden .image-creation-composer-dock,
-.codex-shell.sidebar-hidden .image-creation-fade { left: 0; }
-html[data-theme="paper"] .image-creation-composer-box { box-shadow: 0 18px 40px rgba(60, 48, 30, .18); }
+.forge-topbar { display: flex; align-items: center; gap: 16px; padding: 10px 0 14px; }
+.figure-forge-back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; color: var(--night-muted); background: transparent; border: 0; font: inherit; font-size: 12px; cursor: pointer; }
+.figure-forge-back:hover { color: var(--night-ink); }
+.forge-title { display: flex; min-width: 0; align-items: baseline; gap: 10px; }
+.forge-title strong { font-size: 15px; letter-spacing: -.01em; }
+.forge-title span { color: var(--night-muted); font-size: 12px; }
+
+.forge-steps { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0 0 14px; padding: 8px 0; background: var(--night-ground); }
+.forge-steps-item { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; padding: 7px 9px; color: var(--night-muted); background: var(--night-panel-soft); border: 1px solid var(--night-line); border-radius: 8px; font: inherit; text-align: left; cursor: pointer; transition: border-color 120ms ease, background 120ms ease; }
+.forge-steps-item:hover { border-color: color-mix(in srgb, var(--night-ink) 24%, var(--night-line)); }
+.forge-steps-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.forge-steps-index { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 700; }
+.forge-steps-copy { display: grid; min-width: 0; gap: 1px; }
+.forge-steps-copy strong { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.forge-steps-copy small { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.forge-steps-item.is-done { color: var(--state-success); border-color: color-mix(in srgb, var(--state-success) 34%, var(--night-line)); }
+.forge-steps-item.is-done .forge-steps-copy strong { color: var(--night-ink); }
+.forge-steps-item.is-busy { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--night-line)); }
+.forge-steps-item.is-busy .forge-steps-copy strong { color: var(--night-ink); }
+
+.forge-alert { margin: 0 0 12px; padding: 9px 12px; color: var(--state-danger); font-size: 12px; line-height: 1.5; background: color-mix(in srgb, var(--state-danger) 10%, var(--night-panel)); border: 1px solid color-mix(in srgb, var(--state-danger) 38%, var(--night-line)); border-radius: 8px; }
+
+.figure-forge-body { display: grid; min-height: 0; gap: 14px; padding-bottom: 28px; }
+
+.forge-step { display: grid; background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 10px; overflow: hidden; }
+.forge-step-head { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 14px 16px; }
+.forge-step-index { display: grid; place-items: center; width: 22px; height: 22px; color: var(--accent-ink); background: var(--accent); border-radius: 50%; font-size: 11px; font-weight: 700; }
+.forge-step-copy { display: grid; min-width: 0; gap: 2px; }
+.forge-step-title { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.forge-step-subtitle { margin: 0; color: var(--night-muted); font-size: 11.5px; line-height: 1.45; }
+.forge-step-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.forge-step-body { display: grid; gap: 12px; padding: 0 16px 16px; border-top: 1px solid var(--night-line-soft); padding-top: 14px; }
+
+.forge-primary, .forge-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 13px; border-radius: 6px; font: inherit; font-size: 11px; font-weight: 650; white-space: nowrap; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease; }
+.forge-primary { color: var(--accent-ink); background: var(--accent); border: 1px solid var(--accent); }
+.forge-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.forge-secondary { color: var(--night-ink); background: var(--night-panel-soft); border: 1px solid var(--night-line); }
+.forge-secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--night-ink) 26%, var(--night-line)); }
+.forge-primary:disabled, .forge-secondary:disabled { opacity: .45; cursor: not-allowed; }
+.forge-primary:focus-visible, .forge-secondary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.forge-blocked { flex-basis: 100%; max-width: 240px; margin-left: auto; color: var(--night-muted); font-size: 10.5px; line-height: 1.4; text-align: right; }
+.forge-blocked-inline { flex-basis: auto; max-width: none; margin-left: 0; text-align: left; }
+
+/* Reference contract: the measurable grammar distilled from the chosen figures.
+   Values are editable so a wrong palette or panel count is fixed here instead of
+   costing another generation. */
+.forge-contract { display: grid; gap: 10px; padding: 12px; background: var(--night-panel-soft); border: 1px solid var(--night-line); border-radius: 8px; }
+.forge-contract-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.forge-contract-head > div { display: grid; gap: 2px; min-width: 0; }
+.forge-contract-head strong { font-size: 11.5px; font-weight: 700; }
+.forge-contract-body { display: grid; gap: 10px; }
+.forge-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 16px; }
+.forge-metric { display: grid; gap: 5px; min-width: 0; }
+.forge-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.forge-swatch { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px 3px 4px; background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 5px; }
+.forge-swatch i { display: block; width: 14px; height: 14px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--night-ink) 22%, transparent); border-radius: 3px; }
+.forge-swatch input.forge-compact { width: 74px; padding: 0; color: var(--night-ink); background: transparent; border: 0; font: inherit; font-size: 10px; font-variant-numeric: tabular-nums; }
+.forge-swatch input:focus-visible { outline: none; }
+.forge-numbers { display: flex; flex-wrap: wrap; gap: 6px; }
+.forge-number { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px; background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 5px; }
+.forge-number span { color: var(--night-muted); font-size: 9.5px; }
+.forge-number input.forge-compact { width: 38px; padding: 0; color: var(--night-ink); background: transparent; border: 0; font: inherit; font-size: 10px; font-variant-numeric: tabular-nums; }
+.forge-number input:focus-visible { outline: none; }
+.forge-stale { margin: 0; padding: 7px 10px; color: var(--state-warning); font-size: 10.5px; line-height: 1.45; background: color-mix(in srgb, var(--state-warning) 10%, var(--night-panel)); border: 1px solid color-mix(in srgb, var(--state-warning) 34%, var(--night-line)); border-radius: 6px; }
+
+.forge-pill { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; color: var(--night-muted); background: var(--night-panel-soft); border: 1px solid var(--night-line); border-radius: 999px; font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.forge-pill.is-ready { color: var(--state-success); border-color: color-mix(in srgb, var(--state-success) 34%, var(--night-line)); }
+
+.forge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 18px; }
+.forge-grid > .forge-field:only-child, .forge-grid > label:only-child { max-width: 480px; }
+.forge-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; }
+/* Filters sit in a tight four-up row, so their labels stack instead of eating a fixed column. */
+.forge-filters .forge-field { grid-template-columns: minmax(0, 1fr); }
+.forge-filters .forge-field-hint { grid-column: 1; }
+
+.forge-field { display: grid; grid-template-columns: 108px minmax(0, 1fr); align-items: center; gap: 3px 12px; min-width: 0; }
+.forge-field-label { color: var(--night-muted); font-size: 11px; font-weight: 600; }
+.forge-field-hint { color: var(--night-muted); font-size: 10.5px; line-height: 1.45; }
+/* Only hints nested inside a field take the control column; standalone hints
+   (step notices, status lines) must span the whole row. */
+.forge-field .forge-field-hint { grid-column: 2; }
+.forge-field-stacked { grid-template-columns: minmax(0, 1fr); }
+.forge-field-stacked .forge-field-label { grid-column: 1; }
+.forge-field-stacked .forge-field-hint { grid-column: 1; }
+
+.forge-step-body input:not(.forge-drop-input):not(.forge-compact), .forge-step-body select, .forge-step-body textarea { width: 100%; min-width: 0; padding: 7px 9px; color: var(--night-ink); background: var(--night-ground); border: 1px solid var(--night-line); border-radius: 6px; font: inherit; font-size: 12px; }
+.forge-step-body textarea { resize: vertical; line-height: 1.55; }
+.forge-step-body input:not(.forge-compact):focus-visible, .forge-step-body select:focus-visible, .forge-step-body textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -1px; border-color: var(--accent); }
+.forge-plan textarea { min-height: 150px; }
+
+.forge-drop { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 14px; color: var(--night-muted); background: var(--night-panel-soft); border: 1px dashed var(--night-line); border-radius: 8px; cursor: pointer; transition: border-color 120ms ease, background 120ms ease; }
+.forge-drop:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--night-line)); }
+.forge-drop:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.forge-drop.is-loaded { border-style: solid; border-color: color-mix(in srgb, var(--state-success) 30%, var(--night-line)); }
+.forge-drop-copy { display: grid; min-width: 0; gap: 2px; }
+.forge-drop-copy strong { overflow: hidden; color: var(--night-ink); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.forge-drop-copy small { color: var(--night-muted); font-size: 10.5px; line-height: 1.45; }
+.forge-drop-action { color: var(--accent); font-size: 10.5px; font-weight: 650; }
+.forge-drop-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.forge-disclosure { border: 1px solid var(--night-line); border-radius: 8px; }
+.forge-disclosure > summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; color: var(--night-muted); font-size: 11.5px; font-weight: 600; cursor: pointer; list-style: none; }
+.forge-disclosure > summary::-webkit-details-marker { display: none; }
+.forge-disclosure > summary::before { content: "▸"; font-size: 9px; transition: transform 120ms ease; }
+.forge-disclosure[open] > summary::before { transform: rotate(90deg); }
+.forge-disclosure > summary:hover { color: var(--night-ink); }
+.forge-disclosure > summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 8px; }
+.forge-disclosure-value { margin-left: auto; color: var(--night-muted); font-weight: 500; }
+.forge-disclosure-body { display: grid; gap: 10px; padding: 0 12px 12px; }
+
+.forge-inline-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.forge-inline-actions > span { color: var(--night-muted); font-size: 10.5px; line-height: 1.45; }
+
+.forge-selected { display: grid; gap: 8px; padding: 12px; background: var(--night-panel-soft); border: 1px solid var(--night-line); border-radius: 8px; }
+.forge-selected > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.forge-selected > header > div { display: flex; align-items: baseline; gap: 8px; }
+.forge-selected > header strong { font-size: 11.5px; font-weight: 700; }
+.forge-selected-list { display: grid; gap: 6px; }
+.forge-upload { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; color: var(--night-ink); background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 6px; font-size: 10.5px; font-weight: 600; cursor: pointer; }
+.forge-upload:hover { border-color: color-mix(in srgb, var(--night-ink) 26%, var(--night-line)); }
+.forge-upload:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+.forge-footnote { margin: 0; color: var(--night-faint); font-size: 10.5px; line-height: 1.5; }
+
+.figure-forge-reference { display: flex; align-items: center; gap: 10px; padding: 7px 8px; background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 6px; }
+.figure-forge-reference img { width: 64px; height: 44px; object-fit: contain; background: var(--night-panel-raised); border-radius: 4px; }
+.figure-forge-reference div { display: grid; min-width: 0; flex: 1; gap: 2px; font-size: 11px; }
+.figure-forge-reference strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.figure-forge-reference span { color: var(--night-muted); }
+.figure-forge-reference a { color: var(--accent); font-size: 10.5px; }
+.figure-forge-reference > button { display: grid; place-items: center; padding: 5px; color: var(--night-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.figure-forge-reference > button:hover { color: var(--night-ink); background: var(--night-panel-soft); }
+
+.figure-forge-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); gap: 8px; }
+.figure-forge-results button { display: grid; min-width: 0; gap: 5px; padding: 6px; color: var(--night-ink); background: var(--night-panel-soft); border: 1px solid var(--night-line); border-radius: 6px; text-align: left; cursor: pointer; transition: border-color 120ms ease; }
+.figure-forge-results button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--night-ink) 24%, var(--night-line)); }
+.figure-forge-results button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.figure-forge-results button:disabled { opacity: .45; cursor: not-allowed; }
+.figure-forge-results img { width: 100%; height: 84px; object-fit: contain; background: var(--night-panel-raised); border-radius: 4px; }
+.figure-forge-results span { overflow: hidden; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.figure-forge-results small { color: var(--night-muted); font-size: 10px; }
+.figure-forge-results-hits { overflow: hidden; color: var(--night-faint); font-size: 9.5px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.figure-forge-results b { color: var(--accent); font-size: 10px; font-weight: 650; }
+
+.figure-forge-output { display: grid; gap: 10px; padding: 12px; background: var(--night-panel-soft); border: 1px solid var(--night-line); border-radius: 8px; }
+.figure-forge-output img { width: 100%; max-height: 480px; object-fit: contain; background: var(--night-panel-raised); border-radius: 6px; }
+.figure-forge-output a { width: fit-content; color: var(--accent); font-size: 11px; font-weight: 600; }
+
+@media (max-width: 860px) {
+  .forge-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); position: static; }
+  .forge-step-head { grid-template-columns: 22px minmax(0, 1fr); }
+  .forge-step-actions, .forge-pill { grid-column: 2; justify-items: start; }
+  .forge-blocked { max-width: none; text-align: left; }
+  .forge-field { grid-template-columns: minmax(0, 1fr); }
+  .forge-field-hint { grid-column: 1; }
+}
+
 html[data-theme="paper"] .image-creation-filter-panel { box-shadow: 0 18px 44px rgba(60, 48, 30, .16); }
-html[data-theme="paper"] .image-creation-tab small,
-html[data-theme="paper"] .image-creation-model,
-html[data-theme="paper"] .image-creation-composer-input::placeholder,
-html[data-theme="paper"] .image-creation-composer-note { color: #6f6a63; }
+html[data-theme="paper"] .image-creation-tab small { color: #6f6a63; }
 
 .main-workspace[data-narrow] .image-creation-controls { grid-template-columns: minmax(0, 1fr); }
 .main-workspace[data-narrow] .image-creation-filter-panel { right: auto; left: 0; }
 .main-workspace[data-narrow] .image-creation-tabs { flex-wrap: wrap; gap: 12px; padding-bottom: 8px; }
 .main-workspace[data-narrow] .image-creation-actions { width: 100%; margin-left: 0; }
-.image-creation-model { min-width: 0; }
-
-@media (max-width: 920px) {
-  .image-creation-composer-dock, .image-creation-fade { left: 0; }
-}
 @media (max-width: 720px) {
   .image-creation-page { padding-inline: 14px; }
   .image-creation-tabs { flex-wrap: wrap; gap: 12px; padding-bottom: 8px; }
   .image-creation-actions { width: 100%; margin-left: 0; }
   .image-creation-controls { grid-template-columns: minmax(0, 1fr); }
   .image-creation-filter-panel { right: auto; left: 0; width: min(520px, calc(100vw - 32px)); }
-  .image-creation-model { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .image-creation-card-image img, .image-creation-card-use { transition: none; }
 }
 
-/* The compose dock has to survive a narrow main column when the right
-   workbench is open or the window is small. */
-.codex-main.workbench-open .image-creation-model { display: none; }
 .main-workspace[data-narrow] .image-creation-page { padding-inline: 12px; }
 .main-workspace[data-narrow] .image-creation-actions { flex-wrap: wrap; gap: 6px; }
-.main-workspace[data-narrow] .image-creation-model,
-.main-workspace[data-narrow] .image-creation-aspect { display: none; }
-.main-workspace[data-narrow] .image-creation-composer-dock { padding-inline: 10px; }
-.main-workspace[data-narrow] .image-creation-composer-box { gap: 6px; padding-left: 6px; }
-.main-workspace[data-narrow] .image-creation-composer-note { padding-inline: 4px; }
 
 /* Paper writing actions belong to the editor toolbar, not the global toolbar. */
 .paper-pane-actions { display: flex; min-width: 0; align-items: center; gap: 4px; margin-left: auto; }

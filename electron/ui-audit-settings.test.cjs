@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { readLocale } = require("./locale-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
@@ -10,7 +11,8 @@ const modal = read("src", "SettingsModal.tsx");
 const proactive = read("src", "ProactiveSettingsPanel.tsx");
 const web = read("src", "WebSearchSettingsModal.tsx");
 const terminal = read("src", "TerminalSettingsModal.tsx");
-const i18n = read("src", "i18n.tsx");
+const i18n = readLocale();
+const i18nSource = read("src", "i18n.tsx");
 const tokens = read("src", "tokens.css");
 const css = read("src", "styles.css");
 
@@ -43,7 +45,7 @@ test("shared settings action row is styled once", () => {
 });
 
 test("text size defaults to 100 percent with 10 percent steps", () => {
-  assert.match(i18n, /TEXT_SIZE_SCALE: Record<TextSize, number> = \{ smaller: 0\.8, small: 0\.9, default: 1, large: 1\.1, larger: 1\.2 \}/);
+  assert.match(i18nSource, /TEXT_SIZE_SCALE: Record<TextSize, number> = \{ smaller: 0\.8, small: 0\.9, default: 1, large: 1\.1, larger: 1\.2 \}/);
   assert.match(modal, /scale: TEXT_SIZE_SCALE\.small/);
   assert.match(modal, /scale: TEXT_SIZE_SCALE\.default/);
   assert.match(modal, /Math\.round\(activeSize\.scale \* 100\)/);

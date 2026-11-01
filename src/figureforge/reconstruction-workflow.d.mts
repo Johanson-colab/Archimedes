@@ -1,0 +1,2 @@
+import type { FigureScene } from "./reconstruction.mjs";
+export function reconstructWithTopConf(canvas: HTMLCanvasElement, source: string, transport: (input: { images: string[]; width: number; height: number; task: Record<string, unknown> }) => Promise<Record<string, unknown>>, onProgress?: (phase: string) => void, options?: object): Promise<{ scene: FigureScene; audit: { finalValidation?: { state?: string }; tilePassComplete?: boolean } }>;

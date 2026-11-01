@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { readLocale } = require("./locale-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
@@ -21,7 +22,7 @@ const hook = read("src", "useProactiveAgent.ts");
 const library = read("src", "LibraryView.tsx");
 const paper = read("src", "PaperWritingView.tsx");
 const css = read("src", "styles.css");
-const i18n = read("src", "i18n.tsx");
+const i18n = readLocale();
 
 test("proactive is opt-in and starts off", () => {
   assert.match(types, /mode: "off"/);
