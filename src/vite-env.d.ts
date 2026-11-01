@@ -643,6 +643,8 @@ interface ContextAttachment {
   path?: string;
   detail?: string;
   description?: string;
+  size?: number;
+  selection?: { startLine: number; endLine: number; excerpt: string };
   paper?: ContextPaperMetadata;
   repository?: PaperRepositorySnapshot;
   image?: ContextImage;

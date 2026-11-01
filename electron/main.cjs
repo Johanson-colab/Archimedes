@@ -434,7 +434,14 @@ function installApplicationMenu() {
 function contextItem(type, resourcePath, detail = "") {
   const resolved = path.resolve(resourcePath);
   allowedContextPaths.add(resolved);
-  return { id: `${type}:${resolved}`, type, name: path.basename(resolved), path: resolved, detail };
+  let size;
+  try {
+    const stats = fs.statSync(resolved);
+    if (stats.isFile()) size = stats.size;
+  } catch {
+    // The caller will surface an unreadable path if it matters.
+  }
+  return { id: `${type}:${resolved}`, type, name: path.basename(resolved), path: resolved, detail, ...(size === undefined ? {} : { size }) };
 }
 
 function installedSkills(workspace) {

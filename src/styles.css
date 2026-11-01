@@ -7540,3 +7540,10 @@ html[data-menu-style="glass"] .menu-surface {
   font-size: 9px;
 }
 .attached-context-clear:hover { color: var(--night-ink); background: var(--night-panel-raised); }
+
+.attached-context-size {
+  flex: 0 0 auto;
+  color: var(--night-faint);
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
