@@ -13,7 +13,7 @@ const settings = read("src/SettingsModal.tsx");
 
 test("workbench and full editor share the tabbed file shell", () => {
   assert.match(app, /className=\{compact \? "artifact-editor-pane compact" : "artifact-editor-pane"\}/);
-  assert.match(app, /const tabs = openFiles\.length > 0 \? <Tabs value=\{selectedPath \?\? ""\}/);
+  assert.match(app, /const tabs = openFiles\.length > 0 \? <div className="artifact-tabs"/);
   assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
   assert.match(app, /artifact-browser-heading/);
   assert.match(app, /mainSection === "writing" \? t\("Paper writing"\) : t\("Files"\)/);

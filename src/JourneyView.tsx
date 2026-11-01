@@ -5,7 +5,6 @@ import { chapterChunkStatus, eventFailedAnswer, eventHasError, eventOrdinal, isU
 import { artifactPaths, collectTouchedPaths, toolArgumentsOf, toolNameOf } from "./evidencePaths";
 import { planChapterMerges } from "./journeyMergePlan";
 import { useDialogFocus } from "./useDialogFocus";
-import { Tabs, Tab } from "./Tabs";
 
 type JourneyViewProps = {
   bridge: ResearchDeskBridge;
@@ -1166,11 +1165,9 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     <div className="journey-topline">
       <span className="journey-kicker">Journey</span>
       <div className="journey-views">
-        <Tabs value={view} onChange={(value) => switchView(value as "story" | "outline")} label={t("Journey views")} className="journey-view-tabs">
-          <Tab value="story">{t("Story")}</Tab>
-          <Tab value="outline">{t("Outline")}</Tab>
-        </Tabs>
-        {mapAvailable && <button className="journey-map-action" onClick={() => setMapOpen(true)}>{t("Map")}</button>}
+        <button className={view === "story" ? "active" : ""} onClick={() => switchView("story")}>{t("Story")}</button>
+        <button className={view === "outline" ? "active" : ""} onClick={() => switchView("outline")}>{t("Outline")}</button>
+        {mapAvailable && <button onClick={() => setMapOpen(true)}>{t("Map")}</button>}
       </div>
     </div>
     <h1>{thread?.title || t("New research task")}</h1>

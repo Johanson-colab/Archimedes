@@ -3,7 +3,6 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { Plus, SlidersHorizontal, SquareTerminal, X } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
-import { Tabs, Tab } from "./Tabs";
 
 type TerminalThemeName = "charcoal" | "paper";
 
@@ -167,14 +166,19 @@ export default function TerminalPanel({ bridge, open, theme, workspace, settings
   return <section className={[open ? "smart-terminal open" : "smart-terminal", orientation === "right" ? "in-workbench" : ""].join(" ")} aria-label="Terminal panel">
     {orientation === "bottom" && <div className="terminal-resize-handle" onPointerDown={startResize} title="Drag to resize terminal"><span /></div>}
     <div className="smart-terminal-tabs">
-      <Tabs value={activeSessionId ?? ""} onChange={(value) => setActiveSessionId(value)} label="Terminal sessions" variant="editor" className="terminal-tab-list">
+      <div className="terminal-tab-list" role="tablist" aria-label="Terminal sessions">
         {tabs.map((tab, index) => {
           const label = terminalTabLabel(settings?.detectedShellName || settings?.detectedShell || tab.title, index);
-          return <Tab key={tab.sessionId} value={tab.sessionId} icon={<SquareTerminal size={13} />} title={tab.workspace} onClose={() => void closeTab(tab.sessionId)} closeLabel={`Close ${label}`}>
-            {label}{tab.status === "exited" && <i>exited</i>}
-          </Tab>;
+          return <div className={activeSessionId === tab.sessionId ? "terminal-tab active" : "terminal-tab"} key={tab.sessionId}>
+            <button className="terminal-tab-select" onClick={() => setActiveSessionId(tab.sessionId)} role="tab" aria-selected={activeSessionId === tab.sessionId} title={tab.workspace}>
+              <SquareTerminal size={13} />
+              <span>{label}</span>
+              {tab.status === "exited" && <i>exited</i>}
+            </button>
+            <button className="terminal-tab-close" onClick={() => void closeTab(tab.sessionId)} title={`Close ${label}`}><X size={12} /></button>
+          </div>;
         })}
-      </Tabs>
+      </div>
       <button className="new-terminal-button" onClick={() => void createTerminal()} title="New terminal"><Plus size={15} /></button>
       {onOpenSettings && <button className="terminal-settings-button" onClick={onOpenSettings} title="Terminal settings" aria-label="Terminal settings"><SlidersHorizontal size={14} /></button>}
     </div>

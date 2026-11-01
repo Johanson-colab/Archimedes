@@ -22,16 +22,12 @@ test("the shared tab primitive handles roving focus and ARIA", () => {
 test("all true tab groups use the primitive", () => {
   const groups = [
     ["src/RightWorkbench.tsx", /<Tabs value=\{activeTab\}/],
-    ["src/ExtensionsView.tsx", /<Tabs value=\{tab\}/],
-    ["src/App.tsx", /<Tabs value=\{selectedPath \?\? ""\}/],
-    ["src/TerminalPanel.tsx", /<Tabs value=\{activeSessionId \?\? ""\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{readerView\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{searchActive \? "" : mode\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{searchKind\}/],
     ["src/ImageCreationView.tsx", /<Tabs value=\{tab\}/],
     ["src/BenchmarkRadarView.tsx", /<Tabs value=\{tab\}/],
-    ["src/JourneyView.tsx", /<Tabs value=\{view\}/],
-    ["src/SettingsModal.tsx", /<Tabs value=\{section\}/],
+    ["src/LibraryView.tsx", /<Tabs value=\{aiMode\}/],
   ];
   for (const [file, pattern] of groups) assert.match(read(file), pattern, `${file} should use Tabs`);
 });
@@ -50,4 +46,13 @@ test("actions are kept outside tab lists", () => {
   assert.ok(image.indexOf("</Tabs>") < image.indexOf('className="image-creation-actions"'));
   assert.match(read("src/LibraryView.tsx"), /className="paper-reader-action reproduce-tab"/);
   assert.ok(read("src/ProactiveAgentPanel.tsx").indexOf("</FilterGroup>") < read("src/ProactiveAgentPanel.tsx").indexOf("agent-proactive-history-scope"));
+});
+
+
+test("canceled groups keep their existing tab implementation", () => {
+  assert.match(read("src/ExtensionsView.tsx"), /workbench-tab active/);
+  assert.match(read("src/App.tsx"), /<div className="artifact-tabs" role="tablist"/);
+  assert.match(read("src/TerminalPanel.tsx"), /<div className="terminal-tab-list" role="tablist"/);
+  assert.match(read("src/JourneyView.tsx"), /<div className="journey-views">/);
+  assert.match(read("src/SettingsModal.tsx"), /<nav className="settings-nav"/);
 });

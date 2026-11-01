@@ -201,9 +201,9 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
 
   return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
     <div className="image-creation-tabs">
-      <Tabs value={tab} onChange={(value) => setTab(value as "gallery" | "charts")} label="Image creation views" className="image-creation-tablist">
-        <Tab value="gallery" id="image-creation-tab-gallery" controls="image-creation-panel-gallery">Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small></Tab>
-        <Tab value="charts" id="image-creation-tab-charts" controls="image-creation-panel-charts">Data charts</Tab>
+      <Tabs value={tab} onChange={(value) => setTab(value as "gallery" | "charts")} label="Image creation views" className="workbench-tabs image-creation-tablist">
+        <Tab value="gallery" id="image-creation-tab-gallery" controls="image-creation-panel-gallery" className="workbench-tab">Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small></Tab>
+        <Tab value="charts" id="image-creation-tab-charts" controls="image-creation-panel-charts" className="workbench-tab">Data charts</Tab>
       </Tabs>
       <div className="image-creation-actions">
         {tab === "gallery" && <label className="image-creation-sort">

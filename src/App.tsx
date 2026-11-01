@@ -33,7 +33,6 @@ import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
 import ExtensionsView, { type ExtensionsTab } from "./ExtensionsView";
 import { useConfirm } from "./ConfirmDialog";
-import { Tabs, Tab } from "./Tabs";
 import DialogPortal from "./DialogPortal";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { sidebarEntries, type MainSection, type SidebarEntry } from "./sidebar-registry";
@@ -3880,19 +3879,15 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const tabs = openFiles.length > 0 ? <Tabs value={selectedPath ?? ""} onChange={(path) => { const openFile = openFiles.find((candidate) => candidate.path === path); if (openFile) onSelectOpenFile(openFile); }} label="Open files" variant="editor" className="artifact-tabs">
-    {openFiles.map((openFile) => <Tab
-      key={openFile.path}
-      value={openFile.path}
-      icon={<span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}>{workspaceFileIcon({ type: "file", kind: openFile.kind, path: openFile.path })}</span>}
-      onClose={() => onCloseFile(openFile.path)}
-      closeLabel={`Close ${openFile.name}`}
-      title={openFile.path}
-    >
-      {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
-      <span className="artifact-tab-name">{openFile.name}</span>
-    </Tab>)}
-  </Tabs> : null;
+  const tabs = openFiles.length > 0 ? <div className="artifact-tabs" role="tablist" aria-label="Open files">
+    {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
+      <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
+        {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
+        <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}>{workspaceFileIcon({ type: "file", kind: openFile.kind, path: openFile.path })}</span><span className="artifact-tab-name">{openFile.name}</span>
+      </button>
+      <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
+    </div>)}
+  </div> : null;
 
   const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
     {!compact && tabs}

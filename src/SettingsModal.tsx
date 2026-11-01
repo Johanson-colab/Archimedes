@@ -14,7 +14,6 @@ import { TEXT_SIZE_SCALE, useUISettings, type ChatVerbosity, type InterfaceFont,
 import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type CardStyle, type ContrastIssue, type Density, type DialogStyle, type InputStyle, type MenuStyle, type MotionStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type SurfaceStyles, type ThemePack, type ThemePreset } from "./appearance";
 import { useDialogFocus } from "./useDialogFocus";
 import DialogPortal from "./DialogPortal";
-import { Tabs, Tab } from "./Tabs";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about" | "account" | "members";
 
@@ -274,9 +273,11 @@ export default function SettingsModal({
     <section ref={dialogRef} tabIndex={-1} className="settings-modal app-dialog app-dialog-settings" role="dialog" aria-modal="true" aria-label={t("Settings")} onMouseDown={(event) => event.stopPropagation()}>
       <aside className="settings-sidebar">
         <div className="settings-brand"><div><strong>Archimedes</strong><span>{t("Settings")}</span></div></div>
-        <Tabs value={section} onChange={(value) => onSectionChange(value as SettingsSection)} label={t("Settings sections")} orientation="vertical" className="settings-nav">
-          {sections.map((item) => <Tab key={item.id} value={item.id} icon={item.icon}>{t(item.label)}</Tab>)}
-        </Tabs>
+        <nav className="settings-nav" aria-label={t("Settings sections")}>
+          {sections.map((item) => <button key={item.id} className={item.id === section ? "settings-nav-item active" : "settings-nav-item"} onClick={() => onSectionChange(item.id)} aria-current={item.id === section ? "page" : undefined}>
+            {item.icon}<span>{t(item.label)}</span>
+          </button>)}
+        </nav>
         <span className="settings-version">Archimedes 0.1.0</span>
       </aside>
 
