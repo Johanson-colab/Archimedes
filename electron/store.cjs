@@ -392,6 +392,21 @@ function schema(db) {
       updated_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS reproduction_runs (
+      id TEXT PRIMARY KEY NOT NULL,
+      reproduction_id TEXT NOT NULL REFERENCES reproductions(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      backend TEXT NOT NULL DEFAULT '',
+      image TEXT NOT NULL DEFAULT '',
+      steps_json TEXT NOT NULL DEFAULT '[]',
+      log TEXT NOT NULL DEFAULT '',
+      error TEXT NOT NULL DEFAULT '',
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
       cache_key TEXT PRIMARY KEY NOT NULL,
       response_json TEXT NOT NULL,
@@ -424,6 +439,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_paper_reviews_updated ON paper_reviews(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_paper_presentations_updated ON paper_presentations(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_reproductions_updated ON reproductions(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_reproduction_runs_reproduction ON reproduction_runs(reproduction_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
@@ -2501,7 +2517,7 @@ function deleteArtifact(id) {
 
 const REPRODUCTION_STATUSES = new Set([
   "draft", "planned", "queued", "provisioning", "running",
-  "diagnosing", "verified", "diverged", "blocked", "cancelled",
+  "diagnosing", "checks-passed", "verified", "diverged", "blocked", "cancelled",
 ]);
 
 const DEFAULT_REPRODUCTION_BUDGET = Object.freeze({ wallClockMin: 45, gpuHours: 2, maxFixAttempts: 3 });
@@ -2597,6 +2613,89 @@ function deleteReproduction(id) {
   return true;
 }
 
+const REPRODUCTION_RUN_STATUSES = new Set([
+  "running", "verified", "failed", "blocked", "manual", "stopped", "timeout", "interrupted",
+]);
+
+function reproductionRunRow(row) {
+  if (!row) return null;
+  let steps = [];
+  try { steps = JSON.parse(row.steps_json || "[]"); } catch { steps = []; }
+  return {
+    id: row.id,
+    reproduction_id: row.reproduction_id,
+    status: REPRODUCTION_RUN_STATUSES.has(row.status) ? row.status : "running",
+    backend: row.backend || "",
+    image: row.image || "",
+    steps: Array.isArray(steps) ? steps : [],
+    log: row.log || "",
+    error: row.error || "",
+    started_at: row.started_at,
+    finished_at: row.finished_at || null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function createReproductionRun(input = {}) {
+  const db = requireDatabase();
+  if (!getReproduction(input.reproductionId)) throw new Error("That reproduction does not exist.");
+  const now = timestamp();
+  const id = randomUUID();
+  db.prepare(`INSERT INTO reproduction_runs
+      (id, reproduction_id, status, backend, image, steps_json, log, error, started_at, finished_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, '[]', '', '', ?, NULL, ?, ?)`).run(
+    id,
+    String(input.reproductionId),
+    REPRODUCTION_RUN_STATUSES.has(input.status) ? input.status : "running",
+    String(input.backend || "").slice(0, 80),
+    String(input.image || "").slice(0, 200),
+    input.startedAt || now,
+    now,
+    now,
+  );
+  return getReproductionRun(id);
+}
+
+function getReproductionRun(id) {
+  const db = requireDatabase();
+  return reproductionRunRow(db.prepare("SELECT * FROM reproduction_runs WHERE id = ?").get(String(id || "")));
+}
+
+function updateReproductionRun(id, patch = {}) {
+  const db = requireDatabase();
+  const current = getReproductionRun(id);
+  if (!current) throw new Error("That run does not exist.");
+  const steps = Array.isArray(patch.steps) ? patch.steps : current.steps;
+  db.prepare(`UPDATE reproduction_runs
+      SET status = ?, steps_json = ?, log = ?, error = ?, finished_at = ?, backend = ?, image = ?, updated_at = ?
+      WHERE id = ?`).run(
+    REPRODUCTION_RUN_STATUSES.has(patch.status) ? patch.status : current.status,
+    JSON.stringify(steps),
+    typeof patch.log === "string" ? patch.log : current.log,
+    typeof patch.error === "string" ? patch.error.slice(0, 4_000) : current.error,
+    patch.finishedAt === null ? null : patch.finishedAt || current.finished_at,
+    typeof patch.backend === "string" && patch.backend ? patch.backend.slice(0, 80) : current.backend,
+    typeof patch.image === "string" && patch.image ? patch.image.slice(0, 200) : current.image,
+    timestamp(),
+    String(id),
+  );
+  return getReproductionRun(id);
+}
+
+function getLatestReproductionRun(reproductionId) {
+  const db = requireDatabase();
+  return reproductionRunRow(db.prepare("SELECT * FROM reproduction_runs WHERE reproduction_id = ? ORDER BY created_at DESC LIMIT 1").get(String(reproductionId || "")));
+}
+
+function listReproductionRuns(reproductionId, limit = 20) {
+  const db = requireDatabase();
+  const bound = Math.min(100, Math.max(1, Math.trunc(Number(limit) || 20)));
+  return db.prepare("SELECT * FROM reproduction_runs WHERE reproduction_id = ? ORDER BY created_at DESC LIMIT ?")
+    .all(String(reproductionId || ""), bound)
+    .map(reproductionRunRow);
+}
+
 module.exports = {
   addPaper,
   createComment,
@@ -2613,6 +2712,11 @@ module.exports = {
   projectRoleForUser,
   setLocalIdentity,
   createReproduction,
+  createReproductionRun,
+  getLatestReproductionRun,
+  getReproductionRun,
+  listReproductionRuns,
+  updateReproductionRun,
   listLibraryProjects,
   deleteReproduction,
   getReproduction,
