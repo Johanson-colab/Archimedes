@@ -1437,6 +1437,7 @@ app.whenReady().then(async () => {
       reasoningEffort,
       contextLength,
       contextItems,
+      capabilities: input.capabilities,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => event.sender.send("agent:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) }),
     });
@@ -1772,6 +1773,11 @@ app.whenReady().then(async () => {
     const action = store.resolveAction(actionId, "rejected");
     agent.resolveApproval(actionId, false);
     return action;
+  });
+
+  ipcMain.handle("agent:claim-approvals", (_event, threadId, claimed) => {
+    if (typeof threadId !== "string" || !threadId) throw new Error("A research thread ID is required.");
+    return { claimed: agent.setApprovalSurface(threadId, Boolean(claimed)) };
   });
 
   ipcMain.handle("agent:interrupt", (_event, threadId) => {

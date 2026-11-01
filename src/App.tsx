@@ -1288,6 +1288,14 @@ function App() {
     if (activeThread?.visibility === "private" || activeThread?.visibility === "project") setThreadVisibility(activeThread.visibility);
     if (!activeThreadId) setCommentsOpen(false);
   }, [activeThread?.visibility, activeThreadId]);
+  // Approvals are rendered inside the conversation view, so the open thread is
+  // the only one whose prompts can actually be answered. Claiming it here lets
+  // the agent veto a write instead of waiting for a prompt nobody can see.
+  useEffect(() => {
+    if (!activeThreadId || typeof desktopBridge?.claimApprovals !== "function") return;
+    void desktopBridge.claimApprovals(activeThreadId, true).catch(() => {});
+    return () => { void desktopBridge.claimApprovals(activeThreadId, false).catch(() => {}); };
+  }, [activeThreadId]);
   useEffect(() => {
     if (!activeProjectId || !authState?.user || typeof desktopBridge?.joinProjectPresence !== "function") {
       setPresenceMembers([]);
@@ -2300,7 +2308,7 @@ function App() {
     setEvents([{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" } });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       if (submittedThreadId === null) {
         const draftNote = noteValuesRef.current[draftNoteKey] ?? "";

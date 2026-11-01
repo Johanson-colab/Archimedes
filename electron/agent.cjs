@@ -6,7 +6,7 @@ const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
-const { resolveApproval, waitForApproval } = require("./agent/approval-manager.cjs");
+const { hasApprovalSurface, resolveApproval, setApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { completeAnthropic } = require("./agent/anthropic.cjs");
 const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData } = require("./agent/pdf-reader.cjs");
@@ -332,8 +332,15 @@ function workspacePath(root, requested = "") {
   return candidate;
 }
 
-function workspaceActionRequested(prompt) {
-  return /(save|write|create|edit|modify|implement|build|run|execute|保存|写入|创建|新建|编辑|修改|实现|搭建|运行|执行)/i.test(String(prompt || ""));
+// Capabilities are declared by the surface that starts the turn, never inferred
+// from the prompt text. The prompt is data the model reads; it must not be able
+// to grant itself permission to touch the workspace. Default is deny.
+const DEFAULT_CAPABILITIES = Object.freeze({ write: "deny", command: "deny" });
+
+function normalizeCapabilities(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const pick = (key) => (source[key] === "ask" ? "ask" : "deny");
+  return { write: pick("write"), command: pick("command") };
 }
 
 function relativePath(root, target) {
@@ -516,7 +523,7 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, allowWorkspaceActions, browser, config, recordEvent = () => {} }) {
+async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {} }) {
   const args = parseArguments(call.function.arguments);
   const name = call.function.name;
   recordEvent({ type: "tool_call", payload: { call_id: call.id, name, arguments: args } });
@@ -687,7 +694,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   }
 
   if (name === "write_artifact") {
-    if (!allowWorkspaceActions) throw new Error("The user did not request a workspace write in this turn. Return the result in chat instead.");
+    if (capabilities.write !== "ask") throw new Error("Workspace writes are disabled in this conversation. Return the result in chat instead.");
     if (typeof args.path !== "string" || typeof args.content !== "string" || args.content.length > 200_000) {
       throw new Error("A write proposal needs a path and no more than 200000 characters of content.");
     }
@@ -697,20 +704,20 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     const change = fileChangeForContent(root, relative, args.content);
     const action = store.createAction({ taskId, kind: "write", payload: { path: relative, content: args.content, change } });
     emit({ type: "approval", title: "Approval required", detail: `Write ${relative}`, action });
-    const decision = await waitForApproval(action.id, signal);
+    const decision = await waitForApproval(action.id, signal, threadId);
     if (!decision.approved && store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
     return { action: store.getAction(action.id), content: JSON.stringify({ approved: decision.approved, reason: decision.reason, action_id: action.id, kind: "write", path: relative }) };
   }
 
   if (name === "propose_command") {
-    if (!allowWorkspaceActions) throw new Error("The user did not request command execution in this turn. Explain any suggested command in chat instead.");
+    if (capabilities.command !== "ask") throw new Error("Command execution is disabled in this conversation. Explain any suggested command in chat instead.");
     if (typeof args.command !== "string" || !args.command.trim() || args.command.length > 2_000) {
       throw new Error("A command proposal needs a non-empty command of at most 2000 characters.");
     }
     const workingDirectory = workspacePath(root, args.cwd || "");
     const action = store.createAction({ taskId, kind: "command", payload: { command: args.command.trim(), cwd: workingDirectory } });
     emit({ type: "approval", title: "Approval required", detail: args.command.trim(), action });
-    const decision = await waitForApproval(action.id, signal);
+    const decision = await waitForApproval(action.id, signal, threadId);
     if (!decision.approved && store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
     return { action: store.getAction(action.id), content: JSON.stringify({ approved: decision.approved, reason: decision.reason, action_id: action.id, kind: "command", command: args.command.trim() }) };
   }
@@ -847,7 +854,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], emit = () => {}, browser, transient = false }) {
+async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, emit = () => {}, browser, transient = false }) {
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
@@ -914,7 +921,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     const foundPapers = new Map();
     const pdfCache = new Map();
     const maxToolRounds = policy.maxToolRounds;
-    const allowWorkspaceActions = !transient && workspaceActionRequested(prompt);
+    const turnCapabilities = transient ? DEFAULT_CAPABILITIES : normalizeCapabilities(capabilities);
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort} · context: ${resolvedContextLength}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
@@ -956,7 +963,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
             }
             webSearches += count;
           }
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, allowWorkspaceActions, browser, config, recordEvent });
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent });
           if (result.action) actions.push(result.action);
           messages.push({ role: "tool", tool_call_id: call.id, content: result.content });
           recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content: result.content } });
@@ -1006,4 +1013,4 @@ function interruptAgent(threadId) {
   return true;
 }
 
-module.exports = { complete, executeTool, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, translatePaperSelection };
+module.exports = { complete, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, setApprovalSurface, translatePaperSelection };

@@ -500,8 +500,8 @@ function remarkCodePaths() {
 }
 const PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT = 60;
 const PAPER_CHAT_HISTORY_PAGE_SIZE = 40;
-const PAPER_BRIEFING_REQUEST_EN = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise English Markdown with exactly these sections:\n\n## Key terms\nList 4-8 essential terms, each with a one-line explanation.\n\n## Three-sentence summary\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## Paper map\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## Limitations and open questions\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
-const PAPER_BRIEFING_REQUEST_ZH = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then write concise Chinese Markdown with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nWrite exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
+const PAPER_BRIEFING_REQUEST_EN = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then return concise English Markdown in this chat, with exactly these sections:\n\n## Key terms\nList 4-8 essential terms, each with a one-line explanation.\n\n## Three-sentence summary\nGive exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## Paper map\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## Limitations and open questions\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
+const PAPER_BRIEFING_REQUEST_ZH = "Create the initial full-paper reading briefing before answering any follow-up question. First call read_attached_paper_pdf repeatedly for the attached paper, in consecutive page ranges of at most 24 pages, until every available PDF page has been read. Do not substitute the abstract for full text. Then return concise Chinese Markdown in this chat, with exactly these sections:\n\n## 关键词词典\nList 4-8 essential terms, each with a one-line explanation.\n\n## 三行摘要\nGive exactly three numbered sentences covering the problem, method, and main evidence/result.\n\n## 论文地图\nUse bullets for research question, method, experiments/evaluation, and main findings. Cite PDF page numbers.\n\n## 局限与待核查\nState limitations explicitly reported by the authors and open questions that need closer reading. Cite page numbers where possible.\n\nBe evidence-aware: distinguish what the paper states from your inference.";
 const PAPER_BRIEFING_INSTRUCTION_PREFIX = "You are preparing a durable research reading guide for the paper ";
 
 function paperBriefingRequest(language: Language) {
@@ -703,6 +703,21 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [chatThreadId, setChatThreadId] = useState<string | undefined>();
   const [chatMessages, setChatMessages] = useState<PaperChatMessage[]>([]);
   const [streamingChatText, setStreamingChatText] = useState<string | null>(null);
+  // Token deltas arrive far faster than the markdown tree can re-render. Buffer
+  // them and flush on a short interval so one answer costs ~10 parses instead of
+  // one per token.
+  const streamBufferRef = useRef("");
+  const streamFlushRef = useRef<number | null>(null);
+  const flushStream = useCallback(() => {
+    streamFlushRef.current = null;
+    setStreamingChatText(streamBufferRef.current);
+  }, []);
+  const stopStreamTimer = useCallback(() => {
+    if (streamFlushRef.current !== null) {
+      window.clearTimeout(streamFlushRef.current);
+      streamFlushRef.current = null;
+    }
+  }, []);
   const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
   const [briefingVersion, setBriefingVersion] = useState(0);
   const briefingStartedRef = useRef(false);
@@ -753,8 +768,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
 
   useEffect(() => bridge.onAgentEvent((event) => {
     if (event.type !== "assistant_delta" || !event.delta || event.clientRunId !== activePaperRunIdRef.current) return;
-    setStreamingChatText((current) => (current ?? "") + event.delta);
-  }), [bridge]);
+    streamBufferRef.current += event.delta;
+    if (streamFlushRef.current !== null) return;
+    streamFlushRef.current = window.setTimeout(flushStream, 100);
+  }), [bridge, flushStream]);
+  useEffect(() => stopStreamTimer, [stopStreamTimer]);
 
   const selectedHighlight = reader?.highlights.find((highlight) => highlight.page_number === pageNumber &&
     (highlight.quote === selection || highlight.quote.includes(selection) || selection.includes(highlight.quote))) ?? null;
@@ -1018,6 +1036,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     }
     setChatBusy(true);
     setChatCancelling(false);
+    stopStreamTimer();
+    streamBufferRef.current = "";
     const clientRunId = crypto.randomUUID();
     activePaperRunIdRef.current = clientRunId;
     setStreamingChatText("");
@@ -1029,6 +1049,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         projectId: projectId || undefined,
         mode: options.initialBriefing || aiMode === "audit" ? "deep-research" : "free-chat",
         contextItems: [...researchContext, ...(options.initialBriefing ? [] : droppedAttachments), ...(attachedFigure ? [attachedFigure.image] : [])],
+        // Paper chat produces chat output only. It has no approval surface, so
+        // asking for workspace writes can only strand the turn on a prompt
+        // nobody can answer.
+        capabilities: { write: "deny", command: "deny" },
         clientRunId,
       });
       setChatThreadId(result.threadId);
@@ -1041,6 +1065,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     } finally {
       if (activePaperRunIdRef.current === clientRunId) {
         activePaperRunIdRef.current = null;
+        stopStreamTimer();
+        streamBufferRef.current = "";
         setStreamingChatText(null);
       }
       setChatBusy(false);

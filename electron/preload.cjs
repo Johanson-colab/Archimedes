@@ -165,6 +165,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   readClipboardImage: () => ipcRenderer.invoke("clipboard:read-image"),
   saveTask: (task) => ipcRenderer.invoke("task:save", task),
   runAgent: (input) => ipcRenderer.invoke("agent:run", input),
+  claimApprovals: (threadId, claimed) => ipcRenderer.invoke("agent:claim-approvals", threadId, claimed),
   runProactiveReply: (input) => ipcRenderer.invoke("proactive:reply", input),
   prepareFigurePlan: (input) => ipcRenderer.invoke("figure-forge:prepare", input),
   analyzeFigureReferences: (input) => ipcRenderer.invoke("figure-forge:analyze-references", input),

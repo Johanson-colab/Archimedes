@@ -19,7 +19,7 @@ function context(root, threadId, args) {
     foundPapers: new Map(),
     pdfCache: new Map(),
     signal: new AbortController().signal,
-    allowWorkspaceActions: false,
+    capabilities: { write: "deny", command: "deny" },
   };
 }
 
