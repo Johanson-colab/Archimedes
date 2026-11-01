@@ -7425,3 +7425,63 @@ html[data-menu-style="glass"] .menu-surface {
   background: color-mix(in srgb, var(--state-danger) 7%, var(--surface-panel));
   border-color: color-mix(in srgb, var(--state-danger) 24%, var(--border-default));
 }
+
+/* Composer controls: status, model options and context estimate. */
+.composer-runtime-local {
+  display: inline-flex;
+  height: 23px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  color: var(--night-ink);
+  background: var(--night-panel);
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 600;
+}
+.composer-runtime-dot { width: 5px; height: 5px; background: var(--state-success); border-radius: 50%; }
+.composer-runtime-switch button.composer-runtime-cloud { padding: 3px 7px; }
+.composer-model-controls { display: inline-flex; min-width: 0; align-items: center; gap: 2px; }
+.composer-model-controls .reasoning-effort-picker { display: inline-flex; }
+.composer-tool.context-length-trigger { gap: 6px; padding: 0 4px; }
+.composer-tool.context-length-trigger > svg:last-child { margin-left: 1px; color: var(--night-faint); transition: transform .15s ease; }
+.composer-tool.context-length-trigger.active > svg:last-child { transform: rotate(180deg); }
+
+.composer-context {
+  height: 29px;
+  padding: 0 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+}
+.composer-context:hover { color: var(--night-ink); background: var(--night-panel-raised); }
+
+.context-usage-control { position: relative; display: inline-flex; flex: 0 0 auto; }
+.composer-tool + .context-usage-control,
+.composer-context + .context-usage-control { margin-left: 0; }
+.context-usage {
+  height: 29px;
+  margin-left: 0;
+  padding: 0 5px;
+  gap: 5px;
+  color: var(--night-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+}
+.context-usage:hover { color: var(--night-ink); background: var(--night-panel-raised); }
+.context-usage::after { display: none; }
+.context-usage-value { min-width: 24px; color: inherit; font-size: 9.5px; font-variant-numeric: tabular-nums; text-align: right; }
+.context-usage-ring { width: 12px; height: 12px; }
+.context-usage-ring::after { inset: 2px; }
+.context-usage-menu { padding: 6px; }
+.context-usage-breakdown { display: grid; gap: 2px; padding: 4px 0 2px; }
+.context-usage-breakdown > div { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 6px 8px; color: var(--night-muted); border-radius: 4px; font-size: 10px; }
+.context-usage-breakdown > div strong { color: var(--night-ink); font-family: var(--font-mono); font-size: 9.5px; font-weight: 500; }
+.context-usage-breakdown > div.total { margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--night-line-soft); }
+.context-usage-breakdown > div.total strong { color: var(--night-ink-soft); }
+.context-usage-breakdown-note { margin: 2px 8px 5px; color: var(--night-faint); font-size: 9px; line-height: 1.45; }

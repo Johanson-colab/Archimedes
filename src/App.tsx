@@ -40,6 +40,7 @@ import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./Ri
 import ChangesView from "./ChangesView";
 import NotesView from "./NotesView";
 import VoiceInputButton from "./VoiceInputButton";
+import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, normalizeWorkbenchPreferences, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
@@ -105,6 +106,7 @@ import {
   Folder,
   FolderOpen,
   FlaskConical,
+  Gauge,
   ImagePlus,
   Images,
   Laptop,
@@ -2737,6 +2739,7 @@ function App() {
               onThreadVisibility={(visibility) => void changeThreadVisibility(visibility)}
               cloudSignedIn={Boolean(authState?.user)}
               onRequestSignIn={() => openAuth("choice")}
+              onOpenWorkspaceSettings={() => { setSettingsSection("workspace"); setSettingsOpen(true); }}
               agentBusy={agentBusy}
               interrupting={interrupting}
               pendingAction={pendingAction}
@@ -3111,7 +3114,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -3131,6 +3134,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   contextItems: ContextAttachment[];
   cloudSignedIn: boolean;
   onRequestSignIn: () => void;
+  onOpenWorkspaceSettings: () => void;
   onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength) => void;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
@@ -3150,12 +3154,16 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const shortcutModifier = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
   const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextUsageOpen, setContextUsageOpen] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [cloudGateOpen, setCloudGateOpen] = useState(false);
   const [cloudNotice, setCloudNotice] = useState("");
   const [composerError, setComposerError] = useState("");
   const [prompt, setPrompt] = useState("");
   const reasoningTriggerRef = useRef<HTMLButtonElement>(null);
+  const contextTriggerRef = useRef<HTMLButtonElement>(null);
+  const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
   // Parent activity updates can occur every second. Keep the history's event
@@ -3176,6 +3184,15 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     requestAnimationFrame(() => composerRef.current?.focus());
   }, [composerRequest, onComposerRequestApplied]);
 
+  useEffect(() => {
+    const textarea = composerRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const maxHeight = 220;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [prompt]);
+
   const predictedMode = inferResearchMode(prompt, researchMode);
   const messageContextCharacters = useMemo(
     () => messages.reduce((total, message) => total + message.text.length, 0),
@@ -3194,8 +3211,13 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const contextUsageState = contextUsage >= 0.9 ? "critical" : contextUsage >= 0.7 ? "warning" : "normal";
   const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${contextCharacterLimit.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
+  const contextUsagePercent = Math.round(contextUsage * 100);
+  const activeContextLength = contextLengths.find((length) => length.id === contextLength) ?? contextLengths[0];
+  const contextLengthLabel = activeContextLength?.id === "extra-long" ? t("Extra Long") : t("Standard");
+  const formatContextCharacters = (value: number) => value >= 10_000 ? `${Math.round(value / 1_000)}k` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : String(value);
   const availableThinkingEfforts = reasoningEfforts.filter((effort) => modelCapabilities.thinkingEfforts.includes(effort.id));
   const availableContextLengths = contextLengths.filter((length) => modelCapabilities.contextLengths.includes(length.id));
+  const reasoningEffortLabel = t(reasoningEfforts.find((effort) => effort.id === reasoningEffort)?.label ?? reasoningEffort);
 
   async function attachPastedImage(blob: Blob) {
     if (contextItems.filter((item) => item.type === "image").length >= 4) {
@@ -3274,14 +3296,21 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   function appendTranscript(text: string) {
     const value = text.trim();
     if (!value) return;
-    setPrompt((current) => current.trim() ? (/\s$/.test(current) ? `${current}${value}` : `${current} ${value}`) : value);
+    const textarea = composerRef.current;
+    const start = textarea?.selectionStart ?? prompt.length;
+    const end = textarea?.selectionEnd ?? prompt.length;
+    const before = prompt.slice(0, start);
+    const after = prompt.slice(end);
+    const leading = before && !/\s$/.test(before) ? " " : "";
+    const trailing = after && !/^\s/.test(after) ? " " : "";
+    const inserted = `${leading}${value}${trailing}`;
+    setPrompt(`${before}${inserted}${after}`);
     setComposerError("");
     requestAnimationFrame(() => {
-      const textarea = composerRef.current;
       if (!textarea) return;
-      const end = textarea.value.length;
       textarea.focus();
-      textarea.setSelectionRange(end, end);
+      const cursor = start + inserted.length;
+      textarea.setSelectionRange(cursor, cursor);
     });
   }
 
@@ -3314,59 +3343,98 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
         </div>}
         {cloudNotice && <div className="cloud-gate notice"><span className="cloud-gate-icon"><Cloud size={16} /></span><div><strong>{cloudNotice}</strong><span>Local runs remain fully available.</span></div><button className="secondary-button" onClick={() => setCloudNotice("")}>Dismiss</button></div>}
         <textarea ref={composerRef} value={prompt} onChange={(event) => setPrompt(event.target.value)} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
+          if (shouldSubmitPaperChatKey(event)) {
             event.preventDefault();
             submitCurrentPrompt();
           }
-        }} placeholder={activeMode.placeholder} rows={3} />
+        }} placeholder={activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-describedby={composerError ? "composer-error" : undefined} />
         <ContextChips items={contextItems} onRemove={onRemoveContext} />
         <MenuSurface open={Boolean(composerMenu)} onClose={() => setComposerMenu(null)} cursor={composerMenu} placement="bottom-start" width={300} className="composer-context-menu" ariaLabel={t("Composer actions")}>
           <MenuItem icon={<Scissors size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}X`} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd} onClick={() => { setComposerMenu(null); void copySelection(true); }}>{t("Cut")}</MenuItem>
           <MenuItem icon={<Copy size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}C`} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd} onClick={() => { setComposerMenu(null); void copySelection(); }}>{t("Copy")}</MenuItem>
           <MenuItem icon={<ClipboardPaste size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}V`} onClick={() => { setComposerMenu(null); void pasteFromSystemClipboard(); }}>{t("Paste")}</MenuItem>
         </MenuSurface>
-        {composerError && <div className="composer-attachment-error" role="alert">{composerError}</div>}
+        {composerError && <div id="composer-error" className="composer-attachment-error" role="alert">{composerError}</div>}
         <div className="conversation-composer-footer">
-          <div className="composer-runtime-switch" role="group" aria-label="Runtime location">
-            <button className="active" aria-pressed="true">Local</button>
-            <button className={cloudSignedIn ? "cloud signed-in" : "cloud locked"} aria-pressed="false" onClick={() => cloudSignedIn ? setCloudNotice("Cloud runtime is coming soon.") : setCloudGateOpen(true)} title={cloudSignedIn ? "Cloud runtime is coming soon" : "Sign in to use cloud runs"}>
-              {!cloudSignedIn && <Lock size={10} />}Cloud<span>{cloudSignedIn ? "Soon" : "Locked"}</span>
+          <div className="composer-runtime-switch" aria-label="Runtime location">
+            <span className="composer-runtime-local"><span className="composer-runtime-dot" aria-hidden="true" />{t("Local")}</span>
+            <button className={cloudSignedIn ? "composer-runtime-cloud signed-in" : "composer-runtime-cloud locked"} onClick={() => cloudSignedIn ? setCloudNotice("Cloud runtime is coming soon.") : setCloudGateOpen(true)} title={cloudSignedIn ? "Cloud runtime is coming soon" : "Sign in to use cloud runs"}>
+              {!cloudSignedIn && <Lock size={10} />}{t("Cloud")}<span>{cloudSignedIn ? t("Soon") : t("Locked")}</span>
             </button>
           </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} onAdd={onAddContext} />
-          <div className="reasoning-effort-picker">
-            <button ref={reasoningTriggerRef} className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => setReasoningMenuOpen((open) => !open)} title={availableThinkingEfforts.length ? `Thinking effort: ${reasoningEffort}` : "Thinking effort is not exposed by this model"} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>
-              <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>Thinking effort · {availableThinkingEfforts.length ? reasoningEffort[0].toUpperCase() + reasoningEffort.slice(1) : "Unavailable"}</span><ChevronDown size={13} />
-            </button>
-            <MenuSurface open={reasoningMenuOpen} onClose={() => setReasoningMenuOpen(false)} anchorRef={reasoningTriggerRef} placement="top-start" width={268} className="reasoning-effort-menu" ariaLabel={t("Thinking effort")}>
-              <MenuLabel>{t("Thinking effort")}</MenuLabel>
-              {availableThinkingEfforts.map((effort) => <MenuItem key={effort.id} checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>{t(effort.label)}</MenuItem>)}
-              <MenuDivider />
-              <MenuLabel>{t("Context length")}</MenuLabel>
-              {availableContextLengths.map((length) => <MenuItem key={length.id} checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setReasoningMenuOpen(false); }}>{length.id === "extra-long" ? t("Extra Long") : t("Standard")}</MenuItem>)}
-            </MenuSurface>
+          <div className="composer-model-controls" aria-label={t("Model controls")}>
+            <div className="reasoning-effort-picker">
+              <button ref={reasoningTriggerRef} className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setContextMenuOpen(false); setContextUsageOpen(false); setReasoningMenuOpen((open) => !open); }} title={availableThinkingEfforts.length ? `${t("Thinking effort")}: ${reasoningEffortLabel}` : t("Thinking effort is not exposed by this model")} aria-label={`${t("Thinking effort")}: ${availableThinkingEfforts.length ? reasoningEffortLabel : t("Unavailable")}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen} disabled={!availableThinkingEfforts.length}>
+                <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>{availableThinkingEfforts.length ? reasoningEffortLabel : t("Unavailable")}</span><ChevronDown size={13} />
+              </button>
+              <MenuSurface open={reasoningMenuOpen} onClose={() => setReasoningMenuOpen(false)} anchorRef={reasoningTriggerRef} placement="top-start" width={220} className="reasoning-effort-menu" ariaLabel={t("Thinking effort")}>
+                <MenuLabel>{t("Thinking effort")}</MenuLabel>
+                {availableThinkingEfforts.map((effort) => <MenuItem key={effort.id} checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>{t(effort.label)}</MenuItem>)}
+              </MenuSurface>
+            </div>
+            <div className="reasoning-effort-picker">
+              <button ref={contextTriggerRef} className={contextMenuOpen ? "composer-tool context-length-trigger active" : "composer-tool context-length-trigger"} onClick={() => { setReasoningMenuOpen(false); setContextUsageOpen(false); setContextMenuOpen((open) => !open); }} title={availableContextLengths.length ? `${t("Context length")}: ${contextLengthLabel}` : t("Context length is not exposed by this model")} aria-label={`${t("Context length")}: ${availableContextLengths.length ? contextLengthLabel : t("Unavailable")}`} aria-haspopup="menu" aria-expanded={contextMenuOpen} disabled={!availableContextLengths.length}>
+                <Gauge size={12} aria-hidden="true" /><span>{availableContextLengths.length ? contextLengthLabel : t("Unavailable")}</span><ChevronDown size={13} />
+              </button>
+              <MenuSurface open={contextMenuOpen} onClose={() => setContextMenuOpen(false)} anchorRef={contextTriggerRef} placement="top-start" width={220} className="reasoning-effort-menu" ariaLabel={t("Context length")}>
+                <MenuLabel>{t("Context length")}</MenuLabel>
+                {availableContextLengths.map((length) => <MenuItem key={length.id} checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setContextMenuOpen(false); }}>{length.id === "extra-long" ? t("Extra Long") : t("Standard")}</MenuItem>)}
+              </MenuSurface>
+            </div>
           </div>
           <button
             className={`composer-tool thread-visibility-trigger ${threadVisibility}`}
             onClick={() => onThreadVisibility(threadVisibility === "private" ? "project" : "private")}
-            title={threadVisibility === "private" ? "Only you can see this thread" : "Project members can see this thread"}
+            title={threadVisibility === "private" ? "Private draft. Only you can see this thread." : "Project thread. Project members can see this thread."}
             aria-label={threadVisibility === "private" ? "Make thread project-visible" : "Make thread private"}
           >
             {threadVisibility === "private" ? <Lock size={12} /> : <Users size={12} />}
-            <span>{threadVisibility === "private" ? "Private draft" : "Project thread"}</span>
+            <span>{threadVisibility === "private" ? t("Private") : t("Project")}</span>
           </button>
-          <div className="composer-context"><ShieldCheck size={13} /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : "No workspace"}</span></div>
-          <div
-            className={`context-usage ${contextUsageState}`}
-            data-context-usage={contextUsageLabel}
-            aria-label={contextUsageTitle}
-            role="img"
+          <button
+            type="button"
+            className="composer-context"
+            onClick={onOpenWorkspaceSettings}
+            title={workspace ? `${t("Workspace")}: ${workspace}` : t("Open workspace settings")}
+            aria-label={workspace ? `${t("Workspace")}: ${workspace}. ${t("Open workspace settings")}` : t("Open workspace settings")}
           >
-            <span
-              className="context-usage-ring"
-              style={{ "--context-usage-progress": `${Math.round(contextUsage * 1_000) / 10}%` } as React.CSSProperties}
-              aria-hidden="true"
-            />
+            <Folder size={13} aria-hidden="true" /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : t("No workspace")}</span>
+          </button>
+          <div className="context-usage-control">
+            <button
+              ref={contextUsageTriggerRef}
+              type="button"
+              className={`context-usage ${contextUsageState}`}
+              data-context-usage={contextUsageLabel}
+              aria-label={contextUsageTitle}
+              aria-haspopup="menu"
+              aria-expanded={contextUsageOpen}
+              title={contextUsageTitle}
+              onClick={() => { setReasoningMenuOpen(false); setContextMenuOpen(false); setContextUsageOpen((open) => !open); }}
+            >
+              <span className="context-usage-value">{contextUsageLabel}</span>
+              <span
+                className="context-usage-ring"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={contextUsagePercent}
+                aria-valuetext={`${contextUsagePercent}% estimated context used`}
+                style={{ "--context-usage-progress": `${Math.round(contextUsage * 1_000) / 10}%` } as React.CSSProperties}
+              />
+            </button>
+            <MenuSurface open={contextUsageOpen} onClose={() => setContextUsageOpen(false)} anchorRef={contextUsageTriggerRef} placement="top-end" width={264} className="context-usage-menu" ariaLabel={t("Context usage")} role="group" focus="none">
+              <MenuLabel>{t("Context usage")}</MenuLabel>
+              <div className="context-usage-breakdown">
+                <div><span>{t("Chat")}</span><strong>{formatContextCharacters(messageContextCharacters)}</strong></div>
+                <div><span>{t("Draft")}</span><strong>{formatContextCharacters(prompt.length)}</strong></div>
+                <div><span>{t("Attachments")}</span><strong>{formatContextCharacters(attachedContextCharacters)}</strong></div>
+                <div><span>{t("Instructions")}</span><strong>{formatContextCharacters(CONTEXT_INSTRUCTION_OVERHEAD_CHARS)}</strong></div>
+                <div className="total"><span>{t("Estimated total")}</span><strong>{estimatedContextCharacters.toLocaleString()} / {contextCharacterLimit.toLocaleString()}</strong></div>
+              </div>
+              <p className="context-usage-breakdown-note">{t("Approximate character estimate. The final request can differ after context compaction.")}</p>
+            </MenuSurface>
           </div>
           <div className="composer-send-cluster">
             <VoiceInputButton

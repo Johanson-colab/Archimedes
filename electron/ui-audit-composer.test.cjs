@@ -70,3 +70,30 @@ test("main composer supports a minimal voice button beside send", () => {
   assert.match(preload, /transcribeSpeech/);
   assert.match(preload, /requestMicrophoneAccess/);
 });
+
+test("composer input has IME protection and grows with the draft", () => {
+  assert.match(app, /shouldSubmitPaperChatKey\(event\)/);
+  assert.match(app, /aria-label=\{t\("Message Archimedes"\)\}/);
+  assert.match(app, /textarea\.style\.height = "auto"/);
+  assert.match(app, /textarea\.style\.overflowY = textarea\.scrollHeight > maxHeight \? "auto" : "hidden"/);
+});
+
+test("model controls are split and do not disable each other", () => {
+  assert.match(app, /className=\{reasoningMenuOpen \? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"\}[\s\S]*?disabled=\{!availableThinkingEfforts\.length\}/);
+  assert.match(app, /className=\{contextMenuOpen \? "composer-tool context-length-trigger active" : "composer-tool context-length-trigger"\}[\s\S]*?disabled=\{!availableContextLengths\.length\}/);
+  assert.match(app, /ariaLabel=\{t\("Thinking effort"\)\}/);
+  assert.match(app, /ariaLabel=\{t\("Context length"\)\}/);
+});
+
+test("runtime is status-first and context usage exposes a readable breakdown", () => {
+  assert.doesNotMatch(app, /composer-runtime-switch" role="group"/);
+  assert.match(app, /className="composer-runtime-local"/);
+  assert.match(app, /className=\{cloudSignedIn \? "composer-runtime-cloud signed-in" : "composer-runtime-cloud locked"\}/);
+  assert.match(app, /role="progressbar"/);
+  assert.match(app, /aria-valuenow=\{contextUsagePercent\}/);
+  assert.match(app, /className="context-usage-breakdown"/);
+  assert.match(app, /t\("Instructions"\)/);
+  assert.match(app, /onClick=\{onOpenWorkspaceSettings\}/);
+  assert.match(app, /selectionStart/);
+  assert.match(app, /selectionEnd/);
+});

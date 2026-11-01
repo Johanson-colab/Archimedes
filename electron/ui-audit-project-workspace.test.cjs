@@ -58,7 +58,8 @@ test("new projects choose a folder and existing projects can rebind it", () => {
 
 test("the composer surfaces the effective working folder", () => {
   assert.match(app, /workspace=\{executionWorkspace\}\s+projectId=\{activeProjectId\}\s+threadVisibility=\{threadVisibility\}\s+onThreadVisibility=/);
-  assert.match(app, /className="composer-context"><ShieldCheck size=\{13\} \/><span>\{workspace \? workspace\.split/);
+  assert.match(app, /className="composer-context"[\s\S]*?onClick=\{onOpenWorkspaceSettings\}/);
+  assert.match(app, /title=\{workspace \? `\$\{t\("Workspace"\)\}: \$\{workspace\}`/);
 });
 
 test("folder previews and watches do not move the window's primary workspace", () => {
