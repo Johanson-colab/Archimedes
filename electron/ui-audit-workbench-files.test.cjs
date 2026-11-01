@@ -2,13 +2,15 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { readLocale } = require("./locale-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const app = read("src/App.tsx");
 const css = read("src/styles.css");
 const editor = read("src/FileCodeEditor.tsx");
-const i18n = read("src/i18n.tsx");
+const i18n = readLocale();
+const i18nSource = read("src/i18n.tsx");
 const settings = read("src/SettingsModal.tsx");
 
 test("workbench and full editor share the tabbed file shell", () => {
@@ -56,10 +58,10 @@ test("file icons default to City Lights and still switch to monochrome", () => {
   assert.match(app, /className=\{`tree-file-icon tone-\$\{workspaceFileTone\(entry\)\}`\}/);
   assert.match(css, /\.tree-file-icon\.tone-folder \{/);
   assert.match(css, /html\[data-file-icons="monochrome"\] \.tree-file-icon/);
-  assert.match(i18n, /export type FileIconStyle = "city-lights" \| "material" \| "seti" \| "monochrome"/);
-  assert.match(i18n, /FILE_ICON_STYLE_STORAGE_KEY/);
-  assert.match(i18n, /stored === "monochrome" \|\| stored === "material" \|\| stored === "seti"/);
-  assert.match(i18n, /document\.documentElement\.dataset\.fileIcons = fileIconStyle/);
+  assert.match(i18nSource, /export type FileIconStyle = "city-lights" \| "material" \| "seti" \| "monochrome"/);
+  assert.match(i18nSource, /FILE_ICON_STYLE_STORAGE_KEY/);
+  assert.match(i18nSource, /stored === "monochrome" \|\| stored === "material" \|\| stored === "seti"/);
+  assert.match(i18nSource, /document\.documentElement\.dataset\.fileIcons = fileIconStyle/);
   assert.match(settings, /onChange=\{setFileIconStyle\}/);
   assert.match(settings, /value: "city-lights"/);
   assert.match(settings, /value: "material"/);

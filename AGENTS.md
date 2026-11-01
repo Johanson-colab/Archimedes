@@ -37,7 +37,7 @@ Add or update tests for behavior changes. UI changes need an audit test where pr
 - One concern per PR; no drive-by refactors or formatting churn.
 - Branch from `main`. Do not push to `main` or force-push shared branches.
 - Reuse existing primitives and tokens (`Dialog`, `Menu`, `Tabs`, `SettingsPrimitives`, `StateView`); do not hand-roll menus/dialogs or hardcode colors.
-- Add new user-facing strings to `src/i18n.tsx` in both `en` and `zh`.
+- Add new user-facing strings to the shard under `src/i18n/translations/` that matches the surface, in both `en` (the key) and `zh` (the value), and keep that file alphabetically sorted.
 - Never commit `node_modules`, `dist`, `.env.local`, API keys, or generated build output.
 
 ## 5. PR checklist

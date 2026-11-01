@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { readLocale } = require("./locale-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -13,7 +14,7 @@ const settingsPanel = read("src/WorkbenchSettingsPanel.tsx");
 const changes = read("src/ChangesView.tsx");
 const notes = read("src/NotesView.tsx");
 const css = read("src/styles.css");
-const i18n = read("src/i18n.tsx");
+const i18n = readLocale();
 const main = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
 

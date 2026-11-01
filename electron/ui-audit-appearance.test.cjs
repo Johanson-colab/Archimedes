@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { readLocale } = require("./locale-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
@@ -12,7 +13,7 @@ const appearance = read("src", "appearance.ts");
 const library = read("src", "LibraryView.tsx");
 const writing = read("src", "PaperWritingView.tsx");
 const agent = read("src", "AgentLayer.tsx");
-const i18n = read("src", "i18n.tsx");
+const i18n = readLocale();
 const css = read("src", "styles.css");
 
 test("the app owns appearance instead of a single theme key", () => {

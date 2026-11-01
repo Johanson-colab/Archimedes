@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { readLocale } = require("./locale-source.cjs");
 
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
@@ -9,7 +10,7 @@ const registry = fs.readFileSync(path.join(root, "src", "sidebar-registry.tsx"),
 const view = fs.readFileSync(path.join(root, "src", "ImageCreationView.tsx"), "utf8");
 const charts = fs.readFileSync(path.join(root, "src", "DataChartGallery.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
-const i18n = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
+const i18n = readLocale();
 
 test("Paper diagrams is a view inside Image creation, not a second Create destination", () => {
   assert.match(registry, /id: "image-creation"[^\n]*labelKey: "Image creation"[^\n]*destination: \{ type: "section", section: "image-creation" \}/);
