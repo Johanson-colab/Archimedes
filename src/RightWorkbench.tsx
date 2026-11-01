@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ellipsis } from "lucide-react";
 import { useUISettings } from "./i18n";
+import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";
 import {
   moveWorkbenchTab,
   moveWorkbenchTabByOffset,
@@ -58,6 +59,7 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
   const [dragging, setDragging] = useState<WorkbenchTabId | null>(null);
   const [dropTarget, setDropTarget] = useState<WorkbenchTabId | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
   const [contextMenu, setContextMenu] = useState<TabMenu | null>(null);
   const [visited, setVisited] = useState<Set<WorkbenchTabId>>(() => new Set([activeTab]));
 
@@ -91,27 +93,6 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [onTabChange, open, visibleTabs]);
-
-  useEffect(() => {
-    if (!moreOpen && !contextMenu) return;
-    function closeMenus(event: PointerEvent) {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest(".workbench-menu, .workbench-tab-more")) return;
-      setMoreOpen(false);
-      setContextMenu(null);
-    }
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      setMoreOpen(false);
-      setContextMenu(null);
-    }
-    window.addEventListener("pointerdown", closeMenus);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      window.removeEventListener("pointerdown", closeMenus);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [contextMenu, moreOpen]);
 
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
@@ -179,7 +160,7 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
             onClick={() => onTabChange(id)}
             onContextMenu={(event) => {
               event.preventDefault();
-              setContextMenu({ id, x: Math.min(event.clientX, window.innerWidth - 190), y: Math.min(event.clientY, window.innerHeight - 170) });
+              setContextMenu({ id, x: event.clientX, y: event.clientY });
               setMoreOpen(false);
             }}
             onKeyDown={(event) => {
@@ -213,6 +194,7 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
           </button>;
         })}
         <button
+          ref={moreButtonRef}
           className="workbench-tab-more"
           onClick={() => { setMoreOpen((current) => !current); setContextMenu(null); }}
           title={t("More tabs")}
@@ -222,26 +204,28 @@ export default function RightWorkbench({ open, width, activeTab, panels, prefere
         ><Ellipsis size={15} /></button>
       </div>
 
-      {moreOpen && <div className="workbench-menu workbench-more-menu" role="menu" aria-label={t("Workbench tabs")}>
-      {hiddenTabs.length > 0 && <>
-        <span className="workbench-menu-label">{t("Hidden tabs")}</span>
-        {hiddenTabs.map((id) => {
-          const tab = workbenchTabDefinition(id);
-          return <button key={id} role="menuitem" onClick={() => showTab(id)}><span>{t(tab.labelKey)}</span></button>;
-        })}
-        <span className="workbench-menu-divider" />
-      </>}
-        <button role="menuitem" onClick={() => { setMoreOpen(false); onOpenSettings(); }}><span>{t("Customize tabs…")}</span></button>
-      </div>}
+      <MenuSurface open={moreOpen} onClose={() => setMoreOpen(false)} anchorRef={moreButtonRef} placement="bottom-end" width={260} className="workbench-menu workbench-more-menu" ariaLabel={t("Workbench tabs")}>
+        {hiddenTabs.length > 0 && <>
+          <MenuLabel>{t("Hidden tabs")}</MenuLabel>
+          {hiddenTabs.map((id) => {
+            const tab = workbenchTabDefinition(id);
+            return <MenuItem key={id} onClick={() => showTab(id)}>{t(tab.labelKey)}</MenuItem>;
+          })}
+          <MenuDivider />
+        </>}
+        <MenuItem onClick={() => { setMoreOpen(false); onOpenSettings(); }}>{t("Customize tabs…")}</MenuItem>
+      </MenuSurface>
     </header>
 
-    {contextMenu && <div className="workbench-menu workbench-context-menu" role="menu" style={{ left: contextMenu.x, top: contextMenu.y }} aria-label={t("Tab options")}>
-      <button role="menuitem" disabled={visibleTabs.length <= 1} onClick={() => { hideTab(contextMenu.id); setContextMenu(null); }}>{t("Hide tab")}</button>
-      <button role="menuitem" disabled={visibleTabs.indexOf(contextMenu.id) <= 0} onClick={() => { onPreferencesChange(moveWorkbenchTabByOffset(preferences, contextMenu.id, -1)); setContextMenu(null); }}>{t("Move left")}</button>
-      <button role="menuitem" disabled={visibleTabs.indexOf(contextMenu.id) >= visibleTabs.length - 1} onClick={() => { onPreferencesChange(moveWorkbenchTabByOffset(preferences, contextMenu.id, 1)); setContextMenu(null); }}>{t("Move right")}</button>
-      <span className="workbench-menu-divider" />
-      <button role="menuitem" onClick={() => { setContextMenu(null); onOpenSettings(); }}><span>{t("Customize tabs…")}</span></button>
-    </div>}
+    <MenuSurface open={Boolean(contextMenu)} onClose={() => setContextMenu(null)} cursor={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null} placement="bottom-start" width={240} className="workbench-menu workbench-context-menu" ariaLabel={t("Tab options")}>
+      {contextMenu && <>
+        <MenuItem disabled={visibleTabs.length <= 1} onClick={() => { hideTab(contextMenu.id); setContextMenu(null); }}>{t("Hide tab")}</MenuItem>
+        <MenuItem disabled={visibleTabs.indexOf(contextMenu.id) <= 0} onClick={() => { onPreferencesChange(moveWorkbenchTabByOffset(preferences, contextMenu.id, -1)); setContextMenu(null); }}>{t("Move left")}</MenuItem>
+        <MenuItem disabled={visibleTabs.indexOf(contextMenu.id) >= visibleTabs.length - 1} onClick={() => { onPreferencesChange(moveWorkbenchTabByOffset(preferences, contextMenu.id, 1)); setContextMenu(null); }}>{t("Move right")}</MenuItem>
+        <MenuDivider />
+        <MenuItem onClick={() => { setContextMenu(null); onOpenSettings(); }}>{t("Customize tabs…")}</MenuItem>
+      </>}
+    </MenuSurface>
 
     <div className="workbench-body">
       <div className="workbench-content">

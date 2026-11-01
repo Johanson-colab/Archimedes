@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Check, ChevronDown, FolderOpen, MessageSquarePlus, MoreVertical, Plus, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, FolderOpen, MessageSquarePlus, MoreVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { useDialogFocus } from "./useDialogFocus";
 import DialogPortal from "./DialogPortal";
+import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 
 export type WorkFilter = "all" | "running" | "review" | "automations" | "archived";
 
@@ -53,8 +54,8 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState("");
-  const filterRef = useRef<HTMLDivElement | null>(null);
-  const projectMenuRef = useRef<HTMLDivElement | null>(null);
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
+  const projectAnchorRef = useRef<HTMLElement | null>(null);
   const renameInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -66,38 +67,6 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
       return next;
     });
   }, [activeProjectId, projects]);
-
-  useEffect(() => {
-    if (!filterOpen) return;
-    function handlePointerDown(event: PointerEvent) {
-      if (!filterRef.current?.contains(event.target as Node)) setFilterOpen(false);
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setFilterOpen(false);
-    }
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [filterOpen]);
-
-  useEffect(() => {
-    if (!projectMenu) return;
-    function handlePointerDown(event: PointerEvent) {
-      if (!projectMenuRef.current?.contains(event.target as Node)) setProjectMenu(null);
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setProjectMenu(null);
-    }
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [projectMenu]);
 
   function toggleProject(id: string) {
     setExpanded((current) => {
@@ -168,18 +137,14 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
   return <section className="sidebar-group projects-group work-group">
     <div className="work-heading">
       <span>{t("Work")}</span>
-      <div className="work-heading-actions" ref={filterRef}>
-        <button className={filter === "all" ? "work-filter-button" : "work-filter-button active"} onClick={() => setFilterOpen((open) => !open)} title={t("Filter work")} aria-haspopup="menu" aria-expanded={filterOpen} disabled={disabled}>
+      <div className="work-heading-actions">
+        <button ref={filterButtonRef} className={filter === "all" ? "work-filter-button" : "work-filter-button active"} onClick={() => setFilterOpen((open) => !open)} title={t("Filter work")} aria-haspopup="menu" aria-expanded={filterOpen} disabled={disabled}>
           <span>{activeFilterLabel}</span><ChevronDown size={11} />
         </button>
         <button className="work-new-project" onClick={onNewProject} title={t("New project")} aria-label={t("New project")} disabled={disabled}><Plus size={14} /></button>
-        {filterOpen && <div className="work-filter-menu" role="menu" aria-label={t("Filter work")}>
-          {filterOptions.map((option) => <button key={option.id} role="menuitemradio" aria-checked={filter === option.id} className={filter === option.id ? "work-filter-option active" : "work-filter-option"} onClick={() => { setFilter(option.id); setFilterOpen(false); }}>
-            <span className="work-filter-check">{filter === option.id ? <Check size={11} /> : null}</span>
-            <span>{option.label}</span>
-            {typeof option.count === "number" && <small>{option.count}</small>}
-          </button>)}
-        </div>}
+        <MenuSurface open={filterOpen} onClose={() => setFilterOpen(false)} anchorRef={filterButtonRef} placement="bottom-end" width={280} className="work-filter-menu" ariaLabel={t("Filter work")}>
+          {filterOptions.map((option) => <MenuItem key={option.id} checked={filter === option.id} hint={typeof option.count === "number" ? option.count : undefined} onClick={() => { setFilter(option.id); setFilterOpen(false); }}>{option.label}</MenuItem>)}
+        </MenuSurface>
       </div>
     </div>
 
@@ -224,15 +189,15 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                 : <button className="project-select" onClick={() => toggleProject(project.id)} title={`${project.name}${project.workspace_path ? ` · ${project.workspace_path}` : ""}`} aria-expanded={isExpanded}><span className="project-name">{project.name}</span>{projectThreads.length > 0 && <small>{projectThreads.length}</small>}</button>}
               <span className="project-row-actions">
                 <button onClick={() => onNewChat(project.id)} title={t("New chat in {name}", { name: project.name })} disabled={disabled}><MessageSquarePlus size={13} /></button>
-                <button className={menuOpen ? "project-more-button active" : "project-more-button"} onClick={() => setProjectMenu((current) => current?.project.id === project.id ? null : { project })} title={t("More project actions")} aria-label={t("More project actions")} aria-haspopup="menu" aria-expanded={menuOpen} disabled={disabled}><MoreVertical size={14} /></button>
+                <button className={menuOpen ? "project-more-button active" : "project-more-button"} onClick={(event) => { projectAnchorRef.current = event.currentTarget; setProjectMenu((current) => current?.project.id === project.id ? null : { project }); }} title={t("More project actions")} aria-label={t("More project actions")} aria-haspopup="menu" aria-expanded={menuOpen} disabled={disabled}><MoreVertical size={14} /></button>
               </span>
-              {menuOpen && <div className="project-more-menu" ref={projectMenuRef} role="menu" aria-label={t("Project actions")}>
-                <button role="menuitem" onClick={() => { setProjectMenu(null); onChangeProjectWorkspace(project); }} disabled={disabled}><span>{t("Change project folder")}</span></button>
-                <button role="menuitem" onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}><span>{t("Rename")}</span></button>
-                <button role="menuitem" onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}><span>{t("Archive")}</span></button>
-                <div className="project-more-divider" />
-                <button className="danger" role="menuitem" onClick={() => { setProjectMenu(null); onRemoveProject(project); }} disabled={disabled}><span>{t("Remove")}</span></button>
-              </div>}
+              <MenuSurface open={menuOpen} onClose={() => setProjectMenu(null)} anchorRef={projectAnchorRef} placement="bottom-end" width={300} className="project-more-menu" ariaLabel={t("Project actions")}>
+                <MenuItem icon={<FolderOpen size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onChangeProjectWorkspace(project); }} disabled={disabled}>{t("Change project folder")}</MenuItem>
+                <MenuItem icon={<Pencil size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}>{t("Rename")}</MenuItem>
+                <MenuItem icon={<Archive size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}>{t("Archive")}</MenuItem>
+                <MenuDivider />
+                <MenuItem danger icon={<Trash2 size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onRemoveProject(project); }} disabled={disabled}>{t("Remove")}</MenuItem>
+              </MenuSurface>
             </div>
             {isExpanded && <div className="project-chat-list">
               {projectThreads.map((thread) => {

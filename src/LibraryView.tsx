@@ -32,6 +32,7 @@ import { findPdfHorizontalRules, findRuledTableRect, findTextTableRect } from ".
 import { isDensePdfProse, mergePdfVisualRegions, pdfCaptionKind } from "./pdf-visual-regions";
 import { buildPdfHighlightSegments, PDF_HIGHLIGHT_COLORS } from "./pdf-highlight-segments";
 import { useUISettings, type Language } from "./i18n";
+import { MenuItem, MenuSurface } from "./Menu";
 import { useDialogFocus } from "./useDialogFocus";
 import { useConfirm } from "./ConfirmDialog";
 import ToolbarActions from "./ToolbarActions";
@@ -672,6 +673,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [translationPopover, setTranslationPopover] = useState<TranslationPopover | null>(null);
   const [translating, setTranslating] = useState(false);
   const [highlightPickerOpen, setHighlightPickerOpen] = useState(false);
+  const highlightTriggerRef = useRef<HTMLButtonElement>(null);
   const [commentOpen, setCommentOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [highlightListOpen, setHighlightListOpen] = useState(false);
@@ -1178,8 +1180,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </aside></>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 300, Math.max(12, selectionAnchor.x - 112)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
-      <button onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />{t("Highlight")}</button><button onClick={translateSelection}><Languages size={15} />{t("Translate")}</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />{t("Comment")}</button><button onClick={openAskForSelection}><Bot size={15} />{t("Ask AI")}</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />{t("Delete highlight")}</button>}
-      {highlightPickerOpen && <div className="paper-highlight-picker" role="menu" aria-label={t("Highlight color")}>{HIGHLIGHT_COLORS.map((color) => <button key={color.value} className={`highlight-color ${color.value}`} title={t(color.label)} onClick={() => void saveHighlight("", color.value)}><span /></button>)}</div>}
+      <button ref={highlightTriggerRef} aria-haspopup="menu" aria-expanded={highlightPickerOpen} onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />{t("Highlight")}</button><button onClick={translateSelection}><Languages size={15} />{t("Translate")}</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />{t("Comment")}</button><button onClick={openAskForSelection}><Bot size={15} />{t("Ask AI")}</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />{t("Delete highlight")}</button>}
+      <MenuSurface open={highlightPickerOpen} onClose={() => setHighlightPickerOpen(false)} anchorRef={highlightTriggerRef} placement="bottom-start" width={220} className="paper-highlight-picker" ariaLabel={t("Highlight color")}>
+        {HIGHLIGHT_COLORS.map((color) => <MenuItem key={color.value} checked={selectedHighlight?.color === color.value} icon={<span className="highlight-dot" style={{ background: PDF_HIGHLIGHT_COLORS[color.value ?? "yellow"] ?? "transparent" }} />} onClick={() => { setHighlightPickerOpen(false); void saveHighlight("", color.value); }}>{t(color.label)}</MenuItem>)}
+      </MenuSurface>
       {commentOpen && <form className="paper-comment-composer" onSubmit={(event) => { event.preventDefault(); void saveHighlight(comment, "blue"); }}><textarea autoFocus value={comment} onChange={(event) => setComment(event.target.value)} placeholder={t("Write a comment…")} rows={3} /><div><button type="button" onClick={closeSelection}>{t("Cancel")}</button><button type="submit" disabled={!comment.trim()}>{t("Save")}</button></div></form>}
     </div>}
     {translationPopover && <aside className="paper-translation-popover" style={{ left: Math.min(window.innerWidth - 404, Math.max(12, translationPopover.anchor.x - 150)), top: Math.min(window.innerHeight - 278, Math.max(12, translationPopover.anchor.y + 18)) }} onMouseDown={(event) => event.preventDefault()}>

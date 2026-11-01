@@ -84,7 +84,8 @@ test("proactive output always carries evidence, why-now, and one primary action"
   assert.match(proactive, /agent-proactive-status/);
   assert.doesNotMatch(proactive, /proactive-status-dot/);
   assert.match(proactive, /agent-proactive-menu/);
-  assert.match(proactive, /closeOnEscape/);
+  assert.match(proactive, /<MenuSurface/);
+  assert.match(proactive, /<MenuItem/);
   assert.doesNotMatch(proactive, /SourceIcon/);
   assert.doesNotMatch(proactive, /window\.open|shell\.open|exec\(/);
 });

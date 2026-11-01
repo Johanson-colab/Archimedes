@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ExternalLink, ImageOff, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { MenuSurface } from "./Menu";
 import { useDialogFocus } from "./useDialogFocus";
 
 const SOURCE_ROOT = "https://paperfigure.net/";
@@ -239,20 +240,9 @@ export default function DataChartGallery({ active, sort }: { active: boolean; so
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
-  useEffect(() => {
-    if (!filterOpen) return;
-    function onPointer(event: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(event.target as Node)) setFilterOpen(false);
-    }
-    function onKey(event: KeyboardEvent) { if (event.key === "Escape") setFilterOpen(false); }
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onPointer); document.removeEventListener("keydown", onKey); };
-  }, [filterOpen]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => window.clearTimeout(timer);
@@ -294,15 +284,15 @@ export default function DataChartGallery({ active, sort }: { active: boolean; so
   return <section className="data-chart-gallery" aria-label="Paper data charts and tables">
     <div className="image-creation-controls data-chart-controls">
       <label className="gallery-search data-chart-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search paper titles, captions, or tags" aria-label="Search charts and tables" /></label>
-      <div className="image-creation-filter" ref={filterRef}>
-        <button type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={filterOpen} title="Filter data charts">
+      <div className="image-creation-filter">
+        <button ref={filterTriggerRef} type="button" className={filterOpen ? "image-creation-filter-button active" : "image-creation-filter-button"} onClick={() => setFilterOpen((open) => !open)} aria-haspopup="true" aria-expanded={filterOpen} title="Filter data charts">
           <SlidersHorizontal size={14} />Filters{activeFilterCount > 0 && <b>{activeFilterCount}</b>}
         </button>
-        {filterOpen && <div className="image-creation-filter-panel data-chart-filter-panel" role="region" aria-label="Filter data charts">
+        <MenuSurface open={filterOpen} onClose={() => setFilterOpen(false)} anchorRef={filterTriggerRef} placement="bottom-start" width={520} maxHeight={520} className="image-creation-filter-panel data-chart-filter-panel" role="group" ariaLabel="Filter data charts">
           <header><strong>Filter data charts</strong><button type="button" onClick={resetFilters} disabled={!activeFilterCount && !query}>Clear all</button></header>
           <div className="gallery-facet"><span className="gallery-facet-label">Content</span><div className="gallery-facet-options"><button type="button" className={category === "data" ? "selected" : ""} aria-pressed={category === "data"} onClick={() => setCategory("data")}>Data charts</button><button type="button" className={category === "table" ? "selected" : ""} aria-pressed={category === "table"} onClick={() => setCategory("table")}>Tables</button></div></div>
           {category === "data" && <div className="gallery-facet"><span className="gallery-facet-label">Chart type</span><div className="gallery-facet-options"><button type="button" className={chart === "all" ? "selected" : ""} aria-pressed={chart === "all"} onClick={() => setChart("all")}>All</button>{CHART_TYPES.map((item) => <button type="button" key={item.id} className={chart === item.id ? "selected" : ""} aria-pressed={chart === item.id} onClick={() => setChart(item.id)}>{item.label}</button>)}</div></div>}
-        </div>}
+        </MenuSurface>
       </div>
     </div>
     <div className="data-chart-results"><span>{loading ? "Loading full catalogue…" : error ? "Catalogue unavailable" : `Showing ${shown.length.toLocaleString()} of ${figures.length.toLocaleString()} · ${sort === "preferred" ? "AI venues first, newest within each venue" : "newest first"}`}</span><a href={sourceLink.href} target="_blank" rel="noreferrer">Explore more at source <ExternalLink size={13} /></a></div>

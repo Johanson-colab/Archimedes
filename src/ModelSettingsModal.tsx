@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BrainCircuit,
   Check,
@@ -22,6 +22,8 @@ import moonshotLogo from "./assets/providers/moonshot.jpg";
 import openaiLogo from "./assets/providers/openai.png";
 import qwenLogo from "./assets/providers/qwen.png";
 import { useUISettings } from "./i18n";
+import { MenuSurface } from "./Menu";
+import { useDialogFocus } from "./useDialogFocus";
 
 type ProviderId = ModelProviderId;
 
@@ -68,8 +70,13 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   const [catalogError, setCatalogError] = useState("");
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
+  const [activeModelIndex, setActiveModelIndex] = useState(0);
+  const modelInputRef = useRef<HTMLInputElement | null>(null);
+  const modelAnchorRef = useRef<HTMLDivElement | null>(null);
   const selected = useMemo(() => providers.find((item) => item.id === provider) ?? providers.at(-1)!, [provider]);
   const availableModels = useMemo(() => [...new Set([...selected.models, ...catalogModels, model].filter(Boolean))], [catalogModels, model, selected.models]);
+  const filteredModels = useMemo(() => availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())), [availableModels, modelSearch]);
+  const activeModel = filteredModels[Math.min(activeModelIndex, Math.max(0, filteredModels.length - 1))] ?? "";
 
   useEffect(() => {
     if (!open) return;
@@ -126,9 +133,46 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   function toggleModelMenu() {
     const next = !modelMenuOpen;
     setModelMenuOpen(next);
+    setActiveModelIndex(0);
     if (next) {
       setModelSearch("");
       void refreshModelCatalog({ quiet: true });
+      requestAnimationFrame(() => modelInputRef.current?.focus());
+    }
+  }
+
+  function chooseModel(name: string) {
+    setModel(name);
+    setModelSearch("");
+    setModelMenuOpen(false);
+    requestAnimationFrame(() => modelInputRef.current?.focus());
+  }
+
+  function onModelInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!modelMenuOpen) {
+        setModelMenuOpen(true);
+        setModelSearch("");
+        setActiveModelIndex(0);
+        void refreshModelCatalog({ quiet: true });
+        return;
+      }
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      setActiveModelIndex((current) => {
+        if (!filteredModels.length) return 0;
+        return (current + delta + filteredModels.length) % filteredModels.length;
+      });
+      return;
+    }
+    if (!modelMenuOpen) return;
+    if (event.key === "Enter" && activeModel) {
+      event.preventDefault();
+      chooseModel(activeModel);
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setModelMenuOpen(false);
     }
   }
 
@@ -205,17 +249,30 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
             <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>
             <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
             <label><span><KeyRound size={14} />{t("API key")}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} /></label>
-            <label><span><BrainCircuit size={14} />{t("Model")}</span><div className="model-combobox">
-              <input value={model} onChange={(event) => { setModel(event.target.value); setModelSearch(event.target.value); setModelMenuOpen(true); }} placeholder={t("Model identifier")} spellCheck={false} aria-expanded={modelMenuOpen} aria-controls="model-catalog" />
-              <button type="button" className="model-catalog-toggle" onClick={toggleModelMenu} title={t("Show available models")} aria-label={t("Show available models")}><ChevronDown size={16} /></button>
-              {modelMenuOpen && <div className="model-catalog" id="model-catalog">
-                <div className="model-catalog-header"><span>{catalogModels.length ? t("{count} models · live catalog merged", { count: availableModels.length }) : t("{count} supported models", { count: availableModels.length })}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title={t("Refresh live catalog")}>{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}{t("Refresh")}</button></div>
-                {catalogError && <p className="model-catalog-note">{catalogError} {t("Showing the recommended list below.")}</p>}
-                <div className="model-catalog-list">
-                  {availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())).map((name) => <button type="button" key={name} className={name === model ? "active" : ""} onClick={() => { setModel(name); setModelSearch(""); setModelMenuOpen(false); }}><span>{name}</span>{name === model && <Check size={13} />}</button>)}
-                  {!availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())).length && <p className="model-catalog-empty">{t("No matching model. Keep typing to use a custom identifier.")}</p>}
+            <label><span><BrainCircuit size={14} />{t("Model")}</span><div className="model-combobox" ref={modelAnchorRef}>
+              <input
+                ref={modelInputRef}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-haspopup="listbox"
+                aria-expanded={modelMenuOpen}
+                aria-controls="model-catalog"
+                aria-activedescendant={modelMenuOpen && activeModel ? `model-option-${activeModel.replace(/[^a-zA-Z0-9_-]/g, "-")}` : undefined}
+                value={model}
+                onKeyDown={onModelInputKeyDown}
+                onChange={(event) => { setModel(event.target.value); setModelSearch(event.target.value); setModelMenuOpen(true); setActiveModelIndex(0); }}
+                placeholder={t("Model identifier")}
+                spellCheck={false}
+              />
+              <button type="button" className="model-catalog-toggle" onClick={toggleModelMenu} title={t("Show available models")} aria-label={t("Show available models")} aria-haspopup="listbox" aria-expanded={modelMenuOpen}><ChevronDown size={16} /></button>
+              <MenuSurface open={modelMenuOpen} onClose={() => { setModelMenuOpen(false); modelInputRef.current?.focus(); }} anchorRef={modelAnchorRef} placement="bottom-start" width="anchor" maxHeight={320} role="listbox" ariaLabel={t("Available models")} id="model-catalog" focus="none" className="model-catalog">
+                <div className="model-catalog-header" role="presentation"><span>{catalogModels.length ? t("{count} models · live catalog merged", { count: availableModels.length }) : t("{count} supported models", { count: availableModels.length })}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title={t("Refresh live catalog")}>{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}{t("Refresh")}</button></div>
+                {catalogError && <p className="model-catalog-note" role="presentation">{catalogError} {t("Showing the recommended list below.")}</p>}
+                <div className="model-catalog-list" role="presentation">
+                  {filteredModels.map((name, index) => <button type="button" key={name} id={`model-option-${name.replace(/[^a-zA-Z0-9_-]/g, "-")}`} role="option" aria-selected={name === model} data-menu-item className={name === model ? "menu-item model-option active" : (index === activeModelIndex ? "menu-item model-option active" : "menu-item model-option")} onMouseEnter={() => setActiveModelIndex(index)} onClick={() => chooseModel(name)}><span>{name}</span>{name === model && <Check size={13} />}</button>)}
+                  {!filteredModels.length && <p className="model-catalog-empty" role="presentation">{t("No matching model. Keep typing to use a custom identifier.")}</p>}
                 </div>
-              </div>}
+              </MenuSurface>
             </div></label>
             <div className="model-security-note"><KeyRound size={13} /><span>{t("The API key is stored in Electron user data and never returned to the page.")}</span></div>
             {feedback.text && <div className={`model-feedback ${feedback.kind}`}>{feedback.kind === "success" ? <Check size={14} /> : <X size={14} />}<span>{feedback.text}</span></div>}
