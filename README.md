@@ -158,10 +158,9 @@ If Archimedes supports your research, please cite it:
 ```bibtex
 @software{archimedes2026,
   title   = {Archimedes: A Local-First Research-Agent Suite},
-  author  = {{Archimedes Contributors}},
+  author  = {Weijiang Lv and Jiayu Wang and {Archimedes Contributors}},
   year    = {2026},
-  url     = {https://github.com/Johanson-colab/Archimedes},
-  version = {0.1.0}
+  url     = {https://github.com/Johanson-colab/Archimedes}
 }
 ```
 
