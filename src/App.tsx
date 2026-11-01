@@ -236,6 +236,7 @@ const COMPOSER_HISTORY_STORAGE_KEY = "archimedes-composer-history";
 const COMPOSER_HISTORY_LIMIT = 30;
 
 type ComposerDraft = { text: string; selectionStart: number; selectionEnd: number };
+type QueuedPrompt = { id: string; draft: string; mode: ResearchMode; reasoningEffort: ReasoningEffort; contextLength: ContextLength; contextItems: ContextAttachment[] };
 
 function readComposerDraft(key: string): ComposerDraft | null {
   try {
@@ -2281,12 +2282,12 @@ function App() {
     }
   }
 
-  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength): Promise<boolean> {
+  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength, submittedContextOverride?: ContextAttachment[]): Promise<boolean> {
     const question = draft.trim();
-    const hasPastedImage = contextItems.some((item) => item.type === "image");
+    const submittedContext = submittedContextOverride ?? contextItems;
+    const hasPastedImage = submittedContext.some((item) => item.type === "image");
     if ((!question && !hasPastedImage) || agentBusy) return false;
     const requestPrompt = question || "Please analyze the attached image.";
-    const submittedContext = contextItems;
     const submittedThreadId = activeThreadIdRef.current;
 
     setResearchMode(requestedMode);
@@ -2816,6 +2817,7 @@ function App() {
               onWelcomeAction={openWelcomeWorkflow}
               composerRequest={composerRequest}
               draftKey={composerDraftKey}
+              currentFile={selectedFile}
               onComposerRequestApplied={(id) => setComposerRequest((current) => current?.id === id ? null : current)}
             />
           )}
@@ -3167,7 +3169,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -3188,7 +3190,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   cloudSignedIn: boolean;
   onRequestSignIn: () => void;
   onOpenWorkspaceSettings: () => void;
-  onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength) => Promise<boolean>;
+  onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength, contextItems?: ContextAttachment[]) => Promise<boolean>;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
   onReasoningEffort: (effort: ReasoningEffort) => void;
@@ -3202,6 +3204,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   onWelcomeAction: (action: ResearchWelcomeAction) => void;
   composerRequest: { id: string; text: string; mode?: "append" | "replace" } | null;
   draftKey: string;
+  currentFile?: WorkspaceFilePreview | null;
   onComposerRequestApplied: (id: string) => void;
 }) {
   const { t } = useUISettings();
@@ -3219,6 +3222,11 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const [prompt, setPrompt] = useState(storedDraftRef.current?.text ?? "");
   const [promptHistory, setPromptHistory] = useState<string[]>(readComposerHistory);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
+  const [slashQuery, setSlashQuery] = useState<string | null>(null);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [contextPickerRequest, setContextPickerRequest] = useState(0);
+  const previousBusyRef = useRef(agentBusy);
   const reasoningTriggerRef = useRef<HTMLButtonElement>(null);
   const contextTriggerRef = useRef<HTMLButtonElement>(null);
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
@@ -3311,6 +3319,16 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const availableThinkingEfforts = reasoningEfforts.filter((effort) => modelCapabilities.thinkingEfforts.includes(effort.id));
   const availableContextLengths = contextLengths.filter((length) => modelCapabilities.contextLengths.includes(length.id));
   const reasoningEffortLabel = t(reasoningEfforts.find((effort) => effort.id === reasoningEffort)?.label ?? reasoningEffort);
+  const slashCommands = [
+    { id: "research", label: t("Research"), detail: t("Idea spark"), run: () => onResearchMode("idea-spark") },
+    { id: "review", label: t("Review"), detail: t("Paper review"), run: () => onResearchMode("paper-review") },
+    { id: "write", label: t("Write"), detail: t("Paper writing"), run: () => onResearchMode("paper-generation") },
+    { id: "experiment", label: t("Experiment"), detail: t("Experiment setup"), run: () => onResearchMode("experiment-setup") },
+    { id: "context", label: t("Add context"), detail: t("Files, papers, skills"), run: () => setContextPickerRequest((current) => current + 1) },
+    { id: "clear", label: t("Clear draft"), detail: t("Remove text"), run: () => setPrompt("") },
+  ];
+  const filteredSlashCommands = slashQuery === null ? [] : slashCommands.filter((command) => command.id.startsWith(slashQuery) || command.label.toLowerCase().includes(slashQuery));
+  const slashOpen = filteredSlashCommands.length > 0 && slashQuery !== null;
   useEffect(() => {
     if (!availableThinkingEfforts.length) setReasoningMenuOpen(false);
     if (!availableContextLengths.length) setContextMenuOpen(false);
@@ -3323,7 +3341,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     }
     try {
       const image = await contextImageFromBlob(blob);
-      onAddContext([image]);
+      addContextItems([image]);
       setComposerError("");
     } catch (error) {
       setComposerError(error instanceof Error ? error.message : "The pasted image could not be attached.");
@@ -3352,7 +3370,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
           setComposerError("You can attach up to four pasted images in one message.");
           return;
         }
-        onAddContext([contextImageFromData(image)]);
+        addContextItems([contextImageFromData(image)]);
         setComposerError("");
         return;
       }
@@ -3360,6 +3378,20 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
       setComposerError("");
     } catch (error) {
       setComposerError(error instanceof Error ? error.message : "Nothing compatible was found on the clipboard.");
+    }
+  }
+
+  function addContextItems(items: ContextAttachment[]) {
+    if (!items.length) return;
+    const available = Math.max(0, 12 - contextItems.length);
+    if (!available) {
+      setComposerError("You can attach up to 12 items in one message.");
+      return;
+    }
+    const unique = items.filter((item, index) => !contextItems.some((current) => current.id === item.id) && items.findIndex((candidate) => candidate.id === item.id) === index).slice(0, available);
+    if (unique.length) {
+      onAddContext(unique);
+      setComposerError(items.length > available ? "Only the first 12 attachments were added." : "");
     }
   }
 
@@ -3372,8 +3404,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     }
     try {
       const items = await desktopBridge.attachDroppedFiles(files.slice(0, available));
-      onAddContext(items);
-      setComposerError(files.length > available ? "Only the first 12 attachments were added." : "");
+      addContextItems(items);
     } catch (error) {
       setComposerError(error instanceof Error ? error.message : "The dropped files could not be attached.");
     }
@@ -3434,6 +3465,31 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     });
   }
 
+  function updateSlashQuery(value: string, caret: number) {
+    const before = value.slice(0, caret);
+    const match = /(?:^|\s)\/([a-z-]*)$/i.exec(before);
+    setSlashQuery(match ? match[1].toLowerCase() : null);
+    setSlashIndex(0);
+  }
+
+  function runSlashCommand(command: { run: () => void }) {
+    const textarea = composerRef.current;
+    const caret = textarea?.selectionStart ?? prompt.length;
+    const before = prompt.slice(0, caret);
+    const start = before.lastIndexOf("/");
+    const next = start >= 0 ? `${prompt.slice(0, start)}${prompt.slice(caret)}` : prompt;
+    setPrompt(next);
+    setSlashQuery(null);
+    command.run();
+    requestAnimationFrame(() => {
+      const field = composerRef.current;
+      if (!field) return;
+      field.focus();
+      const cursor = Math.max(0, start);
+      field.setSelectionRange(cursor, cursor);
+    });
+  }
+
   function rememberPrompt(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -3470,17 +3526,41 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     return true;
   }
 
-  async function submitCurrentPrompt() {
-    if (agentBusy || (!prompt.trim() && !contextItems.some((item) => item.type === "image"))) return;
+  function queueCurrentPrompt() {
     const draft = prompt;
+    if (!draft.trim() && !contextItems.some((item) => item.type === "image")) return;
+    if (queuedPrompts.length >= 5) {
+      setComposerError("Up to five follow-ups can be queued at a time.");
+      return;
+    }
+    setQueuedPrompts((current) => [...current, {
+      id: crypto.randomUUID(),
+      draft,
+      mode: predictedMode,
+      reasoningEffort,
+      contextLength,
+      contextItems,
+    }]);
+    rememberPrompt(draft);
+    setPrompt("");
+    setHistoryIndex(-1);
+    setComposerError("");
+  }
+
+  async function submitCurrentPrompt() {
+    if (!prompt.trim() && !contextItems.some((item) => item.type === "image")) return;
+    if (agentBusy) {
+      queueCurrentPrompt();
+      return;
+    }
+    const draft = prompt;
+    const submittedContext = contextItems;
     rememberPrompt(draft);
     setPrompt("");
     setComposerError("");
     onResearchMode(predictedMode);
-    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength);
-    if (!sent) {
-      setPrompt((current) => current.trim() ? current : draft);
-    }
+    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext);
+    if (!sent) setPrompt((current) => current.trim() ? current : draft);
     requestAnimationFrame(() => {
       const textarea = composerRef.current;
       if (!textarea) return;
@@ -3489,6 +3569,19 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
       textarea.setSelectionRange(end, end);
     });
   }
+
+  useEffect(() => {
+    const wasBusy = previousBusyRef.current;
+    previousBusyRef.current = agentBusy;
+    if (!wasBusy || agentBusy || !queuedPrompts.length) return;
+    const [next, ...rest] = queuedPrompts;
+    setQueuedPrompts(rest);
+    void onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems).then((sent) => {
+      if (sent) return;
+      setComposerError("A queued follow-up could not be sent. It was restored below.");
+      setPrompt((current) => current.trim() ? current : next.draft);
+    });
+  }, [agentBusy, queuedPrompts, onSubmit]);
 
   const selectWelcomeWorkflow = useCallback((action: ResearchWelcomeAction) => {
     historyHandlersRef.current.onWelcomeAction(action);
@@ -3535,8 +3628,44 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
           <button className="secondary-button" onClick={() => setCloudGateOpen(false)}>Stay local</button>
         </div>}
         {cloudNotice && <div className="cloud-gate notice"><span className="cloud-gate-icon"><Cloud size={16} /></span><div><strong>{cloudNotice}</strong><span>Local runs remain fully available.</span></div><button className="secondary-button" onClick={() => setCloudNotice("")}>Dismiss</button></div>}
-        <textarea ref={composerRef} value={prompt} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
+        {queuedPrompts.length > 0 && <div className="composer-queue" aria-label={t("Queued messages")}>
+          {queuedPrompts.map((item, index) => <div className="composer-queue-item" key={item.id}>
+            <span className="composer-queue-index">{index + 1}</span>
+            <span>{item.draft || t("Image attachment")}</span>
+            <button type="button" onClick={() => setQueuedPrompts((current) => current.filter((queued) => queued.id !== item.id))} aria-label={`${t("Remove queued message")} ${index + 1}`}><X size={12} /></button>
+          </div>)}
+          {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
+        </div>}
+        <textarea ref={composerRef} value={prompt} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           const textarea = event.currentTarget;
+          if (slashOpen) {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setSlashIndex((current) => Math.min(current + 1, filteredSlashCommands.length - 1));
+              return;
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setSlashIndex((current) => Math.max(current - 1, 0));
+              return;
+            }
+            if (event.key === "Enter") {
+              event.preventDefault();
+              const command = filteredSlashCommands[slashIndex];
+              if (command) runSlashCommand(command);
+              return;
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setSlashQuery(null);
+              return;
+            }
+          }
+          if (event.key === "@" && !event.metaKey && !event.ctrlKey && !event.altKey && (prompt === "" || /\s$/.test(prompt.slice(0, textarea.selectionStart)))) {
+            event.preventDefault();
+            setContextPickerRequest((current) => current + 1);
+            return;
+          }
           const atStart = textarea.selectionStart === 0 && textarea.selectionEnd === 0;
           if (!event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey && event.key === "ArrowUp" && (prompt === "" || atStart) && recallPrompt(-1)) {
             event.preventDefault();
@@ -3551,7 +3680,11 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
             void submitCurrentPrompt();
           }
         }} placeholder={activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
-        <ContextChips items={contextItems} onRemove={onRemoveContext} />
+        <MenuSurface open={slashOpen} onClose={() => setSlashQuery(null)} anchorRef={composerRef} placement="top-start" width={320} className="composer-slash-menu" ariaLabel={t("Composer commands")} focus="none">
+          <MenuLabel>{t("Composer commands")}</MenuLabel>
+          {filteredSlashCommands.map((command, index) => <MenuItem key={command.id} className={index === slashIndex ? "active" : ""} hint={command.detail} onMouseEnter={() => setSlashIndex(index)} onClick={() => runSlashCommand(command)}>{command.label}</MenuItem>)}
+        </MenuSurface>
+        <ContextChips items={contextItems} onRemove={onRemoveContext} onClear={() => contextItems.forEach((item) => onRemoveContext(item.id))} />
         <MenuSurface open={Boolean(composerMenu)} onClose={() => setComposerMenu(null)} cursor={composerMenu} placement="bottom-start" width={300} className="composer-context-menu" ariaLabel={t("Composer actions")}>
           <MenuItem icon={<Scissors size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}X`} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd} onClick={() => { setComposerMenu(null); void copySelection(true); }}>{t("Cut")}</MenuItem>
           <MenuItem icon={<Copy size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}C`} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd} onClick={() => { setComposerMenu(null); void copySelection(); }}>{t("Copy")}</MenuItem>
@@ -3565,7 +3698,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
               {!cloudSignedIn && <Lock size={10} />}{t("Cloud")}<span>{cloudSignedIn ? t("Soon") : t("Locked")}</span>
             </button>
           </div>
-          <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} onAdd={onAddContext} />
+          <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} onAdd={addContextItems} />
           {(availableThinkingEfforts.length > 0 || availableContextLengths.length > 0) && <div className="composer-model-controls" aria-label={t("Model controls")}>
             {availableThinkingEfforts.length > 0 && <div className="reasoning-effort-picker">
               <button ref={reasoningTriggerRef} className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setContextMenuOpen(false); setContextUsageOpen(false); setReasoningMenuOpen((open) => !open); }} title={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-label={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>

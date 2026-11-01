@@ -7499,3 +7499,44 @@ html[data-menu-style="glass"] .menu-surface {
   font-weight: 600;
   pointer-events: none;
 }
+
+/* Queued follow-ups and slash command suggestions. */
+.composer-queue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px 0;
+}
+.composer-queue-item {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 3px 6px;
+  color: var(--night-muted);
+  background: var(--night-panel-raised);
+  border: 1px solid var(--night-line-soft);
+  border-radius: 4px;
+  font-size: 9.5px;
+}
+.composer-queue-item > span:nth-child(2) { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-queue-index { display: grid; width: 14px; height: 14px; flex: 0 0 auto; place-items: center; color: var(--night-faint); background: var(--night-panel); border-radius: 50%; font-size: 8px; }
+.composer-queue-item button { display: grid; width: 18px; height: 18px; flex: 0 0 auto; place-items: center; color: var(--night-faint); background: transparent; border-radius: 3px; }
+.composer-queue-item button:hover { color: var(--night-ink); background: var(--night-panel); }
+.composer-queue-clear { padding: 3px 6px; color: var(--night-faint); background: transparent; border: 0; border-radius: 4px; font: inherit; font-size: 9px; }
+.composer-queue-clear:hover { color: var(--night-ink); background: var(--night-panel-raised); }
+.composer-slash-menu .menu-item.active { color: var(--night-ink); background: var(--night-panel-raised); }
+
+.attached-context-clear {
+  height: 27px;
+  padding: 0 7px;
+  color: var(--night-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 9px;
+}
+.attached-context-clear:hover { color: var(--night-ink); background: var(--night-panel-raised); }

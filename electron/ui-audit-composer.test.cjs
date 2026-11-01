@@ -130,3 +130,29 @@ test("composer exposes history recall, focus shortcut and disabled-send reason",
   assert.match(app, /aria-keyshortcuts="Control\+L Meta\+L"/);
   assert.match(app, /Add text or attach an image to send/);
 });
+
+test("composer queues follow-ups while the agent is busy", () => {
+  assert.match(app, /type QueuedPrompt =/);
+  assert.match(app, /const \[queuedPrompts, setQueuedPrompts\] = useState<QueuedPrompt\[\]>\(\[\]\)/);
+  assert.match(app, /if \(agentBusy\) \{\n      queueCurrentPrompt\(\);/);
+  assert.match(app, /up to five follow-ups can be queued at a time/i);
+  assert.match(app, /className="composer-queue"/);
+  assert.match(app, /onSubmit\(next\.draft, next\.mode, next\.reasoningEffort, next\.contextLength, next\.contextItems\)/);
+});
+
+test("composer exposes slash commands and an @ context shortcut", () => {
+  assert.match(app, /const slashCommands = \[/);
+  assert.match(app, /setSlashQuery/);
+  assert.match(app, /ariaLabel=\{t\("Composer commands"\)\}/);
+  assert.match(app, /if \(event\.key === "@"/);
+  assert.match(app, /setContextPickerRequest\(\(current\) => current \+ 1\)/);
+  assert.match(app, /openRequest=\{contextPickerRequest\}/);
+});
+
+test("composer exposes the current file and a clear-all attachment action", () => {
+  assert.match(app, /currentFile=\{selectedFile\}/);
+  assert.match(app, /onClear=\{\(\) => contextItems\.forEach\(\(item\) => onRemoveContext\(item\.id\)\)\}/);
+  assert.match(read("src", "ContextPicker.tsx"), /label="Current file"/);
+  assert.match(read("src", "ContextPicker.tsx"), /className="attached-context-clear"/);
+  assert.match(css, /\.attached-context-clear \{/);
+});

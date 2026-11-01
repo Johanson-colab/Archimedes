@@ -32,7 +32,7 @@ test("every dropdown / overflow menu renders through the shared MenuSurface", ()
     assert.ok(uses >= count, `${file} should use MenuSurface at least ${count} time(s), found ${uses}`);
     assert.match(source, /from "\.\/Menu"/, `${file} should import the menu primitive`);
   }
-  assert.equal(total, 15, "all menu surfaces should be accounted for");
+  assert.equal(total, 16, "all menu surfaces should be accounted for");
 });
 
 test("menu semantics only live in the primitive", () => {
