@@ -1053,6 +1053,9 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         // asking for workspace writes can only strand the turn on a prompt
         // nobody can answer.
         capabilities: { write: "deny", command: "deny" },
+        // Paper chats live under their paper, not in the workspace sidebar.
+        origin: "paper",
+        title: paper.title,
         clientRunId,
       });
       setChatThreadId(result.threadId);

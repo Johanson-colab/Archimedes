@@ -1438,6 +1438,8 @@ app.whenReady().then(async () => {
       contextLength,
       contextItems,
       capabilities: input.capabilities,
+      origin: typeof input.origin === "string" && input.origin ? input.origin : undefined,
+      title: typeof input.title === "string" && input.title ? input.title : undefined,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => event.sender.send("agent:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) }),
     });

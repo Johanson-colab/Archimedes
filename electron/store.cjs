@@ -455,6 +455,12 @@ function schema(db) {
   ensureColumn(db, "research_threads", "owner_id", "TEXT");
   ensureColumn(db, "research_threads", "visibility", "TEXT NOT NULL DEFAULT 'project'");
   ensureColumn(db, "research_threads", "archived_at", "TEXT");
+  // Paper chat runs in a research thread, but it is not a research session: it
+  // belongs to a paper, not to the workspace sidebar. `kind` keeps the two
+  // apart so a briefing that is still running never appears as a new chat.
+  ensureColumn(db, "research_threads", "kind", "TEXT NOT NULL DEFAULT 'research'");
+  db.prepare("UPDATE research_threads SET kind = 'paper' WHERE kind = 'research' AND id IN (SELECT thread_id FROM paper_chat_threads)").run();
+  db.prepare("UPDATE research_threads SET kind = 'paper' WHERE kind = 'research' AND title LIKE 'You are preparing a durable research reading guide%'").run();
   ensureColumn(db, "research_projects", "workspace_path", "TEXT");
   ensureColumn(db, "research_threads", "workspace_path", "TEXT");
   ensureColumn(db, "research_projects", "owner_id", "TEXT");
@@ -1683,6 +1689,7 @@ function listResearchProjects({ archived = false } = {}) {
     SELECT research_projects.*,
       COUNT(CASE WHEN research_threads.id IS NOT NULL
         AND paper_chat_threads.thread_id IS NULL
+        AND COALESCE(research_threads.kind, 'research') = 'research'
         AND (CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END)
         THEN 1 END) AS chat_count,
       MAX(CASE WHEN paper_chat_threads.thread_id IS NULL THEN research_threads.updated_at END) AS last_chat_at
@@ -1877,6 +1884,7 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
     WHERE CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END
       AND (? IS NULL OR research_threads.project_id = ?)
       AND paper_chat_threads.thread_id IS NULL
+      AND COALESCE(research_threads.kind, 'research') = 'research'
       AND EXISTS (SELECT 1 FROM project_members WHERE project_members.project_id = research_threads.project_id AND project_members.user_id = ?)
       AND (research_threads.visibility = 'project' OR research_threads.owner_id = ?)
     GROUP BY research_threads.id
@@ -1885,7 +1893,7 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
   `).all(archived ? 1 : 0, projectId, projectId, localIdentity.userId, localIdentity.userId);
 }
 
-function createResearchThread({ prompt, mode, projectId, workspacePath = "", visibility = "project" }) {
+function createResearchThread({ prompt, mode, projectId, workspacePath = "", visibility = "project", kind = "research", title }) {
   const db = requireDatabase();
   const selectedProject = projectId
     ? db.prepare("SELECT id, workspace_path FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId)
@@ -1905,7 +1913,8 @@ function createResearchThread({ prompt, mode, projectId, workspacePath = "", vis
     project_id: resolvedProjectId,
     owner_id: localIdentity.userId,
     visibility: visibility === "private" ? "private" : "project",
-    title: threadTitle(prompt),
+    kind: kind === "paper" ? "paper" : "research",
+    title: typeof title === "string" && title.trim() ? title.trim().slice(0, 72) : threadTitle(prompt),
     mode,
     status: "idle",
     context_summary: "",
@@ -1915,9 +1924,9 @@ function createResearchThread({ prompt, mode, projectId, workspacePath = "", vis
     archived_at: null,
   };
   db.prepare(`
-    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, workspace_path, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(thread.id, thread.project_id, thread.owner_id, thread.visibility, thread.title, thread.mode, thread.status, thread.context_summary, thread.workspace_path, thread.created_at, thread.updated_at);
+    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, workspace_path, created_at, updated_at, kind)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(thread.id, thread.project_id, thread.owner_id, thread.visibility, thread.title, thread.mode, thread.status, thread.context_summary, thread.workspace_path, thread.created_at, thread.updated_at, thread.kind);
   db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, resolvedProjectId);
   return { ...thread, turn_count: 0, last_turn_at: now };
 }
