@@ -150,3 +150,18 @@ npm test
 Archimedes already covers the core research loop, but it is not finished. Next layers include durable project-level research memory, semantic retrieval across larger paper collections, richer reproducible experiment harnesses, more robust source adapters, and expanded plugin/MCP discovery with explicit permission boundaries.
 
 The aim is not research theater. It is a reliable research companion that makes the chain from question to evidence to implementation easier to inspect, challenge, and extend.
+
+## Welcome to cite
+
+If Archimedes supports your research, please cite it:
+
+```bibtex
+@software{archimedes2026,
+  title   = {Archimedes: A Local-First Research-Agent Suite},
+  author  = {Weijiang Lv and Jiayu Wang and {Archimedes Contributors}},
+  year    = {2026},
+  url     = {https://github.com/Johanson-colab/Archimedes}
+}
+```
+
+In LaTeX, add `\cite{archimedes2026}` after including the BibTeX entry in your bibliography.
