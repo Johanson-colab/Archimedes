@@ -67,7 +67,6 @@ test("images lead and text is a single secondary line", () => {
   assert.match(css, /\.image-creation-card-venue \{[^}]*position: absolute/);
   assert.match(css, /\.image-creation-card-title \{[^}]*white-space: nowrap/);
   assert.match(css, /\.image-creation-card-use \{[^}]*opacity: 0/);
-  assert.match(css, /\.image-creation-reference \{/);
   assert.match(view, /Use as template/);
   assert.match(view, /setReferences\(\(current\) => current\.some/);
   assert.match(view, /current\.length \+ uploadedReferences\.length >= 10/);
@@ -81,15 +80,20 @@ test("filter facets fold into one popover instead of a permanent block", () => {
   assert.match(css, /\.menu-surface \{/);
 });
 
-test("the composer opens FigureForge and generation requires a plan", () => {
-  assert.match(view, /className="image-creation-composer-dock"/);
-  assert.match(view, /Describe a figure to plan/);
-  assert.match(view, /Open FigureForge to find references and generate a figure/);
+test("FigureForge opens as a separate workspace without a gallery composer", () => {
+  assert.doesNotMatch(view, /image-creation-composer-dock|image-creation-fade/);
+  assert.match(view, /className="image-creation-forge-button" onClick=\{\(\) => showForge\(true\)\}/);
+  assert.match(view, /className="figure-forge-page"/);
+  assert.match(view, /className="figure-forge-back" onClick=\{\(\) => showForge\(false\)\}/);
+  assert.match(view, /setTab\("gallery"\); showForge\(false\)/);
+  assert.match(view, /function useAsTemplate[\s\S]*?setReferences[\s\S]*?showForge\(true\)/);
+  assert.match(view, /pageRef\.current\?\.scrollIntoView\(\{ block: "start" \}\)/);
+  assert.doesNotMatch(view, /<Dialog open=\{forgeOpen\}/);
   assert.match(view, /AI features use your configured model provider and may incur charges/);
   assert.match(view, /type="file" accept="\.pdf,application\/pdf"/);
   assert.match(view, /prepareFigurePlan\(\{ paperText: pdfPages\.current\.length/);
   assert.match(view, /disabled=\{generationBusy \|\| reconstructionBusy \|\| uploadingReferences \|\| !figurePlan\.trim\(\)/);
   assert.match(view, /current\.filter\(\(item\) => item\.id !== figure\.id\)/);
-  assert.match(css, /\.image-creation-composer-dock \{[^}]*position: fixed/);
-  assert.match(css, /\.image-creation-fade \{[^}]*position: fixed/);
+  assert.match(css, /\.figure-forge-page \{/);
+  assert.doesNotMatch(css, /\.image-creation-composer-dock|\.image-creation-fade/);
 });

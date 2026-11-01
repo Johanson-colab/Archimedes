@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ExternalLink, GraduationCap, ImageOff, LoaderCircle, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { MenuSurface } from "./Menu";
 import DataChartGallery from "./DataChartGallery";
 import { Tabs, Tab } from "./Tabs";
@@ -218,7 +218,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [figurePlan, setFigurePlan] = useState("");
   const [composerText, setComposerText] = useState("");
   const [aspect, setAspect] = useState<Aspect>("1:1");
-  const composerRef = useRef<HTMLInputElement>(null);
+  const pageRef = useRef<HTMLElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const connection = forgeProvider === "configured" ? undefined : { provider: forgeProvider, baseUrl: forgeBaseUrl, apiKey: forgeApiKey, model: parseModel };
 
@@ -251,10 +251,14 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const updateFilter = (key: keyof Filters, value: string | number) => setFilters((current) => ({ ...current, [key]: value }));
   const step = (direction: number) => { if (selectedIndex >= 0) setSelectedId(result[(selectedIndex + direction + result.length) % result.length].id); };
   const resetFilters = () => { setQuery(""); setFilters(INITIAL_FILTERS); };
+  function showForge(open: boolean) {
+    setForgeOpen(open);
+    requestAnimationFrame(() => pageRef.current?.scrollIntoView({ block: "start" }));
+  }
   function useAsTemplate(figure: Figure) {
     if (uploadingReferences) return;
     setReferences((current) => current.some((item) => item.id === figure.id) || current.length + uploadedReferences.length >= 10 ? current : [...current, figure]);
-    setForgeOpen(true);
+    showForge(true);
   }
   async function importPaper(file: File | undefined) {
     if (!file) return;
@@ -475,8 +479,8 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
   }
 
-  return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
-    <div className="image-creation-tabs">
+  return <main ref={pageRef} className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
+    {!forgeOpen && <div className="image-creation-tabs">
       <Tabs value={tab} onChange={(value) => setTab(value as "gallery" | "charts")} label="Image creation views" className="workbench-tabs image-creation-tablist">
         <Tab value="gallery" id="image-creation-tab-gallery" controls="image-creation-panel-gallery" className="workbench-tab">Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small></Tab>
         <Tab value="charts" id="image-creation-tab-charts" controls="image-creation-panel-charts" className="workbench-tab">Data charts</Tab>
@@ -498,10 +502,11 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           <ChevronDown size={12} aria-hidden="true" />
         </label>}
         {tab === "gallery" && <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>}
+        <button type="button" className="image-creation-forge-button" onClick={() => showForge(true)}><Sparkles size={14} />FigureForge</button>
       </div>
-    </div>
+    </div>}
 
-    {tab === "gallery" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-gallery" aria-labelledby="image-creation-tab-gallery">
+    {!forgeOpen && (tab === "gallery" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-gallery" aria-labelledby="image-creation-tab-gallery">
       <div className="image-creation-controls">
         <label className="gallery-search image-creation-search"><Search size={17} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a published diagram, author, or topic" aria-label="Search paper diagrams" /></label>
         <div className="image-creation-filter">
@@ -526,31 +531,12 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
               {visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}
             </>}
       <p className="gallery-credit">Figures belong to their paper authors and publishers. The catalogue and image files are served by <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>. Check each paper's license before reuse.</p>
-    </div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-charts" aria-labelledby="image-creation-tab-charts"><DataChartGallery active={active} sort={chartSort} /></div>}
-
-    {tab === "gallery" && <><div className="image-creation-fade" aria-hidden="true" />
-    <div className="image-creation-composer-dock">
-      <div className="image-creation-composer">
-        {references.length + uploadedReferences.length > 0 && <button type="button" className="image-creation-reference" onClick={() => setForgeOpen(true)}>{t("Selected references: {count}", { count: references.length + uploadedReferences.length })}</button>}
-        <div className="image-creation-composer-box">
-          <button type="button" className="image-creation-attach" disabled title="Attaching a reference image is coming soon" aria-label="Attach a reference image"><Plus size={16} /></button>
-          <input ref={composerRef} className="image-creation-composer-input" value={composerText} onChange={(event) => { setComposerText(event.target.value); }} placeholder={t("Describe a figure to plan…")} aria-label={t("Describe a figure to plan…")} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) setForgeOpen(true); }} />
-          <label className="image-creation-aspect">
-            <select value={aspect} onChange={(event) => setAspect(event.target.value as Aspect)} aria-label="Aspect ratio">
-              {ASPECTS.map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
-            <ChevronDown size={10} aria-hidden="true" />
-          </label>
-          <span className="image-creation-model"><ImagePlus size={12} />FigureForge</span>
-          <button type="button" className="image-creation-send" onClick={() => setForgeOpen(true)} title={t("Open FigureForge")} aria-label={t("Open FigureForge")}><ArrowUp size={15} /></button>
-        </div>
-        <p className="image-creation-composer-note">{t("Open FigureForge to find references and generate a figure.")}</p>
-      </div>
-    </div></>}
+    </div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-charts" aria-labelledby="image-creation-tab-charts"><DataChartGallery active={active} sort={chartSort} /></div>)}
 
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
-    {active && <Dialog open={forgeOpen} onClose={() => setForgeOpen(false)} size="lg" className="figure-forge-dialog" ariaLabel={t("FigureForge planning workspace")}>
-      <header className="figure-forge-header"><div><strong>FigureForge</strong><p>{t("Plan a paper figure with references")}</p></div><button type="button" onClick={() => setForgeOpen(false)} aria-label={t("Close")}><X size={18} /></button></header>
+    {active && forgeOpen && <section className="figure-forge-page" aria-label={t("FigureForge planning workspace")}>
+      <button type="button" className="figure-forge-back" onClick={() => showForge(false)}><ArrowLeft size={15} />{t("Back to gallery")}</button>
+      <header className="figure-forge-header"><div><strong>FigureForge</strong><p>{t("Plan a paper figure with references")}</p></div></header>
       <div className="figure-forge-body">
         <h2 className="figure-forge-step">{t("1. Paper content")}</h2>
         <p className="figure-forge-notice">{t("Upload a PDF to extract its text locally. AI features use your configured model provider and may incur charges. Drafts are not saved.")}</p>
@@ -585,7 +571,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           <div className="figure-forge-results">{recommendations.slice(0, visibleRecommendations).map(({ figure, score }) => { const selected = references.some((item) => item.id === figure.id); return <button type="button" key={figure.id} aria-pressed={selected} disabled={generationBusy || uploadingReferences || (!selected && references.length + uploadedReferences.length >= 10)} onClick={() => { setReferences((current) => selected ? current.filter((item) => item.id !== figure.id) : [...current, figure]); }}><img src={imageUrl(figure)} alt="" loading="lazy" /><span>{figure.title}</span><small>{figure.venue.toUpperCase()} · {figure.year}{score !== null ? ` · ${score}` : ""}</small><b>{selected ? t("Selected") : t("Select reference")}</b></button>; })}</div>
           {visibleRecommendations < recommendations.length && <button type="button" onClick={() => setVisibleRecommendations((count) => count + 60)}>{t("Show more references")}</button>}
         </section>
-        <section className="figure-forge-references"><div className="figure-forge-section-heading"><strong>{t("References ({count}/10)", { count: references.length + uploadedReferences.length })}</strong><button type="button" disabled={generationBusy || uploadingReferences} onClick={() => setForgeOpen(false)}>{t("Browse references")}</button></div>
+        <section className="figure-forge-references"><div className="figure-forge-section-heading"><strong>{t("References ({count}/10)", { count: references.length + uploadedReferences.length })}</strong><button type="button" disabled={generationBusy || uploadingReferences} onClick={() => { setTab("gallery"); showForge(false); }}>{t("Browse references")}</button></div>
           <label className="figure-forge-upload">{t("Upload reference images")}<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={generationBusy || uploadingReferences} onChange={(event) => { void addUploadedReferences(event.target.files); event.target.value = ""; }} /></label>
           {references.length + uploadedReferences.length === 0 && <p>{t("Choose Use as template on a gallery image to add a reference.")}</p>}
           {references.map((figure) => <div className="figure-forge-reference" key={figure.id}><img src={imageUrl(figure)} alt="" /><div><strong>{figure.title}</strong><span>{figure.venue.toUpperCase()} · {figure.year}</span><a href={paperUrl(figure)} target="_blank" rel="noreferrer">{t("Open paper")}</a></div><button type="button" disabled={generationBusy} onClick={() => { setReferences((current) => current.filter((item) => item.id !== figure.id)); }} aria-label={t("Remove reference")}> <X size={16} /></button></div>)}
@@ -619,6 +605,6 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
         </section>
         <p>{t("References belong to their authors. Check each paper's license before reuse.")}</p>
       </div>
-    </Dialog>}
+    </section>}
   </main>;
 }

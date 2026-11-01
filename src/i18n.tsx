@@ -55,6 +55,7 @@ const translations: Record<string, string> = {
   "Reconstruction could not be fully verified. Check for missing or misplaced objects before use.": "重建结果未能完全通过验证，请检查是否有遗漏或错位。",
   "Reconstructing…": "正在重建…",
   "Recognizing and checking editable objects…": "正在识别并检查可编辑对象…",
+  "Back to gallery": "返回图库",
   "Keep generated fonts": "保留生成字体",
   "Reconstruct editable objects": "重建可编辑对象",
   "Reconstructed figure preview": "重建图形预览",
