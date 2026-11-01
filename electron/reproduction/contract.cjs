@@ -97,6 +97,37 @@ function normalizeEnvironment(input) {
   };
 }
 
+const CHECK_KINDS = new Set(["file_exists", "file_contains", "command", "http", "manual"]);
+
+/**
+ * A checkpoint nobody can evaluate is not a checkpoint. Each step carries a
+ * small predicate the runner can execute; anything the planner cannot express
+ * falls back to "manual" and is shown as needing a human.
+ */
+function normalizeCheck(input) {
+  const check = input && typeof input === "object" ? input : {};
+  const kind = CHECK_KINDS.has(check.kind) ? check.kind : "manual";
+  if (kind === "file_exists") {
+    const path = text(check.path, 400);
+    return path ? { kind, path } : { kind: "manual", reason: "No path was given for this check." };
+  }
+  if (kind === "file_contains") {
+    const path = text(check.path, 400);
+    const pattern = text(check.pattern, 200);
+    return path && pattern ? { kind, path, pattern } : { kind: "manual", reason: "No path or pattern was given for this check." };
+  }
+  if (kind === "command") {
+    const command = text(check.command, 1_000);
+    return command ? { kind, command, expect: "exit_zero" } : { kind: "manual", reason: "No command was given for this check." };
+  }
+  if (kind === "http") {
+    const url = text(check.url, 1_000);
+    const status = Math.trunc(boundedNumber(check.status, 200, 100, 599));
+    return url ? { kind, url, status } : { kind: "manual", reason: "No URL was given for this check." };
+  }
+  return { kind: "manual", reason: text(check.reason, 300) || "This step can only be confirmed by a person." };
+}
+
 function normalizeStep(input, index) {
   const step = input && typeof input === "object" ? input : {};
   const title = text(step.title, 200);
@@ -107,6 +138,7 @@ function normalizeStep(input, index) {
     detail: text(step.detail, 600),
     command: text(step.command, 2_000),
     checkpoint: text(step.checkpoint, 400),
+    check: normalizeCheck(step.check),
     source: text(step.source, 400),
     blocked: text(step.blocked, 600),
   };
@@ -119,7 +151,7 @@ function normalizeStep(input, index) {
 function synthesizeSteps({ entrypoint, environment }) {
   const steps = [];
   steps.push({
-    id: "fetch", title: "Get the code", detail: "", command: "", checkpoint: "", source: environment.source, blocked: "",
+    id: "fetch", title: "Get the code", detail: "", command: "", checkpoint: "", check: { kind: "manual", reason: "This plan predates checkpoints." }, source: environment.source, blocked: "",
   });
   if (environment.install.length || environment.python || environment.cuda) {
     steps.push({
@@ -128,6 +160,7 @@ function synthesizeSteps({ entrypoint, environment }) {
       detail: [environment.python && `Python ${environment.python}`, environment.cuda && `CUDA ${environment.cuda}`].filter(Boolean).join(" · "),
       command: environment.install.join(" && "),
       checkpoint: "",
+      check: { kind: "manual", reason: "This plan predates checkpoints." },
       source: environment.source,
       blocked: "",
     });
@@ -138,6 +171,7 @@ function synthesizeSteps({ entrypoint, environment }) {
     detail: "",
     command: entrypoint.command,
     checkpoint: "",
+    check: { kind: "manual", reason: "This plan predates checkpoints." },
     source: "",
     blocked: entrypoint.command ? "" : "No command in the paper or the repository produces these numbers.",
   });
@@ -190,6 +224,8 @@ module.exports = {
   MAX_CLAIMS,
   STATUSES,
   describeClaim,
+  CHECK_KINDS,
+  normalizeCheck,
   normalizeClaim,
   normalizeContract,
   normalizeStep,

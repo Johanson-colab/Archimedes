@@ -45,6 +45,14 @@ function readable(value: unknown, fallback: string) {
   return message.replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, "").trim() || fallback;
 }
 
+function checkLabel(check: ReproductionStep["check"]) {
+  if (check.kind === "manual") return check.reason;
+  if (check.kind === "file_exists") return `${check.path} exists`;
+  if (check.kind === "file_contains") return `${check.path} matches ${check.pattern}`;
+  if (check.kind === "command") return `${check.command} exits 0`;
+  return `${check.url} returns ${check.status}`;
+}
+
 function expectedLabel(claim: ReproductionClaim) {
   if (claim.expected === null) return "no reported value";
   return `${claim.expected}${claim.unit ? ` ${claim.unit}` : ""}`;
@@ -246,7 +254,11 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                 </div>
                 {step.detail && <p className="reproduce-step-detail">{step.detail}</p>}
                 {step.command && <pre className="reproduce-step-command">{step.command}</pre>}
-                {step.checkpoint && <p className="reproduce-checkpoint"><Check size={11} />{step.checkpoint}</p>}
+                {(step.checkpoint || step.check) && <p className={`reproduce-checkpoint${step.check.kind === "manual" ? " manual" : ""}`}>
+                  {step.check.kind === "manual" ? <AlertCircle size={11} /> : <Check size={11} />}
+                  <span>{step.checkpoint || checkLabel(step.check)}</span>
+                  <span className="reproduce-check-kind">{step.check.kind === "manual" ? "manual" : step.check.kind.replace("_", " ")}</span>
+                </p>}
                 {step.source && <p className="reproduce-hint">from {step.source}</p>}
                 {step.blocked && <p className="reproduce-hint warn">{step.blocked}</p>}
               </div>

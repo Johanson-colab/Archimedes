@@ -6785,6 +6785,9 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 .reproduce-step-detail { margin: 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.55; }
 .reproduce-step-command { margin: 2px 0 0; padding: 8px 10px; overflow: auto; color: var(--text-primary); background: var(--surface-ground); border: 1px solid var(--border-soft); border-radius: 6px; font-family: var(--font-mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; }
 .reproduce-checkpoint { display: flex; align-items: baseline; gap: 5px; margin: 2px 0 0; color: var(--state-success); font-size: 11px; }
+.reproduce-checkpoint.manual { color: var(--state-warning); }
+.reproduce-checkpoint > span:first-of-type { min-width: 0; }
+.reproduce-check-kind { flex: 0 0 auto; padding: 0 5px; color: var(--text-faint); background: var(--surface-soft); border-radius: 4px; font-family: var(--font-mono); font-size: 9px; }
 .reproduce-checkpoint svg { flex: 0 0 auto; }
 .reproduce-claim-list { display: grid; overflow: hidden; margin: 0; padding: 0; background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; list-style: none; }
 .reproduce-claim-list > li { border-top: 1px solid var(--border-soft); }

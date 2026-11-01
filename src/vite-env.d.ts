@@ -750,12 +750,20 @@ type ReproductionStatus =
   | "draft" | "planned" | "queued" | "provisioning" | "running"
   | "diagnosing" | "verified" | "diverged" | "blocked" | "cancelled";
 
+type ReproductionCheck =
+  | { kind: "file_exists"; path: string }
+  | { kind: "file_contains"; path: string; pattern: string }
+  | { kind: "command"; command: string; expect: "exit_zero" }
+  | { kind: "http"; url: string; status: number }
+  | { kind: "manual"; reason: string };
+
 interface ReproductionStep {
   id: string;
   title: string;
   detail: string;
   command: string;
   checkpoint: string;
+  check: ReproductionCheck;
   source: string;
   blocked: string;
 }

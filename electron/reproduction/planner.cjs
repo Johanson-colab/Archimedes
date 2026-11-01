@@ -49,7 +49,7 @@ function paperAttachment(paper) {
   };
 }
 
-const CONTRACT_SHAPE = `{"summary":"one sentence","steps":[{"id":"install","title":"Set up the environment","detail":"what this step accomplishes","command":"cd inference && uv pip install '.[server]'","checkpoint":"python -c \"import memt_sglang\" exits 0","source":"inference/pyproject.toml","blocked":""}],"claims":[{"id":"table2-avg","statement":"what is claimed","dataset":"...","metric":"...","expected":50.6,"unit":"points","tolerance":0.02,"step":"run-eval","evidence":{"page":20,"table":"Table 2","row":"average","column":"score","quote":"short verbatim fragment"}}],"entrypoint":{"command":"python scripts/eval.py --model X","cwd":".","outputs":["results/"]},"environment":{"python":"3.10","cuda":"12.1","install":["pip install -r requirements.txt"],"system":[],"source":"requirements.txt"},"repo":{"url":"","commit":""},"notes":["what a human should check"]}`;
+const CONTRACT_SHAPE = `{"summary":"one sentence","steps":[{"id":"install","title":"Set up the environment","detail":"what this step accomplishes","command":"cd inference && uv pip install '.[server]'","checkpoint":"python -c \"import memt_sglang\" exits 0","check":{"kind":"command","command":"python -c \"import memt_sglang\"","expect":"exit_zero"},"source":"inference/pyproject.toml","blocked":""}],"claims":[{"id":"table2-avg","statement":"what is claimed","dataset":"...","metric":"...","expected":50.6,"unit":"points","tolerance":0.02,"step":"run-eval","evidence":{"page":20,"table":"Table 2","row":"average","column":"score","quote":"short verbatim fragment"}}],"entrypoint":{"command":"python scripts/eval.py --model X","cwd":".","outputs":["results/"]},"environment":{"python":"3.10","cuda":"12.1","install":["pip install -r requirements.txt"],"system":[],"source":"requirements.txt"},"repo":{"url":"","commit":""},"notes":["what a human should check"]}`;
 
 function buildPrompt({ paper, pages, review, repoUrl, hasRepository }) {
   const digest = pageDigest(pages);
@@ -60,7 +60,9 @@ function buildPrompt({ paper, pages, review, repoUrl, hasRepository }) {
     "Steps:",
     "1. Identify the 1-4 claims most worth independently confirming. Prefer an exact number stated next to a named dataset and metric.",
     "2. If a repository is attached, read its README first and turn it into an ordered runbook: get the code, set up the environment, obtain any weights or data, run the evaluation, then compare the numbers.",
-    "3. Write 3-8 steps. Each step gets one command (when the repository has one) and a checkpoint a colleague can verify mechanically: a file exists, a command exits 0, a port answers, a JSON key appears. Do not write vague checkpoints like \"it works\".",
+    "3. Write 3-8 steps. Each step gets one command (when the repository has one) and a checkpoint a colleague can verify mechanically.",
+    "   Express the checkpoint as `check`, using exactly one of: {\"kind\":\"file_exists\",\"path\":\"...\"}, {\"kind\":\"file_contains\",\"path\":\"...\",\"pattern\":\"...\"}, {\"kind\":\"command\",\"command\":\"...\",\"expect\":\"exit_zero\"}, {\"kind\":\"http\",\"url\":\"...\",\"status\":200}.",
+    "   Use {\"kind\":\"manual\",\"reason\":\"...\"} only when nothing above applies; a person then has to confirm it. Never write a vague checkpoint like \"it works\".",
     "4. When a step cannot be performed because the repository lacks the code, set `blocked` to a concrete reason and stop adding later steps. Do not invent a workaround.",
     "5. Never invent a path. Every command must reference files that exist in the repository. If nothing produces the numbers, leave `entrypoint.command` empty.",
     "6. Link each claim to the step that produces it through `claim.step`.",

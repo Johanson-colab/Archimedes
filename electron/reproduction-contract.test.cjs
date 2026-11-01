@@ -146,3 +146,42 @@ test("a runbook is kept in order and synthesised when missing", () => {
   const blocked = normalizeContract({ claims: [{ statement: "Result holds" }] });
   assert.equal(blocked.steps.at(-1).blocked.length > 0, true, "a missing entrypoint blocks the run step");
 });
+
+test("a checkpoint carries a check the runner could evaluate", () => {
+  const contract = normalizeContract({
+    claims: [{ statement: "Result holds" }],
+    steps: [
+      { title: "Clone", check: { kind: "file_exists", path: "inference/pyproject.toml" } },
+      { title: "Install", checkpoint: "import works", check: { kind: "command", command: "python -c 'import memt_sglang'", expect: "exit_zero" } },
+      { title: "Serve", check: { kind: "http", url: "http://127.0.0.1:30000/health", status: 200 } },
+      { title: "Read config", check: { kind: "file_contains", path: "config.json", pattern: "model_type" } },
+    ],
+  });
+  assert.deepEqual(contract.steps[0].check, { kind: "file_exists", path: "inference/pyproject.toml" });
+  assert.deepEqual(contract.steps[1].check, { kind: "command", command: "python -c 'import memt_sglang'", expect: "exit_zero" });
+  assert.equal(contract.steps[1].checkpoint, "import works", "the readable copy is kept");
+  assert.deepEqual(contract.steps[2].check, { kind: "http", url: "http://127.0.0.1:30000/health", status: 200 });
+  assert.deepEqual(contract.steps[3].check, { kind: "file_contains", path: "config.json", pattern: "model_type" });
+});
+
+test("an unusable check degrades to manual instead of pretending", () => {
+  const contract = normalizeContract({
+    claims: [{ statement: "Result holds" }],
+    steps: [
+      { title: "Unknown kind", check: { kind: "vibes" } },
+      { title: "Missing path", check: { kind: "file_exists" } },
+      { title: "Missing command", check: { kind: "command" } },
+      { title: "No check at all" },
+    ],
+  });
+  for (const step of contract.steps) {
+    assert.equal(step.check.kind, "manual", `${step.title} should be manual`);
+    assert.ok(step.check.reason.length > 0);
+  }
+});
+
+test("plans written before checkpoints still render", () => {
+  const legacy = normalizeContract({ claims: [{ statement: "Result holds" }], entrypoint: { command: "python eval.py" } });
+  assert.ok(legacy.steps.every((step) => step.check.kind === "manual"));
+  assert.match(legacy.steps[0].check.reason, /predates checkpoints/);
+});
