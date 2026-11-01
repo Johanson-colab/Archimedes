@@ -17,6 +17,18 @@ export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 
 
 const translations: Record<string, string> = {
   "Use as template": "用作参考图",
+  "Upload a PDF to extract its text locally. AI planning uses your configured main model; reference-image analysis and image generation are not available yet. Drafts are not saved.": "上传 PDF 后在本地提取文本。AI 规划使用已配置的主模型；参考图分析和生图尚未开放，草稿也不会保存。",
+  "Upload paper PDF": "上传论文 PDF",
+  "Choose a PDF smaller than 25 MB.": "请选择小于 25 MB 的 PDF 文件。",
+  "No readable PDF text found. Scanned PDFs are not supported yet.": "未找到可读取的 PDF 文字，暂不支持扫描版 PDF。",
+  "Extracted {pages} of {total} pages locally; up to 60,000 characters will be sent.": "已在本地提取 {pages} / {total} 页；最多发送 60,000 个字符。",
+  "Reading PDF locally…": "正在本地读取 PDF…",
+  "Optional: enter or review paper text": "可选：输入或查看论文文本",
+  "Paper analysis is available in the desktop app after restarting it.": "重启桌面应用后即可使用论文分析。",
+  "Analyze paper sends the extracted text and drawing requirements to your configured model provider and may incur charges. Reference images are not sent or analyzed in this step.": "点击分析会将提取的论文文本和绘图要求发送给你配置的模型服务商，可能产生费用；此步骤不会发送或分析参考图。",
+  "Analyzing paper…": "正在分析论文…",
+  "Analyze paper and draft plan": "分析论文并生成方案",
+  "Analyze the paper to draft a plan, then review and edit it.": "分析论文生成方案，然后检查并编辑。",
   "Selected references: {count}": "已选参考图：{count}",
   "Describe a figure to plan…": "描述你想规划的论文图…",
   "Open FigureForge": "打开 FigureForge",

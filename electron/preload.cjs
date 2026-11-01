@@ -166,6 +166,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   saveTask: (task) => ipcRenderer.invoke("task:save", task),
   runAgent: (input) => ipcRenderer.invoke("agent:run", input),
   runProactiveReply: (input) => ipcRenderer.invoke("proactive:reply", input),
+  prepareFigurePlan: (input) => ipcRenderer.invoke("figure-forge:prepare", input),
   runProactiveObservation: (input) => ipcRenderer.invoke("proactive:observe", input),
   captureProactiveScreenshot: () => ipcRenderer.invoke("proactive:screenshot"),
   runPaperReview: (input) => ipcRenderer.invoke("paper-review:run", input),

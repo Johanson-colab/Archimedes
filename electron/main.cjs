@@ -39,6 +39,7 @@ const { runPreflight } = require("./reproduction/preflight.cjs");
 const { runRunbook } = require("./reproduction/runner.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
+const { prepareFigurePlan } = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
@@ -929,6 +930,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("model-config:test", (_event, input = {}, role) => modelConfig.testModelConfig(input, role));
 
   ipcMain.handle("proactive:reply", (_event, input = {}) => proactiveAgent.runProactiveReply(input));
+  ipcMain.handle("figure-forge:prepare", (_event, input = {}) => prepareFigurePlan(input, { config: modelConfig.getActiveModelConfig("agent"), complete: agent.complete }));
 
   ipcMain.handle("proactive:observe", (_event, input = {}) => proactiveAgent.runProactiveObservation(input));
 

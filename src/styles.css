@@ -5179,6 +5179,9 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 .figure-forge-body { display: grid; min-height: 0; gap: 16px; overflow-y: auto; padding: 20px 24px 24px; }
 .figure-forge-body .figure-forge-notice { margin: 0; padding: 10px 12px; background: var(--night-panel-soft); border: 1px solid var(--night-line); border-radius: 6px; }
 .figure-forge-body > label { display: grid; gap: 7px; font-size: 12px; font-weight: 650; }
+.figure-forge-body details { display: grid; padding: 10px; border: 1px solid var(--night-line); border-radius: 6px; font-size: 12px; }
+.figure-forge-body details summary { cursor: pointer; }
+.figure-forge-body details label { display: grid; gap: 7px; margin-top: 10px; }
 .figure-forge-body input, .figure-forge-body textarea, .figure-forge-body select { width: 100%; padding: 9px 10px; color: var(--night-ink); background: var(--night-ground); border: 1px solid var(--night-line); border-radius: 6px; font: inherit; }
 .figure-forge-body textarea { resize: vertical; line-height: 1.5; }
 .figure-forge-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }

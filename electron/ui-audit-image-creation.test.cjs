@@ -85,7 +85,9 @@ test("the composer is present but does not pretend image generation is shipped",
   assert.match(view, /className="image-creation-composer-dock"/);
   assert.match(view, /Describe a figure to plan/);
   assert.match(view, /Image model · Soon/);
-  assert.match(view, /AI analysis, PDF import and image generation are not available yet/);
+  assert.match(view, /reference-image analysis and image generation are not available yet/);
+  assert.match(view, /type="file" accept="\.pdf,application\/pdf"/);
+  assert.match(view, /prepareFigurePlan\(\{ paperText: paperContent/);
   assert.match(view, /disabled=\{!figurePlan\.trim\(\)\}/);
   assert.match(view, /setPlanConfirmed\(false\)/);
   assert.match(view, /current\.filter\(\(item\) => item\.id !== figure\.id\)/);

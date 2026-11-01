@@ -149,7 +149,7 @@ function FigureDialog({ figure, index, total, onClose, onStep }: {
 }
 
 export default function ImageCreationView({ active, onBrowseProceedings }: { active: boolean; onBrowseProceedings: () => void }) {
-  const { t } = useUISettings();
+  const { t, language } = useUISettings();
   const [figures, setFigures] = useState<Figure[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -165,6 +165,12 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [forgeOpen, setForgeOpen] = useState(false);
   const [paperTitle, setPaperTitle] = useState("");
   const [paperContent, setPaperContent] = useState("");
+  const [pdfName, setPdfName] = useState("");
+  const [pdfStatus, setPdfStatus] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [analysisBusy, setAnalysisBusy] = useState(false);
+  const [forgeError, setForgeError] = useState("");
+  const pdfSequence = useRef(0);
   const [figureType, setFigureType] = useState("framework");
   const [figurePlan, setFigurePlan] = useState("");
   const [planConfirmed, setPlanConfirmed] = useState(false);
@@ -204,6 +210,44 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     setReferences((current) => current.some((item) => item.id === figure.id) || current.length >= 6 ? current : [...current, figure]);
     setPlanConfirmed(false);
     setForgeOpen(true);
+  }
+  async function importPaper(file: File | undefined) {
+    if (!file) return;
+    const sequence = ++pdfSequence.current;
+    setPaperContent(""); setPaperTitle(""); setPdfName(""); setPdfStatus(""); setForgeError(""); setFigurePlan(""); setPlanConfirmed(false);
+    if (!file.name.toLowerCase().endsWith(".pdf") || file.size > 25 * 1024 * 1024) { setForgeError(t("Choose a PDF smaller than 25 MB.")); return; }
+    setPdfBusy(true);
+    try {
+      const { pdfjs } = await import("./pdf-runtime");
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+      let extracted = "";
+      let pagesRead = 0;
+      try {
+        for (let pageNumber = 1; pageNumber <= Math.min(doc.numPages, 50) && extracted.length < 60_000; pageNumber++) {
+          const page = await doc.getPage(pageNumber);
+          const content = await page.getTextContent();
+          const text = content.items.map((item) => "str" in item ? item.str : "").join(" ");
+          extracted += `\n[Page ${pageNumber}]\n${text}\n`;
+          pagesRead = pageNumber;
+          page.cleanup();
+        }
+      } finally { await doc.destroy(); }
+      if (sequence !== pdfSequence.current) return;
+      if (extracted.replace(/\[Page \d+\]/g, "").trim().length < 100) throw new Error(t("No readable PDF text found. Scanned PDFs are not supported yet."));
+      setPaperContent(extracted.slice(0, 60_000)); setPdfName(file.name);
+      setPdfStatus(t("Extracted {pages} of {total} pages locally; up to 60,000 characters will be sent.", { pages: pagesRead, total: doc.numPages }));
+    } catch (error) {
+      if (sequence === pdfSequence.current) setForgeError(error instanceof Error ? error.message : String(error));
+    } finally { if (sequence === pdfSequence.current) setPdfBusy(false); }
+  }
+  async function analyzePaper() {
+    if (!window.researchDesk?.prepareFigurePlan) { setForgeError(t("Paper analysis is available in the desktop app after restarting it.")); return; }
+    setAnalysisBusy(true); setForgeError(""); setFigurePlan(""); setPlanConfirmed(false);
+    try {
+      const result = await window.researchDesk.prepareFigurePlan({ paperText: paperContent, figureType, requirements: [paperTitle && `Title: ${paperTitle}`, composerText].filter(Boolean).join("\n"), language });
+      setFigurePlan(result.plan);
+    } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
+    finally { setAnalysisBusy(false); }
   }
 
   return <main className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
@@ -283,16 +327,24 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     {active && <Dialog open={forgeOpen} onClose={() => setForgeOpen(false)} size="lg" className="figure-forge-dialog" ariaLabel={t("FigureForge planning workspace")}>
       <header className="figure-forge-header"><div><strong>FigureForge</strong><p>{t("Plan a paper figure with references")}</p></div><button type="button" onClick={() => setForgeOpen(false)} aria-label={t("Close")}><X size={18} /></button></header>
       <div className="figure-forge-body">
-        <p className="figure-forge-notice">{t("This is a manual planning draft. AI analysis, PDF import and image generation are not available yet. Nothing here is saved after leaving this view.")}</p>
-        <label>{t("Paper title")}<input value={paperTitle} onChange={(event) => { setPaperTitle(event.target.value); setPlanConfirmed(false); }} /></label>
-        <label>{t("Abstract or paper content")}<textarea rows={4} value={paperContent} onChange={(event) => { setPaperContent(event.target.value); setPlanConfirmed(false); }} /></label>
-        <label>{t("Figure type")}<select value={figureType} onChange={(event) => { setFigureType(event.target.value); setPlanConfirmed(false); }}>{[["framework", "Framework"], ["architecture", "Architecture"], ["pipeline", "Pipeline"], ["conceptual", "Concept"], ["custom", "Custom"]].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-        <label>{t("Drawing requirements")}<textarea rows={2} value={composerText} onChange={(event) => { setComposerText(event.target.value); setPlanConfirmed(false); }} /></label>
+        <p className="figure-forge-notice">{t("Upload a PDF to extract its text locally. AI planning uses your configured main model; reference-image analysis and image generation are not available yet. Drafts are not saved.")}</p>
+        <label>{t("Upload paper PDF")}<input type="file" accept=".pdf,application/pdf" disabled={pdfBusy || analysisBusy} onChange={(event) => { void importPaper(event.target.files?.[0]); event.target.value = ""; }} /></label>
+        {pdfBusy && <p role="status">{t("Reading PDF locally…")}</p>}
+        {pdfName && <p role="status">{pdfName} · {pdfStatus}</p>}
+        <details><summary>{t("Optional: enter or review paper text")}</summary>
+          <label>{t("Paper title")}<input value={paperTitle} disabled={analysisBusy} onChange={(event) => { setPaperTitle(event.target.value); setPlanConfirmed(false); }} /></label>
+          <label>{t("Abstract or paper content")}<textarea rows={5} value={paperContent} disabled={analysisBusy} onChange={(event) => { setPaperContent(event.target.value.slice(0, 60_000)); setPlanConfirmed(false); }} /></label>
+        </details>
+        <label>{t("Figure type")}<select value={figureType} disabled={analysisBusy} onChange={(event) => { setFigureType(event.target.value); setPlanConfirmed(false); }}>{[["framework", "Framework"], ["architecture", "Architecture"], ["pipeline", "Pipeline"], ["conceptual", "Concept"], ["custom", "Custom"]].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+        <label>{t("Drawing requirements")}<textarea rows={2} value={composerText} disabled={analysisBusy} onChange={(event) => { setComposerText(event.target.value); setPlanConfirmed(false); }} /></label>
         <section className="figure-forge-references"><div className="figure-forge-section-heading"><strong>{t("References ({count}/6)", { count: references.length })}</strong><button type="button" onClick={() => setForgeOpen(false)}>{t("Browse references")}</button></div>
           {references.length === 0 ? <p>{t("Choose Use as template on a gallery image to add a reference.")}</p> : references.map((figure) => <div className="figure-forge-reference" key={figure.id}><img src={imageUrl(figure)} alt="" /><div><strong>{figure.title}</strong><span>{figure.venue.toUpperCase()} · {figure.year}</span><a href={paperUrl(figure)} target="_blank" rel="noreferrer">{t("Open paper")}</a></div><button type="button" onClick={() => { setReferences((current) => current.filter((item) => item.id !== figure.id)); setPlanConfirmed(false); }} aria-label={t("Remove reference")}> <X size={16} /></button></div>)}
           {references.length >= 6 && <p>{t("Maximum of 6 references. Remove one before adding another.")}</p>}
         </section>
-        <label>{t("Figure plan")}<textarea rows={5} value={figurePlan} onChange={(event) => { setFigurePlan(event.target.value); setPlanConfirmed(false); }} placeholder={t("Describe the layout, modules, connections and visual style.")} /></label>
+        <p>{t("Analyze paper sends the extracted text and drawing requirements to your configured model provider and may incur charges. Reference images are not sent or analyzed in this step.")}</p>
+        <div className="figure-forge-footer"><button type="button" disabled={pdfBusy || analysisBusy || paperContent.trim().length < 100} onClick={() => void analyzePaper()}>{analysisBusy ? t("Analyzing paper…") : t("Analyze paper and draft plan")}</button></div>
+        {forgeError && <p role="alert">{forgeError}</p>}
+        <label>{t("Figure plan")}<textarea rows={5} value={figurePlan} disabled={analysisBusy} onChange={(event) => { setFigurePlan(event.target.value); setPlanConfirmed(false); }} placeholder={t("Analyze the paper to draft a plan, then review and edit it.")} /></label>
         <p>{t("References belong to their authors. Check each paper's license before reuse.")}</p>
         <div className="figure-forge-footer"><button type="button" disabled={!figurePlan.trim()} onClick={() => setPlanConfirmed(true)}>{t("Confirm plan")}</button>{planConfirmed && <span role="status">{t("Plan confirmed for this session. Image generation is not available yet.")}</span>}</div>
       </div>
