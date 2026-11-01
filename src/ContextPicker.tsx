@@ -14,12 +14,13 @@ import {
   X,
 } from "lucide-react";
 import { MenuDivider, MenuLabel, MenuSurface } from "./Menu";
+import type { FileSelection } from "./file-editor";
 
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
 type PickerView = "root" | "libraries" | "papers" | "plugins" | "skills";
 
-export default function ContextPicker({ bridge, workspace, projectId, items, onAdd, openRequest = 0, currentFile }: {
+export default function ContextPicker({ bridge, workspace, projectId, items, onAdd, openRequest = 0, currentFile, currentSelection }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   projectId?: string | null;
@@ -27,6 +28,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
   onAdd: (items: ContextAttachment[]) => void;
   openRequest?: number;
   currentFile?: WorkspaceFilePreview | null;
+  currentSelection?: { file: WorkspaceFilePreview; selection: FileSelection } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<PickerView>("root");
@@ -154,6 +156,23 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
       name: currentFile.name,
       path: absolutePath,
       detail: currentFile.path,
+      size: currentFile.size,
+    }]);
+    reset(false);
+  }
+
+  function addCurrentSelection() {
+    if (!currentSelection) return;
+    const { file, selection } = currentSelection;
+    const absolutePath = `${workspace.replace(/[\\/]$/, "")}/${file.path.replace(/^\/+/, "")}`;
+    onAdd([{
+      id: `file:${absolutePath}`,
+      type: "file",
+      name: file.name,
+      path: absolutePath,
+      detail: `${file.path} · lines ${selection.startLine}–${selection.endLine}`,
+      size: file.size,
+      selection,
     }]);
     reset(false);
   }
@@ -175,6 +194,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
 
         {view === "root" && <>
           <MenuLabel>Add context</MenuLabel>
+          {currentSelection && <PickerAction icon={<FilePlus2 size={16} />} label="Current selection" detail={`${currentSelection.file.path} · lines ${currentSelection.selection.startLine}–${currentSelection.selection.endLine}`} onClick={addCurrentSelection} />}
           {currentFile && <PickerAction icon={<FilePlus2 size={16} />} label="Current file" detail={currentFile.path} onClick={addCurrentFile} />}
           <PickerAction icon={<FilePlus2 size={16} />} label="Local file" detail="Attach one or more files" onClick={() => void chooseLocal("file")} />
           <PickerAction icon={<FolderPlus size={16} />} label="Local folder" detail="Give Archimedes access to a folder" onClick={() => void chooseLocal("folder")} />
@@ -217,13 +237,22 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
 export function ContextChips({ items, onRemove, onClear }: { items: ContextAttachment[]; onRemove: (id: string) => void; onClear?: () => void }) {
   if (!items.length) return null;
   return <div className="attached-contexts" aria-label={`Attached context (${items.length})`}>
-    {items.map((item) => <span className={item.type === "image" ? "attached-context-chip image" : "attached-context-chip"} key={item.id} title={item.detail || item.path || item.name}>{item.type === "image" && item.image ? <img src={item.image.dataUrl} alt="" /> : <ContextTypeIcon type={item.type} />}<span>{item.name}</span><button onClick={() => onRemove(item.id)} title={`Remove ${item.name}`} aria-label={`Remove ${item.name}`}><X size={12} /></button></span>)}
+    {items.map((item) => {
+      const size = item.image?.sizeBytes ?? item.size;
+      return <span className={item.type === "image" ? "attached-context-chip image" : "attached-context-chip"} key={item.id} title={[item.detail || item.path || item.name, size !== undefined ? formatAttachmentSize(size) : ""].filter(Boolean).join(" · ")}>{item.type === "image" && item.image ? <img src={item.image.dataUrl} alt="" /> : <ContextTypeIcon type={item.type} />}<span>{item.name}</span>{size !== undefined && <small className="attached-context-size">{formatAttachmentSize(size)}</small>}<button onClick={() => onRemove(item.id)} title={`Remove ${item.name}`} aria-label={`Remove ${item.name}`}><X size={12} /></button></span>;
+    })}
     {onClear && items.length > 1 && <button type="button" className="attached-context-clear" onClick={onClear}>Clear all</button>}
   </div>;
 }
 
 function PickerAction({ icon, label, detail, onClick }: { icon: React.ReactNode; label: string; detail: string; onClick: () => void }) {
   return <button type="button" data-menu-item className="menu-item menu-item-rich context-picker-action" onClick={(event) => { event.stopPropagation(); onClick(); }}><span className="menu-item-icon">{icon}</span><span className="menu-item-body"><strong>{label}</strong><small>{detail}</small></span></button>;
+}
+
+function formatAttachmentSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function ContextTypeIcon({ type }: { type: ContextAttachmentType }) {

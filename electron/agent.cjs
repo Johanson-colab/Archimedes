@@ -485,7 +485,7 @@ function attachedContextManifest(items) {
       const image = item.image || {};
       return `${JSON.stringify({ id: item.id, type: item.type, name: item.name, mime_type: image.mimeType, size_bytes: image.sizeBytes, width: image.width, height: image.height })}\nThis image is included directly in the current user message. Inspect it visually before making image-dependent claims.`;
     }
-    const base = { id: item.id, type: item.type, name: item.name, detail: item.detail };
+    const base = { id: item.id, type: item.type, name: item.name, detail: item.detail, ...(item.selection ? { selection: item.selection } : {}) };
     if (item.type === "skill") {
       try { return `${JSON.stringify(base)}\n<skill_instructions>\n${readAttachedTextFile(items, item.id, "SKILL.md").slice(0, 48_000)}\n</skill_instructions>`; }
       catch { return JSON.stringify(base); }

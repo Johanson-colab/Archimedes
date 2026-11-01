@@ -1248,6 +1248,7 @@ function App() {
   const [openFiles, setOpenFiles] = useState<WorkspaceFilePreview[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<WorkspaceFilePreview | null>(null);
+  const [fileSelection, setFileSelection] = useState<{ file: WorkspaceFilePreview; selection: FileSelection } | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState("");
   const [paperOpenRequest, setPaperOpenRequest] = useState<PaperOpenRequest>(null);
@@ -2818,6 +2819,7 @@ function App() {
               composerRequest={composerRequest}
               draftKey={composerDraftKey}
               currentFile={selectedFile}
+              currentSelection={fileSelection}
               onComposerRequestApplied={(id) => setComposerRequest((current) => current?.id === id ? null : current)}
             />
           )}
@@ -2830,7 +2832,7 @@ function App() {
           {imageCreationOpened && <div className={mainSection === "image-creation" ? "image-creation-view-cache" : "image-creation-view-cache hidden"} aria-hidden={mainSection !== "image-creation"}><ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} /></div>}
           {mainSection === "extensions" && <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />}
           {mainSection === "files" && (
-            <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} />
+            <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} onFileSelectionChange={(path, selection) => setFileSelection(selection ? { file: selectedFile ?? { name: path.split("/").at(-1) ?? path, path, kind: "text", size: 0, modifiedAt: "" }, selection } : null)} />
           )}
           <div className={mainSection === "writing" ? "paper-writing-view-cache" : "paper-writing-view-cache hidden"} aria-hidden={mainSection !== "writing"}>
             {workspaceReady && <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />}
@@ -2932,6 +2934,7 @@ function App() {
               onReload={(filePath) => void reloadFile(filePath)}
               onDismissConflict={dismissFileConflict}
               onAddComment={addFileComment}
+              onFileSelectionChange={(path, selection) => setFileSelection(selection ? { file: selectedFile ?? { name: path.split("/").at(-1) ?? path, path, kind: "text", size: 0, modifiedAt: "" }, selection } : null)}
               onOpenFull={() => { setMainSection("files"); setWorkbenchOpen(false); }}
             />,
             artifacts: <ArtifactsPanel
@@ -3169,7 +3172,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -3205,6 +3208,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   composerRequest: { id: string; text: string; mode?: "append" | "replace" } | null;
   draftKey: string;
   currentFile?: WorkspaceFilePreview | null;
+  currentSelection?: { file: WorkspaceFilePreview; selection: FileSelection } | null;
   onComposerRequestApplied: (id: string) => void;
 }) {
   const { t } = useUISettings();
@@ -3698,7 +3702,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
               {!cloudSignedIn && <Lock size={10} />}{t("Cloud")}<span>{cloudSignedIn ? t("Soon") : t("Locked")}</span>
             </button>
           </div>
-          <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} onAdd={addContextItems} />
+          <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
           {(availableThinkingEfforts.length > 0 || availableContextLengths.length > 0) && <div className="composer-model-controls" aria-label={t("Model controls")}>
             {availableThinkingEfforts.length > 0 && <div className="reasoning-effort-picker">
               <button ref={reasoningTriggerRef} className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setContextMenuOpen(false); setContextUsageOpen(false); setReasoningMenuOpen((open) => !open); }} title={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-label={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>
@@ -4003,7 +4007,7 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
   </div>;
 }
 
-function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading, error, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, compact = false }: {
+function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading, error, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, onSelectionChange, compact = false }: {
   file: WorkspaceFilePreview | null;
   draft?: FileDraft;
   dirty: boolean;
@@ -4017,6 +4021,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   onReload: () => void;
   onDismissConflict: () => void;
   onAddComment: (comment: FileComment) => void;
+  onSelectionChange?: (selection: FileSelection | null) => void;
   compact?: boolean;
 }) {
   const [mode, setMode] = useState<"preview" | "edit">("preview");
@@ -4028,6 +4033,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   useEffect(() => {
     setMode(dirty ? "edit" : "preview");
     setSelection(null);
+    onSelectionChange?.(null);
     setCommentOpen(false);
     setCommentBody("");
   }, [file?.path]);
@@ -4091,7 +4097,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
     </div>
     <div className={`artifact-preview-surface${editing ? " editing" : ""}`}>
       {editing ? <Suspense fallback={<div className="artifact-empty"><LoaderCircle className="spin" size={18} />Loading editor...</div>}>
-        <FileCodeEditor filePath={file.path} value={draft?.content ?? ""} onChange={(value) => onDraftChange(file.path, value)} onSave={onSave} onSelectionChange={setSelection} />
+        <FileCodeEditor filePath={file.path} value={draft?.content ?? ""} onChange={(value) => onDraftChange(file.path, value)} onSave={onSave} onSelectionChange={(selection) => { setSelection(selection); onSelectionChange?.(selection); }} />
       </Suspense> : <>
         {file.kind === "markdown" && <article className="markdown-preview"><MarkdownContent content={draft?.content ?? file.content ?? ""} /></article>}
         {file.kind === "text" && <CodePreview content={draft?.content ?? file.content ?? ""} filePath={file.path} />}
@@ -4160,7 +4166,7 @@ function readFilesPaneWidth() {
   return Number.isFinite(saved) && saved >= FILES_PANE_MIN_WIDTH ? saved : FILES_PANE_DEFAULT_WIDTH;
 }
 
-function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewFile, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, compact = false, compactWidth = 0, onOpenFull }: {
+function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewFile, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, onFileSelectionChange, compact = false, compactWidth = 0, onOpenFull }: {
   workspace: string;
   tree: WorkspaceFileTree;
   openFiles: WorkspaceFilePreview[];
@@ -4185,6 +4191,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   onReload: (filePath: string) => void;
   onDismissConflict: (filePath: string) => void;
   onAddComment: (comment: FileComment) => void;
+  onFileSelectionChange?: (path: string, selection: FileSelection | null) => void;
   compact?: boolean;
   compactWidth?: number;
   onOpenFull?: () => void;
@@ -4315,6 +4322,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
       onReload={() => file && onReload(file.path)}
       onDismissConflict={() => file && onDismissConflict(file.path)}
       onAddComment={onAddComment}
+      onSelectionChange={(selection) => onFileSelectionChange?.(file?.path ?? "", selection)}
     />
   </div>;
 

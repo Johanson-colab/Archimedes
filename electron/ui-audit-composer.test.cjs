@@ -156,3 +156,11 @@ test("composer exposes the current file and a clear-all attachment action", () =
   assert.match(read("src", "ContextPicker.tsx"), /className="attached-context-clear"/);
   assert.match(css, /\.attached-context-clear \{/);
 });
+
+test("composer can attach the current editor selection and shows attachment size", () => {
+  assert.match(app, /currentSelection=\{fileSelection\}/);
+  assert.match(app, /onFileSelectionChange=/);
+  assert.match(read("src", "ContextPicker.tsx"), /label="Current selection"/);
+  assert.match(read("src", "ContextPicker.tsx"), /className="attached-context-size"/);
+  assert.match(read("electron", "agent.cjs"), /item\.selection \? \{ selection: item\.selection \}/);
+});
