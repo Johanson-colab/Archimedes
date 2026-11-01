@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronDown, ExternalLink, GraduationCap, ImageOff, LoaderCircle, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Search, SlidersHorizontal, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { MenuSurface } from "./Menu";
 import DataChartGallery from "./DataChartGallery";
 import { Tabs, Tab } from "./Tabs";
@@ -9,6 +9,7 @@ import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
 import { useUISettings } from "./i18n";
 import { loadRetrievalIndex, prepareSemanticQuery, searchRetrievalIndex, type RetrievalIndex } from "./figureforge/retrieval.mjs";
+import { contractIsUsable, normalizeDesignContract, renderDesignContract, renderImageGuide, type DesignContract } from "./figureforge/design-contract.mjs";
 import { sanitizeFigureSvg } from "./figureforge/sanitize-svg.mjs";
 import type { FigureScene } from "./figureforge/reconstruction.mjs";
 import { parseSvgScene } from "./figureforge/vendor/svg-scene.mjs";
@@ -28,6 +29,11 @@ const PATTERNS = [
   ["results", "Results"], ["comparison", "Comparison"],
 ] as const;
 const ASPECTS = ["1:1", "3:2", "4:3", "16:9"] as const;
+// The stage-1 figure type maps onto the gallery's visual-pattern vocabulary so
+// reference retrieval inherits the intent instead of ignoring it.
+const FIGURE_TYPE_PATTERN: Record<string, string> = {
+  framework: "framework", architecture: "architecture", pipeline: "pipeline", conceptual: "conceptual", custom: "all",
+};
 type Aspect = typeof ASPECTS[number];
 
 type Figure = {
@@ -185,7 +191,12 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [forgeError, setForgeError] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
   const [retrievalStatus, setRetrievalStatus] = useState("");
-  const [recommendations, setRecommendations] = useState<Array<{ figure: Figure; score: number | null }>>([]);
+  const [forgeFilters, setForgeFilters] = useState<Filters>(INITIAL_FILTERS);
+  const [searchedQuery, setSearchedQuery] = useState<string | null>(null);
+  const [designContract, setDesignContract] = useState<DesignContract | null>(null);
+  const [designPicks, setDesignPicks] = useState<{ representative: number[]; imageRefs: number[] }>({ representative: [], imageRefs: [] });
+  const [contractBusy, setContractBusy] = useState(false);
+  const [recommendations, setRecommendations] = useState<Array<{ figure: Figure; score: number | null; reason?: string; keywords?: string[] }>>([]);
   const [visibleRecommendations, setVisibleRecommendations] = useState(60);
   const [forgeMethod, setForgeMethod] = useState<"direct" | "two-stage">("two-stage");
   const [visionModel, setVisionModel] = useState("");
@@ -198,7 +209,6 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [outputMode, setOutputMode] = useState<"svg" | "bitmap">("svg");
   const [imageModel, setImageModel] = useState("");
   const [imageResolution, setImageResolution] = useState("1K");
-  const [styleGuide, setStyleGuide] = useState("");
   const [generatedSvg, setGeneratedSvg] = useState("");
   const [svgWarnings, setSvgWarnings] = useState<string[]>([]);
   const [generatedBitmap, setGeneratedBitmap] = useState("");
@@ -237,6 +247,19 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   useEffect(() => () => { uploadedReferencesRef.current.forEach((item) => URL.revokeObjectURL(item.url)); }, []);
   useEffect(() => { setSelectedId(null); }, [tab]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [filters, query, sort]);
+  // The design contract is derived from the plan text and the exact reference
+  // set. Editing either one silently invalidates it, so it is dropped rather
+  // than reused against figures it never saw.
+  const referenceSignature = `${references.map((item) => item.id).join("|")}#${uploadedReferences.map((item) => item.id).join("|")}`;
+  const designSignature = useRef("");
+  useEffect(() => {
+    const next = `${figurePlan}\u0000${referenceSignature}`;
+    if (!designSignature.current) { designSignature.current = next; return; }
+    if (designSignature.current === next) return;
+    designSignature.current = next;
+    setDesignContract(null);
+    setDesignPicks({ representative: [], imageRefs: [] });
+  }, [figurePlan, referenceSignature]);
 
   const result = useMemo(() => {
     const matched = figures.filter((figure) => matches(figure, filters, query));
@@ -249,6 +272,14 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const shown = result.slice(0, visibleCount);
   const activeFilterCount = [filters.venue, filters.year, filters.tier, filters.pattern].filter((value) => value !== "all").length;
   const updateFilter = (key: keyof Filters, value: string | number) => setFilters((current) => ({ ...current, [key]: value }));
+  const updateForgeFilter = (key: keyof Filters, value: string | number) => setForgeFilters((current) => ({ ...current, [key]: value }));
+  // The paper-level figure type is the reader's intent, so it seeds the gallery
+  // filter instead of living only inside the plan prompt.
+  function changeFigureType(value: string) {
+    setFigureType(value);
+    const pattern = FIGURE_TYPE_PATTERN[value] ?? "all";
+    setForgeFilters((current) => (current.pattern === pattern ? current : { ...current, pattern }));
+  }
   const step = (direction: number) => { if (selectedIndex >= 0) setSelectedId(result[(selectedIndex + direction + result.length) % result.length].id); };
   const resetFilters = () => { setQuery(""); setFilters(INITIAL_FILTERS); };
   function showForge(open: boolean) {
@@ -324,14 +355,15 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
       const index = retrievalRef.current ?? await loadRetrievalIndex();
       retrievalRef.current = index;
       const candidates = index.data.figs.map((figure, i) => ({ figure, i })).filter(({ figure }) =>
-        (filters.venue === "all" || figure.venue === filters.venue.toLowerCase()) &&
-        (filters.year === "all" || figure.year === filters.year) &&
-        (filters.pattern === "all" || figure.pattern === filters.pattern) &&
-        (filters.tier === "all" || (filters.tier === "best" ? Boolean(figure.award) : figure.tier === filters.tier && !figure.award))
+        (forgeFilters.venue === "all" || figure.venue === forgeFilters.venue.toLowerCase()) &&
+        (forgeFilters.year === "all" || figure.year === forgeFilters.year) &&
+        (forgeFilters.pattern === "all" || figure.pattern === forgeFilters.pattern) &&
+        (forgeFilters.tier === "all" || (forgeFilters.tier === "best" ? Boolean(figure.award) : figure.tier === forgeFilters.tier && !figure.award))
       ).map(({ i }) => i);
       const show = (vector?: number[]) => {
         if (retrievalSequence.current !== sequence) return;
-        setRecommendations(searchRetrievalIndex(index, query, candidates, vector).filter(({ figure }) => isFigure(figure)) as Array<{ figure: Figure; score: number | null }>);
+        setRecommendations(searchRetrievalIndex(index, query, candidates, vector).filter(({ figure }) => isFigure(figure)) as Array<{ figure: Figure; score: number | null; reason?: string; keywords?: string[] }>);
+        setSearchedQuery(query);
       };
       setVisibleRecommendations(60); show();
       if (!query.trim()) { setRetrievalStatus(t("Showing references without relevance ranking.")); return; }
@@ -399,17 +431,45 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
       setForgeError(error instanceof Error ? error.message : String(error));
     } finally { setUploadingReferences(false); }
   }
+  async function analyzeReferences() {
+    if (!window.researchDesk?.analyzeFigureReferences) { setForgeError(t("Figure generation requires the desktop app after restarting it.")); return; }
+    setContractBusy(true); setForgeError("");
+    try {
+      const images = await referenceDataUrls();
+      const analysis = await window.researchDesk.analyzeFigureReferences({ references: images, plan: figurePlan, model: visionModel.trim() || undefined, connection });
+      setDesignContract(normalizeDesignContract(analysis.contract));
+      setDesignPicks({ representative: analysis.representative, imageRefs: analysis.imageRefs });
+    } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
+    finally { setContractBusy(false); }
+  }
+  function resetDesign() {
+    setDesignContract(null);
+    setDesignPicks({ representative: [], imageRefs: [] });
+  }
+  // Edits are kept raw while typing (a half-typed hex must not be wiped) and are
+  // normalized once, right before they are rendered into a prompt.
+  function editContract(mutate: (draft: DesignContract) => void) {
+    setDesignContract((current) => {
+      if (!current) return current;
+      const draft: DesignContract = JSON.parse(JSON.stringify(current));
+      mutate(draft);
+      return draft;
+    });
+  }
   async function generateFigure() {
-    if (!window.researchDesk?.generateFigureSvg || !window.researchDesk?.generateFigureBitmap || !window.researchDesk?.analyzeFigureReferences) { setForgeError(t("Figure generation requires the desktop app after restarting it.")); return; }
-    setGenerationBusy(true); setForgeError(""); setGeneratedSvg(""); setSvgWarnings([]); setGeneratedBitmap(""); setStyleGuide(""); setReconstructedScene(null); setReconstructionStatus("");
+    if (!window.researchDesk?.generateFigureSvg || !window.researchDesk?.generateFigureBitmap) { setForgeError(t("Figure generation requires the desktop app after restarting it.")); return; }
+    setGenerationBusy(true); setForgeError(""); setGeneratedSvg(""); setSvgWarnings([]); setGeneratedBitmap(""); setReconstructedScene(null); setReconstructionStatus("");
     try {
       const images = await referenceDataUrls();
       let guide = "";
       let selectedImages = images;
       if (forgeMethod === "two-stage") {
-        const analysis = await window.researchDesk.analyzeFigureReferences({ references: images, plan: figurePlan, model: visionModel.trim() || undefined, connection });
-        guide = analysis.guide; setStyleGuide(guide);
-        selectedImages = analysis.representative.map((index) => images[index - 1]).filter(Boolean);
+        if (!designContract || !contractIsUsable(designContract)) throw new Error(t("Analyze the references first."));
+        const contract = normalizeDesignContract(designContract);
+        guide = outputMode === "svg" ? renderDesignContract(contract) : renderImageGuide(contract);
+        const picks = outputMode === "svg" ? designPicks.representative : designPicks.imageRefs;
+        const anchored = picks.map((index) => images[index - 1]).filter(Boolean);
+        if (anchored.length >= 2) selectedImages = anchored;
       }
       if (outputMode === "svg") {
         const output = await window.researchDesk.generateFigureSvg({ references: selectedImages, plan: figurePlan, guide, method: forgeMethod, model: visionModel.trim() || undefined, aspect, connection });
@@ -479,6 +539,37 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
   }
 
+  // Derived view state for the FigureForge workspace: keep every disabled button
+  // explained, so the page never leaves the user guessing why nothing happens.
+  const selectedReferenceCount = references.length + uploadedReferences.length;
+  const referenceFloor = forgeMethod === "two-stage" ? 4 : 2;
+  const referenceCeiling = forgeMethod === "two-stage" ? 10 : 4;
+  const hasPaperInput = Boolean(pdfFile) || paperContent.trim().length >= 100;
+  const analyzeBlockedReason = hasPaperInput ? "" : t("Add a PDF, or at least 100 characters of paper text.");
+  const currentSearchQuery = (figurePlan || paperContent || composerText).slice(0, 10_000);
+  const resultsStale = searchedQuery !== null && searchedQuery !== currentSearchQuery && recommendations.length > 0;
+  const needsContract = forgeMethod === "two-stage" && !(designContract && contractIsUsable(designContract));
+  const analyzeReferencesBlockedReason =
+    selectedReferenceCount < referenceFloor ? t("Select at least {n} references in step 2.", { n: referenceFloor })
+      : !figurePlan.trim() ? t("Draft a figure plan in step 1 first.") : "";
+  const generateBlockedReason =
+    !figurePlan.trim() ? t("Draft a figure plan in step 1 first.")
+      : selectedReferenceCount < referenceFloor ? t("Select at least {n} references in step 2.", { n: referenceFloor })
+        : selectedReferenceCount > referenceCeiling ? t("This mode accepts at most {n} references.", { n: referenceCeiling })
+          : needsContract ? t("Analyze the references first.")
+            : outputMode === "bitmap" && !imageModel.trim() ? t("Enter an image model for bitmap output.")
+              : "";
+  const generateReady = !generationBusy && !reconstructionBusy && !uploadingReferences && !contractBusy && !generateBlockedReason;
+  const forgeSteps = [
+    { index: 1, label: t("Paper content"), detail: figurePlan.trim() ? t("Plan drafted") : t("Not analyzed"), tone: figurePlan.trim() ? "done" : "idle" },
+    { index: 2, label: t("References"), detail: `${selectedReferenceCount} / ${referenceFloor}`, tone: selectedReferenceCount >= referenceFloor ? "done" : "idle" },
+    { index: 3, label: t("Generate"), detail: generationBusy ? t("Generating…") : (generatedSvg || generatedBitmap) ? t("Draft ready") : designContract ? t("Contract ready") : t("Not started"), tone: generationBusy ? "busy" : (generatedSvg || generatedBitmap) ? "done" : "idle" },
+    { index: 4, label: t("Export"), detail: reconstructedScene ? t("Ready") : t("Not started"), tone: reconstructedScene ? "done" : "idle" },
+  ] as const;
+  const goToStep = (index: number) => {
+    document.getElementById(`forge-step-${index}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
   return <main ref={pageRef} className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
     {!forgeOpen && <div className="image-creation-tabs">
       <Tabs value={tab} onChange={(value) => setTab(value as "gallery" | "charts")} label="Image creation views" className="workbench-tabs image-creation-tablist">
@@ -502,7 +593,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           <ChevronDown size={12} aria-hidden="true" />
         </label>}
         {tab === "gallery" && <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>}
-        <button type="button" className="image-creation-forge-button" onClick={() => showForge(true)}><Sparkles size={14} />FigureForge</button>
+        <button type="button" className="image-creation-forge-button" onClick={() => showForge(true)}><Wand2 size={14} />FigureForge</button>
       </div>
     </div>}
 
@@ -535,75 +626,286 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
 
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
     {active && forgeOpen && <section className="figure-forge-page" aria-label={t("FigureForge planning workspace")}>
-      <button type="button" className="figure-forge-back" onClick={() => showForge(false)}><ArrowLeft size={15} />{t("Back to gallery")}</button>
-      <header className="figure-forge-header"><div><strong>FigureForge</strong><p>{t("Plan a paper figure with references")}</p></div></header>
+      <div className="forge-topbar">
+        <button type="button" className="figure-forge-back" onClick={() => showForge(false)}><ArrowLeft size={15} />{t("Back to gallery")}</button>
+        <div className="forge-title"><strong>FigureForge</strong><span>{t("Plan a paper figure with references")}</span></div>
+      </div>
+
+      <nav className="forge-steps" aria-label={t("FigureForge steps")}>
+        {forgeSteps.map((step) => <button type="button" key={step.index} className={`forge-steps-item is-${step.tone}`} onClick={() => goToStep(step.index)}>
+          <span className="forge-steps-index" aria-hidden="true">{step.index}</span>
+          <span className="forge-steps-copy"><strong>{step.label}</strong><small>{step.detail}</small></span>
+        </button>)}
+      </nav>
+
+      {forgeError && <p role="alert" className="forge-alert">{forgeError}</p>}
+
       <div className="figure-forge-body">
-        <h2 className="figure-forge-step">{t("1. Paper content")}</h2>
-        <p className="figure-forge-notice">{t("Upload a PDF to extract its text locally. AI features use your configured model provider and may incur charges. Drafts are not saved.")}</p>
-        <label>{t("Upload paper PDF")}<input type="file" accept=".pdf,application/pdf" disabled={pdfBusy || analysisBusy} onChange={(event) => { void importPaper(event.target.files?.[0]); event.target.value = ""; }} /></label>
-        {pdfBusy && <p role="status">{t("Reading PDF locally…")}</p>}
-        {pdfName && <p role="status">{pdfName} · {pdfStatus}</p>}
-        <details><summary>{t("Optional: enter or review paper text")}</summary>
-          <label>{t("Paper title")}<input value={paperTitle} disabled={analysisBusy} onChange={(event) => { setPaperTitle(event.target.value); }} /></label>
-          <label>{t("Abstract or paper content")}<textarea rows={5} value={paperContent} disabled={analysisBusy} onChange={(event) => { pdfPages.current = []; setPdfFile(null); setPdfStatus(t("Using manually edited paper text.")); setPaperContent(event.target.value.slice(0, 60_000)); }} /></label>
-        </details>
-        <label>{t("Figure type")}<select value={figureType} disabled={analysisBusy} onChange={(event) => { setFigureType(event.target.value); }}>{[["framework", "Framework"], ["architecture", "Architecture"], ["pipeline", "Pipeline"], ["conceptual", "Concept"], ["custom", "Custom"]].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-        <section className="figure-forge-generation"><strong>{t("Paper analysis model and provider")}</strong>
-          <label>{t("Provider")}<select value={forgeProvider} disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} onChange={(event) => { setForgeProvider(event.target.value); setForgeApiKey(""); setAvailableModels([]); }}><option value="configured">{t("Use Archimedes main model")}</option><option value="infistar">Infistar</option><option value="nonelinear">NoneLinear</option><option value="openai">OpenAI</option><option value="ark">Volcengine Ark</option><option value="siliconflow">SiliconFlow</option><option value="glm">Zhipu GLM</option><option value="qwen">Qwen</option><option value="moonshot">Moonshot</option><option value="anthropic">Anthropic</option><option value="custom">{t("Custom OpenAI-compatible")}</option></select></label>
-          {forgeProvider !== "configured" && <><label>{t("API key (this session only)")}<input type="password" autoComplete="off" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={forgeApiKey} onChange={(event) => setForgeApiKey(event.target.value)} /></label><label>{t("Paper analysis model")}<input list="figure-forge-models" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={parseModel} onChange={(event) => setParseModel(event.target.value)} /></label>{forgeProvider === "custom" && <label>{t("Model API base URL")}<input type="url" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={forgeBaseUrl} onChange={(event) => setForgeBaseUrl(event.target.value)} placeholder="https://example.com/v1" /></label>}<p>{t("This key stays in memory for this session and is not saved to the project.")}</p></>}
-          <datalist id="figure-forge-models">{availableModels.map((model) => <option key={model} value={model} />)}</datalist>
-          <button type="button" disabled={modelsBusy} onClick={() => void refreshFigureModels()}>{modelsBusy ? t("Loading models…") : t("Refresh model list")}</button>
-        </section>
-        <label>{t("Drawing requirements")}<textarea rows={2} value={composerText} disabled={analysisBusy} onChange={(event) => { setComposerText(event.target.value); }} /></label>
-        <p>{t("Analyzing sends your PDF and requirements to the selected model provider; if PDF input is rejected, readable extracted text is used instead. This may incur charges. Reference images are not sent in this step.")}</p>
-        <div className="figure-forge-footer"><button type="button" disabled={pdfBusy || analysisBusy || (!pdfFile && paperContent.trim().length < 100)} onClick={() => void analyzePaper()}>{analysisBusy ? t("Analyzing paper…") : t("Analyze paper and draft plan")}</button></div>
-        {forgeError && <p role="alert">{forgeError}</p>}
-        <label>{t("Figure plan")}<textarea rows={5} value={figurePlan} disabled={analysisBusy} onChange={(event) => { setFigurePlan(event.target.value); }} placeholder={t("Analyze the paper to draft a plan, then review and edit it.")} /></label>
-        <section className="figure-forge-search"><div className="figure-forge-section-heading"><strong>{t("2. Find and select references")}</strong><button type="button" disabled={searchBusy} onClick={() => void findReferences()}>{searchBusy ? t("Searching…") : t("Search references")}</button></div>
-          <div className="figure-forge-filter-row">
-            <label>{t("Figure type")}<select value={filters.pattern} onChange={(event) => updateFilter("pattern", event.target.value)}><option value="all">{t("All")}</option>{PATTERNS.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-            <label>{t("Venue")}<select value={filters.venue} onChange={(event) => updateFilter("venue", event.target.value)}><option value="all">{t("All")}</option>{VENUES.map((venue) => <option key={venue} value={venue}>{venue}</option>)}</select></label>
-            <label>{t("Year")}<select value={filters.year} onChange={(event) => updateFilter("year", event.target.value === "all" ? "all" : Number(event.target.value))}><option value="all">{t("All")}</option>{YEARS.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
-            <label>{t("Presentation")}<select value={filters.tier} onChange={(event) => updateFilter("tier", event.target.value)}><option value="all">{t("All")}</option><option value="best">{t("Awarded")}</option><option value="oral">Oral</option><option value="spotlight">Spotlight</option></select></label>
+        <section className="forge-step" id="forge-step-1" aria-labelledby="forge-step-1-title">
+          <header className="forge-step-head">
+            <span className="forge-step-index" aria-hidden="true">1</span>
+            <div className="forge-step-copy">
+              <h2 className="forge-step-title" id="forge-step-1-title">{t("Paper content")}</h2>
+              <p className="forge-step-subtitle">{t("Describe the paper and the figure you need.")}</p>
+            </div>
+            <div className="forge-step-actions">
+              <button type="button" className="forge-primary" disabled={pdfBusy || analysisBusy || !hasPaperInput} onClick={() => void analyzePaper()}>{analysisBusy ? t("Analyzing…") : t("Analyze and draft plan")}</button>
+              {analyzeBlockedReason && <span className="forge-blocked">{analyzeBlockedReason}</span>}
+            </div>
+          </header>
+          <div className="forge-step-body">
+            <div className="forge-grid">
+              <label className="forge-field">
+                <span className="forge-field-label">{t("Figure type")}</span>
+                <select value={figureType} disabled={analysisBusy} onChange={(event) => { changeFigureType(event.target.value); }}>{[["framework", "Framework"], ["architecture", "Architecture"], ["pipeline", "Pipeline"], ["conceptual", "Concept"], ["custom", "Custom"]].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select>
+                <span className="forge-field-hint">{t("Decides which sections the paper is read for, and seeds the reference filter.")}</span>
+              </label>
+            </div>
+
+            <label className={`forge-drop${pdfName ? " is-loaded" : ""}`}>
+              <input className="forge-drop-input" type="file" accept=".pdf,application/pdf" disabled={pdfBusy || analysisBusy} onChange={(event) => { void importPaper(event.target.files?.[0]); event.target.value = ""; }} />
+              <Upload size={17} aria-hidden="true" />
+              <span className="forge-drop-copy">
+                <strong>{pdfBusy ? t("Reading PDF locally…") : pdfName || t("Drop a paper PDF here, or click to choose one")}</strong>
+                <small>{pdfName ? pdfStatus : t("Text is extracted on this machine. Only the plan request leaves it.")}</small>
+              </span>
+              {pdfName && <span className="forge-drop-action">{t("Replace")}</span>}
+            </label>
+
+            <details className="forge-disclosure">
+              <summary>{t("Paste the paper text instead")}</summary>
+              <div className="forge-disclosure-body">
+                <label className="forge-field">
+                  <span className="forge-field-label">{t("Paper title")}</span>
+                  <input value={paperTitle} disabled={analysisBusy} onChange={(event) => { setPaperTitle(event.target.value); }} />
+                </label>
+                <label className="forge-field forge-field-stacked">
+                  <span className="forge-field-label">{t("Abstract or paper content")}</span>
+                  <textarea rows={5} value={paperContent} disabled={analysisBusy} onChange={(event) => { pdfPages.current = []; setPdfFile(null); setPdfStatus(t("Using manually edited paper text.")); setPaperContent(event.target.value.slice(0, 60_000)); }} />
+                </label>
+              </div>
+            </details>
+
+            <label className="forge-field forge-field-stacked">
+              <span className="forge-field-label">{t("Drawing requirements")}</span>
+              <textarea rows={2} value={composerText} disabled={analysisBusy} onChange={(event) => { setComposerText(event.target.value); }} placeholder={t("Optional: layout wishes, must-have modules, terms to use.")} />
+            </label>
+
+            <details className="forge-disclosure">
+              <summary>{t("Model settings")}<span className="forge-disclosure-value">{forgeProvider === "configured" ? t("Archimedes main model") : forgeProvider}</span></summary>
+              <div className="forge-disclosure-body">
+                <label className="forge-field">
+                  <span className="forge-field-label">{t("Provider")}</span>
+                  <select value={forgeProvider} disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} onChange={(event) => { setForgeProvider(event.target.value); setForgeApiKey(""); setAvailableModels([]); }}><option value="configured">{t("Use Archimedes main model")}</option><option value="infistar">Infistar</option><option value="nonelinear">NoneLinear</option><option value="openai">OpenAI</option><option value="ark">Volcengine Ark</option><option value="siliconflow">SiliconFlow</option><option value="glm">Zhipu GLM</option><option value="qwen">Qwen</option><option value="moonshot">Moonshot</option><option value="anthropic">Anthropic</option><option value="custom">{t("Custom OpenAI-compatible")}</option></select>
+                </label>
+                {forgeProvider !== "configured" && <>
+                  <label className="forge-field">
+                    <span className="forge-field-label">{t("API key (this session only)")}</span>
+                    <input type="password" autoComplete="off" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={forgeApiKey} onChange={(event) => setForgeApiKey(event.target.value)} />
+                  </label>
+                  <label className="forge-field">
+                    <span className="forge-field-label">{t("Paper analysis model")}</span>
+                    <input list="figure-forge-models" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={parseModel} onChange={(event) => setParseModel(event.target.value)} />
+                  </label>
+                  {forgeProvider === "custom" && <label className="forge-field">
+                    <span className="forge-field-label">{t("Model API base URL")}</span>
+                    <input type="url" disabled={analysisBusy || generationBusy || reconstructionBusy || modelsBusy} value={forgeBaseUrl} onChange={(event) => setForgeBaseUrl(event.target.value)} placeholder="https://example.com/v1" />
+                  </label>}
+                </>}
+                <datalist id="figure-forge-models">{availableModels.map((model) => <option key={model} value={model} />)}</datalist>
+                <div className="forge-inline-actions">
+                  <button type="button" className="forge-secondary" disabled={modelsBusy} onClick={() => void refreshFigureModels()}>{modelsBusy ? t("Loading models…") : t("Refresh model list")}</button>
+                  <span>{t("API keys stay in memory for this session and are never written to the project.")}</span>
+                </div>
+              </div>
+            </details>
+
+            <label className="forge-field forge-field-stacked forge-plan">
+              <span className="forge-field-label">{t("Figure plan")}</span>
+              <textarea rows={8} value={figurePlan} disabled={analysisBusy} onChange={(event) => { setFigurePlan(event.target.value); }} placeholder={t("Analyze the paper to draft a plan, then review and edit it.")} />
+              <span className="forge-field-hint">{t("Edit freely. This text drives both reference search and generation.")}</span>
+            </label>
           </div>
-          <p>{t("Search uses the paper plan or text. Gallery filters also apply. First use downloads the CLIP model; your query is processed locally.")}</p>
-          {retrievalStatus && <p role="status">{retrievalStatus}</p>}
-          <div className="figure-forge-results">{recommendations.slice(0, visibleRecommendations).map(({ figure, score }) => { const selected = references.some((item) => item.id === figure.id); return <button type="button" key={figure.id} aria-pressed={selected} disabled={generationBusy || uploadingReferences || (!selected && references.length + uploadedReferences.length >= 10)} onClick={() => { setReferences((current) => selected ? current.filter((item) => item.id !== figure.id) : [...current, figure]); }}><img src={imageUrl(figure)} alt="" loading="lazy" /><span>{figure.title}</span><small>{figure.venue.toUpperCase()} · {figure.year}{score !== null ? ` · ${score}` : ""}</small><b>{selected ? t("Selected") : t("Select reference")}</b></button>; })}</div>
-          {visibleRecommendations < recommendations.length && <button type="button" onClick={() => setVisibleRecommendations((count) => count + 60)}>{t("Show more references")}</button>}
         </section>
-        <section className="figure-forge-references"><div className="figure-forge-section-heading"><strong>{t("References ({count}/10)", { count: references.length + uploadedReferences.length })}</strong><button type="button" disabled={generationBusy || uploadingReferences} onClick={() => { setTab("gallery"); showForge(false); }}>{t("Browse references")}</button></div>
-          <label className="figure-forge-upload">{t("Upload reference images")}<input type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={generationBusy || uploadingReferences} onChange={(event) => { void addUploadedReferences(event.target.files); event.target.value = ""; }} /></label>
-          {references.length + uploadedReferences.length === 0 && <p>{t("Choose Use as template on a gallery image to add a reference.")}</p>}
-          {references.map((figure) => <div className="figure-forge-reference" key={figure.id}><img src={imageUrl(figure)} alt="" /><div><strong>{figure.title}</strong><span>{figure.venue.toUpperCase()} · {figure.year}</span><a href={paperUrl(figure)} target="_blank" rel="noreferrer">{t("Open paper")}</a></div><button type="button" disabled={generationBusy} onClick={() => { setReferences((current) => current.filter((item) => item.id !== figure.id)); }} aria-label={t("Remove reference")}> <X size={16} /></button></div>)}
-          {uploadedReferences.map((item) => <div className="figure-forge-reference" key={item.id}><img src={item.url} alt="" /><div><strong>{item.name}</strong><span>{t("Uploaded reference")}</span></div><button type="button" disabled={generationBusy} onClick={() => { URL.revokeObjectURL(item.url); setUploadedReferences((current) => current.filter((value) => value.id !== item.id)); }} aria-label={t("Remove reference")}><X size={16} /></button></div>)}
-          {references.length + uploadedReferences.length >= 10 && <p>{t("Maximum of 10 references. Remove one before adding another.")}</p>}
+
+        <section className="forge-step" id="forge-step-2" aria-labelledby="forge-step-2-title">
+          <header className="forge-step-head">
+            <span className="forge-step-index" aria-hidden="true">2</span>
+            <div className="forge-step-copy">
+              <h2 className="forge-step-title" id="forge-step-2-title">{t("References")}</h2>
+              <p className="forge-step-subtitle">{t("Pick published figures whose layout you want to follow.")}</p>
+            </div>
+            <span className={`forge-pill${selectedReferenceCount >= referenceFloor ? " is-ready" : ""}`}>{selectedReferenceCount} / {referenceFloor}–{referenceCeiling}</span>
+            <div className="forge-step-actions">
+              <button type="button" className="forge-secondary" onClick={() => { setTab("gallery"); showForge(false); }}>{t("Browse gallery")}</button>
+              <button type="button" className="forge-primary" disabled={searchBusy} onClick={() => void findReferences()}>{searchBusy ? t("Searching…") : t("Search references")}</button>
+            </div>
+          </header>
+          <div className="forge-step-body">
+            <div className="forge-filters">
+              <label className="forge-field"><span className="forge-field-label">{t("Figure type")}</span><select value={forgeFilters.pattern} onChange={(event) => updateForgeFilter("pattern", event.target.value)}><option value="all">{t("All")}</option>{PATTERNS.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+              <label className="forge-field"><span className="forge-field-label">{t("Venue")}</span><select value={forgeFilters.venue} onChange={(event) => updateForgeFilter("venue", event.target.value)}><option value="all">{t("All")}</option>{VENUES.map((venue) => <option key={venue} value={venue}>{venue}</option>)}</select></label>
+              <label className="forge-field"><span className="forge-field-label">{t("Year")}</span><select value={forgeFilters.year} onChange={(event) => updateForgeFilter("year", event.target.value === "all" ? "all" : Number(event.target.value))}><option value="all">{t("All")}</option>{YEARS.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+              <label className="forge-field"><span className="forge-field-label">{t("Presentation")}</span><select value={forgeFilters.tier} onChange={(event) => updateForgeFilter("tier", event.target.value)}><option value="all">{t("All")}</option><option value="best">{t("Awarded")}</option><option value="oral">Oral</option><option value="spotlight">Spotlight</option></select></label>
+            </div>
+            <p className="forge-field-hint">{t("Ranking is based on the plan above. First search downloads the CLIP model; your query stays local.")}</p>
+            {resultsStale && <p role="status" className="forge-stale">{t("The plan changed since the last search. Run the search again to re-rank the references.")}</p>}
+            {retrievalStatus && <p role="status" className="forge-field-hint">{retrievalStatus}</p>}
+            <div className="figure-forge-results">{recommendations.slice(0, visibleRecommendations).map(({ figure, score, reason, keywords }) => { const selected = references.some((item) => item.id === figure.id); return <button type="button" key={figure.id} aria-pressed={selected} title={reason || undefined} disabled={generationBusy || uploadingReferences || (!selected && selectedReferenceCount >= 10)} onClick={() => { setReferences((current) => selected ? current.filter((item) => item.id !== figure.id) : [...current, figure]); }}><img src={imageUrl(figure)} alt="" loading="lazy" /><span>{figure.title}</span><small>{figure.venue.toUpperCase()} · {figure.year}{score !== null ? ` · ${score}` : ""}</small>{keywords && keywords.length > 0 && <em className="figure-forge-results-hits">{keywords.join(" · ")}</em>}<b>{selected ? t("Selected") : t("Select reference")}</b></button>; })}</div>
+            {visibleRecommendations < recommendations.length && <button type="button" className="forge-secondary" onClick={() => setVisibleRecommendations((count) => count + 60)}>{t("Show more references")}</button>}
+
+            <div className="forge-selected">
+              <header>
+                <div><strong>{t("Selected references")}</strong><span className="forge-field-hint">{selectedReferenceCount} / 10</span></div>
+                <label className="forge-upload">
+                  <input className="forge-drop-input" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled={generationBusy || uploadingReferences} onChange={(event) => { void addUploadedReferences(event.target.files); event.target.value = ""; }} />
+                  {t("Upload images")}
+                </label>
+              </header>
+              {selectedReferenceCount === 0 && <p className="forge-field-hint">{t("Nothing selected yet. Choose references above, or upload your own.")}</p>}
+              <div className="forge-selected-list">
+                {references.map((figure) => <div className="figure-forge-reference" key={figure.id}><img src={imageUrl(figure)} alt="" /><div><strong>{figure.title}</strong><span>{figure.venue.toUpperCase()} · {figure.year}</span><a href={paperUrl(figure)} target="_blank" rel="noreferrer">{t("Open paper")}</a></div><button type="button" disabled={generationBusy} onClick={() => { setReferences((current) => current.filter((item) => item.id !== figure.id)); }} aria-label={t("Remove reference")}> <X size={16} /></button></div>)}
+                {uploadedReferences.map((item) => <div className="figure-forge-reference" key={item.id}><img src={item.url} alt="" /><div><strong>{item.name}</strong><span>{t("Uploaded reference")}</span></div><button type="button" disabled={generationBusy} onClick={() => { URL.revokeObjectURL(item.url); setUploadedReferences((current) => current.filter((value) => value.id !== item.id)); }} aria-label={t("Remove reference")}><X size={16} /></button></div>)}
+              </div>
+              {selectedReferenceCount >= 10 && <p className="forge-field-hint">{t("Maximum of 10 references. Remove one before adding another.")}</p>}
+            </div>
+          </div>
         </section>
-        <section className="figure-forge-generation"><strong>{t("3. Generate figure")}</strong>
-          <label>{t("Generation method")}<select value={forgeMethod} disabled={generationBusy} onChange={(event) => setForgeMethod(event.target.value as "direct" | "two-stage")}><option value="two-stage">{t("Two-stage: analyze then generate")}</option><option value="direct">{t("Direct generation")}</option></select></label>
-          <label>{t("Output format")}<select value={outputMode} disabled={generationBusy} onChange={(event) => setOutputMode(event.target.value as "svg" | "bitmap")}><option value="svg">SVG</option><option value="bitmap">{t("AI bitmap")}</option></select></label>
-          <label>{t("Aspect ratio")}<select value={aspect} disabled={generationBusy} onChange={(event) => setAspect(event.target.value as Aspect)}>{ASPECTS.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          {outputMode === "bitmap" && <label>{t("Resolution")}<select value={imageResolution} disabled={generationBusy} onChange={(event) => setImageResolution(event.target.value)}><option>1K</option><option>2K</option><option>4K</option></select></label>}
-          <label>{t("Vision model override (optional)")}<input list="figure-forge-models" value={visionModel} disabled={generationBusy || reconstructionBusy} onChange={(event) => setVisionModel(event.target.value)} placeholder={t("Uses the configured main model by default")} /></label>
-          {outputMode === "bitmap" && <label>{t("Image generation model")}<input list="figure-forge-models" value={imageModel} disabled={generationBusy} onChange={(event) => setImageModel(event.target.value)} placeholder="gpt-image-1" /></label>}
-          <p>{t("Selected reference images and your plan will be sent to the configured model provider. Use a model that supports images; charges may apply.")}</p>
-          <p>{t("Two-stage requires 4–10 references; direct generation requires 2–4.")}</p>
-          <button type="button" disabled={generationBusy || reconstructionBusy || uploadingReferences || !figurePlan.trim() || (outputMode === "bitmap" && !imageModel.trim()) || references.length + uploadedReferences.length < (forgeMethod === "two-stage" ? 4 : 2) || (forgeMethod === "direct" && references.length + uploadedReferences.length > 4)} onClick={() => void generateFigure()}>{generationBusy ? t("Generating…") : t("Generate draft")}</button>
-          {styleGuide && <details><summary>{t("Reference analysis")}</summary><pre>{styleGuide}</pre></details>}
-          {generatedSvg && <div className="figure-forge-output"><img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(generatedSvg)}`} alt={t("Generated figure preview")} /><button type="button" onClick={downloadSvg}>{t("Download SVG")}</button></div>}
-          {svgWarnings.length > 0 && <p role="status">{svgWarnings.join("; ")}</p>}
-          {generatedBitmap && <div className="figure-forge-output"><img src={generatedBitmap} alt={t("Generated figure preview")} /><a href={generatedBitmap} download="figure.png" target="_blank" rel="noreferrer">{t("Download bitmap")}</a></div>}
+
+        <section className="forge-step" id="forge-step-3" aria-labelledby="forge-step-3-title">
+          <header className="forge-step-head">
+            <span className="forge-step-index" aria-hidden="true">3</span>
+            <div className="forge-step-copy">
+              <h2 className="forge-step-title" id="forge-step-3-title">{t("Generate")}</h2>
+              <p className="forge-step-subtitle">{t("The model reads the references, then drafts the figure.")}</p>
+            </div>
+            <div className="forge-step-actions">
+              <button type="button" className="forge-primary" disabled={!generateReady} onClick={() => void generateFigure()}>{generationBusy ? t("Generating…") : t("Generate draft")}</button>
+              {generateBlockedReason && <span className="forge-blocked">{generateBlockedReason}</span>}
+            </div>
+          </header>
+          <div className="forge-step-body">
+            <div className="forge-grid">
+              <div className="forge-field">
+                <span className="forge-field-label">{t("Method")}</span>
+                <Tabs value={forgeMethod} onChange={(value) => setForgeMethod(value as "direct" | "two-stage")} label={t("Generation method")} variant="segmented">
+                  <Tab value="direct">{t("Direct")}</Tab>
+                  <Tab value="two-stage">{t("Two-stage")}</Tab>
+                </Tabs>
+                <span className="forge-field-hint">{forgeMethod === "two-stage" ? t("Reads the references first and draws from their shared layout.") : t("Draws straight from your plan and the references.")}</span>
+              </div>
+              <div className="forge-field">
+                <span className="forge-field-label">{t("Output")}</span>
+                <Tabs value={outputMode} onChange={(value) => setOutputMode(value as "svg" | "bitmap")} label={t("Output format")} variant="segmented">
+                  <Tab value="svg">SVG</Tab>
+                  <Tab value="bitmap">{t("AI bitmap")}</Tab>
+                </Tabs>
+                <span className="forge-field-hint">{outputMode === "svg" ? t("Editable text and shapes, ready for Figma or PowerPoint.") : t("A rendered image; reconstruct it in step 4 to edit.")}</span>
+              </div>
+            </div>
+            <div className="forge-grid">
+              <label className="forge-field"><span className="forge-field-label">{t("Aspect ratio")}</span><select value={aspect} disabled={generationBusy} onChange={(event) => setAspect(event.target.value as Aspect)}>{ASPECTS.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+              {outputMode === "bitmap" && <label className="forge-field"><span className="forge-field-label">{t("Resolution")}</span><select value={imageResolution} disabled={generationBusy} onChange={(event) => setImageResolution(event.target.value)}><option>1K</option><option>2K</option><option>4K</option></select></label>}
+            </div>
+            <details className="forge-disclosure">
+              <summary>{t("Advanced model options")}</summary>
+              <div className="forge-disclosure-body">
+                <label className="forge-field">
+                  <span className="forge-field-label">{t("Vision model override (optional)")}</span>
+                  <input list="figure-forge-models" value={visionModel} disabled={generationBusy || reconstructionBusy} onChange={(event) => setVisionModel(event.target.value)} placeholder={t("Uses the configured main model by default")} />
+                </label>
+                {outputMode === "bitmap" && <label className="forge-field">
+                  <span className="forge-field-label">{t("Image generation model")}</span>
+                  <input list="figure-forge-models" value={imageModel} disabled={generationBusy} onChange={(event) => setImageModel(event.target.value)} placeholder="gpt-image-1" />
+                </label>}
+                <p className="forge-field-hint">{t("Selected references and your plan are sent to this provider. Use an image-capable model; charges may apply.")}</p>
+              </div>
+            </details>
+            {forgeMethod === "two-stage" && <div className="forge-contract">
+              <header className="forge-contract-head">
+                <div>
+                  <strong>{t("Reference contract")}</strong>
+                  <span className="forge-field-hint">{designContract ? t("Measured from the selected references. Edit anything before generating.") : t("Reads the selected references and measures their shared layout, palette and type scale.")}</span>
+                </div>
+                <button type="button" className="forge-secondary" disabled={contractBusy || generationBusy || Boolean(analyzeReferencesBlockedReason)} onClick={() => void analyzeReferences()}>{contractBusy ? t("Analyzing…") : designContract ? t("Analyze again") : t("Analyze references")}</button>
+              </header>
+              {!designContract && analyzeReferencesBlockedReason && <p className="forge-blocked forge-blocked-inline">{analyzeReferencesBlockedReason}</p>}
+              {designContract && <div className="forge-contract-body">
+                <label className="forge-field forge-field-stacked">
+                  <span className="forge-field-label">{t("Shared layout")}</span>
+                  <textarea rows={2} value={designContract.layout} onChange={(event) => editContract((draft) => { draft.layout = event.target.value; })} />
+                </label>
+                <div className="forge-metrics">
+                  <div className="forge-metric">
+                    <span className="forge-field-label">{t("Palette")}</span>
+                    <div className="forge-swatches">{(["background", "primary", "accent", "neutral"] as const).map((key) => <label key={key} className="forge-swatch"><i style={{ background: designContract.palette[key] || "transparent" }} aria-hidden="true" /><input className="forge-compact" value={designContract.palette[key]} aria-label={t("Palette color {name}", { name: key })} onChange={(event) => editContract((draft) => { draft.palette[key] = event.target.value; })} /></label>)}</div>
+                  </div>
+                  <div className="forge-metric">
+                    <span className="forge-field-label">{t("Type scale")}</span>
+                    <div className="forge-numbers">{[["title", t("Title")], ["panelHeader", t("Header")], ["label", t("Label")], ["note", t("Note")]].map(([key, label]) => <label key={key} className="forge-number"><span>{label}</span><input className="forge-compact" type="number" value={designContract.typography[key as "title"] || ""} onChange={(event) => editContract((draft) => { draft.typography[key as "title"] = Number(event.target.value); })} /></label>)}</div>
+                  </div>
+                  <div className="forge-metric">
+                    <span className="forge-field-label">{t("Strokes")}</span>
+                    <div className="forge-numbers">{[["box", t("Box")], ["arrow", t("Arrow")], ["connector", t("Line")]].map(([key, label]) => <label key={key} className="forge-number"><span>{label}</span><input className="forge-compact" type="number" value={designContract.strokes[key as "box"] || ""} onChange={(event) => editContract((draft) => { draft.strokes[key as "box"] = Number(event.target.value); })} /></label>)}</div>
+                  </div>
+                  <div className="forge-metric">
+                    <span className="forge-field-label">{t("Density")}</span>
+                    <div className="forge-numbers">{[["panels", t("Panels")], ["modulesPerPanel", t("Per panel")], ["connectors", t("Links")]].map(([key, label]) => <label key={key} className="forge-number"><span>{label}</span><input className="forge-compact" type="number" value={designContract.density[key as "panels"] || ""} onChange={(event) => editContract((draft) => { draft.density[key as "panels"] = Number(event.target.value); })} /></label>)}</div>
+                  </div>
+                </div>
+                {designContract.panels.length > 0 && <p className="forge-field-hint">{t("Panels: {list}", { list: designContract.panels.map((panel) => panel.name || panel.role).filter(Boolean).join(" · ") })}</p>}
+                <details className="forge-disclosure">
+                  <summary>{t("Elements, hierarchy and caveats")}</summary>
+                  <div className="forge-disclosure-body">
+                    <label className="forge-field forge-field-stacked"><span className="forge-field-label">{t("Recurring elements")}</span><textarea rows={2} value={designContract.elements} onChange={(event) => editContract((draft) => { draft.elements = event.target.value; })} /></label>
+                    <label className="forge-field forge-field-stacked"><span className="forge-field-label">{t("Information hierarchy")}</span><textarea rows={2} value={designContract.hierarchy} onChange={(event) => editContract((draft) => { draft.hierarchy = event.target.value; })} /></label>
+                    <label className="forge-field forge-field-stacked"><span className="forge-field-label">{t("Caveats")}</span><textarea rows={2} value={designContract.caveats} onChange={(event) => editContract((draft) => { draft.caveats = event.target.value; })} /></label>
+                  </div>
+                </details>
+              </div>}
+            </div>}
+            {generatedSvg && <div className="figure-forge-output"><img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(generatedSvg)}`} alt={t("Generated figure preview")} /><button type="button" className="forge-secondary" onClick={downloadSvg}>{t("Download SVG")}</button></div>}
+            {svgWarnings.length > 0 && <p role="status" className="forge-field-hint">{svgWarnings.join("; ")}</p>}
+            {generatedBitmap && <div className="figure-forge-output"><img src={generatedBitmap} alt={t("Generated figure preview")} /><a href={generatedBitmap} download="figure.png" target="_blank" rel="noreferrer">{t("Download bitmap")}</a></div>}
+          </div>
         </section>
-        <section className="figure-forge-generation"><strong>{t("4. Reconstruct and export editable figure")}</strong>
-          <label>{t("Upload a bitmap or use the generated image")}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={reconstructionBusy} onChange={(event) => { setReconstructionFile(event.target.files?.[0] ?? null); setReconstructedScene(null); }} /></label>
-          <p>{t("Reconstruction sends the bitmap and rendered comparisons to the configured vision model in multiple requests. This may incur charges; check results before use.")}</p>
-          <button type="button" disabled={reconstructionBusy || generationBusy || (!reconstructionFile && !generatedBitmap)} onClick={() => void reconstructBitmap()}>{reconstructionBusy ? t("Reconstructing…") : t("Reconstruct editable objects")}</button>
-          {reconstructionStatus && <p role="status">{reconstructionStatus}</p>}
-          {reconstructedScene && <><div className="figure-forge-output"><img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(exportSource === "svg" ? generatedSvg : sceneToSvgString(reconstructedScene))}`} alt={t("Reconstructed figure preview")} /></div>
-            <label>{t("Export format")}<select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as typeof exportFormat)}><option value="svg">SVG</option><option value="pptx">PPTX</option><option value="vsdx">VSDX</option><option value="drawio">draw.io</option></select></label>
-            <label>{t("Export font")}<select value={exportFont} onChange={(event) => setExportFont(event.target.value)}><option value="">{t("Keep generated fonts")}</option><option>Arial</option><option>Helvetica</option><option>Times New Roman</option><option>Noto Sans</option></select></label>
-            <button type="button" onClick={() => void downloadReconstruction()}>{t("Export editable figure")}</button></>}
+
+        <section className="forge-step" id="forge-step-4" aria-labelledby="forge-step-4-title">
+          <header className="forge-step-head">
+            <span className="forge-step-index" aria-hidden="true">4</span>
+            <div className="forge-step-copy">
+              <h2 className="forge-step-title" id="forge-step-4-title">{t("Export")}</h2>
+              <p className="forge-step-subtitle">{t("Hand the draft over as editable vector objects.")}</p>
+            </div>
+            {reconstructedScene && <div className="forge-step-actions">
+              <button type="button" className="forge-primary" onClick={() => void downloadReconstruction()}>{t("Export editable figure")}</button>
+            </div>}
+          </header>
+          <div className="forge-step-body">
+            <p className="forge-field-hint">{outputMode === "svg" ? t("SVG drafts are already editable — choose a format and export. Reconstruct only to turn a bitmap into objects.") : t("Reconstruct the bitmap into editable objects, then export.")}</p>
+            <label className={`forge-drop${reconstructionFile ? " is-loaded" : ""}`}>
+              <input className="forge-drop-input" type="file" accept="image/png,image/jpeg,image/webp" disabled={reconstructionBusy} onChange={(event) => { setReconstructionFile(event.target.files?.[0] ?? null); setReconstructedScene(null); }} />
+              <ImagePlus size={17} aria-hidden="true" />
+              <span className="forge-drop-copy">
+                <strong>{reconstructionFile ? reconstructionFile.name : t("Drop a bitmap here, or use the generated image")}</strong>
+                <small>{t("Reconstruction makes several model calls; check the result before use.")}</small>
+              </span>
+            </label>
+            <div className="forge-inline-actions">
+              <button type="button" className="forge-secondary" disabled={reconstructionBusy || generationBusy || (!reconstructionFile && !generatedBitmap)} onClick={() => void reconstructBitmap()}>{reconstructionBusy ? t("Reconstructing…") : t("Reconstruct editable objects")}</button>
+              {!reconstructionFile && !generatedBitmap && <span>{t("Generate a bitmap draft first, or upload one.")}</span>}
+            </div>
+            {reconstructionStatus && <p role="status" className="forge-field-hint">{reconstructionStatus}</p>}
+            {reconstructedScene && <>
+              <div className="figure-forge-output"><img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(exportSource === "svg" ? generatedSvg : sceneToSvgString(reconstructedScene))}`} alt={t("Reconstructed figure preview")} /></div>
+              <div className="forge-grid">
+                <label className="forge-field"><span className="forge-field-label">{t("Export format")}</span><select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as typeof exportFormat)}><option value="svg">SVG</option><option value="pptx">PPTX</option><option value="vsdx">VSDX</option><option value="drawio">draw.io</option></select></label>
+                <label className="forge-field"><span className="forge-field-label">{t("Export font")}</span><select value={exportFont} onChange={(event) => setExportFont(event.target.value)}><option value="">{t("Keep generated fonts")}</option><option>Arial</option><option>Helvetica</option><option>Times New Roman</option><option>Noto Sans</option></select></label>
+              </div>
+            </>}
+            <p className="forge-footnote">{t("References belong to their authors. Check each paper's license before reuse.")}</p>
+          </div>
         </section>
-        <p>{t("References belong to their authors. Check each paper's license before reuse.")}</p>
       </div>
     </section>}
   </main>;

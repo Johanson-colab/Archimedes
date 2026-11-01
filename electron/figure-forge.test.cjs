@@ -48,16 +48,40 @@ test("PDF analysis falls back to text only for explicit unsupported-document err
   assert.equal(fallbackCalls, 1);
 });
 
-test("reference analysis sends image data to the selected model without tools", async () => {
+test("reference analysis returns a measured design contract instead of prose", async () => {
   let messages;
   const refs = Array(4).fill("data:image/png;base64,YWJj");
+  const payload = {
+    layout: "three panels left to right",
+    panels: [{ name: "Input", role: "raw data", x: 0, y: 0, w: 500, h: 900 }],
+    elements: "rounded boxes, dashed grouping frames",
+    palette: { background: "#ffffff", primary: "#2f6f4f", accent: "#d9a227", neutral: "#4a4a4a", others: ["#b31b1b", "not-a-hex"] },
+    typography: { title: 44, panelHeader: 28, label: 22, note: 18 },
+    strokes: { box: 3, arrow: 3, connector: 2 },
+    density: { panels: 3, modulesPerPanel: 5, connectors: 6 },
+    hierarchy: "title, then panel headers, then labels",
+    caveats: "panel count varied between figures",
+    representative: [2, 4],
+    imageRefs: [1, 3],
+  };
   const result = await analyzeReferences({ references: refs, plan: "A paper plan", model: "vision" }, {
     config,
-    complete: async (cfg, value, options) => { assert.equal(cfg.model, "vision"); assert.equal(options.allowTools, false); messages = value; return { content: "Use a three-panel layout" }; },
+    complete: async (cfg, value, options) => { assert.equal(cfg.model, "vision"); assert.equal(options.allowTools, false); messages = value; return { content: JSON.stringify(payload) }; },
   });
-  assert.match(result.guide, /three-panel/);
+  assert.equal(result.contract.layout, "three panels left to right");
+  assert.equal(result.contract.palette.primary, "#2f6f4f");
+  assert.deepEqual(result.contract.palette.others, ["#b31b1b"]);
+  assert.equal(result.contract.typography.title, 44);
+  assert.deepEqual(result.representative, [2, 4]);
+  assert.deepEqual(result.imageRefs, [1, 3]);
   assert.equal(messages[1].content.filter((part) => part.type === "image_url").length, 4);
   await assert.rejects(analyzeReferences({ references: refs.slice(0, 3), plan: "plan" }, { config, complete: async () => ({}) }), /4–10/);
+});
+
+test("reference analysis refuses a response that carries no usable evidence", async () => {
+  const refs = Array(4).fill("data:image/png;base64,YWJj");
+  await assert.rejects(analyzeReferences({ references: refs, plan: "plan" }, { config, complete: async () => ({ content: "I cannot analyse these images." }) }), /readable design contract/);
+  await assert.rejects(analyzeReferences({ references: refs, plan: "plan" }, { config, complete: async () => ({ content: '{"elements":"boxes"}' }) }), /no usable layout or palette/);
 });
 
 test("SVG generation requires inputs and does not silently accept empty output", async () => {

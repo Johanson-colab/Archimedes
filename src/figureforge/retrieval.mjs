@@ -48,7 +48,7 @@ export function searchRetrievalIndex({ data, index }, query, candidates, vector 
     }
   }
   return rank(index, prepareQuery(query, index.idf), indices, imageScores, textScores)
-    .map((item) => ({ figure: data.figs[item.i], score: item.score, reason: item.reason }));
+    .map((item) => ({ figure: data.figs[item.i], score: item.score, reason: item.reason, keywords: Array.isArray(item.hits) ? item.hits.slice(0, 4) : [] }));
 }
 
 export function prepareSemanticQuery({ index }, query) {

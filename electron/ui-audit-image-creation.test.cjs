@@ -89,11 +89,80 @@ test("FigureForge opens as a separate workspace without a gallery composer", () 
   assert.match(view, /function useAsTemplate[\s\S]*?setReferences[\s\S]*?showForge\(true\)/);
   assert.match(view, /pageRef\.current\?\.scrollIntoView\(\{ block: "start" \}\)/);
   assert.doesNotMatch(view, /<Dialog open=\{forgeOpen\}/);
-  assert.match(view, /AI features use your configured model provider and may incur charges/);
+  assert.match(view, /Text is extracted on this machine\. Only the plan request leaves it\./);
   assert.match(view, /type="file" accept="\.pdf,application\/pdf"/);
   assert.match(view, /prepareFigurePlan\(\{ paperText: pdfPages\.current\.length/);
-  assert.match(view, /disabled=\{generationBusy \|\| reconstructionBusy \|\| uploadingReferences \|\| !figurePlan\.trim\(\)/);
+  assert.match(view, /disabled=\{!generateReady\}/);
   assert.match(view, /current\.filter\(\(item\) => item\.id !== figure\.id\)/);
   assert.match(css, /\.figure-forge-page \{/);
   assert.doesNotMatch(css, /\.image-creation-composer-dock|\.image-creation-fade/);
+});
+
+test("FigureForge reads as four numbered steps with one primary action each", () => {
+  // A persistent status rail replaces four anonymous headings.
+  assert.match(view, /className="forge-steps" aria-label=\{t\("FigureForge steps"\)\}/);
+  assert.match(view, /const forgeSteps = \[/);
+  assert.match(view, /tone: selectedReferenceCount >= referenceFloor \? "done" : "idle"/);
+  assert.match(css, /\.forge-steps-item\.is-done/);
+  assert.match(css, /\.forge-steps-item\.is-busy/);
+  // Each step is a card with its own numbered header and anchored id.
+  for (const step of [1, 2, 3, 4]) {
+    assert.match(view, new RegExp(`className="forge-step" id="forge-step-${step}"`));
+  }
+  assert.match(view, /className="forge-step-actions"/);
+  assert.match(css, /\.forge-step-index \{/);
+  assert.match(css, /\.forge-step-subtitle \{/);
+  // Configuration is behind a disclosure so the default path needs no setup.
+  assert.match(view, /<summary>\{t\("Model settings"\)\}/);
+  assert.match(view, /Archimedes main model/);
+  // Every disabled primary action explains itself.
+  assert.match(view, /const analyzeBlockedReason = hasPaperInput \? "" : t\("Add a PDF, or at least 100 characters of paper text\."\)/);
+  assert.match(view, /const generateBlockedReason =/);
+  assert.match(view, /className="forge-blocked">\{analyzeBlockedReason\}/);
+  assert.match(view, /className="forge-blocked">\{generateBlockedReason\}/);
+  // Uploads use a drop target instead of a raw file input.
+  assert.match(view, /className=\{`forge-drop\$\{pdfName \? " is-loaded" : ""\}`\}/);
+  assert.match(css, /\.forge-drop-input \{ position: absolute/);
+  // Method and output are segmented controls, not stacked selects.
+  assert.match(view, /variant="segmented"[\s\S]*?<Tab value="two-stage">/);
+  assert.match(view, /<Tab value="bitmap">/);
+});
+
+test("FigureForge reference search is decoupled, explainable and never stale silently", () => {
+  // Gallery filters and FigureForge filters are separate state, so tuning one
+  // no longer resets the other.
+  assert.match(view, /const updateForgeFilter = \(key: keyof Filters, value: string \| number\) => setForgeFilters/);
+  assert.match(view, /const \[forgeFilters, setForgeFilters\] = useState<Filters>\(INITIAL_FILTERS\)/);
+  const stepTwo = view.slice(view.indexOf('id="forge-step-2"'), view.indexOf('id="forge-step-3"'));
+  assert.doesNotMatch(stepTwo, /updateFilter\("(pattern|venue|year|tier)"/, "step 2 must not drive the gallery filters");
+  // The paper's figure type seeds the reference pattern filter.
+  assert.match(view, /const FIGURE_TYPE_PATTERN: Record<string, string> = \{/);
+  assert.match(view, /function changeFigureType\(value: string\)[\s\S]*?setForgeFilters/);
+  // A changed plan marks the previous ranking as out of date.
+  assert.match(view, /const currentSearchQuery = \(figurePlan \|\| paperContent \|\| composerText\)\.slice\(0, 10_000\)/);
+  assert.match(view, /const resultsStale = searchedQuery !== null && searchedQuery !== currentSearchQuery/);
+  assert.match(view, /className="forge-stale">\{t\("The plan changed since the last search/);
+  // Retrieval explains why a card ranked where it did.
+  assert.match(view, /title=\{reason \|\| undefined\}/);
+  assert.match(view, /className="figure-forge-results-hits">\{keywords\.join/);
+});
+
+test("FigureForge measures the references before generating and lets you edit the contract", () => {
+  // Analysis is its own action, so a wrong palette is fixed before paying for a draft.
+  assert.match(view, /async function analyzeReferences\(\)/);
+  assert.match(view, /onClick=\{\(\) => void analyzeReferences\(\)\}/);
+  assert.match(view, /className="forge-contract"/);
+  assert.match(view, /t\("Reference contract"\)/);
+  assert.match(view, /className="forge-metrics"/);
+  assert.match(view, /value=\{designContract\.layout\}/);
+  assert.match(view, /designContract\.palette\[key\]/);
+  assert.match(view, /draft\.typography\[key as "title"\] = Number/);
+  // Generation consumes the edited contract, not the raw model prose.
+  assert.match(view, /if \(!designContract \|\| !contractIsUsable\(designContract\)\) throw new Error\(t\("Analyze the references first\."\)\)/);
+  assert.match(view, /const contract = normalizeDesignContract\(designContract\)/);
+  assert.match(view, /renderDesignContract\(contract\) : renderImageGuide\(contract\)/);
+  // The contract dies when its inputs change, so it is never reused blindly.
+  assert.match(view, /const referenceSignature = /);
+  assert.match(view, /useEffect\(\(\) => \{[\s\S]*?setDesignContract\(null\);[\s\S]*?\}, \[figurePlan, referenceSignature\]\)/);
+  assert.match(view, /const needsContract = forgeMethod === "two-stage" && !\(designContract && contractIsUsable\(designContract\)\)/);
 });
