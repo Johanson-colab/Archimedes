@@ -129,7 +129,19 @@ interface ResearchDeskBridge {
     deleteReproduction: (id: string) => Promise<boolean>;
     planReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
     preflightReproduction: (id: string, workspace?: string) => Promise<ReproductionPreflight>;
+    runReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
+    stopReproduction: (id: string) => Promise<boolean>;
     onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
+    onReproductionRunEvent?: (callback: (payload: {
+      reproductionId?: string;
+      runId?: string;
+      type?: string;
+      detail?: string;
+      chunk?: string;
+      status?: string;
+      summary?: string;
+      step?: { id?: string; title?: string; status?: ReproductionRunStepStatus; detail?: string; exit_code?: number | null; duration_ms?: number };
+    }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
@@ -749,7 +761,7 @@ interface DailyPaper extends AcademicSearchResult {
 
 type ReproductionStatus =
   | "draft" | "planned" | "queued" | "provisioning" | "running"
-  | "diagnosing" | "verified" | "diverged" | "blocked" | "cancelled";
+  | "diagnosing" | "checks-passed" | "verified" | "diverged" | "blocked" | "cancelled";
 
 type ReproductionCheck =
   | { kind: "file_exists"; path: string }
@@ -805,9 +817,38 @@ interface Reproduction {
   error: string;
   created_at: string;
   updated_at: string;
+  run?: ReproductionRun | null;
 }
 
 type ReproductionCheckStatus = "passed" | "failed" | "needs-run" | "manual" | "blocked";
+
+type ReproductionRunStepStatus = "pending" | "passed" | "failed" | "manual" | "blocked" | "stopped";
+
+interface ReproductionRunStep {
+  id: string;
+  title: string;
+  status: ReproductionRunStepStatus;
+  detail: string;
+  exit_code: number | null;
+  duration_ms: number;
+}
+
+type ReproductionRunStatus = "running" | "verified" | "failed" | "blocked" | "manual" | "stopped" | "timeout" | "interrupted";
+
+interface ReproductionRun {
+  id: string;
+  reproduction_id: string;
+  status: ReproductionRunStatus;
+  backend: string;
+  image: string;
+  steps: ReproductionRunStep[];
+  log: string;
+  error: string;
+  started_at: string;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 interface ReproductionPreflight {
   commit: string;

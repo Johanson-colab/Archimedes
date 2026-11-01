@@ -60,12 +60,43 @@ deviation, not silently absorbed.
 ## Status
 
 ```
-draft → planned → queued → provisioning → running → verified | diverged
-                                   ↑            │
-                                   └ diagnosing ┘   (max 3 attempts → blocked)
+draft → planned → queued → provisioning → running ─┬→ checks-passed
+                            ↑                      │
+                            └────── diagnosing ────┘   (max 3 attempts → blocked)
+
+checks-passed → verified | diverged        (when the reported numbers are compared)
 ```
 
+`checks-passed` is deliberately not `verified`: every runbook checkpoint passed,
+but no number in the paper has been compared yet. Collapsing the two would let a
+plan look finished while the table it promises is still unread.
+
 `approve` is a human action. It is deliberately not exposed as an agent tool.
+
+## Execution
+
+### M1: local Docker
+
+One container per run, created from what the contract declares (`python:3.11-slim`
+for `python: 3.11`, `node:20` when the install steps are npm), with the checkout
+mounted at `/workspace`. Steps are `docker exec` calls, so they share the
+environment they are building.
+
+The runner (`electron/reproduction/runner.cjs`) is deliberately dumb:
+
+1. run the step's command;
+2. evaluate the step's `check` as its own predicate;
+3. pass → next step, anything else → stop.
+
+A command's exit code never overrides its checkpoint: `pip install -e .` exiting
+1 still passes a `file_exists` check if the package landed, and exiting 0 still
+fails if the import breaks. `manual` stops the run and asks a person — it never
+gets guessed. Commands that time out, or a run that exceeds `budget.wallClockMin`,
+stop with `timeout`.
+
+Stopping a run aborts the in-flight `docker exec` and removes the container.
+Closing the app removes it too: a local Docker run does not survive the app, and
+the UI says so rather than pretending the job is still going.
 
 ## Execution (later milestones)
 
@@ -79,10 +110,15 @@ draft → planned → queued → provisioning → running → verified | diverge
 
 ## Milestones
 
-| Milestone | Scope |
-| --- | --- |
-| M0 | object, list, paper entry, contract planning, approval (no execution) |
-| M1 | local Docker run, queue, log stream, metric parse, verdict |
-| M2 | bounded diagnosis loop, budget enforcement |
-| M3 | SSH backends, environment cache, cost watchdog |
-| M4 | batch across papers, aggregate report |
+| Milestone | Scope | State |
+| --- | --- | --- |
+| M0 | object, list, paper entry, contract planning, approval (no execution) | done |
+| M1 | local Docker run, queue, log stream, checkpoint verdicts | done |
+| M2 | bounded diagnosis loop, budget enforcement | next |
+| M3 | SSH backends, environment cache, cost watchdog | planned |
+| M4 | batch across papers, aggregate report | planned |
+
+M1 stops short of comparing numbers on purpose: `checks-passed` means the
+runbook ran, not that Table 2 matched. Metric parsing and verdicts arrive with
+M2/M3 once failures have somewhere useful to go.
+

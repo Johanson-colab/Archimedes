@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -36,6 +36,8 @@ const { planReproduction } = require("./reproduction/planner.cjs");
 const { normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
 const { runPreflight } = require("./reproduction/preflight.cjs");
+const { runRunbook } = require("./reproduction/runner.cjs");
+const { createDockerBackend } = require("./reproduction/docker.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -1038,7 +1040,8 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("reproduction:get", (_event, { id } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
-    return presentReproduction(store.getReproduction(id));
+    const record = presentReproduction(store.getReproduction(id));
+    return record ? { ...record, run: store.getLatestReproductionRun(record.id) } : record;
   });
 
   ipcMain.handle("reproduction:update", (_event, { id, patch } = {}) => {
@@ -1063,6 +1066,113 @@ app.whenReady().then(async () => {
       repoUrl: record.contract.repo?.url || record.repo_url,
       steps: record.contract.steps,
     });
+  });
+
+  const activeReproductionRuns = new Map();
+
+  const notifyRunFinished = (record, outcome) => {
+    // The user is told when they are not looking; a run that finishes while the
+    // window is focused already shows its result on screen.
+    try {
+      if (!Notification.isSupported()) return;
+      if (BrowserWindow.getAllWindows().some((window) => window.isFocused())) return;
+      const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
+      new Notification({
+        title: `${record.title} stopped`,
+        body: stopped
+          ? `Step "${stopped.title}" ${stopped.detail || stopped.status}`
+          : outcome.error || "The run stopped before it finished.",
+      }).show();
+    } catch {
+      // Notifications are best effort and must never fail a run.
+    }
+  };
+
+  ipcMain.handle("reproduction:run", async (event, { id, workspace } = {}) => {
+    const record = presentReproduction(store.getReproduction(id));
+    if (!record) throw new Error("That reproduction does not exist.");
+    if (!record.contract) throw new Error("Generate a plan before running it.");
+    if (!record.contract.frozen_at) throw new Error("Approve the plan before running it.");
+    if (activeReproductionRuns.has(record.id)) throw new Error("This reproduction is already running.");
+    const repoUrl = record.contract.repo?.url || record.repo_url;
+    if (!repoUrl) throw new Error("This reproduction has no repository to run against.");
+
+    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
+    store.openWorkspace(dataWorkspace);
+
+    const run = store.createReproductionRun({ reproductionId: record.id, backend: "docker" });
+    const controller = new AbortController();
+    activeReproductionRuns.set(record.id, { runId: run.id, controller });
+    store.updateReproduction(record.id, { status: "provisioning", error: "" });
+
+    const send = (payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
+    };
+
+    // Detached on purpose: the renderer gets progress events, the main process
+    // owns the run, and closing the reproduction view does not stop it.
+    void (async () => {
+      let outcome = { status: "failed", steps: [], log: "", error: "" };
+      let backend = null;
+      try {
+        send({ type: "preparing", detail: "Getting the repository checkout…" });
+        const existing = await getRepositoryCheckout(dataWorkspace, repoUrl).catch(() => null);
+        if (!existing) {
+          send({ type: "preparing", detail: "Cloning the repository…" });
+          await cloneRepositoryCheckout(dataWorkspace, repoUrl);
+        }
+        const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "");
+        backend = createDockerBackend({ checkoutDir: root, environment: record.contract.environment });
+        store.updateReproductionRun(run.id, { image: backend.image, backend: backend.describe() });
+        send({ type: "preparing", detail: `Starting ${backend.image}…` });
+        await backend.prepare();
+        store.updateReproduction(record.id, { status: "running" });
+        send({ type: "started", detail: backend.describe() });
+        outcome = await runRunbook({
+          steps: record.contract.steps,
+          backend,
+          signal: controller.signal,
+          budgetMs: Math.max(1, Number(record.budget?.wallClockMin) || 45) * 60_000,
+          emit: (payload) => send(payload),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "The run could not start.";
+        outcome = { status: "failed", steps: [], log: "", error: message };
+        send({ type: "error", detail: message });
+      } finally {
+        if (backend) await backend.dispose().catch(() => {});
+        activeReproductionRuns.delete(record.id);
+      }
+
+      const runStatus = outcome.status || "failed";
+      store.updateReproductionRun(run.id, {
+        status: runStatus,
+        steps: outcome.steps || [],
+        log: outcome.log || "",
+        error: outcome.error || "",
+        finishedAt: new Date().toISOString(),
+      });
+      const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
+      const summary = runStatus === "verified"
+        ? ""
+        : stopped ? `${stopped.title}: ${stopped.detail || stopped.status}` : (outcome.error || "The run stopped.");
+      store.updateReproduction(record.id, {
+        status: runStatus === "verified" ? "checks-passed" : runStatus === "stopped" ? "cancelled" : "blocked",
+        error: summary,
+      });
+      send({ type: "finished", status: runStatus, summary });
+      if (runStatus !== "verified") notifyRunFinished(record, { ...outcome, error: summary });
+    })();
+
+    return { ...presentReproduction(store.getReproduction(record.id)), run };
+  });
+
+  ipcMain.handle("reproduction:stop", async (_event, { id } = {}) => {
+    const active = activeReproductionRuns.get(String(id || ""));
+    if (!active) throw new Error("This reproduction is not running.");
+    active.controller.abort();
+    return true;
   });
 
   ipcMain.handle("reproduction:plan", async (event, { id, workspace } = {}) => {

@@ -13,7 +13,7 @@ const MAX_STEPS = 10;
 
 const STATUSES = Object.freeze([
   "draft", "planned", "queued", "provisioning", "running",
-  "diagnosing", "verified", "diverged", "blocked", "cancelled",
+  "diagnosing", "checks-passed", "verified", "diverged", "blocked", "cancelled",
 ]);
 
 function text(value, limit = 2_000) {

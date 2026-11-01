@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronLeft, FlaskConical, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Check, ChevronLeft, FlaskConical, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
 
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
@@ -10,6 +10,7 @@ const STATUS_LABELS: Record<ReproductionStatus, string> = {
   provisioning: "Building environment",
   running: "Running",
   diagnosing: "Diagnosing",
+  "checks-passed": "Checkpoints passed",
   verified: "Verified",
   diverged: "Diverged",
   blocked: "Blocked",
@@ -23,6 +24,7 @@ const STATUS_TONE: Record<ReproductionStatus, string> = {
   provisioning: "working",
   running: "working",
   diagnosing: "warning",
+  "checks-passed": "good",
   verified: "good",
   diverged: "warning",
   blocked: "bad",
@@ -51,6 +53,40 @@ function statusLabel(status: ReproductionCheckStatus) {
   if (status === "needs-run") return "needs run";
   if (status === "blocked") return "blocked";
   return "manual";
+}
+
+const RUN_STEP_LABELS: Record<ReproductionRunStepStatus, string> = {
+  pending: "pending",
+  passed: "passed",
+  failed: "failed",
+  manual: "manual",
+  blocked: "blocked",
+  stopped: "stopped",
+};
+
+const RUN_STEP_TONES: Record<ReproductionRunStepStatus, string> = {
+  pending: "needs-run",
+  passed: "passed",
+  failed: "failed",
+  manual: "manual",
+  blocked: "blocked",
+  stopped: "needs-run",
+};
+
+const RUN_LABELS: Record<ReproductionRunStatus, string> = {
+  running: "Running",
+  verified: "All checkpoints passed",
+  failed: "Stopped at a failed checkpoint",
+  blocked: "Blocked by a step the plan marks impossible",
+  manual: "Stopped at a checkpoint only a person can confirm",
+  stopped: "Stopped",
+  timeout: "Ran out of time",
+  interrupted: "Interrupted",
+};
+
+function stepDuration(step: ReproductionRunStep) {
+  if (!step.duration_ms) return "";
+  return step.duration_ms < 1000 ? `${step.duration_ms} ms` : `${(step.duration_ms / 1000).toFixed(1)} s`;
 }
 
 function preflightSummary(results: Record<string, { status: ReproductionCheckStatus }>) {
@@ -90,12 +126,22 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [items, setItems] = useState<Reproduction[]>([]);
   const [detail, setDetail] = useState<Reproduction | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "">("");
+  const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "run" | "stop" | "">("");
   const [error, setError] = useState("");
   const [planStatus, setPlanStatus] = useState("");
   const [openClaim, setOpenClaim] = useState<string | null>(null);
   const [preflight, setPreflight] = useState<Record<string, { status: ReproductionCheckStatus; detail: string }> | null>(null);
   const [checking, setChecking] = useState(false);
+  const [run, setRun] = useState<ReproductionRun | null>(null);
+  const [runSteps, setRunSteps] = useState<Record<string, ReproductionRunStep>>({});
+  const [liveLog, setLiveLog] = useState("");
+  const [running, setRunning] = useState(false);
+  const [runLine, setRunLine] = useState("");
+  const logRef = useRef<HTMLPreElement | null>(null);
+
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [liveLog]);
 
   const [picking, setPicking] = useState(false);
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
@@ -127,12 +173,48 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   }, [bridge]);
 
   useEffect(() => {
+    const off = bridge.onReproductionRunEvent?.((payload) => {
+      if (!payload?.reproductionId || payload.reproductionId !== selectedId) return;
+      if (payload.type === "preparing" || payload.type === "started" || payload.type === "error") {
+        if (payload.detail) setRunLine(payload.detail);
+        return;
+      }
+      if (payload.type === "output" && payload.chunk) {
+        setLiveLog((current) => (current + payload.chunk).slice(-200_000));
+        return;
+      }
+      if (payload.type === "step" && payload.step?.id) {
+        const step = payload.step as ReproductionRunStep;
+        setRunSteps((current) => ({ ...current, [step.id]: step }));
+        return;
+      }
+      if (payload.type === "finished") {
+        setRunning(false);
+        setRunLine(payload.summary || "");
+        void bridge.getReproduction(selectedId).then((record) => {
+          if (!record) return;
+          setDetail(record);
+          setRun(record.run ?? null);
+        }).catch(() => {});
+        void refresh();
+      }
+    });
+    return () => off?.();
+  }, [bridge, refresh, selectedId]);
+
+  useEffect(() => {
     if (!selectedId) { setDetail(null); return; }
     let cancelled = false;
     void bridge.getReproduction(selectedId).then((record) => {
       if (cancelled) return;
       setDetail(record);
       setPreflight(null);
+      const previous = record?.run ?? null;
+      setRun(previous);
+      setRunSteps(Object.fromEntries((previous?.steps ?? []).map((entry) => [entry.id, entry])));
+      setLiveLog(previous?.log ?? "");
+      setRunning(previous?.status === "running");
+      setRunLine("");
     }).catch((detailError) => { if (!cancelled) setError(readable(detailError, "Could not open this reproduction.")); });
     return () => { cancelled = true; };
   }, [bridge, selectedId]);
@@ -207,6 +289,40 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setError(readable(checkError, "Could not check the repository."));
     } finally {
       setChecking(false);
+    }
+  }, [bridge, detail]);
+
+  const startRun = useCallback(async () => {
+    if (!detail) return;
+    setBusy("run");
+    setError("");
+    setRunLine("Starting…");
+    setLiveLog("");
+    setRunSteps({});
+    try {
+      const next = await bridge.runReproduction(detail.id);
+      setDetail(next);
+      setRun(next.run ?? null);
+      setRunning(true);
+    } catch (runError) {
+      setError(readable(runError, "The runbook could not start."));
+      setRunning(false);
+      setRunLine("");
+    } finally {
+      setBusy("");
+    }
+  }, [bridge, detail]);
+
+  const stopRun = useCallback(async () => {
+    if (!detail) return;
+    setBusy("stop");
+    try {
+      await bridge.stopReproduction(detail.id);
+      setRunLine("Stopping…");
+    } catch (stopError) {
+      setError(readable(stopError, "The run could not be stopped."));
+    } finally {
+      setBusy("");
     }
   }, [bridge, detail]);
 
@@ -295,28 +411,50 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           </h2>
           {preflight && <p className="reproduce-preflight-summary">{preflightSummary(preflight)}</p>}
           <ol className="reproduce-runbook">
-            {(contract.steps ?? []).map((step, index) => <li className={`reproduce-step${step.blocked ? " blocked" : ""}`} key={step.id}>
+            {(contract.steps ?? []).map((step, index) => {
+              // A checkpoint nobody has evaluated is not a green tick: it is a
+              // statement of what will be checked. Only a real verdict colours it.
+              const verdict = runSteps[step.id]?.status ?? preflight?.[step.id]?.status ?? "";
+              const tone = verdict === "passed" ? "" : verdict === "manual" || step.check.kind === "manual" ? " manual" : verdict ? " bad" : " idle";
+              const VerdictIcon = verdict === "failed" || verdict === "blocked" || verdict === "manual" || step.check.kind === "manual" ? AlertCircle : Check;
+              return <li className={`reproduce-step${step.blocked ? " blocked" : ""}`} key={step.id}>
               <span className="reproduce-step-index" aria-hidden="true">{index + 1}</span>
               <div className="reproduce-step-body">
                 <div className="reproduce-step-head">
                   <strong>{step.title}</strong>
-                  {preflight?.[step.id] && <span className={`reproduce-check-status ${preflight[step.id].status}`}>{statusLabel(preflight[step.id].status)}</span>}
+                  {runSteps[step.id]
+                    ? <span className={`reproduce-check-status ${RUN_STEP_TONES[runSteps[step.id].status]}`}>{RUN_STEP_LABELS[runSteps[step.id].status]}</span>
+                    : preflight?.[step.id] ? <span className={`reproduce-check-status ${preflight[step.id].status}`}>{statusLabel(preflight[step.id].status)}</span> : null}
                   {step.blocked && <span className="reproduce-tag warn">blocked</span>}
                 </div>
                 {step.detail && <p className="reproduce-step-detail">{step.detail}</p>}
                 {step.command && <pre className="reproduce-step-command">{step.command}</pre>}
-                {(step.checkpoint || step.check) && <p className={`reproduce-checkpoint${step.check.kind === "manual" ? " manual" : ""}`}>
-                  {step.check.kind === "manual" ? <AlertCircle size={11} /> : <Check size={11} />}
+                {(step.checkpoint || step.check) && <p className={`reproduce-checkpoint${tone}`}>
+                  <VerdictIcon size={11} />
                   <span>{step.checkpoint || checkLabel(step.check)}</span>
                   <span className="reproduce-check-kind">{step.check.kind === "manual" ? "manual" : step.check.kind.replace("_", " ")}</span>
                 </p>}
                 {step.source && <p className="reproduce-hint">from {step.source}</p>}
                 {step.blocked && <p className="reproduce-hint warn">{step.blocked}</p>}
                 {preflight?.[step.id]?.detail && preflight[step.id].status === "failed" && <p className="reproduce-hint bad">{preflight[step.id].detail}</p>}
+                {runSteps[step.id]?.detail && <p className="reproduce-hint bad">{runSteps[step.id].detail}</p>}
+                {runSteps[step.id] && (runSteps[step.id].exit_code !== null || runSteps[step.id].duration_ms > 0) && <p className="reproduce-hint">
+                  {[runSteps[step.id].exit_code !== null ? `exit ${runSteps[step.id].exit_code}` : "", stepDuration(runSteps[step.id])].filter(Boolean).join(" · ")}
+                </p>}
               </div>
-            </li>)}
+            </li>;
+            })}
           </ol>
         </section>
+
+        {(run || running || runLine) && <section className="reproduce-block reproduce-run">
+          <h2>Run
+            {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : "failed"}`}>{RUN_LABELS[run.status]}</span>}
+          </h2>
+          {run?.backend && <p className="reproduce-hint">{run.backend}</p>}
+          {runLine && <p className="reproduce-hint">{runLine}</p>}
+          {(liveLog || running) && <pre className="reproduce-log" ref={logRef}>{liveLog || "Waiting for output…"}</pre>}
+        </section>}
 
         <section className="reproduce-block">
           <h2>Numbers this runbook should produce</h2>
@@ -370,15 +508,22 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         </div>
 
         <footer className="reproduce-footer">
-          <button className="secondary-button" disabled={busy !== ""} onClick={() => void plan()}>
+          <button className="secondary-button" disabled={busy !== "" || running} onClick={() => void plan()}>
             {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Re-plan
           </button>
-          <button className="primary-button" disabled={busy !== "" || detail.status === "queued"} onClick={() => void approve()}>
-            {detail.status === "queued" ? <Check size={14} /> : <FlaskConical size={14} />}
-            {detail.status === "queued" ? "Queued" : "Approve and queue"}
-          </button>
+          {contract.frozen_at
+            ? running
+              ? <button className="secondary-button" disabled={busy !== ""} onClick={() => void stopRun()}>
+                  {busy === "stop" ? <LoaderCircle className="spin" size={14} /> : <Square size={13} />}Stop
+                </button>
+              : <button className="primary-button" disabled={busy !== ""} onClick={() => void startRun()}>
+                  {busy === "run" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}Run runbook
+                </button>
+            : <button className="primary-button" disabled={busy !== ""} onClick={() => void approve()}>
+                <FlaskConical size={14} />Approve and queue
+              </button>}
         </footer>
-        {detail.status === "queued" && <p className="reproduce-hint reproduce-queued">Contract frozen. Execution lands in the next milestone.</p>}
+        {contract.frozen_at && !running && run?.status === "verified" && <p className="reproduce-hint reproduce-queued">Every checkpoint passed. Comparing the reported numbers is the next milestone.</p>}
       </>}
     </section>;
   }
