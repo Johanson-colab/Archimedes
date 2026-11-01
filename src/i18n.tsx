@@ -439,6 +439,8 @@ const translations: Record<string, string> = {
   "Thinking effort": "思考强度",
   "Context length": "上下文长度",
   "Model controls": "模型控制",
+  "Drop files or folders to attach": "拖入文件或文件夹以添加附件",
+  "Add text or attach an image to send": "输入文字或添加图片后才能发送",
   "Private": "私有",
   "Project": "项目",
   "Unavailable": "不可用",

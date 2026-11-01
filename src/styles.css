@@ -1296,6 +1296,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 
 .conversation-composer-wrap { width: min(100%, 820px); margin: 0 auto; padding: 0 30px 12px; }
 .conversation-composer {
+  position: relative;
   overflow: visible;
   background: #fff;
   border: 1px solid #d4d4ce;
@@ -7431,7 +7432,6 @@ html[data-menu-style="glass"] .menu-surface {
   display: inline-flex;
   height: 23px;
   align-items: center;
-  gap: 5px;
   padding: 0 8px;
   color: var(--night-ink);
   background: var(--night-panel);
@@ -7439,7 +7439,6 @@ html[data-menu-style="glass"] .menu-surface {
   font-size: 8.5px;
   font-weight: 600;
 }
-.composer-runtime-dot { width: 5px; height: 5px; background: var(--state-success); border-radius: 50%; }
 .composer-runtime-switch button.composer-runtime-cloud { padding: 3px 7px; }
 .composer-model-controls { display: inline-flex; min-width: 0; align-items: center; gap: 2px; }
 .composer-model-controls .reasoning-effort-picker { display: inline-flex; }
@@ -7485,3 +7484,18 @@ html[data-menu-style="glass"] .menu-surface {
 .context-usage-breakdown > div.total { margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--night-line-soft); }
 .context-usage-breakdown > div.total strong { color: var(--night-ink-soft); }
 .context-usage-breakdown-note { margin: 2px 8px 5px; color: var(--night-faint); font-size: 9px; line-height: 1.45; }
+
+.composer-drop-target {
+  position: absolute;
+  inset: 4px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-panel));
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border-default));
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
