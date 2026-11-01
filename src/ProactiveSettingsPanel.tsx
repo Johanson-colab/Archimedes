@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, LoaderCircle, Network, Save, X } from "lucide-react";
 import { useUISettings } from "./i18n";
+import { SettingsChoiceGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
 import { providers } from "./ModelSettingsModal";
 import type { ProactiveSettings } from "./proactive-types";
 
@@ -10,21 +11,6 @@ const MODES: Array<{ id: ProactiveSettings["mode"]; label: string; description: 
   { id: "auto", label: "Auto", description: "Watch L0 signals and observe the active context in seconds-level bursts." },
   { id: "random", label: "Random", description: "Stay closed until Proactive agent has something to say, then pop up automatically." },
 ];
-
-function Row({ title, description, hint, children, stacked = false }: { title: string; description: string; hint?: string; children: React.ReactNode; stacked?: boolean }) {
-  return <div className={stacked ? "settings-row settings-row-stacked" : "settings-row"}>
-    <div className="settings-row-copy">
-      <span className="settings-row-title">{title}</span>
-      <p className="settings-row-description">{description}</p>
-      {hint && <span className="settings-row-hint">{hint}</span>}
-    </div>
-    <div className="settings-row-control">{children}</div>
-  </div>;
-}
-
-function Toggle({ checked, label, onChange, disabled = false }: { checked: boolean; label: string; onChange: (checked: boolean) => void; disabled?: boolean }) {
-  return <button className={checked ? "settings-toggle on" : "settings-toggle"} role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}><span /></button>;
-}
 
 export default function ProactiveSettingsPanel({
   settings,
@@ -143,37 +129,33 @@ export default function ProactiveSettingsPanel({
   return <div className="settings-sections">
     <p className="settings-group-note">{t("A quiet research sidekick. It reads app context; screenshots are opt-in, app-only, and never written to disk.")}</p>
 
-    <section className="settings-section">
-      <h3 className="settings-section-title">{t("Mode")}</h3>
+    <SettingsSection title={t("Mode")}>
       <div className="settings-group">
-        <Row
+        <SettingsRow
           title={t("Proactive mode")}
           description={t("Proactive is opt-in. Off is the default.")}
           hint={t(activeMode.description)}
         >
-          <div className="settings-choice" role="radiogroup" aria-label={t("Proactive mode")}>
-            {MODES.map((mode) => <button
-              key={mode.id}
-              role="radio"
-              aria-checked={settings.mode === mode.id}
-              className={settings.mode === mode.id ? "active" : ""}
-              onClick={() => onChange({ mode: mode.id })}
-            >{t(mode.label)}</button>)}
-          </div>
-        </Row>
+          <SettingsChoiceGroup
+            value={settings.mode}
+            label={t("Proactive mode")}
+            options={MODES.map((mode) => ({ value: mode.id, label: t(mode.label) }))}
+            onChange={(mode) => onChange({ mode })}
+          />
+        </SettingsRow>
       </div>
-    </section>
+    </SettingsSection>
 
-    <section className="settings-section">
-      <h3 className="settings-section-title">{t("Model")}</h3>
+    <SettingsSection title={t("Model")}>
       <div className="settings-group">
-        <div className="settings-row settings-row-stacked proactive-model-row">
-          <div className="settings-row-copy">
-            <span className="settings-row-title">{t("Proactive model")}</span>
-            <p className="settings-row-description">{t("Replies and live observation use this model. It can inherit the main Agent model or use a cheaper one.")}</p>
-            <span className="settings-row-hint">{modelConfig?.inheritedFromAgent ? t("Currently inheriting the main Agent model.") : t("A dedicated Proactive model.")}</span>
-          </div>
-          <div className="proactive-model-form">
+        <SettingsRow
+          stacked
+          className="proactive-model-row"
+          controlClassName="proactive-model-form"
+          title={t("Proactive model")}
+          description={t("Replies and live observation use this model. It can inherit the main Agent model or use a cheaper one.")}
+          hint={modelConfig?.inheritedFromAgent ? t("Currently inheriting the main Agent model.") : t("A dedicated Proactive model.")}
+        >
             {modelLoading ? <div className="proactive-model-loading"><LoaderCircle className="spin" size={15} />{t("Loading configuration")}</div> : <>
               <label className="proactive-model-field">
                 <span>{t("Provider")}</span>
@@ -225,54 +207,50 @@ export default function ProactiveSettingsPanel({
               </div>
               {modelFeedback.text && <div className={`model-feedback ${modelFeedback.kind}`}>{modelFeedback.kind === "success" ? <Check size={14} /> : <X size={14} />}<span>{modelFeedback.text}</span></div>}
             </>}
-          </div>
-        </div>
+        </SettingsRow>
       </div>
       <p className="settings-group-note">{t("The API key stays in Electron user data. Proactive never shares the main Agent's conversation unless it is part of the current context.")}</p>
-    </section>
+    </SettingsSection>
 
-    <section className="settings-section">
-      <h3 className="settings-section-title">{t("What it watches")}</h3>
+    <SettingsSection title={t("What it watches")}>
       <p className="settings-group-note">{t("Only L0 signals from inside Archimedes.")}</p>
       <div className="settings-group">
-        <Row title={t("Search with 0 results")} description={t("Offer the likely term when a paper search misses.")} hint={t("L0 · app context")}>
-          <Toggle checked={settings.sources.search} label={t("Search with 0 results")} onChange={(value) => setSource("search", value)} />
-        </Row>
-        <Row title={t("Repeated passage selection")} description={t("Notice when the same passage is selected more than once.")} hint={t("L0 · app context")}>
-          <Toggle checked={settings.sources.selection} label={t("Repeated passage selection")} onChange={(value) => setSource("selection", value)} />
-        </Row>
-        <Row title={t("LaTeX build failure")} description={t("Turn the first diagnostic into a fix request with the file and line.")} hint={t("L0 · app context")}>
-          <Toggle checked={settings.sources.latex} label={t("LaTeX build failure")} onChange={(value) => setSource("latex", value)} />
-        </Row>
-        <Row title={t("Uncited claims")} description={t("Manual review of the latest answer; never runs on its own.")} hint={t("Manual only")}>
-          <Toggle checked={settings.sources.citation} label={t("Uncited claims")} onChange={(value) => setSource("citation", value)} />
-        </Row>
-        <Row title={t("Library radar")} description={t("Sum up papers added to your library in the last 24 hours.")} hint={t("Once a day")}>
-          <Toggle checked={settings.sources.library} label={t("Library radar")} onChange={(value) => setSource("library", value)} />
-        </Row>
+        <SettingsRow title={t("Search with 0 results")} description={t("Offer the likely term when a paper search misses.")} hint={t("L0 · app context")}>
+          <SettingsSwitch checked={settings.sources.search} label={t("Search with 0 results")} onChange={(value) => setSource("search", value)} />
+        </SettingsRow>
+        <SettingsRow title={t("Repeated passage selection")} description={t("Notice when the same passage is selected more than once.")} hint={t("L0 · app context")}>
+          <SettingsSwitch checked={settings.sources.selection} label={t("Repeated passage selection")} onChange={(value) => setSource("selection", value)} />
+        </SettingsRow>
+        <SettingsRow title={t("LaTeX build failure")} description={t("Turn the first diagnostic into a fix request with the file and line.")} hint={t("L0 · app context")}>
+          <SettingsSwitch checked={settings.sources.latex} label={t("LaTeX build failure")} onChange={(value) => setSource("latex", value)} />
+        </SettingsRow>
+        <SettingsRow title={t("Uncited claims")} description={t("Manual review of the latest answer; never runs on its own.")} hint={t("Manual only")}>
+          <SettingsSwitch checked={settings.sources.citation} label={t("Uncited claims")} onChange={(value) => setSource("citation", value)} />
+        </SettingsRow>
+        <SettingsRow title={t("Library radar")} description={t("Sum up papers added to your library in the last 24 hours.")} hint={t("Once a day")}>
+          <SettingsSwitch checked={settings.sources.library} label={t("Library radar")} onChange={(value) => setSource("library", value)} />
+        </SettingsRow>
       </div>
       <p className="settings-group-note">{t("Activity metadata stays local. Window titles and keystroke content are never read.")}</p>
-    </section>
+    </SettingsSection>
 
-    <section className="settings-section">
-      <h3 className="settings-section-title">{t("Visual observation")}</h3>
+    <SettingsSection title={t("Visual observation")}>
       <div className="settings-group">
-        <Row
+        <SettingsRow
           title={t("App screenshots")}
           description={t("Capture only Archimedes' own window while you are active. Images are sent to the Proactive model in memory and discarded after the call.")}
           hint={settings.visionCapable ? t("L2 · Archimedes window only") : t("Requires a vision-capable model")}
         >
-          <Toggle checked={settings.appCapture} label={t("App screenshots")} disabled={!settings.visionCapable} onChange={(appCapture) => onChange({ appCapture })} />
-        </Row>
+          <SettingsSwitch checked={settings.appCapture} label={t("App screenshots")} disabled={!settings.visionCapable} onChange={(appCapture) => onChange({ appCapture })} />
+        </SettingsRow>
       </div>
       {!settings.visionCapable && <p className="settings-group-note warning">{t("Mark the Proactive model as vision-capable above before enabling Visual observation.")}</p>}
       <p className="settings-group-note">{t("No desktop capture and no other windows. The floating Proactive panel is hidden before each capture; the image is never written to disk.")}</p>
-    </section>
+    </SettingsSection>
 
-    <section className="settings-section">
-      <h3 className="settings-section-title">{t("Rhythm")}</h3>
+    <SettingsSection title={t("Rhythm")}>
       <div className="settings-group">
-        <Row title={t("Daily budget")} description={t("Auto suggestions created per day. Manual reviews are not counted.")}>
+        <SettingsRow title={t("Daily budget")} description={t("Auto suggestions created per day. Manual reviews are not counted.")}>
           <input
             className="settings-text-input proactive-budget-input"
             type="number"
@@ -282,11 +260,11 @@ export default function ProactiveSettingsPanel({
             aria-label={t("Daily budget")}
             onChange={(event) => onChange({ dailyBudget: Math.min(20, Math.max(1, Number(event.target.value) || 1)) })}
           />
-        </Row>
-        <Row title={t("Live observation")} description={t("While you are active, look at the current context every few seconds. The interval follows pointer and typing activity.")}>
-          <Toggle checked={settings.liveObservation} label={t("Live observation")} onChange={(liveObservation) => onChange({ liveObservation })} />
-        </Row>
-        <Row title={t("Live observation budget")} description={t("Model calls per day for live observation. Suggestions have their own budget above.")}>
+        </SettingsRow>
+        <SettingsRow title={t("Live observation")} description={t("While you are active, look at the current context every few seconds. The interval follows pointer and typing activity.")}>
+          <SettingsSwitch checked={settings.liveObservation} label={t("Live observation")} onChange={(liveObservation) => onChange({ liveObservation })} />
+        </SettingsRow>
+        <SettingsRow title={t("Live observation budget")} description={t("Model calls per day for live observation. Suggestions have their own budget above.")}>
           <input
             className="settings-text-input proactive-budget-input"
             type="number"
@@ -296,29 +274,28 @@ export default function ProactiveSettingsPanel({
             aria-label={t("Live observation budget")}
             onChange={(event) => onChange({ liveObservationBudget: Math.min(1000, Math.max(0, Number(event.target.value) || 0)) })}
           />
-        </Row>
-        <Row title={t("Quiet hours")} description={t("Suggestions stay queued and only light the toolbar badge.")}>
+        </SettingsRow>
+        <SettingsRow title={t("Quiet hours")} description={t("Suggestions stay queued and only light the toolbar badge.")}>
           <div className="settings-inline-control">
-            <Toggle checked={settings.quietHours.enabled} label={t("Quiet hours")} onChange={(enabled) => onChange({ quietHours: { ...settings.quietHours, enabled } })} />
+            <SettingsSwitch checked={settings.quietHours.enabled} label={t("Quiet hours")} onChange={(enabled) => onChange({ quietHours: { ...settings.quietHours, enabled } })} />
             <input className="settings-text-input proactive-time-input" type="time" value={settings.quietHours.start} disabled={!settings.quietHours.enabled} aria-label={t("Quiet hours start")} onChange={(event) => onChange({ quietHours: { ...settings.quietHours, start: event.target.value } })} />
             <span className="settings-control-label">{t("to")}</span>
             <input className="settings-text-input proactive-time-input" type="time" value={settings.quietHours.end} disabled={!settings.quietHours.enabled} aria-label={t("Quiet hours end")} onChange={(event) => onChange({ quietHours: { ...settings.quietHours, end: event.target.value } })} />
           </div>
-        </Row>
+        </SettingsRow>
       </div>
       <p className="settings-group-note">{t("Composer focused → badge only · 3 dismissals → 2h pause · No evidence → never shown")}</p>
-    </section>
+    </SettingsSection>
 
-    <section className="settings-section">
-      <h3 className="settings-section-title">{t("Manual review")}</h3>
+    <SettingsSection title={t("Manual review")}>
       <div className="settings-group">
-        <Row title={t("Review the current context")} description={t("Run one full observation now: current view, selection, recent answers, and activity. Nothing continues in the background.")}>
+        <SettingsRow title={t("Review the current context")} description={t("Run one full observation now: current view, selection, recent answers, and activity. Nothing continues in the background.")}>
           <button className="secondary-button" onClick={onObserveOnce} disabled={!canObserve}>{t("Observe once")}</button>
-        </Row>
-        <Row title={t("Suggestion history")} description={t("{count} suggestions retained for 30 days", { count: historyCount })}>
+        </SettingsRow>
+        <SettingsRow title={t("Suggestion history")} description={t("{count} suggestions retained for 30 days", { count: historyCount })}>
           <button className="settings-reset-button" onClick={onResetHistory} disabled={!historyCount}>{t("Clear history")}</button>
-        </Row>
+        </SettingsRow>
       </div>
-    </section>
+    </SettingsSection>
   </div>;
 }

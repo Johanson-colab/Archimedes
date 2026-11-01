@@ -44,7 +44,7 @@ test("Settings > Appearance exposes accent, surface, density, radius, and reset 
   assert.match(settings, /min=\{SURFACE_DEPTH_MIN\}/);
   assert.match(settings, /updateOverride\(\{ accent: event\.target\.value \}\)/);
   assert.match(settings, /updateOverride\(\{ surface: event\.target\.value \}\)/);
-  assert.match(settings, /updateGlobalOverride\(\{ density: id \}\)/);
+  assert.match(settings, /updateGlobalOverride\(\{ density \}\)/);
   assert.match(settings, /updateGlobalOverride\(\{ controlRadius: Number\(event\.target\.value\) \}\)/);
   assert.match(settings, /Reset custom theme/);
   assert.match(settings, /onAppearanceChange/);
@@ -55,7 +55,7 @@ test("accent, surface, and component styles can be scoped to reader, writing, an
   assert.match(writing, /data-surface="writing"/);
   assert.match(agent, /data-surface="agent"/);
   assert.match(settings, /t\("Apply to"\)/);
-  assert.match(settings, /setScope\(id\)/);
+  assert.match(settings, /onChange=\{setScope\}/);
   assert.match(settings, /accentResetDisabled/);
   assert.match(settings, /clearScope/);
   assert.match(settings, /styles: \{ \.\.\.appearance\.surfaces\?\.\[scope\]\?\.styles, \.\.\.patch \}/);
@@ -76,10 +76,10 @@ test("the Style section maps button, dialog, shape, and shadow presets", () => {
   assert.match(settings, /t\("Dialog style"\)/);
   assert.match(settings, /t\("Shape"\)/);
   assert.match(settings, /t\("Shadow"\)/);
-  assert.match(settings, /updateStyles\(\{ button: id \}\)/);
-  assert.match(settings, /updateStyles\(\{ dialog: id \}\)/);
-  assert.match(settings, /updateStyles\(\{ shape: id \}\)/);
-  assert.match(settings, /updateStyles\(\{ shadow: id \}\)/);
+  assert.match(settings, /updateStyles\(\{ button \}\)/);
+  assert.match(settings, /updateStyles\(\{ dialog \}\)/);
+  assert.match(settings, /updateStyles\(\{ shape \}\)/);
+  assert.match(settings, /updateStyles\(\{ shadow \}\)/);
   assert.match(appearance, /export function styleTokens/);
   assert.match(appearance, /export type AppearanceStyles/);
 });
@@ -87,7 +87,7 @@ test("the Style section maps button, dialog, shape, and shadow presets", () => {
 test("Motion is a global Full / Reduced / None preference", () => {
   assert.match(settings, /type MotionStyle/);
   assert.match(settings, /t\("Motion"\)/);
-  assert.match(settings, /updateGlobalStyles\(\{ motion: id \}\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ motion \}\)/);
   assert.match(appearance, /export type MotionStyle = "full" \| "reduced" \| "none"/);
   assert.match(appearance, /root\.dataset\.motion = settings\.styles\?\.motion \?\? "full"/);
   assert.match(css, /html\[data-motion="reduced"\] \*/);
@@ -101,9 +101,9 @@ test("Components exposes global input, card, and menu presets", () => {
   assert.match(settings, /t\("Input style"\)/);
   assert.match(settings, /t\("Card style"\)/);
   assert.match(settings, /t\("Menu style"\)/);
-  assert.match(settings, /updateGlobalStyles\(\{ input: id \}\)/);
-  assert.match(settings, /updateGlobalStyles\(\{ card: id \}\)/);
-  assert.match(settings, /updateGlobalStyles\(\{ menu: id \}\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ input \}\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ card \}\)/);
+  assert.match(settings, /updateGlobalStyles\(\{ menu \}\)/);
   assert.match(appearance, /export type InputStyle/);
   assert.match(appearance, /export type CardStyle/);
   assert.match(appearance, /export type MenuStyle/);

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ExternalLink, ImageOff, LoaderCircle, Search, SlidersHorizontal, X } from "lucide-react";
 import { MenuSurface } from "./Menu";
-import { useDialogFocus } from "./useDialogFocus";
 
+import { Dialog } from "./Dialog";
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 const SOURCE_ROOT = "https://paperfigure.net/";
 const IMAGE_ROOT = "https://img.paperfigure.net/";
 const SHARDS = [0, 1, 2, 3].map((index) => `${SOURCE_ROOT}data/index-${index}.json`);
@@ -203,7 +204,6 @@ function ChartDialog({ figures, index, onClose, onStep }: {
   figures: ChartFigure[]; index: number; onClose: () => void; onStep: (direction: number) => void;
 }) {
   const figure = figures[index];
-  const dialogRef = useDialogFocus<HTMLElement>(true, onClose);
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "ArrowLeft") onStep(-1);
@@ -212,8 +212,7 @@ function ChartDialog({ figures, index, onClose, onStep }: {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onStep]);
-  return createPortal(<div className="gallery-dialog-backdrop app-dialog-overlay" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="gallery-dialog chart-reference-dialog app-dialog app-dialog-gallery" role="dialog" aria-modal="true" aria-label={`${chartLabel(figure)} from ${figure.paper}`} onMouseDown={(event) => event.stopPropagation()}>
+  return <Dialog open onClose={onClose} size="gallery" className="gallery-dialog chart-reference-dialog" overlayClassName="gallery-dialog-backdrop app-dialog-overlay" ariaLabel={`${chartLabel(figure)} from ${figure.paper}`}>
       <header><span>{index + 1} / {figures.length}</span><button type="button" onClick={onClose} title="Close" aria-label="Close"><X size={20} /></button></header>
       <div className="gallery-dialog-content">
         <button type="button" onClick={() => onStep(-1)} title="Previous" aria-label="Previous figure"><ArrowLeft size={21} /></button>
@@ -224,8 +223,7 @@ function ChartDialog({ figures, index, onClose, onStep }: {
         <div><span className="gallery-dialog-kicker">{figure.venue} {figure.year} · {chartLabel(figure)}{figure.category === "table" ? ` ${figure.figure}` : ` · Figure ${figure.figure}`}</span><h2>{figure.paper}</h2><p className="chart-reference-caption">{figure.caption}</p></div>
         <div className="gallery-dialog-links"><a href={figure.page} target="_blank" rel="noreferrer">Source & paper <ExternalLink size={14} /></a><a href={figure.image} target="_blank" rel="noreferrer">Original image <ExternalLink size={14} /></a></div>
       </footer>
-    </section>
-  </div>, document.body);
+  </Dialog>;
 }
 
 export default function DataChartGallery({ active, sort }: { active: boolean; sort: SortMode }) {
@@ -296,9 +294,9 @@ export default function DataChartGallery({ active, sort }: { active: boolean; so
       </div>
     </div>
     <div className="data-chart-results"><span>{loading ? "Loading full catalogue…" : error ? "Catalogue unavailable" : `Showing ${shown.length.toLocaleString()} of ${figures.length.toLocaleString()} · ${sort === "preferred" ? "AI venues first, newest within each venue" : "newest first"}`}</span><a href={sourceLink.href} target="_blank" rel="noreferrer">Explore more at source <ExternalLink size={13} /></a></div>
-    {loading ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading full figure catalogue…</strong></div>
-      : error ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load data charts</strong><p>{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>
-        : !figures.length ? <div className="gallery-state"><Search size={25} /><strong>No matching references</strong><p>Try another keyword or chart type.</p></div>
+    {loading ? <StateView tone="loading" className="gallery-state" icon={<LoaderCircle className="spin" size={25} />} title="Loading full figure catalogue…" />
+      : error ? <StateView tone="error" className="gallery-state" icon={<ImageOff size={25} />} title="Could not load data charts" description={error} action={<button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button>} />
+        : !figures.length ? <StateView className="gallery-state" icon={<Search size={25} />} title="No matching references" description="Try another keyword or chart type." />
           : <><div className="image-creation-grid data-chart-grid">{shown.map((figure) => <ChartCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} />)}</div>
             {visibleCount < figures.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more references <span>{shown.length.toLocaleString()} / {figures.length.toLocaleString()}</span></button></div>}</>}
     <p className="data-chart-credit">Image rights remain with the paper authors and publishers. References and images are served by <a href={SOURCE_ROOT} target="_blank" rel="noreferrer">Paper Figure Library</a>; check the paper license before reuse.</p>

@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import DialogPortal from "./DialogPortal";
-import { useDialogFocus } from "./useDialogFocus";
 import {
   Check,
   Download,
@@ -14,6 +12,9 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { Dialog } from "./Dialog";
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 
 export type ExtensionsTab = "installed" | "available" | "updates";
 
@@ -213,7 +214,6 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
   const closeTimer = useRef<number | null>(null);
   const suppressHover = useRef(false);
   const previewCache = useRef(new Map<string, HoverPreviewState>());
-  const installDialogRef = useDialogFocus<HTMLElement>(Boolean(installItem), () => setInstallItem(null));
 
   useEffect(() => {
     let active = true;
@@ -458,13 +458,13 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
       </div>
     </div>
 
-    {notice && <div className="extensions-notice"><Check size={13} />{notice}</div>}
-    {marketError && <div className="extensions-source-alert">{marketError}<button onClick={refreshFeed}>Retry</button></div>}
-    {!marketError && sourceErrors > 0 && <div className="extensions-source-alert">{sourceErrors} {sourceErrors === 1 ? "source is" : "sources are"} unavailable.<button onClick={() => setSourceManagerOpen(true)}>Manage sources</button></div>}
+    {notice && <InlineNotice tone="success" className="extensions-notice" icon={<Check size={13} />}>{notice}</InlineNotice>}
+    {marketError && <InlineNotice tone="danger" className="extensions-source-alert" action={<button onClick={refreshFeed}>Retry</button>}>{marketError}</InlineNotice>}
+    {!marketError && sourceErrors > 0 && <InlineNotice tone="warning" className="extensions-source-alert" action={<button onClick={() => setSourceManagerOpen(true)}>Manage sources</button>}>{sourceErrors} {sourceErrors === 1 ? "source is" : "sources are"} unavailable.</InlineNotice>}
 
-    {tab === "installed" && installedLoading && <div className="skills-state"><LoaderCircle className="spin" size={16} />Reading installed extensions…</div>}
-    {tab === "installed" && !installedLoading && installedError && <div className="skills-error">{installedError}</div>}
-    {(tab === "available" || tab === "updates") && marketLoading && !feed && <div className="skills-state"><LoaderCircle className="spin" size={16} />Syncing extension sources…</div>}
+    {tab === "installed" && installedLoading && <StateView tone="loading" className="skills-state" icon={<LoaderCircle className="spin" size={16} />} title="Reading installed extensions…" />}
+    {tab === "installed" && !installedLoading && installedError && <InlineNotice tone="danger" className="skills-error">{installedError}</InlineNotice>}
+    {(tab === "available" || tab === "updates") && marketLoading && !feed && <StateView tone="loading" className="skills-state" icon={<LoaderCircle className="spin" size={16} />} title="Syncing extension sources…" />}
 
     {!(tab === "installed" && installedLoading) && !(tab !== "installed" && marketLoading && !feed) && !installedError && <>
       <div className="extensions-table-head" aria-hidden="true">
@@ -475,9 +475,11 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
         <span />
       </div>
 
-      {!filteredRows.length && <div className="extensions-empty-line">
-        {tab === "installed" ? "No installed extensions match this view." : tab === "updates" ? "Everything is up to date." : "No extensions match this view."}
-      </div>}
+      {!filteredRows.length && <StateView
+        compact
+        className="extensions-empty-line"
+        description={tab === "installed" ? "No installed extensions match this view." : tab === "updates" ? "Everything is up to date." : "No extensions match this view."}
+      />}
 
       <div className="extensions-table">
         {filteredRows.map((row) => {
@@ -562,8 +564,7 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
       refreshFeed();
     }} />}
 
-    {installItem && <DialogPortal><div className="extensions-modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setInstallItem(null); }}>
-      <section ref={installDialogRef} tabIndex={-1} className="extensions-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-labelledby="extensions-install-title">
+    {installItem && <Dialog open onClose={() => setInstallItem(null)} size="md" className="extensions-modal" overlayClassName="extensions-modal-backdrop app-dialog-overlay" ariaLabelledBy="extensions-install-title">
         <header className="app-dialog-header"><div><h2 id="extensions-install-title">{installItem.name}</h2><p>{installItem.description}</p></div><button className="app-dialog-close" onClick={() => setInstallItem(null)} aria-label="Close"><X size={15} /></button></header>
         <div className="app-dialog-body extensions-install-body">
           <dl className="extensions-install-meta">
@@ -577,11 +578,10 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
             <label><input type="radio" name="extension-scope" checked={installScope === "workspace"} onChange={() => setInstallScope("workspace")} /><span>Workspace</span><small>.agents/skills</small></label>
             <label><input type="radio" name="extension-scope" checked={installScope === "global"} onChange={() => setInstallScope("global")} /><span>Global</span><small>~/.agents/skills</small></label>
           </fieldset>
-          {installError && <div className="skills-error">{installError}</div>}
+          {installError && <InlineNotice tone="danger" className="skills-error">{installError}</InlineNotice>}
         </div>
         <footer className="app-dialog-footer"><button className="secondary-button" onClick={() => setInstallItem(null)}>Cancel</button><button className="primary-button" onClick={() => void confirmInstall()} disabled={installBusy}>{installBusy ? <LoaderCircle className="spin" size={13} /> : <Download size={13} />}{installItem.updateAvailable ? "Update" : "Install"}</button></footer>
-      </section>
-    </div></DialogPortal>}
+      </Dialog>}
   </section>;
 }
 
@@ -596,7 +596,6 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
   const [newSource, setNewSource] = useState({ name: "", type: "json" as ExtensionSourceType, url: "", token: "" });
   const [adding, setAdding] = useState(false);
-  const sourceDialogRef = useDialogFocus<HTMLElement>(true, onClose);
 
   useEffect(() => {
     if (sources.length) {
@@ -664,8 +663,7 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
     }
   }
 
-  return <DialogPortal><div className="extensions-modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section ref={sourceDialogRef} tabIndex={-1} className="extensions-modal extensions-source-modal app-dialog app-dialog-md" role="dialog" aria-modal="true" aria-labelledby="extensions-sources-title">
+  return <Dialog open onClose={onClose} size="md" className="extensions-modal extensions-source-modal" overlayClassName="extensions-modal-backdrop app-dialog-overlay" ariaLabelledBy="extensions-sources-title">
       <header className="app-dialog-header"><div><h2 id="extensions-sources-title">Sources</h2><p>Enable public registries or add a JSON index. Results are deduplicated across sources.</p></div><button className="app-dialog-close" onClick={onClose} aria-label="Close"><X size={15} /></button></header>
       <div className="app-dialog-body extensions-sources-body">
       <div className="extensions-source-list">
@@ -682,9 +680,8 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
         <label>Token <small>Optional, sent as Bearer</small><input type="password" value={newSource.token} onChange={(event) => setNewSource({ ...newSource, token: event.target.value })} /></label>
         <div className="extensions-form-actions"><button className="secondary-button" onClick={() => setAdding(false)}>Cancel</button><button className="primary-button" onClick={addSource}>Add source</button></div>
       </div> : <button className="extensions-add-source" onClick={() => setAdding(true)}><Plus size={13} />Add source</button>}
-      {error && <div className="skills-error">{error}</div>}
+      {error && <InlineNotice tone="danger" className="skills-error">{error}</InlineNotice>}
       </div>
       <footer className="app-dialog-footer extensions-sources-footer"><button className="extensions-reset" onClick={() => void reset()} disabled={saving}>Reset defaults</button><span /><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={() => void save()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={13} /> : <Settings2 size={13} />}Save sources</button></footer>
-    </section>
-  </div></DialogPortal>;
+  </Dialog>;
 }

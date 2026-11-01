@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import DialogPortal from "./DialogPortal";
-import { useDialogFocus } from "./useDialogFocus";
 import { ArrowLeft, ArrowRight, FileText, Image as ImageIcon, LoaderCircle, Maximize2, RefreshCw, Search, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -17,6 +15,9 @@ import {
   type ArtifactFilter,
   type ArtifactItem,
 } from "./artifacts-model";
+import { Dialog } from "./Dialog";
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 
 type ArtifactsPanelProps = {
   bridge: ResearchDeskBridge;
@@ -68,7 +69,6 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
   const [seenPaths, setSeenPaths] = useState<Set<string>>(new Set());
   const [loadedFiles, setLoadedFiles] = useState<Record<string, LoadedFile>>({});
   const [imageIndex, setImageIndex] = useState(0);
-  const previewDialogRef = useDialogFocus<HTMLElement>(Boolean(preview), () => setPreview(null));
   const seenThreadRef = useRef("");
   const loadedFilesRef = useRef<Record<string, LoadedFile>>({});
 
@@ -163,7 +163,7 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
   });
 
   if (!threadId) {
-    return <div className="artifacts-panel"><div className="artifacts-empty"><ImageIcon size={20} /><strong>No conversation yet</strong><span>Artifacts created in a research turn will collect here.</span></div></div>;
+    return <div className="artifacts-panel"><StateView className="artifacts-empty" icon={<ImageIcon size={20} />} title="No conversation yet" description="Artifacts created in a research turn will collect here." /></div>;
   }
 
   return <div className="artifacts-panel">
@@ -175,9 +175,9 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
       <button className="artifacts-refresh" onClick={() => void load()} title="Refresh artifacts" aria-label="Refresh artifacts" disabled={loading}><RefreshCw size={13} /></button>
     </div>
 
-    {error && <div className="artifacts-empty"><strong>Could not load artifacts</strong><span>{error}</span></div>}
-    {!error && loading && !items.length && <div className="artifacts-loading"><LoaderCircle size={15} />Loading artifacts…</div>}
-    {!error && !loading && !filtered.length && <div className="artifacts-empty"><ImageIcon size={20} /><strong>{items.length ? "No matching artifacts" : "No artifacts yet"}</strong><span>{items.length ? "Try a different type or search." : "Ask the agent for a figure, table, Markdown brief, or web output."}</span></div>}
+    {error && <InlineNotice tone="danger" className="artifacts-empty" title="Could not load artifacts">{error}</InlineNotice>}
+    {!error && loading && !items.length && <StateView tone="loading" className="artifacts-loading" icon={<LoaderCircle size={15} />} title="Loading artifacts…" />}
+    {!error && !loading && !filtered.length && <StateView className="artifacts-empty" icon={<ImageIcon size={20} />} title={items.length ? "No matching artifacts" : "No artifacts yet"} description={items.length ? "Try a different type or search." : "Ask the agent for a figure, table, Markdown brief, or web output."} />}
 
     {groups.thisTurn.length > 0 && <section className="artifacts-group">
       <h3>This turn</h3>
@@ -192,8 +192,7 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
       const item = imageItems[imageIndex];
       const loaded = item ? loadedFiles[item.path] : undefined;
       const url = loaded?.file?.previewUrl;
-      return <DialogPortal><div className="artifact-lightbox app-dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}>
-        <section ref={previewDialogRef} tabIndex={-1} className="artifact-lightbox-dialog app-dialog app-dialog-lightbox" role="dialog" aria-modal="true" aria-label="Artifact image preview" onMouseDown={(event) => event.stopPropagation()}>
+      return <Dialog open onClose={() => setPreview(null)} size="lightbox" className="artifact-lightbox-dialog" overlayClassName="artifact-lightbox app-dialog-overlay" ariaLabel="Artifact image preview">
           <header className="artifact-lightbox-head">
             <div><strong className="artifact-lightbox-title">{item?.title ?? "Artifact"}</strong><span className="artifact-lightbox-meta">{item ? `${item.version > 1 ? `v${item.version} · ` : ""}${turnLabel(item, currentTurnId)}` : ""}</span></div>
             <span className="artifact-lightbox-count">{imageItems.length ? `${imageIndex + 1} / ${imageItems.length}` : ""}</span>
@@ -211,16 +210,14 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
               <button onClick={() => item && loadFile(item.path)}><RefreshCw size={11} />Reload</button>
             </div>
           </footer>
-        </section>
-      </div></DialogPortal>;
+      </Dialog>;
     })()}
 
     {preview?.kind === "file" && (() => {
       const item = items.find((candidate) => candidate.path === preview.path);
       if (!item) return null;
       const loaded = loadedFiles[item.path];
-      return <DialogPortal><div className="artifact-lightbox app-dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreview(null); }}>
-        <section ref={previewDialogRef} tabIndex={-1} className="artifact-preview-dialog app-dialog app-dialog-preview" role="dialog" aria-modal="true" aria-label="Artifact preview" onMouseDown={(event) => event.stopPropagation()}>
+      return <Dialog open onClose={() => setPreview(null)} size="preview" className="artifact-preview-dialog" overlayClassName="artifact-lightbox app-dialog-overlay" ariaLabel="Artifact preview">
           <header className="artifact-lightbox-head">
             <div><strong className="artifact-lightbox-title">{item.title}</strong><span className="artifact-lightbox-meta">{artifactTypeLabelForPath(item.path)} · {turnLabel(item, currentTurnId)}</span></div>
             <button className="artifact-lightbox-close" onClick={() => setPreview(null)} aria-label="Close preview"><X size={15} /></button>
@@ -232,8 +229,7 @@ export default function ArtifactsPanel({ bridge, workspace, threadId, currentTur
             <div><b>{artifactTypeLabelForPath(item.path)}</b><span>{formatArtifactSize(item.size)}</span></div>
             <div className="artifact-lightbox-actions"><button onClick={() => onOpenFile(item.path)}>Open in Files</button></div>
           </footer>
-        </section>
-      </div></DialogPortal>;
+      </Dialog>;
     })()}
   </div>;
 }

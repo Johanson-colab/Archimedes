@@ -60,10 +60,11 @@ test("file icons default to City Lights and still switch to monochrome", () => {
   assert.match(i18n, /FILE_ICON_STYLE_STORAGE_KEY/);
   assert.match(i18n, /stored === "monochrome" \|\| stored === "material" \|\| stored === "seti"/);
   assert.match(i18n, /document\.documentElement\.dataset\.fileIcons = fileIconStyle/);
-  assert.match(settings, /setFileIconStyle\("city-lights"\)/);
-  assert.match(settings, /setFileIconStyle\("material"\)/);
-  assert.match(settings, /setFileIconStyle\("seti"\)/);
-  assert.match(settings, /setFileIconStyle\("monochrome"\)/);
+  assert.match(settings, /onChange=\{setFileIconStyle\}/);
+  assert.match(settings, /value: "city-lights"/);
+  assert.match(settings, /value: "material"/);
+  assert.match(settings, /value: "seti"/);
+  assert.match(settings, /value: "monochrome"/);
   assert.doesNotMatch(settings, /setFileIconStyle\("colorful"\)/);
   assert.match(css, /html\[data-file-icons="material"\] \{/);
   assert.match(css, /html\[data-file-icons="seti"\] \{/);

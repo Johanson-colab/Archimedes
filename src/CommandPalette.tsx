@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { useDialogFocus } from "./useDialogFocus";
-import DialogPortal from "./DialogPortal";
+import { Dialog } from "./Dialog";
+import { StateView } from "./StateView";
 
 export type PaletteCommand = {
   id: string;
@@ -22,7 +22,6 @@ export default function CommandPalette({ open, commands, onClose }: {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -74,8 +73,7 @@ export default function CommandPalette({ open, commands, onClose }: {
     return result;
   }, []);
 
-  return <DialogPortal><div className="command-palette-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="command-palette app-dialog app-dialog-md app-dialog-palette" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}>
+  return <Dialog open={open} onClose={onClose} size="md" className="command-palette app-dialog-palette" overlayClassName="command-palette-backdrop app-dialog-overlay" ariaLabel="Command palette">
       <div className="command-palette-search"><Search size={16} /><input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setSelected(0); }} placeholder="Search commands, pages, and panels" aria-label="Search commands" onKeyDown={(event) => {
         if (event.key === "ArrowDown") {
           event.preventDefault();
@@ -99,9 +97,8 @@ export default function CommandPalette({ open, commands, onClose }: {
             {command.shortcut && <kbd>{command.shortcut}</kbd>}
           </button>)}
         </div>)}
-        {!filtered.length && <div className="command-palette-empty">No matching commands.</div>}
+        {!filtered.length && <StateView compact className="command-palette-empty" description="No matching commands." />}
       </div>
       <footer className="command-palette-footer"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></footer>
-    </section>
-  </div></DialogPortal>;
+  </Dialog>;
 }

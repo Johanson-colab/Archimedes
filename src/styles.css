@@ -7374,3 +7374,54 @@ html[data-menu-style="glass"] .menu-surface {
 .paper-reader-bar .paper-reader-tabs .ui-tab { height: 32px; padding: 0 8px; font-size: 12px; }
 .paper-reader-bar .paper-reader-tabs .ui-tab-icon svg { width: 14px; height: 14px; }
 @media (max-width: 560px) { .paper-reader-bar .paper-reader-tabs .ui-tab { padding-inline: 7px; } }
+
+/* Shared state and notice primitives. Page classes remain layout hooks. */
+.ui-state {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.ui-state > svg { color: var(--text-faint); }
+.ui-state-title { color: var(--text-primary); font-size: 12px; font-weight: 600; line-height: 1.35; }
+.ui-state-description { max-width: 48ch; color: var(--text-muted); font-size: 11px; line-height: 1.55; }
+.ui-state-action { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px; margin-top: 2px; }
+.ui-state-compact { gap: 6px; }
+.ui-state-loading > svg { color: var(--text-faint); }
+
+.ui-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--state-info) 7%, var(--surface-panel));
+  border: 1px solid color-mix(in srgb, var(--state-info) 24%, var(--border-default));
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.ui-notice > svg { flex: 0 0 auto; margin-top: 1px; }
+.ui-notice-copy { display: grid; min-width: 0; flex: 1; gap: 2px; }
+.ui-notice-copy strong { color: var(--text-primary); font-size: 11px; font-weight: 600; }
+.ui-notice-copy span { color: inherit; }
+.ui-notice-action { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.ui-notice-close { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; color: inherit; background: transparent; border-radius: 4px; opacity: .72; }
+.ui-notice-close:hover { background: color-mix(in srgb, currentColor 10%, transparent); opacity: 1; }
+.ui-notice-success {
+  color: var(--state-success);
+  background: color-mix(in srgb, var(--state-success) 7%, var(--surface-panel));
+  border-color: color-mix(in srgb, var(--state-success) 24%, var(--border-default));
+}
+.ui-notice-warning {
+  color: var(--state-warning);
+  background: color-mix(in srgb, var(--state-warning) 8%, var(--surface-panel));
+  border-color: color-mix(in srgb, var(--state-warning) 28%, var(--border-default));
+}
+.ui-notice-danger {
+  color: var(--state-danger);
+  background: color-mix(in srgb, var(--state-danger) 7%, var(--surface-panel));
+  border-color: color-mix(in srgb, var(--state-danger) 24%, var(--border-default));
+}

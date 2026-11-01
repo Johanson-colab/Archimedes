@@ -16,6 +16,8 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 const collectionAppearance: Record<string, { icon: React.ReactNode; tone: string }> = {
   "AI-Research-SKILLs": { icon: <BrainCircuit size={22} />, tone: "green" },
   "Research-Paper-Writing-Skills": { icon: <PenTool size={22} />, tone: "gold" },
@@ -120,7 +122,7 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach, e
         <div><span className="page-kicker">Extensions</span><h1>Skills</h1><p>Browse reusable research instructions and attach the ones you need to an Archimedes conversation.</p></div>
         <span className="skills-total"><strong>{collections.reduce((total, collection) => total + collection.skillCount, 0)}</strong> indexed skills</span>
       </header>}
-      {loading && <div className="skills-state"><LoaderCircle className="spin" size={18} />Indexing local skills...</div>}
+      {loading && <StateView tone="loading" className="skills-state" icon={<LoaderCircle className="spin" size={18} />} description="Indexing local skills..." />}
       {!loading && <div className="skill-collection-grid">
         {collections.map((collection) => {
           const appearance = collectionAppearance[collection.id] || { icon: <BrainCircuit size={22} />, tone: "green" };
@@ -132,7 +134,7 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach, e
           </button>;
         })}
       </div>}
-      {error && <div className="skills-error">{error.replace(/^Error:\s*/, "")}</div>}
+      {error && <InlineNotice tone="danger" className="skills-error">{error.replace(/^Error:\s*/, "")}</InlineNotice>}
     </section>;
   }
 
@@ -156,13 +158,13 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach, e
               <span><strong>{skill.name}</strong><small>{skill.description || "Reusable research instructions"}</small></span>
             </button>)}
           </section>)}
-          {!loading && !filteredSkills.length && <div className="skills-state compact">No matching skills.</div>}
+          {!loading && !filteredSkills.length && <StateView compact className="skills-state" description="No matching skills." />}
         </div>
       </aside>
 
       <div className="skill-preview-pane">
-        {loading && !selectedSkill && <div className="skills-state"><LoaderCircle className="spin" size={18} />Loading collection...</div>}
-        {!loading && !selectedSkill && <div className="skills-state">This collection does not contain any `SKILL.md` files yet.</div>}
+        {loading && !selectedSkill && <StateView tone="loading" className="skills-state" icon={<LoaderCircle className="spin" size={18} />} description="Loading collection..." />}
+        {!loading && !selectedSkill && <StateView className="skills-state" description="This collection does not contain any `SKILL.md` files yet." />}
         {selectedSkill && <>
           <header className="skill-preview-header">
             <span className={`skill-collection-icon ${appearance.tone}`}>{collectionIcon(selectedSkill.collectionId, 19)}</span>
@@ -174,7 +176,7 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach, e
           </header>
           <article className="skill-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{markdownBody(selectedSkill.content)}</ReactMarkdown></article>
         </>}
-        {error && <div className="skills-error">{error.replace(/^Error:\s*/, "")}</div>}
+        {error && <InlineNotice tone="danger" className="skills-error">{error.replace(/^Error:\s*/, "")}</InlineNotice>}
       </div>
     </div>
   </section>;

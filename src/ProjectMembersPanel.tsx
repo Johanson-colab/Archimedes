@@ -3,8 +3,11 @@ import { Cloud, Download, LoaderCircle, Plus, RefreshCw, Share2, Trash2, UserPlu
 import SharedRunsPanel from "./SharedRunsPanel";
 import SharedNoteEditor from "./SharedNoteEditor";
 import { useUISettings } from "./i18n";
+import { SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { useConfirm } from "./ConfirmDialog";
 
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 type ProjectMembersPanelProps = {
   bridge: ResearchDeskBridge;
   project: ResearchProject;
@@ -227,36 +230,31 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
       <div className="settings-group">
         {!cloudStatus?.signedIn ? <p className="settings-group-note">{t("Sign in from Account to share this project with collaborators.")}</p> : <>
           {cloudProjectId ? <>
-            <div className="settings-row project-cloud-row">
-              <div className="settings-row-copy">
-                <span className="settings-row-title"><Share2 size={14} />{t("Shared project")}</span>
-                <p className="settings-row-description"><code>{cloudProjectId.slice(0, 18)}…</code></p>
-              </div>
-              <div className="settings-row-control">
-                <button className="secondary-button" disabled={cloudBusy} onClick={() => void sync()}><RefreshCw size={13} />{t("Sync members")}</button>
-                <button className="secondary-button" disabled={threadBusy} onClick={() => void syncThreads()}><RefreshCw size={13} />{t("Sync threads")}</button>
-                <button className="secondary-button" disabled={exportBusy} onClick={() => void exportProject()}><Download size={13} />{exportBusy ? t("Exporting…") : t("Export")}</button>
-              </div>
-            </div>
-            <div className="settings-row project-member-add">
-              <span className="project-member-avatar add"><UserPlus size={14} /></span>
-              <div className="settings-row-control">
-                <input className="settings-text-input" type="email" value={cloudEmail} onChange={(event) => setCloudEmail(event.target.value)} placeholder={t("Collaborator email")} onKeyDown={(event) => { if (event.key === "Enter") void addCloudMember(); }} />
-                <select className="settings-select" value={cloudRole} onChange={(event) => setCloudRole(event.target.value as ProjectMember["role"])} aria-label={t("Role")}>
-                  {ROLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{t(option.label)}</option>)}
-                </select>
-                <button className="primary-button" disabled={!cloudEmail.trim() || cloudBusy || cloudRole === "owner"} onClick={() => void addCloudMember()}><Plus size={13} />{t("Invite")}</button>
-              </div>
-            </div>
-          </> : <div className="settings-row project-cloud-row">
-            <div className="settings-row-copy">
-              <span className="settings-row-title"><Share2 size={14} />{t("Share this project")}</span>
-              <p className="settings-row-description">{t("Create a cloud copy so collaborators can join this project.")}</p>
-            </div>
-            <div className="settings-row-control">
-              <button className="primary-button" disabled={cloudBusy} onClick={() => void publish()}><Cloud size={13} />{t("Share")}</button>
-            </div>
-          </div>}
+            <SettingsRow
+              className="project-cloud-row"
+              title={t("Shared project")}
+              icon={<Share2 size={14} />}
+              description={<code>{cloudProjectId.slice(0, 18)}…</code>}
+            >
+              <button className="secondary-button" disabled={cloudBusy} onClick={() => void sync()}><RefreshCw size={13} />{t("Sync members")}</button>
+              <button className="secondary-button" disabled={threadBusy} onClick={() => void syncThreads()}><RefreshCw size={13} />{t("Sync threads")}</button>
+              <button className="secondary-button" disabled={exportBusy} onClick={() => void exportProject()}><Download size={13} />{exportBusy ? t("Exporting…") : t("Export")}</button>
+            </SettingsRow>
+            <SettingsRow className="project-member-add" leading={<span className="project-member-avatar add"><UserPlus size={14} /></span>}>
+              <input className="settings-text-input" type="email" value={cloudEmail} onChange={(event) => setCloudEmail(event.target.value)} placeholder={t("Collaborator email")} onKeyDown={(event) => { if (event.key === "Enter") void addCloudMember(); }} />
+              <select className="settings-select" value={cloudRole} onChange={(event) => setCloudRole(event.target.value as ProjectMember["role"])} aria-label={t("Role")}>
+                {ROLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{t(option.label)}</option>)}
+              </select>
+              <button className="primary-button" disabled={!cloudEmail.trim() || cloudBusy || cloudRole === "owner"} onClick={() => void addCloudMember()}><Plus size={13} />{t("Invite")}</button>
+            </SettingsRow>
+          </> : <SettingsRow
+            className="project-cloud-row"
+            title={t("Share this project")}
+            icon={<Share2 size={14} />}
+            description={t("Create a cloud copy so collaborators can join this project.")}
+          >
+            <button className="primary-button" disabled={cloudBusy} onClick={() => void publish()}><Cloud size={13} />{t("Share")}</button>
+          </SettingsRow>}
           {unlinkedCloudProjects.length > 0 && <div className="project-cloud-list">
             <p className="settings-group-note">{t("Shared projects available to your account")}</p>
             {unlinkedCloudProjects.map((candidate) => <div className="project-cloud-item" key={candidate.id}>
@@ -265,9 +263,9 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
             </div>)}
           </div>}
         </>}
-        {cloudBusy && <div className="project-members-loading"><LoaderCircle size={14} />{t("Syncing…")}</div>}
-        {cloudError && <p className="settings-group-note warning">{cloudError}</p>}
-        {cloudNotice && <p className="settings-group-note">{cloudNotice}</p>}
+        {cloudBusy && <StateView tone="loading" compact className="project-members-loading" icon={<LoaderCircle size={14} />} description={t("Syncing…")} />}
+        {cloudError && <InlineNotice tone="warning" className="settings-group-note warning">{cloudError}</InlineNotice>}
+        {cloudNotice && <InlineNotice tone="info" className="settings-group-note">{cloudNotice}</InlineNotice>}
       </div>
     </section>
 
@@ -277,36 +275,32 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
     <section className="settings-section">
       <h3 className="settings-section-title">{t("Project members")}</h3>
       <div className="settings-group">
-        {loading && !members.length ? <div className="project-members-loading"><LoaderCircle size={14} />{t("Loading members…")}</div> : members.map((member) => <div className="settings-row project-member-row" key={member.user_id}>
-          <span className="project-member-avatar" aria-hidden="true">{(member.display_name || "?").slice(0, 1).toUpperCase()}</span>
-          <div className="settings-row-copy">
-            <span className="settings-row-title">{member.display_name}{member.source === "cloud" && <Cloud size={12} />}</span>
-            <p className="settings-row-description">{member.role === "owner" ? t("Project owner") : `${t("Member")} · ${member.user_id.slice(0, 16)}…`}</p>
-          </div>
-          <div className="settings-row-control">
-            <select className="settings-select project-member-role" value={member.role} disabled={member.role === "owner"} onChange={(event) => void changeRole(member, event.target.value as ProjectMember["role"])} aria-label={t("Role for {name}", { name: member.display_name })}>
-              {member.role === "owner" && <option value="owner">{t("Owner")}</option>}
-              {ROLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{t(option.label)}</option>)}
-            </select>
-            {member.role !== "owner" && <button className="icon-button danger" onClick={() => void remove(member)} title={t("Remove member")} aria-label={t("Remove member")}><Trash2 size={13} /></button>}
-          </div>
-        </div>)}
+        {loading && !members.length ? <StateView tone="loading" compact className="project-members-loading" icon={<LoaderCircle size={14} />} description={t("Loading members…")} /> : members.map((member) => <SettingsRow
+          className="project-member-row"
+          key={member.user_id}
+          leading={<span className="project-member-avatar" aria-hidden="true">{(member.display_name || "?").slice(0, 1).toUpperCase()}</span>}
+          title={<>{member.display_name}{member.source === "cloud" && <Cloud size={12} />}</>}
+          description={member.role === "owner" ? t("Project owner") : `${t("Member")} · ${member.user_id.slice(0, 16)}…`}
+        >
+          <select className="settings-select project-member-role" value={member.role} disabled={member.role === "owner"} onChange={(event) => void changeRole(member, event.target.value as ProjectMember["role"])} aria-label={t("Role for {name}", { name: member.display_name })}>
+            {member.role === "owner" && <option value="owner">{t("Owner")}</option>}
+            {ROLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{t(option.label)}</option>)}
+          </select>
+          {member.role !== "owner" && <button className="icon-button danger" onClick={() => void remove(member)} title={t("Remove member")} aria-label={t("Remove member")}><Trash2 size={13} /></button>}
+        </SettingsRow>)}
       </div>
     </section>
 
     <section className="settings-section">
       <h3 className="settings-section-title">{t("Add a local member")}</h3>
       <div className="settings-group">
-        <div className="settings-row project-member-add">
-          <span className="project-member-avatar add"><UserPlus size={14} /></span>
-          <div className="settings-row-control">
-            <input className="settings-text-input" value={name} onChange={(event) => setName(event.target.value)} placeholder={t("Display name")} onKeyDown={(event) => { if (event.key === "Enter") void add(); }} />
-            <select className="settings-select" value={role} onChange={(event) => setRole(event.target.value as ProjectMember["role"])} aria-label={t("Role")}>
-              {ROLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{t(option.label)}</option>)}
-            </select>
-            <button className="primary-button" disabled={!name.trim() || busy} onClick={() => void add()}><Plus size={13} />{t("Add")}</button>
-          </div>
-        </div>
+        <SettingsRow className="project-member-add" leading={<span className="project-member-avatar add"><UserPlus size={14} /></span>}>
+          <input className="settings-text-input" value={name} onChange={(event) => setName(event.target.value)} placeholder={t("Display name")} onKeyDown={(event) => { if (event.key === "Enter") void add(); }} />
+          <select className="settings-select" value={role} onChange={(event) => setRole(event.target.value as ProjectMember["role"])} aria-label={t("Role")}>
+            {ROLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{t(option.label)}</option>)}
+          </select>
+          <button className="primary-button" disabled={!name.trim() || busy} onClick={() => void add()}><Plus size={13} />{t("Add")}</button>
+        </SettingsRow>
         <p className="settings-group-note">{t("Local members stay on this device. Invite signed-in collaborators above to share through the cloud.")}</p>
       </div>
     </section>
@@ -317,7 +311,7 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
         {activity.length ? activity.map((event) => <div className="project-activity-row" key={event.id}>
           <span className="project-activity-dot" />
           <div><strong>{t(ACTION_LABELS[event.action] || event.action)}</strong><small>{new Date(event.created_at).toLocaleString()}</small></div>
-        </div>) : <div className="project-activity-empty"><Users size={16} /><span>{t("No project activity yet.")}</span></div>}
+        </div>) : <StateView compact className="project-activity-empty" icon={<Users size={16} />} description={t("No project activity yet.")} />}
       </div>
     </section>
     {error && <p className="settings-group-note warning">{error}</p>}

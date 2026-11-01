@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useUISettings } from "./i18n";
 import { chapterChunkStatus, eventFailedAnswer, eventHasError, eventOrdinal, isUnresolvedError, latestAnswerOrdinal } from "./journeyEventState";
 import { artifactPaths, collectTouchedPaths, toolArgumentsOf, toolNameOf } from "./evidencePaths";
 import { planChapterMerges } from "./journeyMergePlan";
-import { useDialogFocus } from "./useDialogFocus";
 
+import { Dialog } from "./Dialog";
 type JourneyViewProps = {
   bridge: ResearchDeskBridge;
   thread: ResearchThread | null;
@@ -655,7 +654,6 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   const previousBusyRef = useRef(agentBusy);
   const previousPendingRef = useRef<string | null>(pendingAction?.id ?? null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const mapDialogRef = useDialogFocus<HTMLElement>(mapOpen, () => setMapOpen(false));
 
   const sourceChapters = useMemo(() => buildChapters(events, settings, pendingAction, thread, t, merges), [events, merges, pendingAction, settings, thread, t]);
   const titledSourceChapters = useMemo(() => sourceChapters.map((chapter) => titles[chapter.id] ? { ...chapter, title: titles[chapter.id] } : chapter), [sourceChapters, titles]);
@@ -1275,8 +1273,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
       <p className="journey-outline-hint">{t("Click a chapter to expand. Open map for the full tree.")}</p>
       {dock}
     </div>}
-    {mapOpen && typeof document !== "undefined" && createPortal(<div className="journey-map-scrim app-dialog-overlay" role="presentation" onMouseDown={() => setMapOpen(false)}>
-      <section ref={mapDialogRef} tabIndex={-1} className="journey-map app-dialog app-dialog-full" role="dialog" aria-modal="true" aria-label={t("Journey map")} onMouseDown={(event) => event.stopPropagation()}>
+    <Dialog open={mapOpen} onClose={() => setMapOpen(false)} size="full" className="journey-map" overlayClassName="journey-map-scrim app-dialog-overlay" ariaLabel={t("Journey map")}>
         <header className="journey-map-header">
           <div><h2>{t("Journey map")}</h2><p>{thread?.title || t("New research task")} · {plural(steps, t("step"))} · {plural(chapters.length, t("chapter"))}</p></div>
           <div className="journey-map-tools">
@@ -1325,7 +1322,6 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
           </aside>
         </div>
         <footer className="journey-map-footer"><span>{t("Click a chapter to inspect. Hover a row to see its event range.")}</span><span>{summaryLabel} · {plural(steps, t("step"))}</span></footer>
-      </section>
-    </div>, document.body)}
+    </Dialog>
   </section>;
 }

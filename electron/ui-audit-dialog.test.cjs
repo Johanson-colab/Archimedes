@@ -14,7 +14,7 @@ test("shared dialog hook implements escape, tab trapping, scroll lock and focus 
   assert.match(hook, /previous\.focus\(\)/);
 });
 
-test("all modal surfaces use the shared dialog contract", () => {
+test("all modal surfaces use the shared dialog shell", () => {
   for (const file of [
     "src/App.tsx",
     "src/LibraryView.tsx",
@@ -25,10 +25,14 @@ test("all modal surfaces use the shared dialog contract", () => {
     "src/ExtensionsView.tsx",
   ]) {
     const source = read(file);
-    assert.match(source, /useDialogFocus/, `${file} should use useDialogFocus`);
-    assert.match(source, /app-dialog/, `${file} should use the shared dialog skin`);
-    assert.match(source, /DialogPortal|createPortal/, `${file} should portal its dialog`);
+    assert.match(source, /<Dialog\b/, `${file} should use the shared Dialog shell`);
+    assert.doesNotMatch(source, /role="dialog"/, `${file} should not recreate dialog semantics`);
   }
+  const dialog = read("src/Dialog.tsx");
+  assert.match(dialog, /DialogPortal/);
+  assert.match(dialog, /useDialogFocus/);
+  assert.match(dialog, /aria-modal/);
+  assert.match(dialog, /app-dialog/);
 });
 
 test("welcome composer stays quiet while resizers keep explicit focus styling", () => {
@@ -40,8 +44,8 @@ test("welcome composer stays quiet while resizers keep explicit focus styling", 
 
 test("paper project dialog is dismissible before a project exists", () => {
   const paper = read("src/PaperWritingView.tsx");
-  assert.match(paper, /useDialogFocus<HTMLElement>\(dialogOpen, \(\) => setChooserOpen\(false\)\)/);
-  assert.match(paper, /event\.target === event\.currentTarget\) setChooserOpen\(false\)/);
+  assert.match(paper, /<Dialog open=\{dialogOpen\} onClose=\{\(\) => setChooserOpen\(false\)\}/);
+  assert.match(paper, /overlayClassName="paper-create-backdrop app-dialog-overlay"/);
   assert.doesNotMatch(paper, /activeProject && <button[^>]*aria-label="Close project chooser"/);
   assert.match(paper, /<button className="app-dialog-close" onClick=\{\(\) => setChooserOpen\(false\)\} aria-label="Close project chooser">/);
 });

@@ -6,6 +6,8 @@ import { BookOpen, Check, ChevronLeft, ChevronRight, ExternalLink, FileText, Gra
 import conferenceCatalog from "../shared/conferences.json";
 import { FilterGroup, FilterButton } from "./Tabs";
 
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }> = [
   { id: "all", label: "All" }, { id: "oral", label: "Oral" }, { id: "spotlight", label: "Spotlight" },
   { id: "poster", label: "Poster" }, { id: "unknown", label: "Unclassified" },
@@ -78,15 +80,15 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
       <div className="external-search-box"><Search size={16} /><input aria-label="Search conference papers" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && search()} placeholder="Search by title, author, abstract, or keyword" /><button className="primary-button" disabled={loading} onClick={search}><Search size={14} />Search</button></div>
       <span>{response ? `${response.total.toLocaleString()} papers` : `${selected.label} ${year}`}</span>
     </div>
-    {error && <div className="library-error" role="alert">{error}</div>}
+    {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
     {response && <div className="conference-catalog-status">
       <span><GraduationCap size={14} />{selected.label} {year} · {response.catalog_total.toLocaleString()} papers · {response.status === "not_held" ? "No edition" : response.status === "not_published" ? "Awaiting official publication" : response.stale ? "Cached, refresh pending" : response.cached ? "Cached" : "Official catalog"}</span>
       <details><summary>Sources and updated time</summary><time>{new Date(response.fetched_at).toLocaleString()}</time>{response.sources.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{new URL(url).hostname}<ExternalLink size={11} /></a>)}</details>
     </div>}
-    {response?.warnings.map((warning) => <div className="conference-notice" key={warning}>{warning}</div>)}
-    {loading ? <div className="library-loading"><LoaderCircle className="spin" size={18} />Loading the official {selected.label} {year} catalog…</div>
-      : !response ? <div className="daily-empty"><RefreshCw size={24} /><strong>The official catalog is temporarily unavailable</strong><button className="secondary-button" onClick={() => void load(true)}>Retry</button></div>
-      : !response.papers.length ? <div className="daily-empty"><BookOpen size={24} /><strong>{response.status === "not_held" ? "No edition was held that year" : response.status === "not_published" ? "The official paper catalog is not public yet" : "No papers match these filters"}</strong><span>{response.status === "not_published" ? `The official ${selected.label} ${year} accepted-paper catalog is not available yet. Choose another year or try again later.` : "Try another conference, year, or presentation format."}</span></div>
+    {response?.warnings.map((warning) => <InlineNotice tone="warning" className="conference-notice" key={warning}>{warning}</InlineNotice>)}
+    {loading ? <StateView tone="loading" className="library-loading" icon={<LoaderCircle className="spin" size={18} />} title={`Loading the official ${selected.label} ${year} catalog…`} />
+      : !response ? <StateView tone="error" className="daily-empty" icon={<RefreshCw size={24} />} title="The official catalog is temporarily unavailable" action={<button className="secondary-button" onClick={() => void load(true)}>Retry</button>} />
+      : !response.papers.length ? <StateView className="daily-empty" icon={<BookOpen size={24} />} title={response.status === "not_held" ? "No edition was held that year" : response.status === "not_published" ? "The official paper catalog is not public yet" : "No papers match these filters"} description={response.status === "not_published" ? `The official ${selected.label} ${year} accepted-paper catalog is not available yet. Choose another year or try again later.` : "Try another conference, year, or presentation format."} />
       : <div className="daily-paper-list">{response.papers.map((paper) => {
         const metadata = paper.conference!;
         const key = `${targetLibraryId}:${paper.external_id}`;

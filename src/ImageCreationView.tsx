@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { MenuSurface } from "./Menu";
-import { useDialogFocus } from "./useDialogFocus";
 import DataChartGallery from "./DataChartGallery";
 import { Tabs, Tab } from "./Tabs";
 
+import { Dialog } from "./Dialog";
+import { InlineNotice } from "./InlineNotice";
+import { StateView } from "./StateView";
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
 const PAGE_SIZE = 48;
@@ -129,7 +130,6 @@ function FigureCard({ figure, onOpen, onUseTemplate }: {
 function FigureDialog({ figure, index, total, onClose, onStep }: {
   figure: Figure; index: number; total: number; onClose: () => void; onStep: (step: number) => void;
 }) {
-  const dialogRef = useDialogFocus<HTMLElement>(true, onClose);
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "ArrowLeft") onStep(-1);
@@ -139,13 +139,11 @@ function FigureDialog({ figure, index, total, onClose, onStep }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onStep]);
   const source = paperUrl(figure);
-  return createPortal(<div className="gallery-dialog-backdrop app-dialog-overlay" onMouseDown={onClose}>
-    <section ref={dialogRef} tabIndex={-1} className="gallery-dialog app-dialog app-dialog-gallery" role="dialog" aria-modal="true" aria-label={`Figure from ${figure.title}`} onMouseDown={(event) => event.stopPropagation()}>
+  return <Dialog open onClose={onClose} size="gallery" className="gallery-dialog" overlayClassName="gallery-dialog-backdrop app-dialog-overlay" ariaLabel={`Figure from ${figure.title}`}>
       <header><span>{index + 1} / {total.toLocaleString()}</span><button type="button" title="Close figure" aria-label="Close figure" onClick={onClose}><X size={20} /></button></header>
       <div className="gallery-dialog-content"><button type="button" aria-label="Previous figure" title="Previous figure" onClick={() => onStep(-1)}><ArrowLeft size={21} /></button><img src={imageUrl(figure)} alt={`Figure from ${figure.title}`} /><button type="button" aria-label="Next figure" title="Next figure" onClick={() => onStep(1)}><ArrowRight size={21} /></button></div>
       <footer><div><span className="gallery-dialog-kicker">{figure.venue.toUpperCase()} {figure.year} · {patternLabel(figure.pattern)}{tierName(figure) ? ` · ${tierName(figure)}` : ""}</span><h2>{figure.title}</h2><p>{figure.authors.join(", ")}</p></div><div className="gallery-dialog-links">{source && <a href={source} target="_blank" rel="noreferrer">Open paper <ExternalLink size={14} /></a>}<a href={imageUrl(figure)} target="_blank" rel="noreferrer">Image source <ExternalLink size={14} /></a></div></footer>
-    </section>
-  </div>, document.body);
+  </Dialog>;
 }
 
 export default function ImageCreationView({ active, onBrowseProceedings }: { active: boolean; onBrowseProceedings: () => void }) {
@@ -241,10 +239,10 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           </MenuSurface>
         </div>
       </div>
-      {error && figures.length > 0 && <div className="gallery-notice">The Top-Conf catalogue could not be refreshed. Showing the last successfully loaded catalogue.</div>}
-      {loading && !figures.length ? <div className="gallery-state"><LoaderCircle className="spin" size={25} /><strong>Loading figures…</strong></div>
-        : error && !figures.length ? <div className="gallery-state"><ImageOff size={25} /><strong>Could not load paper diagrams</strong><p>{error}</p><button type="button" onClick={() => void refresh(true)}>Retry</button></div>
-          : !result.length ? <div className="gallery-state"><Search size={25} /><strong>No figures match these filters</strong><button type="button" onClick={resetFilters}>Clear filters</button></div>
+      {error && figures.length > 0 && <InlineNotice tone="warning" className="gallery-notice">The Top-Conf catalogue could not be refreshed. Showing the last successfully loaded catalogue.</InlineNotice>}
+      {loading && !figures.length ? <StateView tone="loading" className="gallery-state" icon={<LoaderCircle className="spin" size={25} />} title="Loading figures…" />
+        : error && !figures.length ? <StateView tone="error" className="gallery-state" icon={<ImageOff size={25} />} title="Could not load paper diagrams" description={error} action={<button type="button" onClick={() => void refresh(true)}>Retry</button>} />
+          : !result.length ? <StateView className="gallery-state" icon={<Search size={25} />} title="No figures match these filters" action={<button type="button" onClick={resetFilters}>Clear filters</button>} />
             : <>
               <div className="image-creation-grid">{shown.map((figure) => <FigureCard key={figure.id} figure={figure} onOpen={() => setSelectedId(figure.id)} onUseTemplate={() => useAsTemplate(figure)} />)}</div>
               {visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}

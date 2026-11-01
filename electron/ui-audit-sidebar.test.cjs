@@ -117,7 +117,8 @@ test("search opens a command palette and Ctrl/Cmd+K is wired", () => {
   assert.match(app, /<button className="sidebar-search-button" onClick=\{\(\) => setPaletteOpen\(true\)\}/);
   assert.match(app, /event\.key\.toLowerCase\(\) === "k"/);
   assert.match(app, /<CommandPalette open=\{paletteOpen\}/);
-  assert.match(palette, /role="dialog" aria-modal="true" aria-label="Command palette"/);
+  assert.match(palette, /<Dialog open=\{open\} onClose=\{onClose\}/);
+  assert.match(palette, /ariaLabel="Command palette"/);
   assert.match(palette, /event\.key === "ArrowDown"/);
   assert.match(palette, /event\.key === "Enter"/);
 });

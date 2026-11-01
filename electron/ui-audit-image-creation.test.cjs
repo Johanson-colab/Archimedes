@@ -31,7 +31,7 @@ test("the page keeps Paper diagrams and Data charts in one tab row without Templ
   assert.match(view, /className="image-creation-sort"/);
   assert.match(view, /Browse full proceedings/);
   assert.doesNotMatch(view, /ToolbarActions/);
-  assert.match(view, /useDialogFocus/);
+  assert.match(view, /<Dialog open onClose=\{onClose\}/);
 });
 
 test("Data charts is a separate tab with chart types and tables, but no field or venue filter", () => {

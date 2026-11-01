@@ -33,7 +33,7 @@ import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
 import ExtensionsView, { type ExtensionsTab } from "./ExtensionsView";
 import { useConfirm } from "./ConfirmDialog";
-import DialogPortal from "./DialogPortal";
+import { Dialog } from "./Dialog";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { sidebarEntries, type MainSection, type SidebarEntry } from "./sidebar-registry";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
@@ -68,7 +68,6 @@ import { useProactiveAgent } from "./useProactiveAgent";
 import type { ProactiveSuggestion } from "./proactive-types";
 import CopyButton from "./CopyButton";
 import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";
-import { useDialogFocus } from "./useDialogFocus";
 import ArchimedesMark from "./brand/ArchimedesMark";
 import ArchimedesWordmark from "./brand/ArchimedesWordmark";
 import {
@@ -3951,13 +3950,12 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
 }
 
 function WorkspaceModal({ modal, fileName, onFileName, onClose, onCreateFile }: { modal: Modal; fileName: string; onFileName: (value: string) => void; onClose: () => void; onCreateFile: () => void }) {
-  const dialogRef = useDialogFocus<HTMLElement>(Boolean(modal), onClose);
   if (!modal) return null;
-  return <DialogPortal><div className="modal-backdrop app-dialog-overlay" role="presentation" onMouseDown={onClose}><section ref={dialogRef} tabIndex={-1} className="workspace-modal app-dialog app-dialog-sm" role="dialog" aria-modal="true" aria-labelledby="workspace-file-title" onMouseDown={(event) => event.stopPropagation()}>
+  return <Dialog open onClose={onClose} size="sm" className="workspace-modal" ariaLabelledBy="workspace-file-title">
     <header className="modal-header"><div><h2 id="workspace-file-title">New workspace file</h2><p>Create a file in the workspace, then open it in the Files view.</p></div><button className="app-dialog-close" onClick={onClose} aria-label="Close"><X size={16} /></button></header>
     <label>File name<input autoFocus value={fileName} onChange={(event) => onFileName(event.target.value)} placeholder="literature-gap.md" onKeyDown={(event) => event.key === "Enter" && onCreateFile()} /></label>
     <footer className="modal-actions"><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" onClick={onCreateFile}><Plus size={14} />Create draft</button></footer>
-  </section></div></DialogPortal>;
+  </Dialog>;
 }
 
 export default App;
