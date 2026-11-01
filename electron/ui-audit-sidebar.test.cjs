@@ -104,7 +104,9 @@ test("Extensions uses Installed, Available, and Updates with Workbench tabs", ()
 test("account chip is global and runtime moves to the composer", () => {
   assert.match(app, /className="sidebar-runtime"/);
   assert.match(app, /<AccountChip authState=\{authState\}/);
-  assert.match(app, /className="composer-runtime-switch" role="group" aria-label="Runtime location"/);
+  assert.match(app, /className="composer-runtime-switch" aria-label="Runtime location"/);
+  assert.match(app, /className="composer-runtime-local"/);
+  assert.match(app, /composer-runtime-cloud/);
   assert.match(app, /Cloud runs need an account/);
   assert.match(css, /\.account-chip \{ display: flex;/);
   assert.match(css, /\.composer-runtime-switch \{ display: inline-flex;/);

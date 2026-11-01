@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookMarked,
@@ -19,12 +19,14 @@ import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
 type PickerView = "root" | "libraries" | "papers" | "plugins" | "skills";
 
-export default function ContextPicker({ bridge, workspace, projectId, items, onAdd }: {
+export default function ContextPicker({ bridge, workspace, projectId, items, onAdd, openRequest = 0, currentFile }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   projectId?: string | null;
   items: ContextAttachment[];
   onAdd: (items: ContextAttachment[]) => void;
+  openRequest?: number;
+  currentFile?: WorkspaceFilePreview | null;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<PickerView>("root");
@@ -37,6 +39,16 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
   const [query, setQuery] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const selectedIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
+  const lastOpenRequest = useRef(0);
+
+  useEffect(() => {
+    if (!openRequest || openRequest === lastOpenRequest.current) return;
+    lastOpenRequest.current = openRequest;
+    setOpen(true);
+    setView("root");
+    setError("");
+    setQuery("");
+  }, [openRequest]);
 
   function reset(nextOpen = false) {
     setOpen(nextOpen);
@@ -133,6 +145,19 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
     reset(false);
   }
 
+  function addCurrentFile() {
+    if (!currentFile) return;
+    const absolutePath = `${workspace.replace(/[\\/]$/, "")}/${currentFile.path.replace(/^\/+/, "")}`;
+    onAdd([{
+      id: `file:${absolutePath}`,
+      type: "file",
+      name: currentFile.name,
+      path: absolutePath,
+      detail: currentFile.path,
+    }]);
+    reset(false);
+  }
+
   const filteredPapers = papers.filter((paper) => `${paper.title} ${paper.authors.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()));
   const resourceTerms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const filteredResources = resources.filter((resource) => {
@@ -150,6 +175,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
 
         {view === "root" && <>
           <MenuLabel>Add context</MenuLabel>
+          {currentFile && <PickerAction icon={<FilePlus2 size={16} />} label="Current file" detail={currentFile.path} onClick={addCurrentFile} />}
           <PickerAction icon={<FilePlus2 size={16} />} label="Local file" detail="Attach one or more files" onClick={() => void chooseLocal("file")} />
           <PickerAction icon={<FolderPlus size={16} />} label="Local folder" detail="Give Archimedes access to a folder" onClick={() => void chooseLocal("folder")} />
           <MenuDivider />
@@ -188,10 +214,11 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
   </div>;
 }
 
-export function ContextChips({ items, onRemove }: { items: ContextAttachment[]; onRemove: (id: string) => void }) {
+export function ContextChips({ items, onRemove, onClear }: { items: ContextAttachment[]; onRemove: (id: string) => void; onClear?: () => void }) {
   if (!items.length) return null;
-  return <div className="attached-contexts" aria-label="Attached context">
-    {items.map((item) => <span className={item.type === "image" ? "attached-context-chip image" : "attached-context-chip"} key={item.id} title={item.detail || item.path || item.name}>{item.type === "image" && item.image ? <img src={item.image.dataUrl} alt="" /> : <ContextTypeIcon type={item.type} />}<span>{item.name}</span><button onClick={() => onRemove(item.id)} title={`Remove ${item.name}`}><X size={12} /></button></span>)}
+  return <div className="attached-contexts" aria-label={`Attached context (${items.length})`}>
+    {items.map((item) => <span className={item.type === "image" ? "attached-context-chip image" : "attached-context-chip"} key={item.id} title={item.detail || item.path || item.name}>{item.type === "image" && item.image ? <img src={item.image.dataUrl} alt="" /> : <ContextTypeIcon type={item.type} />}<span>{item.name}</span><button onClick={() => onRemove(item.id)} title={`Remove ${item.name}`} aria-label={`Remove ${item.name}`}><X size={12} /></button></span>)}
+    {onClear && items.length > 1 && <button type="button" className="attached-context-clear" onClick={onClear}>Clear all</button>}
   </div>;
 }
 
