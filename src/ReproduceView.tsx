@@ -348,7 +348,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     } finally {
       setBusy("");
     }
-  }, [bridge, detail]);
+  }, [bridge, detail, target]);
 
   const stopRun = useCallback(async () => {
     if (!detail) return;
