@@ -206,7 +206,12 @@ async function runRunbook({
       break;
     }
 
-    emit({ type: "step-start", step: { id: step.id, title: step.title } });
+    emit({
+      type: "step-start",
+      step: { id: step.id, title: step.title },
+      index: results.length + 1,
+      total: steps.length,
+    });
     let executed = null;
     if (step.command) {
       try {

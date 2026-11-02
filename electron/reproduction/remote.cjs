@@ -182,7 +182,12 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
       const exists = await run(`test -d ${quoteRemotePath(`${repo}/.git`)} && echo yes || echo no`, { timeoutMs: 60_000 });
       if (!exists.output.includes("yes")) {
         emit({ type: "preparing", detail: `Cloning ${branch || "the default branch"} into ${repo}…` });
-        const clone = await run(`git clone --depth 1${branch ? ` --branch ${shellQuote(branch)}` : ""} ${shellQuote(repoUrl)} ${quoteRemotePath(repo)}`, { timeoutMs: 15 * 60 * 1_000, onData: (chunk) => emit({ type: "output", chunk }) });
+        // git prints no progress without a terminal unless told to; the bar uses
+        // \r, which becomes a newline so the log shows one line per update.
+        const clone = await run(
+          `git clone --progress --depth 1${branch ? ` --branch ${shellQuote(branch)}` : ""} ${shellQuote(repoUrl)} ${quoteRemotePath(repo)}`,
+          { timeoutMs: 15 * 60 * 1_000, onData: (chunk) => emit({ type: "output", chunk: chunk.replace(/\r/g, "\n") }) },
+        );
         if (clone.code !== 0) {
           const host = clone.output.match(/Could not resolve host: (\S+)/)?.[1];
           if (!copyFrom) {

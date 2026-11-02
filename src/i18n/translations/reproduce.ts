@@ -15,6 +15,7 @@ export const reproduce: Record<string, string> = {
   "Run on": "在",
   "Running": "运行中",
   "server": "服务器",
+  "Step": "第",
   "Stop here": "到此为止",
   "Suggested change to step {step}:": "建议把步骤 {step} 改成：",
   "This Mac (Docker)": "本机（Docker）",

@@ -153,6 +153,8 @@ interface ResearchDeskBridge {
       status?: string;
       summary?: string;
       attempt?: number;
+      index?: number;
+      total?: number;
       diagnosis?: ReproductionDiagnosis;
       step?: { id?: string; title?: string; status?: ReproductionRunStepStatus; detail?: string; exit_code?: number | null; duration_ms?: number };
     }) => void) => () => void;

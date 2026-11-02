@@ -114,6 +114,13 @@ function checkLabel(check: ReproductionStep["check"]) {
   return `${check.url} returns ${check.status}`;
 }
 
+function clockLabel(ms: number) {
+  const total = Math.floor(ms / 1000);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function expectedLabel(claim: ReproductionClaim) {
   if (claim.expected === null) return "no reported value";
   return `${claim.expected}${claim.unit ? ` ${claim.unit}` : ""}`;
@@ -141,6 +148,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [running, setRunning] = useState(false);
   const [runLine, setRunLine] = useState("");
   const [diagnosis, setDiagnosis] = useState<ReproductionDiagnosis | null>(null);
+  const [currentStep, setCurrentStep] = useState<{ index: number; total: number; title: string; startedAt: number } | null>(null);
+  const [clock, setClock] = useState(Date.now());
   const [servers, setServers] = useState<SshServer[]>([]);
   const [target, setTarget] = useState(() => window.localStorage.getItem("archimedes-reproduce-target") || "docker");
   const [attempts, setAttempts] = useState<ReproductionAttempt[]>([]);
@@ -185,6 +194,12 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   }, [target]);
 
   useEffect(() => {
+    if (!running) return undefined;
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+
+  useEffect(() => {
     const off = bridge.onReproductionPlanEvent?.((payload) => {
       if (payload?.detail) setPlanStatus(payload.detail);
     });
@@ -202,7 +217,12 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         setLiveLog((current) => (current + payload.chunk).slice(-200_000));
         return;
       }
+      if (payload.type === "step-start" && payload.step) {
+        setCurrentStep({ index: payload.index || 0, total: payload.total || 0, title: payload.step.title || "", startedAt: Date.now() });
+        return;
+      }
       if (payload.type === "step" && payload.step?.id) {
+        setCurrentStep(null);
         const step = payload.step as ReproductionRunStep;
         setRunSteps((current) => ({ ...current, [step.id]: step }));
         return;
@@ -222,6 +242,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       }
       if (payload.type === "finished") {
         setRunning(false);
+        setCurrentStep(null);
         setDiagnosis(null);
         setRunLine(payload.summary || "");
         void bridge.getReproduction(selectedId).then((record) => {
@@ -526,6 +547,11 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
             {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : "failed"}`}>{RUN_LABELS[run.status]}</span>}
           </h2>
           {run?.backend && <p className="reproduce-hint">{run.backend}</p>}
+          {currentStep && <p className="reproduce-step-running">
+            <LoaderCircle className="spin" size={11} />
+            <span>{currentStep.index > 0 && currentStep.total > 0 ? `${t("Step")} ${currentStep.index} / ${currentStep.total} · ` : ""}{currentStep.title}</span>
+            <span className="reproduce-elapsed">{clockLabel(Math.max(0, clock - currentStep.startedAt))}</span>
+          </p>}
           {runLine && <p className="reproduce-hint">{runLine}</p>}
           {(liveLog || running) && <pre className="reproduce-log" ref={logRef}>{liveLog || "Waiting for output…"}</pre>}
         </section>}
