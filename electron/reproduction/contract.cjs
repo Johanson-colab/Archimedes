@@ -211,6 +211,22 @@ function normalizeContract(input, { paperTitle = "" } = {}) {
       branch: text(value.repo?.branch, 200),
     },
     notes: Array.isArray(value.notes) ? value.notes.map((item) => text(item, 400)).filter(Boolean).slice(0, 10) : [],
+    // A frozen contract that gets repaired keeps the repairs: a run that needed
+    // two command changes is not the same run as one that needed none.
+    deviations: Array.isArray(value.deviations)
+      ? value.deviations
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          at: text(item.at, 40),
+          attempt: Math.trunc(boundedNumber(item.attempt, 1, 1, 99)),
+          step_id: text(item.step_id, 80),
+          from: text(item.from, 2_000),
+          to: text(item.to, 2_000),
+          reason: text(item.reason, 600),
+          class: text(item.class, 60),
+        }))
+        .slice(-20)
+      : [],
     // Approval is the gate the runner checks; normalising it away would silently
     // un-freeze a contract the user already approved.
     frozen_at: typeof value.frozen_at === "string" && value.frozen_at ? value.frozen_at : null,

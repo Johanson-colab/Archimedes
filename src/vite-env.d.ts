@@ -132,6 +132,8 @@ interface ResearchDeskBridge {
     preflightReproduction: (id: string, workspace?: string) => Promise<ReproductionPreflight>;
     runReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
     stopReproduction: (id: string) => Promise<boolean>;
+    applyReproductionFix: (id: string) => Promise<Reproduction>;
+    dismissReproductionDiagnosis: (id: string) => Promise<Reproduction>;
     onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
     onReproductionRunEvent?: (callback: (payload: {
       reproductionId?: string;
@@ -141,6 +143,8 @@ interface ResearchDeskBridge {
       chunk?: string;
       status?: string;
       summary?: string;
+      attempt?: number;
+      diagnosis?: ReproductionDiagnosis;
       step?: { id?: string; title?: string; status?: ReproductionRunStepStatus; detail?: string; exit_code?: number | null; duration_ms?: number };
     }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
@@ -810,7 +814,44 @@ interface ReproductionContract {
   environment: { python: string; cuda: string; install: string[]; system: string[]; source: string };
   repo: { url: string; commit: string; branch: string };
   notes: string[];
+  deviations: ReproductionDeviation[];
   frozen_at: string | null;
+}
+
+interface ReproductionDeviation {
+  at: string;
+  attempt: number;
+  step_id: string;
+  from: string;
+  to: string;
+  reason: string;
+  class: string;
+}
+
+interface ReproductionDiagnosis {
+  class: string;
+  confidence: string;
+  evidence: string;
+  cause: string;
+  retry: boolean;
+  fix: { target: string; command: string } | null;
+  id?: string;
+  attempt?: number;
+}
+
+interface ReproductionAttempt {
+  id: string;
+  reproduction_id: string;
+  run_id: string;
+  attempt_no: number;
+  step_id: string;
+  class: string;
+  confidence: string;
+  evidence: string;
+  cause: string;
+  fix: { target: string; command: string } | null;
+  status: string;
+  created_at: string;
 }
 
 interface Reproduction {
@@ -826,6 +867,7 @@ interface Reproduction {
   created_at: string;
   updated_at: string;
   run?: ReproductionRun | null;
+  attempts?: ReproductionAttempt[];
 }
 
 type ReproductionCheckStatus = "passed" | "failed" | "needs-run" | "manual" | "blocked";

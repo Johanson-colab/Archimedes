@@ -130,6 +130,7 @@ async function runRunbook({
   signal,
   stepTimeoutMs = DEFAULT_STEP_TIMEOUT_MS,
   budgetMs = Number.POSITIVE_INFINITY,
+  startAt = 0,
   httpAttempts = DEFAULT_HTTP_ATTEMPTS,
   httpIntervalMs = DEFAULT_HTTP_INTERVAL_MS,
   repoName = "",
@@ -140,6 +141,7 @@ async function runRunbook({
   const startedAt = now();
   const deadline = Number.isFinite(budgetMs) ? startedAt + budgetMs : Number.POSITIVE_INFINITY;
   const results = [];
+  const offset = Math.max(0, Math.min(steps.length, Math.trunc(startAt) || 0));
   let log = "";
   let status = "verified";
 
@@ -164,7 +166,7 @@ async function runRunbook({
     });
   };
 
-  for (const step of steps) {
+  for (const step of steps.slice(offset)) {
     const record = {
       id: step.id,
       title: step.title,

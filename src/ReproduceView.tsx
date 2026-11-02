@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, ChevronLeft, FlaskConical, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
 
+import { useUISettings } from "./i18n";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
 const STATUS_LABELS: Record<ReproductionStatus, string> = {
@@ -123,10 +124,11 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
+  const { t } = useUISettings();
   const [items, setItems] = useState<Reproduction[]>([]);
   const [detail, setDetail] = useState<Reproduction | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "run" | "stop" | "">("");
+  const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "run" | "stop" | "fix" | "">("");
   const [error, setError] = useState("");
   const [planStatus, setPlanStatus] = useState("");
   const [openClaim, setOpenClaim] = useState<string | null>(null);
@@ -138,6 +140,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [liveLog, setLiveLog] = useState("");
   const [running, setRunning] = useState(false);
   const [runLine, setRunLine] = useState("");
+  const [diagnosis, setDiagnosis] = useState<ReproductionDiagnosis | null>(null);
+  const [attempts, setAttempts] = useState<ReproductionAttempt[]>([]);
   const logRef = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
@@ -189,13 +193,28 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         setRunSteps((current) => ({ ...current, [step.id]: step }));
         return;
       }
+      if (payload.type === "attempt") {
+        setDiagnosis(null);
+        setRunning(true);
+        setRunLine(payload.attempt ? `Attempt ${payload.attempt}…` : "");
+        return;
+      }
+      if (payload.type === "diagnosis" && payload.diagnosis) {
+        // A live diagnosis is the only one the buttons may act on: after a
+        // restart the container is gone and the suggestion is only history.
+        setDiagnosis(payload.diagnosis);
+        setRunning(false);
+        return;
+      }
       if (payload.type === "finished") {
         setRunning(false);
+        setDiagnosis(null);
         setRunLine(payload.summary || "");
         void bridge.getReproduction(selectedId).then((record) => {
           if (!record) return;
           setDetail(record);
           setRun(record.run ?? null);
+          setAttempts(record.attempts ?? []);
         }).catch(() => {});
         void refresh();
       }
@@ -216,6 +235,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setLiveLog(previous?.log ?? "");
       setRunning(previous?.status === "running");
       setRunLine("");
+      setDiagnosis(null);
+      setAttempts(record?.attempts ?? []);
     }).catch((detailError) => { if (!cancelled) setError(readable(detailError, "Could not open this reproduction.")); });
     return () => { cancelled = true; };
   }, [bridge, selectedId]);
@@ -323,6 +344,38 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setRunLine("Stopping…");
     } catch (stopError) {
       setError(readable(stopError, "The run could not be stopped."));
+    } finally {
+      setBusy("");
+    }
+  }, [bridge, detail]);
+
+  const applyDiagnosis = useCallback(async () => {
+    if (!detail) return;
+    setBusy("fix");
+    setError("");
+    try {
+      const next = await bridge.applyReproductionFix(detail.id);
+      setDetail(next);
+      setDiagnosis(null);
+      setRunning(true);
+      setRunLine("Re-running from the repaired step…");
+    } catch (fixError) {
+      setError(readable(fixError, "The change could not be applied."));
+    } finally {
+      setBusy("");
+    }
+  }, [bridge, detail]);
+
+  const dismissDiagnosis = useCallback(async () => {
+    if (!detail) return;
+    setBusy("fix");
+    try {
+      const next = await bridge.dismissReproductionDiagnosis(detail.id);
+      setDetail(next);
+      setDiagnosis(null);
+      setRunning(false);
+    } catch (dismissError) {
+      setError(readable(dismissError, "The run could not be closed."));
     } finally {
       setBusy("");
     }
@@ -461,6 +514,30 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           {run?.backend && <p className="reproduce-hint">{run.backend}</p>}
           {runLine && <p className="reproduce-hint">{runLine}</p>}
           {(liveLog || running) && <pre className="reproduce-log" ref={logRef}>{liveLog || "Waiting for output…"}</pre>}
+        </section>}
+
+        {diagnosis && <section className="reproduce-block reproduce-diagnosis">
+          <h2>{t("Diagnosis")}<span className="reproduce-check-status failed">{diagnosis.class.replace(/_/g, " ")}</span></h2>
+          {diagnosis.evidence !== "insufficient" && diagnosis.evidence && <blockquote className="reproduce-diagnosis-evidence">{diagnosis.evidence}</blockquote>}
+          <p className="reproduce-diagnosis-cause">{diagnosis.cause}</p>
+          {diagnosis.fix ? <>
+            <p className="reproduce-hint">{t("Suggested change to step {step}:").replace("{step}", diagnosis.fix.target)}</p>
+            <pre className="reproduce-step-command">{diagnosis.fix.command}</pre>
+            <p className="reproduce-hint">{t("Checkpoints are not changed. Re-running records this as a deviation.")}</p>
+            <div className="reproduce-diagnosis-actions">
+              <button className="primary-button" disabled={busy !== ""} onClick={() => void applyDiagnosis()}>
+                {busy === "fix" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}{t("Apply and re-run")}
+              </button>
+              <button className="secondary-button" disabled={busy !== ""} onClick={() => void dismissDiagnosis()}>{t("Stop here")}</button>
+            </div>
+          </> : <p className="reproduce-hint warn">{t("No safe change to try. This needs a person.")}</p>}
+          {attempts.length > 0 && <ol className="reproduce-attempts">
+            {attempts.map((attempt) => <li key={attempt.id}>
+              <span className="reproduce-attempt-no">#{attempt.attempt_no}</span>
+              <span className="reproduce-attempt-class">{attempt.class.replace(/_/g, " ")}</span>
+              <span className={`reproduce-check-status ${attempt.status === "applied" ? "passed" : "manual"}`}>{attempt.status}</span>
+            </li>)}
+          </ol>}
         </section>}
 
         <section className="reproduce-block">

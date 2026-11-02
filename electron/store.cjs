@@ -407,6 +407,21 @@ function schema(db) {
       updated_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS reproduction_attempts (
+      id TEXT PRIMARY KEY NOT NULL,
+      reproduction_id TEXT NOT NULL REFERENCES reproductions(id) ON DELETE CASCADE,
+      run_id TEXT NOT NULL REFERENCES reproduction_runs(id) ON DELETE CASCADE,
+      attempt_no INTEGER NOT NULL,
+      step_id TEXT NOT NULL,
+      class TEXT NOT NULL,
+      confidence TEXT NOT NULL DEFAULT '',
+      evidence TEXT NOT NULL DEFAULT '',
+      cause TEXT NOT NULL DEFAULT '',
+      fix_json TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
       cache_key TEXT PRIMARY KEY NOT NULL,
       response_json TEXT NOT NULL,
@@ -440,6 +455,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_paper_presentations_updated ON paper_presentations(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_reproductions_updated ON reproductions(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_reproduction_runs_reproduction ON reproduction_runs(reproduction_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_reproduction_attempts_run ON reproduction_attempts(run_id, attempt_no);
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
@@ -2705,6 +2721,70 @@ function listReproductionRuns(reproductionId, limit = 20) {
     .map(reproductionRunRow);
 }
 
+function reproductionAttemptRow(row) {
+  if (!row) return null;
+  let fix = null;
+  try { fix = row.fix_json ? JSON.parse(row.fix_json) : null; } catch { fix = null; }
+  return {
+    id: row.id,
+    reproduction_id: row.reproduction_id,
+    run_id: row.run_id,
+    attempt_no: Number(row.attempt_no) || 1,
+    step_id: row.step_id,
+    class: row.class,
+    confidence: row.confidence || "",
+    evidence: row.evidence || "",
+    cause: row.cause || "",
+    fix,
+    status: row.status,
+    created_at: row.created_at,
+  };
+}
+
+function createReproductionAttempt(input = {}) {
+  const db = requireDatabase();
+  const id = randomUUID();
+  const now = timestamp();
+  const next = db.prepare("SELECT COALESCE(MAX(attempt_no), 0) + 1 AS next FROM reproduction_attempts WHERE run_id = ?")
+    .get(String(input.runId || ""));
+  db.prepare(`INSERT INTO reproduction_attempts
+      (id, reproduction_id, run_id, attempt_no, step_id, class, confidence, evidence, cause, fix_json, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    id,
+    String(input.reproductionId || ""),
+    String(input.runId || ""),
+    Math.trunc(Number(input.attemptNo) || Number(next?.next) || 1),
+    String(input.stepId || "").slice(0, 80),
+    String(input.class || "unknown").slice(0, 60),
+    String(input.confidence || "").slice(0, 20),
+    String(input.evidence || "").slice(0, 400),
+    String(input.cause || "").slice(0, 600),
+    input.fix ? JSON.stringify(input.fix) : null,
+    String(input.status || "proposed").slice(0, 30),
+    now,
+  );
+  return reproductionAttemptRow(db.prepare("SELECT * FROM reproduction_attempts WHERE id = ?").get(id));
+}
+
+function updateReproductionAttempt(id, patch = {}) {
+  const db = requireDatabase();
+  const current = reproductionAttemptRow(db.prepare("SELECT * FROM reproduction_attempts WHERE id = ?").get(String(id || "")));
+  if (!current) throw new Error("That diagnosis does not exist.");
+  db.prepare("UPDATE reproduction_attempts SET status = ?, cause = ? WHERE id = ?").run(
+    typeof patch.status === "string" && patch.status ? patch.status.slice(0, 30) : current.status,
+    typeof patch.cause === "string" && patch.cause ? patch.cause.slice(0, 600) : current.cause,
+    String(id),
+  );
+  return reproductionAttemptRow(db.prepare("SELECT * FROM reproduction_attempts WHERE id = ?").get(String(id)));
+}
+
+function listReproductionAttempts(runId) {
+  const db = requireDatabase();
+  return db.prepare("SELECT * FROM reproduction_attempts WHERE run_id = ? ORDER BY attempt_no ASC")
+    .all(String(runId || ""))
+    .map(reproductionAttemptRow);
+}
+
 module.exports = {
   addPaper,
   createComment,
@@ -2721,10 +2801,13 @@ module.exports = {
   projectRoleForUser,
   setLocalIdentity,
   createReproduction,
+  createReproductionAttempt,
   createReproductionRun,
   getLatestReproductionRun,
   getReproductionRun,
+  listReproductionAttempts,
   listReproductionRuns,
+  updateReproductionAttempt,
   updateReproductionRun,
   listLibraryProjects,
   deleteReproduction,
