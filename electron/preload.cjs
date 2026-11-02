@@ -146,7 +146,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   deleteReproduction: (id) => ipcRenderer.invoke("reproduction:delete", { id }),
   planReproduction: (id, workspace) => ipcRenderer.invoke("reproduction:plan", { id, workspace }),
   preflightReproduction: (id, workspace) => ipcRenderer.invoke("reproduction:preflight", { id, workspace }),
-  runReproduction: (id, workspace) => ipcRenderer.invoke("reproduction:run", { id, workspace }),
+  runReproduction: (id, options = {}) => ipcRenderer.invoke("reproduction:run", { id, ...options }),
   stopReproduction: (id) => ipcRenderer.invoke("reproduction:stop", { id }),
   applyReproductionFix: (id) => ipcRenderer.invoke("reproduction:apply-fix", { id }),
   dismissReproductionDiagnosis: (id) => ipcRenderer.invoke("reproduction:dismiss-diagnosis", { id }),

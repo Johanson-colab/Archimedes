@@ -193,15 +193,24 @@ function run(command, args, { timeoutMs = 25_000, env = {} } = {}) {
  * harmless printf, not a login shell, so a broken profile on the server does not
  * look like a broken connection.
  */
-async function testConnection(server) {
+/**
+ * Who to connect as, and how to answer a password if one is stored. Shared with
+ * the remote execution backend so both paths authenticate the same way.
+ */
+function authFor(server) {
   const saved = server?.id ? findServer(server.id) : null;
   const typedPassword = typeof server?.password === "string" ? server.password : "";
   const target = normalizeServer({ ...saved, ...server });
   const password = typedPassword || codec.decrypt(saved?.passwordCipher || "");
-  const args = connectionArgs(target, `printf ${TEST_MARKER}`, { allowPassword: Boolean(password) });
   const env = password
     ? { SSH_ASKPASS: ensureAskpass(), SSH_ASKPASS_REQUIRE: "force", ARCHIMEDES_SSH_PASSWORD: password }
     : {};
+  return { target, password, env };
+}
+
+async function testConnection(server) {
+  const { target, password, env } = authFor(server);
+  const args = connectionArgs(target, `printf ${TEST_MARKER}`, { allowPassword: Boolean(password) });
   const result = await run("ssh", args, { timeoutMs: 30_000, env });
   const reachable = result.ok && result.detail.includes(TEST_MARKER);
   return {
@@ -214,6 +223,7 @@ async function testConnection(server) {
 
 module.exports = {
   DEFAULT_PORT,
+  authFor,
   DEFAULT_WORKSPACE,
   connectionArgs,
   deleteServer,

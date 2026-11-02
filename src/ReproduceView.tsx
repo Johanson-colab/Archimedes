@@ -141,6 +141,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [running, setRunning] = useState(false);
   const [runLine, setRunLine] = useState("");
   const [diagnosis, setDiagnosis] = useState<ReproductionDiagnosis | null>(null);
+  const [servers, setServers] = useState<SshServer[]>([]);
+  const [target, setTarget] = useState("docker");
   const [attempts, setAttempts] = useState<ReproductionAttempt[]>([]);
   const logRef = useRef<HTMLPreElement | null>(null);
 
@@ -169,6 +171,10 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   }, [bridge]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    void bridge.listSshServers().then(setServers).catch(() => setServers([]));
+  }, [bridge]);
 
   useEffect(() => {
     const off = bridge.onReproductionPlanEvent?.((payload) => {
@@ -313,7 +319,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     } finally {
       setChecking(false);
     }
-  }, [bridge, detail]);
+  }, [bridge, detail, target]);
 
   const startRun = useCallback(async () => {
     if (!detail) return;
@@ -323,7 +329,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     setLiveLog("");
     setRunSteps({});
     try {
-      const next = await bridge.runReproduction(detail.id);
+      const next = await bridge.runReproduction(detail.id, target === "docker" ? { backend: "docker" } : { backend: "ssh", serverId: target });
       setDetail(next);
       setRun(next.run ?? null);
       setRunning(true);
@@ -605,9 +611,20 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
               ? <button className="secondary-button" disabled={busy !== ""} onClick={() => void stopRun()}>
                   {busy === "stop" ? <LoaderCircle className="spin" size={14} /> : <Square size={13} />}Stop
                 </button>
-              : <button className="primary-button" disabled={busy !== ""} onClick={() => void startRun()}>
+              : <>
+                  {servers.length > 0 && <select
+                    className="settings-select reproduce-target"
+                    value={target}
+                    aria-label={t("Where to run")}
+                    onChange={(event) => setTarget(event.target.value)}
+                  >
+                    <option value="docker">{t("This Mac (Docker)")}</option>
+                    {servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
+                  </select>}
+                  <button className="primary-button" disabled={busy !== ""} onClick={() => void startRun()}>
                   {busy === "run" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}Run runbook
-                </button>
+                  </button>
+                </>
             : <button className="primary-button" disabled={busy !== ""} onClick={() => void approve()}>
                 <FlaskConical size={14} />Approve and queue
               </button>}

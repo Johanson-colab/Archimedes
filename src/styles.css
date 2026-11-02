@@ -6890,6 +6890,7 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 .reproduce-check-status.needs-run { color: var(--text-muted); background: var(--surface-soft); }
 .reproduce-check-status.manual, .reproduce-check-status.blocked { color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 14%, transparent); }
 .reproduce-hint.bad { color: var(--state-danger); }
+.reproduce-target { width: auto; min-width: 132px; height: 30px; }
 .reproduce-log { max-height: 280px; margin: 6px 0 0; padding: 8px 10px; overflow: auto; color: var(--text-secondary); background: var(--surface-soft); border: 1px solid var(--border-soft); border-radius: 6px; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .reproduce-diagnosis { border-left: 2px solid var(--state-warning); padding-left: 12px; }
 .reproduce-diagnosis-evidence { margin: 6px 0; padding: 6px 10px; color: var(--text-secondary); background: var(--surface-soft); border-radius: 6px; font-family: var(--font-mono); font-size: 10.5px; white-space: pre-wrap; }

@@ -42,6 +42,7 @@ const { findRepositoryUrl } = require("./paper-repository.cjs");
 const { findRepository, githubSearchCandidates } = require("./reproduction/find-repository.cjs");
 const { runRunbook } = require("./reproduction/runner.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
+const { createSshBackend } = require("./reproduction/remote.cjs");
 const { applyFix, diagnose } = require("./reproduction/diagnose.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
@@ -1241,7 +1242,7 @@ app.whenReady().then(async () => {
     if (session.idleTimer.unref) session.idleTimer.unref();
   };
 
-  ipcMain.handle("reproduction:run", async (event, { id, workspace } = {}) => {
+  ipcMain.handle("reproduction:run", async (event, { id, workspace, backend: backendKind = "docker", serverId = "" } = {}) => {
     const record = presentReproduction(store.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
     if (!record.contract) throw new Error("Generate a plan before running it.");
@@ -1254,7 +1255,10 @@ app.whenReady().then(async () => {
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
 
-    const run = store.createReproductionRun({ reproductionId: record.id, backend: "docker" });
+    const wantsSsh = backendKind === "ssh";
+    const server = wantsSsh ? sshServers.listServers().find((entry) => entry.id === serverId) : null;
+    if (wantsSsh && !server) throw new Error("Choose an SSH server before running this reproduction.");
+    const run = store.createReproductionRun({ reproductionId: record.id, backend: wantsSsh ? "ssh" : "docker" });
     const session = {
       reproductionId: record.id,
       record,
@@ -1280,8 +1284,28 @@ app.whenReady().then(async () => {
     // owns the run, and closing the reproduction view does not stop it.
     void (async () => {
       try {
-        session.send({ type: "preparing", detail: "Getting the repository checkout…" });
         const branch = session.contract.repo?.branch || "";
+        if (server) {
+          // The server does its own checkout; nothing is cloned on this machine.
+          const backend = createSshBackend({ server, repoUrl, branch, emit: session.send });
+          session.backend = backend;
+          store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });
+          session.send({ type: "preparing", detail: `Checking ${server.host}…` });
+          const probe = await backend.probe();
+          session.send({
+            type: "preparing",
+            detail: [probe.os || server.host, `${probe.diskFreeGb} GB free`, probe.docker ? "docker" : "", probe.gpu].filter(Boolean).join(" · "),
+          });
+          if (probe.diskFreeGb > 0 && probe.diskFreeGb < 5) {
+            throw new Error(`${server.host} has only ${probe.diskFreeGb} GB free. Free some space before running.`);
+          }
+          await backend.prepare();
+          store.updateReproduction(record.id, { status: "running" });
+          await executeRun(session, 0);
+          return;
+        }
+
+        session.send({ type: "preparing", detail: "Getting the repository checkout…" });
         const checkoutOptions = { branch };
         const existing = await getRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions).catch(() => null);
         if (!existing) {

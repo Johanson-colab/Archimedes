@@ -139,7 +139,7 @@ interface ResearchDeskBridge {
     deleteReproduction: (id: string) => Promise<boolean>;
     planReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
     preflightReproduction: (id: string, workspace?: string) => Promise<ReproductionPreflight>;
-    runReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
+    runReproduction: (id: string, options?: { backend?: "docker" | "ssh"; serverId?: string; workspace?: string }) => Promise<Reproduction>;
     stopReproduction: (id: string) => Promise<boolean>;
     applyReproductionFix: (id: string) => Promise<Reproduction>;
     dismissReproductionDiagnosis: (id: string) => Promise<Reproduction>;
