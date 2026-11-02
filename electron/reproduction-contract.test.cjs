@@ -99,7 +99,7 @@ test("planning fails loudly when the agent returns no contract", async () => {
     pages: [],
     workspace: "/tmp/workspace",
     runAgent: async () => ({ response: "I could not find any tables." }),
-  }), /did not return a contract/);
+  }), /stopped before finishing the contract/);
 });
 
 test("entrypoint evidence survives normalisation", () => {

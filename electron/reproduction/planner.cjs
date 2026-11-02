@@ -85,16 +85,51 @@ function buildPrompt({ paper, pages, review, repoUrl, hasRepository }) {
   ].filter(Boolean).join("\n");
 }
 
-function extractJson(content) {
-  const text = String(content || "");
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("The planner did not return a contract.");
-  try {
-    return JSON.parse(text.slice(start, end + 1));
-  } catch {
-    throw new Error("The planner returned malformed JSON.");
+/**
+ * The model answers in prose as often as in JSON. Pull out the first complete
+ * object instead of trusting the first "{" and the last "}": a reply that
+ * explains itself before and after the contract still parses, and a reply that
+ * was cut off is reported as cut off, not as malformed.
+ */
+function firstJsonObject(text) {
+  const source = String(text || "");
+  const start = source.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') inString = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
   }
+  return null;
+}
+
+function parseContract(text) {
+  const source = String(text || "").replace(/```(?:json)?/gi, "").trim();
+  const candidate = firstJsonObject(source);
+  if (!candidate) {
+    throw new Error("The planner stopped before finishing the contract. Try again; if it repeats, the repository context is too large to hold.");
+  }
+  for (const attempt of [candidate, candidate.replace(/,\s*([}\]])/g, "$1")]) {
+    try { return JSON.parse(attempt); } catch { /* try the repaired form */ }
+  }
+  throw new Error(`The planner returned malformed JSON: …${candidate.slice(-160)}`);
+}
+
+function extractJson(content) {
+  return parseContract(content);
 }
 
 async function planReproduction({ paper, pages, review, repoUrl, repoItem, workspace, runAgent, emit = () => {} }) {
@@ -110,7 +145,28 @@ async function planReproduction({ paper, pages, review, repoUrl, repoItem, works
     contextItems,
     emit,
   });
-  const contract = normalizeContract(extractJson(result?.response), { paperTitle: paper?.title || "" });
+
+  let parsed;
+  try {
+    parsed = parseContract(result?.response);
+  } catch (error) {
+    // One retry, asked for the same work in a smaller shape. A second silent
+    // failure is worth showing to the user with the reason attached.
+    emit({ type: "warning", detail: "The plan came back unusable; asking once more for the contract alone." });
+    const retry = await runAgent({
+      prompt: `${prompt}\n\nYour previous reply could not be read as JSON. Reply with the contract as ONE JSON object and nothing else. Keep it short: at most 5 steps, one sentence of detail each.`,
+      workspace,
+      transient: true,
+      mode: "experiment-setup",
+      contextItems,
+    });
+    try {
+      parsed = parseContract(retry?.response);
+    } catch {
+      throw error;
+    }
+  }
+  const contract = normalizeContract(parsed, { paperTitle: paper?.title || "" });
   if (repoItem) {
     contract.repo = {
       url: repoItem.repository.url,
@@ -123,4 +179,4 @@ async function planReproduction({ paper, pages, review, repoUrl, repoItem, works
   return contract;
 }
 
-module.exports = { buildPrompt, pageDigest, planReproduction, extractJson };
+module.exports = { buildPrompt, extractJson, firstJsonObject, pageDigest, parseContract, planReproduction };
