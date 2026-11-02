@@ -33,7 +33,7 @@ const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
-const { normalizeContract } = require("./reproduction/contract.cjs");
+const { isContractFrozen, normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
 const { runPreflight } = require("./reproduction/preflight.cjs");
 const { repoNameFromUrl } = require("./reproduction/paths.cjs");
@@ -1329,8 +1329,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("reproduction:plan", async (event, { id, workspace } = {}) => {
     const reproduction = store.getReproduction(id);
     if (!reproduction) throw new Error("That reproduction does not exist.");
-    if (reproduction.contract && reproduction.status !== "draft") {
-      throw new Error("This reproduction already has an approved contract.");
+    if (isContractFrozen(reproduction.contract)) {
+      throw new Error("This contract is approved and frozen. Start a new reproduction to plan it differently.");
     }
     if (!reproduction.paper_id) throw new Error("Reproduction planning is only available for papers.");
     const paper = store.getPaper(reproduction.paper_id);

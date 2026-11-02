@@ -592,7 +592,12 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         </div>
 
         <footer className="reproduce-footer">
-          <button className="secondary-button" disabled={busy !== "" || running} onClick={() => void plan()}>
+          <button
+            className="secondary-button"
+            disabled={busy !== "" || running || Boolean(contract.frozen_at)}
+            title={contract.frozen_at ? t("Approved contracts are frozen") : ""}
+            onClick={() => void plan()}
+          >
             {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Re-plan
           </button>
           {contract.frozen_at
@@ -607,6 +612,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                 <FlaskConical size={14} />Approve and queue
               </button>}
         </footer>
+        {contract.frozen_at && <p className="reproduce-hint">Approved contracts are frozen. Start a new reproduction to plan it differently.</p>}
         {contract.frozen_at && !running && run?.status === "verified" && <p className="reproduce-hint reproduce-queued">Every checkpoint passed. Comparing the reported numbers is the next milestone.</p>}
       </>}
     </section>;
