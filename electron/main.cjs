@@ -1368,7 +1368,12 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("reproduction:dismiss-diagnosis", async (_event, { id } = {}) => {
     const session = activeReproductionRuns.get(String(id || ""));
-    if (!session) throw new Error("This reproduction is not waiting for a decision.");
+    if (!session) {
+      // After a restart there is no container left to dismiss; record the
+      // decision anyway so the reproduction does not stay in "diagnosing".
+      store.updateReproduction(String(id || ""), { status: "blocked" });
+      return presentReproduction(store.getReproduction(id));
+    }
     const summary = session.lastDiagnosis?.cause || "Stopped after the failure.";
     if (session.lastAttempt) store.updateReproductionAttempt(session.lastAttempt.id, { status: "rejected" });
     await stopSession(id);
@@ -1378,7 +1383,9 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("reproduction:stop", async (_event, { id } = {}) => {
     const session = activeReproductionRuns.get(String(id || ""));
-    if (!session) throw new Error("This reproduction is not running.");
+    // Stopping something that already finished is not an error: the button and
+    // the run can disagree for a moment, and shouting at the user helps nobody.
+    if (!session) return false;
     session.controller?.abort();
     return true;
   });

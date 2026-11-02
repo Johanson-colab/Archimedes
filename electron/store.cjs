@@ -794,6 +794,24 @@ function backfillPaperRepositories(db) {
   return filled;
 }
 
+/**
+ * A run cannot survive the process that owned it: the container is gone, and no
+ * session is left to stop. Leaving those rows as "running" makes the UI show a
+ * Stop button for a job that no longer exists, so they are reconciled on open.
+ */
+function reconcileInterruptedReproductions(db) {
+  const now = timestamp();
+  const stuck = db.prepare("SELECT id FROM reproductions WHERE status IN ('provisioning', 'running', 'diagnosing')").all();
+  if (!stuck.length) return 0;
+  const message = "The app stopped while this was running. Start it again.";
+  for (const row of stuck) {
+    db.prepare("UPDATE reproductions SET status = 'blocked', error = ?, updated_at = ? WHERE id = ?").run(message, now, row.id);
+    db.prepare("UPDATE reproduction_runs SET status = 'interrupted', finished_at = ?, updated_at = ? WHERE reproduction_id = ? AND status = 'running'")
+      .run(now, now, row.id);
+  }
+  return stuck.length;
+}
+
 function openWorkspace(workspacePath) {
   if (activeWorkspace === workspacePath && database) return getSnapshot();
 
@@ -816,6 +834,7 @@ function openWorkspace(workspacePath) {
   activeWorkspace = workspacePath;
   schema(database);
   backfillPaperRepositories(database);
+  reconcileInterruptedReproductions(database);
   migrateLegacyTasks(database);
   seedLibraries(database);
   ensureProjectLibraries(database);
