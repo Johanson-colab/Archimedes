@@ -37,6 +37,7 @@ const { isContractFrozen, normalizeContract } = require("./reproduction/contract
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
 const { runPreflight } = require("./reproduction/preflight.cjs");
 const { repoNameFromUrl } = require("./reproduction/paths.cjs");
+const { findRepositoryUrl } = require("./reproduction/paper-repository.cjs");
 const { runRunbook } = require("./reproduction/runner.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const { applyFix, diagnose } = require("./reproduction/diagnose.cjs");
@@ -1345,10 +1346,18 @@ app.whenReady().then(async () => {
       if (!event.sender.isDestroyed()) event.sender.send("reproduction:plan-event", { paperId: reproduction.paper_id, ...payload });
     };
     try {
+      // A record made from a paper carries the paper's URL (usually arXiv). The
+      // code is named inside the paper; use it rather than planning blind.
+      const found = findRepositoryUrl({ recordUrl: reproduction.repo_url, paper, pages: reader.pages || [] });
+      if (found.url && found.url !== reproduction.repo_url) {
+        store.updateReproduction(id, { repoUrl: found.url });
+        emit({ type: "planning", detail: `Repository found in the paper: ${found.url}` });
+      }
+      const repoUrl = found.url || reproduction.repo_url;
       let repoItem = null;
-      if (reproduction.repo_url) {
+      if (repoUrl) {
         emit({ type: "planning", detail: "Cloning the repository…" });
-        repoItem = await prepareRepositoryItem(dataWorkspace, reproduction.repo_url).catch((error) => {
+        repoItem = await prepareRepositoryItem(dataWorkspace, repoUrl).catch((error) => {
           emit({ type: "warning", detail: `Repository unavailable: ${error instanceof Error ? error.message : "clone failed"}` });
           return null;
         });
@@ -1358,7 +1367,7 @@ app.whenReady().then(async () => {
         paper,
         pages: reader.pages || [],
         review: review?.review || review,
-        repoUrl: reproduction.repo_url,
+        repoUrl,
         repoItem,
         workspace: dataWorkspace,
         runAgent: agent.runAgent,
