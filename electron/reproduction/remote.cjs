@@ -89,6 +89,18 @@ function parseProbe(output) {
   };
 }
 
+/**
+ * Runs a command through a login shell.
+ *
+ * `ssh host 'cmd'` starts a non-interactive shell, which does not read the
+ * profile where proxy settings, PATH additions and conda live. A machine whose
+ * network only works through a proxy looks offline from there while working
+ * perfectly in a normal terminal.
+ */
+function loginCommand(command) {
+  return `bash -lc ${shellQuote(command)}`;
+}
+
 function probeCommand() {
   return [
     "echo OS=$(uname -sr 2>/dev/null | tr -d '\\n')",
@@ -105,8 +117,8 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
   const repo = `${root}/repo`;
   let prepared = false;
 
-  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null } = {}) => new Promise((resolve) => {
-    const args = connectionArgs(target, command, { allowPassword: Boolean(password) });
+  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true } = {}) => new Promise((resolve) => {
+    const args = connectionArgs(target, login ? loginCommand(command) : command, { allowPassword: Boolean(password) });
     const child = spawn("ssh", args, { windowsHide: true, env: { ...process.env, ...env } });
     const out = [];
     let settled = false;
@@ -207,7 +219,7 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     async readFile(relativePath) {
       const target_ = path.posix.join(repo, String(relativePath || ""));
       if (target_.includes("..")) throw new Error("The checked path is outside the checkout.");
-      const result = await run(`cat -- ${quoteRemotePath(target_)}`, { timeoutMs: 60_000 });
+      const result = await run(`cat -- ${quoteRemotePath(target_)}`, { timeoutMs: 60_000, login: false });
       if (result.code !== 0) {
         // A missing file is an answer, not a crash: the checkpoint reports it.
         if (/No such file|Not a directory|cannot open/i.test(result.output)) return null;
@@ -230,4 +242,4 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
   };
 }
 
-module.exports = { MARKER_FILE, createSshBackend, parseProbe, probeCommand, quoteRemotePath, remoteRoot, shellQuote };
+module.exports = { MARKER_FILE, createSshBackend, loginCommand, parseProbe, probeCommand, quoteRemotePath, remoteRoot, shellQuote };

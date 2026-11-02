@@ -65,3 +65,10 @@ test("a remote path lets the server expand the home directory", () => {
   assert.equal(quoteRemotePath("/abs/path"), "'/abs/path'");
   assert.equal(quoteRemotePath("~/with space"), `"$HOME"/'with space'`);
 });
+
+test("commands run through a login shell so the profile's proxy applies", () => {
+  const { loginCommand } = require("./reproduction/remote.cjs");
+  assert.equal(loginCommand("git status"), "bash -lc 'git status'");
+  assert.ok(loginCommand("echo 'a b'").startsWith("bash -lc "));
+  assert.ok(loginCommand("echo 'a b'").includes("a b"));
+});
