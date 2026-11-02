@@ -142,7 +142,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [runLine, setRunLine] = useState("");
   const [diagnosis, setDiagnosis] = useState<ReproductionDiagnosis | null>(null);
   const [servers, setServers] = useState<SshServer[]>([]);
-  const [target, setTarget] = useState("docker");
+  const [target, setTarget] = useState(() => window.localStorage.getItem("archimedes-reproduce-target") || "docker");
   const [attempts, setAttempts] = useState<ReproductionAttempt[]>([]);
   const logRef = useRef<HTMLPreElement | null>(null);
 
@@ -173,8 +173,16 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
-    void bridge.listSshServers().then(setServers).catch(() => setServers([]));
+    void bridge.listSshServers().then((list) => {
+      setServers(list);
+      // The saved target may point at a server that has since been removed.
+      setTarget((current) => (current !== "docker" && !list.some((server) => server.id === current) ? "docker" : current));
+    }).catch(() => setServers([]));
   }, [bridge]);
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-reproduce-target", target);
+  }, [target]);
 
   useEffect(() => {
     const off = bridge.onReproductionPlanEvent?.((payload) => {
@@ -622,7 +630,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                     {servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
                   </select>}
                   <button className="primary-button" disabled={busy !== ""} onClick={() => void startRun()}>
-                  {busy === "run" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}Run runbook
+                  {busy === "run" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}
+                  {target === "docker" ? t("Run runbook") : `${t("Run on")} ${servers.find((server) => server.id === target)?.name || t("server")}`}
                   </button>
                 </>
             : <button className="primary-button" disabled={busy !== ""} onClick={() => void approve()}>
