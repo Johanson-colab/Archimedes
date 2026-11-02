@@ -5,7 +5,7 @@
 > 面向研究全流程的科研智能体工作台：把找论文、读论文、看项目代码、组织证据、开展实验和写作放回同一个可追溯的桌面应用中。
 
 <p align="center">
-  <img src="docs/assets/readme/archimedes-hero-1.webp" alt="Archimedes research chat, original paper reader, Daily papers, and Extensions">
+  <img src="docs/assets/readme/archimedes-hero-1.webp" alt="Archimedes research chat, original paper reader, Daily papers, and Canvas">
 </p>
 
 <p align="center">
