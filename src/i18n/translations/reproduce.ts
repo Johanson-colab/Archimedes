@@ -6,6 +6,7 @@
 
 export const reproduce: Record<string, string> = {
   "Apply and re-run": "应用并重跑",
+  "Approved contracts are frozen": "已批准的契约已冻结",
   "Checkpoints are not changed. Re-running records this as a deviation.": "检查点不会被修改。重跑会把这处改动记为偏离。",
   "Diagnosis": "诊断",
   "just now": "刚刚",

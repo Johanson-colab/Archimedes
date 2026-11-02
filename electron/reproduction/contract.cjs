@@ -233,6 +233,15 @@ function normalizeContract(input, { paperTitle = "" } = {}) {
   };
 }
 
+/**
+ * A contract is frozen once it is approved, and re-planning one would quietly
+ * change what the run is being judged against. "Planned but not approved" is
+ * still editable: that is exactly when a bad plan should be replaced.
+ */
+function isContractFrozen(contract) {
+  return Boolean(contract && typeof contract.frozen_at === "string" && contract.frozen_at);
+}
+
 function describeClaim(claim) {
   const expected = claim.expected === null ? "no reported value" : `${claim.expected}${claim.unit ? ` ${claim.unit}` : ""}`;
   const where = claim.evidence.table || (claim.evidence.page ? `page ${claim.evidence.page}` : "unlocated");
@@ -244,6 +253,7 @@ module.exports = {
   MAX_CLAIMS,
   STATUSES,
   describeClaim,
+  isContractFrozen,
   CHECK_KINDS,
   normalizeCheck,
   normalizeClaim,
