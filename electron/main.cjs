@@ -47,6 +47,7 @@ const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
+const sshServers = require("./ssh-servers.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
 const { searchConferencePapers } = require("./conferences.cjs");
@@ -596,6 +597,7 @@ app.whenReady().then(async () => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
+  sshServers.initialize(app.getPath("userData"));
   terminalSettings.initialize(app.getPath("userData"));
   journeySettings.initialize(app.getPath("userData"));
   journeySnapshots.initialize(app.getPath("userData"));
@@ -949,6 +951,17 @@ app.whenReady().then(async () => {
   ipcMain.handle("proactive:observe", (_event, input = {}) => proactiveAgent.runProactiveObservation(input));
 
   ipcMain.handle("proactive:screenshot", (event) => proactiveAgent.captureAppWindow(BrowserWindow.fromWebContents(event.sender)));
+
+  ipcMain.handle("ssh:list-servers", () => sshServers.listServers());
+  ipcMain.handle("ssh:save-server", (_event, input = {}) => sshServers.saveServer(input));
+  ipcMain.handle("ssh:delete-server", (_event, { id } = {}) => sshServers.deleteServer(id));
+  ipcMain.handle("ssh:test-server", async (_event, input = {}) => {
+    // Accept either a saved id or an unsaved form, so the test button works
+    // before the server is written.
+    const saved = input?.id ? sshServers.listServers().find((server) => server.id === input.id) : null;
+    const target = saved ? { ...saved, ...input } : input;
+    return sshServers.testConnection(target);
+  });
 
   ipcMain.handle("web-search:get-config", () => webSearch.getPublicWebSearchConfig());
 

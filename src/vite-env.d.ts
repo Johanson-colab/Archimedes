@@ -117,6 +117,10 @@ interface ResearchDeskBridge {
     testModelConfig: (input: ModelConfigInput, role?: ModelRole) => Promise<ModelConnectionResult>;
     transcribeSpeech: (audio: ArrayBuffer, mimeType: string, language?: string) => Promise<{ text: string }>;
     requestMicrophoneAccess: () => Promise<boolean>;
+    listSshServers: () => Promise<SshServer[]>;
+    saveSshServer: (input: SshServerDraft) => Promise<SshServer>;
+    deleteSshServer: (id: string) => Promise<boolean>;
+    testSshServer: (input: Partial<SshServerDraft>) => Promise<SshServerTest>;
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: (projectId?: string | null) => Promise<ResearchLibrary[]>;
@@ -925,6 +929,34 @@ interface DailyDiscoveryResponse {
   cached: boolean;
   stale: boolean;
   warning?: string;
+}
+
+interface SshServer {
+  id: string;
+  name: string;
+  host: string;
+  user: string;
+  port: number;
+  identityFile: string;
+  workspace: string;
+  useDocker: boolean;
+  createdAt: string;
+}
+
+interface SshServerDraft {
+  id: string;
+  name: string;
+  host: string;
+  user: string;
+  port: number;
+  identityFile: string;
+  workspace: string;
+  useDocker: boolean;
+}
+
+interface SshServerTest {
+  ok: boolean;
+  detail: string;
 }
 
 interface DeepPaperSearchInput {
