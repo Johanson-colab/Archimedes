@@ -1,4 +1,5 @@
 const { randomUUID } = require("node:crypto");
+const { findRepositoryUrl } = require("./paper-repository.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
@@ -773,6 +774,25 @@ function normalizeWorkspacePath(value) {
   return resolved;
 }
 
+/**
+ * Papers imported before the repository was extracted have an empty github_url
+ * even though their abstract names the code. Fill those in once per open: it is
+ * a regex over a few hundred characters, and it writes only when it finds a link.
+ */
+function backfillPaperRepositories(db) {
+  const rows = db.prepare("SELECT id, title, abstract FROM papers WHERE github_url = '' AND abstract <> ''").all();
+  if (!rows.length) return 0;
+  const update = db.prepare("UPDATE papers SET github_url = ?, updated_at = ? WHERE id = ?");
+  let filled = 0;
+  for (const row of rows) {
+    const found = findRepositoryUrl({ paper: { title: row.title, abstract: row.abstract } }).url;
+    if (!found) continue;
+    update.run(found, timestamp(), row.id);
+    filled += 1;
+  }
+  return filled;
+}
+
 function openWorkspace(workspacePath) {
   if (activeWorkspace === workspacePath && database) return getSnapshot();
 
@@ -794,6 +814,7 @@ function openWorkspace(workspacePath) {
   database = new DatabaseSync(databasePath);
   activeWorkspace = workspacePath;
   schema(database);
+  backfillPaperRepositories(database);
   migrateLegacyTasks(database);
   seedLibraries(database);
   ensureProjectLibraries(database);

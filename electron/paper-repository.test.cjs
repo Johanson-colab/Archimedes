@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { findRepositoryUrl, isGithubUrl } = require("./reproduction/paper-repository.cjs");
+const { findRepositoryUrl, isGithubUrl } = require("./paper-repository.cjs");
 
 const NOVEL = {
   title: "Evo-Harness: Context-to-Harness Skill Compilation",
