@@ -1,0 +1,17 @@
+export const runtime: Record<string, string> = {
+  "Agent backend": "Agent 后端",
+  "API harness": "API 自研执行框架",
+  "Backend saved. Changes apply to the next main Work turn.": "后端已保存，将用于主 Work 对话的下一轮。",
+  "Check Codex": "检测 Codex",
+  "Codex approval": "Codex 操作审批",
+  "Codex executable": "Codex 可执行文件",
+  "Codex is connected. Model access is verified only when a turn succeeds.": "Codex 已连接。模型是否可用仍需实际对话验证。",
+  "Codex model": "Codex 模型",
+  "Codex starts read-only and requests native approvals. Plugin/skill attachments and native question cards are not supported yet. Files, images and source metadata are passed as context; papers are not automatically read.": "Codex 默认只读，变更需原生审批。暂不支持插件/技能附件及原生提问卡片。文件、图片及来源元数据将作为上下文传入，不代表已经阅读全文。",
+  "Leave empty to use your Codex configuration. API model settings below do not select the Codex model.": "留空使用 Codex 自身配置。下方 API 模型设置不会改变 Codex 模型。",
+  "Main Work runtime": "主 Work 对话运行时",
+  "No Codex credentials are copied. Native tools differ from the API harness; failures never silently switch backends.": "不复制 Codex 凭据。原生工具与 API 框架不同，失败不会自动切换后端。",
+  "Paper chat, internal research workers and Proactive keep using API models.": "论文对话、内部科研任务和主动助手仍使用 API 模型。",
+  "Save backend": "保存后端",
+  "Use codex from PATH or an absolute executable path. Run codex login in a terminal first.": "使用 PATH 中的 codex 或填写绝对路径。请先在终端运行 codex login。",
+};

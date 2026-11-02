@@ -4161,6 +4161,12 @@ html[data-titlebar="overlay"] .workbench-tabs::-webkit-scrollbar { display: none
 .settings-embedded .terminal-settings-body > * { max-width: 720px; }
 .settings-embedded .terminal-settings-actions { max-width: 720px; padding: 14px 0 18px; margin-top: 0; border-top: 1px solid var(--night-line-soft); }
 .settings-embedded .model-settings-body { grid-template-columns: 248px minmax(0, 1fr); }
+.agent-backend-settings { margin-bottom: 24px; }
+.agent-backend-settings > summary { padding: 8px 0; color: var(--night-muted); font-size: 12px; cursor: pointer; }
+.agent-backend-settings .settings-row { flex-wrap: wrap; gap: 8px; }
+.agent-backend-settings .settings-row-copy { flex-basis: 100%; }
+.agent-backend-settings .settings-row-control { justify-content: flex-start; flex-wrap: wrap; }
+.agent-backend-settings .settings-text-input { width: 100%; min-width: 0; }
 .settings-embedded .provider-list { padding: 2px 14px 12px 0; background: transparent; border-right: 1px solid var(--night-line-soft); }
 .settings-embedded .provider-option { min-height: 52px; color: var(--night-muted); }
 .settings-embedded .provider-option:hover { background: var(--night-panel-raised); }

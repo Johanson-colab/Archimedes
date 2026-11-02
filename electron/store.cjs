@@ -2508,6 +2508,24 @@ function createAction({ taskId, kind, payload }) {
   return action;
 }
 
+// Native IDs stay local: never included in chat export/sync/fork payloads.
+function nativeAgentBindings(threadId) {
+  const db = requireDatabase();
+  db.exec(`CREATE TABLE IF NOT EXISTS native_agent_bindings (
+    thread_id TEXT PRIMARY KEY REFERENCES research_threads(id) ON DELETE CASCADE,
+    native_thread_id TEXT NOT NULL, workspace TEXT NOT NULL, model TEXT NOT NULL,
+    last_turn_id TEXT
+  ) STRICT`);
+  return {
+    get: () => db.prepare("SELECT * FROM native_agent_bindings WHERE thread_id = ?").get(threadId),
+    save: (binding) => db.prepare(`INSERT INTO native_agent_bindings
+      (thread_id, native_thread_id, workspace, model, last_turn_id) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(thread_id) DO UPDATE SET native_thread_id=excluded.native_thread_id,
+      workspace=excluded.workspace, model=excluded.model, last_turn_id=excluded.last_turn_id`)
+      .run(threadId, binding.native_thread_id, binding.workspace, binding.model, binding.last_turn_id),
+  };
+}
+
 function getAction(id) {
   const db = requireDatabase();
   const row = db.prepare("SELECT id, task_id, kind, payload_json, status, created_at, resolved_at FROM agent_actions WHERE id = ?").get(id);
@@ -2898,6 +2916,7 @@ function listReproductionAttempts(runId) {
 }
 
 module.exports = {
+  nativeAgentBindings,
   compactResearchThread,
   forkResearchThread,
   undoResearchTurn,

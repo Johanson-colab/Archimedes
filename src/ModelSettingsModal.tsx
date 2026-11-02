@@ -23,6 +23,7 @@ import openaiLogo from "./assets/providers/openai.png";
 import qwenLogo from "./assets/providers/qwen.png";
 import { useUISettings } from "./i18n";
 import { MenuSurface } from "./Menu";
+import AgentBackendSettings from "./AgentBackendSettings";
 
 type ProviderId = ModelProviderId;
 
@@ -243,6 +244,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         </nav>
 
         <div className="provider-config">
+          {!proactiveRole && <AgentBackendSettings bridge={bridge} />}
           {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />{t("Loading configuration")}</div> : <>
             {proactiveRole && savedConfig?.inheritedFromAgent && <div className="model-inherited-note"><Sparkles size={13} /><span>{t("Currently inheriting the main Agent model. Save below to give Proactive agent its own model.")}</span></div>}
             <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>

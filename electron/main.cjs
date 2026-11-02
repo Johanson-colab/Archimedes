@@ -33,6 +33,8 @@ const { createSupabaseServer } = require("../server/supabase-server.cjs");
 const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
+const agentBackendConfig = require("./agent-backend-config.cjs");
+const { closeAllCodexClients } = require("./agent/codex-client.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
 const { isContractFrozen, normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
@@ -597,6 +599,7 @@ let authFlow = null;
 app.whenReady().then(async () => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
+  agentBackendConfig.initialize(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
   sshServers.initialize(app.getPath("userData"), {
     // Passwords are stored with the OS keychain-backed encryption, never as
@@ -929,6 +932,9 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("model-config:get", (_event, role) => modelConfig.getPublicModelConfig(role));
+  ipcMain.handle("agent-backend:get", () => agentBackendConfig.get());
+  ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
+  ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));
 
   ipcMain.handle("model-config:list-models", (_event, input = {}, role) => modelConfig.listProviderModels(input, role));
 
@@ -1664,7 +1670,11 @@ app.whenReady().then(async () => {
     store.openWorkspace(dataWorkspace);
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
+    const backend = agentBackendConfig.get();
+    const externalBackend = input.origin === "research" && backend.backend === "codex" ? backend : null;
+    if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
     return agent.runAgent({
+      externalBackend,
       prompt: input.prompt.trim(),
       workspace,
       threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
@@ -2290,6 +2300,7 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
+  closeAllCodexClients();
   closeAllTerminals();
   collaborationServer?.close?.();
   void presence?.closeAll();
