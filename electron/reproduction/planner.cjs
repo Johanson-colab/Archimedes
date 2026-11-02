@@ -112,8 +112,12 @@ async function planReproduction({ paper, pages, review, repoUrl, repoItem, works
   });
   const contract = normalizeContract(extractJson(result?.response), { paperTitle: paper?.title || "" });
   if (repoItem) {
-    contract.repo = { url: repoItem.repository.url, commit: String(repoItem.repository.checkout?.commit || "") };
-    const verified = await verifyEntrypoint(workspace, repoItem.repository.url, contract.entrypoint);
+    contract.repo = {
+      url: repoItem.repository.url,
+      commit: String(repoItem.repository.checkout?.commit || ""),
+      branch: String(repoItem.repository.checkout?.branch || ""),
+    };
+    const verified = await verifyEntrypoint(workspace, repoItem.repository.url, contract.entrypoint, contract.repo.branch);
     contract.entrypoint = { ...contract.entrypoint, ...verified };
   }
   return contract;

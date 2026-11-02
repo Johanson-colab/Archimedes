@@ -36,6 +36,7 @@ const { planReproduction } = require("./reproduction/planner.cjs");
 const { normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
 const { runPreflight } = require("./reproduction/preflight.cjs");
+const { repoNameFromUrl } = require("./reproduction/paths.cjs");
 const { runRunbook } = require("./reproduction/runner.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
@@ -1072,6 +1073,7 @@ app.whenReady().then(async () => {
     return runPreflight({
       workspace: dataWorkspace,
       repoUrl: record.contract.repo?.url || record.repo_url,
+      branch: record.contract.repo?.branch || "",
       steps: record.contract.steps,
     });
   });
@@ -1125,12 +1127,14 @@ app.whenReady().then(async () => {
       let backend = null;
       try {
         send({ type: "preparing", detail: "Getting the repository checkout…" });
-        const existing = await getRepositoryCheckout(dataWorkspace, repoUrl).catch(() => null);
+        const branch = record.contract.repo?.branch || "";
+        const checkoutOptions = { branch };
+        const existing = await getRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions).catch(() => null);
         if (!existing) {
-          send({ type: "preparing", detail: "Cloning the repository…" });
-          await cloneRepositoryCheckout(dataWorkspace, repoUrl);
+          send({ type: "preparing", detail: branch ? `Cloning ${branch}…` : "Cloning the repository…" });
+          await cloneRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions);
         }
-        const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "");
+        const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "", branch);
         backend = createDockerBackend({ checkoutDir: root, environment: record.contract.environment });
         store.updateReproductionRun(run.id, { image: backend.image, backend: backend.describe() });
         send({ type: "preparing", detail: `Starting ${backend.image}…` });
@@ -1139,6 +1143,7 @@ app.whenReady().then(async () => {
         send({ type: "started", detail: backend.describe() });
         outcome = await runRunbook({
           steps: record.contract.steps,
+          repoName: repoNameFromUrl(repoUrl),
           backend,
           signal: controller.signal,
           budgetMs: Math.max(1, Number(record.budget?.wallClockMin) || 45) * 60_000,

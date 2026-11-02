@@ -20,9 +20,9 @@ function repositoryId(target) {
   return `repo:${target.owner}-${target.repo}`;
 }
 
-async function readIfPresent(workspace, url, filePath, limit = 12_000) {
+async function readIfPresent(workspace, url, filePath, limit = 12_000, branch = "") {
   try {
-    const file = await readRepositoryCheckoutFile(workspace, url, filePath);
+    const file = await readRepositoryCheckoutFile(workspace, url, filePath, branch);
     return { path: filePath, content: String(file.content || "").slice(0, limit) };
   } catch {
     return null;
@@ -41,13 +41,16 @@ function resolveTarget(repoUrl) {
 async function prepareRepositoryItem(workspace, repoUrl) {
   const target = resolveTarget(repoUrl);
   if (!target) return null;
-  const checkout = await cloneRepositoryCheckout(workspace, target.url);
-  const top = await listRepositoryCheckoutDirectory(workspace, target.url, "");
+  // The README may point at a branch that is not the default one; cloning that
+  // branch is the difference between reading the paper's code and reading main.
+  const checkout = await cloneRepositoryCheckout(workspace, target.url, { branch: target.branch, branchCandidates: target.branchCandidates });
+  const branch = String(checkout.branch === "detached" ? "" : checkout.branch || "");
+  const top = await listRepositoryCheckoutDirectory(workspace, target.url, "", branch);
   const entries = top.entries || [];
 
   const readmeEntry = entries.find((entry) => entry.type === "file" && /^readme(\.[a-z]+)?$/i.test(entry.name));
   const readme = readmeEntry
-    ? String((await readRepositoryCheckoutFile(workspace, target.url, readmeEntry.path)).content || "").slice(0, README_LIMIT)
+    ? String((await readRepositoryCheckoutFile(workspace, target.url, readmeEntry.path, branch)).content || "").slice(0, README_LIMIT)
     : "";
 
   // A small pre-read snapshot helps the model orient before it starts calling
@@ -58,7 +61,7 @@ async function prepareRepositoryItem(workspace, repoUrl) {
     .map((entry) => entry.path);
   const files = [];
   for (const filePath of seedPaths) {
-    const file = await readIfPresent(workspace, target.url, filePath);
+    const file = await readIfPresent(workspace, target.url, filePath, 12_000, branch);
     if (file) files.push({ path: file.path, size: file.content.length, language: path.extname(file.path).slice(1) || "text", content: file.content });
   }
 
@@ -83,7 +86,7 @@ async function prepareRepositoryItem(workspace, repoUrl) {
 }
 
 /** Confirms that every path-like token in a command exists in the checkout. */
-async function verifyEntrypoint(workspace, repoUrl, entrypoint) {
+async function verifyEntrypoint(workspace, repoUrl, entrypoint, branch = "") {
   const target = resolveTarget(repoUrl);
   const command = String(entrypoint?.command || "");
   if (!target || !command) return { evidence: [], unverified: [] };
@@ -95,7 +98,7 @@ async function verifyEntrypoint(workspace, repoUrl, entrypoint) {
   const unverified = [];
   for (const token of [...new Set(tokens)].slice(0, 12)) {
     try {
-      const file = await readRepositoryCheckoutFile(workspace, target.url, token);
+      const file = await readRepositoryCheckoutFile(workspace, target.url, token, branch);
       evidence.push({ path: file.path, line_count: file.line_count });
     } catch {
       unverified.push(token);
