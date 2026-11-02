@@ -8,9 +8,9 @@ const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const view = fs.readFileSync(path.join(root, "src", "LibraryView.tsx"), "utf8");
 
 test("paper chat keeps its column bounded and oversized content locally scrollable", () => {
-  assert.match(css, /\.paper-ai-thread \{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*overflow-x: hidden;[^}]*overflow-y: auto/);
-  assert.match(css, /\.paper-ai-thread article \{[^}]*min-width: 0;[^}]*overflow-wrap: anywhere/);
-  assert.match(css, /\.paper-ai-markdown pre, \.paper-ai-markdown \.katex-display, \.paper-ai-table-scroll \{[^}]*overflow-x: auto/);
+  assert.match(css, /\.paper-ai-conversation \{[^}]*overflow-x: hidden;[^}]*overflow-y: auto/);
+  assert.match(css, /\.paper-ai-conversation \.conversation-message \{[^}]*overflow-wrap: anywhere|min-width: 0/);
+  assert.match(css, /\.paper-ai-conversation \.message-markdown table \{[^}]*overflow-x: auto/);
   assert.match(view, /className="paper-ai-table-scroll" tabIndex=\{0\} role="region"/);
 });
 

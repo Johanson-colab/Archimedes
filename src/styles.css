@@ -7824,3 +7824,226 @@ html[data-menu-style="glass"] .menu-surface {
   .paper-canvas-empty { width: min(470px, calc(100% - 40px)); padding: 20px; }
   .paper-canvas-templates { grid-template-columns: 1fr; }
 }
+
+/* Paper AI uses the same conversation language as the main agent chat:
+   a quiet transcript, full-width assistant replies, a user bubble, and one
+   rounded composer with the send action in its footer. */
+.paper-reader-layout > .paper-ai-panel {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  color: var(--text-primary);
+  background: var(--surface-canvas);
+  border-left: 1px solid var(--border-default);
+}
+.paper-ai-panel > .paper-ai-header {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-soft);
+}
+.paper-ai-header-actions { display: flex; align-items: center; gap: 2px; }
+.paper-ai-panel .paper-ai-mode-toggle {
+  max-width: 100%;
+  margin: 0;
+  padding: 2px;
+  background: var(--surface-raised);
+  border-color: var(--border-soft);
+  border-radius: 7px;
+}
+.paper-ai-panel .paper-ai-mode-toggle button.ui-tab {
+  height: 26px;
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.paper-ai-panel .paper-ai-mode-toggle button.ui-tab:hover {
+  color: var(--text-primary);
+  background: var(--surface-panel);
+}
+.paper-ai-panel .paper-ai-mode-toggle button.ui-tab.active {
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--surface-ground) 14%, transparent);
+}
+.paper-ai-conversation {
+  min-width: 0;
+  min-height: 0;
+  padding: 20px 16px 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.paper-ai-conversation .conversation-message { max-width: none; margin-bottom: 26px; }
+.paper-ai-conversation .conversation-message:last-of-type { margin-bottom: 0; }
+.paper-ai-conversation .conversation-message.assistant .conversation-message-copy { max-width: 100%; }
+.paper-ai-conversation .conversation-message.user .conversation-message-copy { max-width: 88%; }
+.paper-ai-conversation .conversation-message-role { margin-bottom: 6px; font-size: 10px; }
+.paper-ai-conversation .message-markdown { font-size: 13px; line-height: 1.7; }
+.paper-ai-conversation .message-markdown h1 { font-size: 18px; }
+.paper-ai-conversation .message-markdown h2 { font-size: 16px; }
+.paper-ai-conversation .message-markdown h3 { font-size: 14px; }
+.paper-ai-conversation .message-markdown h4 { font-size: 13px; }
+.paper-ai-conversation .message-markdown table { display: block; max-width: 100%; overflow-x: auto; }
+.paper-ai-code-markdown .paper-code-path {
+  display: inline;
+  padding: 1px 4px;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  font: inherit;
+  font-size: .9em;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--text-muted) 48%, transparent);
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.paper-ai-code-markdown .paper-code-path:hover {
+  color: var(--text-primary);
+  background: var(--surface-soft);
+  border-color: var(--border-default);
+}
+.paper-ai-conversation .conversation-load-history { margin: 0 auto 22px; }
+.paper-ai-suggestions { margin-top: 4px; padding-bottom: 14px; }
+.paper-ai-panel .paper-ai-suggestions button {
+  padding: 5px 9px;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.paper-ai-panel .paper-ai-suggestions button:hover {
+  color: var(--text-primary);
+  background: var(--surface-soft);
+  border-color: var(--border-default);
+}
+.paper-ai-panel .paper-ai-empty {
+  display: grid;
+  min-height: 180px;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  padding: 24px 18px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.paper-ai-panel .paper-ai-empty strong { color: var(--text-primary); font-size: 12px; font-weight: 650; }
+.paper-ai-panel .paper-ai-empty p { max-width: 240px; margin: 0; font-size: 11px; line-height: 1.55; }
+.paper-ai-panel .paper-ai-working {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 0 18px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.paper-ai-panel > .paper-ai-context-stack {
+  display: grid;
+  gap: 6px;
+  padding: 8px 12px 0;
+  background: var(--surface-canvas);
+}
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  gap: 5px;
+  padding: 8px 9px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-context span { color: var(--text-muted); font-size: 9px; font-weight: 650; }
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-context p {
+  display: -webkit-box;
+  margin: 1px 0 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-context button,
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context > button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-context button:hover,
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context > button:hover {
+  color: var(--state-danger);
+  background: color-mix(in srgb, var(--state-danger) 9%, transparent);
+}
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context img {
+  width: 48px;
+  height: 38px;
+  object-fit: cover;
+  background: var(--mono-surface);
+  border-radius: 5px;
+}
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context span { color: var(--text-muted); font-size: 9px; font-weight: 650; }
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context p { margin: 2px 0 4px; color: var(--text-secondary); font-size: 9px; line-height: 1.4; }
+.paper-ai-composer-wrap { padding: 8px 12px 12px; }
+.paper-ai-panel .paper-ai-composer { width: 100%; }
+.paper-ai-panel .paper-ai-composer .paper-ai-code-attachments { max-height: 92px; padding: 8px 8px 0; }
+.paper-ai-panel .paper-ai-code-attachment {
+  height: 24px;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border-color: var(--border-soft);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.paper-ai-panel .paper-ai-code-attachment > svg { color: var(--text-muted); }
+.paper-ai-panel .paper-ai-code-attachment button { color: var(--text-faint); }
+.paper-ai-panel .paper-ai-code-attachment button:hover { color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 9%, transparent); }
+.paper-ai-panel .paper-ai-composer textarea { min-height: 72px; padding: 12px 13px 4px; font-size: 13px; line-height: 1.55; }
+.paper-ai-panel .paper-ai-composer-footer {
+  min-height: 36px;
+  padding: 3px 5px 5px 8px;
+}
+.paper-ai-composer-context {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-faint);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.paper-ai-composer-context svg { color: var(--text-muted); }
+.paper-ai-panel .paper-ai-send { margin-left: auto; }
+@media (max-width: 850px) {
+  .paper-ai-conversation { padding: 16px 14px 8px; }
+  .paper-ai-composer-wrap { padding: 6px 10px 10px; }
+}
+@supports (field-sizing: content) {
+  .paper-ai-panel .paper-ai-composer textarea {
+    max-height: 132px;
+    field-sizing: content;
+    overflow-y: auto;
+  }
+}

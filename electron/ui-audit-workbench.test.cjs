@@ -190,7 +190,7 @@ test("paper chat code paths jump to the exact codebase lines", () => {
   assert.match(library, /openFilePath/);
   assert.match(library, /navigationTarget/);
   assert.match(library, /code-target-line/);
-  assert.match(css, /\.paper-ai-markdown \.paper-code-path/);
+  assert.match(css, /\.paper-ai-code-markdown \.paper-code-path/);
   assert.match(css, /\.codebase-source \.code-target-line/);
 });
 
