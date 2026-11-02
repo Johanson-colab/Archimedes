@@ -153,3 +153,44 @@ test("the log handed to a model is bounded", () => {
   assert.ok(clipped.length <= 6_000);
   assert.match(clipped, /TAIL$/);
 });
+
+test("a missing python is repaired to python3, checkpoint included", async () => {
+  const log = "$ python -m pip install -e \".[cl]\"\nbash: line 1: python: command not found\n";
+  const stepWithCheck = {
+    id: "install",
+    title: "Install",
+    command: 'python -m pip install -e ".[cl]"',
+    check: { kind: "command", command: 'python -c "import boto3"', expect: "exit_zero" },
+    detail: "", checkpoint: "", source: "", blocked: "",
+  };
+  const diagnosis = await diagnose({ step: stepWithCheck, outcome: { exit_code: 127 }, contract: { steps: [stepWithCheck] }, log, runAgent: null });
+  assert.equal(diagnosis.class, "command_error");
+  assert.equal(diagnosis.fix.target, "install");
+  assert.equal(diagnosis.fix.command, 'python3 -m pip install -e ".[cl]"');
+  assert.equal(diagnosis.fix.checkCommand, 'python3 -c "import boto3"', "the same check, spelled for this machine");
+});
+
+test("a missing binary nobody can rename stays unfixed", async () => {
+  const log = "$ nvcc --version\nbash: line 1: nvcc: command not found\n";
+  const diagnosis = await diagnose({ step: CONTRACT.steps[1], outcome: { exit_code: 127 }, contract: CONTRACT, log, runAgent: null });
+  assert.equal(diagnosis.fix, null, "installing a compiler is a person's decision");
+});
+
+test("applying an interpreter fix records both moves", () => {
+  const contract = {
+    steps: [{
+      id: "install", title: "Install", detail: "", checkpoint: "", source: "", blocked: "",
+      command: 'python -m pip install -e ".[cl]"',
+      check: { kind: "command", command: 'python -c "import boto3"', expect: "exit_zero" },
+    }],
+  };
+  const next = applyFix(contract, {
+    class: "command_error",
+    cause: "python is not installed",
+    fix: { target: "install", command: 'python3 -m pip install -e ".[cl]"', checkCommand: 'python3 -c "import boto3"' },
+  }, { attempt: 1 });
+  assert.equal(next.steps[0].command, 'python3 -m pip install -e ".[cl]"');
+  assert.equal(next.steps[0].check.command, 'python3 -c "import boto3"');
+  assert.equal(next.deviations.length, 2);
+  assert.match(next.deviations[1].reason, /same binary/);
+});

@@ -12,6 +12,9 @@
  */
 
 const MAX_LOG_CHARS = 6_000;
+// Commands that mean the same thing under a different name on a modern Linux
+// box. Renaming one of these changes no semantics - only the binary.
+const INTERPRETER_ALIASES = Object.freeze({ python: "python3", pip: "pip3", python2: "python3" });
 const MAX_EVIDENCE_CHARS = 300;
 
 const CLASSES = Object.freeze({
@@ -77,6 +80,28 @@ function classifyLog(log) {
     };
   }
   return null;
+}
+
+/** A rename the environment makes obvious, e.g. "python: command not found". */
+function interpreterFix(step, log) {
+  const missing = String(log || "").match(/^(?:\S+: )?(?:line \d+: )?([a-z0-9_]+): command not found$/m);
+  if (!missing) return null;
+  const wrong = missing[1];
+  const right = INTERPRETER_ALIASES[wrong];
+  if (!right) return null;
+  const command = String(step?.command || "");
+  if (!command) return null;
+  const rename = (value) => String(value || "").replace(new RegExp(`(^|[\\s;&|(])${wrong}(?=\\s|$)`, "g"), `$1${right}`);
+  const next = rename(command);
+  if (next === command) return null;
+  const fix = { target: step.id, command: next };
+  // The checkpoint may test the same binary; it is the same check, spelled for
+  // the interpreter this machine actually has.
+  if (step.check?.kind === "command" && step.check.command) {
+    const checkCommand = rename(step.check.command);
+    if (checkCommand !== step.check.command) fix.checkCommand = checkCommand;
+  }
+  return fix;
 }
 
 function causeFor(entry, { step, detail }) {
@@ -162,7 +187,11 @@ function validate(raw, { log, steps }) {
   if (proposed && backed && meta.retry) {
     const target = String(proposed.target || "").trim();
     const command = String(proposed.command || "").replace(/\s+/g, " ").trim().slice(0, 2_000);
-    if (steps.some((step) => step.id === target) && command) fix = { target, command };
+    const checkCommand = String(proposed.checkCommand || "").replace(/\s+/g, " ").trim().slice(0, 2_000);
+    if (steps.some((step) => step.id === target) && command) {
+      fix = { target, command };
+      if (checkCommand) fix.checkCommand = checkCommand;
+    }
   }
 
   return {
@@ -195,7 +224,7 @@ async function diagnose({ step, outcome, contract, log, runAgent, workspace, emi
       confidence: "high",
       evidence: rule.evidence,
       cause: causeFor(rule.class, { step, detail }),
-      fix: null,
+      fix: interpreterFix(step, text),
     }, { log: text, steps });
   }
 
@@ -231,7 +260,11 @@ function applyFix(contract, diagnosis, { at = new Date().toISOString(), attempt 
   if (!diagnosis?.fix) throw new Error("This diagnosis does not propose a change.");
   const steps = (contract.steps || []).map((step) => {
     if (step.id !== diagnosis.fix.target) return step;
-    return { ...step, command: diagnosis.fix.command };
+    const next = { ...step, command: diagnosis.fix.command };
+    if (diagnosis.fix.checkCommand && step.check?.kind === "command") {
+      next.check = { ...step.check, command: diagnosis.fix.checkCommand };
+    }
+    return next;
   });
   const target = contract.steps.find((step) => step.id === diagnosis.fix.target);
   if (!target) throw new Error("The step this fix targets no longer exists.");
@@ -246,8 +279,20 @@ function applyFix(contract, diagnosis, { at = new Date().toISOString(), attempt 
       reason: diagnosis.cause || diagnosis.class,
       class: diagnosis.class,
     },
-  ].slice(-20);
-  return { ...contract, steps, deviations };
+  ];
+  if (diagnosis.fix.checkCommand) {
+    deviations.push({
+      at,
+      attempt,
+      step_id: target.id,
+      from: target.check?.command || "",
+      to: diagnosis.fix.checkCommand,
+      reason: "The checkpoint tested the same binary, renamed for this machine.",
+      class: diagnosis.class,
+    });
+  }
+  const trimmed = deviations.slice(-20);
+  return { ...contract, steps, deviations: trimmed };
 }
 
 module.exports = {
@@ -257,6 +302,7 @@ module.exports = {
   applyFix,
   causeFor,
   classifyLog,
+  interpreterFix,
   diagnose,
   promptFor,
   tail,

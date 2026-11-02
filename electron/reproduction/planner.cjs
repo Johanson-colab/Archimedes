@@ -84,6 +84,7 @@ function buildPrompt({ paper, pages, review, repoUrl, hasRepository }) {
     // directory, so a clone step would download the same code twice - and fail
     // outright on a server with no route to GitHub.
     hasRepository ? "The repository is already checked out in the working directory. Start from its files and do not include a step that clones it again." : "",
+    "Commands run on Linux, where the interpreter is usually python3: write python3 rather than python unless the repository's own scripts require otherwise.",
     digest ? `\nPaper text:\n${digest}` : "",
     reviewText ? `\nSaved review:\n${reviewText}` : "",
   ].filter(Boolean).join("\n");
