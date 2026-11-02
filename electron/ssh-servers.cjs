@@ -15,15 +15,20 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
 const FILE_NAME = "ssh-servers.json";
+const ASKPASS_FILE = "ssh-askpass.sh";
 const MAX_SERVERS = 20;
 const DEFAULT_PORT = 22;
 const DEFAULT_WORKSPACE = "~/.archimedes";
 const TEST_MARKER = "archimedes-ok";
 
 let filePath = "";
+let userDataDirPath = "";
+let codec = { encrypt: () => "", decrypt: () => "" };
 
-function initialize(userDataDir) {
-  filePath = path.join(String(userDataDir || ""), FILE_NAME);
+function initialize(userDataDir, provided = null) {
+  userDataDirPath = String(userDataDir || "");
+  filePath = path.join(userDataDirPath, FILE_NAME);
+  if (provided?.encrypt && provided?.decrypt) codec = provided;
 }
 
 function requirePath() {
@@ -91,13 +96,31 @@ function normalizeServer(input = {}) {
 }
 
 function listServers() {
-  return read().servers.map((server) => ({ ...server, identityFile: server.identityFile || "" }));
+  return read().servers.map(({ passwordCipher, ...server }) => ({
+    ...server,
+    identityFile: server.identityFile || "",
+    hasPassword: Boolean(passwordCipher),
+  }));
+}
+
+function findServer(id) {
+  return read().servers.find((server) => server.id === String(id || "")) || null;
 }
 
 function saveServer(input = {}) {
   const data = read();
   const server = normalizeServer(input);
   const index = data.servers.findIndex((entry) => entry.id === server.id);
+  const previous = index === -1 ? null : data.servers[index];
+  // undefined keeps what is stored; "" clears it; a value replaces it.
+  let passwordCipher = previous?.passwordCipher || "";
+  if (typeof input.password === "string") {
+    passwordCipher = input.password === "" ? "" : codec.encrypt(input.password);
+    if (input.password !== "" && !passwordCipher) {
+      throw new Error("This machine cannot store a password securely, so it was not saved. Use a key instead.");
+    }
+  }
+  server.passwordCipher = passwordCipher;
   if (index === -1) {
     if (data.servers.length >= MAX_SERVERS) throw new Error(`Only ${MAX_SERVERS} servers can be saved. Remove one first.`);
     server.createdAt = new Date().toISOString();
@@ -107,7 +130,8 @@ function saveServer(input = {}) {
     data.servers = data.servers.map((entry) => (entry.id === server.id ? server : entry));
   }
   write(data);
-  return server;
+  const { passwordCipher: _hidden, ...visible } = server;
+  return { ...visible, hasPassword: Boolean(passwordCipher) };
 }
 
 function deleteServer(id) {
@@ -119,24 +143,40 @@ function deleteServer(id) {
 }
 
 /** The argv for one non-interactive connection. Exported so tests can assert it. */
-function connectionArgs(server, remoteCommand) {
+function connectionArgs(server, remoteCommand, { allowPassword = false } = {}) {
   const args = [
-    "-o", "BatchMode=yes",
+    "-o", allowPassword ? "BatchMode=no" : "BatchMode=yes",
     "-o", "ConnectTimeout=10",
     "-o", "StrictHostKeyChecking=accept-new",
     "-p", String(server.port || DEFAULT_PORT),
   ];
-  if (server.identityFile) args.push("-i", server.identityFile);
+  // spawn has no shell, so "~" would never be expanded and ssh would look for a
+  // file literally named "~".
+  if (server.identityFile) args.push("-i", expandHome(server.identityFile));
   args.push(`${server.user}@${server.host}`, remoteCommand);
   return args;
 }
 
-function run(command, args, timeoutMs) {
+function expandHome(value) {
+  const text = String(value || "");
+  if (!text.startsWith("~")) return text;
+  return path.join(process.env.HOME || "", text.slice(1));
+}
+
+/** A tiny askpass helper so a saved password can be used without a terminal. */
+function ensureAskpass() {
+  const target = path.join(userDataDirPath || require("node:os").tmpdir(), ASKPASS_FILE);
+  fs.writeFileSync(target, "#!/bin/sh\nprintf '%s' \"$ARCHIMEDES_SSH_PASSWORD\"\n", { mode: 0o700 });
+  fs.chmodSync(target, 0o700);
+  return target;
+}
+
+function run(command, args, { timeoutMs = 25_000, env = {} } = {}) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
     let child;
-    try { child = spawn(command, args, { windowsHide: true }); }
+    try { child = spawn(command, args, { windowsHide: true, env: { ...process.env, ...env } }); }
     catch (error) { finish({ ok: false, detail: error?.message || "ssh could not start" }); return; }
     const output = [];
     child.stdout.on("data", (chunk) => output.push(chunk));
@@ -154,8 +194,15 @@ function run(command, args, timeoutMs) {
  * look like a broken connection.
  */
 async function testConnection(server) {
-  const target = normalizeServer(server);
-  const result = await run("ssh", connectionArgs(target, `printf ${TEST_MARKER}`), 25_000);
+  const saved = server?.id ? findServer(server.id) : null;
+  const typedPassword = typeof server?.password === "string" ? server.password : "";
+  const target = normalizeServer({ ...saved, ...server });
+  const password = typedPassword || codec.decrypt(saved?.passwordCipher || "");
+  const args = connectionArgs(target, `printf ${TEST_MARKER}`, { allowPassword: Boolean(password) });
+  const env = password
+    ? { SSH_ASKPASS: ensureAskpass(), SSH_ASKPASS_REQUIRE: "force", ARCHIMEDES_SSH_PASSWORD: password }
+    : {};
+  const result = await run("ssh", args, { timeoutMs: 30_000, env });
   const reachable = result.ok && result.detail.includes(TEST_MARKER);
   return {
     ok: reachable,

@@ -940,6 +940,7 @@ interface SshServer {
   identityFile: string;
   workspace: string;
   useDocker: boolean;
+  hasPassword?: boolean;
   createdAt: string;
 }
 
@@ -952,6 +953,7 @@ interface SshServerDraft {
   identityFile: string;
   workspace: string;
   useDocker: boolean;
+  password?: string;
 }
 
 interface SshServerTest {

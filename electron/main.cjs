@@ -597,7 +597,14 @@ app.whenReady().then(async () => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
-  sshServers.initialize(app.getPath("userData"));
+  sshServers.initialize(app.getPath("userData"), {
+    // Passwords are stored with the OS keychain-backed encryption, never as
+    // plain text in the settings file.
+    encrypt: (value) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(value).toString("base64") : ""),
+    decrypt: (value) => {
+      try { return safeStorage.decryptString(Buffer.from(value, "base64")); } catch { return ""; }
+    },
+  });
   terminalSettings.initialize(app.getPath("userData"));
   journeySettings.initialize(app.getPath("userData"));
   journeySnapshots.initialize(app.getPath("userData"));

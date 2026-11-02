@@ -8,7 +8,11 @@ const ssh = require("./ssh-servers.cjs");
 
 function withSettings(fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-ssh-"));
-  ssh.initialize(root);
+  // The real app encrypts with safeStorage; tests only need a reversible codec.
+  ssh.initialize(root, {
+    encrypt: (value) => `enc:${Buffer.from(value, "utf8").toString("base64")}`,
+    decrypt: (value) => Buffer.from(String(value || "").replace(/^enc:/, ""), "base64").toString("utf8"),
+  });
   try {
     fn(root);
   } finally {
@@ -104,4 +108,46 @@ test("the connection command is non-interactive and names the key", () => {
   const withKey = ssh.connectionArgs({ user: "j", host: "h", port: 2222, identityFile: "/k" }, "printf ok");
   assert.deepEqual(withKey.slice(withKey.indexOf("-i"), withKey.indexOf("-i") + 2), ["-i", "/k"]);
   assert.equal(withKey.at(-2), "j@h");
+});
+
+test("a password is stored encrypted and never listed", () => {
+  withSettings((root) => {
+    const saved = ssh.saveServer({ host: "10.150.16.11", user: "ubuntu", password: "hunter2" });
+    assert.equal(saved.hasPassword, true);
+    assert.equal("password" in saved, false, "the plain password is never returned");
+
+    const listed = ssh.listServers();
+    assert.equal(listed[0].hasPassword, true);
+    assert.equal(JSON.stringify(listed).includes("hunter2"), false);
+
+    const raw = fs.readFileSync(path.join(root, "ssh-servers.json"), "utf8");
+    assert.equal(raw.includes("hunter2"), false, "not on disk in the clear");
+  });
+});
+
+test("leaving the password empty keeps the saved one, clearing it removes it", () => {
+  withSettings(() => {
+    const saved = ssh.saveServer({ host: "h", user: "u", password: "secret" });
+    const kept = ssh.saveServer({ ...saved, name: "renamed" });
+    assert.equal(kept.hasPassword, true, "editing other fields keeps the password");
+
+    const cleared = ssh.saveServer({ ...saved, password: "" });
+    assert.equal(cleared.hasPassword, false);
+  });
+});
+
+test("a password makes the connection promptable instead of fail-fast", () => {
+  const withoutPassword = ssh.connectionArgs({ user: "u", host: "h", port: 22 }, "printf ok");
+  assert.ok(withoutPassword.includes("BatchMode=yes"));
+
+  const withPassword = ssh.connectionArgs({ user: "u", host: "h", port: 22 }, "printf ok", { allowPassword: true });
+  assert.ok(withPassword.includes("BatchMode=no"));
+});
+
+test("an identity path starting with ~ is expanded before ssh sees it", () => {
+  const args = ssh.connectionArgs({ user: "u", host: "h", port: 22, identityFile: "~/.ssh/id_ed25519" }, "printf ok");
+  const key = args[args.indexOf("-i") + 1];
+  assert.ok(path.isAbsolute(key), "ssh has no shell to expand it");
+  assert.ok(key.endsWith("/.ssh/id_ed25519"));
+  assert.equal(key.includes("~"), false);
 });

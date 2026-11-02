@@ -13,6 +13,7 @@ const EMPTY_DRAFT: SshServerDraft = {
   identityFile: "",
   workspace: "~/.archimedes",
   useDocker: false,
+  password: "",
 };
 
 function readable(value: unknown, fallback: string) {
@@ -44,7 +45,7 @@ export default function SshServersPanel({ bridge }: { bridge: ResearchDeskBridge
   const edit = (server?: SshServer) => {
     setStatus(null);
     setDraft(server
-      ? { id: server.id, name: server.name, host: server.host, user: server.user, port: server.port, identityFile: server.identityFile, workspace: server.workspace, useDocker: server.useDocker }
+      ? { id: server.id, name: server.name, host: server.host, user: server.user, port: server.port, identityFile: server.identityFile, workspace: server.workspace, useDocker: server.useDocker, password: "" }
       : { ...EMPTY_DRAFT });
   };
 
@@ -143,6 +144,17 @@ export default function SshServersPanel({ bridge }: { bridge: ResearchDeskBridge
         </SettingsRow>
         <SettingsRow title={t("Port")} description={t("22 unless the server listens elsewhere.")}>
           <input className="settings-text-input settings-text-input-narrow" type="number" min={1} max={65535} value={draft.port} onChange={(event) => update({ port: Number(event.target.value) || 22 })} />
+        </SettingsRow>
+        <SettingsRow stacked title={t("Password")} description={t("Only for servers that do not accept a key yet. Stored encrypted on this Mac, never in the workspace.")}>
+          <input
+            className="settings-text-input"
+            type="password"
+            value={draft.password || ""}
+            placeholder={draft.id ? t("Saved · leave empty to keep it") : t("Leave empty to use your SSH key")}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => update({ password: event.target.value })}
+          />
         </SettingsRow>
         <SettingsRow stacked title={t("Identity file")} description={t("Optional. The private key on this laptop, for example ~/.ssh/id_ed25519.")}>
           <input className="settings-text-input" value={draft.identityFile} placeholder="~/.ssh/id_ed25519" autoComplete="off" spellCheck={false} onChange={(event) => update({ identityFile: event.target.value })} />
