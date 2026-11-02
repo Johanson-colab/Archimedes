@@ -64,3 +64,49 @@ test("a run cannot be attached to a reproduction that does not exist", () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("diagnosis attempts keep their order and their verdict", () => {
+  const root = workspace();
+  try {
+    store.openWorkspace(root);
+    const reproduction = store.createReproduction({ title: "MemT" });
+    const run = store.createReproductionRun({ reproductionId: reproduction.id });
+
+    const first = store.createReproductionAttempt({
+      reproductionId: reproduction.id,
+      runId: run.id,
+      stepId: "install",
+      class: "dependency_missing",
+      confidence: "high",
+      evidence: "No module named 'sglang'",
+      cause: "sglang is in the server extra",
+      fix: { target: "install", command: "pip install -e .[all,server]" },
+      status: "proposed",
+    });
+    assert.equal(first.attempt_no, 1);
+
+    const second = store.createReproductionAttempt({
+      reproductionId: reproduction.id,
+      runId: run.id,
+      stepId: "run",
+      class: "unknown",
+      cause: "still failing",
+      status: "proposed",
+    });
+    assert.equal(second.attempt_no, 2);
+
+    const applied = store.updateReproductionAttempt(first.id, { status: "applied" });
+    assert.equal(applied.status, "applied");
+
+    const attempts = store.listReproductionAttempts(run.id);
+    assert.deepEqual(attempts.map((attempt) => attempt.attempt_no), [1, 2]);
+    assert.deepEqual(attempts[0].fix, { target: "install", command: "pip install -e .[all,server]" });
+    assert.equal(attempts[1].fix, null);
+
+    // A run that is deleted takes its attempts with it.
+    store.deleteReproduction(reproduction.id);
+    assert.deepEqual(store.listReproductionAttempts(run.id), []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

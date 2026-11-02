@@ -228,3 +228,18 @@ test("a file checkpoint resolves the repository-name prefix the plan wrote", asy
   assert.equal(result.status, "verified");
   assert.equal(result.steps[0].resolved_path, "pyproject.toml");
 });
+
+test("a repaired run starts from the step that was changed", async () => {
+  const fake = backend();
+  const result = await runRunbook({
+    steps: [
+      step("one", { command: "echo one", check: { kind: "command", command: "echo one", expect: "exit_zero" } }),
+      step("two", { command: "echo two", check: { kind: "command", command: "echo two", expect: "exit_zero" } }),
+    ],
+    backend: fake,
+    startAt: 1,
+  });
+  assert.equal(result.status, "verified");
+  assert.deepEqual(fake.calls, ["exec:echo two"], "the step before the fix keeps its result instead of running again");
+  assert.deepEqual(result.steps.map((entry) => entry.id), ["two"]);
+});

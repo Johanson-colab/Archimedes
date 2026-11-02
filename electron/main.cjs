@@ -39,6 +39,7 @@ const { runPreflight } = require("./reproduction/preflight.cjs");
 const { repoNameFromUrl } = require("./reproduction/paths.cjs");
 const { runRunbook } = require("./reproduction/runner.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
+const { applyFix, diagnose } = require("./reproduction/diagnose.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
@@ -1050,7 +1051,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("reproduction:get", (_event, { id } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
     const record = presentReproduction(store.getReproduction(id));
-    return record ? { ...record, run: store.getLatestReproductionRun(record.id) } : record;
+    if (!record) return record;
+    const run = store.getLatestReproductionRun(record.id);
+    return { ...record, run, attempts: run ? store.listReproductionAttempts(run.id) : [] };
   });
 
   ipcMain.handle("reproduction:update", (_event, { id, patch } = {}) => {
@@ -1079,23 +1082,137 @@ app.whenReady().then(async () => {
   });
 
   const activeReproductionRuns = new Map();
+  const DIAGNOSIS_IDLE_MS = 30 * 60 * 1_000;
 
-  const notifyRunFinished = (record, outcome) => {
+  const notifyRunFinished = (record, summary) => {
     // The user is told when they are not looking; a run that finishes while the
     // window is focused already shows its result on screen.
     try {
       if (!Notification.isSupported()) return;
       if (BrowserWindow.getAllWindows().some((window) => window.isFocused())) return;
-      const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
-      new Notification({
-        title: `${record.title} stopped`,
-        body: stopped
-          ? `Step "${stopped.title}" ${stopped.detail || stopped.status}`
-          : outcome.error || "The run stopped before it finished.",
-      }).show();
+      new Notification({ title: `${record.title} stopped`, body: summary || "The run stopped before it finished." }).show();
     } catch {
       // Notifications are best effort and must never fail a run.
     }
+  };
+
+  const summarizeOutcome = (outcome) => {
+    const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
+    return stopped ? `${stopped.title}: ${stopped.detail || stopped.status}` : (outcome.error || "The run stopped.");
+  };
+
+  const stopSession = async (reproductionId) => {
+    const session = activeReproductionRuns.get(reproductionId);
+    if (!session) return null;
+    activeReproductionRuns.delete(reproductionId);
+    if (session.idleTimer) clearTimeout(session.idleTimer);
+    if (session.backend) await session.backend.dispose().catch(() => {});
+    return session;
+  };
+
+  /**
+   * Runs the runbook from a step, then either finishes the reproduction or
+   * opens a diagnosis. The container stays alive between attempts on purpose:
+   * repairing step 2 and re-running from step 2 means the work done by step 1
+   * is still there.
+   */
+  const executeRun = async (session, startAt) => {
+    const { record, contract, send, run } = session;
+    if (!session.backend) throw new Error("The container is no longer running.");
+    session.controller = new AbortController();
+    send({ type: "attempt", attempt: session.attempt });
+
+    let outcome = { status: "failed", steps: [], log: "", error: "" };
+    try {
+      outcome = await runRunbook({
+        steps: contract.steps,
+        startAt,
+        repoName: session.repoName,
+        backend: session.backend,
+        signal: session.controller.signal,
+        budgetMs: Math.max(1, Number(record.budget?.wallClockMin) || 45) * 60_000,
+        emit: (payload) => send(payload),
+      });
+    } catch (error) {
+      outcome = { status: "failed", steps: [], log: "", error: error instanceof Error ? error.message : "The run failed." };
+    }
+
+    const runStatus = outcome.status || "failed";
+    store.updateReproductionRun(run.id, {
+      status: runStatus,
+      steps: outcome.steps || [],
+      log: outcome.log || "",
+      error: outcome.error || "",
+      finishedAt: new Date().toISOString(),
+    });
+
+    if (runStatus === "verified") {
+      await stopSession(record.id);
+      store.updateReproduction(record.id, { status: "checks-passed", error: "" });
+      send({ type: "finished", status: runStatus });
+      return;
+    }
+    if (runStatus === "stopped") {
+      await stopSession(record.id);
+      store.updateReproduction(record.id, { status: "cancelled", error: "Stopped by the user." });
+      send({ type: "finished", status: runStatus, summary: "Stopped by the user." });
+      return;
+    }
+
+    // Something failed. Explain it before asking for a decision: a red step with
+    // no reason just moves the problem to the person reading the log.
+    const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
+    const stepId = stopped?.id || "";
+    const step = (contract.steps || []).find((entry) => entry.id === stepId) || null;
+    const summary = summarizeOutcome(outcome);
+    store.updateReproduction(record.id, { status: "diagnosing", error: summary });
+
+    let diagnosis = { class: "unknown", confidence: "low", evidence: "insufficient", cause: summary, retry: false, fix: null };
+    if (step) {
+      diagnosis = await diagnose({
+        step,
+        outcome: { exit_code: stopped?.exit_code ?? null, status: stopped?.status, detail: stopped?.detail },
+        contract,
+        log: outcome.log || "",
+        runAgent: agent.runAgent,
+        workspace: session.workspace,
+        emit: (payload) => send(payload),
+      });
+    }
+
+    const attempt = store.createReproductionAttempt({
+      reproductionId: record.id,
+      runId: run.id,
+      attemptNo: session.attempt,
+      stepId,
+      class: diagnosis.class,
+      confidence: diagnosis.confidence,
+      evidence: diagnosis.evidence,
+      cause: diagnosis.cause,
+      fix: diagnosis.fix,
+      status: "proposed",
+    });
+    session.lastDiagnosis = diagnosis;
+    session.lastAttempt = attempt;
+    session.lastStepIndex = Math.max(0, (contract.steps || []).findIndex((entry) => entry.id === stepId));
+
+    if (!diagnosis.fix) {
+      // Nothing safe to try. Stop here and say so, instead of retrying blindly.
+      await stopSession(record.id);
+      store.updateReproduction(record.id, { status: "blocked", error: diagnosis.cause });
+      send({ type: "finished", status: runStatus, summary: diagnosis.cause, diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no } });
+      notifyRunFinished(record, diagnosis.cause);
+      return;
+    }
+
+    send({ type: "diagnosis", diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no }, status: runStatus });
+    session.idleTimer = setTimeout(() => {
+      void (async () => {
+        await stopSession(record.id);
+        store.updateReproduction(record.id, { status: "blocked", error: "The diagnosis was left unattended and the container was removed." });
+      })();
+    }, DIAGNOSIS_IDLE_MS);
+    if (session.idleTimer.unref) session.idleTimer.unref();
   };
 
   ipcMain.handle("reproduction:run", async (event, { id, workspace } = {}) => {
@@ -1112,79 +1229,100 @@ app.whenReady().then(async () => {
     store.openWorkspace(dataWorkspace);
 
     const run = store.createReproductionRun({ reproductionId: record.id, backend: "docker" });
-    const controller = new AbortController();
-    activeReproductionRuns.set(record.id, { runId: run.id, controller });
-    store.updateReproduction(record.id, { status: "provisioning", error: "" });
-
-    const send = (payload) => {
-      if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
+    const session = {
+      reproductionId: record.id,
+      record,
+      run,
+      contract: record.contract,
+      attempt: 1,
+      workspace: dataWorkspace,
+      repoName: repoNameFromUrl(repoUrl),
+      backend: null,
+      controller: null,
+      lastDiagnosis: null,
+      lastAttempt: null,
+      lastStepIndex: 0,
+      idleTimer: null,
+      send: (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
+      },
     };
+    activeReproductionRuns.set(record.id, session);
+    store.updateReproduction(record.id, { status: "provisioning", error: "" });
 
     // Detached on purpose: the renderer gets progress events, the main process
     // owns the run, and closing the reproduction view does not stop it.
     void (async () => {
-      let outcome = { status: "failed", steps: [], log: "", error: "" };
-      let backend = null;
       try {
-        send({ type: "preparing", detail: "Getting the repository checkout…" });
-        const branch = record.contract.repo?.branch || "";
+        session.send({ type: "preparing", detail: "Getting the repository checkout…" });
+        const branch = session.contract.repo?.branch || "";
         const checkoutOptions = { branch };
         const existing = await getRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions).catch(() => null);
         if (!existing) {
-          send({ type: "preparing", detail: branch ? `Cloning ${branch}…` : "Cloning the repository…" });
+          session.send({ type: "preparing", detail: branch ? `Cloning ${branch}…` : "Cloning the repository…" });
           await cloneRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions);
         }
         const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "", branch);
-        backend = createDockerBackend({ checkoutDir: root, environment: record.contract.environment });
+        const backend = createDockerBackend({ checkoutDir: root, environment: session.contract.environment });
+        session.backend = backend;
         store.updateReproductionRun(run.id, { image: backend.image, backend: backend.describe() });
-        send({ type: "preparing", detail: `Starting ${backend.image}…` });
+        session.send({ type: "preparing", detail: `Starting ${backend.image}…` });
         await backend.prepare();
         store.updateReproduction(record.id, { status: "running" });
-        send({ type: "started", detail: backend.describe() });
-        outcome = await runRunbook({
-          steps: record.contract.steps,
-          repoName: repoNameFromUrl(repoUrl),
-          backend,
-          signal: controller.signal,
-          budgetMs: Math.max(1, Number(record.budget?.wallClockMin) || 45) * 60_000,
-          emit: (payload) => send(payload),
-        });
+        session.send({ type: "started", detail: backend.describe() });
+        await executeRun(session, 0);
       } catch (error) {
         const message = error instanceof Error ? error.message : "The run could not start.";
-        outcome = { status: "failed", steps: [], log: "", error: message };
-        send({ type: "error", detail: message });
-      } finally {
-        if (backend) await backend.dispose().catch(() => {});
-        activeReproductionRuns.delete(record.id);
+        await stopSession(record.id);
+        store.updateReproductionRun(run.id, { status: "failed", error: message, finishedAt: new Date().toISOString() });
+        store.updateReproduction(record.id, { status: "blocked", error: message });
+        session.send({ type: "error", detail: message });
+        session.send({ type: "finished", status: "failed", summary: message });
+        notifyRunFinished(record, message);
       }
-
-      const runStatus = outcome.status || "failed";
-      store.updateReproductionRun(run.id, {
-        status: runStatus,
-        steps: outcome.steps || [],
-        log: outcome.log || "",
-        error: outcome.error || "",
-        finishedAt: new Date().toISOString(),
-      });
-      const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
-      const summary = runStatus === "verified"
-        ? ""
-        : stopped ? `${stopped.title}: ${stopped.detail || stopped.status}` : (outcome.error || "The run stopped.");
-      store.updateReproduction(record.id, {
-        status: runStatus === "verified" ? "checks-passed" : runStatus === "stopped" ? "cancelled" : "blocked",
-        error: summary,
-      });
-      send({ type: "finished", status: runStatus, summary });
-      if (runStatus !== "verified") notifyRunFinished(record, { ...outcome, error: summary });
     })();
 
     return { ...presentReproduction(store.getReproduction(record.id)), run };
   });
 
+  ipcMain.handle("reproduction:apply-fix", async (_event, { id } = {}) => {
+    const session = activeReproductionRuns.get(String(id || ""));
+    if (!session) throw new Error("This reproduction is not waiting for a decision.");
+    const diagnosis = session.lastDiagnosis;
+    if (!diagnosis?.fix) throw new Error("This diagnosis does not propose a change.");
+    const maxAttempts = Math.max(1, Number(session.record.budget?.maxFixAttempts) || 3);
+    if (session.attempt > maxAttempts) throw new Error(`Gave up after ${maxAttempts} attempts. The remaining work needs a person.`);
+
+    const targetId = diagnosis.fix.target;
+    const contract = applyFix(session.contract, diagnosis, { attempt: session.attempt - 1 });
+    session.contract = contract;
+    session.lastDiagnosis = null;
+    if (session.idleTimer) {
+      clearTimeout(session.idleTimer);
+      session.idleTimer = null;
+    }
+    if (session.lastAttempt) store.updateReproductionAttempt(session.lastAttempt.id, { status: "applied" });
+    store.updateReproduction(id, { contract, status: "running", error: "" });
+
+    const startAt = Math.max(0, contract.steps.findIndex((step) => step.id === targetId));
+    void executeRun(session, startAt);
+    return { ...presentReproduction(store.getReproduction(id)) };
+  });
+
+  ipcMain.handle("reproduction:dismiss-diagnosis", async (_event, { id } = {}) => {
+    const session = activeReproductionRuns.get(String(id || ""));
+    if (!session) throw new Error("This reproduction is not waiting for a decision.");
+    const summary = session.lastDiagnosis?.cause || "Stopped after the failure.";
+    if (session.lastAttempt) store.updateReproductionAttempt(session.lastAttempt.id, { status: "rejected" });
+    await stopSession(id);
+    store.updateReproduction(id, { status: "blocked", error: summary });
+    return { ...presentReproduction(store.getReproduction(id)) };
+  });
+
   ipcMain.handle("reproduction:stop", async (_event, { id } = {}) => {
-    const active = activeReproductionRuns.get(String(id || ""));
-    if (!active) throw new Error("This reproduction is not running.");
-    active.controller.abort();
+    const session = activeReproductionRuns.get(String(id || ""));
+    if (!session) throw new Error("This reproduction is not running.");
+    session.controller?.abort();
     return true;
   });
 
