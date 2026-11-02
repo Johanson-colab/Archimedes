@@ -217,3 +217,14 @@ test("commands are compared with collapsed whitespace", () => {
   assert.equal(sameCommand("python   -c  x", "python -c x"), true);
   assert.equal(sameCommand("  ", ""), false);
 });
+
+test("a file checkpoint resolves the repository-name prefix the plan wrote", async () => {
+  const fake = backend({ files: { "pyproject.toml": "[project]" } });
+  const result = await runRunbook({
+    steps: [step("clone", { check: { kind: "file_exists", path: "repo/pyproject.toml" } })],
+    backend: fake,
+    repoName: "repo",
+  });
+  assert.equal(result.status, "verified");
+  assert.equal(result.steps[0].resolved_path, "pyproject.toml");
+});

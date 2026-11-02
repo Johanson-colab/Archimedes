@@ -4,7 +4,11 @@ const { normalizeGithubRepositoryUrl, pickRepositoryFiles } = require("./github-
 
 test("normalizes only public GitHub owner/repository URLs", () => {
   assert.deepEqual(normalizeGithubRepositoryUrl("https://github.com/OpenAI/openai-cookbook/tree/main"), {
-    owner: "OpenAI", repo: "openai-cookbook", url: "https://github.com/OpenAI/openai-cookbook",
+    owner: "OpenAI",
+    repo: "openai-cookbook",
+    url: "https://github.com/OpenAI/openai-cookbook",
+    branch: "main",
+    branchCandidates: ["main"],
   });
   assert.throws(() => normalizeGithubRepositoryUrl("https://gitlab.com/group/project"), /GitHub/);
   assert.throws(() => normalizeGithubRepositoryUrl("https://github.com/OpenAI"), /owner and repository/);
@@ -23,4 +27,22 @@ test("keeps implementation, configuration, and small data manifests in the evide
   assert.ok(files.includes("src/train.py"));
   assert.ok(files.includes("datasets/manifest.json"));
   assert.ok(!files.includes("datasets/train.parquet"));
+});
+
+test("keeps the branch a README links to, including names with slashes", () => {
+  assert.deepEqual(normalizeGithubRepositoryUrl("https://github.com/A-EVO-Lab/a-evolve/tree/release/evo-harness"), {
+    owner: "A-EVO-Lab",
+    repo: "a-evolve",
+    url: "https://github.com/A-EVO-Lab/a-evolve",
+    branch: "release/evo-harness",
+    // "release" alone is the other reading of the same path; the clone tries the
+    // longer name first and falls back if that branch does not exist.
+    branchCandidates: ["release/evo-harness", "release"],
+  });
+});
+
+test("a plain repository URL carries no branch", () => {
+  const target = normalizeGithubRepositoryUrl("https://github.com/MemTensor/MemT-1.0.git");
+  assert.equal(target.branch, "");
+  assert.deepEqual(target.branchCandidates, []);
 });

@@ -206,7 +206,9 @@ function normalizeContract(input, { paperTitle = "" } = {}) {
     environment,
     repo: {
       url: text(value.repo?.url, 2_000),
+      // The commit is what actually ran; the branch is how it was asked for.
       commit: text(value.repo?.commit, 80),
+      branch: text(value.repo?.branch, 200),
     },
     notes: Array.isArray(value.notes) ? value.notes.map((item) => text(item, 400)).filter(Boolean).slice(0, 10) : [],
     // Approval is the gate the runner checks; normalising it away would silently

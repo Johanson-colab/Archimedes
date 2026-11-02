@@ -11,6 +11,8 @@
  * reason.
  */
 
+const { candidatePaths } = require("./paths.cjs");
+
 const DEFAULT_STEP_TIMEOUT_MS = 30 * 60 * 1_000;
 const DEFAULT_HTTP_ATTEMPTS = 8;
 const DEFAULT_HTTP_INTERVAL_MS = 2_000;
@@ -43,22 +45,32 @@ function defaultSleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function evaluateFileCheck(check, backend) {
-  let content;
-  try {
-    content = await backend.readFile(check.path);
-  } catch (error) {
-    return { status: "failed", detail: reason(error?.message || `${check.path} could not be read`) };
+async function evaluateFileCheck(check, backend, repoName) {
+  // READMEs write "repo/file" because they clone into a parent directory; the
+  // checkout root is the repository, so try the written path first and then the
+  // same path without the repository's own name in front.
+  const candidates = candidatePaths(check.path, repoName);
+  const failures = [];
+  for (const candidate of candidates) {
+    let content;
+    try {
+      content = await backend.readFile(candidate);
+    } catch (error) {
+      failures.push(reason(error?.message || `${candidate} could not be read`));
+      continue;
+    }
+    if (content === null || content === undefined) {
+      failures.push(`${candidate} does not exist`);
+      continue;
+    }
+    if (check.kind === "file_exists") return { status: "passed", detail: "", resolved: candidate };
+    const pattern = safeRegex(check.pattern);
+    if (!pattern) return { status: "failed", detail: `Invalid pattern: ${check.pattern}`, resolved: candidate };
+    return pattern.test(content)
+      ? { status: "passed", detail: "", resolved: candidate }
+      : { status: "failed", detail: `"${check.pattern}" not found in ${candidate}`, resolved: candidate };
   }
-  if (content === null || content === undefined) {
-    return { status: "failed", detail: `${check.path} does not exist` };
-  }
-  if (check.kind === "file_exists") return { status: "passed", detail: "" };
-  const pattern = safeRegex(check.pattern);
-  if (!pattern) return { status: "failed", detail: `Invalid pattern: ${check.pattern}` };
-  return pattern.test(content)
-    ? { status: "passed", detail: "" }
-    : { status: "failed", detail: `"${check.pattern}" not found in ${check.path}` };
+  return { status: "failed", detail: failures[0] || `${check.path} does not exist` };
 }
 
 async function evaluateHttpCheck(check, { backend, options }) {
@@ -87,7 +99,7 @@ async function evaluateCheck({ check, step, backend, executed, options }) {
     return { status: "manual", detail: reason(check?.reason || "This step can only be confirmed by a person.") };
   }
   if (check.kind === "file_exists" || check.kind === "file_contains") {
-    return evaluateFileCheck(check, backend);
+    return evaluateFileCheck(check, backend, options.repoName);
   }
   if (check.kind === "http") return evaluateHttpCheck(check, { backend, options });
   if (check.kind === "command") {
@@ -120,6 +132,7 @@ async function runRunbook({
   budgetMs = Number.POSITIVE_INFINITY,
   httpAttempts = DEFAULT_HTTP_ATTEMPTS,
   httpIntervalMs = DEFAULT_HTTP_INTERVAL_MS,
+  repoName = "",
   now = () => Date.now(),
   sleep = defaultSleep,
 }) {
@@ -136,7 +149,7 @@ async function runRunbook({
     log = clipLog(log + text);
   };
 
-  const options = { signal, now, deadline, httpAttempts, httpIntervalMs, sleep };
+  const options = { signal, now, deadline, httpAttempts, httpIntervalMs, sleep, repoName };
   options.runCommand = async (command, step) => {
     emit({ type: "output", stepId: step.id, chunk: `\n$ ${command}\n` });
     appendLog(`\n$ ${command}\n`);
@@ -159,6 +172,7 @@ async function runRunbook({
       detail: "",
       exit_code: null,
       duration_ms: 0,
+      resolved_path: "",
     };
     const stepStarted = now();
 
@@ -229,6 +243,7 @@ async function runRunbook({
 
     record.status = verdict.status === "passed" ? "passed" : verdict.status;
     record.detail = verdict.detail;
+    record.resolved_path = String(verdict.resolved || "");
     record.duration_ms = now() - stepStarted;
     results.push(record);
     emit({ type: "step", step: record });

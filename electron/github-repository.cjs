@@ -12,13 +12,29 @@ function normalizeGithubRepositoryUrl(value) {
   if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com") {
     throw new Error("Only public GitHub https://github.com/owner/repository URLs can be opened here.");
   }
-  const [owner, repository] = url.pathname.split("/").filter(Boolean);
+  const parts = url.pathname.split("/").filter(Boolean);
+  const [owner, repository] = parts;
   if (!owner || !repository || !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repository)) {
     throw new Error("The GitHub URL must identify an owner and repository.");
   }
   const repo = repository.replace(/\.git$/i, "");
   if (!repo) throw new Error("The GitHub repository name is missing.");
-  return { owner, repo, url: `https://github.com/${owner}/${repo}` };
+  // A README often links to the branch that actually contains the code, e.g.
+  // .../tree/release/evo-harness. Dropping it silently would clone a different
+  // tree and make every file checkpoint fail for the wrong reason.
+  const branch = extractBranch(parts);
+  return { owner, repo, url: `https://github.com/${owner}/${repo}`, branch: branch[0] || "", branchCandidates: branch };
+}
+
+function extractBranch(parts) {
+  const at = parts.indexOf("tree", 2);
+  if (at === -1 || !parts[at + 1]) return [];
+  // "feature/x" and "feature/x/docs" are indistinguishable without asking
+  // GitHub, so keep both readings and let the clone pick the one that exists.
+  const remainder = parts.slice(at + 1).filter(Boolean);
+  if (!remainder.length) return [];
+  const candidates = [remainder.join("/"), remainder[0]];
+  return [...new Set(candidates)];
 }
 
 function githubRequest(pathname) {

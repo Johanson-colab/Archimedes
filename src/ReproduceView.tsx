@@ -130,7 +130,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [error, setError] = useState("");
   const [planStatus, setPlanStatus] = useState("");
   const [openClaim, setOpenClaim] = useState<string | null>(null);
-  const [preflight, setPreflight] = useState<Record<string, { status: ReproductionCheckStatus; detail: string }> | null>(null);
+  const [preflight, setPreflight] = useState<Record<string, { status: ReproductionCheckStatus; detail: string; resolved?: string; written?: string }> | null>(null);
+  const [preflightBranch, setPreflightBranch] = useState<{ actual: string; expected: string; mismatch: boolean } | null>(null);
   const [checking, setChecking] = useState(false);
   const [run, setRun] = useState<ReproductionRun | null>(null);
   const [runSteps, setRunSteps] = useState<Record<string, ReproductionRunStep>>({});
@@ -284,7 +285,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     setError("");
     try {
       const result = await bridge.preflightReproduction(detail.id);
-      setPreflight(Object.fromEntries(result.results.map((entry) => [entry.id, { status: entry.status, detail: entry.detail }])));
+      setPreflight(Object.fromEntries(result.results.map((entry) => [entry.id, { status: entry.status, detail: entry.detail, resolved: entry.resolved, written: entry.written }])));
+      setPreflightBranch({ actual: result.branch, expected: result.expected_branch, mismatch: result.branch_mismatch });
     } catch (checkError) {
       setError(readable(checkError, "Could not check the repository."));
     } finally {
@@ -410,6 +412,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
               : null}
           </h2>
           {preflight && <p className="reproduce-preflight-summary">{preflightSummary(preflight)}</p>}
+          {preflightBranch?.mismatch && <p className="reproduce-hint warn">
+            The checkout is on {preflightBranch.actual || "another branch"}, but the plan asks for {preflightBranch.expected}. Re-plan, or generate a plan for the branch that is checked out.
+          </p>}
           <ol className="reproduce-runbook">
             {(contract.steps ?? []).map((step, index) => {
               // A checkpoint nobody has evaluated is not a green tick: it is a
@@ -437,7 +442,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                 {step.source && <p className="reproduce-hint">from {step.source}</p>}
                 {step.blocked && <p className="reproduce-hint warn">{step.blocked}</p>}
                 {preflight?.[step.id]?.detail && preflight[step.id].status === "failed" && <p className="reproduce-hint bad">{preflight[step.id].detail}</p>}
+                {preflight?.[step.id]?.resolved && preflight[step.id].written && preflight[step.id].resolved !== preflight[step.id].written && <p className="reproduce-hint">resolved as {preflight[step.id].resolved}</p>}
                 {runSteps[step.id]?.detail && <p className="reproduce-hint bad">{runSteps[step.id].detail}</p>}
+                {runSteps[step.id]?.resolved_path && step.check.kind !== "manual" && "path" in step.check && runSteps[step.id].resolved_path !== step.check.path && <p className="reproduce-hint">resolved as {runSteps[step.id].resolved_path}</p>}
                 {runSteps[step.id] && (runSteps[step.id].exit_code !== null || runSteps[step.id].duration_ms > 0) && <p className="reproduce-hint">
                   {[runSteps[step.id].exit_code !== null ? `exit ${runSteps[step.id].exit_code}` : "", stepDuration(runSteps[step.id])].filter(Boolean).join(" · ")}
                 </p>}

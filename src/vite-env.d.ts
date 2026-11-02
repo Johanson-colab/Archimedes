@@ -808,7 +808,7 @@ interface ReproductionContract {
   claims: ReproductionClaim[];
   entrypoint: { command: string; cwd: string; outputs: string[]; evidence: Array<{ path: string; line_count: number }>; unverified: string[] };
   environment: { python: string; cuda: string; install: string[]; system: string[]; source: string };
-  repo: { url: string; commit: string };
+  repo: { url: string; commit: string; branch: string };
   notes: string[];
   frozen_at: string | null;
 }
@@ -839,6 +839,7 @@ interface ReproductionRunStep {
   detail: string;
   exit_code: number | null;
   duration_ms: number;
+  resolved_path?: string;
 }
 
 type ReproductionRunStatus = "running" | "verified" | "failed" | "blocked" | "manual" | "stopped" | "timeout" | "interrupted";
@@ -860,7 +861,10 @@ interface ReproductionRun {
 
 interface ReproductionPreflight {
   commit: string;
-  results: Array<{ id: string; status: ReproductionCheckStatus; detail: string }>;
+  branch: string;
+  expected_branch: string;
+  branch_mismatch: boolean;
+  results: Array<{ id: string; status: ReproductionCheckStatus; detail: string; resolved?: string; written?: string }>;
 }
 
 interface ReproductionCreateInput { paperId?: string | null; repoUrl?: string; title?: string; budget?: Partial<Reproduction["budget"]> }
