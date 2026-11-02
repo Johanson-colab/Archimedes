@@ -4089,6 +4089,12 @@ html[data-titlebar="overlay"] .workbench-tabs::-webkit-scrollbar { display: none
 .settings-text-input { width: 190px; max-width: 100%; height: 34px; padding: 0 9px; color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-line); border-radius: 7px; outline: 0; font: inherit; font-size: 12px; }
 .settings-text-input-narrow { width: 92px; }
 .settings-row-actions { display: flex; align-items: center; gap: 6px; }
+/* The settings dialog renders in a portal, outside the .theme-* shell, so the
+   themed button rules never match there. Use the dialog's own tokens instead. */
+.settings-ssh-panel .secondary-button { color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-line); }
+.settings-ssh-panel .secondary-button:hover { background: var(--night-panel); }
+.settings-ssh-panel .quiet-icon-button { color: var(--night-muted); }
+.settings-ssh-panel .quiet-icon-button:hover { color: var(--night-ink); background: var(--night-panel-raised); }
 .settings-text-input::placeholder { color: var(--night-faint); }
 .settings-text-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201, 162, 39, .14); }
 .settings-select:hover { border-color: color-mix(in srgb, var(--night-line) 55%, var(--night-ink)); }

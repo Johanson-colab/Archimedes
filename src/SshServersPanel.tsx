@@ -96,7 +96,7 @@ export default function SshServersPanel({ bridge }: { bridge: ResearchDeskBridge
     }
   }
 
-  return <div className="settings-sections">
+  return <div className="settings-sections settings-ssh-panel">
     <p className="settings-group-note">
       {t("Reproduction jobs run on these machines, each in its own folder. Only connection details are stored here: no passwords and no keys.")}
     </p>
