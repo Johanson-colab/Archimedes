@@ -39,6 +39,17 @@ function shellQuote(value) {
 }
 
 /**
+ * Quotes a remote path so the server expands `~`. Single quotes would stop the
+ * expansion and create a directory literally named "~" in the home folder.
+ */
+function quoteRemotePath(value) {
+  const text = String(value ?? "");
+  if (text === "~") return '"$HOME"';
+  if (text.startsWith("~/")) return `"$HOME"/${shellQuote(text.slice(2))}`;
+  return shellQuote(text);
+}
+
+/**
  * Where one reproduction lives on the server. Derived from the repository and
  * branch so a re-run reuses the same directory, and two branches never collide.
  */
@@ -88,7 +99,7 @@ function probeCommand() {
   ].join("; ");
 }
 
-function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", emit = () => {} }) {
+function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {} }) {
   const { target, password, env } = authFor(server);
   const root = remoteRoot(target.workspace || workspace, repoUrl, branch);
   const repo = `${root}/repo`;
@@ -125,40 +136,78 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
       return { ...parseProbe(result.output), ok: result.code === 0 };
     },
 
+    copyCheckout: copyLocalCheckout,
+  };
+
+  /** Ships a checkout that already exists here instead of cloning it there. */
+  async function copyLocalCheckout(localDir) {
+      emit({ type: "preparing", detail: `Copying the checkout to ${target.host}…` });
+      const remoteCommand = `mkdir -p ${quoteRemotePath(repo)} && tar -xzf - -C ${quoteRemotePath(repo)}`;
+      const sshArgs = connectionArgs(target, remoteCommand, { allowPassword: Boolean(password) });
+      return new Promise((resolve, reject) => {
+        const pack = spawn("tar", ["-czf", "-", "-C", localDir, "."]);
+        const pipe = spawn("ssh", sshArgs, { windowsHide: true, env: { ...process.env, ...env } });
+        let stderr = "";
+        let sent = 0;
+        pack.stdout.on("data", (chunk) => { sent += chunk.length; });
+        pack.stdout.pipe(pipe.stdin);
+        pack.once("error", reject);
+        pipe.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+        pipe.once("error", reject);
+        pipe.once("close", (code) => {
+          if (code === 0) resolve({ bytes: sent });
+          else reject(new Error(stderr.trim().slice(0, 300) || `tar exited with ${code}`));
+        });
+      });
+  }
+
+  return {
     async prepare() {
       emit({ type: "preparing", detail: `Creating ${root} on ${target.host}…` });
-      const mkdir = await run(`mkdir -p ${shellQuote(`${root}`)} ${shellQuote(`${root}/logs`)} && echo ok`, { timeoutMs: 60_000 });
+      const mkdir = await run(`mkdir -p ${quoteRemotePath(root)} ${quoteRemotePath(`${root}/logs`)} && echo ok`, { timeoutMs: 60_000 });
       if (mkdir.code !== 0) throw new Error(`Could not create ${root}: ${mkdir.output.trim().slice(0, 300)}`);
 
-      const exists = await run(`test -d ${shellQuote(`${repo}/.git`)} && echo yes || echo no`, { timeoutMs: 60_000 });
+      const exists = await run(`test -d ${quoteRemotePath(`${repo}/.git`)} && echo yes || echo no`, { timeoutMs: 60_000 });
       if (!exists.output.includes("yes")) {
         emit({ type: "preparing", detail: `Cloning ${branch || "the default branch"} into ${repo}…` });
-        const cloneArgs = ["clone", "--depth", "1"];
-        if (branch) cloneArgs.push("--branch", branch);
-        cloneArgs.push(repoUrl, repo);
-        const clone = await run(`git ${cloneArgs.map(shellQuote).join(" ")}`, { timeoutMs: 15 * 60 * 1_000, onData: (chunk) => emit({ type: "output", chunk }) });
-        if (clone.code !== 0) throw new Error(`Could not clone the repository: ${clone.output.trim().slice(0, 300)}`);
+        const clone = await run(`git clone --depth 1${branch ? ` --branch ${shellQuote(branch)}` : ""} ${shellQuote(repoUrl)} ${quoteRemotePath(repo)}`, { timeoutMs: 15 * 60 * 1_000, onData: (chunk) => emit({ type: "output", chunk }) });
+        if (clone.code !== 0) {
+          const host = clone.output.match(/Could not resolve host: (\S+)/)?.[1];
+          if (!copyFrom) {
+            throw new Error(host
+              ? `This server cannot reach ${host} (DNS), and no local checkout exists to copy. Clone the repository on this Mac first.`
+              : `Could not clone the repository: ${clone.output.trim().slice(0, 300)}`);
+          }
+          // No route to GitHub is normal on intranet machines: send what we have.
+          emit({ type: "preparing", detail: `Cannot reach GitHub from ${target.host}; copying the checkout instead…` });
+          await run(`rm -rf ${quoteRemotePath(repo)}`, { timeoutMs: 60_000 });
+          try {
+            await copyLocalCheckout(copyFrom);
+          } catch (error) {
+            throw new Error(`Could not copy the checkout: ${String(error?.message || error).slice(0, 300)}`);
+          }
+        }
       }
 
-      const rev = await run(`git -C ${shellQuote(repo)} rev-parse HEAD`, { timeoutMs: 60_000 });
+      const rev = await run(`git -C ${quoteRemotePath(repo)} rev-parse HEAD`, { timeoutMs: 60_000 });
       const commit = rev.output.trim().slice(0, 40);
       // A marker so a later run knows this directory is ours, and which contract
       // it belongs to.
-      await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${shellQuote(`${root}/${MARKER_FILE}`)}`, { timeoutMs: 60_000 });
+      await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${quoteRemotePath(`${root}/${MARKER_FILE}`)}`, { timeoutMs: 60_000 });
       prepared = true;
       emit({ type: "started", detail: `${target.user}@${target.host} · ${commit.slice(0, 7)}` });
       return { root, repo, commit, branch, host: target.host, user: target.user };
     },
 
     async exec(command, { timeoutMs, onData, signal } = {}) {
-      const result = await run(`cd ${shellQuote(repo)} && ${command}`, { timeoutMs, onData, signal });
+      const result = await run(`cd ${quoteRemotePath(repo)} && ${command}`, { timeoutMs, onData, signal });
       return { exitCode: result.code, timedOut: Boolean(result.timedOut), error: result.error };
     },
 
     async readFile(relativePath) {
       const target_ = path.posix.join(repo, String(relativePath || ""));
       if (target_.includes("..")) throw new Error("The checked path is outside the checkout.");
-      const result = await run(`cat -- ${shellQuote(target_)}`, { timeoutMs: 60_000 });
+      const result = await run(`cat -- ${quoteRemotePath(target_)}`, { timeoutMs: 60_000 });
       if (result.code !== 0) {
         // A missing file is an answer, not a crash: the checkpoint reports it.
         if (/No such file|Not a directory|cannot open/i.test(result.output)) return null;
@@ -181,4 +230,4 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
   };
 }
 
-module.exports = { MARKER_FILE, createSshBackend, parseProbe, probeCommand, remoteRoot, shellQuote };
+module.exports = { MARKER_FILE, createSshBackend, parseProbe, probeCommand, quoteRemotePath, remoteRoot, shellQuote };

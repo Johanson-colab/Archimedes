@@ -57,3 +57,11 @@ test("the probe command asks only for things it can report", () => {
   }
   assert.ok(!/sudo/.test(command), "never escalate to find out what a machine has");
 });
+
+test("a remote path lets the server expand the home directory", () => {
+  const { quoteRemotePath } = require("./reproduction/remote.cjs");
+  assert.equal(quoteRemotePath("~/.archimedes/repro/x"), `"$HOME"/'.archimedes/repro/x'`);
+  assert.equal(quoteRemotePath("~"), '"$HOME"');
+  assert.equal(quoteRemotePath("/abs/path"), "'/abs/path'");
+  assert.equal(quoteRemotePath("~/with space"), `"$HOME"/'with space'`);
+});

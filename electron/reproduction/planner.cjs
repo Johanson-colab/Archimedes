@@ -80,6 +80,10 @@ function buildPrompt({ paper, pages, review, repoUrl, hasRepository }) {
     `Paper: ${paper.title}`,
     paper.authors?.length ? `Authors: ${paper.authors.slice(0, 12).join(", ")}` : "",
     repoUrl ? `Repository: ${repoUrl}${hasRepository ? " (attached; explore it with the repository tools)" : " (not attached)"}` : "Repository: none",
+    // The runner mounts or copies a checkout of this repository at the working
+    // directory, so a clone step would download the same code twice - and fail
+    // outright on a server with no route to GitHub.
+    hasRepository ? "The repository is already checked out in the working directory. Start from its files and do not include a step that clones it again." : "",
     digest ? `\nPaper text:\n${digest}` : "",
     reviewText ? `\nSaved review:\n${reviewText}` : "",
   ].filter(Boolean).join("\n");

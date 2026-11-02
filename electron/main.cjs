@@ -1286,8 +1286,15 @@ app.whenReady().then(async () => {
       try {
         const branch = session.contract.repo?.branch || "";
         if (server) {
-          // The server does its own checkout; nothing is cloned on this machine.
-          const backend = createSshBackend({ server, repoUrl, branch, emit: session.send });
+          // The server clones for itself when it can reach GitHub. The local
+          // checkout is passed along as a fallback for machines that cannot,
+          // which is the normal case on an intranet.
+          let copyFrom = "";
+          const local = await getRepositoryCheckout(dataWorkspace, repoUrl, { branch }).catch(() => null);
+          if (local) {
+            copyFrom = (await resolveAuditPath(dataWorkspace, repoUrl, "", branch).catch(() => ({ root: "" }))).root;
+          }
+          const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send });
           session.backend = backend;
           store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });
           session.send({ type: "preparing", detail: `Checking ${server.host}…` });
