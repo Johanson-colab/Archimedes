@@ -881,6 +881,15 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     if (!transient) store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, ...event });
   };
   const finish = (response, status) => {
+    if (externalBackend) {
+      for (const action of actions) {
+        if (store.getAction(action.id).status === "pending") {
+          store.resolveAction(action.id, "rejected");
+          resolveApproval(action.id, false);
+        }
+        Object.assign(action, store.getAction(action.id));
+      }
+    }
     if (!transient) {
       store.finishTask(task.id, { response, status });
       store.finishResearchTurn(turn.id, { response, status });
