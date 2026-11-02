@@ -1,4 +1,5 @@
 const { XMLParser } = require("fast-xml-parser");
+const { findRepositoryUrl } = require("./paper-repository.cjs");
 
 const S2_BASE_URL = "https://api.semanticscholar.org/graph/v1";
 // An API key moves Semantic Scholar onto a dedicated quota; without one the
@@ -117,7 +118,9 @@ function normalizeArxivEntry(entry, requestedId) {
     discovered_at: published,
     categories,
     upvotes: 0,
-    github_url: "",
+    // The abstract nearly always names the code; extracting it here means the
+    // record already knows its repository before anything plans a reproduction.
+    github_url: findRepositoryUrl({ paper: { title: entry.title, abstract: entry.summary } }).url,
     github_stars: 0,
   };
 }
