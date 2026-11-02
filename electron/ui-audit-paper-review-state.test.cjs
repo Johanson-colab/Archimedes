@@ -20,7 +20,7 @@ test("paper review reports individual specialist failures instead of leaving spi
 test("paper review streams completed notes and renders failure states in the process route", () => {
   assert.match(orchestrator, /stage: "specialist_complete"[\s\S]*?response: result\.response/);
   assert.match(review, /event\.stage === "specialist_complete" && event\.response/);
-  assert.match(review, /paper-review-summary-error/);
+  assert.match(review, /review-reading-error/);
   assert.match(review, /summary\.error/);
 });
 
@@ -90,14 +90,11 @@ test("presentation slides keep source captions concise and structured grids cont
   assert.doesNotMatch(styles, /\.paper-presentation-source figcaption/);
 });
 
-test("expanded evidence notes render as readable full-width cards", () => {
-  const readingRules = styles.match(/\.paper-review-reading \{[^}]*\}/g) ?? [];
-  const activeRule = readingRules.find((rule) => /min-height: 176px;/.test(rule));
-  assert.match(activeRule, /display: block;/);
-  assert.doesNotMatch(activeRule, /display: grid;/);
-  assert.match(activeRule, /padding: 23px 25px 22px;/);
-  assert.match(styles, /\.paper-review-reading\.expanded \{ grid-column: 1 \/ -1;/);
-  assert.match(styles, /\.paper-review-reading \.paper-review-markdown \{ max-width: 86ch; margin: 23px 0 0; padding: 25px 0 2px;/);
+test("expanded evidence notes use the shared Reproduce runbook", () => {
+  assert.match(review, /reproduce-runbook/);
+  assert.match(review, /review-reading-output/);
+  assert.match(styles, /\.review-reading-output \{[\s\S]*?border-top: 1px solid var\(--border-soft\);/);
+  assert.match(styles, /\.review-reading-output \.paper-review-markdown,[\s\S]*?font-size: 12px;/);
 });
 
 test("review markdown renders TeX delimiters with KaTeX", () => {
@@ -107,12 +104,7 @@ test("review markdown renders TeX delimiters with KaTeX", () => {
   assert.match(styles, /\.paper-review-markdown \.katex-display/);
 });
 
-test("research memorandum fills the width of its summary section", () => {
-  const noteRules = styles.match(/\.paper-review-final-note \{[^}]*\}/g) ?? [];
-  const activeRule = noteRules.find((rule) => /border-top: 3px solid var\(--review-accent\);/.test(rule));
-  assert.match(activeRule, /max-width: none;/);
-
-  const headingRules = styles.match(/\.paper-review-final-note h2 \{[^}]*\}/g) ?? [];
-  const activeHeading = headingRules.find((rule) => /margin-top: 29px;/.test(rule));
-  assert.match(activeHeading, /max-width: none;/);
+test("research memorandum reuses the Reproduce summary surface", () => {
+  assert.match(review, /reproduce-summary review-memo/);
+  assert.match(styles, /\.review-memo-body \.paper-review-markdown \{[\s\S]*?font-size: 12px;/);
 });

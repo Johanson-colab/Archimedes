@@ -7824,3 +7824,294 @@ html[data-menu-style="glass"] .menu-surface {
   .paper-canvas-empty { width: min(470px, calc(100% - 40px)); padding: 20px; }
   .paper-canvas-templates { grid-template-columns: 1fr; }
 }
+
+/* Review page — compact runbook layout, matching Reproduce. */
+.review-page-shell {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  color: var(--text-primary);
+  background: var(--surface-ground);
+}
+.review-page {
+  display: flex;
+  width: min(100%, 1080px);
+  min-height: 100%;
+  margin: 0 auto;
+  flex-direction: column;
+  gap: 18px;
+  padding: 26px clamp(18px, 3vw, 40px) 56px;
+}
+.review-page-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.review-page-header > svg { flex: 0 0 auto; color: var(--accent); }
+.review-page-header h1 {
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 620;
+  letter-spacing: -.01em;
+}
+.review-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.review-overall-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+.review-overall-status.idle { color: var(--text-muted); background: var(--surface-soft); }
+.review-overall-status.working { color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.review-overall-status.complete { color: var(--state-success); background: color-mix(in srgb, var(--state-success) 14%, transparent); }
+.review-overall-status.error { color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 14%, transparent); }
+.review-output-tabs { flex: 0 0 auto; }
+.review-run {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+.review-content {
+  display: grid;
+  gap: 16px;
+}
+.review-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+.review-notice > svg { flex: 0 0 auto; color: var(--state-warning); }
+.review-notice > div { display: grid; gap: 3px; }
+.review-notice strong { color: var(--text-primary); font-size: 12px; font-weight: 620; }
+.review-notice span { color: var(--text-muted); font-size: 11.5px; line-height: 1.5; }
+.review-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.review-facts > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+.review-facts span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.review-facts strong { color: var(--text-primary); font-size: 15px; font-weight: 620; }
+.review-block { display: grid; gap: 8px; }
+.review-block > h2 {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.review-readings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.review-reading {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+.review-reading.complete { border-color: color-mix(in srgb, var(--state-success) 28%, var(--border-soft)); }
+.review-reading > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.review-reading-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 7px;
+}
+.review-reading h3 { margin: 0; font-size: 12.5px; font-weight: 620; }
+.review-reading header p { margin: 3px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+.review-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.review-chip.idle { color: var(--text-muted); background: var(--surface-soft); }
+.review-chip.working { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.review-chip.complete { color: var(--state-success); background: color-mix(in srgb, var(--state-success) 13%, transparent); }
+.review-chip.error { color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 13%, transparent); }
+.review-reading-copy { margin: 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.55; }
+.review-reading-error { margin: 0; color: var(--state-danger); font-size: 11.5px; line-height: 1.55; }
+.review-expand {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  font-size: 11px;
+  font-weight: 650;
+}
+.review-reading-output {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+.review-reading-output .paper-review-markdown,
+.review-memo-body .paper-review-markdown {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.review-audit-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+.review-audit-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 7px;
+}
+.review-audit-card p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+.review-memo-card {
+  display: grid;
+  gap: 9px;
+  padding: 16px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+.review-memo-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.review-memo-card header strong { color: var(--text-primary); font-size: 13px; font-weight: 620; }
+.review-memo-card header p { margin: 3px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.45; }
+.review-memo-copy { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.review-page-shell.presentation-active .review-page {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  padding-bottom: 0;
+}
+.review-page-shell.presentation-active .paper-presentation-workbench {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .review-readings { grid-template-columns: 1fr; }
+  .review-facts { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .review-header-actions { width: 100%; margin-left: 0; justify-content: space-between; }
+}
+
+.review-run { margin-left: auto; }
+.review-summary p { margin: 0; }
+.review-memo-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.review-memo-head strong { color: var(--text-primary); font-size: 13px; font-weight: 620; }
+.review-memo-head .review-chip { margin-left: auto; }
+.review-memo > p { margin: 0; }
+
+.review-reading-output .paper-review-markdown,
+.review-memo-body .paper-review-markdown {
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+.review-reading-output .paper-review-markdown :is(h1, h2, h3, h4),
+.review-memo-body .paper-review-markdown :is(h1, h2, h3, h4) {
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.review-reading-output .paper-review-markdown h1,
+.review-memo-body .paper-review-markdown h1 { margin: 0 0 8px; font-size: 15px; line-height: 1.3; }
+.review-reading-output .paper-review-markdown h2,
+.review-memo-body .paper-review-markdown h2 { margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border-soft); font-size: 13px; line-height: 1.35; }
+.review-reading-output .paper-review-markdown h3,
+.review-memo-body .paper-review-markdown h3 { margin: 12px 0 5px; font-size: 12.5px; line-height: 1.4; }
+.review-reading-output .paper-review-markdown h4,
+.review-memo-body .paper-review-markdown h4 { margin: 10px 0 4px; font-size: 12px; }
+.review-reading-output .paper-review-markdown p,
+.review-memo-body .paper-review-markdown p { margin: 7px 0; }
+.review-reading-output .paper-review-markdown :is(ul, ol),
+.review-memo-body .paper-review-markdown :is(ul, ol) { margin: 7px 0; padding-left: 18px; }
+.review-reading-output .paper-review-markdown li + li,
+.review-memo-body .paper-review-markdown li + li { margin-top: 3px; }
+.review-reading-output .paper-review-markdown code,
+.review-memo-body .paper-review-markdown code { padding: 1px 4px; color: var(--text-primary); background: var(--surface-soft); border-radius: 3px; font-size: .92em; }
+.review-reading-output .paper-review-markdown pre,
+.review-memo-body .paper-review-markdown pre { margin: 10px 0; padding: 10px 12px; overflow: auto; background: var(--surface-ground); border: 1px solid var(--border-soft); border-radius: 6px; }
+.review-reading-output .paper-review-markdown blockquote,
+.review-memo-body .paper-review-markdown blockquote { margin: 10px 0; padding: 8px 11px; color: var(--text-secondary); background: var(--surface-soft); border-left: 2px solid var(--accent); }
+.review-reading-output .paper-review-markdown table,
+.review-memo-body .paper-review-markdown table { width: 100%; margin: 10px 0; border-collapse: collapse; font-size: 11.5px; line-height: 1.5; }
+.review-reading-output .paper-review-markdown :is(th, td),
+.review-memo-body .paper-review-markdown :is(th, td) { padding: 5px 7px; border: 1px solid var(--border-soft); text-align: left; vertical-align: top; }
+.review-reading-output .paper-review-markdown th,
+.review-memo-body .paper-review-markdown th { color: var(--text-primary); background: var(--surface-soft); font-weight: 650; }
+.review-reading-output .paper-review-markdown .katex-display,
+.review-memo-body .paper-review-markdown .katex-display { margin: 10px 0; padding: 8px 10px; background: var(--surface-soft); border-left: 2px solid var(--accent); }
