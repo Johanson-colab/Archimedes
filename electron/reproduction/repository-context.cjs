@@ -80,7 +80,14 @@ async function prepareRepositoryItem(workspace, repoUrl) {
       readme,
       files,
       audit: true,
-      checkout: { branch: checkout.branch, commit: checkout.commit, file_count: checkout.file_count },
+      checkout: {
+        branch: checkout.branch,
+        commit: checkout.commit,
+        file_count: checkout.file_count,
+        // Which checkout directory this attachment lives in. Readers must use
+        // this, not the branch name: a default clone is stored under "".
+        requested_branch: checkout.requested_branch || "",
+      },
     },
   };
 }

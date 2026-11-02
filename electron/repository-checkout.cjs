@@ -204,10 +204,10 @@ async function resolveRepositoryCodeReference(workspace, url, requested) {
   return { status: matches.length === 0 ? "missing" : matches.length === 1 ? "unique" : "ambiguous", paths: matches };
 }
 
-async function searchRepositoryCheckout(workspace, url, query, directory = "") {
+async function searchRepositoryCheckout(workspace, url, query, directory = "", branch = "") {
   const needle = String(query || "").trim();
   if (!needle || needle.length > 300) throw new Error("Search for between 1 and 300 characters.");
-  const { root, relative, target } = await resolveAuditPath(workspace, url, directory);
+  const { root, relative, target } = await resolveAuditPath(workspace, url, directory, branch);
   if (!(await fsp.stat(target)).isDirectory()) throw new Error("Search must start from a repository directory.");
   const matches = [];
   for (const file of await walkRepository(root, relative)) {
@@ -225,4 +225,14 @@ async function searchRepositoryCheckout(workspace, url, query, directory = "") {
   return { query: needle, matches };
 }
 
-module.exports = { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference, searchRepositoryCheckout };
+/**
+ * Which checkout an attachment refers to. A repository attached from a
+ * /tree/<branch> link was cloned into its own directory, and reading it with the
+ * default branch would silently return a different tree.
+ */
+function checkoutBranchOf(repository) {
+  const requested = repository?.checkout?.requested_branch;
+  return typeof requested === "string" ? requested : "";
+}
+
+module.exports = { checkoutBranchOf, checkoutDirectory, cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference, searchRepositoryCheckout };

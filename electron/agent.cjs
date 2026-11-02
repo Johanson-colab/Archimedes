@@ -17,7 +17,7 @@ const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.c
 const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
-const { listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
+const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
@@ -611,7 +611,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   if (name === "list_attached_repository_files") {
     const repository = attachedRepository(contextItems, args.attachment_id);
     if (repository.checkout) {
-      const listing = await listRepositoryCheckoutDirectory(root, repository.url, args.directory || "");
+      const listing = await listRepositoryCheckoutDirectory(root, repository.url, args.directory || "", checkoutBranchOf(repository));
       return { content: JSON.stringify({ attachment_id: args.attachment_id, url: repository.url, branch: repository.checkout.branch, commit: repository.checkout.commit, ...listing }) };
     }
     return { content: JSON.stringify({ attachment_id: args.attachment_id, url: repository.url, branch: repository.branch,
@@ -622,7 +622,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   if (name === "read_attached_repository_file") {
     const repository = attachedRepository(contextItems, args.attachment_id);
     if (repository.checkout) {
-      const file = await readRepositoryCheckoutFile(root, repository.url, args.path);
+      const file = await readRepositoryCheckoutFile(root, repository.url, args.path, checkoutBranchOf(repository));
       return { content: JSON.stringify({ attachment_id: args.attachment_id, url: repository.url, branch: repository.checkout.branch, commit: repository.checkout.commit,
         path: file.path, line_count: file.line_count, size_bytes: file.size, content: file.content,
       }) };
@@ -636,7 +636,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   if (name === "search_attached_repository") {
     const repository = attachedRepository(contextItems, args.attachment_id);
     if (!repository.checkout) throw new Error("Full repository search is available after the user starts a code audit checkout.");
-    const result = await searchRepositoryCheckout(root, repository.url, args.query, args.directory || "");
+    const result = await searchRepositoryCheckout(root, repository.url, args.query, args.directory || "", checkoutBranchOf(repository));
     return { content: JSON.stringify({ attachment_id: args.attachment_id, url: repository.url, branch: repository.checkout.branch, commit: repository.checkout.commit, ...result }) };
   }
   if (name === "read_attached_paper_pdf") {
