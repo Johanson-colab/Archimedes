@@ -46,8 +46,8 @@ test("chat send controls are unfilled up-arrows", () => {
   assert.match(css, /\.conversation-send,[\s\S]*?background: transparent;[\s\S]*?border-radius: 6px;/);
   assert.match(css, /\.conversation-send:hover,[\s\S]*?color: var\(--accent\);[\s\S]*?background: transparent;/);
   assert.match(css, /\.conversation-send:disabled,[\s\S]*?opacity: \.35;/);
-  assert.match(library, /className="paper-ai-send"/);
-  assert.match(library, /<ArrowUp size=\{15\} \/>/);
+  assert.match(library, /className="conversation-send paper-ai-send"/);
+  assert.match(library, /<ArrowUp size=\{16\} strokeWidth=\{2\.4\} \/>/);
   assert.doesNotMatch(library, /<Send size=\{14\} \/>/);
   assert.match(css, /\.paper-ai-send \{[^}]*background: transparent/);
   assert.doesNotMatch(css, /\.paper-ai-compose \.primary-button/);
