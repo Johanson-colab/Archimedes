@@ -5,6 +5,7 @@ import { gallery as galleryStrings } from "./i18n/translations/gallery";
 import { figureforge as figureforgeStrings } from "./i18n/translations/figureforge";
 import { canvas as canvasStrings } from "./i18n/translations/canvas";
 import { composer as composerStrings } from "./i18n/translations/composer";
+import { conversation as conversationStrings } from "./i18n/translations/conversation";
 import { agent as agentStrings } from "./i18n/translations/agent";
 import { journey as journeyStrings } from "./i18n/translations/journey";
 import { settings as settingsStrings } from "./i18n/translations/settings";
@@ -35,6 +36,7 @@ const translations: Record<string, string> = {
   ...figureforgeStrings,
   ...canvasStrings,
   ...composerStrings,
+  ...conversationStrings,
   ...agentStrings,
   ...journeyStrings,
   ...settingsStrings,

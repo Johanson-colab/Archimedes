@@ -1,0 +1,4 @@
+export type ConversationCommand = "init" | "new" | "undo" | "compact" | "fork" | "side" | "export" | "model";
+export type ConversationCommandResult = { draft?: string; notice?: string } | void;
+
+export const INIT_PROMPT = `Inspect the active workspace and create or improve its root AGENTS.md contributor guide. Read any existing AGENTS.md first and preserve valid project-specific instructions. Inspect the README, package/build configuration, source layout, tests, and recent Git history using available tools. Write concise, verified guidance covering project structure, development and test commands, coding conventions, and contribution requirements. Do not invent commands or requirements. If the file already covers the project accurately, explain that no change is needed. Propose the file change through the normal approval flow and do not overwrite unrelated work.`;

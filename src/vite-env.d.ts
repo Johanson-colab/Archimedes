@@ -84,6 +84,11 @@ interface ResearchDeskBridge {
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
+    createResearchThread: (input: { projectId?: string; workspacePath?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
+    forkResearchThread: (threadId: string, workspace?: string, side?: boolean) => Promise<ResearchThreadDetail>;
+    undoResearchTurn: (threadId: string, workspace?: string) => Promise<{ thread: ResearchThreadDetail; prompt: string; backupThreadId: string }>;
+    compactResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
+    exportResearchThread: (threadId: string, workspace?: string) => Promise<{ canceled: boolean; path?: string }>;
     getResearchSnapshot: () => Promise<WorkspaceSnapshot>;
     createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
@@ -1259,6 +1264,7 @@ interface ResearchThread {
   mode: ResearchMode;
   status: string;
   context_summary: string;
+  context_summary_through_turn_id?: string | null;
   workspace_path: string | null;
   pending_actions?: number;
   turn_count: number;

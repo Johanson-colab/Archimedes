@@ -7,6 +7,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
+const { registerThreadCommands } = require("./thread-commands.cjs");
 const { runPaperReview } = require("./paper-review-orchestrator.cjs");
 const kimiSlidesSkill = require("./kimi-slides-skill.cjs");
 const runKimiSlidesPlan = kimiSlidesSkill.runKimiSlidesPlan || kimiSlidesSkill.runKimiSlidesPresentation;
@@ -877,6 +878,9 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
+  registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
+    dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
+  });
 
   ipcMain.handle("research-project:create", (_event, input = {}) => {
     return store.createResearchProject(input);

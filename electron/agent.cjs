@@ -6,6 +6,7 @@ const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
+const { workspaceInstructions } = require("./thread-commands.cjs");
 const { hasApprovalSurface, resolveApproval, setApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { completeAnthropic } = require("./agent/anthropic.cjs");
@@ -901,6 +902,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
       attachmentManifest: attachedContextManifest(contextItems),
       mode,
       reasoningInstruction: policy.instruction,
+      projectInstructions: workspaceInstructions(workspace),
       contextCharacterLimit: contextCharacterLimit(config, resolvedContextLength),
     });
     if (context.compacted) {

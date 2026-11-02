@@ -472,6 +472,7 @@ function schema(db) {
   ensureColumn(db, "research_threads", "owner_id", "TEXT");
   ensureColumn(db, "research_threads", "visibility", "TEXT NOT NULL DEFAULT 'project'");
   ensureColumn(db, "research_threads", "archived_at", "TEXT");
+  ensureColumn(db, "research_threads", "context_summary_through_turn_id", "TEXT");
   // Paper chat runs in a research thread, but it is not a research session: it
   // belongs to a paper, not to the workspace sidebar. `kind` keeps the two
   // apart so a briefing that is still running never appears as a new chat.
@@ -1986,7 +1987,7 @@ function createThreadSnapshot(threadId) {
   if (!canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this thread.");
   const turns = db.prepare(`
     SELECT id, mode, user_message, assistant_message, status, created_at, completed_at
-    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC
+    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC
   `).all(threadId);
   const events = db.prepare(`
     SELECT id, turn_id, sequence, type, payload_json, created_at
@@ -2201,7 +2202,7 @@ function getResearchThread(id) {
   if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
   const turns = db.prepare(`
     SELECT id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at
-    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC
+    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC
   `).all(id).map((turn) => ({
     ...turn,
     assistant_message: presentStoredAssistantMessage(turn.assistant_message),
@@ -2321,13 +2322,84 @@ function getResearchThreadIdForTask(taskId) {
 
 function getResearchThreadContext(id) {
   const thread = getResearchThread(id);
+  const checkpoint = thread.turns.findIndex((turn) => turn.id === thread.context_summary_through_turn_id);
   return {
     id: thread.id,
     title: thread.title,
     mode: thread.mode,
     context_summary: thread.context_summary,
-    turns: thread.turns,
+    turns: checkpoint >= 0 ? thread.turns.slice(checkpoint + 1) : thread.turns,
   };
+}
+
+function assertEditableIdleThread(id) {
+  const thread = getResearchThread(id);
+  if (!canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
+  if (thread.status === "running" || thread.turns.some((turn) => turn.status === "running")) throw new Error("Stop the running turn before changing this conversation.");
+  return thread;
+}
+
+// Copies get new IDs and no task bindings: historical approvals must never be
+// executable from a fork. Source text and evidence events remain available.
+function copyResearchThread(source, { title, visibility = source.visibility, turns = source.turns } = {}) {
+  const db = requireDatabase();
+  const copy = createResearchThread({ prompt: source.title, title, mode: source.mode, projectId: source.project_id, workspacePath: source.workspace_path, visibility });
+  const turnIds = new Map();
+  for (const turn of turns) {
+    const id = randomUUID();
+    turnIds.set(turn.id, id);
+    db.prepare(`INSERT INTO research_turns (id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at)
+      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)`).run(id, copy.id, turn.mode, turn.user_message, turn.assistant_message, turn.status, turn.created_at, turn.completed_at);
+  }
+  for (const event of source.events || []) {
+    const turnId = turnIds.get(event.turn_id);
+    if (!turnId) continue;
+    db.prepare(`INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), copy.id, turnId, event.sequence, event.type, JSON.stringify(event.payload), event.created_at);
+  }
+  db.prepare("UPDATE research_threads SET context_summary = ?, context_summary_through_turn_id = ? WHERE id = ?")
+    .run(source.context_summary, turnIds.get(source.context_summary_through_turn_id) || null, copy.id);
+  return getResearchThread(copy.id);
+}
+
+function forkResearchThread(id, { side = false } = {}) {
+  const source = assertEditableIdleThread(id);
+  const db = requireDatabase();
+  db.exec("BEGIN");
+  try {
+    const copy = copyResearchThread(source, { title: `${side ? "Side" : "Fork"}: ${source.title}` });
+    recordAuditEvent(db, { projectId: source.project_id, action: "thread.forked", targetType: "thread", targetId: copy.id, metadata: { sourceThreadId: id, side } });
+    db.exec("COMMIT");
+    return copy;
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+function undoResearchTurn(id) {
+  const source = assertEditableIdleThread(id);
+  const lastTurn = source.turns.at(-1);
+  if (!lastTurn) throw new Error("There is no turn to undo.");
+  const db = requireDatabase();
+  db.exec("BEGIN");
+  try {
+    // A private archived copy makes every undo recoverable from Work > Archived.
+    const backup = copyResearchThread(source, { title: `Before undo: ${source.title}`, visibility: "private" });
+    db.prepare("UPDATE research_threads SET archived_at = ? WHERE id = ?").run(timestamp(), backup.id);
+    if (lastTurn.task_id) db.prepare("UPDATE agent_actions SET status = 'rejected', resolved_at = ? WHERE task_id = ? AND status = 'pending'").run(timestamp(), lastTurn.task_id);
+    db.prepare("DELETE FROM research_turns WHERE id = ? AND thread_id = ?").run(lastTurn.id, id);
+    db.prepare("UPDATE research_threads SET status = 'idle', context_summary = '', context_summary_through_turn_id = NULL, updated_at = ? WHERE id = ?").run(timestamp(), id);
+    recordAuditEvent(db, { projectId: source.project_id, action: "thread.turn_undone", targetType: "thread", targetId: id, metadata: { turnId: lastTurn.id, backupThreadId: backup.id } });
+    db.exec("COMMIT");
+    return { thread: getResearchThread(id), prompt: lastTurn.user_message, backupThreadId: backup.id };
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+function compactResearchThread(id, summary, expectedTurnId) {
+  const thread = assertEditableIdleThread(id);
+  if (!expectedTurnId || thread.turns.at(-1)?.id !== expectedTurnId) throw new Error("This conversation changed during compaction. Please retry.");
+  if (typeof summary !== "string" || !summary.trim() || summary.length > 32_000) throw new Error("The conversation summary must contain between 1 and 32000 characters.");
+  requireDatabase().prepare("UPDATE research_threads SET context_summary = ?, context_summary_through_turn_id = ?, updated_at = ? WHERE id = ?")
+    .run(summary.trim(), expectedTurnId, timestamp(), id);
+  return getResearchThread(id);
 }
 
 function startResearchTurn({ threadId, taskId, prompt, mode }) {
@@ -2807,6 +2879,9 @@ function listReproductionAttempts(runId) {
 }
 
 module.exports = {
+  compactResearchThread,
+  forkResearchThread,
+  undoResearchTurn,
   addPaper,
   createComment,
   deleteComment,

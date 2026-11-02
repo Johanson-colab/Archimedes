@@ -142,6 +142,8 @@ export function MenuSurface({
     if (!panel) return;
     const observer = new ResizeObserver(() => updatePosition());
     observer.observe(panel);
+    const anchor = anchorElement();
+    if (anchor) observer.observe(anchor);
     const onScroll = () => updatePosition();
     const onResize = () => updatePosition();
     window.addEventListener("scroll", onScroll, true);
@@ -151,7 +153,7 @@ export function MenuSurface({
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
     };
-  }, [open, updatePosition]);
+  }, [open, updatePosition, anchorElement]);
 
   useEffect(() => {
     if (!open) return;

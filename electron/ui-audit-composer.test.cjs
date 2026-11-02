@@ -149,6 +149,20 @@ test("composer exposes slash commands and an @ context shortcut", () => {
   assert.match(app, /openRequest=\{contextPickerRequest\}/);
 });
 
+test("slash menu presents the requested commands and connects all actions", () => {
+  const commands = app.match(/const slashCommands = \[([\s\S]*?)\n  \];/)[1];
+  assert.deepEqual([...commands.matchAll(/id: "([^"]+)"/g)].map((match) => match[1]), [
+    "research", "experiment", "write", "review", "init", "new", "undo", "compact", "fork", "side", "export", "model",
+  ]);
+  assert.equal([...commands.matchAll(/detail: t\(/g)].length, 12);
+  assert.equal([...commands.matchAll(/run: \(\) =>/g)].length, 12);
+  assert.match(app, /anchorRef=\{composerBoxRef\} placement="top-start" width="anchor"/);
+  assert.match(app, /minWidth=\{0\} maxHeight=\{320\} className="composer-slash-menu"/);
+  assert.doesNotMatch(app, /slash-command-soon/);
+  assert.match(css, /\.composer-slash-menu \.menu-item \{ min-height: 32px; padding: 0 10px; font-size: 12px; \}/);
+  assert.match(app, /scrollIntoView\(\{ block: "nearest" \}\)/);
+});
+
 test("composer exposes the current file and a clear-all attachment action", () => {
   assert.match(app, /currentFile=\{selectedFile\}/);
   assert.match(app, /onClear=\{\(\) => contextItems\.forEach\(\(item\) => onRemoveContext\(item\.id\)\)\}/);

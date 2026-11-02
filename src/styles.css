@@ -7635,6 +7635,41 @@ html[data-menu-style="glass"] .menu-surface {
 .composer-queue-clear { padding: 3px 6px; color: var(--night-faint); background: transparent; border: 0; border-radius: 4px; font: inherit; font-size: 9px; }
 .composer-queue-clear:hover { color: var(--night-ink); background: var(--night-panel-raised); }
 .composer-slash-menu .menu-item.active { color: var(--night-ink); background: var(--night-panel-raised); }
+.composer-slash-menu .menu-item { min-height: 32px; padding: 0 10px; font-size: 12px; }
+.composer-slash-menu .menu-item-icon { width: 16px; height: 16px; }
+.composer-slash-menu .menu-item-icon > svg { width: 16px; height: 16px; }
+.composer-slash-menu .menu-item-body { display: flex; align-items: baseline; gap: 12px; }
+.composer-slash-menu .slash-command-label { flex: 0 0 90px; font-weight: 600; }
+.composer-slash-menu .slash-command-detail { min-width: 0; overflow: hidden; color: var(--menu-muted); text-overflow: ellipsis; white-space: nowrap; }
+.composer-command-notice { padding: 4px 12px; color: var(--night-muted); font-size: 11px; }
+.chat-main.has-side-chat { display: grid; grid-template-columns: minmax(0, 1fr) min(var(--side-chat-width, 380px), 50%); }
+.chat-main.has-side-chat > .conversation-layout { grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+.chat-main.has-side-chat .conversation-composer-footer { flex-wrap: wrap; }
+.side-chat-host { min-width: 0; min-height: 0; height: 100%; }
+.side-chat-host.hidden { display: none; }
+.side-chat-panel { position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; min-width: 0; min-height: 0; height: 100%; background: var(--night-panel); border-left: 1px solid var(--night-line); }
+.side-chat-header { display: flex; align-items: center; gap: 8px; padding: 12px; color: var(--night-ink); font-size: 12px; }
+.side-chat-header strong { flex: 1; }
+.side-chat-header button, .side-chat-composer button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; background: transparent; color: var(--night-muted); cursor: pointer; }
+.side-chat-header button:hover, .side-chat-composer button:hover { color: var(--night-ink); background: var(--night-panel-raised); }
+.side-chat-header button:disabled, .side-chat-composer button:disabled { opacity: .4; cursor: default; }
+.side-chat-note { margin: 0; padding: 0 12px 10px; color: var(--night-faint); font-size: 11px; line-height: 1.5; }
+.side-chat-messages { min-height: 0; min-width: 0; overflow: auto; padding: 12px; color: var(--night-muted); font-size: 12px; overflow-wrap: anywhere; }
+.side-chat-message { margin-bottom: 18px; line-height: 1.65; }
+.side-chat-message.user { padding: 8px 10px; border-radius: 8px; background: var(--night-panel-raised); color: var(--night-ink); }
+.side-chat-message p { margin: 0 0 8px; }
+.side-chat-message pre { max-width: 100%; overflow: auto; padding: 8px; background: var(--night-panel-raised); }
+.side-chat-message table { display: block; max-width: 100%; overflow: auto; }
+.side-chat-message img { max-width: 100%; height: auto; }
+.side-chat-error { margin: 0; padding: 8px 12px; color: var(--night-ink); font-size: 11px; overflow-wrap: anywhere; }
+.side-chat-composer { display: flex; align-items: flex-end; gap: 6px; margin: 10px; padding: 8px; border: 1px solid var(--night-line); border-radius: 10px; }
+.side-chat-composer textarea { flex: 1; min-width: 0; resize: vertical; max-height: 220px; border: 0; outline: 0; background: transparent; color: var(--night-ink); font: inherit; font-size: 12px; line-height: 1.5; }
+.side-chat-resizer { position: absolute; z-index: 2; top: 0; bottom: 0; left: -3px; width: 6px; cursor: col-resize; touch-action: none; }
+.side-chat-resizer:hover, .side-chat-resizer:focus-visible { background: var(--night-line); }
+@media (max-width: 1000px) {
+  .chat-main.has-side-chat { display: block; }
+  .side-chat-panel { position: absolute; z-index: 8; inset: 0 0 0 auto; width: min(var(--side-chat-width, 380px), 90%); box-shadow: -8px 0 24px var(--night-line); }
+}
 
 .attached-context-clear {
   height: 27px;

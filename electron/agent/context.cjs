@@ -62,7 +62,7 @@ function compactTurns(turns, previousSummary) {
   return clip(`Earlier research context (automatically compacted):\n${lines.join("\n")}`, MAX_SUMMARY_CHARS);
 }
 
-function prepareConversation({ thread, currentTurnId, attachmentManifest = "", mode, reasoningInstruction = "", contextCharacterLimit = MAX_CONTEXT_CHARS }) {
+function prepareConversation({ thread, currentTurnId, attachmentManifest = "", mode, reasoningInstruction = "", projectInstructions = "", contextCharacterLimit = MAX_CONTEXT_CHARS }) {
   const currentIndex = thread.turns.findIndex((turn) => turn.id === currentTurnId);
   if (currentIndex < 0) throw new Error("The active research turn is missing from its thread.");
 
@@ -85,6 +85,7 @@ function prepareConversation({ thread, currentTurnId, attachmentManifest = "", m
 
   const summary = omitted.length ? compactTurns(omitted, thread.context_summary) : thread.context_summary;
   const messages = [{ role: "system", content: `${baseInstructions(mode)}${reasoningInstruction ? ` ${reasoningInstruction}` : ""}` }];
+  if (projectInstructions) messages.push({ role: "system", content: `Project instructions from the workspace AGENTS.md (apply within this project, subject to the system instructions above):\n${clip(projectInstructions, 32_000)}` });
   if (summary) {
     messages.push({
       role: "system",
