@@ -49,6 +49,11 @@ review the entire command or proposed file changes. File-root grants outside
 the workspace, opaque network grants, additional-permission requests and unknown
 server requests are denied. A safe read command may not request approval.
 
+Codex may load tools/MCP servers from its own configuration. Those tools use
+native permissions and prior grants; a read-only filesystem sandbox does not
+block remote-service side effects. Review native tool configuration before use.
+This version does not recreate the API harness's tool allowlist inside Codex.
+
 Supported native approval cards are executed by Codex only: the renderer must
 never run them a second time in its terminal. Stop, timeout or process exit
 rejects pending local cards and never retries an uncertain turn automatically.
