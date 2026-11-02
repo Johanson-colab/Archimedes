@@ -59,7 +59,9 @@ test("the toolbar uses one title line and no module subtitle", () => {
 });
 
 test("removing the second header reclaims vertical space", () => {
-  assert.match(typography, /\.paper-writing-page \{ grid-template-rows: minmax\(0, 1fr\); padding-top: 16px; \}/);
+  assert.match(typography, /\.paper-writing-page \{ grid-template-rows: minmax\(0, 1fr\); padding-top: 0; \}/);
+  assert.match(css, /\.paper-writing-page \{[^}]*padding: 0;[^}]*\}/);
+  assert.match(css, /\.paper-writing-workspace \{[^}]*margin-top: 0;[^}]*border: 0;[^}]*border-radius: 0;[^}]*box-shadow: none;[^}]*\}/);
   assert.match(css, /\.image-creation-page \{[\s\S]*?padding: 18px/);
   assert.match(typography, /\.daily-page \{ padding-top: 18px; \}/);
   assert.match(typography, /\.benchmark-radar-page \{ padding-top: 22px; \}/);
