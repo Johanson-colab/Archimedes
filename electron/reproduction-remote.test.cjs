@@ -72,3 +72,16 @@ test("commands run through a login shell so the profile's proxy applies", () => 
   assert.ok(loginCommand("echo 'a b'").startsWith("bash -lc "));
   assert.ok(loginCommand("echo 'a b'").includes("a b"));
 });
+
+test("the backend implements everything the runner calls", () => {
+  const { createSshBackend } = require("./reproduction/remote.cjs");
+  const backend = createSshBackend({
+    server: { user: "ubuntu", host: "10.150.16.11", port: 22, workspace: "~/.archimedes" },
+    repoUrl: "https://github.com/A-EVO-Lab/a-evolve",
+    branch: "release/evo-harness",
+  });
+  for (const name of ["prepare", "exec", "readFile", "httpStatus", "dispose"]) {
+    assert.equal(typeof backend[name], "function", `${name} is part of the runner contract`);
+  }
+  assert.equal(backend.describe(), "SSH · ubuntu@10.150.16.11");
+});

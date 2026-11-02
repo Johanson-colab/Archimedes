@@ -135,12 +135,33 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     }
   });
 
+  /** Ships a checkout that already exists here instead of cloning it there. */
+  const copyLocalCheckout = (localDir) => new Promise((resolve, reject) => {
+    emit({ type: "preparing", detail: `Copying the checkout to ${target.host}…` });
+    const remoteCommand = `mkdir -p ${quoteRemotePath(repo)} && tar -xzf - -C ${quoteRemotePath(repo)}`;
+    const sshArgs = connectionArgs(target, remoteCommand, { allowPassword: Boolean(password) });
+    const pack = spawn("tar", ["-czf", "-", "-C", localDir, "."]);
+    const pipe = spawn("ssh", sshArgs, { windowsHide: true, env: { ...process.env, ...env } });
+    let stderr = "";
+    let sent = 0;
+    pack.stdout.on("data", (chunk) => { sent += chunk.length; });
+    pack.stdout.pipe(pipe.stdin);
+    pack.once("error", reject);
+    pipe.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    pipe.once("error", reject);
+    pipe.once("close", (code) => {
+      if (code === 0) resolve({ bytes: sent });
+      else reject(new Error(stderr.trim().slice(0, 300) || `tar exited with ${code}`));
+    });
+  });
+
   return {
     kind: "ssh",
     image: "",
     container: "",
     describe: () => `SSH · ${target.user}@${target.host}`,
     remoteRoot: root,
+    copyCheckout: copyLocalCheckout,
 
     /** What the machine can offer, before anything is cloned. */
     async probe() {
@@ -148,32 +169,6 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
       return { ...parseProbe(result.output), ok: result.code === 0 };
     },
 
-    copyCheckout: copyLocalCheckout,
-  };
-
-  /** Ships a checkout that already exists here instead of cloning it there. */
-  async function copyLocalCheckout(localDir) {
-      emit({ type: "preparing", detail: `Copying the checkout to ${target.host}…` });
-      const remoteCommand = `mkdir -p ${quoteRemotePath(repo)} && tar -xzf - -C ${quoteRemotePath(repo)}`;
-      const sshArgs = connectionArgs(target, remoteCommand, { allowPassword: Boolean(password) });
-      return new Promise((resolve, reject) => {
-        const pack = spawn("tar", ["-czf", "-", "-C", localDir, "."]);
-        const pipe = spawn("ssh", sshArgs, { windowsHide: true, env: { ...process.env, ...env } });
-        let stderr = "";
-        let sent = 0;
-        pack.stdout.on("data", (chunk) => { sent += chunk.length; });
-        pack.stdout.pipe(pipe.stdin);
-        pack.once("error", reject);
-        pipe.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-        pipe.once("error", reject);
-        pipe.once("close", (code) => {
-          if (code === 0) resolve({ bytes: sent });
-          else reject(new Error(stderr.trim().slice(0, 300) || `tar exited with ${code}`));
-        });
-      });
-  }
-
-  return {
     async prepare() {
       emit({ type: "preparing", detail: `Creating ${root} on ${target.host}…` });
       const mkdir = await run(`mkdir -p ${quoteRemotePath(root)} ${quoteRemotePath(`${root}/logs`)} && echo ok`, { timeoutMs: 60_000 });
@@ -195,7 +190,6 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
               ? `This server cannot reach ${host} (DNS), and no local checkout exists to copy. Clone the repository on this Mac first.`
               : `Could not clone the repository: ${clone.output.trim().slice(0, 300)}`);
           }
-          // No route to GitHub is normal on intranet machines: send what we have.
           emit({ type: "preparing", detail: `Cannot reach GitHub from ${target.host}; copying the checkout instead…` });
           await run(`rm -rf ${quoteRemotePath(repo)}`, { timeoutMs: 60_000 });
           try {
@@ -208,8 +202,6 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
 
       const rev = await run(`git -C ${quoteRemotePath(repo)} rev-parse HEAD`, { timeoutMs: 60_000 });
       const commit = rev.output.trim().slice(0, 40);
-      // A marker so a later run knows this directory is ours, and which contract
-      // it belongs to.
       await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${quoteRemotePath(`${root}/${MARKER_FILE}`)}`, { timeoutMs: 60_000 });
       prepared = true;
       emit({ type: "started", detail: `${target.user}@${target.host} · ${commit.slice(0, 7)}` });
@@ -222,9 +214,9 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     },
 
     async readFile(relativePath) {
-      const target_ = path.posix.join(repo, String(relativePath || ""));
-      if (target_.includes("..")) throw new Error("The checked path is outside the checkout.");
-      const result = await run(`cat -- ${quoteRemotePath(target_)}`, { timeoutMs: 60_000, login: false });
+      const absolute = path.posix.join(repo, String(relativePath || ""));
+      if (absolute.includes("..")) throw new Error("The checked path is outside the checkout.");
+      const result = await run(`cat -- ${quoteRemotePath(absolute)}`, { timeoutMs: 60_000, login: false });
       if (result.code !== 0) {
         // A missing file is an answer, not a crash: the checkpoint reports it.
         if (/No such file|Not a directory|cannot open/i.test(result.output)) return null;
