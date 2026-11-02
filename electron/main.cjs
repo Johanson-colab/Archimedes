@@ -38,6 +38,7 @@ const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs
 const { runPreflight } = require("./reproduction/preflight.cjs");
 const { repoNameFromUrl } = require("./reproduction/paths.cjs");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
+const { findRepository, githubSearchCandidates } = require("./reproduction/find-repository.cjs");
 const { runRunbook } = require("./reproduction/runner.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const { applyFix, diagnose } = require("./reproduction/diagnose.cjs");
@@ -1348,10 +1349,32 @@ app.whenReady().then(async () => {
     try {
       // A record made from a paper carries the paper's URL (usually arXiv). The
       // code is named inside the paper; use it rather than planning blind.
-      const found = findRepositoryUrl({ recordUrl: reproduction.repo_url, paper, pages: reader.pages || [] });
+      let found = findRepositoryUrl({ recordUrl: reproduction.repo_url, paper, pages: reader.pages || [] });
+      if (!found.url) {
+        // Nothing in the record or the abstract names the code. Ask the agent to
+        // search, but accept an answer only when the repository proves itself.
+        emit({ type: "planning", detail: "Searching for the repository…" });
+        const discovered = await findRepository({
+          paper,
+          pages: reader.pages || [],
+          runAgent: agent.runAgent,
+          searcher: githubSearchCandidates,
+          workspace: dataWorkspace,
+          emit,
+        }).catch(() => null);
+        if (discovered?.url) {
+          found = { url: discovered.url, source: "search" };
+        } else if (discovered?.evidence) {
+          emit({ type: "warning", detail: discovered.evidence });
+        }
+      }
       if (found.url && found.url !== reproduction.repo_url) {
         store.updateReproduction(id, { repoUrl: found.url });
-        emit({ type: "planning", detail: `Repository found in the paper: ${found.url}` });
+        emit({ type: "planning", detail: `Repository found in the ${found.source === "search" ? "web" : "paper"}: ${found.url}` });
+      }
+      if (found.url && !paper.github_url) {
+        // Keep it on the paper so the next reproduction does not search again.
+        try { store.updatePaper(paper.id, { github_url: found.url }); } catch { /* not fatal */ }
       }
       const repoUrl = found.url || reproduction.repo_url;
       let repoItem = null;
