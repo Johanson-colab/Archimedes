@@ -14,6 +14,10 @@ before(async () => {
   global.document = dom.window.document;
   global.IS_REACT_ACT_ENVIRONMENT = true;
   global.requestAnimationFrame = (callback) => { callback(); return 1; };
+  global.cancelAnimationFrame = () => {};
+  global.HTMLElement = dom.window.HTMLElement;
+  global.Node = dom.window.Node;
+  global.ResizeObserver = class { observe() {} disconnect() {} };
   React = require("react");
   ({ createRoot } = require("react-dom/client"));
   const { transformWithOxc } = await import("vite");
@@ -22,7 +26,7 @@ before(async () => {
     React, ...React,
     ...Object.fromEntries(["BrainCircuit", "Bot", "Check", "ChevronDown", "KeyRound", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkles", "X"].map((name) => [name, icons[name]])),
     useUISettings: () => ({ t: translate }),
-    MenuSurface: ({ open, children }) => open ? children : null,
+    createPortal: require("react-dom").createPortal,
     ...Object.fromEntries(["anthropicLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
   };
   async function load(name, exports) {
@@ -35,6 +39,7 @@ before(async () => {
   }
   await load("SettingsPrimitives", ["SettingsGroup", "SettingsRow", "SettingsSection"]);
   await load("Tabs", ["Tab", "Tabs"]);
+  await load("Menu", ["MenuSurface"]);
   await load("AgentBackendSettings", ["AgentBackendSettings"]);
   ({ ModelSettingsModal } = await load("ModelSettingsModal", ["ModelSettingsModal"]));
 });
@@ -45,6 +50,10 @@ after(() => {
   delete global.document;
   delete global.IS_REACT_ACT_ENVIRONMENT;
   delete global.requestAnimationFrame;
+  delete global.cancelAnimationFrame;
+  delete global.HTMLElement;
+  delete global.Node;
+  delete global.ResizeObserver;
 });
 
 function bridge(overrides = {}) {
@@ -55,6 +64,7 @@ function bridge(overrides = {}) {
   return {
     getModelConfig: async () => ({ provider: "deepseek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", hasApiKey: true }),
     saveModelConfig: async (config) => { calls.savedModels.push(config); return config; },
+    listProviderModels: async () => ({ models: [] }),
     getAgentBackendConfig: async () => { calls.loadedBackends++; return { backend: "api", binary: "codex", model: "" }; },
     saveAgentBackendConfig: async (config) => { calls.savedBackends.push(config); return config; },
     checkAgentBackend: async (config) => { calls.checkedBackends.push(config); return { ready: true, models: [{ id: "native-model", label: "Native model" }], message: "Connected" }; },
@@ -130,6 +140,24 @@ test("checking Codex does not activate it; explicit activation and API reset per
     assert.ok(!document.querySelector('.model-connection-tabs .ui-tab-badge'));
     assert.equal(document.querySelector(".agent-runtime-status").textContent, "API harness active");
     assert.deepEqual(calls.savedModels, []);
+  } finally { await cleanup(); }
+});
+
+test("keyboard switching to Agent backends closes the API model picker portal", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await React.act(async () => document.querySelector(".model-catalog-toggle").click());
+    assert.ok(document.body.querySelector(".model-catalog"), "the real MenuSurface portal is open");
+    assert.ok(!document.getElementById("root").querySelector(".model-catalog"), "the popup lives outside the hidden panel");
+    const apiTab = document.querySelector('.model-connection-tabs [data-value="api"]');
+    await React.act(async () => {
+      apiTab.focus();
+      apiTab.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    assert.equal(document.querySelector('.model-connection-tabs [data-value="agents"]').getAttribute("aria-selected"), "true");
+    assert.ok(!document.body.querySelector(".model-catalog"), "the hidden API panel must not leave a floating portal");
+    await click("API models");
+    assert.equal(document.querySelector('[role="combobox"]').getAttribute("aria-expanded"), "false");
   } finally { await cleanup(); }
 });
 

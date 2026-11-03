@@ -240,7 +240,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       </header>}
 
       <div className="model-settings-content">
-      {!proactiveRole && <Tabs value={settingsPage} onChange={setSettingsPage} label={t("Model connection type")} className="model-connection-tabs">
+      {!proactiveRole && <Tabs value={settingsPage} onChange={(page) => { setModelMenuOpen(false); setSettingsPage(page); }} label={t("Model connection type")} className="model-connection-tabs">
         <Tab value="api" id={`${panelId}-api-tab`} controls={`${panelId}-api`} icon={<KeyRound size={16} />}>{t("API models")}</Tab>
         <Tab value="agents" id={`${panelId}-agents-tab`} controls={`${panelId}-agents`} icon={<Bot size={16} />} badge={activeBackend === "codex" ? "Codex" : undefined}>{t("Agent backends")}</Tab>
       </Tabs>}
@@ -277,7 +277,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
                 spellCheck={false}
               />
               <button type="button" className="model-catalog-toggle" onClick={toggleModelMenu} title={t("Show available models")} aria-label={t("Show available models")} aria-haspopup="listbox" aria-expanded={modelMenuOpen}><ChevronDown size={16} /></button>
-              <MenuSurface open={modelMenuOpen} onClose={() => { setModelMenuOpen(false); modelInputRef.current?.focus(); }} anchorRef={modelAnchorRef} placement="bottom-start" width="anchor" maxHeight={320} role="listbox" ariaLabel={t("Available models")} id="model-catalog" focus="none" className="model-catalog">
+              <MenuSurface open={modelMenuOpen && (proactiveRole || settingsPage === "api")} onClose={() => { setModelMenuOpen(false); modelInputRef.current?.focus(); }} anchorRef={modelAnchorRef} placement="bottom-start" width="anchor" maxHeight={320} role="listbox" ariaLabel={t("Available models")} id="model-catalog" focus="none" className="model-catalog">
                 <div className="model-catalog-header" role="presentation"><span>{catalogModels.length ? t("{count} models · live catalog merged", { count: availableModels.length }) : t("{count} supported models", { count: availableModels.length })}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title={t("Refresh live catalog")}>{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}{t("Refresh")}</button></div>
                 {catalogError && <p className="model-catalog-note" role="presentation">{catalogError} {t("Showing the recommended list below.")}</p>}
                 <div className="model-catalog-list" role="presentation">

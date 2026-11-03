@@ -9,10 +9,19 @@ card, activation and connection status are independent of API provider controls.
 Opening or switching tabs never launches Codex or changes the saved runtime.
 The Codex card is expanded by default and can be collapsed manually.
 
-Fresh targeted checks: **25 passed, 0 failed**, including protocol/integration,
+Fresh targeted checks: **26 passed, 0 failed**, including protocol/integration,
 translations, UI interactions, bounded configuration loads, ordinary and
 development StrictMode mount/unmount cycles, and safe DOM assertion failures.
-The serial, heap-limited diagnostic process tree peaked at approximately 327 MiB.
+The serial, heap-limited diagnostic process tree peaked at approximately 333 MiB.
+The keyboard-switch regression exercises the actual body-portaled `MenuSurface`:
+the API model catalog closes before the Agent tab becomes active, and stays
+closed when returning to API settings. The regression failed before the fix.
+
+After integrating current main (`6d79831`), the complete test set was run with
+`--test-concurrency=1`: **783 total, 776 passed, 4 skipped, 3 failed**. All three
+failures are the unchanged Windows-shell expectations below; the same test file
+was rerun on unchanged main with the same three failures. The bounded full-suite
+process tree peaked at approximately **355 MiB**, with no automatic retries.
 
 Before/after, same viewport, Paper theme and API state (preview renderer, no
 credentials or native login claims):
