@@ -49,6 +49,7 @@ import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
 import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
 import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions } from "./native-agent-state";
+import HarnessPicker from "./HarnessPicker";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
 import TrajectoryView from "./TrajectoryView";
@@ -113,7 +114,6 @@ import {
   Folder,
   FolderOpen,
   FlaskConical,
-  Gauge,
   ImagePlus,
   Images,
   Laptop,
@@ -188,17 +188,6 @@ const researchModes: Array<{ id: ResearchMode; label: string; description: strin
   { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
   { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
   { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <ScanSearch size={15} />, placeholder: "What paper or draft would you like to review?" },
-];
-
-const reasoningEfforts: Array<{ id: ReasoningEffort; label: string }> = [
-  { id: "low", label: "Low" },
-  { id: "medium", label: "Medium" },
-  { id: "high", label: "High" },
-];
-
-const contextLengths: Array<{ id: ContextLength; label: string }> = [
-  { id: "standard", label: "Standard" },
-  { id: "extra-long", label: "Extra Long" },
 ];
 
 const previewModelCapabilities: ModelCapabilities = {
@@ -2956,6 +2945,12 @@ function App() {
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={nativeBackend?.backend === "codex" ? nativeBackend : null}
+              onHarnessChange={async (backend) => {
+                if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
+                const current = await desktopBridge.getAgentBackendConfig();
+                const saved = await desktopBridge.saveAgentBackendConfig({ ...current, backend });
+                setNativeBackend(saved);
+              }}
               nativeQuestions={agentBusy ? nativeQuestions.filter((item) => item.threadId === activeThreadId).map((item) => item.question) : []}
               onNativeAnswer={(id, answers) => desktopBridge.answerNativeAgentQuestion(activeThreadId!, id, answers, workspace)}
               onNativeSteer={(text) => desktopBridge.steerNativeAgent(activeThreadId!, text, workspace)}
@@ -2979,9 +2974,7 @@ function App() {
               researchMode={researchMode}
               onResearchMode={setResearchMode}
               reasoningEffort={reasoningEffort}
-              onReasoningEffort={setReasoningEffort}
               contextLength={contextLength}
-              onContextLength={setContextLength}
               modelCapabilities={modelCapabilities}
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
@@ -3188,6 +3181,7 @@ function App() {
         onAppearanceChange={setAppearance}
         bridge={desktopBridge}
         onModelSaved={setActiveModelConfig}
+        executionPreferences={{ reasoningEffort, contextLength, capabilities: modelCapabilities, onReasoningEffort: setReasoningEffort, onContextLength: setContextLength }}
         workspace={workspace}
         workspaceReady={workspaceReady}
         agentBusy={agentBusy}
@@ -3360,11 +3354,12 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
+  onHarnessChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
   nativeQuestions: NativeAgentQuestion[];
   onNativeAnswer: (id: string, answers: Record<string, string[]>) => Promise<unknown>;
   onNativeSteer: (text: string) => Promise<unknown>;
@@ -3391,8 +3386,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, n
   onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength, contextItems?: ContextAttachment[]) => Promise<boolean>;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
-  onReasoningEffort: (effort: ReasoningEffort) => void;
-  onContextLength: (length: ContextLength) => void;
   onAddContext: (items: ContextAttachment[]) => void;
   onRemoveContext: (id: string) => void;
   onApprove: () => void;
@@ -3409,8 +3402,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, n
   const { t } = useUISettings();
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const shortcutModifier = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
-  const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
-  const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextUsageOpen, setContextUsageOpen] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
@@ -3431,8 +3422,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, n
   const [slashIndex, setSlashIndex] = useState(0);
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
   const previousBusyRef = useRef(agentBusy);
-  const reasoningTriggerRef = useRef<HTMLButtonElement>(null);
-  const contextTriggerRef = useRef<HTMLButtonElement>(null);
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
@@ -3521,12 +3510,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, n
   const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${contextCharacterLimit.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
   const contextUsagePercent = Math.round(contextUsage * 100);
-  const activeContextLength = contextLengths.find((length) => length.id === contextLength) ?? contextLengths[0];
-  const contextLengthLabel = activeContextLength?.id === "extra-long" ? t("Extra Long") : t("Standard");
   const formatContextCharacters = (value: number) => value >= 10_000 ? `${Math.round(value / 1_000)}k` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : String(value);
-  const availableThinkingEfforts = reasoningEfforts.filter((effort) => modelCapabilities.thinkingEfforts.includes(effort.id));
-  const availableContextLengths = contextLengths.filter((length) => modelCapabilities.contextLengths.includes(length.id));
-  const reasoningEffortLabel = t(reasoningEfforts.find((effort) => effort.id === reasoningEffort)?.label ?? reasoningEffort);
   const slashCommands = [
     { id: "research", icon: Lightbulb, label: t("Research"), detail: t("Explore research ideas"), run: () => onResearchMode("idea-spark") },
     { id: "experiment", icon: FlaskConical, label: t("Experiment"), detail: t("Set up an experiment"), run: () => onResearchMode("experiment-setup") },
@@ -3546,10 +3530,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, n
   useEffect(() => {
     if (slashOpen) document.querySelector<HTMLElement>(".composer-slash-menu .menu-item.active")?.scrollIntoView({ block: "nearest" });
   }, [slashOpen, slashIndex, slashQuery]);
-  useEffect(() => {
-    if (!availableThinkingEfforts.length) setReasoningMenuOpen(false);
-    if (!availableContextLengths.length) setContextMenuOpen(false);
-  }, [availableThinkingEfforts.length, availableContextLengths.length]);
 
   async function attachPastedImage(blob: Blob) {
     if (contextItems.filter((item) => item.type === "image").length >= 4) {
@@ -3951,27 +3931,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, n
             </button>
           </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          {nativeBackend && <span className="native-runtime-label" title={t("Configure native model, effort and permissions in Models → Agent backends.")}>Codex · {nativeBackend.model || t("Codex default")} · {nativeBackend.effort || t("Codex default")} · {t(nativeBackend.permissionMode === "workspace-write" ? "Workspace write" : "Read-only")}</span>}
-          {!nativeBackend && (availableThinkingEfforts.length > 0 || availableContextLengths.length > 0) && <div className="composer-model-controls" aria-label={t("Model controls")}>
-            {availableThinkingEfforts.length > 0 && <div className="reasoning-effort-picker">
-              <button ref={reasoningTriggerRef} className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setContextMenuOpen(false); setContextUsageOpen(false); setReasoningMenuOpen((open) => !open); }} title={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-label={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>
-                <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>{reasoningEffortLabel}</span><ChevronDown size={13} />
-              </button>
-              <MenuSurface open={reasoningMenuOpen} onClose={() => setReasoningMenuOpen(false)} anchorRef={reasoningTriggerRef} placement="top-start" width={220} className="reasoning-effort-menu" ariaLabel={t("Thinking effort")}>
-                <MenuLabel>{t("Thinking effort")}</MenuLabel>
-                {availableThinkingEfforts.map((effort) => <MenuItem key={effort.id} checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>{t(effort.label)}</MenuItem>)}
-              </MenuSurface>
-            </div>}
-            {availableContextLengths.length > 0 && <div className="reasoning-effort-picker">
-              <button ref={contextTriggerRef} className={contextMenuOpen ? "composer-tool context-length-trigger active" : "composer-tool context-length-trigger"} onClick={() => { setReasoningMenuOpen(false); setContextUsageOpen(false); setContextMenuOpen((open) => !open); }} title={`${t("Context length")}: ${contextLengthLabel}`} aria-label={`${t("Context length")}: ${contextLengthLabel}`} aria-haspopup="menu" aria-expanded={contextMenuOpen}>
-                <Gauge size={12} aria-hidden="true" /><span>{contextLengthLabel}</span><ChevronDown size={13} />
-              </button>
-              <MenuSurface open={contextMenuOpen} onClose={() => setContextMenuOpen(false)} anchorRef={contextTriggerRef} placement="top-start" width={220} className="reasoning-effort-menu" ariaLabel={t("Context length")}>
-                <MenuLabel>{t("Context length")}</MenuLabel>
-                {availableContextLengths.map((length) => <MenuItem key={length.id} checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setContextMenuOpen(false); }}>{length.id === "extra-long" ? t("Extra Long") : t("Standard")}</MenuItem>)}
-              </MenuSurface>
-            </div>}
-          </div>}
+          <HarnessPicker backend={nativeBackend ? "codex" : "api"} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
           <button
             className={`composer-tool thread-visibility-trigger ${threadVisibility}`}
             onClick={() => onThreadVisibility(threadVisibility === "private" ? "project" : "private")}
@@ -4000,7 +3960,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, n
               aria-haspopup="menu"
               aria-expanded={contextUsageOpen}
               title={contextUsageTitle}
-              onClick={() => { setReasoningMenuOpen(false); setContextMenuOpen(false); setContextUsageOpen((open) => !open); }}
+              onClick={() => setContextUsageOpen((open) => !open)}
             >
               <span className="context-usage-value">{contextUsageLabel}</span>
               <span

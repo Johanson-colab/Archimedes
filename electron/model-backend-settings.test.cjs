@@ -24,7 +24,7 @@ before(async () => {
   const icons = require("lucide-react");
   const scope = {
     React, ...React,
-    ...Object.fromEntries(["BrainCircuit", "Bot", "Check", "ChevronDown", "KeyRound", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkles", "X"].map((name) => [name, icons[name]])),
+    ...Object.fromEntries(["BrainCircuit", "Workflow", "Check", "ChevronDown", "KeyRound", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkles", "X"].map((name) => [name, icons[name]])),
     useUISettings: () => ({ t: translate }),
     createPortal: require("react-dom").createPortal,
     ...Object.fromEntries(["anthropicLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
@@ -72,9 +72,9 @@ function bridge(overrides = {}) {
   };
 }
 
-async function mount(api, role = "agent", strict = false) {
+async function mount(api, role = "agent", strict = false, executionPreferences) {
   const root = createRoot(document.getElementById("root"));
-  const content = React.createElement(ModelSettingsModal, { bridge: api, open: true, embedded: true, onClose() {}, onSaved() {}, role });
+  const content = React.createElement(ModelSettingsModal, { bridge: api, open: true, embedded: true, onClose() {}, onSaved() {}, role, executionPreferences });
   await React.act(async () => root.render(strict ? React.createElement(React.StrictMode, null, content) : content));
   return () => React.act(async () => root.unmount());
 }
@@ -94,7 +94,7 @@ test("API and Agent tabs keep separate actions, keyboard navigation and unsaved 
   try {
     const [api, agents] = document.querySelectorAll('[role="tab"]');
     assert.equal(api.textContent, "API models");
-    assert.equal(agents.textContent, "Agent backends");
+    assert.equal(agents.textContent, "Harnesses");
     assert.equal(document.getElementById(api.getAttribute("aria-controls")).hidden, false);
     assert.equal(document.getElementById(agents.getAttribute("aria-controls")).hidden, true);
     await React.act(async () => {
@@ -106,7 +106,7 @@ test("API and Agent tabs keep separate actions, keyboard navigation and unsaved 
     assert.equal(button("Save model").closest('[role="tabpanel"]').hidden, true);
     await input("Codex model", "draft-native-model");
     await click("API models");
-    await click("Agent backends");
+    await click("Harnesses");
     assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "draft-native-model");
     assert.deepEqual(calls.savedBackends, []);
     assert.deepEqual(calls.checkedBackends, []);
@@ -120,7 +120,7 @@ test("API and Agent tabs keep separate actions, keyboard navigation and unsaved 
 test("checking Codex does not activate it; explicit activation and API reset persist separately", async () => {
   const cleanup = await mount(bridge());
   try {
-    await click("Agent backends");
+    await click("Harnesses");
     assert.match(document.querySelector(".agent-connection-status").textContent, /not checked/);
     await click("Check Codex");
     assert.equal(calls.checkedBackends[0].backend, "codex");
@@ -143,7 +143,7 @@ test("checking Codex does not activate it; explicit activation and API reset per
   } finally { await cleanup(); }
 });
 
-test("keyboard switching to Agent backends closes the API model picker portal", async () => {
+test("keyboard switching to Harnesses closes the API model picker portal", async () => {
   const cleanup = await mount(bridge());
   try {
     await React.act(async () => document.querySelector(".model-catalog-toggle").click());
@@ -164,7 +164,7 @@ test("keyboard switching to Agent backends closes the API model picker portal", 
 test("failed save keeps the actual active backend and displays an error", async () => {
   const cleanup = await mount(bridge({ saveAgentBackendConfig: async () => { throw new Error("Cannot save backend"); } }));
   try {
-    await click("Agent backends");
+    await click("Harnesses");
     await click("Use Codex");
     assert.match(document.querySelector('[role="alert"]').textContent, /Cannot save backend/);
     assert.ok(!document.querySelector(".agent-backend-card .agent-backend-active"));
@@ -179,7 +179,7 @@ test("connection errors are visible without silently changing the saved backend"
     checkAgentBackend: async () => { throw new Error("Not signed in"); },
   }));
   try {
-    await click("Agent backends");
+    await click("Harnesses");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connection not checked");
     await click("Check Codex");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connection failed");
@@ -193,7 +193,7 @@ test("in-flight checks lock configuration and never show an unverified connected
   let finish;
   const cleanup = await mount(bridge({ checkAgentBackend: () => new Promise((resolve) => { finish = resolve; }) }));
   try {
-    await click("Agent backends");
+    await click("Harnesses");
     await click("Check Codex");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Checking connection");
     assert.equal(button("Use Codex").disabled, true);
@@ -211,7 +211,7 @@ test("configuration load failure is recoverable without a silent default backend
     return { backend: "codex", binary: "codex", model: "" };
   } }));
   try {
-    await click("Agent backends");
+    await click("Harnesses");
     assert.match(document.querySelector('[role="alert"]').textContent, /Invalid config/);
     assert.equal(button("Use Codex").disabled, true);
     await click("Reload configuration");
@@ -234,7 +234,7 @@ test("Proactive remains API-only and never loads native backend controls", async
 test("agent cards collapse without changing the backend and binary edits invalidate detection", async () => {
   const cleanup = await mount(bridge());
   try {
-    await click("Agent backends");
+    await click("Harnesses");
     const toggle = document.querySelector(".agent-backend-card-toggle");
     const panel = document.getElementById(toggle.getAttribute("aria-controls"));
     await React.act(async () => toggle.click());
@@ -256,9 +256,9 @@ test("repeated mounting and tab switching never starts native agents or accumula
   for (let cycle = 0; cycle < 25; cycle++) {
     const cleanup = await mount(api);
     try {
-      await click("Agent backends");
+      await click("Harnesses");
       await click("API models");
-      await click("Agent backends");
+      await click("Harnesses");
     } finally { await cleanup(); }
     assert.equal(document.getElementById("root").childElementCount, 0);
   }
@@ -278,7 +278,7 @@ test("development StrictMode double mounting remains bounded and never checks Co
   for (let cycle = 0; cycle < 25; cycle++) {
     const cleanup = await mount(api, "agent", true);
     try {
-      await click("Agent backends");
+      await click("Harnesses");
       await click("API models");
     } finally { await cleanup(); }
     assert.equal(document.getElementById("root").childElementCount, 0);
@@ -297,7 +297,7 @@ test("native permissions and effort are explicit drafts and saved independently 
     checkAgentBackend: async () => ({ ready: true, models: [{ id: "native-model", label: "Native model", efforts: ["low", "high", "xhigh"] }], message: "Connected" }),
   }));
   try {
-    await click("Agent backends");
+    await click("Harnesses");
     const field = (label) => document.getElementById([...document.querySelectorAll("label")].find((node) => node.textContent === label)?.htmlFor);
     assert.ok(field("Codex permissions"), "explicit permission selector exists");
     assert.equal(field("Codex permissions").value, "read-only");
@@ -318,5 +318,25 @@ test("native permissions and effort are explicit drafts and saved independently 
     assert.equal(calls.savedBackends.at(-1).permissionMode, "workspace-write");
     assert.equal(calls.savedModels.length, 0);
     assert.ok(!document.querySelector('option[value="danger-full-access"]'));
+  } finally { await cleanup(); }
+});
+
+test("API execution preferences can be changed in Models without switching the harness", async () => {
+  const changes = [];
+  const cleanup = await mount(bridge(), "agent", false, {
+    reasoningEffort: "medium", contextLength: "standard", capabilities: { thinkingEfforts: ["low", "medium", "high"], contextLengths: ["standard", "extra-long"] },
+    onReasoningEffort: (value) => changes.push(["effort", value]), onContextLength: (value) => changes.push(["context", value]),
+  });
+  try {
+    await React.act(async () => {
+      const select = document.querySelector('select[aria-label="Thinking effort"]');
+      assert.ok(select); select.value = "high";
+      select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      const context = document.querySelector('select[aria-label="Context length"]');
+      assert.ok(context); context.value = "extra-long";
+      context.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    });
+    assert.deepEqual(changes, [["effort", "high"], ["context", "extra-long"]]);
+    assert.deepEqual(calls.savedBackends, []);
   } finally { await cleanup(); }
 });

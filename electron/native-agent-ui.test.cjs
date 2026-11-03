@@ -27,9 +27,12 @@ async function mount(component, props) {
 test("native context reports unknown and displays last-request tokens without API estimates", async () => {
   let cleanup = await mount(Usage, { usage: null });
   assert.match(document.body.textContent, /Unknown/); assert.doesNotMatch(document.body.textContent, /300,000|Estimated/);
+  assert.ok(document.querySelector(".context-usage-ring"));
+  assert.equal(document.querySelector('[role="progressbar"]').getAttribute("aria-valuenow"), null);
   await cleanup();
   cleanup = await mount(Usage, { usage: { totalTokens: 100, modelContextWindow: 1000, inputTokens: 80, cachedInputTokens: 40, outputTokens: 20 } });
   assert.match(document.body.textContent, /10%/); assert.match(document.body.textContent, /100/);
+  assert.equal(document.querySelector('[role="progressbar"]').getAttribute("aria-valuenow"), "10");
   await cleanup();
 });
 test("same-title native tools remain distinct with expandable output and correct stopped state", async () => {

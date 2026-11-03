@@ -78,13 +78,11 @@ test("composer input has IME protection and grows with the draft", () => {
   assert.match(app, /textarea\.style\.overflowY = textarea\.scrollHeight > maxHeight \? "auto" : "hidden"/);
 });
 
-test("model controls are split and only render when the model supports them", () => {
-  assert.match(app, /availableThinkingEfforts\.length > 0 && <div className="reasoning-effort-picker"/);
-  assert.match(app, /availableContextLengths\.length > 0 && <div className="reasoning-effort-picker"/);
-  assert.doesNotMatch(app, /disabled=\{!availableThinkingEfforts\.length\}/);
-  assert.doesNotMatch(app, /disabled=\{!availableContextLengths\.length\}/);
-  assert.match(app, /ariaLabel=\{t\("Thinking effort"\)\}/);
-  assert.match(app, /ariaLabel=\{t\("Context length"\)\}/);
+test("composer uses harness selection while execution preferences live in Models", () => {
+  assert.match(app, /<HarnessPicker backend=/);
+  assert.doesNotMatch(app, /className="reasoning-effort-picker"/);
+  assert.doesNotMatch(app, /className="native-runtime-label"/);
+  assert.match(app, /executionPreferences=\{\{ reasoningEffort, contextLength/);
 });
 
 test("runtime is status-first and context usage exposes a readable breakdown", () => {

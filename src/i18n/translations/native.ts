@@ -1,5 +1,6 @@
 // Native agent controls, execution and context.
 export const native: Record<string, string> = {
+  "API providers and harnesses": "API 提供商与执行框架",
   "Cached": "缓存",
   "Codex activity": "Codex 执行过程",
   "Codex changes": "Codex 代码变更",
@@ -13,6 +14,8 @@ export const native: Record<string, string> = {
   "Codex plan": "Codex 执行计划",
   "Codex thinking effort": "Codex 思考强度",
   "Configure native model, effort and permissions in Models → Agent backends.": "在「Models → Agent backends」中配置原生模型、思考强度和权限。",
+  "Harness": "执行框架",
+  "Harnesses": "Harnesses",
   "Input": "输入",
   "Interrupted": "已中断",
   "Last reported context": "最近上报的上下文",
@@ -23,6 +26,7 @@ export const native: Record<string, string> = {
   "Send attachments after the current Codex turn finishes.": "请在当前 Codex 轮次结束后发送附件。",
   "Sending": "正在发送",
   "Steer Codex": "补充指令",
+  "This harness is not connected yet.": "此执行框架尚未接入。",
   "Unknown": "未知",
   "Waiting for Codex to report token usage.": "等待 Codex 上报 token 用量。",
   "Workspace write": "工作区可写",

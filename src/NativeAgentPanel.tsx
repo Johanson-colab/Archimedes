@@ -57,7 +57,10 @@ export function NativeContextUsage({ usage }: { usage: NativeAgentUsage | null }
   const window = usage?.modelContextWindow;
   const percent = usage && window && window > 0 ? Math.min(100, Math.round(usage.totalTokens / window * 100)) : null;
   return <details className="native-context-usage">
-    <summary aria-label={t("Codex context usage")}>Codex · {percent === null ? t("Unknown") : `${percent}%`}</summary>
+    <summary className={`context-usage ${percent !== null && percent >= 90 ? "critical" : percent !== null && percent >= 70 ? "warning" : "normal"}`} aria-label={t("Codex context usage")} title={t("Codex context usage")}>
+      <span className="context-usage-value">{percent === null ? t("Unknown") : `${percent}%`}</span>
+      <span className="context-usage-ring" role="progressbar" aria-label={t("Codex context usage")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent ?? undefined} aria-valuetext={percent === null ? t("Unknown") : `${percent}%`} style={{ "--context-usage-progress": `${percent ?? 0}%` } as React.CSSProperties} />
+    </summary>
     <div className="native-context-popover">
       <strong>{t("Codex context usage")}</strong>
       {usage ? <><p>{t("Last reported context")}: {usage.totalTokens.toLocaleString()} {t("tokens")}{window ? ` / ${window.toLocaleString()}` : ""}</p><p>{t("Input")}: {usage.inputTokens.toLocaleString()} · {t("Cached")}: {usage.cachedInputTokens.toLocaleString()} · {t("Output")}: {usage.outputTokens.toLocaleString()}</p></> : <p>{t("Waiting for Codex to report token usage.")}</p>}

@@ -3,7 +3,7 @@ import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSqua
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import type { ProactiveSettings } from "./proactive-types";
-import ModelSettingsModal from "./ModelSettingsModal";
+import ModelSettingsModal, { type ModelExecutionPreferences } from "./ModelSettingsModal";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SshServersPanel from "./SshServersPanel";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
@@ -31,6 +31,7 @@ type SettingsModalProps = {
   onAppearanceChange: (appearance: AppearanceSettings) => void;
   bridge: ResearchDeskBridge;
   onModelSaved: (config: PublicModelConfig) => void;
+  executionPreferences?: ModelExecutionPreferences;
   workspace: string;
   workspaceReady: boolean;
   agentBusy: boolean;
@@ -105,6 +106,7 @@ export default function SettingsModal({
   onAppearanceChange,
   bridge,
   onModelSaved,
+  executionPreferences,
   workspace,
   workspaceReady,
   agentBusy,
@@ -262,7 +264,7 @@ export default function SettingsModal({
     proactive: { title: t("Proactive agent"), description: t("Opt-in L0 signals, evidence, and interruption limits.") },
     appearance: { title: t("Appearance"), description: t("Theme and fonts") },
     workbench: { title: t("Workbench"), description: t("Choose the tabs that appear in the right rail.") },
-    models: { title: t("Models"), description: t("API providers and external agent backends") },
+    models: { title: t("Models"), description: t("API providers and harnesses") },
     web: { title: t("Web search"), description: t("Search provider and API keys") },
     terminal: { title: t("Terminal"), description: t("Shell, font, and external terminal") },
     ssh: { title: t("SSH servers"), description: t("Machines a reproduction can run on") },
@@ -664,7 +666,7 @@ export default function SettingsModal({
 
             {section === "workbench" && <WorkbenchSettingsPanel preferences={workbenchPreferences} onChange={onChangeWorkbenchPreferences} onReset={onResetWorkbenchPreferences} />}
 
-            {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} />}
+            {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} />}
             {section === "ssh" && <SshServersPanel bridge={bridge} />}
             {section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}
             {section === "terminal" && (terminalSettings

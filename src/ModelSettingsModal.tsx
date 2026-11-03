@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   BrainCircuit,
-  Bot,
+  Workflow,
   Check,
   ChevronDown,
   KeyRound,
@@ -28,6 +28,13 @@ import AgentBackendSettings from "./AgentBackendSettings";
 import { Tab, Tabs } from "./Tabs";
 
 type ProviderId = ModelProviderId;
+export type ModelExecutionPreferences = {
+  reasoningEffort: ReasoningEffort;
+  contextLength: ContextLength;
+  capabilities: ModelCapabilities;
+  onReasoningEffort: (value: ReasoningEffort) => void;
+  onContextLength: (value: ContextLength) => void;
+};
 
 function brandIcon(src: string, variant = "") {
   const logo = <img className="provider-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
@@ -54,7 +61,7 @@ const providers: Array<{
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [], icon: <Network size={17} /> },
 ];
 
-export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent" }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole }) {
+export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent", executionPreferences }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole; executionPreferences?: ModelExecutionPreferences }) {
   const { t } = useUISettings();
   const proactiveRole = role === "proactive";
   const [settingsPage, setSettingsPage] = useState("api");
@@ -242,7 +249,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       <div className="model-settings-content">
       {!proactiveRole && <Tabs value={settingsPage} onChange={(page) => { setModelMenuOpen(false); setSettingsPage(page); }} label={t("Model connection type")} className="model-connection-tabs">
         <Tab value="api" id={`${panelId}-api-tab`} controls={`${panelId}-api`} icon={<KeyRound size={16} />}>{t("API models")}</Tab>
-        <Tab value="agents" id={`${panelId}-agents-tab`} controls={`${panelId}-agents`} icon={<Bot size={16} />} badge={activeBackend === "codex" ? "Codex" : undefined}>{t("Agent backends")}</Tab>
+        <Tab value="agents" id={`${panelId}-agents-tab`} controls={`${panelId}-agents`} icon={<Workflow size={16} />} badge={activeBackend === "codex" ? "Codex" : undefined}>{t("Harnesses")}</Tab>
       </Tabs>}
       <div className="model-settings-panel" id={`${panelId}-api`} role={proactiveRole ? undefined : "tabpanel"} aria-labelledby={proactiveRole ? undefined : `${panelId}-api-tab`} hidden={!proactiveRole && settingsPage !== "api"}>
       {!proactiveRole && <p className="model-connection-description">{t("Connect model providers with an API key. Archimedes manages the tools and research workflow.")}</p>}
@@ -287,6 +294,10 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
               </MenuSurface>
             </div></label>
             <div className="model-security-note"><KeyRound size={13} /><span>{t("The API key is stored in Electron user data and never returned to the page.")}</span></div>
+            {!proactiveRole && executionPreferences && <div className="model-execution-preferences">
+              {executionPreferences.capabilities.thinkingEfforts.length > 0 && <label><span>{t("Thinking effort")}</span><select className="settings-select" aria-label={t("Thinking effort")} value={executionPreferences.reasoningEffort} onChange={(event) => executionPreferences.onReasoningEffort(event.target.value as ReasoningEffort)}>{executionPreferences.capabilities.thinkingEfforts.map((value) => <option key={value} value={value}>{t(value === "low" ? "Low" : value === "high" ? "High" : "Medium")}</option>)}</select></label>}
+              {executionPreferences.capabilities.contextLengths.length > 0 && <label><span>{t("Context length")}</span><select className="settings-select" aria-label={t("Context length")} value={executionPreferences.contextLength} onChange={(event) => executionPreferences.onContextLength(event.target.value as ContextLength)}>{executionPreferences.capabilities.contextLengths.map((value) => <option key={value} value={value}>{t(value === "extra-long" ? "Extra Long" : "Standard")}</option>)}</select></label>}
+            </div>}
             {feedback.text && <div className={`model-feedback ${feedback.kind}`}>{feedback.kind === "success" ? <Check size={14} /> : <X size={14} />}<span>{feedback.text}</span></div>}
           </>}
         </div>

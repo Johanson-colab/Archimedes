@@ -18,9 +18,8 @@
 .native-question-card fieldset button { display: grid; gap: 4px; text-align: left; padding: 9px 10px; background: var(--surface-panel); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); }
 .native-question-card fieldset button[aria-pressed="true"] { border-color: var(--accent); }
 .native-question-card input { width: 100%; padding: 8px; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); background: var(--surface-control); }
-.native-context-usage { position: relative; margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.native-context-usage { position: relative; font-size: 11px; color: var(--text-muted); }
 .native-context-usage > summary { padding: 6px 8px; cursor: pointer; list-style: none; white-space: nowrap; }
 .native-context-popover { position: absolute; bottom: 32px; right: 0; width: 280px; max-width: 70vw; padding: 14px; border: 1px solid var(--border-default); border-radius: 10px; background: var(--surface-raised); color: var(--text-primary); z-index: 20; }
 .native-context-popover p { margin: 8px 0; }
 .native-context-popover small { color: var(--text-muted); line-height: 1.5; }
-.native-runtime-label { min-width: 0; max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-muted); font-size: 11px; padding: 4px 8px; }
