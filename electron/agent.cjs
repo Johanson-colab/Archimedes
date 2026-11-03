@@ -17,6 +17,7 @@ const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.c
 const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
+const { runCodex } = require("./agent/codex-backend.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -855,7 +856,8 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false }) {
+async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null }) {
+  if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The Codex backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
@@ -879,6 +881,15 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     if (!transient) store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, ...event });
   };
   const finish = (response, status) => {
+    if (externalBackend) {
+      for (const action of actions) {
+        if (store.getAction(action.id).status === "pending") {
+          store.resolveAction(action.id, "rejected");
+          resolveApproval(action.id, false);
+        }
+        Object.assign(action, store.getAction(action.id));
+      }
+    }
     if (!transient) {
       store.finishTask(task.id, { response, status });
       store.finishResearchTurn(turn.id, { response, status });
@@ -886,7 +897,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: transient ? { ...thread, status: "idle" } : store.getResearchThread(thread.id) };
   };
 
-  if (!config.apiKey) {
+  if (!config.apiKey && !externalBackend) {
     const response = "Archimedes needs a model configuration before it can run this research task. Open Model settings, choose a provider, add the API key and model, then retry.";
     emitTurn({ type: "configuration", title: "Model configuration required", detail: "No local LLM API key was found" });
     activeRuns.delete(thread.id);
@@ -899,7 +910,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
       // active turn still has to be present for the normal context builder.
       thread: transient ? { id: thread.id, title: thread.title, mode, context_summary: "", turns: [turn] } : store.getResearchThreadContext(thread.id),
       currentTurnId: turn.id,
-      attachmentManifest: attachedContextManifest(contextItems),
+      attachmentManifest: externalBackend ? "" : attachedContextManifest(contextItems),
       mode,
       reasoningInstruction: policy.instruction,
       projectInstructions: workspaceInstructions(workspace),
@@ -908,6 +919,28 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     if (context.compacted) {
       if (!transient) store.updateResearchThreadSummary(thread.id, context.summary);
       recordEvent({ type: "context_compacted", payload: { omitted_turn_count: context.omittedTurnCount } });
+    }
+    if (externalBackend) {
+      const response = await runCodex({
+        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, context, contextItems,
+        signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
+        approve: async (payload) => {
+          if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;
+          const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...payload, externalAgent: "codex" } });
+          actions.push(action);
+          // Register before exposing the card, so an immediate click cannot be lost.
+          const waiting = waitForApproval(action.id, controller.signal, thread.id);
+          emitTurn({ type: "approval", title: "Codex approval required", detail: payload.command, action });
+          try { return (await waiting).approved; }
+          finally {
+            if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+            Object.assign(action, store.getAction(action.id));
+          }
+        },
+      });
+      recordEvent({ type: "assistant_step", payload: { content: response, backend: "codex" } });
+      emitTurn({ type: "complete", title: "Codex turn complete", detail: "Native execution finished" });
+      return finish(response, "completed");
     }
     const messages = context.messages;
     const images = contextItems.filter((item) => item.type === "image" && item.image?.dataUrl).slice(0, 4);
@@ -998,12 +1031,13 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
   } catch (error) {
     if (controller.signal.aborted || error?.name === "AbortError") {
       emitTurn({ type: "interrupted", title: "Research turn interrupted", detail: "Conversation history was preserved" });
-      return finish("This research turn was interrupted. You can continue in the same thread.", "interrupted");
+      return finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This research turn was interrupted. You can continue in the same thread.${externalBackend ? " Check partial native changes before continuing." : ""}`, "interrupted");
     }
-    const response = `Archimedes could not complete this task: ${error.message || String(error)}`;
+    const response = `${error.partialResponse ? `${error.partialResponse}\n\n` : ""}Archimedes could not complete this task: ${error.message || String(error)}`;
     emitTurn({ type: "failed", title: "Research turn failed", detail: "The turn record was saved for inspection" });
     return finish(response, "failed");
   } finally {
+    controller.abort();
     activeRuns.delete(thread.id);
   }
 }

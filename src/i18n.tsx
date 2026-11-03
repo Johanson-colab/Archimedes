@@ -9,6 +9,7 @@ import { conversation as conversationStrings } from "./i18n/translations/convers
 import { agent as agentStrings } from "./i18n/translations/agent";
 import { journey as journeyStrings } from "./i18n/translations/journey";
 import { settings as settingsStrings } from "./i18n/translations/settings";
+import { runtime as runtimeStrings } from "./i18n/translations/runtime";
 import { collab as collabStrings } from "./i18n/translations/collab";
 import { reproduce as reproduceStrings } from "./i18n/translations/reproduce";
 import { writing as writingStrings } from "./i18n/translations/writing";
@@ -40,6 +41,7 @@ const translations: Record<string, string> = {
   ...agentStrings,
   ...journeyStrings,
   ...settingsStrings,
+  ...runtimeStrings,
   ...collabStrings,
   ...reproduceStrings,
   ...writingStrings,

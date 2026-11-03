@@ -184,6 +184,9 @@ interface ResearchDeskBridge {
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
+    getAgentBackendConfig: () => Promise<AgentBackendConfig>;
+    saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
+    checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: Array<{ id: string; label: string }>; message: string }>;
     claimApprovals: (threadId: string, claimed: boolean) => Promise<{ claimed: boolean }>;
     runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
     prepareFigurePlan: (input: { paperText: string; pdfData?: string; figureType: string; requirements: string; language: "en" | "zh"; connection?: FigureForgeConnection }) => Promise<{ plan: string; model: string; provider: string; source: "pdf" | "text" }>;
@@ -1409,10 +1412,16 @@ interface AgentAction {
   id: string;
   task_id: string;
   kind: "write" | "command";
-  payload: { path?: string; content?: string; command?: string; cwd?: string; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
+  payload: { path?: string; content?: string; command?: string; cwd?: string; externalAgent?: "codex"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
   status: "pending" | "approved" | "rejected";
   created_at: string;
   resolved_at: string | null;
+}
+
+interface AgentBackendConfig {
+  backend: "api" | "codex";
+  binary: string;
+  model: string;
 }
 
 interface AgentRunResult {

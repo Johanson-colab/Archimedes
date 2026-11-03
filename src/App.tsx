@@ -860,6 +860,9 @@ const previewBridge = {
     return { deleted: true };
   },
   getModelConfig: async () => ({ provider: "custom" as ModelProviderId, baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", hasApiKey: false, source: "environment" as const }),
+  getAgentBackendConfig: async () => ({ backend: "api", binary: "codex", model: "" }),
+  saveAgentBackendConfig: async () => { throw new Error("External Agent backends require the desktop app."); },
+  checkAgentBackend: async () => { throw new Error("Codex detection requires the desktop app."); },
   getModelCapabilities: async () => previewModelCapabilities,
   listProviderModels: async () => ({ models: [], source: "live" as const }),
   saveModelConfig: async ({ provider, baseUrl, model }: ModelConfigInput) => ({ provider, baseUrl, model, hasApiKey: true, source: "saved" as const }),
@@ -2436,7 +2439,7 @@ function App() {
     setEvents([{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" } });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research" });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       if (submittedThreadId === null) {
         const draftNote = noteValuesRef.current[draftNoteKey] ?? "";
@@ -2669,7 +2672,7 @@ function App() {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
       setPendingAction(null);
       clearThreadPendingAction();
-      if (action.kind === "command" && action.payload.command) {
+      if (action.kind === "command" && action.payload.command && !action.payload.externalAgent) {
         await runCommand(action.payload.command, action.id);
       } else if (action.kind === "write" && action.payload.path) {
         await refreshWorkspaceFiles();
@@ -3291,7 +3294,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {pendingAction && <section className="conversation-approval">
           <div className="approval-content">
             <div className="approval-head">
-              <span className="approval-kind">{pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
+              <span className="approval-kind">{pendingAction.payload.externalAgent ? "Codex" : pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
               {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
             </div>
             <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
