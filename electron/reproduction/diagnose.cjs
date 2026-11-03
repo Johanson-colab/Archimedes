@@ -104,6 +104,60 @@ function interpreterFix(step, log) {
   return fix;
 }
 
+/**
+ * pip refuses an http mirror unless it is named as trusted. The warning says so
+ * in as many words, and the fix is the flag it asks for.
+ */
+function pipTrustFix(step, log) {
+  const text = String(log || "");
+  if (!/not a trusted or secure host/i.test(text)) return null;
+  const host = text.match(/repository located at ([^\s]+) is not a trusted/i)?.[1]
+    || text.match(/Looking in indexes:\s*http:\/\/([^/\s:]+)/i)?.[1]
+    || "";
+  if (!host) return null;
+  const command = String(step?.command || "");
+  if (!/\bpip3?\b/.test(command) || command.includes("--trusted-host")) return null;
+  const next = command.replace(/\b(pip3?)\s+install\b/, `$1 install --trusted-host ${host}`);
+  if (next === command) return null;
+  return { target: step.id, command: next };
+}
+
+/** The log line that justifies a mechanical repair, quoted for the user. */
+function lineFor(log, pattern) {
+  const lines = String(log || "").split("\n");
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (pattern.test(lines[index])) return lines[index].trim().slice(0, MAX_EVIDENCE_CHARS);
+  }
+  return "";
+}
+
+/**
+ * Repairs that need no judgement at all: the environment says what it wants,
+ * and the log quotes it. These apply even when no failure class matches, because
+ * a pip mirror warning is not a diagnosis problem.
+ */
+function mechanicalRepair(step, log) {
+  const renamed = interpreterFix(step, log);
+  if (renamed) {
+    return {
+      fix: renamed,
+      class: "command_error",
+      evidence: lineFor(log, /command not found/i),
+      cause: "This machine names the interpreter differently, so the command never started.",
+    };
+  }
+  const trusted = pipTrustFix(step, log);
+  if (trusted) {
+    return {
+      fix: trusted,
+      class: "environment",
+      evidence: lineFor(log, /not a trusted or secure host/i),
+      cause: "pip ignores the plain-http mirror unless it is named as trusted, so nothing can be installed.",
+    };
+  }
+  return null;
+}
+
 function causeFor(entry, { step, detail }) {
   if (entry === "dependency_missing") {
     return detail
@@ -216,6 +270,17 @@ async function diagnose({ step, outcome, contract, log, runAgent, workspace, emi
   const text = tail(log);
   const steps = Array.isArray(contract?.steps) ? contract.steps : [];
   const rule = classifyLog(text);
+  const mechanical = mechanicalRepair(step, text);
+
+  if (!rule && mechanical) {
+    return validate({
+      class: mechanical.class,
+      confidence: "high",
+      evidence: mechanical.evidence,
+      cause: mechanical.cause,
+      fix: mechanical.fix,
+    }, { log: text, steps });
+  }
 
   if (rule) {
     const detail = rule.detail;
@@ -224,7 +289,7 @@ async function diagnose({ step, outcome, contract, log, runAgent, workspace, emi
       confidence: "high",
       evidence: rule.evidence,
       cause: causeFor(rule.class, { step, detail }),
-      fix: interpreterFix(step, text),
+      fix: mechanical?.fix || null,
     }, { log: text, steps });
   }
 
@@ -303,6 +368,8 @@ module.exports = {
   causeFor,
   classifyLog,
   interpreterFix,
+  mechanicalRepair,
+  pipTrustFix,
   diagnose,
   promptFor,
   tail,

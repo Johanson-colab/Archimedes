@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { applyFix, classifyLog, diagnose, tail, validate } = require("./reproduction/diagnose.cjs");
+const { applyFix, classifyLog, diagnose, pipTrustFix, tail, validate } = require("./reproduction/diagnose.cjs");
 
 const CONTRACT = {
   steps: [
@@ -193,4 +193,21 @@ test("applying an interpreter fix records both moves", () => {
   assert.equal(next.steps[0].check.command, 'python3 -c "import boto3"');
   assert.equal(next.deviations.length, 2);
   assert.match(next.deviations[1].reason, /same binary/);
+});
+
+test("pip refusing an http mirror is repaired with the flag it asks for", async () => {
+  const log = [
+    'Looking in indexes: http://linux.xidian.edu.cn/mirrors/pypi/simple',
+    "WARNING: The repository located at linux.xidian.edu.cn is not a trusted or secure host and is being ignored.",
+    "ERROR: Could not find a version that satisfies the requirement hatchling (from versions: none)",
+  ].join("\n");
+  const step = { id: "install", title: "Install", detail: "", checkpoint: "", source: "", blocked: "", command: 'python3 -m pip install -e ".[cl]"', check: { kind: "manual", reason: "" } };
+  const diagnosis = await diagnose({ step, outcome: { exit_code: 1 }, contract: { steps: [step] }, log, runAgent: null });
+  assert.equal(diagnosis.fix.target, "install");
+  assert.match(diagnosis.fix.command, /pip install --trusted-host linux\.xidian\.edu\.cn -e/);
+});
+
+test("a pip command that already trusts its host is left alone", () => {
+  const log = "WARNING: The repository located at mirror.local is not a trusted or secure host and is being ignored.";
+  assert.equal(pipTrustFix({ id: "i", command: "pip install --trusted-host mirror.local x" }, log), null);
 });
