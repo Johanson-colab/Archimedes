@@ -17,16 +17,16 @@ export default function NativeAgentPanel({ events, busy }: { events: ResearchEve
     if (typeof payload.diff === "string") diff = payload.diff;
   }
   if (!activities.size && !plan && !diff) return null;
-  return <section className="native-agent-panel" aria-label={t("Codex activity")}>
+  return <section className="native-agent-panel" aria-label={t("Native activity")}>
     <details open className="native-activity-card">
-      <summary><Wrench size={13} /><strong>{t("Codex activity")}</strong><span>{activities.size} {t("steps")}</span><ChevronDown size={13} /></summary>
+      <summary><Wrench size={13} /><strong>{t("Native activity")}</strong><span>{activities.size} {t("steps")}</span><ChevronDown size={13} /></summary>
       <div className="native-activity-list">{[...activities.values()].map((activity) => <details key={activity.id} className={`native-activity-item ${activity.status}`}>
         <summary><Terminal size={13} /><span className="native-activity-title">{activity.title}</span><span className="native-activity-detail">{activity.detail}</span><small>{t(activity.status === "running" && !busy ? "Interrupted" : activity.status === "running" ? "Running" : activity.status === "failed" ? "Failed" : activity.status === "interrupted" ? "Interrupted" : "Completed")}</small></summary>
         <pre>{activity.output || activity.detail}</pre>
       </details>)}</div>
     </details>
-    {plan && <details className="native-activity-card" open><summary><strong>{t("Codex plan")}</strong></summary><p>{plan.explanation}</p><ol>{plan.steps.map((step, index) => <li key={index}><span>{step.step}</span><small>{t(step.status === "completed" ? "Completed" : step.status === "inProgress" || step.status === "in_progress" ? "Running" : "Pending")}</small></li>)}</ol></details>}
-    {diff && <details className="native-activity-card"><summary><strong>{t("Codex changes")}</strong></summary><pre>{diff}</pre></details>}
+    {plan && <details className="native-activity-card" open><summary><strong>{t("Native plan")}</strong></summary><p>{plan.explanation}</p><ol>{plan.steps.map((step, index) => <li key={index}><span>{step.step}</span><small>{t(step.status === "completed" ? "Completed" : step.status === "inProgress" || step.status === "in_progress" ? "Running" : "Pending")}</small></li>)}</ol></details>}
+    {diff && <details className="native-activity-card"><summary><strong>{t("Native changes")}</strong></summary><pre>{diff}</pre></details>}
   </section>;
 }
 
@@ -41,7 +41,7 @@ export function NativeQuestionCard({ question, onAnswer }: { question: NativeAge
     setBusy(true); setError("");
     void onAnswer(question.id, Object.fromEntries(question.questions.map((item) => [item.id, [answers.get(item.id)!.trim()]]))).catch((reason) => setError(String(reason))).finally(() => setBusy(false));
   }}>
-    <strong>{t("Codex needs your input")}</strong>
+    <strong>{t("The agent needs your input")}</strong>
     {question.questions.map((item) => <fieldset key={item.id} disabled={busy}>
       <legend>{item.header}</legend><label htmlFor={`native-question-${item.id}`}>{item.question}</label>
       {item.options?.map((option) => <button type="button" key={option.label} aria-pressed={answers.get(item.id) === option.label} onClick={() => setAnswers((current) => new Map(current).set(item.id, option.label))}><strong>{option.label}</strong><span>{option.description}</span></button>)}
@@ -57,14 +57,14 @@ export function NativeContextUsage({ usage }: { usage: NativeAgentUsage | null }
   const window = usage?.modelContextWindow;
   const percent = usage && window && window > 0 ? Math.min(100, Math.round(usage.totalTokens / window * 100)) : null;
   return <details className="native-context-usage">
-    <summary className={`context-usage ${percent !== null && percent >= 90 ? "critical" : percent !== null && percent >= 70 ? "warning" : "normal"}`} aria-label={t("Codex context usage")} title={t("Codex context usage")}>
+    <summary className={`context-usage ${percent !== null && percent >= 90 ? "critical" : percent !== null && percent >= 70 ? "warning" : "normal"}`} aria-label={t("Native context usage")} title={t("Native context usage")}>
       <span className="context-usage-value">{percent === null ? t("Unknown") : `${percent}%`}</span>
-      <span className="context-usage-ring" role="progressbar" aria-label={t("Codex context usage")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent ?? undefined} aria-valuetext={percent === null ? t("Unknown") : `${percent}%`} style={{ "--context-usage-progress": `${percent ?? 0}%` } as React.CSSProperties} />
+      <span className="context-usage-ring" role="progressbar" aria-label={t("Native context usage")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent ?? undefined} aria-valuetext={percent === null ? t("Unknown") : `${percent}%`} style={{ "--context-usage-progress": `${percent ?? 0}%` } as React.CSSProperties} />
     </summary>
     <div className="native-context-popover">
-      <strong>{t("Codex context usage")}</strong>
-      {usage ? <><p>{t("Last reported context")}: {usage.totalTokens.toLocaleString()} {t("tokens")}{window ? ` / ${window.toLocaleString()}` : ""}</p><p>{t("Input")}: {usage.inputTokens.toLocaleString()} · {t("Cached")}: {usage.cachedInputTokens.toLocaleString()} · {t("Output")}: {usage.outputTokens.toLocaleString()}</p></> : <p>{t("Waiting for Codex to report token usage.")}</p>}
-      <small>{t("Codex manages context and automatic compaction. Usage reflects its latest report, not a character estimate.")}</small>
+      <strong>{t("Native context usage")}</strong>
+      {usage ? <><p>{t("Last reported context")}: {usage.totalTokens.toLocaleString()} {t("tokens")}{window ? ` / ${window.toLocaleString()}` : ""}</p><p>{t("Input")}: {usage.inputTokens.toLocaleString()} · {t("Cached")}: {usage.cachedInputTokens.toLocaleString()} · {t("Output")}: {usage.outputTokens.toLocaleString()}</p></> : <p>{t("Waiting for the native agent to report token usage.")}</p>}
+      <small>{t("The native agent manages context. Usage reflects its latest report, not a character estimate.")}</small>
     </div>
   </details>;
 }

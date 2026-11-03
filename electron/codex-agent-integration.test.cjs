@@ -76,7 +76,7 @@ test("native approval is not executed again by the renderer terminal", () => {
   const source = fs.readFileSync(path.join(__dirname, "../src/App.tsx"), "utf8");
   assert.match(source, /action\.kind === "command" && action\.payload\.command && !action\.payload\.externalAgent/);
   const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
-  assert.match(main, /input\.origin === "research" && backend\.backend === "codex"/);
+  assert.match(main, /input\.origin === "research" && backend\.backend !== "api"/);
 });
 
 test("external owner cancellation interrupts native runs and releases signal listeners on every exit", async () => {

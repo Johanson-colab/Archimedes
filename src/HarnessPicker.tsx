@@ -20,7 +20,7 @@ export default function HarnessPicker({ backend, busy, onChange, onSettings }: {
   const [error, setError] = useState("");
   const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (busy) setOpen(false); }, [busy]);
-  const label = backend === "codex" ? "Codex" : "Archimedes";
+  const label = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", api: "Archimedes" }[backend];
   const brand = (id: string) => id === "api" ? <ArchimedesMark size={16} variant="small" /> : <img className="provider-brand-logo" src={id === "codex" ? openaiLogo : id === "claude" ? claudeLogo : opencodeLogo} alt="" />;
   async function choose(next: AgentBackendConfig["backend"]) {
     if (saving || busy) return;
@@ -36,8 +36,8 @@ export default function HarnessPicker({ backend, busy, onChange, onSettings }: {
     <MenuSurface open={open && !busy} onClose={() => setOpen(false)} anchorRef={trigger} placement="top-start" width={280} className="harness-picker-menu" ariaLabel={t("Harnesses")}>
       <div className="harness-picker-header"><strong>{t("Harnesses")}</strong><MenuItem className="harness-settings-button" icon={<Settings size={15} />} disabled={saving} aria-label={t("Model settings")} title={t("Model settings")} onClick={() => { setOpen(false); onSettings(); }}>{null}</MenuItem></div>
       <MenuItem icon={<span className="harness-brand">{brand("codex")}</span>} checked={backend === "codex"} disabled={saving} onClick={() => void choose("codex")}>Codex</MenuItem>
-      <MenuItem icon={<span className="harness-brand">{brand("claude")}</span>} disabled hint={t("Not connected")} title={t("This harness is not connected yet.")}>Claude Code</MenuItem>
-      <MenuItem icon={<span className="harness-brand">{brand("opencode")}</span>} disabled hint={t("Not connected")} title={t("This harness is not connected yet.")}>OpenCode</MenuItem>
+      <MenuItem icon={<span className="harness-brand">{brand("claude")}</span>} checked={backend === "claude"} disabled={saving} onClick={() => void choose("claude")}>Claude Code</MenuItem>
+      <MenuItem icon={<span className="harness-brand">{brand("opencode")}</span>} checked={backend === "opencode"} disabled={saving} onClick={() => void choose("opencode")}>OpenCode</MenuItem>
       <MenuItem icon={<span className="harness-brand">{brand("api")}</span>} checked={backend === "api"} disabled={saving} onClick={() => void choose("api")}>Archimedes</MenuItem>
       {error && <p className="harness-picker-error" role="alert">{error}</p>}
     </MenuSurface>

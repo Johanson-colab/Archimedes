@@ -17,7 +17,7 @@ const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.c
 const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
-const { runCodex } = require("./agent/codex-backend.cjs");
+const { runNative } = require("./agent/external-backend.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -857,7 +857,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
 }
 
 async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal }) {
-  if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The Codex backend is available only for main Work conversations with an approval surface.");
+  if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
@@ -890,7 +890,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
           store.resolveAction(action.id, "rejected");
           resolveApproval(action.id, false);
           Object.assign(action, store.getAction(action.id));
-          emitTurn({ type: "native_approval_resolved", title: "Codex approval resolved", detail: "The native request is no longer pending", action: { ...action } });
+          emitTurn({ type: "native_approval_resolved", title: "Native approval resolved", detail: "The native request is no longer pending", action: { ...action } });
         }
         Object.assign(action, store.getAction(action.id));
       }
@@ -910,27 +910,27 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
       return finish(response, "needs_configuration");
     }
     if (externalBackend) {
-      const response = await runCodex({
+      const response = await runNative({
         config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems,
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: async (payload) => {
           if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;
           const { signal: approvalSignal, ...actionPayload } = payload;
-          const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: "codex" } });
+          const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: externalBackend.backend } });
           actions.push(action);
           // Register before exposing the card, so an immediate click cannot be lost.
           const waiting = waitForApproval(action.id, approvalSignal || controller.signal, thread.id);
-          emitTurn({ type: "approval", title: "Codex approval required", detail: payload.command, action });
+          emitTurn({ type: "approval", title: "Native approval required", detail: payload.command, action });
           try { return (await waiting).approved; }
           finally {
             if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
             Object.assign(action, store.getAction(action.id));
-            emitTurn({ type: "native_approval_resolved", title: "Codex approval resolved", detail: "The native request is no longer pending", action: { ...action } });
+            emitTurn({ type: "native_approval_resolved", title: "Native approval resolved", detail: "The native request is no longer pending", action: { ...action } });
           }
         },
       });
-      recordEvent({ type: "assistant_step", payload: { content: response, backend: "codex" } });
-      emitTurn({ type: "complete", title: "Codex turn complete", detail: "Native execution finished" });
+      recordEvent({ type: "assistant_step", payload: { content: response, backend: externalBackend.backend } });
+      emitTurn({ type: "complete", title: "Native turn complete", detail: "Native execution finished" });
       return finish(response, "completed");
     }
     const context = prepareConversation({

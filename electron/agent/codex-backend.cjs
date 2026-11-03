@@ -8,7 +8,7 @@ const { assertJsonSize, VISIBLE_IMPORT_LIMIT } = require('./codex-limits.cjs');
 const activeNativeRuns = new Map();
 
 function nativeContext(items = []) {
-  if (items.some(item => ['plugin', 'skill'].includes(item.type))) throw new Error('Codex backend does not yet support Archimedes plugin/skill attachments. Remove them or select API harness.');
+  if (items.some(item => ['plugin', 'skill'].includes(item.type))) throw new Error('Native backend does not yet support Archimedes plugin/skill attachments. Remove them or select API harness.');
   return items.filter(item => item.type !== 'image').map(item => ({
     type: item.type, name: item.name, path: item.path, detail: item.detail, selection: item.selection,
     paper: item.paper ? { title: item.paper.title, abstract: item.paper.abstract, url: item.paper.url, pdf_url: item.paper.pdf_url } : undefined,
@@ -16,7 +16,7 @@ function nativeContext(items = []) {
   }));
 }
 function canResume(binding, { workspace, model, previousTurnId }) {
-  return Boolean(binding?.native_thread_id && binding.last_turn_id && binding.workspace === workspace && binding.model === (model || '') && binding.last_turn_id === previousTurnId);
+  return Boolean(binding?.native_thread_id && (!binding.backend || binding.backend === 'codex') && binding.last_turn_id && binding.workspace === workspace && binding.model === (model || '') && binding.last_turn_id === previousTurnId);
 }
 function nativePolicy(config, root) {
   const permissionMode = config.permissionMode || 'read-only';
@@ -300,4 +300,4 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
 }
 async function runCodex(options) { return nativeSession(options); }
 async function compactNative(options) { return nativeSession({ ...options, compaction: true }); }
-module.exports = { runCodex, canResume, nativeContext, steerNative, answerNativeQuestion, compactNative };
+module.exports = { runCodex, canResume, nativeContext, userPrompt, steerNative, answerNativeQuestion, compactNative };

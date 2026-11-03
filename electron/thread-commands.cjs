@@ -77,7 +77,7 @@ function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, Br
     compacting.add(key);
     try {
       const backend = nativeBackend?.getConfig();
-      if (backend?.backend === "codex" && thread.kind !== "paper") {
+      if (backend && backend.backend !== "api" && thread.kind !== "paper") {
         const requireEditor = () => {
           if (!store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
         };

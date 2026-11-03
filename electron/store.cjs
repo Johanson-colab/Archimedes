@@ -2516,13 +2516,16 @@ function nativeAgentBindings(threadId) {
     native_thread_id TEXT NOT NULL, workspace TEXT NOT NULL, model TEXT NOT NULL,
     last_turn_id TEXT
   ) STRICT`);
+  if (!db.prepare("PRAGMA table_info(native_agent_bindings)").all().some(column => column.name === "backend")) {
+    db.exec("ALTER TABLE native_agent_bindings ADD COLUMN backend TEXT NOT NULL DEFAULT 'codex'");
+  }
   return {
     get: () => db.prepare("SELECT * FROM native_agent_bindings WHERE thread_id = ?").get(threadId),
     save: (binding) => db.prepare(`INSERT INTO native_agent_bindings
-      (thread_id, native_thread_id, workspace, model, last_turn_id) VALUES (?, ?, ?, ?, ?)
+      (thread_id, native_thread_id, workspace, model, last_turn_id, backend) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(thread_id) DO UPDATE SET native_thread_id=excluded.native_thread_id,
-      workspace=excluded.workspace, model=excluded.model, last_turn_id=excluded.last_turn_id`)
-      .run(threadId, binding.native_thread_id, binding.workspace, binding.model, binding.last_turn_id),
+      workspace=excluded.workspace, model=excluded.model, last_turn_id=excluded.last_turn_id, backend=excluded.backend`)
+      .run(threadId, binding.native_thread_id, binding.workspace, binding.model, binding.last_turn_id, binding.backend || "codex"),
   };
 }
 

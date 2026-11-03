@@ -249,7 +249,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       <div className="model-settings-content">
       {!proactiveRole && <Tabs value={settingsPage} onChange={(page) => { setModelMenuOpen(false); setSettingsPage(page); }} label={t("Model connection type")} className="model-connection-tabs">
         <Tab value="api" id={`${panelId}-api-tab`} controls={`${panelId}-api`} icon={<KeyRound size={16} />}>{t("API models")}</Tab>
-        <Tab value="agents" id={`${panelId}-agents-tab`} controls={`${panelId}-agents`} icon={<Workflow size={16} />} badge={activeBackend === "codex" ? "Codex" : undefined}>{t("Harnesses")}</Tab>
+        <Tab value="agents" id={`${panelId}-agents-tab`} controls={`${panelId}-agents`} icon={<Workflow size={16} />} badge={activeBackend && activeBackend !== "api" ? ({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode" }[activeBackend]) : undefined}>{t("Harnesses")}</Tab>
       </Tabs>}
       <div className="model-settings-panel" id={`${panelId}-api`} role={proactiveRole ? undefined : "tabpanel"} aria-labelledby={proactiveRole ? undefined : `${panelId}-api-tab`} hidden={!proactiveRole && settingsPage !== "api"}>
       {!proactiveRole && <p className="model-connection-description">{t("Connect model providers with an API key. Archimedes manages the tools and research workflow.")}</p>}

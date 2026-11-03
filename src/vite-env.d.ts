@@ -1414,18 +1414,21 @@ interface AgentAction {
   id: string;
   task_id: string;
   kind: "write" | "command";
-  payload: { path?: string; content?: string; command?: string; cwd?: string; externalAgent?: "codex"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
+  payload: { path?: string; content?: string; command?: string; cwd?: string; externalAgent?: "codex" | "claude" | "opencode"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
   status: "pending" | "approved" | "rejected";
   created_at: string;
   resolved_at: string | null;
 }
 
-interface AgentBackendConfig {
-  backend: "api" | "codex";
+interface AgentBackendProfile {
   binary: string;
   model: string;
   effort?: string;
-  permissionMode?: "read-only" | "workspace-write";
+  permissionMode?: "read-only" | "workspace-write" | "ask";
+}
+interface AgentBackendConfig extends AgentBackendProfile {
+  backend: "api" | "codex" | "claude" | "opencode";
+  profiles?: Partial<Record<"codex" | "claude" | "opencode", AgentBackendProfile>>;
 }
 
 interface NativeAgentModel { id: string; label: string; efforts?: string[]; defaultEffort?: string }

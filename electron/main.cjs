@@ -34,10 +34,10 @@ const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const agentBackendConfig = require("./agent-backend-config.cjs");
-const nativeCodex = require("./agent/codex-backend.cjs");
+const nativeAgent = require("./agent/external-backend.cjs");
 const { registerNativeAgentCommands } = require("./native-agent-commands.cjs");
 const { runWindowAgent } = require("./window-agent-run.cjs");
-const { closeAllCodexClients } = require("./agent/codex-client.cjs");
+const { closeAllNativeClients } = require("./agent/external-backend.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
 const { isContractFrozen, normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
@@ -896,9 +896,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
-    nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeCodex.compactNative(input) },
+    nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeAgent.compactNative(input) },
   });
-  registerNativeAgentCommands({ ipcMain, store, native: nativeCodex,
+  registerNativeAgentCommands({ ipcMain, store, native: nativeAgent,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
   });
 
@@ -1694,7 +1694,7 @@ app.whenReady().then(async () => {
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
     const backend = agentBackendConfig.get();
-    const externalBackend = input.origin === "research" && backend.backend === "codex" ? backend : null;
+    const externalBackend = input.origin === "research" && backend.backend !== "api" ? backend : null;
     const config = externalBackend ? null : modelConfig.getActiveModelConfig();
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
@@ -2327,7 +2327,7 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
-  closeAllCodexClients();
+  closeAllNativeClients();
   closeAllTerminals();
   collaborationServer?.close?.();
   void presence?.closeAll();

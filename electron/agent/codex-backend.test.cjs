@@ -64,6 +64,8 @@ test("only identical successful local history can resume; forks, undo and dirty 
   const binding = { native_thread_id: "native", workspace: "/w", model: "", last_turn_id: "last" };
   const current = { workspace: "/w", model: "", previousTurnId: "last" };
   assert.equal(canResume(binding, current), true);
+  assert.equal(canResume({ ...binding, backend: "claude" }, current), false);
+  assert.equal(canResume({ ...binding, backend: "opencode" }, current), false);
   for (const candidate of [undefined, { ...binding, workspace: "/other" }, { ...binding, model: "other" }, { ...binding, last_turn_id: null }]) assert.equal(canResume(candidate, current), false);
   assert.equal(canResume(binding, { ...current, previousTurnId: "undone" }), false);
   assert.equal(canResume({ ...binding, last_turn_id: null }, { ...current, previousTurnId: null }), false);

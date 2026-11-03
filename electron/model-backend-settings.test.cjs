@@ -27,7 +27,7 @@ before(async () => {
     ...Object.fromEntries(["BrainCircuit", "Workflow", "Check", "ChevronDown", "KeyRound", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkles", "X"].map((name) => [name, icons[name]])),
     useUISettings: () => ({ t: translate }),
     createPortal: require("react-dom").createPortal,
-    ...Object.fromEntries(["anthropicLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
+    ...Object.fromEntries(["anthropicLogo", "claudeLogo", "opencodeLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
   };
   async function load(name, exports) {
     const source = fs.readFileSync(path.join(__dirname, "..", "src", `${name}.tsx`), "utf8");
@@ -318,6 +318,34 @@ test("native permissions and effort are explicit drafts and saved independently 
     assert.equal(calls.savedBackends.at(-1).permissionMode, "workspace-write");
     assert.equal(calls.savedModels.length, 0);
     assert.ok(!document.querySelector('option[value="danger-full-access"]'));
+  } finally { await cleanup(); }
+});
+
+test("Claude and OpenCode settings use independent drafts and explicit native activation", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click("Harnesses");
+    await input("Codex model", "codex-draft");
+    await click("Claude Code");
+    assert.equal(document.querySelector('.agent-backend-fields input').value, "claude");
+    await input("Claude Code model", "sonnet");
+    await click("Check Claude Code");
+    assert.equal(calls.checkedBackends.at(-1).backend, "claude");
+    assert.equal(calls.checkedBackends.at(-1).permissionMode, "ask");
+    await click("OpenCode");
+    assert.equal(document.querySelector('.agent-backend-fields input').value, "opencode");
+    await input("OpenCode model", "provider/model");
+    await click("Claude Code");
+    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "sonnet");
+    await click("Use Claude Code");
+    assert.equal(calls.savedBackends.at(-1).backend, "claude");
+    assert.equal(calls.savedBackends.at(-1).model, "sonnet");
+    await click("Use API harness");
+    assert.equal(calls.savedBackends.at(-1).backend, "api");
+    assert.equal(calls.savedBackends.at(-1).binary, "codex");
+    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "sonnet");
+    await click("Codex");
+    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "codex-draft");
   } finally { await cleanup(); }
 });
 

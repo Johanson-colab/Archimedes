@@ -2452,7 +2452,7 @@ function App() {
     // backend is starting (including when switching from Codex back to API).
     setNativeStream({ threadId: activeThreadId || "", events: [{ id: "pending-turn", turn_id: "pending-turn", sequence: 0, type: "user_message", payload: {}, created_at: new Date().toISOString() }] });
     setNativeQuestions([]);
-    setEvents(nativeBackend?.backend === "codex" ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
+    setEvents(nativeBackend && nativeBackend.backend !== "api" ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
       const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research" });
@@ -2944,11 +2944,13 @@ function App() {
               messages={messages}
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
-              nativeBackend={nativeBackend?.backend === "codex" ? nativeBackend : null}
+              nativeBackend={nativeBackend && nativeBackend.backend !== "api" ? nativeBackend : null}
               onHarnessChange={async (backend) => {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
                 const current = await desktopBridge.getAgentBackendConfig();
-                const saved = await desktopBridge.saveAgentBackendConfig({ ...current, backend });
+                const target = backend === "api" ? "codex" : backend;
+                const profile = current.profiles?.[target] || (current.backend === backend ? current : { binary: target, model: "", effort: "", permissionMode: target === "codex" ? "read-only" as const : "ask" as const });
+                const saved = await desktopBridge.saveAgentBackendConfig({ ...profile, backend });
                 setNativeBackend(saved);
               }}
               nativeQuestions={agentBusy ? nativeQuestions.filter((item) => item.threadId === activeThreadId).map((item) => item.question) : []}
@@ -3333,7 +3335,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {pendingAction && <section className="conversation-approval">
           <div className="approval-content">
             <div className="approval-head">
-              <span className="approval-kind">{pendingAction.payload.externalAgent ? "Codex" : pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
+              <span className="approval-kind">{pendingAction.payload.externalAgent ? ({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode" }[pendingAction.payload.externalAgent]) : pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
               {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
             </div>
             <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
@@ -3770,8 +3772,9 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, o
     if (!prompt.trim() && !contextItems.some((item) => item.type === "image")) return;
     if (agentBusy) {
       if (nativeBackend) {
+        if (nativeBackend.backend !== "codex") { setComposerError(t("Stop the running turn before sending another native request.")); return; }
         if (steering) return;
-        if (contextItems.length) { setComposerError(t("Send attachments after the current Codex turn finishes.")); return; }
+        if (contextItems.length) { setComposerError(t("Send attachments after the current native turn finishes.")); return; }
         setSteering(true); setComposerError("");
         try { await onNativeSteer(prompt); rememberPrompt(prompt); setPrompt(""); }
         catch (error) { setComposerError(String(error)); }
@@ -3931,7 +3934,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, o
             </button>
           </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          <HarnessPicker backend={nativeBackend ? "codex" : "api"} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+          <HarnessPicker backend={nativeBackend?.backend || "api"} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
           <button
             className={`composer-tool thread-visibility-trigger ${threadVisibility}`}
             onClick={() => onThreadVisibility(threadVisibility === "private" ? "project" : "private")}
@@ -3986,7 +3989,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, o
             </MenuSurface>
           </div>}
           <div className="composer-send-cluster">
-            {nativeBackend && agentBusy && <button className="composer-tool" type="button" disabled={steering || !canInterrupt || !prompt.trim()} onClick={() => void submitCurrentPrompt()} title={t("Steer Codex")}>{t(steering ? "Sending" : "Steer Codex")}</button>}
+            {nativeBackend?.backend === "codex" && agentBusy && <button className="composer-tool" type="button" disabled={steering || !canInterrupt || !prompt.trim()} onClick={() => void submitCurrentPrompt()} title={t("Steer Codex")}>{t(steering ? "Sending" : "Steer Codex")}</button>}
             <VoiceInputButton
               onTranscript={appendTranscript}
               onError={setComposerError}
