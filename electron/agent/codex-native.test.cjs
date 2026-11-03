@@ -250,3 +250,49 @@ test('snapshot persistence failure still closes the native client and releases a
   assert.equal(f.saves.at(-1).last_turn_id, null);
   await assert.rejects(backend.steerNative('local-thread', 'stale'), /active/);
 });
+
+test('aggregate visible-history import fails before starting a native operation and preserves stored turns', async () => {
+  const f = fixture(p => complete(p));
+  const turns = Array.from({ length: 30 }, (_, index) => ({ id: `prior-${index}`, user_message: 'u'.repeat(20000), assistant_message: 'a'.repeat(20000) }));
+  f.args.thread.turns.unshift(...turns);
+  await assert.rejects(backend.runCodex(f.args), /visible.*history.*limit|history.*too large/i);
+  assert.equal(f.peer(), undefined);
+  assert.equal(f.saves.length, 0);
+  assert.equal(f.args.thread.turns[0].user_message.length, 20000);
+  assert.equal(f.args.thread.turns.length, 31);
+});
+
+test('resumed native history is authoritative even when old visible history exceeds import limits', async () => {
+  const f = fixture(p => complete(p));
+  f.args.thread.turns.unshift({ id: 'prior', user_message: 'u'.repeat(1_100_000) });
+  f.args.bindings.get = () => ({ native_thread_id: 'native-thread', workspace: fs.realpathSync(os.tmpdir()), model: '', last_turn_id: 'prior' });
+  assert.equal(await backend.runCodex(f.args), 'Answer');
+  assert.equal(f.peer().calls.find(c => c.method === 'turn/start').params.input[0].text, 'Current request');
+});
+
+test('native question answers preserve prototype-like IDs as own JSON keys', async () => {
+  let ready;
+  const entered = new Promise(r => { ready = r; });
+  const f = fixture(p => { p.server(71, 'item/tool/requestUserInput', { itemId: 'prototype-question', questions: [{ id: '__proto__', header: 'Choice', question: 'Choose' }, { id: 'constructor', header: 'Choice', question: 'Choose again' }] }); setImmediate(ready); });
+  const run = backend.runCodex(f.args); run.catch(() => {}); await entered;
+  const questionId = f.events.find(e => e.type === 'native_question').question.id;
+  await backend.answerNativeQuestion('local-thread', questionId, Object.fromEntries([['__proto__', ['A']], ['constructor', ['B']]]));
+  const answers = JSON.parse(JSON.stringify(f.peer().replies[0].result)).answers;
+  assert.equal(Object.hasOwn(answers, '__proto__'), true);
+  assert.deepEqual(answers.__proto__, { answers: ['A'] });
+  assert.deepEqual(answers.constructor, { answers: ['B'] });
+  complete(f.peer()); await run;
+});
+
+test('malformed native question IDs are rejected rather than coerced or truncated', async () => {
+  let ready;
+  const entered = new Promise(r => { ready = r; });
+  const f = fixture(p => {
+    for (const [index, id] of [undefined, null, 7, '', '   ', 'q'.repeat(201)].entries()) p.server(80 + index, 'item/tool/requestUserInput', { itemId: `bad-${index}`, questions: [{ id, header: 'Choice', question: 'Choose' }] });
+    setImmediate(ready);
+  });
+  const run = backend.runCodex(f.args); run.catch(() => {}); await entered;
+  assert.equal(f.events.some(e => e.type === 'native_question'), false);
+  assert.equal(f.peer().replies.filter(r => r.unsupported).length, 6);
+  complete(f.peer()); await run;
+});

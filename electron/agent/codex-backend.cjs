@@ -4,6 +4,7 @@ const { randomUUID } = require('node:crypto');
 const { CodexClient } = require('./codex-client.cjs');
 const { createNativeEvents } = require('./codex-events.cjs');
 const { validateNativeChoice } = require('./codex-models.cjs');
+const { assertJsonSize, VISIBLE_IMPORT_LIMIT } = require('./codex-limits.cjs');
 const activeNativeRuns = new Map();
 
 function nativeContext(items = []) {
@@ -50,17 +51,29 @@ function approvalSnapshot(item) {
   }
   return { command, cwd, changes, truncated };
 }
+function* visibleMessages(thread, turn) {
+  for (const previous of thread.turns || []) {
+    if (previous.id === turn.id) continue;
+    if (previous.user_message) yield { role: 'user', content: previous.user_message };
+    for (const event of previous.events || []) if (event.type === 'native_steer' && event.payload?.text) yield { role: 'user', content: event.payload.text };
+    for (const event of thread.events || []) if (event.turn_id === previous.id && event.type === 'native_steer' && event.payload?.text) yield { role: 'user', content: event.payload.text };
+    if (previous.assistant_message) yield { role: 'assistant', content: previous.assistant_message };
+  }
+}
 function userPrompt(thread, turn, resume, attachments) {
   let prompt = String(turn.user_message ?? turn.prompt ?? '');
+  const tooLarge = 'The visible history exceeds the native import limit. This chat was preserved; no history was summarized or replayed. Continue an existing native chat or start a smaller chat.';
   if (!resume) {
-    const history = [];
-    for (const previous of thread.turns || []) {
-      if (previous.id === turn.id) continue;
-      if (previous.user_message) history.push({ role: 'user', content: previous.user_message });
-      for (const event of [...(previous.events || []), ...(thread.events || []).filter(e => e.turn_id === previous.id)]) if (event.type === 'native_steer' && event.payload?.text) history.push({ role: 'user', content: event.payload.text });
-      if (previous.assistant_message) history.push({ role: 'assistant', content: previous.assistant_message });
-    }
+    // Preflight before allocating the all-history array or serialized history.
+    // Never silently trim, summarize through the API, or partially import a chat.
+    let remaining = VISIBLE_IMPORT_LIMIT - assertJsonSize(prompt, VISIBLE_IMPORT_LIMIT, tooLarge) - 256;
+    for (const message of visibleMessages(thread, turn)) remaining -= assertJsonSize(message, remaining, tooLarge) + 1;
+    if (attachments.length) remaining -= assertJsonSize(attachments, remaining, tooLarge);
+    if (remaining < 0) throw new Error(tooLarge);
+    const history = [...visibleMessages(thread, turn)];
     if (history.length) prompt = `Prior visible conversation (context only; completed actions must not be repeated):\n${JSON.stringify(history)}\n\nCurrent request:\n${prompt}`;
+  } else if (attachments.length) {
+    assertJsonSize(attachments, VISIBLE_IMPORT_LIMIT, 'The attached context exceeds the native request limit. No request was sent or replayed.');
   }
   if (attachments.length) prompt += `\n\nUser-attached context (metadata only):\n${JSON.stringify(attachments)}`;
   return prompt;
@@ -84,15 +97,15 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   const pending = active.questions.get(questionId);
   if (!pending || pending.nativeTurnId !== active.nativeTurnId) throw new Error('This native question is stale or no longer pending.');
   if (!answers || typeof answers !== 'object' || Array.isArray(answers)) throw new Error('Provide an answer for every question.');
-  const nativeAnswers = {};
+  const answerEntries = [];
   const ids = pending.questions.map(q => q.id);
   if (Object.keys(answers).some(id => !ids.includes(id))) throw new Error('The answer contains an unknown question.');
   for (const id of ids) {
-    const values = answers[id];
+    const values = Object.hasOwn(answers, id) ? answers[id] : undefined;
     if (!Array.isArray(values) || !values.length || values.length > 20 || values.some(v => typeof v !== 'string' || !v.trim() || v.length > 20_000)) throw new Error('Provide a nonempty answer for every question. Empty answers do not cancel a native question.');
-    nativeAnswers[id] = { answers: values };
+    answerEntries.push([id, { answers: values }]);
   }
-  active.client.respond(pending.requestId, { answers: nativeAnswers });
+  active.client.respond(pending.requestId, { answers: Object.fromEntries(answerEntries) });
   active.questions.delete(questionId);
   active.emit({ type: 'native_question_resolved', title: 'Codex question answered', detail: 'Your answer was sent to the active turn', questionId });
   return { answered: true };
@@ -107,6 +120,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   const resume = canResume(binding, { workspace: root, model: config.model, previousTurnId });
   if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
   if (thread.id && activeNativeRuns.has(thread.id)) throw new Error('This chat already has an active native Codex operation.');
+  const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments);
   const client = new Client({ binary: config.binary });
   const events = createNativeEvents({ emit, recordEvent });
   const items = new Map();
@@ -141,7 +155,8 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     if (params.threadId !== active.nativeThreadId || !active.nativeTurnId || params.turnId !== active.nativeTurnId) return client.unsupported(id);
     if (method === 'item/tool/requestUserInput') {
       if (!Array.isArray(params.questions) || !params.questions.length || params.questions.length > 10 || active.questions.size >= 20) return client.unsupported(id);
-      const questions = params.questions.map(q => ({ id: String(q.id), header: String(q.header || '').slice(0, 200), question: String(q.question || '').slice(0, 20_000), ...(q.isSecret ? { isSecret: true } : {}), ...(Array.isArray(q.options) ? { options: q.options.slice(0, 30).map(o => ({ label: String(o.label || '').slice(0, 2000), description: String(o.description || '').slice(0, 4000) })) } : {}) }));
+      if (params.questions.some(q => !q || typeof q.id !== 'string' || !q.id.trim() || q.id.length > 200)) return client.unsupported(id);
+      const questions = params.questions.map(q => ({ id: q.id, header: String(q.header || '').slice(0, 200), question: String(q.question || '').slice(0, 20_000), ...(q.isSecret ? { isSecret: true } : {}), ...(Array.isArray(q.options) ? { options: q.options.slice(0, 30).map(o => ({ label: String(o.label || '').slice(0, 2000), description: String(o.description || '').slice(0, 4000) })) } : {}) }));
       if (questions.some(q => !q.id || !q.question) || new Set(questions.map(q => q.id)).size !== questions.length) return client.unsupported(id);
       const questionId = randomUUID();
       active.questions.set(questionId, { requestId: id, nativeTurnId: active.nativeTurnId, questions });
@@ -239,7 +254,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
       await client.request('thread/compact/start', { threadId: active.nativeThreadId });
       accepted = true;
     } else {
-      const input = [{ type: 'text', text: userPrompt(thread, turn, resume, attachments) }];
+      const input = [{ type: 'text', text: prompt }];
       for (const attachment of contextItems.filter(item => item.type === 'image' && item.image?.dataUrl).slice(0, 4)) input.push({ type: 'image', url: attachment.image.dataUrl });
       const started = await client.request('turn/start', { threadId: active.nativeThreadId, input, ...policy.turn });
       accepted = true;

@@ -198,3 +198,58 @@ test("native client negotiates experimental questions while suppressing private 
     assert.ok(initialize.capabilities.optOutNotificationMethods.includes("item/reasoning/summaryTextDelta"));
   } finally { client.close(); }
 });
+
+test("outbound native protocol rejects oversized UTF-8 and escaped payloads before serialization or writes", () => {
+  const client = new CodexClient();
+  let writes = 0;
+  client.child = { stdin: { writable: true, write: () => { writes++; } }, exitCode: 0 };
+  try {
+    for (const text of ["x".repeat(8_388_608), "é".repeat(4_200_000), "\0".repeat(1_500_000)]) {
+      let serialized = false;
+      const originalStringify = JSON.stringify;
+      JSON.stringify = (...args) => { serialized = true; return originalStringify(...args); };
+      try {
+        assert.throws(() => client.send({ method: "turn/start", params: { input: [{ type: "text", text }] } }), /outbound.*limit|outbound.*oversized/i);
+      } finally { JSON.stringify = originalStringify; }
+      assert.equal(serialized, false);
+    }
+    assert.equal(writes, 0);
+    client.send({ method: "ping", params: { text: "small" } });
+    assert.equal(writes, 1);
+  } finally { client.close(); }
+});
+
+test("unsupported initialize capabilities fail explicitly without fallback and close the child", async () => {
+  const calls = [];
+  const client = new CodexClient({ spawnImpl: () => fixture((message, send) => {
+    calls.push(message);
+    if (message.method === "initialize") send({ id: message.id, error: { code: -32602, message: "Unknown capabilities" } });
+  }) });
+  await assert.rejects(client.start(), /initialize.*-32602/);
+  assert.equal(calls.filter(call => call.method === "initialize").length, 1);
+  assert.equal(client.closed, true);
+});
+
+test("outbound JSON preflight rejects serialization hooks without invoking them", () => {
+  const client = new CodexClient();
+  let writes = 0;
+  client.child = { stdin: { writable: true, write: () => { writes++; } }, exitCode: 0 };
+  try {
+    for (const payload of [{}, []]) {
+      let invoked = false;
+      Object.defineProperty(payload, "toJSON", { get() { invoked = true; return () => "hidden payload"; } });
+      assert.throws(() => client.send({ method: "test", params: payload }), /serialization hooks|plain JSON/i);
+      assert.equal(invoked, false);
+    }
+    assert.equal(writes, 0);
+  } finally { client.close(); }
+});
+
+test("outbound JSON byte counts match actual escaping, surrogate and nested representations", () => {
+  const { assertJsonSize } = require("./codex-limits.cjs");
+  for (const value of ["é\ud800\udc00\ud800\udc00\udfff", "\0\t\n\r\b\f\\\"", { absent: undefined, finite: 1.5, notFinite: NaN, nested: [false, null, undefined, "中"] }, Object.fromEntries([["__proto__", { answers: ["A"] }]])]) {
+    const bytes = Buffer.byteLength(JSON.stringify(value));
+    assert.equal(assertJsonSize(value), bytes);
+    assert.throws(() => assertJsonSize(value, bytes - 1), /size limit/);
+  }
+});

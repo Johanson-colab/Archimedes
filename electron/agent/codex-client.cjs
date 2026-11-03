@@ -3,6 +3,7 @@ const { EventEmitter } = require("node:events");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { assertJsonSize, OUTBOUND_PROTOCOL_LIMIT } = require("./codex-limits.cjs");
 const clients = new Set();
 
 function executableCandidates(binary = "codex") {
@@ -43,9 +44,16 @@ class CodexClient extends EventEmitter {
     this.child.on("error", () => this.fail(new Error("Codex could not start. Check the executable and installation.")));
     this.child.on("exit", () => this.fail(new Error("Codex app-server exited. The turn was not replayed; inspect any changes before retrying.")));
     this.child.stdin.on("error", () => this.fail(new Error("Codex input connection closed.")));
-    await this.request("initialize", { clientInfo: { name: "archimedes", title: "Archimedes", version: "0.1.0" }, capabilities: { experimentalApi: true, optOutNotificationMethods: ["item/reasoning/textDelta", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded"] } });
-    this.send({ method: "initialized" });
-    return this;
+    try {
+      await this.request("initialize", { clientInfo: { name: "archimedes", title: "Archimedes", version: "0.1.0" }, capabilities: { experimentalApi: true, optOutNotificationMethods: ["item/reasoning/textDelta", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded"] } });
+      this.send({ method: "initialized" });
+      return this;
+    } catch (error) {
+      // Unsupported capabilities are an explicit connection failure. Do not
+      // silently renegotiate or retry with a less capable protocol contract.
+      this.close();
+      throw error;
+    }
   }
 
   read(chunk) {
@@ -73,7 +81,10 @@ class CodexClient extends EventEmitter {
 
   send(message) {
     if (this.closed || !this.child?.stdin.writable) throw new Error("Codex connection is closed.");
-    this.child.stdin.write(`${JSON.stringify(message)}\n`);
+    assertJsonSize(message, OUTBOUND_PROTOCOL_LIMIT - 1);
+    const serialized = JSON.stringify(message);
+    if (Buffer.byteLength(serialized, "utf8") + 1 > OUTBOUND_PROTOCOL_LIMIT) throw new Error("Codex outbound protocol size limit exceeded. No request was sent or replayed.");
+    this.child.stdin.write(`${serialized}\n`);
   }
 
   request(method, params = {}) {
