@@ -134,7 +134,7 @@ test("composer exposes history recall, focus shortcut and disabled-send reason",
 test("composer queues follow-ups while the agent is busy", () => {
   assert.match(app, /type QueuedPrompt =/);
   assert.match(app, /const \[queuedPrompts, setQueuedPrompts\] = useState<QueuedPrompt\[\]>\(\[\]\)/);
-  assert.match(app, /if \(agentBusy\) \{\n      queueCurrentPrompt\(\);/);
+  assert.match(app, /if \(agentBusy\) \{[\s\S]*?if \(nativeBackend\) \{[\s\S]*?await onNativeSteer\(prompt\)[\s\S]*?queueCurrentPrompt\(\);/);
   assert.match(app, /up to five follow-ups can be queued at a time/i);
   assert.match(app, /className="composer-queue"/);
   assert.match(app, /onSubmit\(next\.draft, next\.mode, next\.reasoningEffort, next\.contextLength, next\.contextItems\)/);

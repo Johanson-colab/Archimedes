@@ -179,6 +179,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   getAgentBackendConfig: () => ipcRenderer.invoke("agent-backend:get"),
   saveAgentBackendConfig: (input) => ipcRenderer.invoke("agent-backend:save", input),
   checkAgentBackend: (input) => ipcRenderer.invoke("agent-backend:check", input),
+  steerNativeAgent: (threadId, text, workspace) => ipcRenderer.invoke("agent:native-steer", { threadId, text, workspace }),
+  answerNativeAgentQuestion: (threadId, questionId, answers, workspace) => ipcRenderer.invoke("agent:native-answer", { threadId, questionId, answers, workspace }),
   claimApprovals: (threadId, claimed) => ipcRenderer.invoke("agent:claim-approvals", threadId, claimed),
   runProactiveReply: (input) => ipcRenderer.invoke("proactive:reply", input),
   prepareFigurePlan: (input) => ipcRenderer.invoke("figure-forge:prepare", input),

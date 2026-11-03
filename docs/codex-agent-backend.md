@@ -1,13 +1,14 @@
-# Codex Agent backend (issue #233)
+# Native Codex Agent backend (issues #233, #235)
 
 ## Scope and authorization
 
 Issue: https://github.com/Johanson-colab/Archimedes/issues/233
 
-The repository owner explicitly requested creating an issue and developing an
-external Agent backend in a new PR. That written request is recorded in the
-issue's final paragraph. This PR implements Codex first; it does not merge or
-push directly to main.
+The repository owner explicitly requested the initial external backend (#233,
+merged PR #234), then approved retaining the Archimedes UI while Codex manages
+execution, context and permissions. The follow-up implementation authorization
+is recorded in [#235](https://github.com/Johanson-colab/Archimedes/issues/235).
+Changes use a new PR; no direct main push or automatic merge.
 
 ## Design
 
@@ -15,8 +16,9 @@ push directly to main.
 - Add an opt-in Codex app-server adapter for main Work conversations.
 - Keep configuration free of copied Codex credentials and use local CLI auth.
 - Persist backend/native-thread bindings separately from public chat history.
-- Stream native output into existing research events, with explicit error and
-  cancellation states. Never replay a turn automatically after uncertain delivery.
+- Stream bounded native activities with stable item IDs, output, plans and diffs.
+  Public commentary is separate from the final answer; hidden reasoning is not
+  displayed. Never replay a turn automatically after uncertain delivery.
 - Start with a restricted sandbox, bridge supported approvals, deny unknown
   requests, and keep read-only conversations out of the external execution path.
 - Reset native continuity when local history is undone/forked or the backend or
@@ -32,6 +34,10 @@ Protocol reference: https://learn.chatgpt.com/docs/app-server
 3. Use `codex` from PATH or an absolute native executable path. A model override
    is optional; empty uses native Codex configuration. Archimedes' API model
    selector does not select the Codex model.
+   Select an advertised native thinking effort after choosing a model, or keep
+   **Codex default**. Choose **Read-only** or explicitly select **Workspace write**;
+   the latter allows edits and commands within the project without per-command
+   approval. Saving applies these choices to the next main Work turn.
 4. Click **Use Codex** (or **Save backend** when already enabled). The next main Work turn uses that backend, including
    when no Archimedes API key is configured. Existing running turns are unchanged.
 
@@ -52,12 +58,15 @@ synced and forked conversation payloads.
 
 ## Permissions and compatibility
 
-Codex starts with a read-only sandbox and `untrusted` approvals routed to the
-user, not the automatic reviewer. Read-only is **not** a promise of workspace-only
+Codex defaults to a read-only sandbox and `on-request` approvals routed to the
+user. Workspace write is an explicit opt-in; no full-access preset is exposed.
+Read-only is **not** a promise of workspace-only
 filesystem reads. Explicit approvals can grant execution beyond that sandbox;
 review the entire command or proposed file changes. File-root grants outside
-the workspace, opaque network grants, additional-permission requests and unknown
-server requests are denied. A safe read command may not request approval.
+the workspace, opaque grants, additional-permission requests and unknown server
+requests are denied explicitly. Concrete native command network requests can
+be displayed and accepted once; root/session/policy grants are not inferred.
+Read-only commands allowed by the sandbox do not need conversational permission.
 
 Codex may load tools/MCP servers from its own configuration. Those tools use
 native permissions and prior grants; a read-only filesystem sandbox does not
@@ -72,12 +81,20 @@ Partial changes are not rolled back.
 The backend has local Codex's tools, not Archimedes' API function tools. Files,
 folders, selected excerpts, images and paper/repository metadata are passed as
 context; metadata does not mean the underlying source was read. Plugin/skill
-attachments fail explicitly. Native question cards, permission-profile grants,
-native compaction, automatic artifact registration and internal-worker migration
-are outside this first version. The existing `/compact` remains an API operation.
+attachments fail explicitly. Native questions render answer cards; switching
+chats preserves pending questions, and completion/stop invalidates them.
+While Codex runs, Enter or **Steer Codex** sends text to its current native turn;
+attachments wait for the next turn. `/compact` calls native compaction for main
+Work when Codex is selected, preserving visible chat history.
+Permission-profile grants, automatic artifact registration and internal-worker
+migration remain outside this implementation.
 Paper chat, Side, review workers, Proactive and FigureForge keep their API paths.
-Codex's own configuration controls reasoning; API reasoning controls are not a
-native effort selector. Windows `.cmd` launchers are rejected; a native executable
+Codex retains its native instructions, AGENTS discovery and context management.
+API prompts, tool budgets, character estimates and local summaries are bypassed.
+The composer shows native token usage only after a native report; before then,
+it shows **Unknown**. These are the last reported context tokens, not lifetime
+usage. Native effort/model controls live in Models → Agent backends.
+Windows `.cmd` launchers are rejected; a native executable
 is required, and Windows runtime behavior has not been verified on this Mac.
 
 The backend choice is a local default for main Work, not a shared project
@@ -86,7 +103,7 @@ unsuccessful native turn causes the next turn to start a new native thread with
 the available Archimedes history. A missing native thread produces an explicit
 error, not a silent API fallback.
 
-## Verification (2026-11-03)
+## Original #234 verification (historical)
 
 - Protocol/backend and main-Work integration tests: **11 passed**. The real child
   fixture proves dispatch without an API key and checks native-ID isolation.
@@ -107,3 +124,6 @@ error, not a silent API fallback.
   component with a controlled command fixture; no command was executed for them.
 
 Evidence: [verification summary](assets/codex-backend/verification.md).
+
+For current #235 checks and matched component screenshots, see
+[native workflow verification](assets/native-codex/verification.md).

@@ -47,6 +47,8 @@ import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, normalizeWorkbenchPreferences, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
+import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
+import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions } from "./native-agent-state";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
 import TrajectoryView from "./TrajectoryView";
@@ -863,6 +865,8 @@ const previewBridge = {
   getAgentBackendConfig: async () => ({ backend: "api", binary: "codex", model: "" }),
   saveAgentBackendConfig: async () => { throw new Error("External Agent backends require the desktop app."); },
   checkAgentBackend: async () => { throw new Error("Codex detection requires the desktop app."); },
+  steerNativeAgent: async () => { throw new Error("Native steering requires the desktop app."); },
+  answerNativeAgentQuestion: async () => { throw new Error("Native questions require the desktop app."); },
   getModelCapabilities: async () => previewModelCapabilities,
   listProviderModels: async () => ({ models: [], source: "live" as const }),
   saveModelConfig: async ({ provider, baseUrl, model }: ModelConfigInput) => ({ provider, baseUrl, model, hasApiKey: true, source: "saved" as const }),
@@ -1310,6 +1314,16 @@ function App() {
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
   const [contextLength, setContextLength] = useState<ContextLength>(readContextLength);
   const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities>(previewModelCapabilities);
+  const [nativeBackend, setNativeBackend] = useState<AgentBackendConfig | null>(null);
+  const [nativeStream, setNativeStream] = useState<{ threadId: string; events: ResearchEvent[] }>({ threadId: "", events: [] });
+  const [nativeQuestions, setNativeQuestions] = useState<Array<{ threadId: string; question: NativeAgentQuestion }>>([]);
+  const combinedTrajectoryEvents = useMemo(() => nativeStream.threadId === activeThreadId ? [...trajectoryEvents, ...nativeStream.events] : trajectoryEvents, [trajectoryEvents, nativeStream, activeThreadId]);
+  useEffect(() => {
+    if (settingsOpen) return;
+    let active = true;
+    void desktopBridge.getAgentBackendConfig().then((config) => { if (active) setNativeBackend(config); }).catch(() => { if (active) setNativeBackend(null); });
+    return () => { active = false; };
+  }, [settingsOpen]);
   const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
   const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
@@ -1950,6 +1964,12 @@ function App() {
         }
       }
       if (event.type === "artifact") setArtifactsVersion((current) => current + 1);
+      if (event.type.startsWith("native_")) {
+        if (event.type === "native_question" || event.type === "native_question_resolved") setNativeQuestions((current) => updateNativeQuestions(current, event));
+        else if (event.type === "native_approval_resolved" && event.action) setPendingAction((current) => current?.id === event.action!.id ? null : current);
+        else if (event.threadId) setNativeStream((current) => ({ threadId: event.threadId!, events: mergeNativeEvent(current.threadId === event.threadId ? current.events : [], event) }));
+        return;
+      }
       if (event.type === "assistant_delta" && event.turnId && event.delta) {
         if (event.threadId && activeThreadIdRef.current !== event.threadId) return;
         queueAssistantDelta(event);
@@ -1958,6 +1978,8 @@ function App() {
       if (event.type === "complete" || event.type === "failed" || event.type === "interrupted") {
         flushAssistantDeltas();
         setInterrupting(false);
+        setNativeQuestions((current) => current.filter((item) => Boolean(event.threadId) && item.threadId !== event.threadId));
+        setPendingAction((current) => current?.payload.externalAgent && (!event.threadId || activeThreadIdRef.current === event.threadId) ? null : current);
       }
       if (event.type === "approval" && event.action && (!event.threadId || activeThreadIdRef.current === event.threadId)) {
         setPendingAction({ ...event.action, source: "agent" });
@@ -2244,7 +2266,8 @@ function App() {
       if (command === "compact") {
         const thread = await desktopBridge.compactResearchThread(threadId!, workspace);
         setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
-        return { notice: t("Context compacted. Original messages are preserved.") };
+        if (activeThreadIdRef.current === thread.id) { setTrajectoryEvents(thread.events ?? []); setNativeStream({ threadId: "", events: [] }); }
+        return { notice: t(nativeBackend?.backend === "codex" ? "Codex context compacted. Original messages are preserved." : "Context compacted. Original messages are preserved.") };
       }
     } finally { commandLockRef.current = false; }
   }
@@ -2436,11 +2459,17 @@ function App() {
     setAgentBusy(true);
     setInterrupting(false);
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt, created_at: new Date().toISOString() }]);
-    setEvents([{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
+    // A new turn must not reuse the previous turn's native activity while the
+    // backend is starting (including when switching from Codex back to API).
+    setNativeStream({ threadId: activeThreadId || "", events: [{ id: "pending-turn", turn_id: "pending-turn", sequence: 0, type: "user_message", payload: {}, created_at: new Date().toISOString() }] });
+    setNativeQuestions([]);
+    setEvents(nativeBackend?.backend === "codex" ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
       const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research" });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
+      setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
+      setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
       if (submittedThreadId === null) {
         const draftNote = noteValuesRef.current[draftNoteKey] ?? "";
         if (draftNote.trim()) {
@@ -2925,7 +2954,11 @@ function App() {
               key={activeThreadId ?? `new:${chatViewNonce}`}
               messages={messages}
               events={events}
-              trajectoryEvents={trajectoryEvents}
+              trajectoryEvents={combinedTrajectoryEvents}
+              nativeBackend={nativeBackend?.backend === "codex" ? nativeBackend : null}
+              nativeQuestions={agentBusy ? nativeQuestions.filter((item) => item.threadId === activeThreadId).map((item) => item.question) : []}
+              onNativeAnswer={(id, answers) => desktopBridge.answerNativeAgentQuestion(activeThreadId!, id, answers, workspace)}
+              onNativeSteer={(text) => desktopBridge.steerNativeAgent(activeThreadId!, text, workspace)}
               workspace={executionWorkspace}
               projectId={activeProjectId}
               threadVisibility={threadVisibility}
@@ -3245,6 +3278,15 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   const [followingOutput, setFollowingOutput] = useState(true);
   const visibleMessages = useMemo(() => messages.slice(historyStart), [messages, historyStart]);
   const lastUserIndex = useMemo(() => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1), [visibleMessages]);
+  const nativeEventsByTurn = useMemo(() => {
+    const grouped = new Map<string, ResearchEvent[]>();
+    for (const event of trajectoryEvents) {
+      if (!event.type.startsWith("native_")) continue;
+      const turn = grouped.get(event.turn_id) ?? [];
+      turn.push(event); grouped.set(event.turn_id, turn);
+    }
+    return grouped;
+  }, [trajectoryEvents]);
 
   const scrollToLatest = useCallback(() => {
     const container = scrollRef.current;
@@ -3287,8 +3329,11 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         }}>
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart) === 1 ? "message" : "messages"}
         </button>}
-        {visibleMessages.slice(0, lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
-        {lastUserIndex >= 0 && <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />}
+        {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
+          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+          {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
+        </div>)}
+        {lastUserIndex >= 0 && (nativeTurnEvents(trajectoryEvents).length ? <NativeAgentPanel events={trajectoryEvents} busy={agentBusy} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
         {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
         {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         {pendingAction && <section className="conversation-approval">
@@ -3315,10 +3360,14 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
+  nativeBackend: AgentBackendConfig | null;
+  nativeQuestions: NativeAgentQuestion[];
+  onNativeAnswer: (id: string, answers: Record<string, string[]>) => Promise<unknown>;
+  onNativeSteer: (text: string) => Promise<unknown>;
   workspace: string;
   projectId?: string | null;
   threadVisibility: "project" | "private";
@@ -3370,6 +3419,8 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const [composerError, setComposerError] = useState("");
   const [commandRunning, setCommandRunning] = useState(false);
   const [commandNotice, setCommandNotice] = useState("");
+  const [steering, setSteering] = useState(false);
+  const reportedNativeUsage = useMemo(() => nativeUsage(trajectoryEvents), [trajectoryEvents]);
   const slashRunningRef = useRef(false);
   const storedDraftRef = useRef<ComposerDraft | null>(readComposerDraft(draftKey));
   const [prompt, setPrompt] = useState(storedDraftRef.current?.text ?? "");
@@ -3738,6 +3789,15 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     if (command) { await runSlashCommand(command); return; }
     if (!prompt.trim() && !contextItems.some((item) => item.type === "image")) return;
     if (agentBusy) {
+      if (nativeBackend) {
+        if (steering) return;
+        if (contextItems.length) { setComposerError(t("Send attachments after the current Codex turn finishes.")); return; }
+        setSteering(true); setComposerError("");
+        try { await onNativeSteer(prompt); rememberPrompt(prompt); setPrompt(""); }
+        catch (error) { setComposerError(String(error)); }
+        finally { setSteering(false); }
+        return;
+      }
       queueCurrentPrompt();
       return;
     }
@@ -3783,6 +3843,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} />
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
+      {nativeQuestions.length > 0 && <div className="native-question-stack">{nativeQuestions.map((question) => <NativeQuestionCard key={question.id} question={question} onAnswer={onNativeAnswer} />)}</div>}
       <div
         ref={composerBoxRef}
         className={draggingFiles ? "conversation-composer drag-active" : "conversation-composer"}
@@ -3890,7 +3951,8 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
             </button>
           </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          {(availableThinkingEfforts.length > 0 || availableContextLengths.length > 0) && <div className="composer-model-controls" aria-label={t("Model controls")}>
+          {nativeBackend && <span className="native-runtime-label" title={t("Configure native model, effort and permissions in Models → Agent backends.")}>Codex · {nativeBackend.model || t("Codex default")} · {nativeBackend.effort || t("Codex default")} · {t(nativeBackend.permissionMode === "workspace-write" ? "Workspace write" : "Read-only")}</span>}
+          {!nativeBackend && (availableThinkingEfforts.length > 0 || availableContextLengths.length > 0) && <div className="composer-model-controls" aria-label={t("Model controls")}>
             {availableThinkingEfforts.length > 0 && <div className="reasoning-effort-picker">
               <button ref={reasoningTriggerRef} className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setContextMenuOpen(false); setContextUsageOpen(false); setReasoningMenuOpen((open) => !open); }} title={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-label={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>
                 <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>{reasoningEffortLabel}</span><ChevronDown size={13} />
@@ -3928,7 +3990,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
           >
             <Folder size={13} aria-hidden="true" /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : t("No workspace")}</span>
           </button>
-          <div className="context-usage-control">
+          {nativeBackend ? <NativeContextUsage usage={reportedNativeUsage} /> : <div className="context-usage-control">
             <button
               ref={contextUsageTriggerRef}
               type="button"
@@ -3962,8 +4024,9 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
               </div>
               <p className="context-usage-breakdown-note">{t("Approximate character estimate. The final request can differ after context compaction.")}</p>
             </MenuSurface>
-          </div>
+          </div>}
           <div className="composer-send-cluster">
+            {nativeBackend && agentBusy && <button className="composer-tool" type="button" disabled={steering || !canInterrupt || !prompt.trim()} onClick={() => void submitCurrentPrompt()} title={t("Steer Codex")}>{t(steering ? "Sending" : "Steer Codex")}</button>}
             <VoiceInputButton
               onTranscript={appendTranscript}
               onError={setComposerError}
