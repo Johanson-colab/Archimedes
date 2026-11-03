@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { applyFix, classifyLog, diagnose, pipTrustFix, tail, validate } = require("./reproduction/diagnose.cjs");
+const { applyFix, classifyLog, diagnose, pipProxyFix, pipTrustFix, tail, validate } = require("./reproduction/diagnose.cjs");
 
 const CONTRACT = {
   steps: [
@@ -210,4 +210,19 @@ test("pip refusing an http mirror is repaired with the flag it asks for", async 
 test("a pip command that already trusts its host is left alone", () => {
   const log = "WARNING: The repository located at mirror.local is not a trusted or secure host and is being ignored.";
   assert.equal(pipTrustFix({ id: "i", command: "pip install --trusted-host mirror.local x" }, log), null);
+});
+
+test("a local proxy that cannot reach the mirror is bypassed", async () => {
+  const log = [
+    "WARNING: Retrying after connection broken by 'ReadTimeoutError(\"HTTPConnectionPool(host='127.0.0.1', port=7890): Read timed out. (read timeout=15)\")': http://mirror/simple/hatchling/",
+    "ERROR: No matching distribution found for hatchling",
+  ].join("\n");
+  const step = { id: "install", title: "Install", detail: "", checkpoint: "", source: "", blocked: "", command: 'python3 -m pip install --trusted-host mirror -e ".[cl]"', check: { kind: "manual", reason: "" } };
+  const diagnosis = await diagnose({ step, outcome: { exit_code: 1 }, contract: { steps: [step] }, log, runAgent: null });
+  assert.equal(diagnosis.class, "network");
+  assert.match(diagnosis.fix.command, /pip install --proxy "" --trusted-host mirror/);
+});
+
+test("a pip command that already bypasses the proxy is left alone", () => {
+  assert.equal(pipProxyFix({ id: "i", command: 'pip install --proxy "" x' }, "HTTPConnectionPool(host='127.0.0.1', port=7890)"), null);
 });

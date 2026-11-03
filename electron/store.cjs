@@ -2675,7 +2675,7 @@ const REPRODUCTION_STATUSES = new Set([
   "diagnosing", "checks-passed", "verified", "diverged", "blocked", "cancelled",
 ]);
 
-const DEFAULT_REPRODUCTION_BUDGET = Object.freeze({ wallClockMin: 45, gpuHours: 2, maxFixAttempts: 3 });
+const DEFAULT_REPRODUCTION_BUDGET = Object.freeze({ wallClockMin: 45, gpuHours: 2, maxFixAttempts: 5 });
 
 function normalizeReproductionBudget(value) {
   const input = value && typeof value === "object" ? value : {};

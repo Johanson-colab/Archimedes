@@ -122,6 +122,21 @@ function pipTrustFix(step, log) {
   return { target: step.id, command: next };
 }
 
+/**
+ * A local proxy that cannot reach the intranet mirror. pip inherits http_proxy
+ * from the profile, so a request for the mirror is sent to a proxy that has no
+ * route to it and times out.
+ */
+function pipProxyFix(step, log) {
+  const text = String(log || "");
+  if (!/HTTPConnectionPool\(host='(?:127\.0\.0\.1|localhost)'/i.test(text)) return null;
+  const command = String(step?.command || "");
+  if (!/\bpip3?\b/.test(command) || command.includes("--proxy")) return null;
+  const next = command.replace(/\b(pip3?)\s+install\b/, `$1 install --proxy ""`);
+  if (next === command) return null;
+  return { target: step.id, command: next };
+}
+
 /** The log line that justifies a mechanical repair, quoted for the user. */
 function lineFor(log, pattern) {
   const lines = String(log || "").split("\n");
@@ -144,6 +159,15 @@ function mechanicalRepair(step, log) {
       class: "command_error",
       evidence: lineFor(log, /command not found/i),
       cause: "This machine names the interpreter differently, so the command never started.",
+    };
+  }
+  const bypass = pipProxyFix(step, log);
+  if (bypass) {
+    return {
+      fix: bypass,
+      class: "network",
+      evidence: lineFor(log, /HTTPConnectionPool\(host=/i),
+      cause: "pip sends the intranet mirror through a local proxy that cannot reach it, so every request times out.",
     };
   }
   const trusted = pipTrustFix(step, log);
@@ -369,6 +393,7 @@ module.exports = {
   classifyLog,
   interpreterFix,
   mechanicalRepair,
+  pipProxyFix,
   pipTrustFix,
   diagnose,
   promptFor,
