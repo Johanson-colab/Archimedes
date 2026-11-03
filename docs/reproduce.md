@@ -124,6 +124,11 @@ run does continue, the old and new command are recorded as a deviation on the
 contract, so a report can say "this run needed two repairs" rather than quietly
 describing a path nobody took.
 
+A repair that is safe by construction is applied **without asking**: renaming an
+interpreter the machine does not have changes no semantics, and a person watching
+a run wants that fixed, not a dialog. The restart is announced (`Attempt 2:
+…`) and recorded as a deviation.
+
 Attempts are capped by `budget.maxFixAttempts` (default 3). At the cap the run
 ends `blocked` with the full chain of attempts, which is more useful than a
 fourth guess.
