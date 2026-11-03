@@ -122,7 +122,10 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   if (thread.id && activeNativeRuns.has(thread.id)) throw new Error('This chat already has an active native Codex operation.');
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments);
   const client = new Client({ binary: config.binary });
-  const events = createNativeEvents({ emit, recordEvent });
+  const events = createNativeEvents({ emit, recordEvent, onError: (error) => {
+    try { finish(error); }
+    finally { client.close(); }
+  } });
   const items = new Map();
   const active = { client, emit, recordEvent, questions: new Map(), approvals: new Map(), resolvedRequests: new Set(), settled: false, compaction, nativeThreadId: null, nativeTurnId: null };
   if (thread.id) activeNativeRuns.set(thread.id, active);

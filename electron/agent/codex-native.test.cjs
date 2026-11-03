@@ -296,3 +296,19 @@ test('malformed native question IDs are rejected rather than coerced or truncate
   assert.equal(f.peer().replies.filter(r => r.unsupported).length, 6);
   complete(f.peer()); await run;
 });
+
+test('delayed native output emitter failures reject the run without an uncaught exception', async () => {
+  const controller = new AbortController();
+  const f = fixture(p => {
+    p.send('item/started', { item: { id: 'delayed', type: 'commandExecution', command: 'echo delayed' } });
+    p.send('item/commandExecution/outputDelta', { itemId: 'delayed', delta: 'delayed output' });
+  });
+  f.args.signal = controller.signal;
+  f.args.emit = event => { if (event.type === 'native_activity' && event.activity.output) throw new Error('Owning Work window was destroyed'); };
+  const fallback = setTimeout(() => controller.abort(), 250);
+  try { await assert.rejects(backend.runCodex(f.args), /Owning Work window was destroyed/); }
+  finally { clearTimeout(fallback); }
+  assert.equal(f.peer().closed, true);
+  assert.equal(f.saves.at(-1).last_turn_id, null);
+  await assert.rejects(backend.steerNative('local-thread', 'stale'), /active/);
+});

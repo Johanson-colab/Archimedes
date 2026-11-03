@@ -856,7 +856,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null }) {
+async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal }) {
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The Codex backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -873,6 +873,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
   const resolvedContextLength = externalBackend ? null : normalizeContextLength(config, contextLength);
   const policy = externalBackend ? null : reasoningPolicy(resolvedReasoningEffort, mode);
   const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
   const actions = [];
   activeRuns.set(thread.id, controller);
 
@@ -899,14 +902,13 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: transient ? { ...thread, status: "idle" } : store.getResearchThread(thread.id) };
   };
 
-  if (!externalBackend && !config.apiKey) {
-    const response = "Archimedes needs a model configuration before it can run this research task. Open Model settings, choose a provider, add the API key and model, then retry.";
-    emitTurn({ type: "configuration", title: "Model configuration required", detail: "No local LLM API key was found" });
-    activeRuns.delete(thread.id);
-    return finish(response, "needs_configuration");
-  }
-
   try {
+    if (controller.signal.aborted) throw new Error("Research turn interrupted before startup.");
+    if (!externalBackend && !config.apiKey) {
+      const response = "Archimedes needs a model configuration before it can run this research task. Open Model settings, choose a provider, add the API key and model, then retry.";
+      emitTurn({ type: "configuration", title: "Model configuration required", detail: "No local LLM API key was found" });
+      return finish(response, "needs_configuration");
+    }
     if (externalBackend) {
       const response = await runCodex({
         config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems,
@@ -1041,6 +1043,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     emitTurn({ type: "failed", title: "Research turn failed", detail: "The turn record was saved for inspection" });
     return finish(response, "failed");
   } finally {
+    externalSignal?.removeEventListener("abort", onExternalAbort);
     controller.abort();
     activeRuns.delete(thread.id);
   }

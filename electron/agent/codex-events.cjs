@@ -5,7 +5,7 @@ const ITEM_LIMIT = 512;
 const clip = (value, limit = 4000) => String(value ?? '').slice(0, limit);
 const tail = value => String(value ?? '').slice(-OUTPUT_LIMIT);
 
-function createNativeEvents({ emit = () => {}, recordEvent = () => {} } = {}) {
+function createNativeEvents({ emit = () => {}, recordEvent = () => {}, onError = () => {} } = {}) {
   const items = new Map();
   const pending = new Set();
   const snapshots = new Map();
@@ -28,7 +28,19 @@ function createNativeEvents({ emit = () => {}, recordEvent = () => {} } = {}) {
       snapshot.dirty = false;
     }
   }
-  function schedule() { if (!timer && !finished) timer = setTimeout(flush, 80); }
+  function schedule() {
+    if (!timer && !finished) timer = setTimeout(() => {
+      try { flush(); }
+      catch (error) {
+        // Timer callbacks have no awaiting caller to catch emitter/persistence
+        // failures. Stop this stream and hand failure to the owning session.
+        finished = true;
+        pending.clear();
+        clearTimeout(timer); timer = null;
+        onError(error);
+      }
+    }, 80);
+  }
   function entry(id) {
     if (!id) return null;
     if (!items.has(id)) {

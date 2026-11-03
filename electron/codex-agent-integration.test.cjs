@@ -78,3 +78,56 @@ test("native approval is not executed again by the renderer terminal", () => {
   const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
   assert.match(main, /input\.origin === "research" && backend\.backend === "codex"/);
 });
+
+test("external owner cancellation interrupts native runs and releases signal listeners on every exit", async () => {
+  const { getEventListeners } = require("node:events");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-codex-owner-"));
+  const backendModule = require("./agent/codex-backend.cjs");
+  const originalRun = backendModule.runCodex;
+  const originalGetConfig = modelConfig.getActiveModelConfig;
+  const agentPath = require.resolve("./agent.cjs");
+  const cachedAgent = require.cache[agentPath];
+  let entered;
+  let started = false;
+  try {
+    store.openWorkspace(directory);
+    modelConfig.initializeModelConfig(directory);
+    backendModule.runCodex = ({ signal }) => {
+      if (signal.aborted) return Promise.reject(Object.assign(new Error("Already interrupted"), { name: "AbortError" }));
+      started = true;
+      return new Promise((resolve, reject) => {
+        const fallback = setTimeout(() => reject(new Error("External cancellation did not propagate")), 150);
+        signal.addEventListener("abort", () => { clearTimeout(fallback); reject(Object.assign(new Error("Native owner interrupted"), { name: "AbortError" })); }, { once: true });
+        entered?.();
+      });
+    };
+    modelConfig.getActiveModelConfig = () => ({ apiKey: "", model: "fixture" });
+    delete require.cache[agentPath];
+    const scopedAgent = require("./agent.cjs");
+    const input = { prompt: "hello", workspace: directory, origin: "research", capabilities: { write: "ask", command: "ask" }, externalBackend: { backend: "codex", binary: "codex", model: "" } };
+    const beforeStart = new AbortController(); beforeStart.abort();
+    assert.equal((await scopedAgent.runAgent({ ...input, externalSignal: beforeStart.signal })).status, "interrupted");
+    assert.equal(started, false);
+    assert.equal(getEventListeners(beforeStart.signal, "abort").length, 0);
+    const whileRunning = new AbortController();
+    const ready = new Promise(resolve => { entered = resolve; });
+    const run = scopedAgent.runAgent({ ...input, externalSignal: whileRunning.signal });
+    await ready; whileRunning.abort();
+    assert.equal((await run).status, "interrupted");
+    assert.equal(getEventListeners(whileRunning.signal, "abort").length, 0);
+    const earlyConfigExit = new AbortController();
+    assert.equal((await scopedAgent.runAgent({ prompt: "hello", workspace: directory, externalSignal: earlyConfigExit.signal })).status, "needs_configuration");
+    assert.equal(getEventListeners(earlyConfigExit.signal, "abort").length, 0);
+    const completed = new AbortController();
+    backendModule.runCodex = async () => "Done";
+    delete require.cache[agentPath];
+    const completeAgent = require("./agent.cjs");
+    assert.equal((await completeAgent.runAgent({ ...input, externalSignal: completed.signal })).status, "completed");
+    assert.equal(getEventListeners(completed.signal, "abort").length, 0);
+  } finally {
+    backendModule.runCodex = originalRun;
+    modelConfig.getActiveModelConfig = originalGetConfig;
+    require.cache[agentPath] = cachedAgent;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
