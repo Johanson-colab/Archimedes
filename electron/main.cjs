@@ -34,6 +34,9 @@ const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const agentBackendConfig = require("./agent-backend-config.cjs");
+const nativeCodex = require("./agent/codex-backend.cjs");
+const { registerNativeAgentCommands } = require("./native-agent-commands.cjs");
+const { runWindowAgent } = require("./window-agent-run.cjs");
 const { closeAllCodexClients } = require("./agent/codex-client.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
 const { isContractFrozen, normalizeContract } = require("./reproduction/contract.cjs");
@@ -893,6 +896,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
+    nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeCodex.compactNative(input) },
+  });
+  registerNativeAgentCommands({ ipcMain, store, native: nativeCodex,
+    dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
   });
 
   ipcMain.handle("research-project:create", (_event, input = {}) => {
@@ -1679,9 +1686,6 @@ app.whenReady().then(async () => {
     }
     const researchModes = new Set(["free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review", "deep-research"]);
     const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
-    const config = modelConfig.getActiveModelConfig();
-    const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort);
-    const contextLength = normalizeContextLength(config, input.contextLength);
     const workspace = resolveWorkspace(input.workspace);
     // Research data stays in the window's primary workspace, while the Agent
     // operates inside the project/session folder.
@@ -1691,9 +1695,13 @@ app.whenReady().then(async () => {
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
     const backend = agentBackendConfig.get();
     const externalBackend = input.origin === "research" && backend.backend === "codex" ? backend : null;
+    const config = externalBackend ? null : modelConfig.getActiveModelConfig();
+    const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
+    const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
     if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
-    return agent.runAgent({
+    return runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
       externalBackend,
+      externalSignal,
       prompt: input.prompt.trim(),
       workspace,
       threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
@@ -1707,8 +1715,8 @@ app.whenReady().then(async () => {
       origin: typeof input.origin === "string" && input.origin ? input.origin : undefined,
       title: typeof input.title === "string" && input.title ? input.title : undefined,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
-      emit: (payload) => event.sender.send("agent:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) }),
-    });
+      emit: (payload) => emit({ ...payload, ...(clientRunId ? { clientRunId } : {}) }),
+    }) });
   });
 
   ipcMain.handle("paper-review:run", async (event, input) => {

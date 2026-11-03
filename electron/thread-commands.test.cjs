@@ -120,6 +120,44 @@ test("Markdown export includes full messages and source URLs", () => {
   for (const text of ["# Results", "Question", "Answer", "https://example.com/paper"]) assert.ok(markdown.includes(text));
 });
 
+test("main Work native compaction bypasses the API summary and preserves visible history", async (t) => {
+  const { root, thread } = fixture(t);
+  const turn = addTurn(thread.id, "Native question", "Native answer");
+  const handlers = new Map();
+  let compacted = 0;
+  registerThreadCommands({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) }, store,
+    agent: { complete: () => { throw new Error("API must not be called"); } },
+    modelConfig: { getActiveModelConfig: () => { throw new Error("API must not be read"); } },
+    dataWorkspace: () => root,
+    nativeBackend: { getConfig: () => ({ backend: "codex" }), compact: async ({ thread: current, workspace }) => {
+      assert.equal(current.id, thread.id); assert.equal(workspace, root); compacted++;
+    } },
+  });
+  const result = await handlers.get("research-thread:compact")({}, { threadId: thread.id });
+  assert.equal(compacted, 1);
+  assert.equal(result.messages.length, 2);
+  assert.equal(result.turns[0].id, turn.id);
+  assert.equal(result.context_summary, "");
+});
+
+test("native compaction requires editor access before starting or persisting its result", async (t) => {
+  const { root, thread } = fixture(t);
+  addTurn(thread.id, "Question", "Answer");
+  const handlers = new Map();
+  let allowed = false;
+  let calls = 0;
+  registerThreadCommands({ ipcMain: { handle: (name, fn) => handlers.set(name, fn) },
+    store: { ...store, canAccessProject: () => allowed }, agent: {}, modelConfig: {}, dataWorkspace: () => root,
+    nativeBackend: { getConfig: () => ({ backend: "codex" }), compact: async () => { calls++; allowed = false; } },
+  });
+  await assert.rejects(handlers.get("research-thread:compact")({}, { threadId: thread.id }), /permission/);
+  assert.equal(calls, 0);
+  allowed = true;
+  await assert.rejects(handlers.get("research-thread:compact")({}, { threadId: thread.id }), /permission/);
+  assert.equal(calls, 1);
+});
+
 test("IPC exports Markdown or JSON and canceling the dialog writes nothing", async (t) => {
   const { root, thread } = fixture(t);
   addTurn(thread.id, "Keep this question", "Keep this answer");

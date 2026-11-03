@@ -7,7 +7,7 @@ import { useUISettings } from "./i18n";
 export default function AgentBackendSettings({ bridge, onBackendChange }: { bridge: ResearchDeskBridge; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void }) {
   const { t } = useUISettings();
   const id = useId();
-  const [config, setConfig] = useState<AgentBackendConfig>({ backend: "api", binary: "codex", model: "" });
+  const [config, setConfig] = useState<AgentBackendConfig>({ backend: "api", binary: "codex", model: "", effort: "", permissionMode: "read-only" });
   const [savedConfig, setSavedConfig] = useState<AgentBackendConfig | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadError, setLoadError] = useState("");
@@ -15,7 +15,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
   const [expanded, setExpanded] = useState(true);
   const [connection, setConnection] = useState<"unchecked" | "connected" | "error">("unchecked");
   const [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(null);
-  const [models, setModels] = useState<Array<{ id: string; label: string }>>([]);
+  const [models, setModels] = useState<NativeAgentModel[]>([]);
   useEffect(() => {
     let active = true;
     setSavedConfig(null);
@@ -27,7 +27,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
   }, [bridge, loadAttempt, onBackendChange]);
 
   function edit(field: "binary" | "model", value: string) {
-    setConfig((current) => ({ ...current, [field]: value }));
+    setConfig((current) => ({ ...current, [field]: value, ...(field === "model" ? { effort: "" } : {}) }));
     setFeedback(null);
     setConnection("unchecked");
     if (field === "binary") setModels([]);
@@ -89,10 +89,23 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
             <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} list={`${id}-models`} value={config.model} spellCheck={false} onChange={(event) => edit("model", event.target.value)} />
             <datalist id={`${id}-models`}>{models.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</datalist>
           </SettingsRow>
+          <SettingsRow stacked title={<label htmlFor={`${id}-effort`}>{t("Codex thinking effort")}</label>} description={t("Native model capabilities come from Check Codex. Leave default to use Codex configuration.")}>
+            <select id={`${id}-effort`} className="settings-select" disabled={disabled} value={config.effort || ""} onChange={(event) => setConfig((current) => ({ ...current, effort: event.target.value }))}>
+              <option value="">{t("Codex default")}</option>
+              {models.find((item) => item.id === config.model)?.efforts?.map((effort) => <option value={effort} key={effort}>{effort}</option>)}
+              {config.effort && !models.find((item) => item.id === config.model)?.efforts?.includes(config.effort) && <option value={config.effort}>{config.effort}</option>}
+            </select>
+          </SettingsRow>
+          <SettingsRow stacked title={<label htmlFor={`${id}-permissions`}>{t("Codex permissions")}</label>} description={t("Read-only allows inspection. Workspace write allows edits and commands in the project. Additional access uses native approval.")}>
+            <select id={`${id}-permissions`} className="settings-select" disabled={disabled} value={config.permissionMode || "read-only"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
+              <option value="read-only">{t("Read-only")}</option>
+              <option value="workspace-write">{t("Workspace write")}</option>
+            </select>
+          </SettingsRow>
         </div>
         <details className="agent-backend-limits">
           <summary>{t("Capabilities and permissions")}</summary>
-          <p>{t("Codex starts read-only and requests native approvals. Plugin/skill attachments and native question cards are not supported yet. Files, images and source metadata are passed as context; papers are not automatically read.")}</p>
+          <p>{t("Codex owns execution and context. Archimedes displays native tool activity and approval requests. Plugin/skill attachments are not supported; source metadata does not mean a paper has been read.")}</p>
           <p>{t("Configured Codex MCP tools may access external services. Read-only does not prevent remote side effects.")}</p>
         </details>
         <div className="agent-backend-actions">

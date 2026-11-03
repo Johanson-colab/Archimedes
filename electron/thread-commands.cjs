@@ -46,7 +46,7 @@ async function summarizeConversation(thread, complete, config, signal) {
   throw new Error("This conversation is too large to compact in one operation. Conversation history was kept.");
 }
 
-function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow, dataWorkspace }) {
+function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow, dataWorkspace, nativeBackend }) {
   const compacting = new Set();
   function open(event, input) {
     store.openWorkspace(dataWorkspace(event, input));
@@ -76,6 +76,22 @@ function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, Br
     const expectedTurnId = thread.turns.at(-1)?.id;
     compacting.add(key);
     try {
+      const backend = nativeBackend?.getConfig();
+      if (backend?.backend === "codex" && thread.kind !== "paper") {
+        const requireEditor = () => {
+          if (!store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
+        };
+        requireEditor();
+        await nativeBackend.compact({ config: backend, workspace: thread.workspace_path || workspace, thread, bindings: store.nativeAgentBindings(thread.id),
+          signal: AbortSignal.timeout(180_000),
+          recordEvent: (record) => { store.openWorkspace(workspace); requireEditor(); store.appendResearchEvent({ threadId: thread.id, turnId: expectedTurnId, ...record }); },
+        });
+        store.openWorkspace(workspace);
+        requireEditor();
+        const current = store.getResearchThread(thread.id);
+        if (current.turns.at(-1)?.id !== expectedTurnId || current.status === "running") throw new Error("Conversation changed during native compaction. Reload it before continuing.");
+        return current;
+      }
       const summary = await summarizeConversation(context, agent.complete, modelConfig.getActiveModelConfig(), AbortSignal.timeout(180_000));
       store.openWorkspace(workspace);
       return store.compactResearchThread(thread.id, summary, expectedTurnId);

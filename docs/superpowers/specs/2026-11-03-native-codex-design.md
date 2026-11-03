@@ -4,7 +4,7 @@ Owner-approved direction: retain Archimedes UI; Codex owns execution, context an
 
 ## Boundary
 
-Only main Work uses the selected external backend. API, Paper chat, Side, FigureForge and internal workers retain their existing harness. Codex receives a small native instruction and attachment metadata, not API tool names, API command restrictions, model settings, local summaries or character-budget compaction. A new native thread imports visible conversation once; a continuous thread resumes native history.
+Only main Work uses the selected external backend. API, Paper chat, Side, FigureForge and internal workers retain their existing harness. Codex retains its native default instructions and receives attachment metadata, not API tool names, API command restrictions, model settings, local summaries or character-budget compaction. No Archimedes developer/base instruction overrides native Codex behavior. A new native thread imports bounded visible conversation once; an oversized import fails explicitly while preserving history. A continuous thread resumes native history.
 
 ## Native controls
 

@@ -131,7 +131,7 @@ test("checking Codex does not activate it; explicit activation and API reset per
     await input("Codex model", "native-model");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connection not checked");
     await click("Use Codex");
-    assert.deepEqual(calls.savedBackends[0], { backend: "codex", binary: "codex", model: "native-model" });
+    assert.deepEqual(calls.savedBackends[0], { backend: "codex", binary: "codex", model: "native-model", effort: "" });
     assert.ok(document.querySelector(".agent-backend-card .agent-backend-active"));
     assert.equal(document.querySelector('.model-connection-tabs .ui-tab-badge').textContent, "Codex");
     await click("Use API harness");
@@ -290,4 +290,33 @@ test("development StrictMode double mounting remains bounded and never checks Co
     global.gc();
     console.log(JSON.stringify({ audit: "25 StrictMode mount/unmount cycles", heapDeltaMiB: +((process.memoryUsage().heapUsed - baseline) / 1048576).toFixed(2) }));
   }
+});
+
+test("native permissions and effort are explicit drafts and saved independently of API controls", async () => {
+  const cleanup = await mount(bridge({
+    checkAgentBackend: async () => ({ ready: true, models: [{ id: "native-model", label: "Native model", efforts: ["low", "high", "xhigh"] }], message: "Connected" }),
+  }));
+  try {
+    await click("Agent backends");
+    const field = (label) => document.getElementById([...document.querySelectorAll("label")].find((node) => node.textContent === label)?.htmlFor);
+    assert.ok(field("Codex permissions"), "explicit permission selector exists");
+    assert.equal(field("Codex permissions").value, "read-only");
+    assert.equal(calls.checkedBackends.length, 0);
+    await click("Check Codex");
+    await input("Codex model", "native-model");
+    await React.act(async () => {
+      const select = field("Codex thinking effort");
+      select.value = "xhigh";
+      select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      const permissions = field("Codex permissions");
+      permissions.value = "workspace-write";
+      permissions.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    });
+    assert.equal(calls.savedBackends.length, 0, "editing does not activate permissions");
+    await click("Use Codex");
+    assert.equal(calls.savedBackends.at(-1).effort, "xhigh");
+    assert.equal(calls.savedBackends.at(-1).permissionMode, "workspace-write");
+    assert.equal(calls.savedModels.length, 0);
+    assert.ok(!document.querySelector('option[value="danger-full-access"]'));
+  } finally { await cleanup(); }
 });

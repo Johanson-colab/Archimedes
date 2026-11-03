@@ -186,7 +186,9 @@ interface ResearchDeskBridge {
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
-    checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: Array<{ id: string; label: string }>; message: string }>;
+    checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: NativeAgentModel[]; message: string }>;
+    steerNativeAgent: (threadId: string, text: string, workspace?: string) => Promise<unknown>;
+    answerNativeAgentQuestion: (threadId: string, questionId: string, answers: Record<string, string[]>, workspace?: string) => Promise<unknown>;
     claimApprovals: (threadId: string, claimed: boolean) => Promise<{ claimed: boolean }>;
     runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
     prepareFigurePlan: (input: { paperText: string; pdfData?: string; figureType: string; requirements: string; language: "en" | "zh"; connection?: FigureForgeConnection }) => Promise<{ plan: string; model: string; provider: string; source: "pdf" | "text" }>;
@@ -1422,7 +1424,15 @@ interface AgentBackendConfig {
   backend: "api" | "codex";
   binary: string;
   model: string;
+  effort?: string;
+  permissionMode?: "read-only" | "workspace-write";
 }
+
+interface NativeAgentModel { id: string; label: string; efforts?: string[]; defaultEffort?: string }
+interface NativeAgentActivity { id: string; kind: string; title: string; detail: string; status: "running" | "completed" | "failed" | "interrupted"; output?: string }
+interface NativeAgentUsage { inputTokens: number; cachedInputTokens: number; outputTokens: number; totalTokens: number; modelContextWindow: number | null; lifetimeTotalTokens?: number }
+interface NativeAgentPlan { explanation: string; steps: Array<{ step: string; status: string }> }
+interface NativeAgentQuestion { id: string; questions: Array<{ id: string; header: string; question: string; isSecret?: boolean; options?: Array<{ label: string; description: string }> }> }
 
 interface AgentRunResult {
   threadId: string;
@@ -1435,7 +1445,7 @@ interface AgentRunResult {
 }
 
 interface AgentEvent {
-  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
   title: string;
   detail: string;
   threadId?: string;
@@ -1443,6 +1453,12 @@ interface AgentEvent {
   delta?: string;
   clientRunId?: string;
   action?: AgentAction;
+  activity?: NativeAgentActivity;
+  usage?: NativeAgentUsage | null;
+  plan?: NativeAgentPlan;
+  diff?: string;
+  question?: NativeAgentQuestion;
+  questionId?: string;
 }
 
 interface PaperReviewInput {
