@@ -27,12 +27,22 @@ Protocol reference: https://learn.chatgpt.com/docs/app-server
 ## Usage
 
 1. Install a current Codex CLI and run `codex login` in a terminal.
-2. In Settings → Models, expand **Agent backend**, select **Codex** and check it.
+2. In Settings → Models, open the top-level **Agent backends** tab. The Codex
+   card is expanded by default; use **Check Codex** to verify the connection.
 3. Use `codex` from PATH or an absolute native executable path. A model override
    is optional; empty uses native Codex configuration. Archimedes' API model
    selector does not select the Codex model.
-4. Click **Save backend**. The next main Work turn uses that backend, including
+4. Click **Use Codex** (or **Save backend** when already enabled). The next main Work turn uses that backend, including
    when no Archimedes API key is configured. Existing running turns are unchanged.
+
+**API models** is a separate tab for API providers, keys and models. Changing
+tabs or checking Codex does not change the runtime; only explicit save/activation
+does. Unsaved inputs survive tab switches. The Agent tab shows the saved Work
+runtime and lets you **Use API harness** to switch back. A Codex badge on the
+tab marks the saved native runtime even while browsing API models. Connection
+status is independent: saved activation never implies a successful connection.
+Editing native configuration invalidates the previous detection result.
+Only Codex is implemented; the UI does not advertise other agents as available.
 
 Each turn owns an app-server process and closes it afterward; the persisted
 native thread is resumed on the next turn or after an application restart.

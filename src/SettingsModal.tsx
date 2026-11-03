@@ -262,7 +262,7 @@ export default function SettingsModal({
     proactive: { title: t("Proactive agent"), description: t("Opt-in L0 signals, evidence, and interruption limits.") },
     appearance: { title: t("Appearance"), description: t("Theme and fonts") },
     workbench: { title: t("Workbench"), description: t("Choose the tabs that appear in the right rail.") },
-    models: { title: t("Models"), description: t("Default model and providers") },
+    models: { title: t("Models"), description: t("API providers and external agent backends") },
     web: { title: t("Web search"), description: t("Search provider and API keys") },
     terminal: { title: t("Terminal"), description: t("Shell, font, and external terminal") },
     ssh: { title: t("SSH servers"), description: t("Machines a reproduction can run on") },

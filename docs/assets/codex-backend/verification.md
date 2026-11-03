@@ -2,6 +2,36 @@
 
 Environment: macOS, Node 25.8.1, Codex CLI 0.161.0. Base: `f78b030`.
 
+## Models layout update
+
+Settings now has separate **API models** and **Agent backends** tabs. The native
+card, activation and connection status are independent of API provider controls.
+Opening or switching tabs never launches Codex or changes the saved runtime.
+The Codex card is expanded by default and can be collapsed manually.
+
+Fresh targeted checks: **25 passed, 0 failed**, including protocol/integration,
+translations, UI interactions, bounded configuration loads, ordinary and
+development StrictMode mount/unmount cycles, and safe DOM assertion failures.
+The serial, heap-limited diagnostic process tree peaked at approximately 327 MiB.
+
+Before/after, same viewport, Paper theme and API state (preview renderer, no
+credentials or native login claims):
+
+![Models before redesign](models-redesign-before.png)
+![Models API tab after redesign](models-redesign-after.png)
+
+Agent tab and language/narrow-window checks:
+
+![Agent tab](models-redesign-agents.png)
+![Agent tab in Chinese](models-redesign-agents-zh.png)
+![Narrow window](models-redesign-agents-narrow.png)
+
+The owner's reported high Electron/Codex memory usage is **not fully explained
+or declared fixed**. See the [memory investigation](memory-investigation.md)
+for the confirmed test-side issue, bounded measurements, and remaining limits.
+
+## Initial backend implementation evidence
+
 ## Automated checks
 
 ```text
