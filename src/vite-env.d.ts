@@ -155,7 +155,7 @@ interface ResearchDeskBridge {
       attempt?: number;
       index?: number;
       total?: number;
-      diagnosis?: ReproductionDiagnosis;
+      diagnosis?: ReproductionDiagnosis | null;
       step?: { id?: string; title?: string; status?: ReproductionRunStepStatus; detail?: string; exit_code?: number | null; duration_ms?: number };
     }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;

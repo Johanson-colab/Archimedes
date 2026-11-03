@@ -1232,14 +1232,33 @@ app.whenReady().then(async () => {
       return;
     }
 
-    send({ type: "diagnosis", diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no }, status: runStatus });
-    session.idleTimer = setTimeout(() => {
-      void (async () => {
-        await stopSession(record.id);
-        store.updateReproduction(record.id, { status: "blocked", error: "The diagnosis was left unattended and the container was removed." });
-      })();
-    }, DIAGNOSIS_IDLE_MS);
-    if (session.idleTimer.unref) session.idleTimer.unref();
+    // A repair that is safe by construction is applied without asking: a person
+    // watching a run wants the interpreter renamed, not a dialog. Every attempt
+    // is recorded and the log says what changed, so nothing happens invisibly.
+    const maxAttempts = Math.max(1, Number(record.budget?.maxFixAttempts) || 3);
+    if (session.attempt > maxAttempts) {
+      await stopSession(record.id);
+      store.updateReproduction(record.id, { status: "blocked", error: `${diagnosis.cause} (gave up after ${maxAttempts} attempts)` });
+      send({ type: "finished", status: runStatus, summary: diagnosis.cause, diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no } });
+      notifyRunFinished(record, diagnosis.cause);
+      return;
+    }
+
+    const targetId = diagnosis.fix.target;
+    const repaired = applyFix(session.contract, diagnosis, { attempt: session.attempt });
+    session.contract = repaired;
+    session.lastDiagnosis = null;
+    store.updateReproductionAttempt(attempt.id, { status: "applied" });
+    store.updateReproduction(record.id, { contract: repaired, status: "running", error: "" });
+
+    const restartAt = Math.max(0, repaired.steps.findIndex((step) => step.id === targetId));
+    send({
+      type: "repair",
+      diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no },
+      detail: `Attempt ${session.attempt + 1}: ${diagnosis.cause}`,
+    });
+    session.attempt += 1;
+    await executeRun(session, restartAt);
   };
 
   ipcMain.handle("reproduction:run", async (event, { id, workspace, backend: backendKind = "docker", serverId = "" } = {}) => {

@@ -233,6 +233,14 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         setRunLine(payload.attempt ? `Attempt ${payload.attempt}…` : "");
         return;
       }
+      if (payload.type === "repair") {
+        // A safe repair was applied without asking; keep the run going and say
+        // what changed so the restart is not a mystery.
+        setDiagnosis(null);
+        setRunning(true);
+        setRunLine(payload.detail || "");
+        return;
+      }
       if (payload.type === "diagnosis" && payload.diagnosis) {
         // A live diagnosis is the only one the buttons may act on: after a
         // restart the container is gone and the suggestion is only history.
