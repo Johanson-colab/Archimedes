@@ -43,7 +43,7 @@ class CodexClient extends EventEmitter {
     this.child.on("error", () => this.fail(new Error("Codex could not start. Check the executable and installation.")));
     this.child.on("exit", () => this.fail(new Error("Codex app-server exited. The turn was not replayed; inspect any changes before retrying.")));
     this.child.stdin.on("error", () => this.fail(new Error("Codex input connection closed.")));
-    await this.request("initialize", { clientInfo: { name: "archimedes", title: "Archimedes", version: "0.1.0" } });
+    await this.request("initialize", { clientInfo: { name: "archimedes", title: "Archimedes", version: "0.1.0" }, capabilities: { experimentalApi: true, optOutNotificationMethods: ["item/reasoning/textDelta", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded"] } });
     this.send({ method: "initialized" });
     return this;
   }

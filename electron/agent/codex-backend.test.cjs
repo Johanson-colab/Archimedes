@@ -126,7 +126,7 @@ test("streaming uses restricted policy, rejects foreign events and persists only
   assert.equal(args.writes.at(-1).last_turn_id, "local-turn");
   assert.equal(client.requests.find((item) => item.method === "thread/start").params.sandbox, "read-only");
   const turn = client.requests.find((item) => item.method === "turn/start").params;
-  assert.equal(turn.approvalPolicy, "untrusted");
+  assert.equal(turn.approvalPolicy, "on-request");
   assert.equal(turn.approvalsReviewer, "user");
   assert.equal(client.closed, true);
   assert.equal(args.events.filter((event) => event.delta).map((event) => event.delta).join(""), "hello");
@@ -184,4 +184,17 @@ test("configuration never stores arbitrary secrets and account checks always clo
     fs.writeFileSync(path.join(directory, "agent-backend.json"), "not json");
     assert.throws(() => config.get(), /no backend was selected automatically/);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("native client negotiates experimental questions while suppressing private reasoning deltas", async () => {
+  let initialize;
+  const client = new CodexClient({ spawnImpl: () => fixture((message, send) => {
+    if (message.method === "initialize") { initialize = message.params; send({ id: message.id, result: {} }); }
+  }) });
+  try {
+    await client.start();
+    assert.equal(initialize.capabilities?.experimentalApi, true);
+    assert.ok(initialize.capabilities.optOutNotificationMethods.includes("item/reasoning/textDelta"));
+    assert.ok(initialize.capabilities.optOutNotificationMethods.includes("item/reasoning/summaryTextDelta"));
+  } finally { client.close(); }
 });

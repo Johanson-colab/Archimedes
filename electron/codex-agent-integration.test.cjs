@@ -35,9 +35,26 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
     delete process.env.ARCHIMEDES_LLM_API_KEY;
     delete process.env.AXIOM_LLM_API_KEY;
     global.fetch = () => { throw new Error("The API backend must not be called"); };
+    // Native dispatch must not even read the API model or prepare API context.
+    // Reload with fail-fast dependencies to exercise the dispatch boundary.
+    const contextModule = require("./agent/context.cjs");
+    const originalPrepare = contextModule.prepareConversation;
+    const originalGetConfig = modelConfig.getActiveModelConfig;
+    const cachedAgent = require.cache[require.resolve("./agent.cjs")];
+    let nativeAgent;
+    try {
+      contextModule.prepareConversation = () => { throw new Error("API context preparation must be bypassed"); };
+      modelConfig.getActiveModelConfig = () => { throw new Error("API model configuration must be bypassed"); };
+      delete require.cache[require.resolve("./agent.cjs")];
+      nativeAgent = require("./agent.cjs");
+    } finally {
+      contextModule.prepareConversation = originalPrepare;
+      modelConfig.getActiveModelConfig = originalGetConfig;
+      require.cache[require.resolve("./agent.cjs")] = cachedAgent;
+    }
     let result;
     try {
-      result = await agent.runAgent({ prompt: "hello", workspace: directory, mode: "free-chat", origin: "research", capabilities: { write: "ask", command: "ask" }, externalBackend: { backend: "codex", binary, model: "" } });
+      result = await nativeAgent.runAgent({ prompt: "hello", workspace: directory, mode: "free-chat", origin: "research", capabilities: { write: "ask", command: "ask" }, externalBackend: { backend: "codex", binary, model: "" } });
     } finally {
       if (originalKey === undefined) delete process.env.ARCHIMEDES_LLM_API_KEY; else process.env.ARCHIMEDES_LLM_API_KEY = originalKey;
       if (legacyKey === undefined) delete process.env.AXIOM_LLM_API_KEY; else process.env.AXIOM_LLM_API_KEY = legacyKey;
