@@ -217,9 +217,11 @@ function watchWorkspace(sender, workspace) {
 function titleBarOverlay(theme) {
   const dark = theme !== "paper";
   return {
-    color: dark ? "#141414" : "#fbfaf8",
+    // Match the 44px main toolbar exactly; a taller overlay makes the native
+    // caption buttons (and their hover highlight) spill below the bar.
+    color: dark ? "#141414" : "#fffdf8",
     symbolColor: dark ? "#e6e5e0" : "#33332f",
-    height: 52,
+    height: 44,
   };
 }
 
