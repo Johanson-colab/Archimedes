@@ -4094,6 +4094,11 @@ html[data-titlebar="overlay"] .workbench-tabs::-webkit-scrollbar { display: none
 .settings-text-input { width: 190px; max-width: 100%; height: 34px; padding: 0 9px; color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-line); border-radius: 7px; outline: 0; font: inherit; font-size: 12px; }
 .settings-text-input-narrow { width: 92px; }
 .settings-row-actions { display: flex; align-items: center; gap: 6px; }
+.plugins-settings-list { display: grid; }
+.plugins-settings-list .settings-row { gap: 16px; }
+.settings-inline-action { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 28px; height: 28px; color: var(--night-muted); background: transparent; border: 1px solid var(--night-line-soft); border-radius: 7px; cursor: pointer; }
+.settings-inline-action:hover { color: var(--night-ink); background: var(--night-panel-raised); }
+.settings-inline-action:disabled { opacity: .5; cursor: default; }
 /* The settings dialog renders in a portal, outside the .theme-* shell, so the
    themed button rules never match there. Use the dialog's own tokens instead. */
 .settings-ssh-panel .secondary-button { color: var(--night-ink); background: var(--night-panel-raised); border: 1px solid var(--night-line); }

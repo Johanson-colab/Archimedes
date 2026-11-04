@@ -58,7 +58,6 @@ interface ExtensionRowModel {
   permissions: string[];
   skill?: ContextAttachment;
   plugin?: ContextAttachment;
-  uiPlugin?: SidebarPluginRecord;
   marketplace?: ExtensionMarketplaceItem;
 }
 
@@ -139,28 +138,6 @@ function pluginRow(plugin: ContextAttachment): ExtensionRowModel {
   };
 }
 
-function uiPluginRow(record: SidebarPluginRecord): ExtensionRowModel {
-  return {
-    key: `ui-plugin:${record.id}`,
-    id: record.id,
-    name: record.name,
-    description: record.error || `${record.version} · contributes a ${record.section === "create" ? "Create" : "Knowledge"} sidebar module`,
-    type: "ui-plugin",
-    source: record.source || "Archimedes index",
-    sourceId: "archimedes",
-    scope: "App",
-    status: record.error ? "Error" : record.enabled ? "Enabled" : "Disabled",
-    path: record.path || "",
-    homepage: "",
-    version: record.version,
-    license: "",
-    size: 0,
-    installs: 0,
-    permissions: [],
-    uiPlugin: record,
-  };
-}
-
 function marketplaceRow(item: ExtensionMarketplaceItem): ExtensionRowModel {
   return {
     key: `mp:${item.id}`,
@@ -187,7 +164,7 @@ function rowActionLabel(row: ExtensionRowModel) {
   const item = row.marketplace;
   if (!item) return "";
   if (item.installed && !item.updateAvailable) return "Installed";
-  if ((item.type === "skill" || item.type === "ui-plugin") && item.files?.length) return item.updateAvailable ? "Update" : "Install";
+  if (item.type === "skill" && item.files?.length) return item.updateAvailable ? "Update" : "Install";
   return "Open source";
 }
 
@@ -195,7 +172,7 @@ function rowActionAvailable(row: ExtensionRowModel) {
   const item = row.marketplace;
   if (!item) return false;
   if (item.installed && !item.updateAvailable) return false;
-  return Boolean(item.homepage || item.sourceUrl || ((item.type === "skill" || item.type === "ui-plugin") && item.files?.length));
+  return Boolean(item.homepage || item.sourceUrl || (item.type === "skill" && item.files?.length));
 }
 
 function previewText(row: ExtensionRowModel, preview: HoverPreviewState) {
@@ -216,7 +193,6 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
 }) {
   const [skills, setSkills] = useState<ContextAttachment[]>([]);
   const [plugins, setPlugins] = useState<ContextAttachment[]>([]);
-  const [uiPlugins, setUiPlugins] = useState<SidebarPluginRecord[]>([]);
   const [installedLoading, setInstalledLoading] = useState(true);
   const [installedError, setInstalledError] = useState("");
   const [feed, setFeed] = useState<ExtensionFeed | null>(null);
@@ -248,7 +224,6 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
       if (!active) return;
       setSkills(installed.skills);
       setPlugins(installed.plugins);
-      setUiPlugins(installed.uiPlugins || []);
     }).catch((reason) => {
       if (active) setInstalledError(String(reason).replace(/^Error:\s*/, ""));
     }).finally(() => {
@@ -285,10 +260,9 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
   const installedRows = useMemo(() => [
     ...skills.map((skill) => installedSkillRow(skill, workspace)),
     ...plugins.map(pluginRow),
-    ...uiPlugins.map(uiPluginRow),
-  ].sort((left, right) => left.name.localeCompare(right.name)), [plugins, skills, uiPlugins, workspace]);
+  ].sort((left, right) => left.name.localeCompare(right.name)), [plugins, skills, workspace]);
 
-  const availableRows = useMemo(() => (feed?.items || []).map(marketplaceRow), [feed]);
+  const availableRows = useMemo(() => (feed?.items || []).filter((item) => item.type !== "ui-plugin").map(marketplaceRow), [feed]);
 
   const updateRows = useMemo(() => availableRows.filter((row) => row.marketplace?.updateAvailable), [availableRows]);
 
@@ -327,7 +301,6 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
       const installed = await bridge.listInstalledExtensions(workspace);
       setSkills(installed.skills);
       setPlugins(installed.plugins);
-      setUiPlugins(installed.uiPlugins || []);
     } catch (reason) {
       setInstalledError(String(reason).replace(/^Error:\s*/, ""));
     }
@@ -400,31 +373,9 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
     if (row.plugin) onAttach(row.plugin);
   }
 
-  async function toggleUiPlugin(record: SidebarPluginRecord) {
-    try {
-      setUiPlugins(await bridge.setSidebarPluginEnabled(record.id, !record.enabled));
-      setNotice(record.enabled ? `Enabled ${record.name}. It appears in the sidebar after Archimedes restarts.` : `Disabled ${record.name}. It leaves the sidebar after Archimedes restarts.`);
-    } catch (reason) {
-      setNotice(String(reason).replace(/^Error:\s*/, ""));
-    }
-  }
-
-  async function removeUiPlugin(record: SidebarPluginRecord) {
-    try {
-      setUiPlugins(await bridge.removeSidebarPlugin(record.id));
-      setNotice(`Removed ${record.name}.`);
-    } catch (reason) {
-      setNotice(String(reason).replace(/^Error:\s*/, ""));
-    }
-  }
-
   function startInstall(item: ExtensionMarketplaceItem) {
     if (item.installed && !item.updateAvailable) return;
-    if (item.type !== "skill" && item.type !== "ui-plugin") {
-      if (item.homepage || item.sourceUrl) void bridge.openExternalUrl(item.homepage || item.sourceUrl);
-      return;
-    }
-    if (!item.files?.length) {
+    if (item.type !== "skill" || !item.files?.length) {
       if (item.homepage || item.sourceUrl) void bridge.openExternalUrl(item.homepage || item.sourceUrl);
       return;
     }
@@ -557,17 +508,7 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
                   startInstall(item);
                 }}>{item.updateAvailable ? "Update" : rowActionLabel(row)}</button>}
                 {item && rowActionLabel(row) === "Installed" && <span className="extensions-installed-mark"><Check size={12} />Installed</span>}
-                {!item && row.uiPlugin && <>
-                  <button className="extensions-row-action" onClick={(event) => {
-                    event.stopPropagation();
-                    void toggleUiPlugin(row.uiPlugin!);
-                  }}>{row.uiPlugin.enabled ? "Disable" : "Enable"}</button>
-                  <button className="extensions-row-action" onClick={(event) => {
-                    event.stopPropagation();
-                    void removeUiPlugin(row.uiPlugin!);
-                  }}>Remove</button>
-                </>}
-                {!item && !row.uiPlugin && <button className="extensions-row-action" onClick={(event) => {
+                {!item && <button className="extensions-row-action" onClick={(event) => {
                   event.stopPropagation();
                   if (row.skill || row.plugin) addToChat(row);
                 }} disabled={attached}>{attached ? "Added" : "Add"}</button>}
@@ -582,12 +523,8 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
                 {row.permissions.length > 0 && <div className="extensions-permissions"><dt>Permissions</dt><dd>{row.permissions.join(" · ")}</dd></div>}
               </dl>
               <div className="extensions-detail-actions">
-                {row.uiPlugin && <>
-                  <button className="primary-button" onClick={() => void toggleUiPlugin(row.uiPlugin!)}>{row.uiPlugin.enabled ? "Disable" : "Enable"}</button>
-                  <button className="secondary-button" onClick={() => void removeUiPlugin(row.uiPlugin!)}><Trash2 size={13} />Remove</button>
-                </>}
                 {row.skill || row.plugin ? <button className={attached ? "secondary-button" : "primary-button"} onClick={() => addToChat(row)} disabled={attached}>{attached ? <Check size={13} /> : <Plus size={13} />}{attached ? "Added to chat" : "Add to chat"}</button> : null}
-                {item && (item.type === "skill" || item.type === "ui-plugin") && item.files?.length && (!item.installed || item.updateAvailable) && <button className="primary-button" onClick={() => startInstall(item)}><Download size={13} />{item.updateAvailable ? "Update" : "Install"}</button>}
+                {item && item.type === "skill" && item.files?.length && (!item.installed || item.updateAvailable) && <button className="primary-button" onClick={() => startInstall(item)}><Download size={13} />{item.updateAvailable ? "Update" : "Install"}</button>}
                 {row.homepage && <button className="secondary-button" onClick={() => openHomepage(row)}><ExternalLink size={13} />Open source</button>}
               </div>
             </div>}
@@ -638,10 +575,10 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
             <div><dt>Size</dt><dd>{formatBytes(installItem.size)}</dd></div>
           </dl>
           <div className="extensions-install-permissions"><strong>Permissions</strong><span>{installItem.permissions.length ? installItem.permissions.join(" · ") : "No special permissions declared."}</span></div>
-          {installItem.type !== "ui-plugin" && <fieldset className="extensions-scope-field"><legend>Install for</legend>
+          <fieldset className="extensions-scope-field"><legend>Install for</legend>
             <label><input type="radio" name="extension-scope" checked={installScope === "workspace"} onChange={() => setInstallScope("workspace")} /><span>Workspace</span><small>.agents/skills</small></label>
             <label><input type="radio" name="extension-scope" checked={installScope === "global"} onChange={() => setInstallScope("global")} /><span>Global</span><small>~/.agents/skills</small></label>
-          </fieldset>}
+          </fieldset>
           {installError && <InlineNotice tone="danger" className="skills-error">{installError}</InlineNotice>}
         </div>
         <footer className="app-dialog-footer"><button className="secondary-button" onClick={() => setInstallItem(null)}>Cancel</button><button className="primary-button" onClick={() => void confirmInstall()} disabled={installBusy}>{installBusy ? <LoaderCircle className="spin" size={13} /> : <Download size={13} />}{installItem.updateAvailable ? "Update" : "Install"}</button></footer>

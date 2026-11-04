@@ -1804,13 +1804,15 @@ function App() {
     return () => window.removeEventListener("keydown", handleWorkbenchShortcut);
   }, [workbenchOpen]);
 
-  useEffect(() => {
-    let active = true;
+  const refreshSidebarPlugins = useCallback(() => {
     loadSidebarPlugins(desktopBridge).then((entries) => {
-      if (active) setPluginEntries(entries);
+      setPluginEntries(entries);
     }).catch(() => undefined);
-    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    refreshSidebarPlugins();
+  }, [refreshSidebarPlugins]);
 
   function openWorkbench(tab: WorkbenchTabId) {
     setWorkbenchTab(tab);
@@ -3268,6 +3270,7 @@ function App() {
         onSignUp={signUp}
         onSignOut={signOut}
         onOpenAuth={(mode) => { setSettingsOpen(false); openAuth(mode || "choice"); }}
+        onPluginsChanged={refreshSidebarPlugins}
       />
       {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
         bridge={desktopBridge}
