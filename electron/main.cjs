@@ -20,6 +20,7 @@ const journeySettings = require("./journey-settings.cjs");
 const journeySnapshots = require("./journey-snapshots.cjs");
 const workbenchSettings = require("./workbench-settings.cjs");
 const sidebarSettings = require("./sidebar-settings.cjs");
+const news = require("./news.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
@@ -630,6 +631,7 @@ app.whenReady().then(async () => {
   extensionMarketplace.initialize(app.getPath("userData"));
   sidebarPlugins.initialize(app.getPath("userData"));
   sidebarSettings.initialize(app.getPath("userData"));
+  news.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());
   const authStorageValues = new Map();
@@ -829,6 +831,12 @@ app.whenReady().then(async () => {
   ipcMain.handle("sidebar:get-settings", () => sidebarSettings.getSettings());
   ipcMain.handle("sidebar:set-core-enabled", (_event, input = {}) => sidebarSettings.setCoreEnabled(String(input?.id || ""), Boolean(input?.enabled)));
   ipcMain.handle("sidebar:set-layout", (_event, input = {}) => sidebarSettings.setLayout(String(input?.layout || "flat")));
+  ipcMain.handle("news:get-settings", () => news.getSettings());
+  ipcMain.handle("news:set-settings", (_event, patch = {}) => news.setSettings(patch));
+  ipcMain.handle("news:list", (_event, filters = {}) => news.list(filters));
+  ipcMain.handle("news:refresh", (_event, input = {}) => news.refresh({ force: Boolean(input?.force) }));
+  ipcMain.handle("news:mark-read", (_event, input = {}) => news.markRead(String(input?.id || ""), Boolean(input?.read)));
+  ipcMain.handle("news:set-saved", (_event, input = {}) => news.setSaved(String(input?.id || ""), Boolean(input?.saved)));
   ipcMain.handle("extensions:read-local", (_event, input = {}) => {
     const target = path.resolve(String(input.path || ""));
     if (!allowedContextPaths.has(target)) throw new Error("This skill is not available in the current context.");

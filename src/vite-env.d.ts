@@ -219,6 +219,12 @@ interface ResearchDeskBridge {
     getSidebarSettings: () => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
     setCoreModuleEnabled: (id: string, enabled: boolean) => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
     setSidebarLayout: (layout: "flat" | "tabs" | "sections") => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
+    getNewsSettings: () => Promise<NewsSettings>;
+    setNewsSettings: (patch: Partial<NewsSettings>) => Promise<NewsSettings>;
+    listNews: (filters?: { source?: string; sort?: "new" | "hot"; query?: string; savedOnly?: boolean; sinceHours?: number; limit?: number }) => Promise<NewsFeedPayload>;
+    refreshNews: (input?: { force?: boolean }) => Promise<{ skipped: boolean; results: Array<{ source: string; status: string; updated: number; error?: string }> }>;
+    markNewsRead: (id: string, read?: boolean) => Promise<{ ok: boolean }>;
+    setNewsSaved: (id: string, saved: boolean) => Promise<{ ok: boolean }>;
     saveWorkbenchSettings: (input: { version?: number; order: string[]; hidden: string[] }) => Promise<{ version: number; order: string[]; hidden: string[] }>;
     resetWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
     getWorkbenchNote: (key: string) => Promise<{ content: string; updatedAt: string | null }>;
@@ -344,6 +350,65 @@ interface SidebarPluginRecord {
   source?: string;
   path?: string;
   error?: string;
+}
+
+interface NewsMedia {
+  url: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+}
+
+interface NewsItem {
+  id: string;
+  source: "hn" | "github" | "arxiv" | "lobsters" | "reddit" | "rss" | "x" | string;
+  sourceLabel: string;
+  title: string;
+  url: string;
+  author: string;
+  publishedAt: string;
+  fetchedAt: string;
+  score: number;
+  comments: number;
+  summary: string;
+  tags: string[];
+  media: NewsMedia[];
+  native: Record<string, unknown>;
+  clusterId: string;
+  saved: boolean;
+  read: boolean;
+}
+
+interface NewsSourceState {
+  id: string;
+  label: string;
+  total: number;
+  unread: number;
+  status: "idle" | "ok" | "error";
+  message: string;
+  lastSuccessAt: string;
+}
+
+interface NewsSettings {
+  version: number;
+  view: "feed" | "board";
+  sources: Record<string, boolean>;
+  rssFeeds: Array<{ id: string; label: string; url: string }>;
+  reddit: { subreddits: string[]; clientId: string; clientSecret: string; configured?: boolean };
+  github: { token: string; configured?: boolean };
+  x: { bearerToken: string; query: string; configured?: boolean };
+  watch: string[];
+  mute: string[];
+  cadenceMinutes: number;
+  sinceHours: number;
+  clustering: boolean;
+}
+
+interface NewsFeedPayload {
+  items: NewsItem[];
+  sources: NewsSourceState[];
+  updatedAt: string;
+  settings: NewsSettings;
 }
 
 interface ExtensionFeed {

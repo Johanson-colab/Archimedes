@@ -9,6 +9,7 @@ const LAYOUTS = new Set(["flat", "tabs", "sections"]);
 const CORE_MODULE_IDS = [
   "library",
   "daily",
+  "news",
   "benchmark-radar",
   "extensions",
   "reproduce",

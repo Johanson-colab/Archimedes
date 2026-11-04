@@ -1128,6 +1128,7 @@ const FileCodeEditor = lazy(() => import("./FileCodeEditor"));
 const LibraryView = lazy(() => import("./LibraryView"));
 const ImageCreationView = lazy(() => import("./ImageCreationView"));
 const BenchmarkRadarView = lazy(() => import("./BenchmarkRadarView"));
+const NewsView = lazy(() => import("./NewsView"));
 const ReproduceView = lazy(() => import("./ReproduceView"));
 const ExtensionsView = lazy(() => import("./ExtensionsView"));
 const PaperWritingView = lazy(() => import("./PaperWritingView"));
@@ -2925,6 +2926,7 @@ function App() {
     library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     daily: <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     "benchmark-radar": <BenchmarkRadarView />,
+    news: <NewsView bridge={desktopBridge} projectId={activeProjectId} active={mainSection === "news"} onSendToChat={sendNoteToChat} />,
     extensions: <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />,
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
@@ -3553,6 +3555,10 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, o
   }, [composerRequest, onComposerRequestApplied]);
 
   useEffect(() => {
+    // A queued composer request wins over the stored draft on first mount:
+    // "Ask AI" from another module switches sections and sets both in the same
+    // commit, so restoring the empty draft here would erase the prompt.
+    if (composerRequest && appliedComposerRequestRef.current === composerRequest.id) return;
     const stored = readComposerDraft(draftKey);
     storedDraftRef.current = stored;
     setPrompt(stored?.text ?? "");
