@@ -19,6 +19,7 @@ const terminalSettings = require("./terminal-settings.cjs");
 const journeySettings = require("./journey-settings.cjs");
 const journeySnapshots = require("./journey-snapshots.cjs");
 const workbenchSettings = require("./workbench-settings.cjs");
+const sidebarSettings = require("./sidebar-settings.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
@@ -626,6 +627,7 @@ app.whenReady().then(async () => {
   workbenchNotes.initialize(app.getPath("userData"));
   extensionMarketplace.initialize(app.getPath("userData"));
   sidebarPlugins.initialize(app.getPath("userData"));
+  sidebarSettings.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());
   const authStorageValues = new Map();
@@ -822,6 +824,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("plugins:list", () => sidebarPlugins.listPlugins());
   ipcMain.handle("plugins:set-enabled", (_event, input = {}) => sidebarPlugins.setEnabled(String(input?.id || ""), Boolean(input?.enabled)));
   ipcMain.handle("plugins:remove", (_event, input = {}) => sidebarPlugins.removePlugin(String(input?.id || "")));
+  ipcMain.handle("sidebar:get-settings", () => sidebarSettings.getSettings());
+  ipcMain.handle("sidebar:set-core-enabled", (_event, input = {}) => sidebarSettings.setCoreEnabled(String(input?.id || ""), Boolean(input?.enabled)));
   ipcMain.handle("extensions:read-local", (_event, input = {}) => {
     const target = path.resolve(String(input.path || ""));
     if (!allowedContextPaths.has(target)) throw new Error("This skill is not available in the current context.");

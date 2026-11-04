@@ -63,6 +63,8 @@ type SettingsModalProps = {
   onSignOut: () => Promise<AuthState>;
   onOpenAuth: (mode?: "choice" | "password" | "signup" | "reset") => void;
   onPluginsChanged?: () => void;
+  disabledCoreModules: string[];
+  onCoreModuleEnabled: (id: string, enabled: boolean) => void;
 };
 
 const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNode }> = [
@@ -140,6 +142,8 @@ export default function SettingsModal({
   onSignOut,
   onOpenAuth,
   onPluginsChanged,
+  disabledCoreModules,
+  onCoreModuleEnabled,
 }: SettingsModalProps) {
   const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const [scope, setScope] = useState<SurfaceScope | "global">("global");
@@ -673,7 +677,7 @@ export default function SettingsModal({
 
             {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} />}
             {section === "ssh" && <SshServersPanel bridge={bridge} />}
-            {section === "plugins" && <PluginsSettingsPanel bridge={bridge} workspace={workspace} onPluginsChanged={onPluginsChanged} />}
+            {section === "plugins" && <PluginsSettingsPanel bridge={bridge} workspace={workspace} onPluginsChanged={onPluginsChanged} disabledCoreModules={disabledCoreModules} onCoreModuleEnabled={onCoreModuleEnabled} />}
             {section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}
             {section === "terminal" && (terminalSettings
               ? <TerminalSettingsModal open embedded mode="settings" settings={terminalSettings} workspace={workspace} onClose={() => undefined} onSave={onSaveTerminalSettings} onOpenExternal={onOpenExternalTerminal} />

@@ -1814,6 +1814,29 @@ function App() {
     refreshSidebarPlugins();
   }, [refreshSidebarPlugins]);
 
+  const [disabledCoreModules, setDisabledCoreModules] = useState<string[]>([]);
+  const refreshSidebarSettings = useCallback(() => {
+    desktopBridge.getSidebarSettings().then((settings) => {
+      setDisabledCoreModules(settings.disabledCore);
+    }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    refreshSidebarSettings();
+  }, [refreshSidebarSettings]);
+
+  // Core modules hidden in Settings disappear from the nav, palette, and view
+  // host; the chat section is not a module and can never be hidden.
+  const hiddenCoreModules = useMemo(() => new Set(disabledCoreModules), [disabledCoreModules]);
+  useEffect(() => {
+    if (mainSection !== "chat" && mainSection !== "files" && hiddenCoreModules.has(mainSection)) setMainSection("chat");
+  }, [hiddenCoreModules, mainSection]);
+
+  async function setCoreModuleEnabled(id: string, enabled: boolean) {
+    const settings = await desktopBridge.setCoreModuleEnabled(id, enabled);
+    setDisabledCoreModules(settings.disabledCore);
+  }
+
   function openWorkbench(tab: WorkbenchTabId) {
     setWorkbenchTab(tab);
     setWorkbenchOpen(true);
@@ -2847,7 +2870,7 @@ function App() {
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : activeModule ? t(activeModule.titleKey) : t("Files");
   const moduleCommands: PaletteCommand[] = (["knowledge", "create"] as const).flatMap((section) =>
     sidebarEntries(section)
-      .filter((entry) => !entry.disabled)
+      .filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id))
       .map((entry) => ({
         id: entry.commandId,
         group: t(section === "knowledge" ? "Knowledge" : "Create"),
@@ -2913,7 +2936,7 @@ function App() {
         <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
           {(["knowledge", "create"] as const).map((section) => <section className={`sidebar-group ${section}-group`} key={section}>
             <div className="codex-sidebar-label">{t(section === "knowledge" ? "Knowledge" : "Create")}</div>
-            {sidebarEntries(section).map((entry) => <button className={mainSection === entry.destination.section ? "codex-nav-item active" : "codex-nav-item"} key={entry.id} onClick={() => activateSidebarEntry(entry)} title={t(entry.labelKey)} disabled={entry.disabled}>
+            {sidebarEntries(section).filter((entry) => !hiddenCoreModules.has(entry.id)).map((entry) => <button className={mainSection === entry.destination.section ? "codex-nav-item active" : "codex-nav-item"} key={entry.id} onClick={() => activateSidebarEntry(entry)} title={t(entry.labelKey)} disabled={entry.disabled}>
               <entry.icon size={15} /><span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
             </button>)}
           </section>)}
@@ -3044,7 +3067,7 @@ function App() {
             {/* View host sidebar-modules: one looping projection, semantics derived from the module registry (keepMounted/cacheClass/requiresWorkspace/open gate). */}
             {(Object.entries(sidebarModuleContent) as [string, ReactNode][]).map(([id, content]) => {
               const entry = sidebarModule(id);
-              if (!entry) return null;
+              if (!entry || hiddenCoreModules.has(id)) return null;
               const active = mainSection === id;
               const opened = sidebarModuleOpen[id] !== false;
               const ready = !entry.requiresWorkspace || workspaceReady;
@@ -3271,6 +3294,8 @@ function App() {
         onSignOut={signOut}
         onOpenAuth={(mode) => { setSettingsOpen(false); openAuth(mode || "choice"); }}
         onPluginsChanged={refreshSidebarPlugins}
+        disabledCoreModules={disabledCoreModules}
+        onCoreModuleEnabled={(id, enabled) => void setCoreModuleEnabled(id, enabled).catch(() => undefined)}
       />
       {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
         bridge={desktopBridge}

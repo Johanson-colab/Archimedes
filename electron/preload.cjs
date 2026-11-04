@@ -207,6 +207,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   stopTerminal: (sessionId) => ipcRenderer.invoke("terminal:stop", sessionId),
   getJourneySettings: () => ipcRenderer.invoke("journey:get-settings"),
   getWorkbenchSettings: () => ipcRenderer.invoke("workbench:get-settings"),
+  getSidebarSettings: () => ipcRenderer.invoke("sidebar:get-settings"),
+  setCoreModuleEnabled: (id, enabled) => ipcRenderer.invoke("sidebar:set-core-enabled", { id, enabled }),
   saveWorkbenchSettings: (input) => ipcRenderer.invoke("workbench:save-settings", input),
   resetWorkbenchSettings: () => ipcRenderer.invoke("workbench:reset-settings"),
   getWorkbenchNote: (key) => ipcRenderer.invoke("workbench:get-note", key),

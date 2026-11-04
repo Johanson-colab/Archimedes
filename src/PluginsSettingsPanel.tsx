@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, LoaderCircle, Puzzle, Trash2 } from "lucide-react";
 
 import { useUISettings } from "./i18n";
+import { coreSidebarEntries } from "./sidebar-registry";
 import { SettingsGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
 
 function readable(value: unknown, fallback: string) {
@@ -15,10 +16,12 @@ function readable(value: unknown, fallback: string) {
  * and removing a sidebar module all happen in this panel, and every change
  * reloads the live sidebar through onPluginsChanged.
  */
-export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChanged }: {
+export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChanged, disabledCoreModules, onCoreModuleEnabled }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   onPluginsChanged?: () => void;
+  disabledCoreModules: string[];
+  onCoreModuleEnabled: (id: string, enabled: boolean) => void;
 }) {
   const { t } = useUISettings();
   const [plugins, setPlugins] = useState<SidebarPluginRecord[]>([]);
@@ -27,6 +30,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
+  const hiddenCore = new Set(disabledCoreModules);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,6 +94,27 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
   }
 
   return <div className="settings-sections">
+    <SettingsSection title={t("Built-in modules")}>
+      <SettingsRow
+        stacked
+        description={t("Every sidebar module is a plugin. Toggle a built-in module to hide or show it; changes apply immediately.")}
+      />
+      <SettingsGroup className="plugins-settings-list">
+        {coreSidebarEntries.map((entry) => <SettingsRow
+          key={entry.id}
+          title={t(entry.labelKey)}
+          description={t(entry.section === "knowledge" ? "Knowledge column" : "Create column")}
+          icon={<entry.icon size={14} />}
+        >
+          <SettingsSwitch
+            checked={!hiddenCore.has(entry.id)}
+            label={hiddenCore.has(entry.id) ? t("Enable") : t("Disable")}
+            disabled={busy === entry.id}
+            onChange={(enabled) => onCoreModuleEnabled(entry.id, enabled)}
+          />
+        </SettingsRow>)}
+      </SettingsGroup>
+    </SettingsSection>
     <SettingsSection title={t("Sidebar plugins")}>
       <SettingsRow
         stacked
