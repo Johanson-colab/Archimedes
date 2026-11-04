@@ -36,6 +36,23 @@ test("navigation is registry-driven and every entry has a command", () => {
   assert.match(app, /flatMap\(\(section\)/);
 });
 
+test("sidebar modules are declared with mount semantics, not scattered conditions", () => {
+  assert.match(registry, /icon: LucideIcon/);
+  assert.match(registry, /titleKey: string/);
+  assert.match(registry, /keepMounted\?: boolean/);
+  assert.match(registry, /cacheClass\?: string/);
+  assert.match(registry, /requiresWorkspace\?: boolean/);
+  assert.doesNotMatch(registry, /icon: </);
+  for (const line of registry.split("\n").filter((line) => /^\s*\{ id: "/.test(line))) {
+    assert.match(line, /source: "core"/);
+  }
+  assert.match(app, /Object\.entries\(sidebarModuleContent\)/);
+  assert.match(app, /<Suspense fallback=\{null\}>/);
+  assert.match(app, /entry\.keepMounted/);
+  assert.match(app, /lazy\(\(\) => import\("\.\/LibraryView"\)\)/);
+  assert.doesNotMatch(app, /import LibraryView from "\.\/LibraryView"/);
+});
+
 test("Files and Artifacts leave the sidebar but stay command reachable", () => {
   assert.doesNotMatch(app, /<Folder size=\{16\} \/><span>\{t\("Files"\)\}<\/span>/);
   assert.doesNotMatch(app, /workspace-button/);

@@ -18,7 +18,8 @@ test("Paper diagrams is a view inside Image creation, not a second Create destin
   assert.doesNotMatch(registry, /id: "image-creation"[^\n]*disabled/);
   assert.doesNotMatch(registry, /id: "image-creation"[^\n]*badge/);
   assert.match(app, /<ImageCreationView active=\{mainSection === "image-creation"\}/);
-  assert.match(app, /mainSection === "image-creation" \? t\("Image creation"\)/);
+  assert.match(registry, /id: "image-creation"[^\n]*titleKey: "Image creation"/);
+  assert.match(app, /activeModule \? t\(activeModule\.titleKey\)/);
   assert.match(i18n, /"Generate and remix research figures"/);
 });
 
