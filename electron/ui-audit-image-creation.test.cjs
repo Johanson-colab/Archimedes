@@ -18,7 +18,8 @@ test("Paper diagrams is a view inside Image creation, not a second Create destin
   assert.doesNotMatch(registry, /id: "image-creation"[^\n]*disabled/);
   assert.doesNotMatch(registry, /id: "image-creation"[^\n]*badge/);
   assert.match(app, /<ImageCreationView active=\{mainSection === "image-creation"\}/);
-  assert.match(app, /mainSection === "image-creation" \? t\("Image creation"\)/);
+  assert.match(registry, /id: "image-creation"[^\n]*titleKey: "Image creation"/);
+  assert.match(app, /activeModule \? t\(activeModule\.titleKey\)/);
   assert.match(i18n, /"Generate and remix research figures"/);
 });
 
@@ -62,9 +63,9 @@ test("Data charts is a separate tab with chart types and tables, but no field or
   assert.doesNotMatch(charts, /api\/search|first 50 checked/);
   assert.match(charts, /className="image-creation-card chart-reference-card"/);
   assert.match(charts, /className="image-creation-card-image chart-reference-preview"/);
-  assert.match(charts, /className="image-creation-card-shade"/);
+  assert.doesNotMatch(charts, /className="image-creation-card-shade"/);
   assert.match(charts, /className="image-creation-card-venue"/);
-  assert.match(charts, /className="image-creation-card-title"/);
+  assert.match(charts, /className="image-creation-card-caption"/);
 });
 
 test("images lead and text is a single secondary line", () => {
@@ -72,7 +73,8 @@ test("images lead and text is a single secondary line", () => {
   assert.match(css, /\.image-creation-card-image \{[^}]*aspect-ratio: 4 \/ 3/);
   assert.match(css, /\.image-creation-card-image img \{[^}]*object-fit: cover/);
   assert.match(css, /\.image-creation-card-venue \{[^}]*position: absolute/);
-  assert.match(css, /\.image-creation-card-title \{[^}]*white-space: nowrap/);
+  assert.match(css, /\.image-creation-card-caption \{[^}]*white-space: nowrap/);
+  assert.doesNotMatch(css, /image-creation-card-shade|image-creation-card-title/);
   assert.match(css, /\.image-creation-card-use \{[^}]*opacity: 0/);
   assert.match(view, /Use as template/);
   assert.match(view, /setReferences\(\(current\) => current\.some/);
