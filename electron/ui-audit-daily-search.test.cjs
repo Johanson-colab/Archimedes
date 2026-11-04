@@ -46,6 +46,35 @@ test("daily rows pair the copy with the paper figure on the right", () => {
   assert.doesNotMatch(literature, /social-thumbnails/);
 });
 
+test("a daily row opens a large paper preview without losing its inline actions", () => {
+  assert.match(library, /function DailyPaperPreview\(/);
+  assert.match(library, /<Dialog open onClose=\{onClose\} size="lg" className="daily-paper-preview-dialog"/);
+  assert.match(library, /className="daily-paper-preview-figure"/);
+  assert.match(library, /bridge\.getDailyFigure/);
+  assert.match(library, /className="daily-paper-preview-actions"/);
+  assert.match(library, /role="button"[\s\S]*?setPreviewPaper\(paper\)/);
+  assert.match(library, /closest\("a, button, input, textarea, select, label"\)/);
+  assert.match(css, /\.daily-paper-preview-dialog \{[^}]*max-height: min\(780px/);
+  assert.match(css, /\.daily-paper-preview-body \{[^}]*grid-template-columns: minmax\(0, 1\.05fr\) minmax\(0, \.95fr\)/);
+  assert.match(css, /\.daily-paper-row \{[^}]*cursor: pointer/);
+});
+
+test("quick and deep search share one send button and search surface", () => {
+  const sendButtons = library.match(/className="daily-search-send"/g) || [];
+  assert.equal(sendButtons.length, 1);
+  assert.match(library, /title=\{searchKind === "deep" \? "Deep search" : "Search"\}/);
+  assert.doesNotMatch(library, /daily-search-input-row .*primary-button/);
+  assert.match(css, /\.daily-search-panel\.deep \{ padding: 9px; \}/);
+  assert.match(css, /\.daily-search-panel\.deep \.daily-search-kind button\.active \{ color: #235b45; \}/);
+  assert.match(css, /\.daily-search-send \{[^}]*color: var\(--accent\)[^}]*background: transparent/);
+  assert.match(css, /\.daily-search-send:hover:not\(:disabled\) \{[^}]*background: color-mix\(in srgb, var\(--accent\) 10%, transparent\)/);
+});
+
+test("the open-paper link sits on the row surface instead of an accent chip", () => {
+  assert.match(css, /\.daily-paper-title a \{ background: transparent !important; border-color: transparent !important; \}/);
+  assert.doesNotMatch(css, /\.daily-paper-title a,\s*\n\.reader-document-kicker/);
+});
+
 test("the save action sits beside the open-paper link", () => {
   assert.match(library, /daily-paper-title"><h2>\{paper\.title\}<\/h2>\{paper\.url && <a[^>]*><ExternalLink size=\{13\} \/><\/a>\}<button/);
 });
