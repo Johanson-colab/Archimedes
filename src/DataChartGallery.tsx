@@ -192,11 +192,10 @@ function ChartCard({ figure, onOpen }: { figure: ChartFigure; onOpen: () => void
     <button type="button" className="image-creation-card-image chart-reference-preview" onClick={onOpen} aria-label={`View ${figure.paper}, ${chartLabel(figure)}`} title={figure.caption || figure.paper}>
       {failed ? <span className="gallery-image-failed"><ImageOff size={24} />Preview unavailable</span>
         : <img src={figure.thumb} alt={figure.caption || `${chartLabel(figure)} from ${figure.paper}`} loading="lazy" decoding="async" onError={() => setFailed(true)} />}
-      <span className="image-creation-card-shade" aria-hidden="true" />
       <span className="image-creation-card-venue">{figure.venue || "Paper"} · {figure.year || "Year unknown"}</span>
       <span className="chart-reference-type">{chartLabel(figure)}</span>
-      <span className="image-creation-card-title">{figure.paper}</span>
     </button>
+    <button type="button" className="image-creation-card-caption" onClick={onOpen} title={figure.caption || figure.paper}>{figure.paper}</button>
   </article>;
 }
 

@@ -133,10 +133,9 @@ function FigureCard({ figure, onOpen, onUseTemplate }: {
       aria-label={`View figure: ${figure.title}`} title={figure.title}>
       {failed ? <span className="gallery-image-failed"><ImageOff size={22} />Image unavailable</span> :
         <img src={imageUrl(figure)} alt={`Figure from ${figure.title}`} loading="lazy" decoding="async" onError={() => setFailed(true)} />}
-      <span className="image-creation-card-shade" aria-hidden="true" />
       <span className="image-creation-card-venue">{figure.venue.toUpperCase()} · {figure.year}</span>
-      <span className="image-creation-card-title">{figure.title}</span>
     </button>
+    <button type="button" className="image-creation-card-caption" onClick={onOpen} title={figure.title}>{figure.title}</button>
     <button type="button" className="image-creation-card-use" onClick={onUseTemplate}
       title={`Use "${figure.title}" as a template`}>
       <Sparkles size={12} />{t("Use as template")}
