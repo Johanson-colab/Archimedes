@@ -11,9 +11,9 @@ function readable(value: unknown, fallback: string) {
 }
 
 /**
- * Sidebar plugins are managed here — not in Extensions, which stays the
+ * Sidebar micro apps are managed here — not in Extensions, which stays the
  * marketplace for MCP servers and skills. Installing, enabling, disabling,
- * and removing a sidebar module all happen in this panel, and every change
+ * and removing a micro app all happen in this panel, and every change
  * reloads the live sidebar through onPluginsChanged.
  */
 export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChanged, disabledCoreModules, onCoreModuleEnabled }: {
@@ -43,7 +43,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       setPlugins(installed);
       setAvailable((feed?.items || []).filter((item) => item.type === "ui-plugin"));
     } catch (reason) {
-      setError(readable(reason, "Could not load the sidebar plugins."));
+      setError(readable(reason, "Could not load the micro apps."));
     } finally {
       setLoading(false);
     }
@@ -58,7 +58,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       setPlugins(await bridge.setSidebarPluginEnabled(record.id, enabled));
       onPluginsChanged?.();
     } catch (reason) {
-      setNotice(readable(reason, "The plugin could not be updated."));
+      setNotice(readable(reason, "The micro app could not be updated."));
     } finally {
       setBusy("");
     }
@@ -72,7 +72,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       onPluginsChanged?.();
       setNotice(t("Removed {name}.", { name: record.name }));
     } catch (reason) {
-      setNotice(readable(reason, "The plugin could not be removed."));
+      setNotice(readable(reason, "The micro app could not be removed."));
     } finally {
       setBusy("");
     }
@@ -87,17 +87,17 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       onPluginsChanged?.();
       setNotice(t("Installed {name}.", { name: item.name }));
     } catch (reason) {
-      setNotice(readable(reason, "The plugin could not be installed."));
+      setNotice(readable(reason, "The micro app could not be installed."));
     } finally {
       setBusy("");
     }
   }
 
   return <div className="settings-sections">
-    <SettingsSection title={t("Built-in modules")}>
+    <SettingsSection title={t("Built-in micro apps")}>
       <SettingsRow
         stacked
-        description={t("Every sidebar module is a plugin. Toggle a built-in module to hide or show it; changes apply immediately.")}
+        description={t("Every sidebar entry is a micro app. Toggle a built-in one to hide or show it; changes apply immediately.")}
       />
       <SettingsGroup className="plugins-settings-list">
         {coreSidebarEntries.map((entry) => <SettingsRow
@@ -115,14 +115,14 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
         </SettingsRow>)}
       </SettingsGroup>
     </SettingsSection>
-    <SettingsSection title={t("Sidebar plugins")}>
+    <SettingsSection title={t("Installed micro apps")}>
       <SettingsRow
         stacked
-        description={t("Sidebar modules add one view to the Knowledge or Create column. Changes apply immediately.")}
+        description={t("Micro apps add one view to the Knowledge or Create column. Changes apply immediately.")}
       />
       {error && <p className="settings-row-hint">{error}</p>}
       {loading && <p className="settings-row-hint"><LoaderCircle className="spin" size={13} /> {t("Loading…")}</p>}
-      {!loading && !plugins.length && <p className="settings-row-hint">{t("No sidebar plugins installed yet.")}</p>}
+      {!loading && !plugins.length && <p className="settings-row-hint">{t("No micro apps installed yet.")}</p>}
       {!loading && plugins.length > 0 && <SettingsGroup className="plugins-settings-list">
         {plugins.map((record) => <SettingsRow
           key={record.id}
@@ -142,8 +142,8 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
         </SettingsRow>)}
       </SettingsGroup>}
     </SettingsSection>
-    <SettingsSection title={t("Available plugins")}>
-      {!available.length && <p className="settings-row-hint">{t("No plugins available yet.")}</p>}
+    <SettingsSection title={t("Available micro apps")}>
+      {!available.length && <p className="settings-row-hint">{t("No micro apps available yet.")}</p>}
       {available.length > 0 && <SettingsGroup className="plugins-settings-list">
         {available.map((item) => {
           const installed = plugins.some((record) => record.id === item.id.split("/").pop());
