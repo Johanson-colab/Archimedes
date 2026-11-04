@@ -19,7 +19,7 @@ Reproduce with `node scripts/capture-native-harnesses.mjs before` or `after`, th
 
 - Focused integration/config/UI/native tests: 50 passed before the final lifecycle regressions; process-tree peak 353.5 MiB.
 - Final focused config/transport/Codex compatibility checks: 28 passed; Electron main-process syntax check passed.
-- Final full suite: 864 tests, 857 passed, 4 skipped, 3 known pre-existing macOS Windows-shell failures; process-tree peak 504.1 MiB. Node tests ran serially with a 256 MiB heap and a 700 MiB process-tree watchdog.
+- Feature-only full suite (`81cbf89`): 864 tests, 857 passed, 4 skipped, 3 known pre-existing macOS Windows-shell failures; process-tree peak 504.1 MiB. Node tests ran serially with a 256 MiB heap and a 700 MiB process-tree watchdog.
 - Existing failures: “Windows prefers PowerShell 7 when it is installed”, “Windows falls back to Windows PowerShell before cmd”, and “explicit shell profiles do not fall through to a different shell”. These tests were not weakened.
 - `npm run lint`, `npm run build`, and `npm run check:theme` passed. Build used a 512 MiB heap / 1024 MiB process-tree limit; observed peak 824.8 MiB. Existing bundle-size warnings remain.
 - New coverage includes real child protocols through the Work orchestrator without API calls; old binding migration; independent profile switching; failure/abort/approval expiry; hidden-thought and replay omission; child output after `exit`; Windows owned-tree cleanup; bounded activity coalescing; and safe quota/auth error hints. Windows cleanup tests are simulated on macOS, not a real Windows integration run.
@@ -38,3 +38,11 @@ Native errors now explain the recognized free-quota and authentication condition
 Claude/OpenCode retain native configured permission rules and expose one-time approval requests; this is not an OS sandbox. Live steering, native question cards, explicit compaction and plugin/skill attachments are not supported by these two adapters. Unsupported requests fail explicitly. Unknown context capacity remains unknown; credentials and native session IDs remain local.
 
 Independent source/spec and code-quality reviews completed. Both lifecycle findings (stdout drain and Windows descendant cleanup) were fixed with regression tests and re-reviewed.
+
+## Integration with updated main
+
+Before publication, remote main advanced by 24 commits to `d95aabd`. Merge `1cc01d8` preserves those updates and the native Harness implementation; the three shared source files merged without conflicts. Electron main-process syntax and TypeScript checks passed after integration.
+
+The merged full suite ran 925 tests: 915 passed, 4 skipped, 6 failed; process-tree peak 433 MiB. In addition to the three existing Windows-shell failures, the remote Benchmark Radar fallback/cache/empty-data tests fail because this machine has an adjacent `benchmark-radar` checkout, which is discovered ahead of the fixture data. The same three failures were reproduced using unchanged `origin/main` modules/tests in the same working directory; no Harness regression was found and those tests were not weakened.
+
+Merged `npm run build` and `npm run check:theme` passed, with a build process-tree peak of 834 MiB. Native CLI smoke results and capability limits above still apply.
