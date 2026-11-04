@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, CalendarDays, FilePenLine, FlaskConical, ImagePlus, Newspaper, Puzzle, Radar } from "lucide-react";
+import { BookOpen, CalendarDays, ClipboardCheck, FilePenLine, FlaskConical, ImagePlus, Newspaper, Puzzle, Radar } from "lucide-react";
 
-export type SidebarSection = "knowledge" | "create";
+export type SidebarSection = "knowledge" | "create" | "evaluate";
 
 /**
  * A sidebar module is one pluggable unit of the left navigation. Every entry
@@ -10,7 +10,7 @@ export type SidebarSection = "knowledge" | "create";
  * already accepts `plugin:<id>` so runtime-registered modules can join this
  * same projection once they land.
  */
-export type SidebarModuleId = "library" | "daily" | "news" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation";
+export type SidebarModuleId = "library" | "daily" | "news" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation" | "paper-review";
 
 /** Main sections that are not modules: they stay hardcoded in App. */
 export type MainSection = "chat" | "files" | SidebarModuleId | `plugin:${string}`;
@@ -60,6 +60,7 @@ export const coreSidebarEntries: SidebarEntry[] = [
   { id: "reproduce", commandId: "open-reproduce", section: "create", labelKey: "Reproduce", titleKey: "Reproduce", icon: FlaskConical, order: 5, destination: { type: "section", section: "reproduce" }, source: "core" },
   { id: "writing", commandId: "open-paper-writing", section: "create", labelKey: "Paper writing", titleKey: "Paper writing", icon: FilePenLine, order: 10, destination: { type: "section", section: "writing" }, source: "core", keepMounted: true, cacheClass: "paper-writing-view-cache", requiresWorkspace: true },
   { id: "image-creation", commandId: "open-image-creation", section: "create", labelKey: "Image creation", titleKey: "Image creation", icon: ImagePlus, order: 20, destination: { type: "section", section: "image-creation" }, source: "core", keepMounted: true, cacheClass: "image-creation-view-cache" },
+  { id: "paper-review", commandId: "open-paper-review", section: "evaluate", labelKey: "Paper review", titleKey: "Paper review", icon: ClipboardCheck, order: 10, destination: { type: "section", section: "paper-review" }, source: "core" },
 ];
 
 /** Runtime plugin modules register here; the projection below merges them. */

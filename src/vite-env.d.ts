@@ -225,6 +225,18 @@ interface ResearchDeskBridge {
     refreshNews: (input?: { force?: boolean }) => Promise<{ skipped: boolean; results: Array<{ source: string; status: string; updated: number; error?: string }> }>;
     markNewsRead: (id: string, read?: boolean) => Promise<{ ok: boolean }>;
     setNewsSaved: (id: string, saved: boolean) => Promise<{ ok: boolean }>;
+    getPaperReviewSettings: () => Promise<PublicPaperReviewSettings>;
+    savePaperReviewSettings: (patch: Partial<PublicPaperReviewSettings> & { model?: Partial<PaperReviewModelSettings> }) => Promise<PublicPaperReviewSettings>;
+    listPaperReviewVenues: () => Promise<PaperReviewVenueSummary[]>;
+    listPaperReviewPapers: (input?: { workspace?: string; projectId?: string }) => Promise<PaperReviewPaperSummary[]>;
+    choosePaperReviewPdf: () => Promise<string>;
+    createPaperReviewRun: (input: PaperReviewCreateInput) => Promise<{ runId: string; document: PaperReviewDocumentSummary | null; venue: { id: string; displayName: string; version: string }; model: string }>;
+    getPaperReviewRun: (runId: string) => Promise<PaperReviewRunSummary | null>;
+    listPaperReviewRuns: (input?: { projectId?: string; limit?: number }) => Promise<PaperReviewRunSummary[]>;
+    cancelPaperReviewRun: (runId: string) => Promise<{ cancelled: boolean }>;
+    deletePaperReviewRun: (runId: string) => Promise<{ deleted: boolean }>;
+    exportPaperReviewRun: (runId: string) => Promise<{ saved: boolean; path: string }>;
+    onPaperReviewProgress: (callback: (payload: PaperReviewProgress) => void) => () => void;
     saveWorkbenchSettings: (input: { version?: number; order: string[]; hidden: string[] }) => Promise<{ version: number; order: string[]; hidden: string[] }>;
     resetWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
     getWorkbenchNote: (key: string) => Promise<{ content: string; updatedAt: string | null }>;
@@ -409,6 +421,233 @@ interface NewsFeedPayload {
   sources: NewsSourceState[];
   updatedAt: string;
   settings: NewsSettings;
+}
+
+interface PaperReviewModelSettings {
+  mode: "agent" | "custom";
+  provider: ModelProviderId;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  configured?: boolean;
+}
+
+interface PublicPaperReviewSettings {
+  version: number;
+  defaultVenueId: string;
+  concurrency: number;
+  model: PaperReviewModelSettings;
+  agentModel: PublicModelConfig;
+}
+
+interface PaperReviewVenueSummary {
+  id: string;
+  venue: string;
+  year: number;
+  track: string;
+  displayName: string;
+  version: string;
+  pageLimit: number;
+  overall: { min: number; max: number };
+  confidence: { min: number; max: number };
+  subdimensions: Array<{ id: string; label: string; min: number; max: number }>;
+  sourceUrls: string[];
+  notes: string;
+}
+
+interface PaperReviewPaperSummary {
+  id: string;
+  title: string;
+  authors: string[];
+  year: number | null;
+  venue: string;
+  url: string;
+  arxiv_id: string;
+  pdf_url: string;
+  libraryId: string;
+  libraryName: string;
+  projectId: string;
+}
+
+interface PaperReviewDocumentSummary {
+  id: string;
+  title: string;
+  sourceKind: "library" | "arxiv" | "pdf" | string;
+  sourceRef: string;
+  pageCount: number;
+  textChars: number;
+}
+
+type PaperReviewSource =
+  | { kind: "library"; paperId: string }
+  | { kind: "arxiv"; value: string }
+  | { kind: "pdf"; filePath: string };
+
+interface PaperReviewCreateInput {
+  source: PaperReviewSource;
+  venueId?: string;
+  workspace?: string;
+  projectId?: string;
+  title?: string;
+}
+
+interface PaperReviewFinding {
+  text: string;
+  page: number | null;
+  quote: string;
+  severity?: string;
+}
+
+interface PaperReviewSubdimensionScore {
+  id: string;
+  label: string;
+  score: number;
+  reason: string;
+}
+
+interface PaperReviewReviewer {
+  index: number;
+  targetScore: number;
+  targetLabel: string;
+  overallScore: number | null;
+  confidence: number | null;
+  summary: string;
+  strengths: PaperReviewFinding[];
+  weaknesses: PaperReviewFinding[];
+  questions: PaperReviewFinding[];
+  limitations: PaperReviewFinding[];
+  subdimensions: PaperReviewSubdimensionScore[];
+  evidence: Array<{ page: number | null; quote: string; supports: string }>;
+  deskRejectRisk: string;
+  expectedOutcome: string;
+  justification: string;
+  status: "complete" | "error";
+  error: string;
+}
+
+interface PaperReviewCard {
+  title: string;
+  topic: string;
+  summary: string;
+  contributions: string[];
+  method: string;
+  experiments: string;
+  claims: Array<{ claim: string; evidence: string; page: number | null; status: string }>;
+  limitations: string[];
+  noveltyClaims: string[];
+  isResearchPaper: boolean;
+  isResearchPaperConfidence: number;
+  qualityGate: "pass" | "warn" | "fail";
+  qualityGateReason: string;
+  promptInjectionRisk: "low" | "medium" | "high";
+  pageCoverage: string;
+  venue: string;
+}
+
+interface PaperReviewPreflight {
+  ok: boolean;
+  pageCount: number;
+  pagesWithText: number;
+  coverage: number;
+  textChars: number;
+  pageLimit: number;
+  pageLimitExceeded: boolean;
+  injectionSignals: Array<{ id: string; sample: string }>;
+  promptInjectionRisk: "low" | "medium" | "high";
+  deskRejectRisk: "low" | "medium" | "high";
+  warnings: string[];
+}
+
+interface PaperReviewFinal {
+  summary: string;
+  strengths: PaperReviewFinding[];
+  weaknesses: PaperReviewFinding[];
+  questions: PaperReviewFinding[];
+  limitations: PaperReviewFinding[];
+  reviewerDisagreement: string[];
+  metaReview: string;
+  overallScore: number;
+  confidence: number;
+  subdimensions: PaperReviewSubdimensionScore[];
+  deskRejectRisk: string;
+  expectedOutcome: string;
+  consistencyNotes: string[];
+  calibrationRationale: string;
+  decision: string;
+  calibratedScore: number;
+  reviewerAgreement: number;
+  simulated: boolean;
+  venue: string;
+}
+
+interface PaperReviewSelection {
+  bestJustified: number;
+  optimistic: number;
+  critical: number;
+  validity: Array<{ index: number; score: number; guni: string[]; reason: string }>;
+  rationale: string;
+}
+
+interface PaperReviewGate {
+  status: "passed" | "failed";
+  reason: string;
+  preflight?: PaperReviewPreflight;
+}
+
+interface PaperReviewResult {
+  gate: PaperReviewGate;
+  preflight: PaperReviewPreflight;
+  paperCard: PaperReviewCard | null;
+  reviewers: PaperReviewReviewer[];
+  selection: PaperReviewSelection | null;
+  review: PaperReviewFinal | null;
+  trace: Array<{ stage: string; detail: string; at: string }>;
+  usage: { inputTokens: number; outputTokens: number };
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  venue: Record<string, unknown>;
+  model: string;
+  simulated: boolean;
+  localPool?: { samples: number; percentile: number | null; note: string };
+  document?: PaperReviewDocumentSummary;
+}
+
+interface PaperReviewRunSummary {
+  id: string;
+  documentId: string;
+  projectId: string;
+  sourceKind: string;
+  sourceRef: string;
+  paperTitle: string;
+  venueId: string;
+  venueVersion: string;
+  model: { provider: string; baseUrl: string; model: string };
+  status: string;
+  stage: string;
+  progress: number;
+  createdAt: string;
+  finishedAt: string;
+  overallScore: number | null;
+  calibratedScore: number | null;
+  confidence: number | null;
+  decision: string;
+  deskRejectRisk: string;
+  expectedOutcome: string;
+  costTokens: number;
+  durationMs: number;
+  error: string;
+  result?: PaperReviewResult | null;
+}
+
+interface PaperReviewProgress {
+  runId?: string;
+  type: string;
+  stage?: string;
+  progress?: number;
+  detail?: string;
+  index?: number;
+  targetScore?: number;
 }
 
 interface ExtensionFeed {

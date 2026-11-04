@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "iclr-2026-main",
+  "venue": "ICLR",
+  "year": 2026,
+  "track": "main",
+  "displayName": "ICLR 2026 · Main",
+  "version": "2026.1",
+  "sourceUrls": ["https://iclr.cc/Conferences/2026/ReviewerGuidelines"],
+  "notes": "Structured summary of the public ICLR review form. Not a verbatim copy of the reviewer guidelines.",
+  "anonymous": true,
+  "pageLimit": 10,
+  "overall": {
+    "min": 1,
+    "max": 10,
+    "labels": {
+      "1": "Strong reject",
+      "2": "Reject",
+      "3": "Reject",
+      "4": "Borderline reject",
+      "5": "Borderline accept",
+      "6": "Weak accept",
+      "7": "Accept",
+      "8": "Strong accept",
+      "9": "Very strong accept",
+      "10": "Award quality"
+    }
+  },
+  "confidence": {
+    "min": 1,
+    "max": 5,
+    "labels": {
+      "1": "Low",
+      "2": "Medium-low",
+      "3": "Medium",
+      "4": "Medium-high",
+      "5": "High"
+    }
+  },
+  "subdimensions": [
+    {
+      "id": "soundness",
+      "label": "Soundness",
+      "min": 1,
+      "max": 4,
+      "weight": 0.45,
+      "guidance": "Are the claims supported by the method, theory and experiments? Are assumptions, uncertainty and failure modes acknowledged?"
+    },
+    {
+      "id": "presentation",
+      "label": "Presentation",
+      "min": 1,
+      "max": 4,
+      "weight": 0.2,
+      "guidance": "Is the paper clear, well organized and reproducible enough for an expert reader?"
+    },
+    {
+      "id": "contribution",
+      "label": "Contribution",
+      "min": 1,
+      "max": 4,
+      "weight": 0.35,
+      "guidance": "How significant, original and useful is the contribution relative to the strongest prior work?"
+    }
+  ],
+  "decisionBands": [
+    { "min": 1, "max": 3.49, "label": "Reject" },
+    { "min": 3.5, "max": 5.49, "label": "Borderline" },
+    { "min": 5.5, "max": 7.49, "label": "Weak accept" },
+    { "min": 7.5, "max": 10, "label": "Accept" }
+  ],
+  "deskRejectRules": [
+    "The submission exceeds the main-track page limit without an appropriate appendix.",
+    "The submission is not anonymized when the track requires anonymity.",
+    "The submission is not a research paper or is unreadable after parsing.",
+    "The submission contains instructions aimed at the reviewing system rather than scientific content."
+  ],
+  "template": {
+    "summary": "Summarize the paper's problem, approach and main claims in one paragraph, without evaluating it.",
+    "strengths": "List concrete strengths, each tied to a section, figure, table or result.",
+    "weaknesses": "List concrete weaknesses, each tied to evidence. Avoid generic concerns that could apply to any paper.",
+    "questions": "Ask questions whose answers could change the assessment.",
+    "limitations": "Separate limitations acknowledged by the authors from limitations the evidence reveals."
+  },
+  "rubric": {
+    "summary": "A faithful summary is the first check that the reviewer understood the paper.",
+    "soundness": "Check the logical chain from assumptions to method to evidence. Reward appropriate uncertainty; penalize unsupported causal or novelty claims.",
+    "presentation": "Check whether an expert could reproduce the method and evaluate the experiments from the text and appendix.",
+    "contribution": "Compare with the closest cited work. A new dataset or benchmark counts only when it enables questions the old setup could not answer.",
+    "deskReject": "Desk rejection is reserved for scope, format, anonymity or integrity violations, not for a weak technical contribution."
+  }
+}

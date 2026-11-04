@@ -216,6 +216,17 @@ contextBridge.exposeInMainWorld("researchDesk", {
   refreshNews: (input) => ipcRenderer.invoke("news:refresh", input),
   markNewsRead: (id, read = true) => ipcRenderer.invoke("news:mark-read", { id, read }),
   setNewsSaved: (id, saved) => ipcRenderer.invoke("news:set-saved", { id, saved }),
+  getPaperReviewSettings: () => ipcRenderer.invoke("paper-review-app:get-settings"),
+  savePaperReviewSettings: (patch) => ipcRenderer.invoke("paper-review-app:save-settings", patch),
+  listPaperReviewVenues: () => ipcRenderer.invoke("paper-review-app:list-venues"),
+  listPaperReviewPapers: (input) => ipcRenderer.invoke("paper-review-app:list-papers", input),
+  choosePaperReviewPdf: () => ipcRenderer.invoke("paper-review-app:choose-pdf"),
+  createPaperReviewRun: (input) => ipcRenderer.invoke("paper-review-app:create", input),
+  getPaperReviewRun: (runId) => ipcRenderer.invoke("paper-review-app:get-run", { runId }),
+  listPaperReviewRuns: (input) => ipcRenderer.invoke("paper-review-app:list-runs", input),
+  cancelPaperReviewRun: (runId) => ipcRenderer.invoke("paper-review-app:cancel-run", { runId }),
+  deletePaperReviewRun: (runId) => ipcRenderer.invoke("paper-review-app:delete-run", { runId }),
+  exportPaperReviewRun: (runId) => ipcRenderer.invoke("paper-review-app:export-run", { runId }),
   saveWorkbenchSettings: (input) => ipcRenderer.invoke("workbench:save-settings", input),
   resetWorkbenchSettings: () => ipcRenderer.invoke("workbench:reset-settings"),
   getWorkbenchNote: (key) => ipcRenderer.invoke("workbench:get-note", key),
@@ -259,6 +270,11 @@ contextBridge.exposeInMainWorld("researchDesk", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("paper-review:event", listener);
     return () => ipcRenderer.removeListener("paper-review:event", listener);
+  },
+  onPaperReviewProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("paper-review-app:progress", listener);
+    return () => ipcRenderer.removeListener("paper-review-app:progress", listener);
   },
   onPaperPresentationEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);

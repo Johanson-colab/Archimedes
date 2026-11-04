@@ -29,7 +29,7 @@ function initialRuns(): Record<ReviewAgentId, ReviewRun> {
 }
 
 function reviewError(error: unknown) {
-  return error instanceof Error ? error.message : String(error || "The review could not be completed.");
+  return error instanceof Error ? error.message : String(error || "The reading could not be completed.");
 }
 
 /**
@@ -76,7 +76,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   const [runs, setRuns] = useState<Record<ReviewAgentId, ReviewRun>>(initialRuns);
   const [summary, setSummary] = useState<ReviewRun>({ status: "idle", response: "", error: "" });
   const [audit, setAudit] = useState("The evidence audit will check citations, overclaims, and disagreements before synthesis.");
-  const [stage, setStage] = useState("Ready for a source-grounded review.");
+  const [stage, setStage] = useState("Ready for a source-grounded reading.");
   const [running, setRunning] = useState(false);
   const [expanded, setExpanded] = useState<Set<ReviewAgentId>>(new Set());
   const [reviewUpdatedAt, setReviewUpdatedAt] = useState("");
@@ -127,7 +127,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       setAudit(saved.audit || "The saved evidence audit did not include a written rationale.");
       setSummary({ status: "complete", response: saved.summary, error: "" });
       setReviewUpdatedAt(saved.updated_at);
-      setStage("Saved review restored. Run the review again to replace it.");
+      setStage("Saved reading restored. Run the reading again to replace it.");
     }).catch(() => undefined);
     return () => { mounted = false; };
   }, [bridge, paper.id, workspace]);
@@ -164,7 +164,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       for (const report of result.specialists) nextRuns[report.id] = { status: report.status, response: report.response, error: report.error, repaired: report.repaired };
       setRuns(nextRuns);
       if (result.error || !result.summary) {
-        const message = result.error || "The review ended before a research memorandum could be written.";
+        const message = result.error || "The reading ended before a research memorandum could be written.";
         setAudit(result.supervisor.reason);
         setSummary({ status: "error", response: "", error: message });
         setStage(message);
@@ -174,7 +174,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
         ? `${result.supervisor.reason} A targeted repair was completed for ${result.supervisor.repairTargets.join(" and ")}.`
         : result.supervisor.reason);
       setSummary({ status: "complete", response: result.summary.response, error: "" });
-      setStage("The review memorandum is ready. Open any reading to inspect its evidence trail.");
+      setStage("The reading memorandum is ready. Open any reading to inspect its evidence trail.");
       const saved = await bridge.getPaperReview(paper.id, workspace, projectId);
       if (saved) setReviewUpdatedAt(saved.updated_at);
     } catch (error) {
@@ -204,24 +204,24 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   return <div className={`review-page-shell${view === "presentation" ? " presentation-active" : ""}`}>
     <div className="review-page">
       <header className="review-page-header">
-        <Tabs value={view} onChange={(value) => setView(value as "review" | "presentation")} label="Review output" variant="segmented" className="review-output-tabs">
-          <Tab value="review">Text review</Tab>
+        <Tabs value={view} onChange={(value) => setView(value as "review" | "presentation")} label="Interactive paper outputs" variant="segmented" className="review-output-tabs">
+          <Tab value="review">Reading</Tab>
           <Tab value="presentation" disabled={!reviewAvailable}>Presentation</Tab>
         </Tabs>
         <span className={`review-overall-status ${running ? "working" : summary.status === "complete" ? "complete" : errorCount ? "error" : "idle"}`}>
-          {running ? "Reviewing" : summary.status === "complete" ? "Complete" : errorCount ? "Needs attention" : completeCount ? `${completeCount}/4 readings` : "Not started"}
+          {running ? "Reading" : summary.status === "complete" ? "Complete" : errorCount ? "Needs attention" : completeCount ? `${completeCount}/4 readings` : "Not started"}
         </span>
         <button className="primary-button review-run" onClick={() => void runReview()} disabled={running || !ready || !workspace}>
           {running && <LoaderCircle className="spin" size={14} />}
-          {running ? "Reviewing" : completeCount || errorCount || summary.status === "complete" ? "Review again" : "Run review"}
+          {running ? "Reading" : completeCount || errorCount || summary.status === "complete" ? "Read again" : "Run reading"}
         </button>
       </header>
 
       {view === "presentation" ? <PaperPresentationDeck bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={pageCount} pdfUrl={pdfUrl} reviewReady={reviewAvailable} reviewUpdatedAt={reviewUpdatedAt} /> : <div className="review-content">
-        {!ready && <InlineNotice tone="warning" title="Prepare the paper first">The review agents need the locally indexed PDF so their findings can point back to the original pages.</InlineNotice>}
-        {!workspace && <InlineNotice tone="warning" title="Choose a workspace first">A workspace keeps this review and its supporting source reads inside Archimedes.</InlineNotice>}
+        {!ready && <InlineNotice tone="warning" title="Prepare the paper first">The reading agents need the locally indexed PDF so their findings can point back to the original pages.</InlineNotice>}
+        {!workspace && <InlineNotice tone="warning" title="Choose a workspace first">A workspace keeps this reading and its supporting source reads inside Archimedes.</InlineNotice>}
 
-        <section className="reproduce-summary review-summary" aria-label="Review status">
+        <section className="reproduce-summary review-summary" aria-label="Reading status">
           <p>Four independent readings are audited for evidence before one concise research memorandum is written.</p>
           <div className="reproduce-facts">
             <span className={`reproduce-fact ${completeCount === REVIEWERS.length ? "ok" : errorCount ? "warn" : ""}`}>{completeCount}/{REVIEWERS.length} readings</span>
@@ -247,7 +247,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
                     </span>
                   </div>
                   <p className="reproduce-step-detail">{reviewer.subtitle}</p>
-                  {run.status === "idle" && <p className="reproduce-step-detail">Waiting for the complete PDF review to begin.</p>}
+                  {run.status === "idle" && <p className="reproduce-step-detail">Waiting for the complete PDF reading to begin.</p>}
                   {run.status === "working" && <p className="reproduce-step-detail">Reading source pages and preparing a page-cited assessment…</p>}
                   {run.status === "error" && <p className="review-reading-error">{run.error}</p>}
                   {run.status === "complete" && <>
@@ -273,7 +273,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
               {summary.status === "working" && <span className="review-chip working"><LoaderCircle className="spin" size={10} />{stage}</span>}
             </div>
             <p>Four independent readings are audited before the final memorandum is written.</p>
-            {summary.status === "idle" && <p>Run the review to collect independent readings before Archimedes writes the final memorandum.</p>}
+            {summary.status === "idle" && <p>Run the reading to collect independent readings before Archimedes writes the final memorandum.</p>}
             {summary.status === "working" && <p>{stage}</p>}
             {summary.status === "error" && <p className="review-reading-error">{summary.error}</p>}
             {summary.status === "complete" && <div className="review-memo-body"><ReviewMarkdown content={summary.response} /></div>}

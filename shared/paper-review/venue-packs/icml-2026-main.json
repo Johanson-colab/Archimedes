@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "icml-2026-main",
+  "venue": "ICML",
+  "year": 2026,
+  "track": "main",
+  "displayName": "ICML 2026 · Main",
+  "version": "2026.1",
+  "sourceUrls": ["https://icml.cc/Conferences/2026/ReviewerGuidelines"],
+  "notes": "Structured summary of the public ICML review form. Not a verbatim copy of the reviewer guidelines.",
+  "anonymous": true,
+  "pageLimit": 8,
+  "overall": {
+    "min": 1,
+    "max": 10,
+    "labels": {
+      "1": "Strong reject",
+      "2": "Reject",
+      "3": "Reject",
+      "4": "Borderline reject",
+      "5": "Borderline accept",
+      "6": "Weak accept",
+      "7": "Accept",
+      "8": "Strong accept",
+      "9": "Very strong accept",
+      "10": "Award quality"
+    }
+  },
+  "confidence": {
+    "min": 1,
+    "max": 5,
+    "labels": {
+      "1": "Low",
+      "2": "Medium-low",
+      "3": "Medium",
+      "4": "Medium-high",
+      "5": "High"
+    }
+  },
+  "subdimensions": [
+    {
+      "id": "soundness",
+      "label": "Soundness",
+      "min": 1,
+      "max": 4,
+      "weight": 0.45,
+      "guidance": "Correctness of the theory and experiments, appropriateness of assumptions and support for each claim."
+    },
+    {
+      "id": "presentation",
+      "label": "Presentation",
+      "min": 1,
+      "max": 4,
+      "weight": 0.2,
+      "guidance": "Clarity of the exposition and completeness of the experimental protocol."
+    },
+    {
+      "id": "contribution",
+      "label": "Contribution",
+      "min": 1,
+      "max": 4,
+      "weight": 0.35,
+      "guidance": "Originality and significance relative to the strongest related work."
+    }
+  ],
+  "decisionBands": [
+    { "min": 1, "max": 3.49, "label": "Reject" },
+    { "min": 3.5, "max": 5.49, "label": "Borderline" },
+    { "min": 5.5, "max": 7.49, "label": "Weak accept" },
+    { "min": 7.5, "max": 10, "label": "Accept" }
+  ],
+  "deskRejectRules": [
+    "The submission exceeds the page limit or violates the supplementary-material rules.",
+    "The submission is not anonymized when required.",
+    "The submission is not a research paper or cannot be parsed.",
+    "The submission contains reviewer-directed manipulation."
+  ],
+  "template": {
+    "summary": "Summarize the problem, technical approach and main empirical or theoretical claims.",
+    "strengths": "Give concrete strengths with page or section references.",
+    "weaknesses": "Give concrete weaknesses with page or section references.",
+    "questions": "Ask questions that could materially change the rating.",
+    "limitations": "Discuss limitations of the method, theory, experiments and scope."
+  },
+  "rubric": {
+    "summary": "The summary should distinguish the paper's actual contribution from its stated motivation.",
+    "soundness": "For theory, check definitions, assumptions and proof sketches. For empirics, check baselines, controls and uncertainty.",
+    "presentation": "Check whether the reader can reconstruct the method and the evaluation from the paper and appendix.",
+    "contribution": "Compare against the closest cited work and ask what would change if the paper did not exist.",
+    "deskReject": "Desk rejection is reserved for format, scope, anonymity and integrity issues."
+  }
+}

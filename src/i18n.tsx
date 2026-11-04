@@ -1,4 +1,4 @@
-﻿import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { app as appStrings } from "./i18n/translations/app";
 import { library as libraryStrings } from "./i18n/translations/library";
 import { gallery as galleryStrings } from "./i18n/translations/gallery";
@@ -16,6 +16,7 @@ import { writing as writingStrings } from "./i18n/translations/writing";
 import { misc as miscStrings } from "./i18n/translations/misc";
 import { native as nativeStrings } from "./i18n/translations/native";
 import { news as newsStrings } from "./i18n/translations/news";
+import { paperReview as paperReviewStrings } from "./i18n/translations/paperReview";
 
 export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
@@ -50,6 +51,7 @@ const translations: Record<string, string> = {
   ...miscStrings,
   ...nativeStrings,
   ...newsStrings,
+  ...paperReviewStrings,
 };
 
 type UISettings = {

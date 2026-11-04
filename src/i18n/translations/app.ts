@@ -52,6 +52,7 @@ export const app: Record<string, string> = {
   "Drag to reorder": "拖动排序",
   "Drop files or folders to attach": "拖入文件或文件夹以添加附件",
   "Estimated total": "预计总计",
+  "Evaluate": "评估",
   "Experiment": "实验",
   "Experiment plan": "实验计划",
   "Experiment setup": "实验设置",

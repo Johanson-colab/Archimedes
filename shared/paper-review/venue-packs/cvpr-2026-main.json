@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "id": "cvpr-2026-main",
+  "venue": "CVPR",
+  "year": 2026,
+  "track": "main",
+  "displayName": "CVPR 2026 · Main",
+  "version": "2026.1",
+  "sourceUrls": ["https://cvpr.thecvf.com/Conferences/2026/ReviewerGuidelines"],
+  "notes": "Structured summary of the public CVPR review form. Not a verbatim copy of the reviewer guidelines.",
+  "anonymous": true,
+  "pageLimit": 8,
+  "overall": {
+    "min": 1,
+    "max": 5,
+    "labels": {
+      "1": "Strong reject",
+      "2": "Reject",
+      "3": "Borderline",
+      "4": "Accept",
+      "5": "Strong accept"
+    }
+  },
+  "confidence": {
+    "min": 1,
+    "max": 5,
+    "labels": {
+      "1": "Low",
+      "2": "Medium-low",
+      "3": "Medium",
+      "4": "Medium-high",
+      "5": "High"
+    }
+  },
+  "subdimensions": [
+    {
+      "id": "technical",
+      "label": "Technical quality",
+      "min": 1,
+      "max": 5,
+      "weight": 0.4,
+      "guidance": "Correctness of the method, appropriateness of the benchmarks and strength of the ablations."
+    },
+    {
+      "id": "novelty",
+      "label": "Novelty",
+      "min": 1,
+      "max": 5,
+      "weight": 0.3,
+      "guidance": "Originality relative to the closest vision work, including new tasks, representations or analyses."
+    },
+    {
+      "id": "clarity",
+      "label": "Clarity",
+      "min": 1,
+      "max": 5,
+      "weight": 0.3,
+      "guidance": "Clarity of the method, figures and experimental protocol; reproducibility of the reported results."
+    }
+  ],
+  "decisionBands": [
+    { "min": 1, "max": 2.49, "label": "Reject" },
+    { "min": 2.5, "max": 3.49, "label": "Borderline" },
+    { "min": 3.5, "max": 5, "label": "Accept" }
+  ],
+  "deskRejectRules": [
+    "The submission violates the page limit or the dual-submission policy.",
+    "The submission is not anonymized when required.",
+    "The submission is not a research paper or cannot be parsed.",
+    "The submission contains reviewer-directed manipulation."
+  ],
+  "template": {
+    "summary": "Summarize the visual task, method, datasets and main results.",
+    "strengths": "List concrete strengths with figure, table or section references.",
+    "weaknesses": "List concrete weaknesses with figure, table or section references.",
+    "questions": "Ask questions that could change the rating after rebuttal.",
+    "limitations": "Discuss limitations of the method, datasets, metrics and claims."
+  },
+  "rubric": {
+    "summary": "Check that the summary covers the actual visual task and evaluation, not only the architecture.",
+    "technical": "Check dataset splits, metric choices, baseline strength and ablation coverage.",
+    "novelty": "Reward new tasks and analyses, not only a new module stacked on an existing backbone.",
+    "clarity": "Check that figures and tables are legible and that the evaluation protocol is specified.",
+    "deskReject": "Desk rejection is a format, anonymity, scope or integrity decision."
+  }
+}

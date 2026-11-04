@@ -8673,3 +8673,141 @@ html[data-menu-style="glass"] .menu-surface {
 .news-settings-textarea { width: 100%; min-height: 88px; padding: 8px 10px; color: var(--night-ink); background: var(--mono-control); border: 1px solid var(--night-line); border-radius: 6px; font: inherit; font-size: 12px; resize: vertical; }
 .news-settings-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 .news-cadence-input { width: 72px; }
+
+/* Paper review micro app. The page follows the Reproduce shell: one centered
+   column, compact controls, plain section headings and no decorative chrome.
+   Review bodies stay close to OpenReview's dense document layout. */
+.pra-page { display: flex; width: min(100%, 1080px); min-height: 100%; margin: 0 auto; flex-direction: column; gap: 14px; padding: 26px clamp(18px, 3vw, 40px) 60px; overflow: auto; color: var(--night-ink); }
+.pra-header { display: flex; align-items: center; gap: 10px; }
+.pra-header h1 { flex: 1; min-width: 0; margin: 0; overflow: hidden; font-size: 18px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.pra-header-actions { display: flex; align-items: center; gap: 8px; }
+.pra-status { flex: 0 0 auto; padding: 2px 8px; color: var(--night-muted); background: var(--mono-control); border-radius: 999px; font-size: 9.5px; font-weight: 700; text-transform: uppercase; }
+.pra-status.complete { color: var(--state-success); background: color-mix(in srgb, var(--state-success) 12%, transparent); }
+.pra-status.error, .pra-status.cancelled { color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 12%, transparent); }
+.pra-status.running { color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 12%, transparent); }
+
+.pra-compose { display: grid; gap: 8px; padding: 12px 14px; background: var(--mono-surface); border: 1px solid var(--night-line); border-radius: 8px; }
+.pra-compose-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pra-source-tabs .ui-tab { height: 26px; padding: 0 10px; font-size: 11px; }
+.pra-source-select, .pra-venue-select, .pra-pdf-picker { min-width: 0; height: 32px; padding: 0 9px; color: var(--night-ink); background: var(--mono-control); border: 1px solid var(--night-line); border-radius: 6px; font: inherit; font-size: 12px; }
+.pra-source-select { flex: 1 1 300px; }
+.pra-venue-select { flex: 0 1 220px; }
+.pra-pdf-picker { display: flex; flex: 1 1 300px; align-items: center; gap: 9px; padding: 0; background: transparent; border: 0; }
+.pra-pdf-picker .secondary-button { height: 32px; }
+.pra-compose-row .primary-button { height: 32px; }
+.pra-compose-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; color: var(--night-muted); font-size: 10.5px; }
+.pra-compose-foot b { color: var(--night-ink-soft); font-weight: 600; }
+.pra-link { padding: 0; color: var(--accent); background: transparent; border: 0; font: inherit; font-size: 10.5px; cursor: pointer; }
+.pra-link:hover { text-decoration: underline; }
+
+.pra-progress { display: grid; gap: 5px; padding-top: 3px; }
+.pra-progress-head { display: flex; justify-content: space-between; gap: 10px; color: var(--night-ink-soft); font-size: 10.5px; }
+.pra-progress-head b { color: var(--accent); font-variant-numeric: tabular-nums; }
+.pra-progress-track { height: 3px; overflow: hidden; background: var(--mono-control); border-radius: 999px; }
+.pra-progress-track i { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .25s ease; }
+
+.pra-notice { padding: 8px 10px; color: var(--night-ink-soft); background: var(--mono-surface-raised); border: 1px solid var(--night-line); border-radius: 6px; font-size: 11px; }
+.pra-notice.error { color: var(--state-danger); border-color: color-mix(in srgb, var(--state-danger) 35%, var(--night-line)); }
+
+.pra-doc { padding: 16px 18px 18px; background: var(--mono-surface); border: 1px solid var(--night-line); border-radius: 8px; }
+.pra-doc-head { display: flex; align-items: center; gap: 10px; padding-bottom: 9px; border-bottom: 1px solid var(--night-line-soft); }
+.pra-meta { flex: 1; min-width: 0; margin: 0; color: var(--night-muted); font-size: 10.5px; }
+.pra-simulated { flex: 0 0 auto; padding: 2px 8px; color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 10%, transparent); border: 1px solid color-mix(in srgb, var(--state-warning) 25%, transparent); border-radius: 999px; font-size: 9.5px; font-weight: 700; white-space: nowrap; }
+.pra-gate { padding: 10px 0; border-bottom: 1px solid var(--night-line-soft); }
+.pra-gate b { color: var(--state-warning); font-size: 12px; }
+.pra-gate p { margin: 4px 0 0; color: var(--night-ink-soft); font-size: 11.5px; line-height: 1.55; }
+
+.pra-score-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px 10px; padding: 10px 0; border-bottom: 1px solid var(--night-line-soft); }
+.pra-score-main { color: var(--accent); font-size: 27px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.pra-score-main small { color: var(--night-muted); font-size: 12px; font-weight: 500; }
+.pra-score-summary strong { font-size: 13px; font-weight: 650; }
+.pra-score-outcome { color: var(--night-muted); font-size: 11px; }
+.pra-score-spacer { flex: 1; }
+.pra-score-fact { color: var(--night-muted); font-size: 10.5px; }
+.pra-score-fact.tone-ok { color: var(--state-success); }
+.pra-score-fact.tone-warning { color: var(--state-warning); }
+.pra-score-fact.tone-danger { color: var(--state-danger); }
+
+.pra-dimensions { display: grid; gap: 0; border-bottom: 1px solid var(--night-line-soft); }
+.pra-dimension-row { display: grid; grid-template-columns: 110px 28px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 4px 0; }
+.pra-dimension-label { color: var(--night-ink-soft); font-size: 11.5px; font-weight: 600; }
+.pra-dimension-score { color: var(--accent); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.pra-dimension-reason { color: var(--night-muted); font-size: 11px; line-height: 1.55; }
+.pra-pool { margin: 8px 0 0; color: var(--night-muted); font-size: 10.5px; line-height: 1.5; }
+.pra-pool span { color: var(--night-faint); }
+
+.pra-result-tabs { margin: 10px 0 0; }
+.pra-doc-body { display: grid; }
+.pra-doc-section { padding-top: 9px; }
+.pra-doc-section h3 { margin: 0 0 4px; color: var(--night-ink); font-size: 12.5px; font-weight: 650; }
+.pra-doc-section p { margin: 0; color: var(--night-ink-soft); font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
+.pra-list { margin: 0; padding-left: 18px; color: var(--night-ink-soft); font-size: 12px; line-height: 1.65; }
+.pra-list li + li { margin-top: 3px; }
+.pra-finding-text { overflow-wrap: anywhere; }
+.pra-page-badge { display: inline-block; margin-left: 6px; padding: 0 5px; color: var(--night-muted); background: var(--mono-control); border-radius: 4px; font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.pra-quote { margin-left: 6px; color: var(--night-muted); font-size: 10.5px; }
+.pra-severity { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.pra-severity.fatal { color: var(--state-danger); background: color-mix(in srgb, var(--state-danger) 12%, transparent); }
+.pra-severity.major { color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 12%, transparent); }
+.pra-severity.minor { color: var(--night-muted); background: var(--mono-control); }
+
+.pra-reviewers { display: grid; gap: 0; padding-top: 4px; }
+.pra-reviewers > p { margin: 4px 0; color: var(--night-muted); font-size: 10.5px; line-height: 1.55; }
+.pra-reviewer { border-top: 1px solid var(--night-line-soft); padding: 9px 0; }
+.pra-reviewer.failed { padding: 9px 0; }
+.pra-reviewer.failed header { display: flex; gap: 8px; font-size: 11.5px; }
+.pra-reviewer.failed header span { color: var(--state-danger); }
+.pra-reviewer summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 7px; cursor: pointer; list-style: none; }
+.pra-reviewer summary::-webkit-details-marker { display: none; }
+.pra-reviewer summary::before { content: "▸"; color: var(--night-muted); font-size: 10px; }
+.pra-reviewer[open] summary::before { content: "▾"; }
+.pra-reviewer-score { color: var(--night-ink); font-size: 12px; font-weight: 650; }
+.pra-tag { padding: 1px 7px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 999px; font-size: 9px; font-weight: 700; }
+.pra-reviewer-summary { flex: 1 1 100%; padding-left: 14px; color: var(--night-muted); font-size: 11px; line-height: 1.55; }
+.pra-reviewer-body { padding: 4px 0 0 14px; }
+.pra-reviewer-justification { margin: 0 0 3px; color: var(--night-muted); font-size: 11px; line-height: 1.6; }
+
+.pra-meta-list { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 5px; color: var(--night-muted); font-size: 10.5px; line-height: 1.5; }
+.pra-claims { display: grid; gap: 0; }
+.pra-claim { padding: 5px 0; border-bottom: 1px solid var(--night-line-soft); }
+.pra-claim p { margin: 0; font-size: 11.5px; line-height: 1.55; }
+.pra-claim p b { color: var(--night-ink); font-weight: 600; }
+.pra-claim p span { color: var(--night-muted); font-size: 9.5px; }
+.pra-claim.unsupported { border-left: 2px solid var(--state-danger); padding-left: 8px; }
+.pra-claim.partial { border-left: 2px solid var(--state-warning); padding-left: 8px; }
+.pra-claim.supported { border-left: 2px solid var(--state-success); padding-left: 8px; }
+.pra-trace { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.pra-trace li { display: grid; grid-template-columns: 118px minmax(0, 1fr) auto; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--night-line-soft); font-size: 10.5px; line-height: 1.5; }
+.pra-trace b { color: var(--night-ink-soft); font-weight: 600; }
+.pra-trace span { color: var(--night-muted); }
+.pra-trace em { color: var(--night-faint); font-style: normal; white-space: nowrap; }
+
+.pra-history { display: grid; gap: 4px; }
+.pra-history > header { display: flex; align-items: baseline; gap: 6px; }
+.pra-history > header h2 { margin: 0; color: var(--night-muted); font-size: 10.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.pra-history > header span { color: var(--night-faint); font-size: 10px; }
+.pra-history-list { display: grid; gap: 0; }
+.pra-history-item { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--night-line-soft); }
+.pra-history-item.active { border-left: 2px solid var(--accent); padding-left: 7px; }
+.pra-history-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; padding: 6px 0; color: inherit; background: transparent; border: 0; text-align: left; font: inherit; cursor: pointer; }
+.pra-history-title { overflow: hidden; color: var(--night-ink-soft); font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.pra-history-meta { color: var(--night-muted); font-size: 9.5px; }
+.pra-history-delete { padding: 2px 5px; color: var(--night-faint); background: transparent; border: 0; font-size: 9.5px; cursor: pointer; }
+.pra-history-delete:hover { color: var(--state-danger); }
+
+.pra-muted { margin: 0; color: var(--night-muted); font-size: 11px; line-height: 1.55; }
+.pra-settings { display: grid; gap: 16px; max-height: 74vh; overflow: auto; padding: 20px 22px; }
+.pra-settings h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.pra-settings-note { margin: 0; color: var(--night-muted); font-size: 10.5px; line-height: 1.55; }
+.pra-settings-note.warning { color: var(--state-warning); }
+.pra-settings-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.pra-select, .pra-input { width: 100%; height: 32px; padding: 0 9px; color: var(--night-ink); background: var(--mono-control); border: 1px solid var(--night-line); border-radius: 6px; font: inherit; font-size: 12px; }
+.pra-number { width: 72px; height: 32px; padding: 0 9px; color: var(--night-ink); background: var(--mono-control); border: 1px solid var(--night-line); border-radius: 6px; font: inherit; font-size: 12px; }
+
+@media (max-width: 760px) {
+  .pra-header { flex-wrap: wrap; }
+  .pra-doc { padding: 14px; }
+  .pra-dimension-row { grid-template-columns: minmax(0, 1fr) 28px; }
+  .pra-dimension-reason { grid-column: 1 / -1; }
+  .pra-trace li { grid-template-columns: minmax(0, 1fr); }
+}

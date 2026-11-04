@@ -1234,7 +1234,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <Tabs value={readerView} onChange={(value) => { setReaderView(value as "paper" | "canvas" | "review"); if (value === "review" || value === "canvas") setChatOpen(false); }} label={t("Paper reader views")} className="paper-reader-tablist">
           <Tab value="paper" icon={<FileText size={14} />}>{t("Original paper")}</Tab>
           <Tab value="canvas" icon={<Frame size={14} />}>{t("Canvas")}</Tab>
-          <Tab value="review" icon={<BookOpen size={14} />}>{t("Review")}</Tab>
+          <Tab value="review" icon={<BookOpen size={14} />}>{t("Interactive paper")}</Tab>
         </Tabs>
         {projectUrl && <button className="paper-reader-action" title={t("Open this paper's linked project")} onClick={() => openProject(projectUrl)}><Code2 size={14} />Project</button>}
         {projectUrl && isGithubRepositoryLink(projectUrl) && <button className="paper-reader-action" title={t("Open the local code audit workspace")} onClick={() => openCodebase(projectUrl)}><FileCode2 size={14} />Codebase</button>}
