@@ -36,7 +36,6 @@ import { useUISettings, type Language } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
 import { useConfirm } from "./ConfirmDialog";
 import { Tabs, Tab, FilterGroup, FilterButton } from "./Tabs";
-import ToolbarActions from "./ToolbarActions";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import {
@@ -205,6 +204,7 @@ type LibraryViewProps = {
 
 export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject }: LibraryViewProps) {
   const confirm = useConfirm();
+  const { t } = useUISettings();
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -348,9 +348,13 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 
   if (!selectedLibrary) {
     return <section className="library-page">
-      <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button>
-        <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title="Sync shared libraries"><Cloud size={15} />{cloudBusy ? "Syncing…" : "Sync cloud"}</button>
-      </ToolbarActions>
+      <div className="library-page-toolbar">
+        <span className="library-page-count"><strong>{libraries.length}</strong> {t("Libraries")}</span>
+        <div className="library-page-actions">
+          <button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />{t("New library")}</button>
+          <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync shared libraries")}><Cloud size={15} />{cloudBusy ? t("Syncing…") : t("Sync cloud")}</button>
+        </div>
+      </div>
       {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
       {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
       {!loading && projectPaperCount === 0 && otherProjects.length > 0 && <div className="library-project-hint">
@@ -2697,6 +2701,7 @@ function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: Research
 }
 
 function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
+  const { t } = useUISettings();
   const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
   const [range, setRange] = useState<DailyDiscoveryRange>("7d");
   const [topic, setTopic] = useState<DailyDiscoveryTopic>("all");
@@ -2709,6 +2714,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<string | null>(null);
+  const [previewPaper, setPreviewPaper] = useState<DailyPaper | null>(null);
   const [error, setError] = useState("");
   const feedRequestId = useRef(0);
   const deepRequestId = useRef(0);
@@ -2839,9 +2845,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
         <Tab value="deep" icon={<Sparkles size={12} />}>Deep search</Tab>
       </Tabs>
       <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
-        {searchKind === "deep"
-          ? <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title="Deep search" aria-label="Deep search">{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
-          : <button className="primary-button" disabled={loading || !query.trim()} onClick={() => void submitSearch()}>{loading ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button>}
+        <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title={searchKind === "deep" ? "Deep search" : "Search"} aria-label={searchKind === "deep" ? "Deep search" : "Search"}>{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
       </div>
       {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}</span></div>}
     </div>
@@ -2850,7 +2854,25 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;
-      return <article className="daily-paper-row" key={key}>
+      return <article
+        className="daily-paper-row"
+        key={key}
+        role="button"
+        tabIndex={0}
+        title={t("Open paper preview")}
+        aria-label={`${t("Open paper preview")}: ${paper.title}`}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("a, button, input, textarea, select, label")) return;
+          setPreviewPaper(paper);
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setPreviewPaper(paper);
+          }
+        }}
+      >
         <div className="daily-paper-content">
           <div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}<button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button></div>
           <p className="daily-paper-meta"><span className="daily-paper-date">{formatPaperDate(paper.published_at)}</span><span className="daily-paper-source">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}</span><span className="daily-paper-authors">{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</span></p>
@@ -2860,8 +2882,77 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
         <DailyThumbnail paper={paper} bridge={bridge} />
       </article>;
     })}</div>}
+    {previewPaper && <DailyPaperPreview
+      paper={previewPaper}
+      bridge={bridge}
+      canSave={Boolean(targetLibrary)}
+      isAdded={added.has(previewPaper.external_id || previewPaper.title)}
+      isAdding={adding === (previewPaper.external_id || previewPaper.title)}
+      onAdd={() => void add(previewPaper)}
+      onClose={() => setPreviewPaper(null)}
+    />}
     </>}
   </section>;
+}
+
+function DailyPaperPreview({ paper, bridge, canSave, isAdded, isAdding, onAdd, onClose }: {
+  paper: DailyPaper;
+  bridge: ResearchDeskBridge;
+  canSave: boolean;
+  isAdded: boolean;
+  isAdding: boolean;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useUISettings();
+  const [figureUrl, setFigureUrl] = useState("");
+  useEffect(() => {
+    const load = bridge.getDailyFigure;
+    if (!paper.arxiv_id || !load) return;
+    let cancelled = false;
+    void load(paper.arxiv_id).then((url) => { if (!cancelled && url) setFigureUrl(url); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [bridge, paper.arxiv_id]);
+  const authors = paper.authors.length ? paper.authors.join(", ") : t("Unknown authors");
+  return <Dialog open onClose={onClose} size="lg" className="daily-paper-preview-dialog" ariaLabelledBy="daily-paper-preview-title">
+    <header className="daily-paper-preview-header">
+      <div>
+        <span className="eyebrow">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}{paper.year ? ` · ${paper.year}` : ""}</span>
+        <h2 id="daily-paper-preview-title">{paper.title}</h2>
+        <p className="daily-paper-preview-authors">{authors}</p>
+      </div>
+      <button className="icon-button" onClick={onClose} title={t("Close preview")} aria-label={t("Close preview")}><X size={16} /></button>
+    </header>
+    <div className="daily-paper-preview-body">
+      <div className="daily-paper-preview-figure">
+        <span className="daily-paper-thumb-fallback">{paper.categories[0] || "Paper"}</span>
+        {figureUrl && <img src={figureUrl} alt={t("Figure preview for {title}").replace("{title}", paper.title)} onError={(event) => { event.currentTarget.remove(); }} />}
+      </div>
+      <div className="daily-paper-preview-copy">
+        <div className="daily-paper-preview-meta">
+          <span>{formatPaperDate(paper.published_at)}</span>
+          {paper.venue && <span>{paper.venue}</span>}
+          {paper.upvotes > 0 && <span><Flame size={11} />{paper.upvotes}</span>}
+          {paper.citation_count > 0 && <span>{paper.citation_count.toLocaleString()} citations</span>}
+        </div>
+        <div className="daily-paper-preview-tags">
+          {paper.categories.map((category) => <span key={category}>{category}</span>)}
+        </div>
+        <p className="daily-paper-preview-abstract">{paper.abstract || t("No abstract available.")}</p>
+      </div>
+    </div>
+    <footer className="daily-paper-preview-actions">
+      <div>
+        {paper.url && <a className="secondary-button" href={paper.url} target="_blank" rel="noreferrer"><ExternalLink size={14} />{t("Open paper")}</a>}
+        {paper.pdf_url && <a className="secondary-button" href={paper.pdf_url} target="_blank" rel="noreferrer"><FileText size={14} />PDF</a>}
+        {paper.github_url && <a className="secondary-button" href={paper.github_url} target="_blank" rel="noreferrer"><Code2 size={14} />Code</a>}
+      </div>
+      <button className={isAdded ? "secondary-button imported" : "primary-button"} disabled={isAdded || isAdding || !canSave} onClick={onAdd}>
+        {isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}
+        {isAdded ? t("Saved") : isAdding ? t("Saving") : t("Save")}
+      </button>
+    </footer>
+  </Dialog>;
 }
 
 function DeepSearchResults({ response, loading, error, targetLibrary, added, adding, onSave }: {

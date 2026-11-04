@@ -1,7 +1,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-let cachedPayload = null;
+const { normalizeRecord, readIndexFile, refreshPublicIndex, indexPayload, PUBLIC_INDEX_URL } = require("./benchmark-radar-index.cjs");
+
+let cachedLocalPayload = null;
+let refreshInFlight = null;
 
 function radarRoots() {
   // An explicit path is a deployment contract, not a hint. Falling back to a
@@ -13,72 +16,28 @@ function radarRoots() {
   ];
 }
 
+function isRadarRoot(candidate) {
+  return Boolean(candidate)
+    && fs.existsSync(path.join(candidate, "data", "benchmarks_index.json"))
+    && fs.existsSync(path.join(candidate, "data", "library_index.json"));
+}
+
 function resolveRadarRoot() {
-  const root = radarRoots().find((candidate) => fs.existsSync(path.join(candidate, "data", "benchmarks_index.json"))
-    && fs.existsSync(path.join(candidate, "data", "library_index.json")));
-  if (!root) {
-    throw new Error("Benchmark Radar data was not found. Keep the benchmark-radar project next to ResearchDesk, or set BENCHMARK_RADAR_ROOT.");
+  const explicit = process.env.BENCHMARK_RADAR_ROOT;
+  if (explicit) {
+    if (!isRadarRoot(explicit)) {
+      throw new Error("Benchmark Radar data was not found at BENCHMARK_RADAR_ROOT. Point it at a checkout containing data/benchmarks_index.json and data/library_index.json.");
+    }
+    return explicit;
   }
-  return root;
+  return radarRoots().find(isRadarRoot) || null;
 }
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
-function text(value, limit = 1600) {
-  return typeof value === "string" ? value.slice(0, limit) : "";
-}
-
-function strings(value, limit = 8) {
-  return Array.isArray(value) ? value.filter((item) => typeof item === "string").slice(0, limit) : [];
-}
-
-function links(value) {
-  const candidate = value && typeof value === "object" ? value : {};
-  return Object.fromEntries(Object.entries(candidate).filter(([, url]) => typeof url === "string" && /^https:\/\//.test(url)));
-}
-
-function attention(value) {
-  const candidate = value && typeof value === "object" ? value : {};
-  return {
-    githubStars: Number.isFinite(candidate.githubStars) ? candidate.githubStars : null,
-    hfPaperUpvotes: Number.isFinite(candidate.hfPaperUpvotes) ? candidate.hfPaperUpvotes : null,
-    datasetDownloads: Number.isFinite(candidate.hfDatasetDownloads) ? candidate.hfDatasetDownloads : null,
-  };
-}
-
-function normalizeRecord(record) {
-  const ranking = record.ranking && typeof record.ranking === "object" ? record.ranking : {};
-  const source = record.source && typeof record.source === "object" ? record.source : {};
-  const publication = record.publication && typeof record.publication === "object" ? record.publication : {};
-  return {
-    id: text(record.id, 180),
-    name: text(record.name, 400),
-    title: text(record.paperTitle || record.name, 700),
-    description: text(record.description || record.oneLine, 1800),
-    oneLine: text(record.oneLine || record.description, 700),
-    releasedAt: text(record.releasedAt, 32),
-    readiness: text(record.readiness, 80),
-    area: text(record.area, 180),
-    primaryDomain: text(record.primaryDomain, 180),
-    topics: strings(record.topics),
-    capabilities: strings(record.capabilities),
-    capabilityGroups: strings(record.capabilityGroups),
-    directions: strings(record.libraryCategories || record.researchDirections || record.researchTopics, 4),
-    authors: strings(source.authors, 12),
-    publication: { status: text(publication.status, 64), venue: text(publication.venue, 180) },
-    links: links(record.links),
-    attention: attention(record.attention),
-    attentionScore: Number.isFinite(ranking["90d"]?.score) ? ranking["90d"].score : null,
-    attentionRank: Number.isFinite(ranking["90d"]?.rank) ? ranking["90d"].rank : null,
-    forecast: Number.isFinite(record.attentionForecast?.score) ? record.attentionForecast.score : null,
-  };
-}
-
-function getBenchmarkRadarData() {
-  if (cachedPayload) return cachedPayload;
-  const root = resolveRadarRoot();
+function localPayload(root) {
   // Benchmark Radar's public Radar surface consumes this generated index, not
   // the internal canonical snapshot.  Keeping that contract here preserves its
   // filtering and display eligibility rules inside Archimedes as well.
@@ -88,16 +47,57 @@ function getBenchmarkRadarData() {
   const library = Array.isArray(librarySource.records) ? librarySource.records.filter((record) => record && record.displayEligible !== false).map(normalizeRecord) : [];
   const taxonomy = librarySource.manifest?.libraryTaxonomy || librarySource.manifest?.researchTaxonomy || {};
   const directions = Array.isArray(taxonomy.directions) ? taxonomy.directions.map((direction) => ({
-    id: text(direction.id, 120), name: text(direction.name, 180), section: text(direction.section, 120), count: Number.isFinite(direction.count) ? direction.count : 0,
+    id: typeof direction?.id === "string" ? direction.id.slice(0, 120) : "",
+    name: typeof direction?.name === "string" ? direction.name.slice(0, 180) : "",
+    section: typeof direction?.section === "string" ? direction.section.slice(0, 120) : "",
+    count: Number.isFinite(direction?.count) ? direction.count : 0,
   })).filter((direction) => direction.id && direction.name) : [];
-  cachedPayload = {
+  return {
+    source: "local",
     sourceRoot: root,
-    updatedAt: text(radarSource.manifest?.dataAsOf || librarySource.manifest?.dataAsOf, 32),
+    updatedAt: typeof radarSource.manifest?.dataAsOf === "string" ? radarSource.manifest.dataAsOf.slice(0, 32) : typeof librarySource.manifest?.dataAsOf === "string" ? librarySource.manifest.dataAsOf.slice(0, 32) : "",
     radar,
     library,
     directions,
   };
-  return cachedPayload;
+}
+
+function newestIndex(cached, seed) {
+  if (!cached) return seed ? { index: seed, source: "bundled" } : null;
+  if (!seed) return { index: cached, source: "cached" };
+  return (cached.updatedAt || "") >= (seed.updatedAt || "") ? { index: cached, source: "cached" } : { index: seed, source: "bundled" };
+}
+
+function scheduleRefresh(options) {
+  if (options.allowNetwork === false || !options.cachePath || refreshInFlight) return;
+  refreshInFlight = refreshPublicIndex({ cachePath: options.cachePath, url: options.url, ttlMs: options.ttlMs })
+    .catch(() => {})
+    .finally(() => { refreshInFlight = null; });
+}
+
+async function getBenchmarkRadarData(options = {}) {
+  const root = resolveRadarRoot();
+  if (root) {
+    if (!cachedLocalPayload || cachedLocalPayload.sourceRoot !== root) cachedLocalPayload = localPayload(root);
+    return cachedLocalPayload;
+  }
+
+  const cached = readIndexFile(options.cachePath);
+  const seed = readIndexFile(options.seedPath);
+  const best = newestIndex(cached, seed);
+  if (best) {
+    scheduleRefresh(options);
+    return indexPayload(best.index, { source: best.source, sourceRoot: options.cachePath || PUBLIC_INDEX_URL });
+  }
+
+  if (options.allowNetwork === false) throw new Error("Benchmark Radar data was not found. Connect to the internet once to download the public index, or set BENCHMARK_RADAR_ROOT.");
+  try {
+    const result = await refreshPublicIndex({ cachePath: options.cachePath, url: options.url, ttlMs: options.ttlMs, force: true });
+    return indexPayload(result.index, { source: "remote", sourceRoot: PUBLIC_INDEX_URL });
+  } catch (failure) {
+    const detail = failure instanceof Error ? failure.message : String(failure);
+    throw new Error(`Benchmark Radar data is unavailable. ${detail} Connect to the internet once, or set BENCHMARK_RADAR_ROOT.`);
+  }
 }
 
 module.exports = { getBenchmarkRadarData };

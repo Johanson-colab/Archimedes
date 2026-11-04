@@ -13,7 +13,10 @@ test("Windows uses a hidden overlay title bar while macOS keeps inset traffic li
   assert.match(main, /titleBarStyle: process\.platform === "darwin" \? "hiddenInset" : overlay \? "hidden" : undefined/);
   assert.match(main, /titleBarOverlay: overlay \? titleBarOverlay\(initialTheme\) : undefined/);
   assert.match(main, /function titleBarOverlay\(theme\)/);
-  assert.match(main, /height: 52/);
+  // The native caption buttons must match the 44px main toolbar, otherwise the
+  // hover surface spills below it.
+  assert.match(main, /height: 44/);
+  assert.match(main, /color: dark \? "#141414" : "#fffdf8"/);
   assert.match(main, /window:set-titlebar-theme/);
 });
 
@@ -38,4 +41,10 @@ test("overlay title bar exposes drag regions and reserves native control space",
   assert.match(css, /html\[data-titlebar="overlay"\] \.main-toolbar button,[\s\S]*?-webkit-app-region: no-drag/);
   assert.match(css, /html\[data-titlebar="overlay"\] \.codex-main:not\(\.workbench-open\) \.main-toolbar \{ padding-right: calc\(18px \+ 138px\)/);
   assert.match(css, /html\[data-titlebar="overlay"\] \.right-workbench \.workbench-header \{ padding-right: 146px/);
+});
+
+test("macOS inset traffic lights get clearance and the chrome stays draggable", () => {
+  assert.match(css, /html\[data-titlebar="inset"\] \.codex-sidebar \{ padding-top: 20px; \}/);
+  assert.match(css, /html\[data-titlebar="inset"\] \.codex-brand,[\s\S]*?html\[data-titlebar="inset"\] \.main-toolbar,[\s\S]*?-webkit-app-region: drag/);
+  assert.match(css, /html\[data-titlebar="inset"\] \.main-toolbar button,[\s\S]*?-webkit-app-region: no-drag/);
 });

@@ -11,6 +11,13 @@ type LibrarySort = RadarSort | "stars";
 
 const SAVED_KEY = "archimedes:benchmark-radar:saved";
 
+const SOURCE_LABELS: Record<BenchmarkRadarData["source"], string> = {
+  local: "local checkout",
+  remote: "live public index",
+  cached: "cached public index",
+  bundled: "bundled snapshot",
+};
+
 function loadSaved() {
   try { return new Set<string>(JSON.parse(window.localStorage.getItem(SAVED_KEY) || "[]")); }
   catch { return new Set<string>(); }
@@ -52,8 +59,8 @@ function SaveButton({ record, saved, onToggle }: { record: BenchmarkRadarRecord;
   </button>;
 }
 
-function BenchmarkRow({ record, saved, onToggle, radar = false }: { record: BenchmarkRadarRecord; saved: boolean; onToggle: () => void; radar?: boolean }) {
-  const labels = (record.directions.length ? record.directions : [...record.capabilityGroups, ...record.topics]).slice(0, 3);
+function BenchmarkRow({ record, saved, onToggle, radar = false, directionNames }: { record: BenchmarkRadarRecord; saved: boolean; onToggle: () => void; radar?: boolean; directionNames?: Map<string, string> }) {
+  const labels = (record.directions.length ? record.directions.map((id) => directionNames?.get(id) ?? id) : [...record.capabilityGroups, ...record.topics]).slice(0, 3);
   return <article className={radar ? "benchmark-row radar" : "benchmark-row"}>
     {radar && <div className="benchmark-date"><small>Released</small><strong>{formatDate(record.releasedAt)}</strong></div>}
     <div className="benchmark-row-main">
@@ -103,11 +110,14 @@ export default function BenchmarkRadarView() {
   const radarRecords = useMemo(() => {
     if (!data) return [];
     const newestDate = data.radar.reduce((latest, record) => dateValue(record.releasedAt) > dateValue(latest) ? record.releasedAt : latest, "");
-    const dataAsOf = dateValue(data.updatedAt);
-    const cutoffAnchor = dataAsOf || dateValue(newestDate);
+    const cutoffAnchor = dateValue(data.updatedAt) || dateValue(newestDate);
     const cutoff = cutoffAnchor - (windowName === "30d" ? 30 : windowName === "90d" ? 90 : 0) * 86_400_000;
-    return data.radar.filter((record) => windowName === "latest" ? record.releasedAt === newestDate : dateValue(record.releasedAt) >= cutoff)
-      .sort((a, b) => radarSort === "newest" ? dateValue(b.releasedAt) - dateValue(a.releasedAt) || a.name.localeCompare(b.name) : attentionValue(b) - attentionValue(a) || dateValue(b.releasedAt) - dateValue(a.releasedAt));
+    // The public index can publish a single benchmark on its newest date, so
+    // "Latest" shows the newest releases rather than only that one day.
+    const scoped = windowName === "latest"
+      ? [...data.radar].sort((a, b) => dateValue(b.releasedAt) - dateValue(a.releasedAt)).slice(0, 30)
+      : data.radar.filter((record) => dateValue(record.releasedAt) >= cutoff);
+    return scoped.sort((a, b) => radarSort === "newest" ? dateValue(b.releasedAt) - dateValue(a.releasedAt) || a.name.localeCompare(b.name) : attentionValue(b) - attentionValue(a) || dateValue(b.releasedAt) - dateValue(a.releasedAt));
   }, [data, radarSort, windowName]);
 
   const libraryRecords = useMemo(() => {
@@ -126,11 +136,13 @@ export default function BenchmarkRadarView() {
     return [...groups.entries()];
   }, [data]);
 
+  const directionNames = useMemo(() => new Map((data?.directions ?? []).map((item) => [item.id, item.name])), [data]);
+
   if (loading) return <main className="benchmark-radar-page"><StateView tone="loading" className="benchmark-loading" icon={<LoaderCircle className="spin" size={25} />} title="Loading Benchmark Radar…" /></main>;
   if (!data) return <main className="benchmark-radar-page"><StateView tone="error" className="benchmark-loading" icon={<Radar size={26} />} title="Benchmark Radar is unavailable" description={error || "The local Benchmark Radar dataset could not be opened."} /></main>;
 
   return <main className="benchmark-radar-page">
-    <ToolbarActions><span className="module-toolbar-note"><Radar size={12} />Updated {data.updatedAt || "locally"} · {data.library.length.toLocaleString()} indexed</span></ToolbarActions>
+    <ToolbarActions><span className="module-toolbar-note"><Radar size={12} />Updated {data.updatedAt || "locally"} · {data.library.length.toLocaleString()} indexed{data.source ? ` · ${SOURCE_LABELS[data.source]}` : ""}</span></ToolbarActions>
 
     <div className="benchmark-tabs-row">
       <Tabs value={tab} onChange={(value) => setTab(value as typeof tab)} label="Benchmark Radar view" className="benchmark-tabs">
@@ -144,10 +156,10 @@ export default function BenchmarkRadarView() {
       <div className="benchmark-intro"><div><h2>Emerging AI benchmarks</h2><p>New public evaluations from the latest Benchmark Radar release feed, ranked by observable attention where signals are available.</p></div><strong>{radarRecords.length}<small> latest releases</small></strong></div>
       <div className="benchmark-controls"><div><span>Time window</span><div className="benchmark-segmented">{(["latest", "30d", "90d"] as TimeWindow[]).map((item) => <button key={item} className={windowName === item ? "active" : ""} onClick={() => setWindowName(item)}>{item === "latest" ? "Latest" : item.replace("d", " days")}</button>)}</div></div><div><span>Sort by</span><div className="benchmark-segmented">{(["attention", "newest"] as RadarSort[]).map((item) => <button key={item} className={radarSort === item ? "active" : ""} onClick={() => setRadarSort(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></div></div>
       <div className="benchmark-results-heading"><h2>Rising benchmarks <small>{radarRecords.length} results</small></h2></div>
-      <div className="benchmark-list">{radarRecords.length ? radarRecords.map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} radar />) : <StateView compact className="benchmark-empty" description="No releases match this time window." />}</div>
+      <div className="benchmark-list">{radarRecords.length ? radarRecords.map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} radar directionNames={directionNames} />) : <StateView compact className="benchmark-empty" description="No releases match this time window." />}</div>
     </section> : <section className="benchmark-library-layout">
       <aside className="benchmark-directions"><div className="benchmark-direction-head"><span>Research directions</span><p>Browse the Benchmark Radar taxonomy or search every public benchmark.</p></div><button className={!direction ? "active" : ""} onClick={() => setDirection("")}>All benchmarks <small>{data.library.length.toLocaleString()}</small></button>{directionsBySection.map(([section, items]) => <section key={section}><h2>{section}</h2>{items.map((item) => <button key={item.id} className={direction === item.id ? "active" : ""} onClick={() => setDirection(item.id)}><span>{item.name}</span><small>{item.count.toLocaleString()}</small></button>)}</section>)}</aside>
-      <div className="benchmark-library-content"><div className="benchmark-library-toolbar"><label><span>Search</span><div><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search benchmarks, tasks, or research directions" /></div></label><label><span>Sort by</span><div className="benchmark-segmented">{(["newest", "attention", "stars"] as LibrarySort[]).map((item) => <button key={item} className={librarySort === item ? "active" : ""} onClick={() => setLibrarySort(item)}>{item === "stars" ? "GitHub stars" : item[0].toUpperCase() + item.slice(1)}</button>)}</div></label></div><div className="benchmark-results-heading"><h2>{direction ? data.directions.find((item) => item.id === direction)?.name || "Benchmarks" : "All benchmarks"} <small>{libraryRecords.length.toLocaleString()} entries · public attention</small></h2></div><div className="benchmark-list">{libraryRecords.length ? libraryRecords.slice(0, 150).map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} />) : <StateView compact className="benchmark-empty" description="No public benchmarks match this search. Clear the search or choose another research direction." />}{libraryRecords.length > 150 && <p className="benchmark-limit">Showing the first 150 matching benchmarks. Refine the search or choose a research direction.</p>}</div></div>
+      <div className="benchmark-library-content"><div className="benchmark-library-toolbar"><label><span>Search</span><div><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search benchmarks, tasks, or research directions" /></div></label><label><span>Sort by</span><div className="benchmark-segmented">{(["newest", "attention", "stars"] as LibrarySort[]).map((item) => <button key={item} className={librarySort === item ? "active" : ""} onClick={() => setLibrarySort(item)}>{item === "stars" ? "GitHub stars" : item[0].toUpperCase() + item.slice(1)}</button>)}</div></label></div><div className="benchmark-results-heading"><h2>{direction ? data.directions.find((item) => item.id === direction)?.name || "Benchmarks" : "All benchmarks"} <small>{libraryRecords.length.toLocaleString()} entries · public attention</small></h2></div><div className="benchmark-list">{libraryRecords.length ? libraryRecords.slice(0, 150).map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} directionNames={directionNames} />) : <StateView compact className="benchmark-empty" description="No public benchmarks match this search. Clear the search or choose another research direction." />}{libraryRecords.length > 150 && <p className="benchmark-limit">Showing the first 150 matching benchmarks. Refine the search or choose a research direction.</p>}</div></div>
     </section>}
   </main>;
 }

@@ -67,8 +67,11 @@ interface ResearchDeskBridge {
     listExtensions: (input: { workspace?: string; limit?: number; refresh?: boolean }) => Promise<ExtensionFeed>;
     previewExtension: (input: { id: string; workspace?: string }) => Promise<ExtensionPreview>;
     installExtension: (input: { id: string; workspace?: string; scope?: "workspace" | "global" }) => Promise<ExtensionInstallResult>;
-    listInstalledExtensions: (workspace?: string) => Promise<{ skills: ContextAttachment[]; plugins: ContextAttachment[] }>;
+    listInstalledExtensions: (workspace?: string) => Promise<{ skills: ContextAttachment[]; plugins: ContextAttachment[]; uiPlugins: SidebarPluginRecord[] }>;
     readExtensionFile: (path: string, workspace?: string) => Promise<{ filename: string; content: string }>;
+    listSidebarPlugins: () => Promise<SidebarPluginRecord[]>;
+    setSidebarPluginEnabled: (id: string, enabled: boolean) => Promise<SidebarPluginRecord[]>;
+    removeSidebarPlugin: (id: string) => Promise<SidebarPluginRecord[]>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
     listWorkspaceFiles: (workspace: string, directory?: string) => Promise<WorkspaceFileTree>;
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
@@ -213,6 +216,15 @@ interface ResearchDeskBridge {
     stopTerminal: (sessionId: string) => Promise<void>;
     getJourneySettings: () => Promise<JourneySettings>;
     getWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
+    getSidebarSettings: () => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
+    setCoreModuleEnabled: (id: string, enabled: boolean) => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
+    setSidebarLayout: (layout: "flat" | "tabs" | "sections") => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
+    getNewsSettings: () => Promise<NewsSettings>;
+    setNewsSettings: (patch: Partial<NewsSettings>) => Promise<NewsSettings>;
+    listNews: (filters?: { source?: string; sort?: "new" | "hot"; query?: string; savedOnly?: boolean; sinceHours?: number; limit?: number }) => Promise<NewsFeedPayload>;
+    refreshNews: (input?: { force?: boolean }) => Promise<{ skipped: boolean; results: Array<{ source: string; status: string; updated: number; error?: string }> }>;
+    markNewsRead: (id: string, read?: boolean) => Promise<{ ok: boolean }>;
+    setNewsSaved: (id: string, saved: boolean) => Promise<{ ok: boolean }>;
     saveWorkbenchSettings: (input: { version?: number; order: string[]; hidden: string[] }) => Promise<{ version: number; order: string[]; hidden: string[] }>;
     resetWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
     getWorkbenchNote: (key: string) => Promise<{ content: string; updatedAt: string | null }>;
@@ -274,7 +286,7 @@ interface SkillDetail extends SkillSummary {
   content: string;
 }
 
-type ExtensionType = "skill" | "mcp" | "plugin" | "source" | "automation";
+type ExtensionType = "skill" | "mcp" | "plugin" | "source" | "automation" | "ui-plugin";
 
 type ExtensionSourceType = "archimedes" | "json" | "github" | "mcp" | "npm";
 
@@ -315,11 +327,88 @@ interface ExtensionMarketplaceItem {
   config?: Record<string, unknown> | null;
   repo?: string;
   packageName?: string;
+  engine?: string;
+  checksums?: Record<string, string> | null;
   installed?: boolean;
   installedVersion?: string;
   installedPath?: string;
   installedScope?: "workspace" | "global" | "";
   updateAvailable?: boolean;
+}
+
+interface SidebarPluginRecord {
+  id: string;
+  name: string;
+  version: string;
+  section: "knowledge" | "create" | "";
+  icon: string;
+  entry: string;
+  title?: string;
+  engine?: string;
+  enabled: boolean;
+  installedAt?: string;
+  source?: string;
+  path?: string;
+  error?: string;
+}
+
+interface NewsMedia {
+  url: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+}
+
+interface NewsItem {
+  id: string;
+  source: "hn" | "github" | "arxiv" | "lobsters" | "reddit" | "rss" | "x" | string;
+  sourceLabel: string;
+  title: string;
+  url: string;
+  author: string;
+  publishedAt: string;
+  fetchedAt: string;
+  score: number;
+  comments: number;
+  summary: string;
+  tags: string[];
+  media: NewsMedia[];
+  native: Record<string, unknown>;
+  clusterId: string;
+  saved: boolean;
+  read: boolean;
+}
+
+interface NewsSourceState {
+  id: string;
+  label: string;
+  total: number;
+  unread: number;
+  status: "idle" | "ok" | "error";
+  message: string;
+  lastSuccessAt: string;
+}
+
+interface NewsSettings {
+  version: number;
+  view: "feed" | "board";
+  sources: Record<string, boolean>;
+  rssFeeds: Array<{ id: string; label: string; url: string }>;
+  reddit: { subreddits: string[]; clientId: string; clientSecret: string; configured?: boolean };
+  github: { token: string; configured?: boolean };
+  x: { bearerToken: string; query: string; configured?: boolean };
+  watch: string[];
+  mute: string[];
+  cadenceMinutes: number;
+  sinceHours: number;
+  clustering: boolean;
+}
+
+interface NewsFeedPayload {
+  items: NewsItem[];
+  sources: NewsSourceState[];
+  updatedAt: string;
+  settings: NewsSettings;
 }
 
 interface ExtensionFeed {
@@ -1633,6 +1722,7 @@ interface BenchmarkRadarDirection {
 }
 
 interface BenchmarkRadarData {
+  source: "local" | "remote" | "cached" | "bundled";
   sourceRoot: string;
   updatedAt: string;
   radar: BenchmarkRadarRecord[];

@@ -19,6 +19,8 @@ const terminalSettings = require("./terminal-settings.cjs");
 const journeySettings = require("./journey-settings.cjs");
 const journeySnapshots = require("./journey-snapshots.cjs");
 const workbenchSettings = require("./workbench-settings.cjs");
+const sidebarSettings = require("./sidebar-settings.cjs");
+const news = require("./news.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
@@ -67,6 +69,7 @@ const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github
 const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");
 const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");
 const extensionMarketplace = require("./extensions-marketplace.cjs");
+const sidebarPlugins = require("./sidebar-plugins.cjs");
 
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
@@ -82,10 +85,16 @@ let browserSessionHardened = false;
 
 app.setName("Archimedes");
 app.setAppUserModelId("com.archimedes.research");
-protocol.registerSchemesAsPrivileged([{
-  scheme: "archimedes-file",
-  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
-}]);
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "archimedes-file",
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+  {
+    scheme: "archimedes-plugin",
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+]);
 
 function cleanTerminalEnvironment() {
   return Object.fromEntries(Object.entries({
@@ -217,9 +226,11 @@ function watchWorkspace(sender, workspace) {
 function titleBarOverlay(theme) {
   const dark = theme !== "paper";
   return {
-    color: dark ? "#141414" : "#fbfaf8",
+    // Match the 44px main toolbar exactly; a taller overlay makes the native
+    // caption buttons (and their hover highlight) spill below the bar.
+    color: dark ? "#141414" : "#fffdf8",
     symbolColor: dark ? "#e6e5e0" : "#33332f",
-    height: 52,
+    height: 44,
   };
 }
 
@@ -618,6 +629,9 @@ app.whenReady().then(async () => {
   workbenchSettings.initialize(app.getPath("userData"));
   workbenchNotes.initialize(app.getPath("userData"));
   extensionMarketplace.initialize(app.getPath("userData"));
+  sidebarPlugins.initialize(app.getPath("userData"));
+  sidebarSettings.initialize(app.getPath("userData"));
+  news.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());
   const authStorageValues = new Map();
@@ -676,6 +690,21 @@ app.whenReady().then(async () => {
       return net.fetch(pathToFileURL(target).toString());
     } catch {
       return new Response("File preview unavailable.", { status: 404 });
+    }
+  });
+  protocol.handle("archimedes-plugin", (request) => {
+    try {
+      const url = new URL(request.url);
+      const target = sidebarPlugins.resolvePluginFile(url.hostname, decodeURIComponent(url.pathname.slice(1)));
+      if (!target) return new Response("Plugin file not found.", { status: 404 });
+      if (fs.statSync(target).size > 5_000_000) return new Response("Plugin file is too large.", { status: 413 });
+      const type = path.extname(target).toLowerCase();
+      const mime = { ".mjs": "text/javascript", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".html": "text/html", ".svg": "image/svg+xml", ".png": "image/png" }[type] ?? "application/octet-stream";
+      return new Response(fs.readFileSync(target), {
+        headers: { "content-type": mime, "access-control-allow-origin": "*" },
+      });
+    } catch {
+      return new Response("Plugin file unavailable.", { status: 404 });
     }
   });
 
@@ -787,13 +816,27 @@ app.whenReady().then(async () => {
   }));
   ipcMain.handle("extensions:install", (_event, input = {}) => extensionMarketplace.installExtension({
     id: input.id,
-    workspace: resolveWorkspace(input.workspace),
+    workspace: input.workspace ? resolveWorkspace(input.workspace) : "",
     scope: input.scope === "global" ? "global" : "workspace",
+    hostVersion: app.getVersion(),
   }));
   ipcMain.handle("extensions:list-installed", (_event, input = {}) => ({
     skills: installedSkills(resolveWorkspace(input.workspace)),
     plugins: installedPlugins(),
+    uiPlugins: sidebarPlugins.listPlugins(),
   }));
+  ipcMain.handle("plugins:list", () => sidebarPlugins.listPlugins());
+  ipcMain.handle("plugins:set-enabled", (_event, input = {}) => sidebarPlugins.setEnabled(String(input?.id || ""), Boolean(input?.enabled)));
+  ipcMain.handle("plugins:remove", (_event, input = {}) => sidebarPlugins.removePlugin(String(input?.id || "")));
+  ipcMain.handle("sidebar:get-settings", () => sidebarSettings.getSettings());
+  ipcMain.handle("sidebar:set-core-enabled", (_event, input = {}) => sidebarSettings.setCoreEnabled(String(input?.id || ""), Boolean(input?.enabled)));
+  ipcMain.handle("sidebar:set-layout", (_event, input = {}) => sidebarSettings.setLayout(String(input?.layout || "flat")));
+  ipcMain.handle("news:get-settings", () => news.getSettings());
+  ipcMain.handle("news:set-settings", (_event, patch = {}) => news.setSettings(patch));
+  ipcMain.handle("news:list", (_event, filters = {}) => news.list(filters));
+  ipcMain.handle("news:refresh", (_event, input = {}) => news.refresh({ force: Boolean(input?.force) }));
+  ipcMain.handle("news:mark-read", (_event, input = {}) => news.markRead(String(input?.id || ""), Boolean(input?.read)));
+  ipcMain.handle("news:set-saved", (_event, input = {}) => news.setSaved(String(input?.id || ""), Boolean(input?.saved)));
   ipcMain.handle("extensions:read-local", (_event, input = {}) => {
     const target = path.resolve(String(input.path || ""));
     if (!allowedContextPaths.has(target)) throw new Error("This skill is not available in the current context.");
@@ -1503,7 +1546,10 @@ app.whenReady().then(async () => {
     return deepSearchPapers(input, { modelConfig: modelConfig.getActiveModelConfig() });
   });
 
-  ipcMain.handle("benchmark-radar:get-data", () => getBenchmarkRadarData());
+  ipcMain.handle("benchmark-radar:get-data", () => getBenchmarkRadarData({
+    cachePath: path.join(app.getPath("userData"), "benchmark-radar", "public-index.json"),
+    seedPath: path.join(__dirname, "assets", "benchmark-radar", "public-index.json"),
+  }));
 
   ipcMain.handle("library:add-paper", (_event, { libraryId, paper }) => {
     if (typeof libraryId !== "string" || !paper || typeof paper.title !== "string" || !paper.title.trim()) {

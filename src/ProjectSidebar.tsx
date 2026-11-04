@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, ChevronDown, FolderOpen, MessageSquarePlus, MoreVertical, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, FolderOpen, MessageSquarePlus, MoreHorizontal, MoreVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
-import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
+import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";
 
 export type WorkFilter = "all" | "running" | "review" | "automations" | "archived";
 
@@ -110,8 +110,6 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
     { id: "automations", label: t("Automations"), count: automationCount },
     { id: "archived", label: t("Archived"), count: archivedThreads.length + archivedProjects.length },
   ];
-  const activeFilterLabel = filter === "all" ? t("Filter") : filterOptions.find((option) => option.id === filter)?.label ?? t("Filter");
-
   const visibleThreads = filter === "all"
     ? threads
     : filter === "running"
@@ -137,12 +135,14 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
     <div className="work-heading">
       <span>{t("Work")}</span>
       <div className="work-heading-actions">
-        <button ref={filterButtonRef} className={filter === "all" ? "work-filter-button" : "work-filter-button active"} onClick={() => setFilterOpen((open) => !open)} title={t("Filter work")} aria-haspopup="menu" aria-expanded={filterOpen} disabled={disabled}>
-          <span>{activeFilterLabel}</span><ChevronDown size={11} />
+        <button ref={filterButtonRef} className="work-more-button" onClick={() => setFilterOpen((open) => !open)} title={t("More work actions")} aria-label={t("More work actions")} aria-haspopup="menu" aria-expanded={filterOpen} disabled={disabled}>
+          <MoreHorizontal size={15} />
         </button>
-        <button className="work-new-project" onClick={onNewProject} title={t("New project")} aria-label={t("New project")} disabled={disabled}><Plus size={14} /></button>
-        <MenuSurface open={filterOpen} onClose={() => setFilterOpen(false)} anchorRef={filterButtonRef} placement="bottom-end" width={280} className="work-filter-menu" ariaLabel={t("Filter work")}>
+        <MenuSurface open={filterOpen} onClose={() => setFilterOpen(false)} anchorRef={filterButtonRef} placement="bottom-end" width={280} className="work-filter-menu" ariaLabel={t("Work actions")}>
+          <MenuLabel>{t("Filter")}</MenuLabel>
           {filterOptions.map((option) => <MenuItem key={option.id} checked={filter === option.id} hint={typeof option.count === "number" ? option.count : undefined} onClick={() => { setFilter(option.id); setFilterOpen(false); }}>{option.label}</MenuItem>)}
+          <MenuDivider />
+          <MenuItem icon={<Plus size={14} />} disabled={disabled} onClick={() => { setFilterOpen(false); onNewProject(); }}>{t("New project")}</MenuItem>
         </MenuSurface>
       </div>
     </div>

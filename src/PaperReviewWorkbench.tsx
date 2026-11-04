@@ -3,8 +3,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { AlertTriangle, BookOpenCheck, Check, ChevronDown, ChevronUp, FileSearch, FlaskConical, Lightbulb, LoaderCircle, RefreshCw, ScanSearch, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, FileSearch, FlaskConical, Lightbulb, LoaderCircle, ScanSearch } from "lucide-react";
 import PaperPresentationDeck from "./PaperPresentationDeck";
+import { Tab, Tabs } from "./Tabs";
+import { InlineNotice } from "./InlineNotice";
 
 type ReviewAgentId = "related" | "method" | "experiments" | "limitations";
 type ReviewStatus = "idle" | "working" | "complete" | "error";
@@ -199,52 +201,85 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     });
   }
 
-  return <div className={`paper-review-shell${view === "presentation" ? " presentation-active" : ""}`}>
-    <nav className="paper-review-view-switch" aria-label="Review output">
-      <button className={view === "review" ? "active" : ""} onClick={() => setView("review")}>Text review</button>
-      <button className={view === "presentation" ? "active" : ""} onClick={() => setView("presentation")} disabled={!reviewAvailable}>Presentation</button>
-      <span>Two independent outputs from one saved review</span>
-    </nav>
-
-    {view === "presentation" ? <PaperPresentationDeck bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={pageCount} pdfUrl={pdfUrl} reviewReady={reviewAvailable} reviewUpdatedAt={reviewUpdatedAt} /> : <main className="paper-review-workbench">
-      <header className="paper-review-heading">
-        <div><p className="paper-review-kicker">Evidence review</p><h1>Read the paper against its own record.</h1><p className="paper-review-intro">Four independent readings are audited for evidence before one concise research memorandum is written.</p></div>
-        <button className="paper-review-run" onClick={() => void runReview()} disabled={running || !ready || !workspace}>{running ? <LoaderCircle className="spin" size={16} /> : completeCount || errorCount || summary.status === "complete" ? <RefreshCw size={16} /> : <Sparkles size={16} />}{running ? "Reviewing" : completeCount || errorCount || summary.status === "complete" ? "Review again" : "Run review"}</button>
+  return <div className={`review-page-shell${view === "presentation" ? " presentation-active" : ""}`}>
+    <div className="review-page">
+      <header className="review-page-header">
+        <Tabs value={view} onChange={(value) => setView(value as "review" | "presentation")} label="Review output" variant="segmented" className="review-output-tabs">
+          <Tab value="review">Text review</Tab>
+          <Tab value="presentation" disabled={!reviewAvailable}>Presentation</Tab>
+        </Tabs>
+        <span className={`review-overall-status ${running ? "working" : summary.status === "complete" ? "complete" : errorCount ? "error" : "idle"}`}>
+          {running ? "Reviewing" : summary.status === "complete" ? "Complete" : errorCount ? "Needs attention" : completeCount ? `${completeCount}/4 readings` : "Not started"}
+        </span>
+        <button className="primary-button review-run" onClick={() => void runReview()} disabled={running || !ready || !workspace}>
+          {running && <LoaderCircle className="spin" size={14} />}
+          {running ? "Reviewing" : completeCount || errorCount || summary.status === "complete" ? "Review again" : "Run review"}
+        </button>
       </header>
 
-      {!ready && <div className="paper-review-notice"><AlertTriangle size={17} /><div><strong>Prepare the paper first</strong><span>The review agents need the locally indexed PDF so their findings can point back to the original pages.</span></div></div>}
-      {!workspace && <div className="paper-review-notice"><AlertTriangle size={17} /><div><strong>Choose a workspace first</strong><span>A workspace keeps this review and its supporting source reads inside Archimedes.</span></div></div>}
+      {view === "presentation" ? <PaperPresentationDeck bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={pageCount} pdfUrl={pdfUrl} reviewReady={reviewAvailable} reviewUpdatedAt={reviewUpdatedAt} /> : <div className="review-content">
+        {!ready && <InlineNotice tone="warning" title="Prepare the paper first">The review agents need the locally indexed PDF so their findings can point back to the original pages.</InlineNotice>}
+        {!workspace && <InlineNotice tone="warning" title="Choose a workspace first">A workspace keeps this review and its supporting source reads inside Archimedes.</InlineNotice>}
 
-      <section className="paper-review-route" aria-label="Review process">
-        <div data-step="01"><span>Independent readings</span><strong>{independentReadingStatus}</strong></div>
-        <div data-step="02"><span>Evidence audit</span><strong>{running ? "Checking" : summary.status === "complete" ? "Completed" : summary.status === "error" ? "Not completed" : "Pending"}</strong></div>
-        <div data-step="03"><span>Research memorandum</span><strong>{summary.status === "complete" ? "Ready" : running ? "Drafting" : summary.status === "error" ? "Failed" : "Pending"}</strong></div>
-      </section>
+        <section className="reproduce-summary review-summary" aria-label="Review status">
+          <p>Four independent readings are audited for evidence before one concise research memorandum is written.</p>
+          <div className="reproduce-facts">
+            <span className={`reproduce-fact ${completeCount === REVIEWERS.length ? "ok" : errorCount ? "warn" : ""}`}>{completeCount}/{REVIEWERS.length} readings</span>
+            <span className={`reproduce-fact ${summary.status === "complete" ? "ok" : summary.status === "error" ? "warn" : ""}`}>audit {summary.status === "complete" ? "complete" : running ? "checking" : "pending"}</span>
+            <span className={`reproduce-fact ${summary.status === "complete" ? "ok" : summary.status === "error" ? "warn" : ""}`}>memo {summary.status === "complete" ? "ready" : running ? "drafting" : "pending"}</span>
+          </div>
+        </section>
 
-      <section className="paper-review-readings" aria-label="Specialist readings">
-        {REVIEWERS.map((reviewer, index) => {
-          const run = visibleRuns[reviewer.id];
-          const Icon = reviewer.icon;
-          const isExpanded = expanded.has(reviewer.id);
-          return <article className={`paper-review-reading ${reviewer.id} ${run.status}${isExpanded ? " expanded" : ""}`} data-index={String(index + 1).padStart(2, "0")} key={reviewer.id}>
-            <header><span className="paper-review-reading-icon"><Icon size={19} strokeWidth={1.7} /></span><div><h2>{reviewer.title}</h2><p>{reviewer.subtitle}</p></div><span className={`paper-review-status ${run.status}`} aria-label={run.status}>{run.status === "working" ? <LoaderCircle className="spin" size={14} /> : run.status === "complete" ? <Check size={15} /> : run.status === "error" ? <AlertTriangle size={15} /> : null}</span></header>
-            {run.status === "idle" && <p className="paper-review-reading-copy">Waiting for the complete PDF review to begin.</p>}
-            {run.status === "working" && <p className="paper-review-reading-copy">Reading source pages and preparing a page-cited assessment…</p>}
-            {run.status === "error" && <p className="paper-review-reading-error">{run.error}</p>}
-            {run.status === "complete" && <><button className="paper-review-expand" onClick={() => toggleExpanded(reviewer.id)} aria-expanded={isExpanded}><span>{run.repaired ? "Read repaired evidence note" : "Read evidence note"}</span>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>{isExpanded && <ReviewMarkdown content={run.response} />}</>}
-          </article>;
-        })}
-      </section>
+        <section className="reproduce-block">
+          <h2>Independent readings</h2>
+          <ol className="reproduce-runbook">
+            {REVIEWERS.map((reviewer, index) => {
+              const run = visibleRuns[reviewer.id];
+              const isExpanded = expanded.has(reviewer.id);
+              return <li className="reproduce-step" key={reviewer.id}>
+                <span className="reproduce-step-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                <div className="reproduce-step-body">
+                  <div className="reproduce-step-head">
+                    <strong>{reviewer.title}</strong>
+                    <span className={`review-chip ${run.status}`}>
+                      {run.status === "working" && <LoaderCircle className="spin" size={10} />}
+                      {run.status === "complete" ? "complete" : run.status === "working" ? "reading" : run.status === "error" ? "failed" : "pending"}
+                    </span>
+                  </div>
+                  <p className="reproduce-step-detail">{reviewer.subtitle}</p>
+                  {run.status === "idle" && <p className="reproduce-step-detail">Waiting for the complete PDF review to begin.</p>}
+                  {run.status === "working" && <p className="reproduce-step-detail">Reading source pages and preparing a page-cited assessment…</p>}
+                  {run.status === "error" && <p className="review-reading-error">{run.error}</p>}
+                  {run.status === "complete" && <>
+                    <button className="review-expand" onClick={() => toggleExpanded(reviewer.id)} aria-expanded={isExpanded}><span>{run.repaired ? "Read repaired evidence note" : "Read evidence note"}</span>{isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
+                    {isExpanded && <div className="review-reading-output"><ReviewMarkdown content={run.response} /></div>}
+                  </>}
+                </div>
+              </li>;
+            })}
+          </ol>
+        </section>
 
-      <section className={summary.status === "complete" ? "paper-review-audit complete" : "paper-review-audit"}><div className="paper-review-audit-mark"><BookOpenCheck size={19} strokeWidth={1.65} /></div><div><h2>Evidence audit</h2><p>{audit}</p></div></section>
+        <section className="reproduce-block">
+          <h2>Evidence audit</h2>
+          <div className="reproduce-summary"><p>{audit}</p></div>
+        </section>
 
-      <section className={`paper-review-summary ${summary.status}`}>
-        <header><div><p className="paper-review-kicker">Research memorandum</p><h2>One note, with the uncertainty left in.</h2></div>{summary.status === "working" && <span><LoaderCircle className="spin" size={14} />{stage}</span>}</header>
-        {summary.status === "idle" && <p>Run the review to collect independent readings before Archimedes writes the final memorandum.</p>}
-        {summary.status === "working" && <p>{stage}</p>}
-        {summary.status === "error" && <p className="paper-review-summary-error">{summary.error}</p>}
-        {summary.status === "complete" && <ReviewMarkdown content={summary.response} className="paper-review-final-note" />}
-      </section>
-    </main>}
+        <section className="reproduce-block">
+          <h2>Research memorandum</h2>
+          <div className="reproduce-summary review-memo">
+            <div className="review-memo-head">
+              <strong>One note, with the uncertainty left in.</strong>
+              {summary.status === "working" && <span className="review-chip working"><LoaderCircle className="spin" size={10} />{stage}</span>}
+            </div>
+            <p>Four independent readings are audited before the final memorandum is written.</p>
+            {summary.status === "idle" && <p>Run the review to collect independent readings before Archimedes writes the final memorandum.</p>}
+            {summary.status === "working" && <p>{stage}</p>}
+            {summary.status === "error" && <p className="review-reading-error">{summary.error}</p>}
+            {summary.status === "complete" && <div className="review-memo-body"><ReviewMarkdown content={summary.response} /></div>}
+          </div>
+        </section>
+      </div>}
+    </div>
   </div>;
 }

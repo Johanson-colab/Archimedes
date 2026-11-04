@@ -18,7 +18,8 @@ test("workbench and full editor share the tabbed file shell", () => {
   assert.match(app, /const tabs = openFiles\.length > 0 \? <div className="artifact-tabs"/);
   assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
   assert.match(app, /artifact-browser-heading/);
-  assert.match(app, /mainSection === "writing" \? t\("Paper writing"\) : t\("Files"\)/);
+  assert.match(app, /activeModule \? t\(activeModule\.titleKey\) : t\("Files"\)/);
+  assert.match(read("src/sidebar-registry.tsx"), /id: "writing"[^\n]*titleKey: "Paper writing"/);
   assert.match(app, /artifact-workbench-body split/);
   assert.doesNotMatch(app, /className="files-page"/);
   assert.doesNotMatch(app, /Browse the active folder and inspect files created or changed by Archimedes/);

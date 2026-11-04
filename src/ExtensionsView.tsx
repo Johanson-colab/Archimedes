@@ -24,11 +24,12 @@ const TYPE_LABEL: Record<ExtensionType, string> = {
   skill: "Skill",
   mcp: "MCP",
   plugin: "Plugin",
+  "ui-plugin": "Sidebar plugin",
   source: "Source",
   automation: "Automation",
 };
 
-const TYPE_ORDER: ExtensionType[] = ["skill", "mcp", "plugin", "source", "automation"];
+const TYPE_ORDER: ExtensionType[] = ["skill", "mcp", "plugin", "ui-plugin", "source", "automation"];
 
 const SOURCE_TYPE_LABEL: Record<ExtensionSourceType, string> = {
   archimedes: "JSON index",
@@ -261,7 +262,7 @@ export default function ExtensionsView({ bridge, workspace, tab, onTabChange, at
     ...plugins.map(pluginRow),
   ].sort((left, right) => left.name.localeCompare(right.name)), [plugins, skills, workspace]);
 
-  const availableRows = useMemo(() => (feed?.items || []).map(marketplaceRow), [feed]);
+  const availableRows = useMemo(() => (feed?.items || []).filter((item) => item.type !== "ui-plugin").map(marketplaceRow), [feed]);
 
   const updateRows = useMemo(() => availableRows.filter((row) => row.marketplace?.updateAvailable), [availableRows]);
 
