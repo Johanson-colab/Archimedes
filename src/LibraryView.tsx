@@ -36,7 +36,6 @@ import { useUISettings, type Language } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
 import { useConfirm } from "./ConfirmDialog";
 import { Tabs, Tab, FilterGroup, FilterButton } from "./Tabs";
-import ToolbarActions from "./ToolbarActions";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import {
@@ -205,6 +204,7 @@ type LibraryViewProps = {
 
 export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject }: LibraryViewProps) {
   const confirm = useConfirm();
+  const { t } = useUISettings();
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -348,9 +348,13 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 
   if (!selectedLibrary) {
     return <section className="library-page">
-      <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button>
-        <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title="Sync shared libraries"><Cloud size={15} />{cloudBusy ? "Syncing…" : "Sync cloud"}</button>
-      </ToolbarActions>
+      <div className="library-page-toolbar">
+        <span className="library-page-count"><strong>{libraries.length}</strong> {t("Libraries")}</span>
+        <div className="library-page-actions">
+          <button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />{t("New library")}</button>
+          <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync shared libraries")}><Cloud size={15} />{cloudBusy ? t("Syncing…") : t("Sync cloud")}</button>
+        </div>
+      </div>
       {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
       {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
       {!loading && projectPaperCount === 0 && otherProjects.length > 0 && <div className="library-project-hint">
