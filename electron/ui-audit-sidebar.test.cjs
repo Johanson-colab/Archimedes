@@ -25,7 +25,7 @@ test("sidebar keeps Work below stable Knowledge and Create modules", () => {
   assert.match(registry, /id: "image-creation"[^\n]*labelKey: "Image creation"/);
   assert.doesNotMatch(registry, /id: "gallery"/);
   assert.doesNotMatch(registry, /badge: "Soon"[^\n]*disabled: true/);
-  assert.match(app, /sidebarEntries\(section\)\.map/);
+  assert.match(app, /sidebarEntries\(section\)\.filter\(\(entry\) => !hiddenCoreModules\.has\(entry\.id\)\)\.map/);
 });
 
 test("navigation is registry-driven and every entry has a command", () => {

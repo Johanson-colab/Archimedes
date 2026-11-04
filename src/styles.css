@@ -4712,6 +4712,9 @@ html:not([data-theme="paper"]) .paper-review-notice span { color: #b9a48b; }
 .sidebar-modules .create-group { padding-top: 11px; padding-bottom: 2px; }
 .sidebar-modules .codex-nav-item { min-height: 30px; gap: 8px; }
 .sidebar-modules .codex-nav-item > svg { width: 15px; height: 15px; color: var(--sb-muted); stroke-width: 1.7; }
+/* The active tab's icon follows the tab's own active color, so the glyph and
+   the tab share one fill instead of the icon keeping its idle muted tone. */
+.sidebar-modules .codex-nav-item.active > svg { color: inherit; }
 .sidebar-modules .codex-nav-item:disabled { cursor: default; opacity: .52; }
 .sidebar-modules .codex-nav-item:disabled:hover { background: transparent; }
 .nav-tail { margin-left: auto; flex: 0 0 auto; color: var(--sb-faint); font-size: 8px; letter-spacing: .03em; }
@@ -5407,7 +5410,6 @@ html[data-theme="paper"] .image-creation-tab small { color: #6f6a63; }
 .reader-progress-top strong,
 .reader-progress-card button,
 .reader-progress-card button:hover,
-.codex-nav-item.active > svg,
 .project-tree-row.active .project-select > svg,
 .quiet-icon-button.active,
 .reader-section-nav button.active,
