@@ -1100,6 +1100,15 @@ const previewBridge = {
     previewAgentListeners.add(callback);
     return () => previewAgentListeners.delete(callback);
   },
+  onPaperReviewEvent: () => () => undefined,
+  onPaperPresentationEvent: () => () => undefined,
+  getPaperReview: async () => null,
+  runPaperReview: async () => { throw new Error("Paper review runs in the desktop app."); },
+  cleanupPaperReviewRuns: async () => ({ threadIds: [] }),
+  getPaperPresentation: async () => null,
+  runPaperPresentation: async () => { throw new Error("Paper presentations run in the desktop app."); },
+  revealPaperPresentation: async () => undefined,
+  listReproductions: async () => [],
   onMenuNewChat: () => () => undefined,
   onMenuOpenFolder: () => () => undefined,
   onWorkspaceFilesChanged: (callback: (payload: { path: string }) => void) => {
