@@ -12,7 +12,7 @@ function inferredPdfUrl(paper) {
   return match ? `https://arxiv.org/pdf/${match[1]}` : "";
 }
 
-async function preparePaperReader({ workspace, paper, localPath = "" }) {
+async function preparePaperReader({ workspace, paper, localPath = "", signal }) {
   let data;
   let sourceUrl = inferredPdfUrl(paper);
   let name = `${paper.id}.pdf`;
@@ -25,13 +25,13 @@ async function preparePaperReader({ workspace, paper, localPath = "" }) {
     sourceUrl = "";
   } else {
     if (!sourceUrl) throw new Error("No public PDF URL is available. Attach a local PDF to read the full text.");
-    const result = await fetchPublicPdf(sourceUrl);
+    const result = await fetchPublicPdf(sourceUrl, signal);
     data = result.data;
     sourceUrl = result.url;
     name = new URL(result.url).pathname.split("/").filter(Boolean).at(-1) || name;
   }
   if (data.subarray(0, 4).toString("ascii") !== "%PDF") throw new Error("The selected source did not contain a PDF document.");
-  const index = await extractPdfPagesData(data, name);
+  const index = await extractPdfPagesData(data, name, { signal });
   const relativePath = `.archimedes/papers/${paper.id}.pdf`;
   const outputPath = path.join(workspace, relativePath);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });

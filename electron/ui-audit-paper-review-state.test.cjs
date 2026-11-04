@@ -37,12 +37,12 @@ test("completed reviews are saved and restored when the review tab remounts", ()
   assert.match(main, /store\.savePaperReview\(paper\.id, result, input\.projectId\)/);
   assert.match(main, /ipcMain\.handle\("paper-review:get"/);
   assert.match(review, /bridge\.getPaperReview\(paper\.id, workspace, projectId\)/);
-  assert.match(review, /Saved review restored/);
+  assert.match(review, /Saved reading restored/);
 });
 
 test("text review and generated presentation remain independent outputs", () => {
   assert.match(review, /ReactMarkdown/);
-  assert.match(review, /Text review/);
+  assert.match(review, /<Tab value="review">Reading<\/Tab>/);
   assert.match(review, /PaperPresentationDeck/);
   assert.match(main, /store\.getPaperReview\(input\.paper\.id, input\.projectId\)/);
   assert.match(main, /store\.savePaperPresentation/);
@@ -64,7 +64,7 @@ test("saved presentations render as a keyboard-navigable academic deck with PDF 
   assert.match(presentation, /layout-editorial/);
   assert.match(presentation, /paper-presentation-structured/);
   assert.match(presentation, /PAPER_PRESENTATION_VERSION/);
-  assert.match(presentation, /Use saved text review/);
+  assert.match(presentation, /Use saved reading/);
   assert.match(presentation, /Read original paper/);
   assert.match(presentation, /sourceMode/);
   assert.match(presentation, /RenderedPresentationPage/);

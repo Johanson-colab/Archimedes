@@ -99,7 +99,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
     <SettingsSection title={t("Sidebar layout")}>
       <SettingsRow
         stacked
-        description={t("Micro app is one section by default. Group tabs and group sections split it into the Knowledge and Create groups; Work stays a separate section.")}
+        description={t("Micro app is one section by default. Group tabs and group sections split it into the Knowledge, Create and Evaluate groups; Work stays a separate section.")}
       />
       <SettingsChoiceGroup
         value={sidebarLayout}
@@ -113,7 +113,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       />
       <p className="settings-row-hint">
         {sidebarLayout === "flat"
-          ? t("All micro apps stay in one list; Knowledge and Create are merged.")
+          ? t("All micro apps stay in one list; Knowledge, Create and Evaluate are merged.")
           : sidebarLayout === "tabs"
             ? t("A simple text tab row inside Micro app; one group is visible at a time.")
             : t("Stacked group headings inside Micro app; every group is visible.")}
@@ -128,7 +128,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
         {coreSidebarEntries.map((entry) => <SettingsRow
           key={entry.id}
           title={t(entry.labelKey)}
-          description={t(entry.section === "knowledge" ? "Knowledge column" : "Create column")}
+          description={t(entry.section === "knowledge" ? "Knowledge column" : entry.section === "create" ? "Create column" : "Evaluate column")}
           icon={<entry.icon size={14} />}
         >
           <SettingsSwitch
@@ -143,7 +143,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
     <SettingsSection title={t("Installed micro apps")}>
       <SettingsRow
         stacked
-        description={t("Micro apps add one view to the Knowledge or Create column. Changes apply immediately.")}
+        description={t("Micro apps add one view to the Knowledge, Create or Evaluate column. Changes apply immediately.")}
       />
       {error && <p className="settings-row-hint">{error}</p>}
       {loading && <p className="settings-row-hint"><LoaderCircle className="spin" size={13} /> {t("Loading…")}</p>}

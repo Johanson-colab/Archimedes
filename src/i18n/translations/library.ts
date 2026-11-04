@@ -47,6 +47,7 @@ export const library: Record<string, string> = {
   "Highlight color": "高亮颜色",
   "Highlights & notes": "高亮与笔记",
   "Image": "图片",
+  "Interactive paper": "交互论文",
   "Libraries": "文献库",
   "New library": "新建文献库",
   "Next page": "下一页",

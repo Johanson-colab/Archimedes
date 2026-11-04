@@ -15,6 +15,7 @@ const CORE_MODULE_IDS = [
   "reproduce",
   "writing",
   "image-creation",
+  "paper-review",
 ];
 const CORE_ID_SET = new Set(CORE_MODULE_IDS);
 

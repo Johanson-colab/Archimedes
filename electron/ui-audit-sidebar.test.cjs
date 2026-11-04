@@ -21,7 +21,7 @@ test("sidebar defaults to one flat Micro app section above Work", () => {
   const modules = app.indexOf('<nav className="sidebar-nav sidebar-modules"');
   const work = app.indexOf("<ProjectSidebar");
   assert.ok(modules > 0 && work > modules, "Micro app → Work order");
-  assert.match(app, /\["knowledge", "create"\] as const/);
+  assert.match(app, /\["knowledge", "create", "evaluate"\] as const/);
   assert.match(app, /className="sidebar-section-label">\{t\("Micro app"\)\}/);
   assert.match(app, /sidebarLayout === "flat" && <div className="sidebar-module-list">\{flatModuleEntries\.map\(moduleButton\)\}/);
   assert.match(app, /sidebarLayout === "tabs"/);
@@ -36,7 +36,7 @@ test("sidebar defaults to one flat Micro app section above Work", () => {
 });
 
 test("navigation is registry-driven and every entry has a command", () => {
-  assert.match(registry, /export type SidebarSection = "knowledge" \| "create"/);
+  assert.match(registry, /export type SidebarSection = "knowledge" \| "create" \| "evaluate"/);
   assert.ok(registry.includes('source?: "core" | `plugin:${string}`'));
   assert.match(registry, /commandId: string/);
   assert.match(registry, /destination: \{ type: "section"; section: MainSection \}/);

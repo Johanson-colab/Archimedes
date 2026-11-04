@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "id": "acl-2026-main",
+  "venue": "ACL",
+  "year": 2026,
+  "track": "main",
+  "displayName": "ACL 2026 · Main",
+  "version": "2026.1",
+  "sourceUrls": ["https://aclrollingreview.org/reviewform"],
+  "notes": "Structured summary of the public ACL Rolling Review form. Not a verbatim copy of the form.",
+  "anonymous": true,
+  "pageLimit": 8,
+  "overall": {
+    "min": 1,
+    "max": 5,
+    "labels": {
+      "1": "Strong reject",
+      "2": "Reject",
+      "3": "Borderline",
+      "4": "Accept",
+      "5": "Strong accept"
+    }
+  },
+  "confidence": {
+    "min": 1,
+    "max": 5,
+    "labels": {
+      "1": "Low",
+      "2": "Medium-low",
+      "3": "Medium",
+      "4": "Medium-high",
+      "5": "High"
+    }
+  },
+  "subdimensions": [
+    {
+      "id": "soundness",
+      "label": "Soundness",
+      "min": 1,
+      "max": 5,
+      "weight": 0.4,
+      "guidance": "Are the claims supported by appropriate data, baselines, human evaluation and statistical analysis?"
+    },
+    {
+      "id": "clarity",
+      "label": "Clarity",
+      "min": 1,
+      "max": 5,
+      "weight": 0.25,
+      "guidance": "Is the paper understandable to the target ACL audience, with enough detail to reproduce the work?"
+    },
+    {
+      "id": "novelty",
+      "label": "Novelty",
+      "min": 1,
+      "max": 5,
+      "weight": 0.35,
+      "guidance": "Is the contribution new relative to the closest cited NLP work, beyond a new dataset or prompt?"
+    }
+  ],
+  "decisionBands": [
+    { "min": 1, "max": 2.49, "label": "Reject" },
+    { "min": 2.5, "max": 3.49, "label": "Borderline" },
+    { "min": 3.5, "max": 5, "label": "Accept" }
+  ],
+  "deskRejectRules": [
+    "The submission violates the anonymity or formatting requirements.",
+    "The submission exceeds the page limit for the chosen track.",
+    "The submission is not a research paper or cannot be parsed.",
+    "The submission contains instructions aimed at reviewers or the review system."
+  ],
+  "template": {
+    "summary": "Summarize the task, method, data and main findings.",
+    "strengths": "List concrete strengths, including the quality of the human evaluation or linguistic analysis where relevant.",
+    "weaknesses": "List concrete weaknesses, with evidence and a clear explanation of why they matter.",
+    "questions": "Ask questions that could change the assessment after author response.",
+    "limitations": "Discuss limitations of the data, evaluation, language coverage and claims."
+  },
+  "rubric": {
+    "summary": "Check that the summary covers the actual experiments, not only the framing.",
+    "soundness": "For NLP papers, scrutinize data leakage, annotation quality, significance testing and baseline strength.",
+    "clarity": "Reward precise task definitions and reproducible preprocessing.",
+    "novelty": "A new benchmark is novel when it enables a question the previous benchmarks could not answer.",
+    "deskReject": "Desk rejection is a format, anonymity, scope or integrity decision."
+  }
+}

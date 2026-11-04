@@ -1129,6 +1129,7 @@ const LibraryView = lazy(() => import("./LibraryView"));
 const ImageCreationView = lazy(() => import("./ImageCreationView"));
 const BenchmarkRadarView = lazy(() => import("./BenchmarkRadarView"));
 const NewsView = lazy(() => import("./NewsView"));
+const PaperReviewView = lazy(() => import("./PaperReviewView"));
 const ReproduceView = lazy(() => import("./ReproduceView"));
 const ExtensionsView = lazy(() => import("./ExtensionsView"));
 const PaperWritingView = lazy(() => import("./PaperWritingView"));
@@ -1259,7 +1260,7 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const [sidebarLayout, setSidebarLayout] = useState<"flat" | "tabs" | "sections">("flat");
-  const [activeModuleGroup, setActiveModuleGroup] = useState<"knowledge" | "create">("knowledge");
+  const [activeModuleGroup, setActiveModuleGroup] = useState<"knowledge" | "create" | "evaluate">("knowledge");
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [pluginEntries, setPluginEntries] = useState<SidebarEntry[]>([]);
@@ -2877,9 +2878,9 @@ function App() {
   const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : activeModule ? t(activeModule.titleKey) : t("Files");
-  const moduleGroups = useMemo(() => (["knowledge", "create"] as const).map((id) => ({
+  const moduleGroups = useMemo(() => (["knowledge", "create", "evaluate"] as const).map((id) => ({
     id,
-    label: id === "knowledge" ? t("Knowledge") : t("Create"),
+    label: id === "knowledge" ? t("Knowledge") : id === "create" ? t("Create") : t("Evaluate"),
     entries: sidebarEntries(id).filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)),
   })).filter((group) => group.entries.length > 0), [hiddenCoreModules, pluginEntries, t]);
   const flatModuleEntries = useMemo(() => moduleGroups.flatMap((group) => group.entries), [moduleGroups]);
@@ -2927,6 +2928,7 @@ function App() {
     daily: <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     "benchmark-radar": <BenchmarkRadarView />,
     news: <NewsView bridge={desktopBridge} projectId={activeProjectId} active={mainSection === "news"} onSendToChat={sendNoteToChat} />,
+    "paper-review": <PaperReviewView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} active={mainSection === "paper-review"} />,
     extensions: <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />,
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
@@ -3629,7 +3631,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, o
     { id: "research", icon: Lightbulb, label: t("Research"), detail: t("Explore research ideas"), run: () => onResearchMode("idea-spark") },
     { id: "experiment", icon: FlaskConical, label: t("Experiment"), detail: t("Set up an experiment"), run: () => onResearchMode("experiment-setup") },
     { id: "write", icon: FilePenLine, label: t("Write"), detail: t("Draft research writing"), run: () => onResearchMode("paper-generation") },
-    { id: "review", icon: ScanSearch, label: t("Review"), detail: t("Review a paper"), run: () => onResearchMode("paper-review") },
+    { id: "review", icon: ScanSearch, label: t("Paper reading"), detail: t("Read a paper interactively"), run: () => onResearchMode("paper-review") },
     { id: "init", icon: FileCog, label: t("Init"), detail: t("Set up project instructions"), run: () => onCommand("init") },
     { id: "new", icon: Plus, label: t("New"), detail: t("Start a new conversation"), run: () => onCommand("new") },
     { id: "undo", icon: Undo2, label: t("Undo"), detail: t("Undo the last message"), run: () => onCommand("undo") },

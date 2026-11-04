@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "id": "neurips-2026-main",
+  "venue": "NeurIPS",
+  "year": 2026,
+  "track": "main",
+  "displayName": "NeurIPS 2026 · Main",
+  "version": "2026.1",
+  "sourceUrls": ["https://neurips.cc/Conferences/2026/ReviewerGuidelines"],
+  "notes": "Structured summary of the public NeurIPS review form. Not a verbatim copy of the reviewer guidelines.",
+  "anonymous": true,
+  "pageLimit": 9,
+  "overall": {
+    "min": 1,
+    "max": 10,
+    "labels": {
+      "1": "Strong reject",
+      "2": "Reject",
+      "3": "Reject",
+      "4": "Borderline reject",
+      "5": "Borderline accept",
+      "6": "Weak accept",
+      "7": "Accept",
+      "8": "Strong accept",
+      "9": "Very strong accept",
+      "10": "Award quality"
+    }
+  },
+  "confidence": {
+    "min": 1,
+    "max": 5,
+    "labels": {
+      "1": "Low",
+      "2": "Medium-low",
+      "3": "Medium",
+      "4": "Medium-high",
+      "5": "High"
+    }
+  },
+  "subdimensions": [
+    {
+      "id": "quality",
+      "label": "Quality",
+      "min": 1,
+      "max": 4,
+      "weight": 0.35,
+      "guidance": "Technical soundness, appropriateness of the evaluation and support for the claims."
+    },
+    {
+      "id": "clarity",
+      "label": "Clarity",
+      "min": 1,
+      "max": 4,
+      "weight": 0.2,
+      "guidance": "Writing quality, organization and reproducibility of the described method."
+    },
+    {
+      "id": "significance",
+      "label": "Significance",
+      "min": 1,
+      "max": 4,
+      "weight": 0.25,
+      "guidance": "Importance of the problem and likely impact of the results on the field."
+    },
+    {
+      "id": "originality",
+      "label": "Originality",
+      "min": 1,
+      "max": 4,
+      "weight": 0.2,
+      "guidance": "Novelty relative to the closest prior work, including new formulations, data or analyses."
+    }
+  ],
+  "decisionBands": [
+    { "min": 1, "max": 3.49, "label": "Reject" },
+    { "min": 3.5, "max": 5.49, "label": "Borderline" },
+    { "min": 5.5, "max": 7.49, "label": "Weak accept" },
+    { "min": 7.5, "max": 10, "label": "Accept" }
+  ],
+  "deskRejectRules": [
+    "The submission violates the main-track page limit or appendix rules.",
+    "The submission is not anonymized when required.",
+    "The submission is out of scope or is not a research paper.",
+    "The submission attempts to manipulate the review process."
+  ],
+  "template": {
+    "summary": "Summarize the paper and its claimed contributions in one paragraph.",
+    "strengths": "State concrete strengths with locations in the paper.",
+    "weaknesses": "State concrete weaknesses with locations in the paper; distinguish missing evidence from disagreement with the approach.",
+    "questions": "Ask focused questions that the authors could answer in a rebuttal.",
+    "limitations": "Discuss limitations of the method, evaluation and claims."
+  },
+  "rubric": {
+    "summary": "A good summary shows that the reviewer read the paper rather than the abstract alone.",
+    "quality": "Check whether the experiments test the claims, whether baselines are strong, and whether uncertainty is reported.",
+    "clarity": "Check whether the method, hyperparameters and evaluation protocol are specified well enough to reproduce.",
+    "significance": "A incremental result can still be significant if it changes practice or enables a new line of work.",
+    "originality": "Reward new problem formulations and analyses, not only new architectures.",
+    "deskReject": "Desk rejection is a scope, format, anonymity or integrity decision."
+  }
+}

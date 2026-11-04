@@ -21,6 +21,7 @@ const journeySnapshots = require("./journey-snapshots.cjs");
 const workbenchSettings = require("./workbench-settings.cjs");
 const sidebarSettings = require("./sidebar-settings.cjs");
 const news = require("./news.cjs");
+const paperReview = require("./paper-review.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
@@ -632,6 +633,7 @@ app.whenReady().then(async () => {
   sidebarPlugins.initialize(app.getPath("userData"));
   sidebarSettings.initialize(app.getPath("userData"));
   news.initialize(app.getPath("userData"));
+  paperReview.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());
   const authStorageValues = new Map();
@@ -837,6 +839,52 @@ app.whenReady().then(async () => {
   ipcMain.handle("news:refresh", (_event, input = {}) => news.refresh({ force: Boolean(input?.force) }));
   ipcMain.handle("news:mark-read", (_event, input = {}) => news.markRead(String(input?.id || ""), Boolean(input?.read)));
   ipcMain.handle("news:set-saved", (_event, input = {}) => news.setSaved(String(input?.id || ""), Boolean(input?.saved)));
+  ipcMain.handle("paper-review-app:get-settings", () => paperReview.getSettings());
+  ipcMain.handle("paper-review-app:save-settings", (_event, patch = {}) => paperReview.saveSettings(patch));
+  ipcMain.handle("paper-review-app:list-venues", () => paperReview.listVenues());
+  ipcMain.handle("paper-review-app:list-papers", (event, input = {}) => {
+    const resolvedWorkspace = resolveWorkspace(input?.workspace || windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(resolvedWorkspace);
+    return paperReview.listPapers({ projectId: String(input?.projectId || "") });
+  });
+  ipcMain.handle("paper-review-app:choose-pdf", async (event) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Choose a paper PDF",
+      properties: ["openFile"],
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    };
+    const result = browserWindow ? await dialog.showOpenDialog(browserWindow, options) : await dialog.showOpenDialog(options);
+    return result.canceled ? "" : result.filePaths[0] || "";
+  });
+  ipcMain.handle("paper-review-app:create", async (event, input = {}) => {
+    const resolvedWorkspace = resolveWorkspace(input?.workspace || windowWorkspaces.get(event.sender.id));
+    store.openWorkspace(resolvedWorkspace);
+    const sender = event.sender;
+    return paperReview.createRun(input, {
+      workspace: resolvedWorkspace,
+      emit: (payload) => {
+        if (!sender.isDestroyed()) sender.send("paper-review-app:progress", payload);
+      },
+    });
+  });
+  ipcMain.handle("paper-review-app:get-run", (_event, input = {}) => paperReview.getRun(String(input?.runId || "")));
+  ipcMain.handle("paper-review-app:list-runs", (_event, input = {}) => paperReview.listRuns({ projectId: String(input?.projectId || ""), limit: Number(input?.limit) || 50 }));
+  ipcMain.handle("paper-review-app:cancel-run", (_event, input = {}) => paperReview.cancelRun(String(input?.runId || "")));
+  ipcMain.handle("paper-review-app:delete-run", (_event, input = {}) => paperReview.deleteRun(String(input?.runId || "")));
+  ipcMain.handle("paper-review-app:export-run", async (event, input = {}) => {
+    const exported = paperReview.exportRun(String(input?.runId || ""));
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Export simulated review",
+      defaultPath: path.join(app.getPath("documents"), exported.filename),
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+    };
+    const result = browserWindow ? await dialog.showSaveDialog(browserWindow, options) : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return { saved: false, path: "" };
+    fs.writeFileSync(result.filePath, exported.markdown, "utf8");
+    return { saved: true, path: result.filePath };
+  });
   ipcMain.handle("extensions:read-local", (_event, input = {}) => {
     const target = path.resolve(String(input.path || ""));
     if (!allowedContextPaths.has(target)) throw new Error("This skill is not available in the current context.");
