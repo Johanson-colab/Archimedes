@@ -59,6 +59,14 @@ copies of copyrighted CFPs or reviewer guidelines. Each links to its public
 source. The schema and copyright note are documented in
 `shared/paper-review/README.md`.
 
+## UI
+
+The page follows the Reproduce shell: one centered 1080px column, a compact
+compose row, plain section headings and a bottom history list. Review bodies use
+an OpenReview-style dense document layout: a compact score row, text sections,
+native expandable reviewer blocks, and page/quote evidence inline instead of
+decorative cards or repeated headings.
+
 ## Model selection and privacy
 
 - Default: the **main agent model** from Settings → Models.
