@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
-import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, UserRound, Users, X } from "lucide-react";
+import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Route, Server, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, UserRound, Users, X } from "lucide-react";
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import type { ProactiveSettings } from "./proactive-types";
-import ModelSettingsModal from "./ModelSettingsModal";
+import ModelSettingsModal, { type ModelExecutionPreferences } from "./ModelSettingsModal";
 import TerminalSettingsModal from "./TerminalSettingsModal";
+import SshServersPanel from "./SshServersPanel";
 import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import WorkbenchSettingsPanel from "./WorkbenchSettingsPanel";
 import AccountSettingsPanel from "./AccountSettingsPanel";
@@ -15,7 +16,7 @@ import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RAD
 import { Dialog } from "./Dialog";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection as SettingsSectionView } from "./SettingsPrimitives";
 
-export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "workspace" | "about" | "account" | "members";
+export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "models" | "web" | "terminal" | "ssh" | "workspace" | "about" | "account" | "members";
 
 type SettingsModalProps = {
   open: boolean;
@@ -30,6 +31,7 @@ type SettingsModalProps = {
   onAppearanceChange: (appearance: AppearanceSettings) => void;
   bridge: ResearchDeskBridge;
   onModelSaved: (config: PublicModelConfig) => void;
+  executionPreferences?: ModelExecutionPreferences;
   workspace: string;
   workspaceReady: boolean;
   agentBusy: boolean;
@@ -72,6 +74,7 @@ const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNod
   { id: "models", label: "Models", icon: <Orbit size={15} /> },
   { id: "web", label: "Web search", icon: <Globe2 size={15} /> },
   { id: "terminal", label: "Terminal", icon: <SquareTerminal size={15} /> },
+  { id: "ssh", label: "SSH servers", icon: <Server size={15} /> },
   { id: "workspace", label: "Workspace", icon: <FolderOpen size={15} /> },
   { id: "about", label: "About", icon: <Info size={15} /> },
 ];
@@ -103,6 +106,7 @@ export default function SettingsModal({
   onAppearanceChange,
   bridge,
   onModelSaved,
+  executionPreferences,
   workspace,
   workspaceReady,
   agentBusy,
@@ -260,9 +264,10 @@ export default function SettingsModal({
     proactive: { title: t("Proactive agent"), description: t("Opt-in L0 signals, evidence, and interruption limits.") },
     appearance: { title: t("Appearance"), description: t("Theme and fonts") },
     workbench: { title: t("Workbench"), description: t("Choose the tabs that appear in the right rail.") },
-    models: { title: t("Models"), description: t("Default model and providers") },
+    models: { title: t("Models"), description: t("API providers and harnesses") },
     web: { title: t("Web search"), description: t("Search provider and API keys") },
     terminal: { title: t("Terminal"), description: t("Shell, font, and external terminal") },
+    ssh: { title: t("SSH servers"), description: t("Machines a reproduction can run on") },
     workspace: { title: t("Workspace"), description: t("Current folder and access") },
     about: { title: t("About"), description: t("Build information") },
   };
@@ -661,7 +666,8 @@ export default function SettingsModal({
 
             {section === "workbench" && <WorkbenchSettingsPanel preferences={workbenchPreferences} onChange={onChangeWorkbenchPreferences} onReset={onResetWorkbenchPreferences} />}
 
-            {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} />}
+            {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} />}
+            {section === "ssh" && <SshServersPanel bridge={bridge} />}
             {section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}
             {section === "terminal" && (terminalSettings
               ? <TerminalSettingsModal open embedded mode="settings" settings={terminalSettings} workspace={workspace} onClose={() => undefined} onSave={onSaveTerminalSettings} onOpenExternal={onOpenExternalTerminal} />

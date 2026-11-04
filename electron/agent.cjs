@@ -6,6 +6,7 @@ const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
+const { workspaceInstructions } = require("./thread-commands.cjs");
 const { hasApprovalSurface, resolveApproval, setApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { completeAnthropic } = require("./agent/anthropic.cjs");
@@ -16,7 +17,8 @@ const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.c
 const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
 const { fileChangeForContent } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
-const { listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
+const { runCodex } = require("./agent/codex-backend.cjs");
+const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
@@ -610,7 +612,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   if (name === "list_attached_repository_files") {
     const repository = attachedRepository(contextItems, args.attachment_id);
     if (repository.checkout) {
-      const listing = await listRepositoryCheckoutDirectory(root, repository.url, args.directory || "");
+      const listing = await listRepositoryCheckoutDirectory(root, repository.url, args.directory || "", checkoutBranchOf(repository));
       return { content: JSON.stringify({ attachment_id: args.attachment_id, url: repository.url, branch: repository.checkout.branch, commit: repository.checkout.commit, ...listing }) };
     }
     return { content: JSON.stringify({ attachment_id: args.attachment_id, url: repository.url, branch: repository.branch,
@@ -621,7 +623,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   if (name === "read_attached_repository_file") {
     const repository = attachedRepository(contextItems, args.attachment_id);
     if (repository.checkout) {
-      const file = await readRepositoryCheckoutFile(root, repository.url, args.path);
+      const file = await readRepositoryCheckoutFile(root, repository.url, args.path, checkoutBranchOf(repository));
       return { content: JSON.stringify({ attachment_id: args.attachment_id, url: repository.url, branch: repository.checkout.branch, commit: repository.checkout.commit,
         path: file.path, line_count: file.line_count, size_bytes: file.size, content: file.content,
       }) };
@@ -635,7 +637,7 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   if (name === "search_attached_repository") {
     const repository = attachedRepository(contextItems, args.attachment_id);
     if (!repository.checkout) throw new Error("Full repository search is available after the user starts a code audit checkout.");
-    const result = await searchRepositoryCheckout(root, repository.url, args.query, args.directory || "");
+    const result = await searchRepositoryCheckout(root, repository.url, args.query, args.directory || "", checkoutBranchOf(repository));
     return { content: JSON.stringify({ attachment_id: args.attachment_id, url: repository.url, branch: repository.checkout.branch, commit: repository.checkout.commit, ...result }) };
   }
   if (name === "read_attached_paper_pdf") {
@@ -854,7 +856,8 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false }) {
+async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal }) {
+  if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The Codex backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
@@ -865,11 +868,14 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
   const turn = transient
     ? { id: randomUUID(), thread_id: thread.id, task_id: task.id, mode, user_message: prompt, assistant_message: "", status: "running", created_at: new Date().toISOString(), completed_at: null }
     : store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode });
-  const config = getActiveModelConfig();
-  const resolvedReasoningEffort = normalizeModelReasoningEffort(config, reasoningEffort);
-  const resolvedContextLength = normalizeContextLength(config, contextLength);
-  const policy = reasoningPolicy(resolvedReasoningEffort, mode);
+  const config = externalBackend ? null : getActiveModelConfig();
+  const resolvedReasoningEffort = externalBackend ? null : normalizeModelReasoningEffort(config, reasoningEffort);
+  const resolvedContextLength = externalBackend ? null : normalizeContextLength(config, contextLength);
+  const policy = externalBackend ? null : reasoningPolicy(resolvedReasoningEffort, mode);
   const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
   const actions = [];
   activeRuns.set(thread.id, controller);
 
@@ -878,6 +884,17 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     if (!transient) store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, ...event });
   };
   const finish = (response, status) => {
+    if (externalBackend) {
+      for (const action of actions) {
+        if (store.getAction(action.id).status === "pending") {
+          store.resolveAction(action.id, "rejected");
+          resolveApproval(action.id, false);
+          Object.assign(action, store.getAction(action.id));
+          emitTurn({ type: "native_approval_resolved", title: "Codex approval resolved", detail: "The native request is no longer pending", action: { ...action } });
+        }
+        Object.assign(action, store.getAction(action.id));
+      }
+    }
     if (!transient) {
       store.finishTask(task.id, { response, status });
       store.finishResearchTurn(turn.id, { response, status });
@@ -885,22 +902,46 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: transient ? { ...thread, status: "idle" } : store.getResearchThread(thread.id) };
   };
 
-  if (!config.apiKey) {
-    const response = "Archimedes needs a model configuration before it can run this research task. Open Model settings, choose a provider, add the API key and model, then retry.";
-    emitTurn({ type: "configuration", title: "Model configuration required", detail: "No local LLM API key was found" });
-    activeRuns.delete(thread.id);
-    return finish(response, "needs_configuration");
-  }
-
   try {
+    if (controller.signal.aborted) throw new Error("Research turn interrupted before startup.");
+    if (!externalBackend && !config.apiKey) {
+      const response = "Archimedes needs a model configuration before it can run this research task. Open Model settings, choose a provider, add the API key and model, then retry.";
+      emitTurn({ type: "configuration", title: "Model configuration required", detail: "No local LLM API key was found" });
+      return finish(response, "needs_configuration");
+    }
+    if (externalBackend) {
+      const response = await runCodex({
+        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems,
+        signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
+        approve: async (payload) => {
+          if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;
+          const { signal: approvalSignal, ...actionPayload } = payload;
+          const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: "codex" } });
+          actions.push(action);
+          // Register before exposing the card, so an immediate click cannot be lost.
+          const waiting = waitForApproval(action.id, approvalSignal || controller.signal, thread.id);
+          emitTurn({ type: "approval", title: "Codex approval required", detail: payload.command, action });
+          try { return (await waiting).approved; }
+          finally {
+            if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+            Object.assign(action, store.getAction(action.id));
+            emitTurn({ type: "native_approval_resolved", title: "Codex approval resolved", detail: "The native request is no longer pending", action: { ...action } });
+          }
+        },
+      });
+      recordEvent({ type: "assistant_step", payload: { content: response, backend: "codex" } });
+      emitTurn({ type: "complete", title: "Codex turn complete", detail: "Native execution finished" });
+      return finish(response, "completed");
+    }
     const context = prepareConversation({
       // Internal review workers are intentionally not persisted, but their
       // active turn still has to be present for the normal context builder.
       thread: transient ? { id: thread.id, title: thread.title, mode, context_summary: "", turns: [turn] } : store.getResearchThreadContext(thread.id),
       currentTurnId: turn.id,
-      attachmentManifest: attachedContextManifest(contextItems),
+      attachmentManifest: externalBackend ? "" : attachedContextManifest(contextItems),
       mode,
       reasoningInstruction: policy.instruction,
+      projectInstructions: workspaceInstructions(workspace),
       contextCharacterLimit: contextCharacterLimit(config, resolvedContextLength),
     });
     if (context.compacted) {
@@ -996,12 +1037,14 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
   } catch (error) {
     if (controller.signal.aborted || error?.name === "AbortError") {
       emitTurn({ type: "interrupted", title: "Research turn interrupted", detail: "Conversation history was preserved" });
-      return finish("This research turn was interrupted. You can continue in the same thread.", "interrupted");
+      return finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This research turn was interrupted. You can continue in the same thread.${externalBackend ? " Check partial native changes before continuing." : ""}`, "interrupted");
     }
-    const response = `Archimedes could not complete this task: ${error.message || String(error)}`;
+    const response = `${error.partialResponse ? `${error.partialResponse}\n\n` : ""}Archimedes could not complete this task: ${error.message || String(error)}`;
     emitTurn({ type: "failed", title: "Research turn failed", detail: "The turn record was saved for inspection" });
     return finish(response, "failed");
   } finally {
+    externalSignal?.removeEventListener("abort", onExternalAbort);
+    controller.abort();
     activeRuns.delete(thread.id);
   }
 }

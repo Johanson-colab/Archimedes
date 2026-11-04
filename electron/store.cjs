@@ -1,4 +1,5 @@
 const { randomUUID } = require("node:crypto");
+const { findRepositoryUrl } = require("./paper-repository.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
@@ -407,6 +408,21 @@ function schema(db) {
       updated_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS reproduction_attempts (
+      id TEXT PRIMARY KEY NOT NULL,
+      reproduction_id TEXT NOT NULL REFERENCES reproductions(id) ON DELETE CASCADE,
+      run_id TEXT NOT NULL REFERENCES reproduction_runs(id) ON DELETE CASCADE,
+      attempt_no INTEGER NOT NULL,
+      step_id TEXT NOT NULL,
+      class TEXT NOT NULL,
+      confidence TEXT NOT NULL DEFAULT '',
+      evidence TEXT NOT NULL DEFAULT '',
+      cause TEXT NOT NULL DEFAULT '',
+      fix_json TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS daily_feed_cache (
       cache_key TEXT PRIMARY KEY NOT NULL,
       response_json TEXT NOT NULL,
@@ -440,6 +456,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_paper_presentations_updated ON paper_presentations(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_reproductions_updated ON reproductions(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_reproduction_runs_reproduction ON reproduction_runs(reproduction_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_reproduction_attempts_run ON reproduction_attempts(run_id, attempt_no);
     CREATE INDEX IF NOT EXISTS idx_research_threads_updated ON research_threads(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_turns_thread ON research_turns(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_events_turn ON research_events(turn_id, sequence ASC);
@@ -455,6 +472,7 @@ function schema(db) {
   ensureColumn(db, "research_threads", "owner_id", "TEXT");
   ensureColumn(db, "research_threads", "visibility", "TEXT NOT NULL DEFAULT 'project'");
   ensureColumn(db, "research_threads", "archived_at", "TEXT");
+  ensureColumn(db, "research_threads", "context_summary_through_turn_id", "TEXT");
   // Paper chat runs in a research thread, but it is not a research session: it
   // belongs to a paper, not to the workspace sidebar. `kind` keeps the two
   // apart so a briefing that is still running never appears as a new chat.
@@ -757,6 +775,43 @@ function normalizeWorkspacePath(value) {
   return resolved;
 }
 
+/**
+ * Papers imported before the repository was extracted have an empty github_url
+ * even though their abstract names the code. Fill those in once per open: it is
+ * a regex over a few hundred characters, and it writes only when it finds a link.
+ */
+function backfillPaperRepositories(db) {
+  const rows = db.prepare("SELECT id, title, abstract FROM papers WHERE github_url = '' AND abstract <> ''").all();
+  if (!rows.length) return 0;
+  const update = db.prepare("UPDATE papers SET github_url = ?, updated_at = ? WHERE id = ?");
+  let filled = 0;
+  for (const row of rows) {
+    const found = findRepositoryUrl({ paper: { title: row.title, abstract: row.abstract } }).url;
+    if (!found) continue;
+    update.run(found, timestamp(), row.id);
+    filled += 1;
+  }
+  return filled;
+}
+
+/**
+ * A run cannot survive the process that owned it: the container is gone, and no
+ * session is left to stop. Leaving those rows as "running" makes the UI show a
+ * Stop button for a job that no longer exists, so they are reconciled on open.
+ */
+function reconcileInterruptedReproductions(db) {
+  const now = timestamp();
+  const stuck = db.prepare("SELECT id FROM reproductions WHERE status IN ('provisioning', 'running', 'diagnosing')").all();
+  if (!stuck.length) return 0;
+  const message = "The app stopped while this was running. Start it again.";
+  for (const row of stuck) {
+    db.prepare("UPDATE reproductions SET status = 'blocked', error = ?, updated_at = ? WHERE id = ?").run(message, now, row.id);
+    db.prepare("UPDATE reproduction_runs SET status = 'interrupted', finished_at = ?, updated_at = ? WHERE reproduction_id = ? AND status = 'running'")
+      .run(now, now, row.id);
+  }
+  return stuck.length;
+}
+
 function openWorkspace(workspacePath) {
   if (activeWorkspace === workspacePath && database) return getSnapshot();
 
@@ -778,6 +833,8 @@ function openWorkspace(workspacePath) {
   database = new DatabaseSync(databasePath);
   activeWorkspace = workspacePath;
   schema(database);
+  backfillPaperRepositories(database);
+  reconcileInterruptedReproductions(database);
   migrateLegacyTasks(database);
   seedLibraries(database);
   ensureProjectLibraries(database);
@@ -1949,7 +2006,7 @@ function createThreadSnapshot(threadId) {
   if (!canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this thread.");
   const turns = db.prepare(`
     SELECT id, mode, user_message, assistant_message, status, created_at, completed_at
-    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC
+    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC
   `).all(threadId);
   const events = db.prepare(`
     SELECT id, turn_id, sequence, type, payload_json, created_at
@@ -2164,7 +2221,7 @@ function getResearchThread(id) {
   if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
   const turns = db.prepare(`
     SELECT id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at
-    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC
+    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC
   `).all(id).map((turn) => ({
     ...turn,
     assistant_message: presentStoredAssistantMessage(turn.assistant_message),
@@ -2284,13 +2341,84 @@ function getResearchThreadIdForTask(taskId) {
 
 function getResearchThreadContext(id) {
   const thread = getResearchThread(id);
+  const checkpoint = thread.turns.findIndex((turn) => turn.id === thread.context_summary_through_turn_id);
   return {
     id: thread.id,
     title: thread.title,
     mode: thread.mode,
     context_summary: thread.context_summary,
-    turns: thread.turns,
+    turns: checkpoint >= 0 ? thread.turns.slice(checkpoint + 1) : thread.turns,
   };
+}
+
+function assertEditableIdleThread(id) {
+  const thread = getResearchThread(id);
+  if (!canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
+  if (thread.status === "running" || thread.turns.some((turn) => turn.status === "running")) throw new Error("Stop the running turn before changing this conversation.");
+  return thread;
+}
+
+// Copies get new IDs and no task bindings: historical approvals must never be
+// executable from a fork. Source text and evidence events remain available.
+function copyResearchThread(source, { title, visibility = source.visibility, turns = source.turns } = {}) {
+  const db = requireDatabase();
+  const copy = createResearchThread({ prompt: source.title, title, mode: source.mode, projectId: source.project_id, workspacePath: source.workspace_path, visibility });
+  const turnIds = new Map();
+  for (const turn of turns) {
+    const id = randomUUID();
+    turnIds.set(turn.id, id);
+    db.prepare(`INSERT INTO research_turns (id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at)
+      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)`).run(id, copy.id, turn.mode, turn.user_message, turn.assistant_message, turn.status, turn.created_at, turn.completed_at);
+  }
+  for (const event of source.events || []) {
+    const turnId = turnIds.get(event.turn_id);
+    if (!turnId) continue;
+    db.prepare(`INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), copy.id, turnId, event.sequence, event.type, JSON.stringify(event.payload), event.created_at);
+  }
+  db.prepare("UPDATE research_threads SET context_summary = ?, context_summary_through_turn_id = ? WHERE id = ?")
+    .run(source.context_summary, turnIds.get(source.context_summary_through_turn_id) || null, copy.id);
+  return getResearchThread(copy.id);
+}
+
+function forkResearchThread(id, { side = false } = {}) {
+  const source = assertEditableIdleThread(id);
+  const db = requireDatabase();
+  db.exec("BEGIN");
+  try {
+    const copy = copyResearchThread(source, { title: `${side ? "Side" : "Fork"}: ${source.title}` });
+    recordAuditEvent(db, { projectId: source.project_id, action: "thread.forked", targetType: "thread", targetId: copy.id, metadata: { sourceThreadId: id, side } });
+    db.exec("COMMIT");
+    return copy;
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+function undoResearchTurn(id) {
+  const source = assertEditableIdleThread(id);
+  const lastTurn = source.turns.at(-1);
+  if (!lastTurn) throw new Error("There is no turn to undo.");
+  const db = requireDatabase();
+  db.exec("BEGIN");
+  try {
+    // A private archived copy makes every undo recoverable from Work > Archived.
+    const backup = copyResearchThread(source, { title: `Before undo: ${source.title}`, visibility: "private" });
+    db.prepare("UPDATE research_threads SET archived_at = ? WHERE id = ?").run(timestamp(), backup.id);
+    if (lastTurn.task_id) db.prepare("UPDATE agent_actions SET status = 'rejected', resolved_at = ? WHERE task_id = ? AND status = 'pending'").run(timestamp(), lastTurn.task_id);
+    db.prepare("DELETE FROM research_turns WHERE id = ? AND thread_id = ?").run(lastTurn.id, id);
+    db.prepare("UPDATE research_threads SET status = 'idle', context_summary = '', context_summary_through_turn_id = NULL, updated_at = ? WHERE id = ?").run(timestamp(), id);
+    recordAuditEvent(db, { projectId: source.project_id, action: "thread.turn_undone", targetType: "thread", targetId: id, metadata: { turnId: lastTurn.id, backupThreadId: backup.id } });
+    db.exec("COMMIT");
+    return { thread: getResearchThread(id), prompt: lastTurn.user_message, backupThreadId: backup.id };
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+function compactResearchThread(id, summary, expectedTurnId) {
+  const thread = assertEditableIdleThread(id);
+  if (!expectedTurnId || thread.turns.at(-1)?.id !== expectedTurnId) throw new Error("This conversation changed during compaction. Please retry.");
+  if (typeof summary !== "string" || !summary.trim() || summary.length > 32_000) throw new Error("The conversation summary must contain between 1 and 32000 characters.");
+  requireDatabase().prepare("UPDATE research_threads SET context_summary = ?, context_summary_through_turn_id = ?, updated_at = ? WHERE id = ?")
+    .run(summary.trim(), expectedTurnId, timestamp(), id);
+  return getResearchThread(id);
 }
 
 function startResearchTurn({ threadId, taskId, prompt, mode }) {
@@ -2378,6 +2506,24 @@ function createAction({ taskId, kind, payload }) {
   db.prepare("INSERT INTO agent_actions (id, task_id, kind, payload_json, status, created_at) VALUES (?, ?, ?, ?, ?, ?)")
     .run(action.id, action.task_id, action.kind, JSON.stringify(action.payload), action.status, action.created_at);
   return action;
+}
+
+// Native IDs stay local: never included in chat export/sync/fork payloads.
+function nativeAgentBindings(threadId) {
+  const db = requireDatabase();
+  db.exec(`CREATE TABLE IF NOT EXISTS native_agent_bindings (
+    thread_id TEXT PRIMARY KEY REFERENCES research_threads(id) ON DELETE CASCADE,
+    native_thread_id TEXT NOT NULL, workspace TEXT NOT NULL, model TEXT NOT NULL,
+    last_turn_id TEXT
+  ) STRICT`);
+  return {
+    get: () => db.prepare("SELECT * FROM native_agent_bindings WHERE thread_id = ?").get(threadId),
+    save: (binding) => db.prepare(`INSERT INTO native_agent_bindings
+      (thread_id, native_thread_id, workspace, model, last_turn_id) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(thread_id) DO UPDATE SET native_thread_id=excluded.native_thread_id,
+      workspace=excluded.workspace, model=excluded.model, last_turn_id=excluded.last_turn_id`)
+      .run(threadId, binding.native_thread_id, binding.workspace, binding.model, binding.last_turn_id),
+  };
 }
 
 function getAction(id) {
@@ -2529,7 +2675,7 @@ const REPRODUCTION_STATUSES = new Set([
   "diagnosing", "checks-passed", "verified", "diverged", "blocked", "cancelled",
 ]);
 
-const DEFAULT_REPRODUCTION_BUDGET = Object.freeze({ wallClockMin: 45, gpuHours: 2, maxFixAttempts: 3 });
+const DEFAULT_REPRODUCTION_BUDGET = Object.freeze({ wallClockMin: 45, gpuHours: 2, maxFixAttempts: 5 });
 
 function normalizeReproductionBudget(value) {
   const input = value && typeof value === "object" ? value : {};
@@ -2705,7 +2851,75 @@ function listReproductionRuns(reproductionId, limit = 20) {
     .map(reproductionRunRow);
 }
 
+function reproductionAttemptRow(row) {
+  if (!row) return null;
+  let fix = null;
+  try { fix = row.fix_json ? JSON.parse(row.fix_json) : null; } catch { fix = null; }
+  return {
+    id: row.id,
+    reproduction_id: row.reproduction_id,
+    run_id: row.run_id,
+    attempt_no: Number(row.attempt_no) || 1,
+    step_id: row.step_id,
+    class: row.class,
+    confidence: row.confidence || "",
+    evidence: row.evidence || "",
+    cause: row.cause || "",
+    fix,
+    status: row.status,
+    created_at: row.created_at,
+  };
+}
+
+function createReproductionAttempt(input = {}) {
+  const db = requireDatabase();
+  const id = randomUUID();
+  const now = timestamp();
+  const next = db.prepare("SELECT COALESCE(MAX(attempt_no), 0) + 1 AS next FROM reproduction_attempts WHERE run_id = ?")
+    .get(String(input.runId || ""));
+  db.prepare(`INSERT INTO reproduction_attempts
+      (id, reproduction_id, run_id, attempt_no, step_id, class, confidence, evidence, cause, fix_json, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    id,
+    String(input.reproductionId || ""),
+    String(input.runId || ""),
+    Math.trunc(Number(input.attemptNo) || Number(next?.next) || 1),
+    String(input.stepId || "").slice(0, 80),
+    String(input.class || "unknown").slice(0, 60),
+    String(input.confidence || "").slice(0, 20),
+    String(input.evidence || "").slice(0, 400),
+    String(input.cause || "").slice(0, 600),
+    input.fix ? JSON.stringify(input.fix) : null,
+    String(input.status || "proposed").slice(0, 30),
+    now,
+  );
+  return reproductionAttemptRow(db.prepare("SELECT * FROM reproduction_attempts WHERE id = ?").get(id));
+}
+
+function updateReproductionAttempt(id, patch = {}) {
+  const db = requireDatabase();
+  const current = reproductionAttemptRow(db.prepare("SELECT * FROM reproduction_attempts WHERE id = ?").get(String(id || "")));
+  if (!current) throw new Error("That diagnosis does not exist.");
+  db.prepare("UPDATE reproduction_attempts SET status = ?, cause = ? WHERE id = ?").run(
+    typeof patch.status === "string" && patch.status ? patch.status.slice(0, 30) : current.status,
+    typeof patch.cause === "string" && patch.cause ? patch.cause.slice(0, 600) : current.cause,
+    String(id),
+  );
+  return reproductionAttemptRow(db.prepare("SELECT * FROM reproduction_attempts WHERE id = ?").get(String(id)));
+}
+
+function listReproductionAttempts(runId) {
+  const db = requireDatabase();
+  return db.prepare("SELECT * FROM reproduction_attempts WHERE run_id = ? ORDER BY attempt_no ASC")
+    .all(String(runId || ""))
+    .map(reproductionAttemptRow);
+}
+
 module.exports = {
+  nativeAgentBindings,
+  compactResearchThread,
+  forkResearchThread,
+  undoResearchTurn,
   addPaper,
   createComment,
   deleteComment,
@@ -2721,10 +2935,13 @@ module.exports = {
   projectRoleForUser,
   setLocalIdentity,
   createReproduction,
+  createReproductionAttempt,
   createReproductionRun,
   getLatestReproductionRun,
   getReproductionRun,
+  listReproductionAttempts,
   listReproductionRuns,
+  updateReproductionAttempt,
   updateReproductionRun,
   listLibraryProjects,
   deleteReproduction,

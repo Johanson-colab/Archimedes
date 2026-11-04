@@ -5,13 +5,16 @@ import { gallery as galleryStrings } from "./i18n/translations/gallery";
 import { figureforge as figureforgeStrings } from "./i18n/translations/figureforge";
 import { canvas as canvasStrings } from "./i18n/translations/canvas";
 import { composer as composerStrings } from "./i18n/translations/composer";
+import { conversation as conversationStrings } from "./i18n/translations/conversation";
 import { agent as agentStrings } from "./i18n/translations/agent";
 import { journey as journeyStrings } from "./i18n/translations/journey";
 import { settings as settingsStrings } from "./i18n/translations/settings";
+import { runtime as runtimeStrings } from "./i18n/translations/runtime";
 import { collab as collabStrings } from "./i18n/translations/collab";
 import { reproduce as reproduceStrings } from "./i18n/translations/reproduce";
 import { writing as writingStrings } from "./i18n/translations/writing";
 import { misc as miscStrings } from "./i18n/translations/misc";
+import { native as nativeStrings } from "./i18n/translations/native";
 
 export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
@@ -35,13 +38,16 @@ const translations: Record<string, string> = {
   ...figureforgeStrings,
   ...canvasStrings,
   ...composerStrings,
+  ...conversationStrings,
   ...agentStrings,
   ...journeyStrings,
   ...settingsStrings,
+  ...runtimeStrings,
   ...collabStrings,
   ...reproduceStrings,
   ...writingStrings,
   ...miscStrings,
+  ...nativeStrings,
 };
 
 type UISettings = {

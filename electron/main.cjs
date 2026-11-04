@@ -7,6 +7,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
+const { registerThreadCommands } = require("./thread-commands.cjs");
 const { runPaperReview } = require("./paper-review-orchestrator.cjs");
 const kimiSlidesSkill = require("./kimi-slides-skill.cjs");
 const runKimiSlidesPlan = kimiSlidesSkill.runKimiSlidesPlan || kimiSlidesSkill.runKimiSlidesPresentation;
@@ -32,16 +33,27 @@ const { createSupabaseServer } = require("../server/supabase-server.cjs");
 const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
+const agentBackendConfig = require("./agent-backend-config.cjs");
+const nativeCodex = require("./agent/codex-backend.cjs");
+const { registerNativeAgentCommands } = require("./native-agent-commands.cjs");
+const { runWindowAgent } = require("./window-agent-run.cjs");
+const { closeAllCodexClients } = require("./agent/codex-client.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
-const { normalizeContract } = require("./reproduction/contract.cjs");
+const { isContractFrozen, normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
 const { runPreflight } = require("./reproduction/preflight.cjs");
+const { repoNameFromUrl } = require("./reproduction/paths.cjs");
+const { findRepositoryUrl } = require("./paper-repository.cjs");
+const { findRepository, githubSearchCandidates } = require("./reproduction/find-repository.cjs");
 const { runRunbook } = require("./reproduction/runner.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
+const { createSshBackend } = require("./reproduction/remote.cjs");
+const { applyFix, diagnose } = require("./reproduction/diagnose.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
+const sshServers = require("./ssh-servers.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
 const { searchConferencePapers } = require("./conferences.cjs");
@@ -590,7 +602,16 @@ let authFlow = null;
 app.whenReady().then(async () => {
   loadLocalAgentEnvironment();
   modelConfig.initializeModelConfig(app.getPath("userData"));
+  agentBackendConfig.initialize(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
+  sshServers.initialize(app.getPath("userData"), {
+    // Passwords are stored with the OS keychain-backed encryption, never as
+    // plain text in the settings file.
+    encrypt: (value) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(value).toString("base64") : ""),
+    decrypt: (value) => {
+      try { return safeStorage.decryptString(Buffer.from(value, "base64")); } catch { return ""; }
+    },
+  });
   terminalSettings.initialize(app.getPath("userData"));
   journeySettings.initialize(app.getPath("userData"));
   journeySnapshots.initialize(app.getPath("userData"));
@@ -873,6 +894,13 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
+  registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
+    dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
+    nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeCodex.compactNative(input) },
+  });
+  registerNativeAgentCommands({ ipcMain, store, native: nativeCodex,
+    dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
+  });
 
   ipcMain.handle("research-project:create", (_event, input = {}) => {
     return store.createResearchProject(input);
@@ -911,6 +939,9 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("model-config:get", (_event, role) => modelConfig.getPublicModelConfig(role));
+  ipcMain.handle("agent-backend:get", () => agentBackendConfig.get());
+  ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
+  ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));
 
   ipcMain.handle("model-config:list-models", (_event, input = {}, role) => modelConfig.listProviderModels(input, role));
 
@@ -941,6 +972,17 @@ app.whenReady().then(async () => {
   ipcMain.handle("proactive:observe", (_event, input = {}) => proactiveAgent.runProactiveObservation(input));
 
   ipcMain.handle("proactive:screenshot", (event) => proactiveAgent.captureAppWindow(BrowserWindow.fromWebContents(event.sender)));
+
+  ipcMain.handle("ssh:list-servers", () => sshServers.listServers());
+  ipcMain.handle("ssh:save-server", (_event, input = {}) => sshServers.saveServer(input));
+  ipcMain.handle("ssh:delete-server", (_event, { id } = {}) => sshServers.deleteServer(id));
+  ipcMain.handle("ssh:test-server", async (_event, input = {}) => {
+    // Accept either a saved id or an unsaved form, so the test button works
+    // before the server is written.
+    const saved = input?.id ? sshServers.listServers().find((server) => server.id === input.id) : null;
+    const target = saved ? { ...saved, ...input } : input;
+    return sshServers.testConnection(target);
+  });
 
   ipcMain.handle("web-search:get-config", () => webSearch.getPublicWebSearchConfig());
 
@@ -1049,7 +1091,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("reproduction:get", (_event, { id } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
     const record = presentReproduction(store.getReproduction(id));
-    return record ? { ...record, run: store.getLatestReproductionRun(record.id) } : record;
+    if (!record) return record;
+    const run = store.getLatestReproductionRun(record.id);
+    return { ...record, run, attempts: run ? store.listReproductionAttempts(run.id) : [] };
   });
 
   ipcMain.handle("reproduction:update", (_event, { id, patch } = {}) => {
@@ -1072,31 +1116,165 @@ app.whenReady().then(async () => {
     return runPreflight({
       workspace: dataWorkspace,
       repoUrl: record.contract.repo?.url || record.repo_url,
+      branch: record.contract.repo?.branch || "",
       steps: record.contract.steps,
     });
   });
 
   const activeReproductionRuns = new Map();
+  const DIAGNOSIS_IDLE_MS = 30 * 60 * 1_000;
 
-  const notifyRunFinished = (record, outcome) => {
+  const notifyRunFinished = (record, summary) => {
     // The user is told when they are not looking; a run that finishes while the
     // window is focused already shows its result on screen.
     try {
       if (!Notification.isSupported()) return;
       if (BrowserWindow.getAllWindows().some((window) => window.isFocused())) return;
-      const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
-      new Notification({
-        title: `${record.title} stopped`,
-        body: stopped
-          ? `Step "${stopped.title}" ${stopped.detail || stopped.status}`
-          : outcome.error || "The run stopped before it finished.",
-      }).show();
+      new Notification({ title: `${record.title} stopped`, body: summary || "The run stopped before it finished." }).show();
     } catch {
       // Notifications are best effort and must never fail a run.
     }
   };
 
-  ipcMain.handle("reproduction:run", async (event, { id, workspace } = {}) => {
+  const summarizeOutcome = (outcome) => {
+    const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
+    return stopped ? `${stopped.title}: ${stopped.detail || stopped.status}` : (outcome.error || "The run stopped.");
+  };
+
+  const stopSession = async (reproductionId) => {
+    const session = activeReproductionRuns.get(reproductionId);
+    if (!session) return null;
+    activeReproductionRuns.delete(reproductionId);
+    if (session.idleTimer) clearTimeout(session.idleTimer);
+    if (session.backend) await session.backend.dispose().catch(() => {});
+    return session;
+  };
+
+  /**
+   * Runs the runbook from a step, then either finishes the reproduction or
+   * opens a diagnosis. The container stays alive between attempts on purpose:
+   * repairing step 2 and re-running from step 2 means the work done by step 1
+   * is still there.
+   */
+  const executeRun = async (session, startAt) => {
+    const { record, contract, send, run } = session;
+    if (!session.backend) throw new Error("The container is no longer running.");
+    session.controller = new AbortController();
+    send({ type: "attempt", attempt: session.attempt });
+
+    let outcome = { status: "failed", steps: [], log: "", error: "" };
+    try {
+      outcome = await runRunbook({
+        steps: contract.steps,
+        startAt,
+        repoName: session.repoName,
+        backend: session.backend,
+        signal: session.controller.signal,
+        budgetMs: Math.max(1, Number(record.budget?.wallClockMin) || 45) * 60_000,
+        emit: (payload) => send(payload),
+      });
+    } catch (error) {
+      outcome = { status: "failed", steps: [], log: "", error: error instanceof Error ? error.message : "The run failed." };
+    }
+
+    const runStatus = outcome.status || "failed";
+    store.updateReproductionRun(run.id, {
+      status: runStatus,
+      steps: outcome.steps || [],
+      log: outcome.log || "",
+      error: outcome.error || "",
+      finishedAt: new Date().toISOString(),
+    });
+
+    if (runStatus === "verified") {
+      await stopSession(record.id);
+      store.updateReproduction(record.id, { status: "checks-passed", error: "" });
+      send({ type: "finished", status: runStatus });
+      return;
+    }
+    if (runStatus === "stopped") {
+      await stopSession(record.id);
+      store.updateReproduction(record.id, { status: "cancelled", error: "Stopped by the user." });
+      send({ type: "finished", status: runStatus, summary: "Stopped by the user." });
+      return;
+    }
+
+    // Something failed. Explain it before asking for a decision: a red step with
+    // no reason just moves the problem to the person reading the log.
+    const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
+    const stepId = stopped?.id || "";
+    const step = (contract.steps || []).find((entry) => entry.id === stepId) || null;
+    const summary = summarizeOutcome(outcome);
+    store.updateReproduction(record.id, { status: "diagnosing", error: summary });
+
+    let diagnosis = { class: "unknown", confidence: "low", evidence: "insufficient", cause: summary, retry: false, fix: null };
+    if (step) {
+      diagnosis = await diagnose({
+        step,
+        outcome: { exit_code: stopped?.exit_code ?? null, status: stopped?.status, detail: stopped?.detail },
+        contract,
+        log: outcome.log || "",
+        runAgent: agent.runAgent,
+        workspace: session.workspace,
+        emit: (payload) => send(payload),
+      });
+    }
+
+    const attempt = store.createReproductionAttempt({
+      reproductionId: record.id,
+      runId: run.id,
+      attemptNo: session.attempt,
+      stepId,
+      class: diagnosis.class,
+      confidence: diagnosis.confidence,
+      evidence: diagnosis.evidence,
+      cause: diagnosis.cause,
+      fix: diagnosis.fix,
+      status: "proposed",
+    });
+    session.lastDiagnosis = diagnosis;
+    session.lastAttempt = attempt;
+    session.lastStepIndex = Math.max(0, (contract.steps || []).findIndex((entry) => entry.id === stepId));
+
+    if (!diagnosis.fix) {
+      // Nothing safe to try. Stop here and say so, instead of retrying blindly.
+      await stopSession(record.id);
+      store.updateReproduction(record.id, { status: "blocked", error: diagnosis.cause });
+      send({ type: "finished", status: runStatus, summary: diagnosis.cause, diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no } });
+      notifyRunFinished(record, diagnosis.cause);
+      return;
+    }
+
+    // A repair that is safe by construction is applied without asking: a person
+    // watching a run wants the interpreter renamed, not a dialog. Every attempt
+    // is recorded and the log says what changed, so nothing happens invisibly.
+    const maxAttempts = Math.max(1, Number(record.budget?.maxFixAttempts) || 3);
+    if (session.attempt > maxAttempts) {
+      await stopSession(record.id);
+      store.updateReproduction(record.id, { status: "blocked", error: `${diagnosis.cause} (gave up after ${maxAttempts} attempts)` });
+      send({ type: "finished", status: runStatus, summary: diagnosis.cause, diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no } });
+      notifyRunFinished(record, diagnosis.cause);
+      return;
+    }
+
+    const targetId = diagnosis.fix.target;
+    const repaired = applyFix(session.contract, diagnosis, { attempt: session.attempt });
+    session.contract = repaired;
+    session.lastDiagnosis = null;
+    store.updateReproductionAttempt(attempt.id, { status: "applied" });
+    store.updateReproduction(record.id, { contract: repaired, status: "running", error: "" });
+
+    const restartAt = Math.max(0, repaired.steps.findIndex((step) => step.id === targetId));
+    send({
+      type: "repair",
+      diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no },
+      detail: `Attempt ${session.attempt + 1}: ${diagnosis.cause}`,
+    });
+    session.attempt += 1;
+    await executeRun(session, restartAt);
+  };
+
+  ipcMain.handle("reproduction:run", async (event, { id, workspace, backend: backendKind = "docker", serverId = "" } = {}) => {
     const record = presentReproduction(store.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
     if (!record.contract) throw new Error("Generate a plan before running it.");
@@ -1109,85 +1287,146 @@ app.whenReady().then(async () => {
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
 
-    const run = store.createReproductionRun({ reproductionId: record.id, backend: "docker" });
-    const controller = new AbortController();
-    activeReproductionRuns.set(record.id, { runId: run.id, controller });
-    store.updateReproduction(record.id, { status: "provisioning", error: "" });
-
-    const send = (payload) => {
-      if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
+    const wantsSsh = backendKind === "ssh";
+    const server = wantsSsh ? sshServers.listServers().find((entry) => entry.id === serverId) : null;
+    if (wantsSsh && !server) throw new Error("Choose an SSH server before running this reproduction.");
+    const run = store.createReproductionRun({ reproductionId: record.id, backend: wantsSsh ? "ssh" : "docker" });
+    const session = {
+      reproductionId: record.id,
+      record,
+      run,
+      contract: record.contract,
+      attempt: 1,
+      workspace: dataWorkspace,
+      repoName: repoNameFromUrl(repoUrl),
+      backend: null,
+      controller: null,
+      lastDiagnosis: null,
+      lastAttempt: null,
+      lastStepIndex: 0,
+      idleTimer: null,
+      send: (payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
+      },
     };
+    activeReproductionRuns.set(record.id, session);
+    store.updateReproduction(record.id, { status: "provisioning", error: "" });
 
     // Detached on purpose: the renderer gets progress events, the main process
     // owns the run, and closing the reproduction view does not stop it.
     void (async () => {
-      let outcome = { status: "failed", steps: [], log: "", error: "" };
-      let backend = null;
       try {
-        send({ type: "preparing", detail: "Getting the repository checkout…" });
-        const existing = await getRepositoryCheckout(dataWorkspace, repoUrl).catch(() => null);
-        if (!existing) {
-          send({ type: "preparing", detail: "Cloning the repository…" });
-          await cloneRepositoryCheckout(dataWorkspace, repoUrl);
+        const branch = session.contract.repo?.branch || "";
+        if (server) {
+          // The server clones for itself when it can reach GitHub. The local
+          // checkout is passed along as a fallback for machines that cannot,
+          // which is the normal case on an intranet.
+          let copyFrom = "";
+          const local = await getRepositoryCheckout(dataWorkspace, repoUrl, { branch }).catch(() => null);
+          if (local) {
+            copyFrom = (await resolveAuditPath(dataWorkspace, repoUrl, "", branch).catch(() => ({ root: "" }))).root;
+          }
+          const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send });
+          session.backend = backend;
+          store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });
+          session.send({ type: "preparing", detail: `Checking ${server.host}…` });
+          const probe = await backend.probe();
+          session.send({
+            type: "preparing",
+            detail: [probe.os || server.host, `${probe.diskFreeGb} GB free`, probe.docker ? "docker" : "", probe.gpu].filter(Boolean).join(" · "),
+          });
+          if (probe.diskFreeGb > 0 && probe.diskFreeGb < 5) {
+            throw new Error(`${server.host} has only ${probe.diskFreeGb} GB free. Free some space before running.`);
+          }
+          await backend.prepare();
+          store.updateReproduction(record.id, { status: "running" });
+          await executeRun(session, 0);
+          return;
         }
-        const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "");
-        backend = createDockerBackend({ checkoutDir: root, environment: record.contract.environment });
+
+        session.send({ type: "preparing", detail: "Getting the repository checkout…" });
+        const checkoutOptions = { branch };
+        const existing = await getRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions).catch(() => null);
+        if (!existing) {
+          session.send({ type: "preparing", detail: branch ? `Cloning ${branch}…` : "Cloning the repository…" });
+          await cloneRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions);
+        }
+        const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "", branch);
+        const backend = createDockerBackend({ checkoutDir: root, environment: session.contract.environment });
+        session.backend = backend;
         store.updateReproductionRun(run.id, { image: backend.image, backend: backend.describe() });
-        send({ type: "preparing", detail: `Starting ${backend.image}…` });
+        session.send({ type: "preparing", detail: `Starting ${backend.image}…` });
         await backend.prepare();
         store.updateReproduction(record.id, { status: "running" });
-        send({ type: "started", detail: backend.describe() });
-        outcome = await runRunbook({
-          steps: record.contract.steps,
-          backend,
-          signal: controller.signal,
-          budgetMs: Math.max(1, Number(record.budget?.wallClockMin) || 45) * 60_000,
-          emit: (payload) => send(payload),
-        });
+        session.send({ type: "started", detail: backend.describe() });
+        await executeRun(session, 0);
       } catch (error) {
         const message = error instanceof Error ? error.message : "The run could not start.";
-        outcome = { status: "failed", steps: [], log: "", error: message };
-        send({ type: "error", detail: message });
-      } finally {
-        if (backend) await backend.dispose().catch(() => {});
-        activeReproductionRuns.delete(record.id);
+        await stopSession(record.id);
+        store.updateReproductionRun(run.id, { status: "failed", error: message, finishedAt: new Date().toISOString() });
+        store.updateReproduction(record.id, { status: "blocked", error: message });
+        session.send({ type: "error", detail: message });
+        session.send({ type: "finished", status: "failed", summary: message });
+        notifyRunFinished(record, message);
       }
-
-      const runStatus = outcome.status || "failed";
-      store.updateReproductionRun(run.id, {
-        status: runStatus,
-        steps: outcome.steps || [],
-        log: outcome.log || "",
-        error: outcome.error || "",
-        finishedAt: new Date().toISOString(),
-      });
-      const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
-      const summary = runStatus === "verified"
-        ? ""
-        : stopped ? `${stopped.title}: ${stopped.detail || stopped.status}` : (outcome.error || "The run stopped.");
-      store.updateReproduction(record.id, {
-        status: runStatus === "verified" ? "checks-passed" : runStatus === "stopped" ? "cancelled" : "blocked",
-        error: summary,
-      });
-      send({ type: "finished", status: runStatus, summary });
-      if (runStatus !== "verified") notifyRunFinished(record, { ...outcome, error: summary });
     })();
 
     return { ...presentReproduction(store.getReproduction(record.id)), run };
   });
 
+  ipcMain.handle("reproduction:apply-fix", async (_event, { id } = {}) => {
+    const session = activeReproductionRuns.get(String(id || ""));
+    if (!session) throw new Error("This reproduction is not waiting for a decision.");
+    const diagnosis = session.lastDiagnosis;
+    if (!diagnosis?.fix) throw new Error("This diagnosis does not propose a change.");
+    const maxAttempts = Math.max(1, Number(session.record.budget?.maxFixAttempts) || 3);
+    if (session.attempt > maxAttempts) throw new Error(`Gave up after ${maxAttempts} attempts. The remaining work needs a person.`);
+
+    const targetId = diagnosis.fix.target;
+    const contract = applyFix(session.contract, diagnosis, { attempt: session.attempt - 1 });
+    session.contract = contract;
+    session.lastDiagnosis = null;
+    if (session.idleTimer) {
+      clearTimeout(session.idleTimer);
+      session.idleTimer = null;
+    }
+    if (session.lastAttempt) store.updateReproductionAttempt(session.lastAttempt.id, { status: "applied" });
+    store.updateReproduction(id, { contract, status: "running", error: "" });
+
+    const startAt = Math.max(0, contract.steps.findIndex((step) => step.id === targetId));
+    void executeRun(session, startAt);
+    return { ...presentReproduction(store.getReproduction(id)) };
+  });
+
+  ipcMain.handle("reproduction:dismiss-diagnosis", async (_event, { id } = {}) => {
+    const session = activeReproductionRuns.get(String(id || ""));
+    if (!session) {
+      // After a restart there is no container left to dismiss; record the
+      // decision anyway so the reproduction does not stay in "diagnosing".
+      store.updateReproduction(String(id || ""), { status: "blocked" });
+      return presentReproduction(store.getReproduction(id));
+    }
+    const summary = session.lastDiagnosis?.cause || "Stopped after the failure.";
+    if (session.lastAttempt) store.updateReproductionAttempt(session.lastAttempt.id, { status: "rejected" });
+    await stopSession(id);
+    store.updateReproduction(id, { status: "blocked", error: summary });
+    return { ...presentReproduction(store.getReproduction(id)) };
+  });
+
   ipcMain.handle("reproduction:stop", async (_event, { id } = {}) => {
-    const active = activeReproductionRuns.get(String(id || ""));
-    if (!active) throw new Error("This reproduction is not running.");
-    active.controller.abort();
+    const session = activeReproductionRuns.get(String(id || ""));
+    // Stopping something that already finished is not an error: the button and
+    // the run can disagree for a moment, and shouting at the user helps nobody.
+    if (!session) return false;
+    session.controller?.abort();
     return true;
   });
 
   ipcMain.handle("reproduction:plan", async (event, { id, workspace } = {}) => {
     const reproduction = store.getReproduction(id);
     if (!reproduction) throw new Error("That reproduction does not exist.");
-    if (reproduction.contract && reproduction.status !== "draft") {
-      throw new Error("This reproduction already has an approved contract.");
+    if (isContractFrozen(reproduction.contract)) {
+      throw new Error("This contract is approved and frozen. Start a new reproduction to plan it differently.");
     }
     if (!reproduction.paper_id) throw new Error("Reproduction planning is only available for papers.");
     const paper = store.getPaper(reproduction.paper_id);
@@ -1202,10 +1441,40 @@ app.whenReady().then(async () => {
       if (!event.sender.isDestroyed()) event.sender.send("reproduction:plan-event", { paperId: reproduction.paper_id, ...payload });
     };
     try {
+      // A record made from a paper carries the paper's URL (usually arXiv). The
+      // code is named inside the paper; use it rather than planning blind.
+      let found = findRepositoryUrl({ recordUrl: reproduction.repo_url, paper, pages: reader.pages || [] });
+      if (!found.url) {
+        // Nothing in the record or the abstract names the code. Ask the agent to
+        // search, but accept an answer only when the repository proves itself.
+        emit({ type: "planning", detail: "Searching for the repository…" });
+        const discovered = await findRepository({
+          paper,
+          pages: reader.pages || [],
+          runAgent: agent.runAgent,
+          searcher: githubSearchCandidates,
+          workspace: dataWorkspace,
+          emit,
+        }).catch(() => null);
+        if (discovered?.url) {
+          found = { url: discovered.url, source: "search" };
+        } else if (discovered?.evidence) {
+          emit({ type: "warning", detail: discovered.evidence });
+        }
+      }
+      if (found.url && found.url !== reproduction.repo_url) {
+        store.updateReproduction(id, { repoUrl: found.url });
+        emit({ type: "planning", detail: `Repository found in the ${found.source === "search" ? "web" : "paper"}: ${found.url}` });
+      }
+      if (found.url && !paper.github_url) {
+        // Keep it on the paper so the next reproduction does not search again.
+        try { store.updatePaper(paper.id, { github_url: found.url }); } catch { /* not fatal */ }
+      }
+      const repoUrl = found.url || reproduction.repo_url;
       let repoItem = null;
-      if (reproduction.repo_url) {
+      if (repoUrl) {
         emit({ type: "planning", detail: "Cloning the repository…" });
-        repoItem = await prepareRepositoryItem(dataWorkspace, reproduction.repo_url).catch((error) => {
+        repoItem = await prepareRepositoryItem(dataWorkspace, repoUrl).catch((error) => {
           emit({ type: "warning", detail: `Repository unavailable: ${error instanceof Error ? error.message : "clone failed"}` });
           return null;
         });
@@ -1215,7 +1484,7 @@ app.whenReady().then(async () => {
         paper,
         pages: reader.pages || [],
         review: review?.review || review,
-        repoUrl: reproduction.repo_url,
+        repoUrl,
         repoItem,
         workspace: dataWorkspace,
         runAgent: agent.runAgent,
@@ -1417,9 +1686,6 @@ app.whenReady().then(async () => {
     }
     const researchModes = new Set(["free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review", "deep-research"]);
     const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
-    const config = modelConfig.getActiveModelConfig();
-    const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort);
-    const contextLength = normalizeContextLength(config, input.contextLength);
     const workspace = resolveWorkspace(input.workspace);
     // Research data stays in the window's primary workspace, while the Agent
     // operates inside the project/session folder.
@@ -1427,7 +1693,15 @@ app.whenReady().then(async () => {
     store.openWorkspace(dataWorkspace);
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
-    return agent.runAgent({
+    const backend = agentBackendConfig.get();
+    const externalBackend = input.origin === "research" && backend.backend === "codex" ? backend : null;
+    const config = externalBackend ? null : modelConfig.getActiveModelConfig();
+    const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
+    const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
+    if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
+    return runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
+      externalBackend,
+      externalSignal,
       prompt: input.prompt.trim(),
       workspace,
       threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
@@ -1441,8 +1715,8 @@ app.whenReady().then(async () => {
       origin: typeof input.origin === "string" && input.origin ? input.origin : undefined,
       title: typeof input.title === "string" && input.title ? input.title : undefined,
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
-      emit: (payload) => event.sender.send("agent:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) }),
-    });
+      emit: (payload) => emit({ ...payload, ...(clientRunId ? { clientRunId } : {}) }),
+    }) });
   });
 
   ipcMain.handle("paper-review:run", async (event, input) => {
@@ -2053,6 +2327,7 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
+  closeAllCodexClients();
   closeAllTerminals();
   collaborationServer?.close?.();
   void presence?.closeAll();

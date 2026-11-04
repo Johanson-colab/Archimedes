@@ -206,13 +206,40 @@ function normalizeContract(input, { paperTitle = "" } = {}) {
     environment,
     repo: {
       url: text(value.repo?.url, 2_000),
+      // The commit is what actually ran; the branch is how it was asked for.
       commit: text(value.repo?.commit, 80),
+      branch: text(value.repo?.branch, 200),
     },
     notes: Array.isArray(value.notes) ? value.notes.map((item) => text(item, 400)).filter(Boolean).slice(0, 10) : [],
+    // A frozen contract that gets repaired keeps the repairs: a run that needed
+    // two command changes is not the same run as one that needed none.
+    deviations: Array.isArray(value.deviations)
+      ? value.deviations
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          at: text(item.at, 40),
+          attempt: Math.trunc(boundedNumber(item.attempt, 1, 1, 99)),
+          step_id: text(item.step_id, 80),
+          from: text(item.from, 2_000),
+          to: text(item.to, 2_000),
+          reason: text(item.reason, 600),
+          class: text(item.class, 60),
+        }))
+        .slice(-20)
+      : [],
     // Approval is the gate the runner checks; normalising it away would silently
     // un-freeze a contract the user already approved.
     frozen_at: typeof value.frozen_at === "string" && value.frozen_at ? value.frozen_at : null,
   };
+}
+
+/**
+ * A contract is frozen once it is approved, and re-planning one would quietly
+ * change what the run is being judged against. "Planned but not approved" is
+ * still editable: that is exactly when a bad plan should be replaced.
+ */
+function isContractFrozen(contract) {
+  return Boolean(contract && typeof contract.frozen_at === "string" && contract.frozen_at);
 }
 
 function describeClaim(claim) {
@@ -226,6 +253,7 @@ module.exports = {
   MAX_CLAIMS,
   STATUSES,
   describeClaim,
+  isContractFrozen,
   CHECK_KINDS,
   normalizeCheck,
   normalizeClaim,

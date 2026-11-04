@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   BrainCircuit,
+  Workflow,
   Check,
   ChevronDown,
   KeyRound,
@@ -23,8 +24,17 @@ import openaiLogo from "./assets/providers/openai.png";
 import qwenLogo from "./assets/providers/qwen.png";
 import { useUISettings } from "./i18n";
 import { MenuSurface } from "./Menu";
+import AgentBackendSettings from "./AgentBackendSettings";
+import { Tab, Tabs } from "./Tabs";
 
 type ProviderId = ModelProviderId;
+export type ModelExecutionPreferences = {
+  reasoningEffort: ReasoningEffort;
+  contextLength: ContextLength;
+  capabilities: ModelCapabilities;
+  onReasoningEffort: (value: ReasoningEffort) => void;
+  onContextLength: (value: ContextLength) => void;
+};
 
 function brandIcon(src: string, variant = "") {
   const logo = <img className="provider-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
@@ -51,9 +61,12 @@ const providers: Array<{
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [], icon: <Network size={17} /> },
 ];
 
-export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent" }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole }) {
+export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent", executionPreferences }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole; executionPreferences?: ModelExecutionPreferences }) {
   const { t } = useUISettings();
   const proactiveRole = role === "proactive";
+  const [settingsPage, setSettingsPage] = useState("api");
+  const [activeBackend, setActiveBackend] = useState<AgentBackendConfig["backend"] | null>(null);
+  const panelId = useId();
   const [provider, setProvider] = useState<ProviderId>("custom");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
@@ -199,7 +212,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       setSavedConfig(config);
       setApiKey("");
       onSaved(config);
-      setFeedback({ kind: "success", text: proactiveRole ? `Saved ${config.model}. Proactive replies and live observation will use this model.` : `Saved ${config.model}. New Agent turns will use this model.` });
+      setFeedback({ kind: "success", text: proactiveRole ? `Saved ${config.model}. Proactive replies and live observation will use this model.` : t("Saved {model}. API-backed features will use this model.", { model: config.model }) });
     } catch (error) {
       setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
     } finally {
@@ -233,6 +246,13 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         <button className="quiet-icon-button" onClick={onClose} title="Close model settings"><X size={17} /></button>
       </header>}
 
+      <div className="model-settings-content">
+      {!proactiveRole && <Tabs value={settingsPage} onChange={(page) => { setModelMenuOpen(false); setSettingsPage(page); }} label={t("Model connection type")} className="model-connection-tabs">
+        <Tab value="api" id={`${panelId}-api-tab`} controls={`${panelId}-api`} icon={<KeyRound size={16} />}>{t("API models")}</Tab>
+        <Tab value="agents" id={`${panelId}-agents-tab`} controls={`${panelId}-agents`} icon={<Workflow size={16} />} badge={activeBackend === "codex" ? "Codex" : undefined}>{t("Harnesses")}</Tab>
+      </Tabs>}
+      <div className="model-settings-panel" id={`${panelId}-api`} role={proactiveRole ? undefined : "tabpanel"} aria-labelledby={proactiveRole ? undefined : `${panelId}-api-tab`} hidden={!proactiveRole && settingsPage !== "api"}>
+      {!proactiveRole && <p className="model-connection-description">{t("Connect model providers with an API key. Archimedes manages the tools and research workflow.")}</p>}
       <div className="model-settings-body">
         <nav className="provider-list" aria-label="Model providers">
           {providers.map((item) => <button key={item.id} className={item.id === provider ? "provider-option active" : "provider-option"} onClick={() => chooseProvider(item)}>
@@ -264,7 +284,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
                 spellCheck={false}
               />
               <button type="button" className="model-catalog-toggle" onClick={toggleModelMenu} title={t("Show available models")} aria-label={t("Show available models")} aria-haspopup="listbox" aria-expanded={modelMenuOpen}><ChevronDown size={16} /></button>
-              <MenuSurface open={modelMenuOpen} onClose={() => { setModelMenuOpen(false); modelInputRef.current?.focus(); }} anchorRef={modelAnchorRef} placement="bottom-start" width="anchor" maxHeight={320} role="listbox" ariaLabel={t("Available models")} id="model-catalog" focus="none" className="model-catalog">
+              <MenuSurface open={modelMenuOpen && (proactiveRole || settingsPage === "api")} onClose={() => { setModelMenuOpen(false); modelInputRef.current?.focus(); }} anchorRef={modelAnchorRef} placement="bottom-start" width="anchor" maxHeight={320} role="listbox" ariaLabel={t("Available models")} id="model-catalog" focus="none" className="model-catalog">
                 <div className="model-catalog-header" role="presentation"><span>{catalogModels.length ? t("{count} models · live catalog merged", { count: availableModels.length }) : t("{count} supported models", { count: availableModels.length })}</span><button type="button" onClick={() => void refreshModelCatalog()} disabled={catalogLoading} title={t("Refresh live catalog")}>{catalogLoading ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}{t("Refresh")}</button></div>
                 {catalogError && <p className="model-catalog-note" role="presentation">{catalogError} {t("Showing the recommended list below.")}</p>}
                 <div className="model-catalog-list" role="presentation">
@@ -274,6 +294,10 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
               </MenuSurface>
             </div></label>
             <div className="model-security-note"><KeyRound size={13} /><span>{t("The API key is stored in Electron user data and never returned to the page.")}</span></div>
+            {!proactiveRole && executionPreferences && <div className="model-execution-preferences">
+              {executionPreferences.capabilities.thinkingEfforts.length > 0 && <label><span>{t("Thinking effort")}</span><select className="settings-select" aria-label={t("Thinking effort")} value={executionPreferences.reasoningEffort} onChange={(event) => executionPreferences.onReasoningEffort(event.target.value as ReasoningEffort)}>{executionPreferences.capabilities.thinkingEfforts.map((value) => <option key={value} value={value}>{t(value === "low" ? "Low" : value === "high" ? "High" : "Medium")}</option>)}</select></label>}
+              {executionPreferences.capabilities.contextLengths.length > 0 && <label><span>{t("Context length")}</span><select className="settings-select" aria-label={t("Context length")} value={executionPreferences.contextLength} onChange={(event) => executionPreferences.onContextLength(event.target.value as ContextLength)}>{executionPreferences.capabilities.contextLengths.map((value) => <option key={value} value={value}>{t(value === "extra-long" ? "Extra Long" : "Standard")}</option>)}</select></label>}
+            </div>}
             {feedback.text && <div className={`model-feedback ${feedback.kind}`}>{feedback.kind === "success" ? <Check size={14} /> : <X size={14} />}<span>{feedback.text}</span></div>}
           </>}
         </div>
@@ -286,6 +310,11 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         </div>
         <div>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Cancel")}</button>}<button className="primary-button" onClick={() => void save()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{saving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{t("Save model")}</button></div>
       </footer>
+      </div>
+      {!proactiveRole && <div className="model-settings-panel model-settings-panel-agents" id={`${panelId}-agents`} role="tabpanel" aria-labelledby={`${panelId}-agents-tab`} hidden={settingsPage !== "agents"}>
+        <AgentBackendSettings bridge={bridge} onBackendChange={setActiveBackend} />
+      </div>}
+      </div>
     </>;
   return <section className="settings-embedded model-settings-modal" aria-label="Model settings">{content}</section>;
 }

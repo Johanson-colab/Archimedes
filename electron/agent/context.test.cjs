@@ -2,6 +2,13 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { prepareConversation } = require("./context.cjs");
 
+test("project instructions and the compacted summary reach the model before new messages", () => {
+  const result = prepareConversation({ thread: { context_summary: "Earlier decision: use dataset A", turns: [{ id: "new", user_message: "Continue", assistant_message: "" }] }, currentTurnId: "new", mode: "free-chat", projectInstructions: "Run npm test after editing." });
+  assert.match(result.messages[1].content, /Run npm test/);
+  assert.match(result.messages[2].content, /Earlier decision/);
+  assert.equal(result.messages.at(-1).content, "Continue");
+});
+
 test("uses the Free chat instructions without falling back to Idea spark", () => {
   const conversation = prepareConversation({
     thread: {

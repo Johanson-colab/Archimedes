@@ -46,8 +46,8 @@ test("chat send controls are unfilled up-arrows", () => {
   assert.match(css, /\.conversation-send,[\s\S]*?background: transparent;[\s\S]*?border-radius: 6px;/);
   assert.match(css, /\.conversation-send:hover,[\s\S]*?color: var\(--accent\);[\s\S]*?background: transparent;/);
   assert.match(css, /\.conversation-send:disabled,[\s\S]*?opacity: \.35;/);
-  assert.match(library, /className="paper-ai-send"/);
-  assert.match(library, /<ArrowUp size=\{15\} \/>/);
+  assert.match(library, /className="conversation-send paper-ai-send"/);
+  assert.match(library, /<ArrowUp size=\{16\} strokeWidth=\{2\.4\} \/>/);
   assert.doesNotMatch(library, /<Send size=\{14\} \/>/);
   assert.match(css, /\.paper-ai-send \{[^}]*background: transparent/);
   assert.doesNotMatch(css, /\.paper-ai-compose \.primary-button/);
@@ -78,13 +78,11 @@ test("composer input has IME protection and grows with the draft", () => {
   assert.match(app, /textarea\.style\.overflowY = textarea\.scrollHeight > maxHeight \? "auto" : "hidden"/);
 });
 
-test("model controls are split and only render when the model supports them", () => {
-  assert.match(app, /availableThinkingEfforts\.length > 0 && <div className="reasoning-effort-picker"/);
-  assert.match(app, /availableContextLengths\.length > 0 && <div className="reasoning-effort-picker"/);
-  assert.doesNotMatch(app, /disabled=\{!availableThinkingEfforts\.length\}/);
-  assert.doesNotMatch(app, /disabled=\{!availableContextLengths\.length\}/);
-  assert.match(app, /ariaLabel=\{t\("Thinking effort"\)\}/);
-  assert.match(app, /ariaLabel=\{t\("Context length"\)\}/);
+test("composer uses harness selection while execution preferences live in Models", () => {
+  assert.match(app, /<HarnessPicker backend=/);
+  assert.doesNotMatch(app, /className="reasoning-effort-picker"/);
+  assert.doesNotMatch(app, /className="native-runtime-label"/);
+  assert.match(app, /executionPreferences=\{\{ reasoningEffort, contextLength/);
 });
 
 test("runtime is status-first and context usage exposes a readable breakdown", () => {
@@ -134,7 +132,7 @@ test("composer exposes history recall, focus shortcut and disabled-send reason",
 test("composer queues follow-ups while the agent is busy", () => {
   assert.match(app, /type QueuedPrompt =/);
   assert.match(app, /const \[queuedPrompts, setQueuedPrompts\] = useState<QueuedPrompt\[\]>\(\[\]\)/);
-  assert.match(app, /if \(agentBusy\) \{\n      queueCurrentPrompt\(\);/);
+  assert.match(app, /if \(agentBusy\) \{[\s\S]*?if \(nativeBackend\) \{[\s\S]*?await onNativeSteer\(prompt\)[\s\S]*?queueCurrentPrompt\(\);/);
   assert.match(app, /up to five follow-ups can be queued at a time/i);
   assert.match(app, /className="composer-queue"/);
   assert.match(app, /onSubmit\(next\.draft, next\.mode, next\.reasoningEffort, next\.contextLength, next\.contextItems\)/);
@@ -147,6 +145,20 @@ test("composer exposes slash commands and an @ context shortcut", () => {
   assert.match(app, /if \(event\.key === "@"/);
   assert.match(app, /setContextPickerRequest\(\(current\) => current \+ 1\)/);
   assert.match(app, /openRequest=\{contextPickerRequest\}/);
+});
+
+test("slash menu presents the requested commands and connects all actions", () => {
+  const commands = app.match(/const slashCommands = \[([\s\S]*?)\n  \];/)[1];
+  assert.deepEqual([...commands.matchAll(/id: "([^"]+)"/g)].map((match) => match[1]), [
+    "research", "experiment", "write", "review", "init", "new", "undo", "compact", "fork", "side", "export", "model",
+  ]);
+  assert.equal([...commands.matchAll(/detail: t\(/g)].length, 12);
+  assert.equal([...commands.matchAll(/run: \(\) =>/g)].length, 12);
+  assert.match(app, /anchorRef=\{composerBoxRef\} placement="top-start" width="anchor"/);
+  assert.match(app, /minWidth=\{0\} maxHeight=\{320\} className="composer-slash-menu"/);
+  assert.doesNotMatch(app, /slash-command-soon/);
+  assert.match(css, /\.composer-slash-menu \.menu-item \{ min-height: 32px; padding: 0 10px; font-size: 12px; \}/);
+  assert.match(app, /scrollIntoView\(\{ block: "nearest" \}\)/);
 });
 
 test("composer exposes the current file and a clear-all attachment action", () => {

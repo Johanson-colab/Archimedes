@@ -35,6 +35,12 @@ test("the page keeps Paper diagrams and Data charts in one tab row without Templ
   assert.match(view, /<Dialog open onClose=\{onClose\}/);
 });
 
+test("the tab row does not draw a divider above the search bar", () => {
+  assert.match(css, /\.image-creation-tabs \{[^}]*border-bottom: 0/);
+  assert.match(css, /\.image-creation-tab\.active::after \{[^}]*bottom: 0;/);
+  assert.match(css, /\.image-creation-controls \{[^}]*margin: 12px 0 15px/);
+});
+
 test("Data charts is a separate tab with chart types and tables, but no field or venue filter", () => {
   assert.match(view, /<Tab value="charts" id="image-creation-tab-charts"/);
   assert.match(view, /<DataChartGallery active=\{active\} sort=\{chartSort\} \/>/);

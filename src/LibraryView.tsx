@@ -36,7 +36,6 @@ import { useUISettings, type Language } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
 import { useConfirm } from "./ConfirmDialog";
 import { Tabs, Tab, FilterGroup, FilterButton } from "./Tabs";
-import ToolbarActions from "./ToolbarActions";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import {
@@ -205,6 +204,7 @@ type LibraryViewProps = {
 
 export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject }: LibraryViewProps) {
   const confirm = useConfirm();
+  const { t } = useUISettings();
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [papers, setPapers] = useState<LibraryPaper[]>([]);
@@ -348,9 +348,13 @@ export default function LibraryView({ bridge, mode, initialDailyMode, workspace 
 
   if (!selectedLibrary) {
     return <section className="library-page">
-      <ToolbarActions active={active}><button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />New library</button>
-        <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title="Sync shared libraries"><Cloud size={15} />{cloudBusy ? "Syncing…" : "Sync cloud"}</button>
-      </ToolbarActions>
+      <div className="library-page-toolbar">
+        <span className="library-page-count"><strong>{libraries.length}</strong> {t("Libraries")}</span>
+        <div className="library-page-actions">
+          <button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />{t("New library")}</button>
+          <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync shared libraries")}><Cloud size={15} />{cloudBusy ? t("Syncing…") : t("Sync cloud")}</button>
+        </div>
+      </div>
       {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
       {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
       {!loading && projectPaperCount === 0 && otherProjects.length > 0 && <div className="library-project-hint">
@@ -523,7 +527,7 @@ const HIGHLIGHT_COLORS: Array<{ value: PaperHighlightInput["color"]; label: stri
 ];
 
 const PaperChatMarkdown = memo(function PaperChatMarkdown({ text, onOpenCodePath }: { text: string; onOpenCodePath: (target: CodePathLocation) => void }) {
-  return <div className="paper-ai-markdown"><ReactMarkdown
+  return <div className="message-markdown paper-ai-code-markdown"><ReactMarkdown
     remarkPlugins={[remarkGfm, remarkMath, remarkCodePaths]}
     rehypePlugins={[rehypeKatex]}
     components={{
@@ -544,7 +548,15 @@ const PaperChatMarkdown = memo(function PaperChatMarkdown({ text, onOpenCodePath
 });
 
 const PaperChatMessageRow = memo(function PaperChatMessageRow({ message, streaming = false, onOpenCodePath }: { message: PaperChatMessage; streaming?: boolean; onOpenCodePath: (target: CodePathLocation) => void }) {
-  return <article className={`${message.role}${streaming ? " streaming" : ""}`}><span>{message.role === "assistant" ? <Bot size={14} /> : "You"}</span>{message.role === "assistant" ? <PaperChatMarkdown text={message.text || "…"} onOpenCodePath={onOpenCodePath} /> : <p>{message.text}</p>}{streaming && <i className="paper-ai-stream-cursor" aria-label="Generating response" />}</article>;
+  const { t } = useUISettings();
+  const assistant = message.role === "assistant";
+  return <article className={`conversation-message paper-ai-message ${message.role}${streaming ? " streaming" : ""}`}>
+    <div className="conversation-message-copy">
+      {assistant && <div className="conversation-message-role">{t("Archimedes")}</div>}
+      {assistant ? <PaperChatMarkdown text={message.text || "…"} onOpenCodePath={onOpenCodePath} /> : <p>{message.text}</p>}
+      {streaming && <i className="paper-ai-stream-cursor" aria-label={t("Generating response")} />}
+    </div>
+  </article>;
 });
 
 const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, streamingText, onAsk, onOpenCodePath }: {
@@ -553,6 +565,8 @@ const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, 
   const { language, t } = useUISettings();
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyInitializedRef = useRef(messages.length > 0);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const followLatestRef = useRef(true);
   const visibleMessages = messages.slice(historyStart);
   const hiddenMessageCount = historyStart;
   const hasAssistantMessage = useMemo(() => messages.some((message) => message.role === "assistant"), [messages]);
@@ -569,16 +583,24 @@ const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, 
     }
     setHistoryStart((current) => Math.min(current, Math.max(0, messages.length - PAPER_CHAT_INITIAL_VISIBLE_MESSAGE_COUNT)));
   }, [messages.length]);
+  useEffect(() => {
+    const thread = threadRef.current;
+    if (!thread || !followLatestRef.current) return;
+    thread.scrollTop = thread.scrollHeight;
+  }, [busy, messages.length, streamingText]);
   const prompt = (audit: string, brief: string) => () => onAsk(aiMode === "audit" ? audit : brief);
   const zh = language === "zh";
 
-  return <div className="paper-ai-thread">
+  return <div className="paper-ai-conversation" ref={threadRef} onScroll={(event) => {
+    const node = event.currentTarget;
+    followLatestRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 72;
+  }}>
     {messages.length ? <>
-      {hiddenMessageCount > 0 && <button className="paper-ai-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - PAPER_CHAT_HISTORY_PAGE_SIZE))}>Show {Math.min(PAPER_CHAT_HISTORY_PAGE_SIZE, hiddenMessageCount)} earlier messages</button>}
+      {hiddenMessageCount > 0 && <button className="conversation-load-history paper-ai-load-history" onClick={() => setHistoryStart((current) => Math.max(0, current - PAPER_CHAT_HISTORY_PAGE_SIZE))}>Show {Math.min(PAPER_CHAT_HISTORY_PAGE_SIZE, hiddenMessageCount)} earlier messages</button>}
       {visibleMessages.map((message, index) => <PaperChatMessageRow key={`${message.role}-${index + historyStart}`} message={message} onOpenCodePath={onOpenCodePath} />)}
-    </> : streamingText === null && <div className="paper-ai-empty"><Bot size={22} /><strong>{aiMode === "audit" ? "Ready for a strict code audit" : "Reading the full paper"}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes is building a page-grounded guide before taking detailed questions."}</p></div>}
+    </> : streamingText === null && <div className="paper-ai-empty"><strong>{aiMode === "audit" ? "Ready for a strict code audit" : t("Ask about this paper")}</strong><p>{aiMode === "audit" ? "Ask about a method, configuration, or selected code. Archimedes will trace it to paper and repository evidence." : "Archimedes answers with page-level evidence from the full paper."}</p></div>}
     {streamingText !== null && <PaperChatMessageRow message={{ role: "assistant", text: streamingText }} streaming onOpenCodePath={onOpenCodePath} />}
-    {busy && <div className="paper-ai-working"><LoaderCircle className="spin" size={15} />{messages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}
+    {busy && <div className="paper-ai-working"><LoaderCircle className="spin" size={14} />{messages.length ? "Archimedes is reading…" : aiMode === "audit" ? "Tracing paper and code evidence…" : "Reading PDF pages and building the guide…"}</div>}
     {hasAssistantMessage && !busy && <div className="paper-ai-suggestions">
       <button onClick={prompt(zh ? "请核验论文的核心方法在代码中由哪些文件和函数实现，并建立证据链。" : "Verify which files and functions implement the paper's core method, and build an evidence chain.", zh ? "这篇论文最核心的贡献是什么？请结合全文说明。" : "What is the paper's core contribution? Explain it using the full text.")}>{aiMode === "audit" ? t("Verify method") : t("Core contribution")}</button>
       <button onClick={prompt(zh ? "请检查训练与评估配置是否支持论文中的实验主张。" : "Check whether the training and evaluation setup supports the paper's experimental claims.", zh ? "请细讲方法部分：输入、关键机制、训练或推理流程分别是什么？" : "Explain the method in detail: inputs, key mechanisms, and training or inference flow.")}>{aiMode === "audit" ? t("Verify experiments") : t("Explain method")}</button>
@@ -622,17 +644,20 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
     if (!draft.trim() || busy) return;
     if (onAsk(draft)) setDraft("");
   }
-  return <div className="paper-ai-compose" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes("application/x-archimedes-repository-path")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDrop={(event) => { const files = Array.from(event.dataTransfer.files); const repositoryPath = event.dataTransfer.getData("application/x-archimedes-repository-path"); if (!files.length && !repositoryPath) return; event.preventDefault(); event.stopPropagation(); onDropFiles(files, repositoryPath); }}>
-    <div className="paper-ai-compose-input">
+  return <div className="paper-ai-composer-wrap" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes("application/x-archimedes-repository-path")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }} onDrop={(event) => { const files = Array.from(event.dataTransfer.files); const repositoryPath = event.dataTransfer.getData("application/x-archimedes-repository-path"); if (!files.length && !repositoryPath) return; event.preventDefault(); event.stopPropagation(); onDropFiles(files, repositoryPath); }}>
+    <div className="conversation-composer paper-ai-composer">
       {(attachments.length > 0 || droppedAttachments.length > 0) && <div className="paper-ai-code-attachments">
         {attachments.map((attachment, index) => <div className="paper-ai-code-attachment" key={attachment.path + ":" + attachment.startLine + ":" + index} title={attachment.path + ":" + attachment.startLine + "-" + attachment.endLine}>
           <FileCode2 size={13} /><span>{attachment.path}:{attachment.startLine}{attachment.endLine !== attachment.startLine ? "-" + attachment.endLine : ""}</span><button type="button" onClick={() => onRemoveAttachment(index)} title={t("Remove code attachment")} aria-label={t("Remove {path} code attachment", { path: attachment.path })}><X size={12} /></button>
         </div>)}
         {droppedAttachments.map((item) => <div className="paper-ai-code-attachment" key={item.id} title={item.path}>{item.type === "folder" ? <Folder size={13} /> : <FileCode2 size={13} />}<span>{item.name}</span><button type="button" onClick={() => onRemoveDropped(item.id)} title={t("Remove attachment")} aria-label={`${t("Remove attachment")}: ${item.name}`}><X size={12} /></button></div>)}
       </div>}
-      <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (shouldSubmitPaperChatKey(event)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? t("Ask about the selected code…") : t("Ask about the paper…")} rows={1} />
+      <textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (shouldSubmitPaperChatKey(event)) { event.preventDefault(); submit(); } }} placeholder={attachments.length ? t("Ask about the selected code…") : t("Ask about the paper…")} rows={2} />
+      <div className="conversation-composer-footer paper-ai-composer-footer">
+        <span className="paper-ai-composer-context"><FileText size={12} />{t("Full paper")}</span>
+        <button className="conversation-send paper-ai-send" disabled={busy ? !canInterrupt || cancelling : !draft.trim()} onClick={busy ? onInterrupt : submit} title={busy ? (cancelling ? t("Stopping") : t("Stop")) : t("Send")} aria-label={busy ? (cancelling ? t("Stopping") : t("Stop")) : t("Send")}>{busy ? <Square size={13} fill="currentColor" /> : <ArrowUp size={16} strokeWidth={2.4} />}</button>
+      </div>
     </div>
-    <button className="paper-ai-send" disabled={busy ? !canInterrupt || cancelling : !draft.trim()} onClick={busy ? onInterrupt : submit} title={busy ? (cancelling ? t("Stopping") : t("Stop")) : t("Send")} aria-label={busy ? (cancelling ? t("Stopping") : t("Stop")) : t("Send")}>{busy ? <Square size={13} fill="currentColor" /> : <ArrowUp size={15} />}</button>
   </div>;
 });
 
@@ -1273,10 +1298,15 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </main>
       {chatOpen && readerView !== "canvas" && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
       <aside className="paper-ai-panel">
-        <header><div><span className="eyebrow">Archimedes</span><h2>{t("Paper chat")}</h2><Tabs value={aiMode} onChange={(value) => { if (value === "audit" && !checkout) { if (projectUrl) openCodebase(projectUrl); return; } setAiMode(value as typeof aiMode); }} label="Evidence mode" variant="segmented" className="paper-ai-mode-toggle"><Tab value="brief">{t("Paper briefing")}</Tab><Tab value="audit" title={checkout ? "Use the cloned repository for strict verification" : "Open Codebase and clone the repository first"}>{t("Code audit")}</Tab></Tabs></div><div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title={t("Read the full paper again")}><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")}><X size={16} /></button></div></header>
+        <header className="paper-ai-header">
+          <Tabs value={aiMode} onChange={(value) => { if (value === "audit" && !checkout) { if (projectUrl) openCodebase(projectUrl); return; } setAiMode(value as typeof aiMode); }} label={t("Paper chat mode")} variant="segmented" className="paper-ai-mode-toggle"><Tab value="brief">{t("Briefing")}</Tab><Tab value="audit" title={checkout ? t("Use the cloned repository for strict verification") : t("Open Codebase and clone the repository first")}>{t("Code audit")}</Tab></Tabs>
+          <div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title={t("Read the full paper again")}><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")}><X size={16} /></button></div>
+        </header>
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={askPaperSuggestion} onOpenCodePath={openCodePath} />
-        {selection && <div className="paper-ai-context"><span>{t("p. {page} selection", { page: pageNumber })}</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-        {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p><button className="paper-ai-figure-canvas" onClick={addFigureToCanvas} title={t("Send to canvas")}><Frame size={12} /><span>{t("Send to canvas")}</span></button></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
+        {(selection || figureCapture) && <div className="paper-ai-context-stack">
+          {selection && <div className="paper-ai-context"><span>{t("p. {page} selection", { page: pageNumber })}</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
+          {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p><button className="paper-ai-figure-canvas" onClick={addFigureToCanvas} title={t("Send to canvas")}><Frame size={12} /><span>{t("Send to canvas")}</span></button></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
+        </div>}
         <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} droppedAttachments={droppedAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} onRemoveDropped={(id) => setDroppedAttachments((current) => current.filter((item) => item.id !== id))} onDropFiles={(files, repositoryPath) => void attachPaperChatDrop(files, repositoryPath)} />
       </aside></>}
     </div>
@@ -2671,6 +2701,7 @@ function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: Research
 }
 
 function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
+  const { t } = useUISettings();
   const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
   const [range, setRange] = useState<DailyDiscoveryRange>("7d");
   const [topic, setTopic] = useState<DailyDiscoveryTopic>("all");
@@ -2683,6 +2714,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<string | null>(null);
+  const [previewPaper, setPreviewPaper] = useState<DailyPaper | null>(null);
   const [error, setError] = useState("");
   const feedRequestId = useRef(0);
   const deepRequestId = useRef(0);
@@ -2813,9 +2845,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
         <Tab value="deep" icon={<Sparkles size={12} />}>Deep search</Tab>
       </Tabs>
       <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
-        {searchKind === "deep"
-          ? <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title="Deep search" aria-label="Deep search">{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
-          : <button className="primary-button" disabled={loading || !query.trim()} onClick={() => void submitSearch()}>{loading ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button>}
+        <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title={searchKind === "deep" ? "Deep search" : "Search"} aria-label={searchKind === "deep" ? "Deep search" : "Search"}>{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
       </div>
       {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}</span></div>}
     </div>
@@ -2824,7 +2854,25 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;
-      return <article className="daily-paper-row" key={key}>
+      return <article
+        className="daily-paper-row"
+        key={key}
+        role="button"
+        tabIndex={0}
+        title={t("Open paper preview")}
+        aria-label={`${t("Open paper preview")}: ${paper.title}`}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("a, button, input, textarea, select, label")) return;
+          setPreviewPaper(paper);
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setPreviewPaper(paper);
+          }
+        }}
+      >
         <div className="daily-paper-content">
           <div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}<button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button></div>
           <p className="daily-paper-meta"><span className="daily-paper-date">{formatPaperDate(paper.published_at)}</span><span className="daily-paper-source">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}</span><span className="daily-paper-authors">{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</span></p>
@@ -2834,8 +2882,77 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
         <DailyThumbnail paper={paper} bridge={bridge} />
       </article>;
     })}</div>}
+    {previewPaper && <DailyPaperPreview
+      paper={previewPaper}
+      bridge={bridge}
+      canSave={Boolean(targetLibrary)}
+      isAdded={added.has(previewPaper.external_id || previewPaper.title)}
+      isAdding={adding === (previewPaper.external_id || previewPaper.title)}
+      onAdd={() => void add(previewPaper)}
+      onClose={() => setPreviewPaper(null)}
+    />}
     </>}
   </section>;
+}
+
+function DailyPaperPreview({ paper, bridge, canSave, isAdded, isAdding, onAdd, onClose }: {
+  paper: DailyPaper;
+  bridge: ResearchDeskBridge;
+  canSave: boolean;
+  isAdded: boolean;
+  isAdding: boolean;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useUISettings();
+  const [figureUrl, setFigureUrl] = useState("");
+  useEffect(() => {
+    const load = bridge.getDailyFigure;
+    if (!paper.arxiv_id || !load) return;
+    let cancelled = false;
+    void load(paper.arxiv_id).then((url) => { if (!cancelled && url) setFigureUrl(url); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [bridge, paper.arxiv_id]);
+  const authors = paper.authors.length ? paper.authors.join(", ") : t("Unknown authors");
+  return <Dialog open onClose={onClose} size="lg" className="daily-paper-preview-dialog" ariaLabelledBy="daily-paper-preview-title">
+    <header className="daily-paper-preview-header">
+      <div>
+        <span className="eyebrow">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}{paper.year ? ` · ${paper.year}` : ""}</span>
+        <h2 id="daily-paper-preview-title">{paper.title}</h2>
+        <p className="daily-paper-preview-authors">{authors}</p>
+      </div>
+      <button className="icon-button" onClick={onClose} title={t("Close preview")} aria-label={t("Close preview")}><X size={16} /></button>
+    </header>
+    <div className="daily-paper-preview-body">
+      <div className="daily-paper-preview-figure">
+        <span className="daily-paper-thumb-fallback">{paper.categories[0] || "Paper"}</span>
+        {figureUrl && <img src={figureUrl} alt={t("Figure preview for {title}").replace("{title}", paper.title)} onError={(event) => { event.currentTarget.remove(); }} />}
+      </div>
+      <div className="daily-paper-preview-copy">
+        <div className="daily-paper-preview-meta">
+          <span>{formatPaperDate(paper.published_at)}</span>
+          {paper.venue && <span>{paper.venue}</span>}
+          {paper.upvotes > 0 && <span><Flame size={11} />{paper.upvotes}</span>}
+          {paper.citation_count > 0 && <span>{paper.citation_count.toLocaleString()} citations</span>}
+        </div>
+        <div className="daily-paper-preview-tags">
+          {paper.categories.map((category) => <span key={category}>{category}</span>)}
+        </div>
+        <p className="daily-paper-preview-abstract">{paper.abstract || t("No abstract available.")}</p>
+      </div>
+    </div>
+    <footer className="daily-paper-preview-actions">
+      <div>
+        {paper.url && <a className="secondary-button" href={paper.url} target="_blank" rel="noreferrer"><ExternalLink size={14} />{t("Open paper")}</a>}
+        {paper.pdf_url && <a className="secondary-button" href={paper.pdf_url} target="_blank" rel="noreferrer"><FileText size={14} />PDF</a>}
+        {paper.github_url && <a className="secondary-button" href={paper.github_url} target="_blank" rel="noreferrer"><Code2 size={14} />Code</a>}
+      </div>
+      <button className={isAdded ? "secondary-button imported" : "primary-button"} disabled={isAdded || isAdding || !canSave} onClick={onAdd}>
+        {isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}
+        {isAdded ? t("Saved") : isAdding ? t("Saving") : t("Save")}
+      </button>
+    </footer>
+  </Dialog>;
 }
 
 function DeepSearchResults({ response, loading, error, targetLibrary, added, adding, onSave }: {

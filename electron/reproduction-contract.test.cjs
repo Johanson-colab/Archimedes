@@ -99,7 +99,7 @@ test("planning fails loudly when the agent returns no contract", async () => {
     pages: [],
     workspace: "/tmp/workspace",
     runAgent: async () => ({ response: "I could not find any tables." }),
-  }), /did not return a contract/);
+  }), /stopped before finishing the contract/);
 });
 
 test("entrypoint evidence survives normalisation", () => {
@@ -192,4 +192,13 @@ test("an approved contract stays frozen when it is read back", () => {
   const approved = { claims: [{ statement: "Result holds" }], frozen_at: "2026-11-01T10:00:00.000Z" };
   assert.equal(normalizeContract(approved).frozen_at, "2026-11-01T10:00:00.000Z");
   assert.equal(normalizeContract({ claims: [{ statement: "Result holds" }] }).frozen_at, null);
+});
+
+test("a plan can be replaced until it is approved, and not after", () => {
+  const { isContractFrozen } = require("./reproduction/contract.cjs");
+  const planned = normalizeContract({ claims: [{ statement: "Result holds" }] });
+  assert.equal(isContractFrozen(planned), false, "an unapproved plan is still editable");
+  const approved = normalizeContract({ claims: [{ statement: "Result holds" }], frozen_at: "2026-11-02T10:00:00.000Z" });
+  assert.equal(isContractFrozen(approved), true, "an approved contract must not be silently replaced");
+  assert.equal(isContractFrozen(null), false);
 });

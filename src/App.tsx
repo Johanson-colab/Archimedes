@@ -40,11 +40,16 @@ import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./Ri
 import ChangesView from "./ChangesView";
 import NotesView from "./NotesView";
 import VoiceInputButton from "./VoiceInputButton";
+import SideConversation from "./SideConversation";
+import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, normalizeWorkbenchPreferences, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
+import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
+import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions } from "./native-agent-state";
+import HarnessPicker from "./HarnessPicker";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
 import TrajectoryView from "./TrajectoryView";
@@ -84,6 +89,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Cpu,
+  Download,
   File,
   FileArchive,
   FileAudio,
@@ -102,11 +109,11 @@ import {
   FileVideo,
   Flag,
   GitCompareArrows,
+  GitFork,
   NotebookPen,
   Folder,
   FolderOpen,
   FlaskConical,
-  Gauge,
   ImagePlus,
   Images,
   Laptop,
@@ -134,10 +141,12 @@ import {
   Settings,
   Share2,
   ShieldCheck,
+  Shrink,
   ScanSearch,
   Sparkles,
   Square,
   SquareTerminal,
+  Undo2,
   Users,
   X,
 } from "lucide-react";
@@ -154,6 +163,7 @@ for (const [name, grammar] of syntaxLanguages) {
 
 type Message = {
   id: string;
+  turn_id?: string;
   role: "user" | "assistant";
   text: string;
   sources?: ResearchSource[];
@@ -178,17 +188,6 @@ const researchModes: Array<{ id: ResearchMode; label: string; description: strin
   { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
   { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
   { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <ScanSearch size={15} />, placeholder: "What paper or draft would you like to review?" },
-];
-
-const reasoningEfforts: Array<{ id: ReasoningEffort; label: string }> = [
-  { id: "low", label: "Low" },
-  { id: "medium", label: "Medium" },
-  { id: "high", label: "High" },
-];
-
-const contextLengths: Array<{ id: ContextLength; label: string }> = [
-  { id: "standard", label: "Standard" },
-  { id: "extra-long", label: "Extra Long" },
 ];
 
 const previewModelCapabilities: ModelCapabilities = {
@@ -781,6 +780,59 @@ const previewBridge = {
   },
   listResearchThreadSnapshots: async (threadId: string) => structuredClone(previewThreadSnapshots.filter((snapshot) => snapshot.thread_id === threadId)),
   getResearchThreadSnapshot: async (snapshotId: string) => structuredClone(previewThreadSnapshots.find((snapshot) => snapshot.id === snapshotId) || null),
+  createResearchThread: async (input: { projectId?: string; workspacePath?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }): Promise<ResearchThreadDetail> => {
+    const now = new Date().toISOString();
+    const thread: ResearchThreadDetail = { id: crypto.randomUUID(), project_id: input.projectId || "preview-general", owner_id: previewLocalIdentity.userId, visibility: input.visibility || "project", title: input.title || "New conversation", mode: input.mode || "free-chat", status: "idle", context_summary: "", workspace_path: input.workspacePath || previewWorkspace, turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
+    previewThreads.unshift(thread);
+    return structuredClone(thread);
+  },
+  forkResearchThread: async (threadId: string, _workspace?: string, side = false) => {
+    const source = previewThreads.find((thread) => thread.id === threadId);
+    if (!source) throw new Error("Research thread not found.");
+    const copy = structuredClone(source);
+    const ids = new Map(copy.turns.map((turn) => [turn.id, crypto.randomUUID()]));
+    copy.id = crypto.randomUUID();
+    copy.title = `${side ? "Side" : "Fork"}: ${source.title}`;
+    copy.created_at = copy.updated_at = new Date().toISOString();
+    copy.turns = copy.turns.map((turn) => ({ ...turn, id: ids.get(turn.id)!, thread_id: copy.id, task_id: null }));
+    copy.messages = copy.messages.map((message) => ({ ...message, id: `${ids.get(message.turn_id)}:${message.role}`, turn_id: ids.get(message.turn_id)! }));
+    copy.events = copy.events?.map((event) => ({ ...event, id: crypto.randomUUID(), turn_id: ids.get(event.turn_id)! }));
+    copy.context_summary_through_turn_id = ids.get(source.context_summary_through_turn_id || "") || null;
+    copy.changeSets = [];
+    copy.pending_actions = 0;
+    previewThreads.unshift(copy);
+    return structuredClone(copy);
+  },
+  undoResearchTurn: async (threadId: string) => {
+    const thread = previewThreads.find((item) => item.id === threadId);
+    const last = thread?.turns.at(-1);
+    if (!thread || !last) throw new Error("There is no turn to undo.");
+    const backup = await previewBridge.forkResearchThread(threadId);
+    await previewBridge.setResearchThreadVisibility(backup.id, "private");
+    const storedBackup = previewThreads.find((item) => item.id === backup.id)!;
+    storedBackup.title = `Before undo: ${thread.title}`;
+    await previewBridge.archiveResearchThread(backup.id);
+    thread.turns.pop();
+    thread.messages = thread.messages.filter((item) => item.turn_id !== last.id);
+    thread.events = thread.events?.filter((event) => event.turn_id !== last.id);
+    thread.changeSets = thread.changeSets.filter((item) => item.turnId !== last.id);
+    thread.turn_count = thread.turns.length;
+    thread.context_summary = "";
+    thread.context_summary_through_turn_id = null;
+    return { thread: structuredClone(thread), prompt: last.user_message, backupThreadId: backup.id };
+  },
+  compactResearchThread: async () => { throw new Error("Context compaction requires a configured model in the desktop app."); },
+  exportResearchThread: async (threadId: string) => {
+    const thread = previewThreads.find((item) => item.id === threadId);
+    if (!thread) throw new Error("Research thread not found.");
+    const url = URL.createObjectURL(new Blob([JSON.stringify(thread, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "conversation.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { canceled: false };
+  },
   archiveResearchThread: async (id: string, archived = true) => {
     const source = archived ? previewThreads : previewArchivedThreads;
     const target = archived ? previewArchivedThreads : previewThreads;
@@ -799,6 +851,11 @@ const previewBridge = {
     return { deleted: true };
   },
   getModelConfig: async () => ({ provider: "custom" as ModelProviderId, baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", hasApiKey: false, source: "environment" as const }),
+  getAgentBackendConfig: async () => ({ backend: "api", binary: "codex", model: "" }),
+  saveAgentBackendConfig: async () => { throw new Error("External Agent backends require the desktop app."); },
+  checkAgentBackend: async () => { throw new Error("Codex detection requires the desktop app."); },
+  steerNativeAgent: async () => { throw new Error("Native steering requires the desktop app."); },
+  answerNativeAgentQuestion: async () => { throw new Error("Native questions require the desktop app."); },
   getModelCapabilities: async () => previewModelCapabilities,
   listProviderModels: async () => ({ models: [], source: "live" as const }),
   saveModelConfig: async ({ provider, baseUrl, model }: ModelConfigInput) => ({ provider, baseUrl, model, hasApiKey: true, source: "saved" as const }),
@@ -810,7 +867,8 @@ const previewBridge = {
   readClipboardText: async () => "",
   writeClipboardText: async () => undefined,
   readClipboardImage: async () => null,
-  runAgent: async ({ prompt, workspace, threadId, projectId, visibility = "project", mode, reasoningEffort = "medium", contextLength = "standard", contextItems }: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[] }) => {
+  runAgent: async ({ prompt, workspace, threadId, projectId, visibility = "project", mode, reasoningEffort = "medium", contextLength = "standard", contextItems, clientRunId, capabilities }: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" } }) => {
+    const emit = (event: AgentEvent) => emitPreviewAgentEvent({ ...event, clientRunId });
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
@@ -827,9 +885,9 @@ const previewBridge = {
       thread!.events!.push({ id: crypto.randomUUID(), turn_id: turnId, sequence: thread!.events!.length + 1, type, payload, created_at: new Date().toISOString() });
     };
     appendPreviewEvent("user_message", { text: prompt, mode, reasoningEffort, contextLength });
-    emitPreviewAgentEvent({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: `Browser preview Agent · thinking: ${reasoningEffort} · context: ${contextLength}` });
+    emit({ type: "status", threadId: thread.id, turnId, title: "Research turn started", detail: `Browser preview Agent · thinking: ${reasoningEffort} · context: ${contextLength}` });
     const actions: AgentAction[] = [];
-    if (/(write|draft|note|生成|写入)/i.test(prompt)) {
+    if (capabilities?.write !== "deny" && /(write|draft|note|生成|写入)/i.test(prompt)) {
       const action: AgentAction = {
         id: crypto.randomUUID(), task_id: taskId, kind: "write",
         payload: {
@@ -842,13 +900,13 @@ const previewBridge = {
       previewActions.push(action);
       actions.push(action);
       appendPreviewEvent("tool_call", { call_id: crypto.randomUUID(), name: "write_file", arguments: { path: "notes/agent-research-brief.md", content: action.payload.content }, status: "approval_required" });
-      emitPreviewAgentEvent({ type: "tool", threadId: thread.id, turnId, title: "write artifact", detail: "Prepared a draft for approval" });
+      emit({ type: "tool", threadId: thread.id, turnId, title: "write artifact", detail: "Prepared a draft for approval" });
     }
     const selectedMode = researchModes.find((candidate) => candidate.id === mode)?.label ?? "Research";
     const contextNote = contextItems?.length ? ` I received ${contextItems.length} attached context item${contextItems.length === 1 ? "" : "s"}.` : "";
     const response = `Preview Agent (${selectedMode}): I reviewed the active research workspace and framed the request as an evidence-backed next step.${contextNote} In the desktop app, this same request will use your configured model and restricted workspace tools.`;
     appendPreviewEvent("assistant_step", { content: "Reviewing the research request and available workspace context.", protocol: "preview", tool_calls: actions.length ? [{ id: actions[0].id, function: { name: "write_file", arguments: JSON.stringify(actions[0].payload) } }] : [] });
-    emitPreviewAgentEvent({ type: "assistant_delta", threadId: thread.id, turnId, title: "Writing response", detail: "Streaming model output", delta: response });
+    emit({ type: "assistant_delta", threadId: thread.id, turnId, title: "Writing response", detail: "Streaming model output", delta: response });
     const completedAt = new Date().toISOString();
     const task = { id: taskId, prompt, response, status: "completed", created_at: now };
     previewTasks.push(task);
@@ -861,7 +919,7 @@ const previewBridge = {
     thread.turn_count = thread.turns.length;
     thread.updated_at = completedAt;
     thread.last_turn_at = completedAt;
-    emitPreviewAgentEvent({ type: "complete", threadId: thread.id, turnId, title: "Research turn complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
+    emit({ type: "complete", threadId: thread.id, turnId, title: "Research turn complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
     return { threadId: thread.id, turnId, taskId: task.id, response, status: "completed", actions, thread: structuredClone(thread) };
   },
   interruptAgent: async () => ({ interrupted: true }),
@@ -1199,6 +1257,9 @@ function App() {
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [sideThread, setSideThread] = useState<ResearchThreadDetail | null>(null);
+  const [sideBusy, setSideBusy] = useState(false);
+  const commandLockRef = useRef(false);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
   const [trajectoryEvents, setTrajectoryEvents] = useState<ResearchEvent[]>([]);
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
@@ -1251,6 +1312,16 @@ function App() {
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
   const [contextLength, setContextLength] = useState<ContextLength>(readContextLength);
   const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities>(previewModelCapabilities);
+  const [nativeBackend, setNativeBackend] = useState<AgentBackendConfig | null>(null);
+  const [nativeStream, setNativeStream] = useState<{ threadId: string; events: ResearchEvent[] }>({ threadId: "", events: [] });
+  const [nativeQuestions, setNativeQuestions] = useState<Array<{ threadId: string; question: NativeAgentQuestion }>>([]);
+  const combinedTrajectoryEvents = useMemo(() => nativeStream.threadId === activeThreadId ? [...trajectoryEvents, ...nativeStream.events] : trajectoryEvents, [trajectoryEvents, nativeStream, activeThreadId]);
+  useEffect(() => {
+    if (settingsOpen) return;
+    let active = true;
+    void desktopBridge.getAgentBackendConfig().then((config) => { if (active) setNativeBackend(config); }).catch(() => { if (active) setNativeBackend(null); });
+    return () => { active = false; };
+  }, [settingsOpen]);
   const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
   const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
@@ -1867,6 +1938,7 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
+      if (event.clientRunId?.startsWith("side-chat:")) return;
       if (event.threadId) {
         setRunningThreadId(event.threadId);
         if (!activeThreadIdRef.current) {
@@ -1890,6 +1962,12 @@ function App() {
         }
       }
       if (event.type === "artifact") setArtifactsVersion((current) => current + 1);
+      if (event.type.startsWith("native_")) {
+        if (event.type === "native_question" || event.type === "native_question_resolved") setNativeQuestions((current) => updateNativeQuestions(current, event));
+        else if (event.type === "native_approval_resolved" && event.action) setPendingAction((current) => current?.id === event.action!.id ? null : current);
+        else if (event.threadId) setNativeStream((current) => ({ threadId: event.threadId!, events: mergeNativeEvent(current.threadId === event.threadId ? current.events : [], event) }));
+        return;
+      }
       if (event.type === "assistant_delta" && event.turnId && event.delta) {
         if (event.threadId && activeThreadIdRef.current !== event.threadId) return;
         queueAssistantDelta(event);
@@ -1898,6 +1976,8 @@ function App() {
       if (event.type === "complete" || event.type === "failed" || event.type === "interrupted") {
         flushAssistantDeltas();
         setInterrupting(false);
+        setNativeQuestions((current) => current.filter((item) => Boolean(event.threadId) && item.threadId !== event.threadId));
+        setPendingAction((current) => current?.payload.externalAgent && (!event.threadId || activeThreadIdRef.current === event.threadId) ? null : current);
       }
       if (event.type === "approval" && event.action && (!event.threadId || activeThreadIdRef.current === event.threadId)) {
         setPendingAction({ ...event.action, source: "agent" });
@@ -1953,16 +2033,18 @@ function App() {
   }, [activeProjectId, agentBusy]);
 
   async function chooseWorkspace() {
-    if (agentBusy) return;
+    if (agentBusy || sideBusy || commandLockRef.current) return;
     const selected = await desktopBridge.chooseWorkspace();
     if (selected) await loadWorkspace(selected);
   }
 
   async function loadWorkspace(workspacePath: string) {
+    if (agentBusy || sideBusy || commandLockRef.current) return;
     if (Object.values(fileDraftsRef.current).some(isDraftDirty) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
     clearPendingAssistantDeltas();
     setWorkspaceReady(false);
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
+    setSideThread(null);
     setWorkspace(snapshot.workspace);
     setProjects(snapshot.projects ?? []);
     setArchivedProjects(snapshot.archivedProjects ?? []);
@@ -2131,7 +2213,68 @@ function App() {
     setChangeSets([]);
   }
 
+  async function runConversationCommand(command: ConversationCommand): Promise<ConversationCommandResult> {
+    if (command === "model") {
+      setSettingsSection("models");
+      setSettingsOpen(true);
+      return;
+    }
+    if (commandLockRef.current) throw new Error(t("Wait for the current command to finish."));
+    if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
+    if (command === "init") {
+      if (!executionWorkspace) throw new Error(t("Select a workspace first."));
+      if (!(await submitPrompt(INIT_PROMPT, "free-chat"))) throw new Error(t("Project initialization could not start."));
+      return;
+    }
+    if (command === "new") { startNewTask(); return; }
+    if (command === "side" && sideThread) return { notice: t("The side conversation is already open.") };
+    const threadId = activeThreadIdRef.current;
+    if (!threadId && command !== "side") throw new Error(t("Start a conversation before using this command."));
+    commandLockRef.current = true;
+    try {
+      if (command === "export") {
+        const result = await desktopBridge.exportResearchThread(threadId!, workspace);
+        return result.canceled ? undefined : { notice: t("Conversation exported.") };
+      }
+      if (command === "fork" || command === "side") {
+        const copy = threadId
+          ? await desktopBridge.forkResearchThread(threadId, workspace, command === "side")
+          : await desktopBridge.createResearchThread({ projectId: activeProjectId || undefined, workspacePath: executionWorkspace, mode: researchMode, visibility: threadVisibility, title: t("Side conversation") });
+        setThreads((current) => [copy, ...current.filter((item) => item.id !== copy.id)]);
+        if (command === "side") { setSideThread(copy); setWorkbenchOpen(false); }
+        else await openResearchThread(copy);
+        return;
+      }
+      if (command === "undo") {
+        const result = await desktopBridge.undoResearchTurn(threadId!, workspace);
+        if (activeThreadIdRef.current === threadId) {
+          clearPendingAssistantDeltas();
+          setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
+          setTrajectoryEvents(result.thread.events ?? []);
+          setChangeSets(result.thread.changeSets);
+          setPendingAction(null);
+          setEvents([]);
+        }
+        const snapshot = await desktopBridge.getResearchSnapshot();
+        setThreads(snapshot.threads);
+        setArchivedThreads(snapshot.archivedThreads ?? []);
+        await desktopBridge.clearJourneySummary(threadId!).catch(() => undefined);
+        return { draft: result.prompt, notice: t("Last turn undone. Files are unchanged. A backup is available in archived chats.") };
+      }
+      if (command === "compact") {
+        const thread = await desktopBridge.compactResearchThread(threadId!, workspace);
+        setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
+        if (activeThreadIdRef.current === thread.id) { setTrajectoryEvents(thread.events ?? []); setNativeStream({ threadId: "", events: [] }); }
+        return { notice: t(nativeBackend?.backend === "codex" ? "Codex context compacted. Original messages are preserved." : "Context compacted. Original messages are preserved.") };
+      }
+    } finally { commandLockRef.current = false; }
+  }
+
   async function openResearchThread(threadSummary: ResearchThread) {
+    if (sideThread?.id === threadSummary.id) {
+      if (sideBusy) return;
+      setSideThread(null);
+    }
     clearPendingAssistantDeltas();
     setMainSection("chat");
     activeThreadIdRef.current = threadSummary.id;
@@ -2304,7 +2447,7 @@ function App() {
     const question = draft.trim();
     const submittedContext = submittedContextOverride ?? contextItems;
     const hasPastedImage = submittedContext.some((item) => item.type === "image");
-    if ((!question && !hasPastedImage) || agentBusy) return false;
+    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current) return false;
     const requestPrompt = question || "Please analyze the attached image.";
     const submittedThreadId = activeThreadIdRef.current;
 
@@ -2314,11 +2457,17 @@ function App() {
     setAgentBusy(true);
     setInterrupting(false);
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt, created_at: new Date().toISOString() }]);
-    setEvents([{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
+    // A new turn must not reuse the previous turn's native activity while the
+    // backend is starting (including when switching from Codex back to API).
+    setNativeStream({ threadId: activeThreadId || "", events: [{ id: "pending-turn", turn_id: "pending-turn", sequence: 0, type: "user_message", payload: {}, created_at: new Date().toISOString() }] });
+    setNativeQuestions([]);
+    setEvents(nativeBackend?.backend === "codex" ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" } });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research" });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
+      setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
+      setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
       if (submittedThreadId === null) {
         const draftNote = noteValuesRef.current[draftNoteKey] ?? "";
         if (draftNote.trim()) {
@@ -2550,7 +2699,7 @@ function App() {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
       setPendingAction(null);
       clearThreadPendingAction();
-      if (action.kind === "command" && action.payload.command) {
+      if (action.kind === "command" && action.payload.command && !action.payload.externalAgent) {
         await runCommand(action.payload.command, action.id);
       } else if (action.kind === "write" && action.payload.path) {
         await refreshWorkspaceFiles();
@@ -2797,13 +2946,23 @@ function App() {
         </header>
 
         <div className="main-workspace" ref={mainWorkspaceRef}>
-        <div className={mainSection === "chat" ? "main-view chat-main" : "main-view knowledge-main"}>
+        <div className={mainSection === "chat" ? `main-view chat-main${sideThread ? " has-side-chat" : ""}` : "main-view knowledge-main"}>
           {mainSection === "chat" && (
             <ConversationView
               key={activeThreadId ?? `new:${chatViewNonce}`}
               messages={messages}
               events={events}
-              trajectoryEvents={trajectoryEvents}
+              trajectoryEvents={combinedTrajectoryEvents}
+              nativeBackend={nativeBackend?.backend === "codex" ? nativeBackend : null}
+              onHarnessChange={async (backend) => {
+                if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
+                const current = await desktopBridge.getAgentBackendConfig();
+                const saved = await desktopBridge.saveAgentBackendConfig({ ...current, backend });
+                setNativeBackend(saved);
+              }}
+              nativeQuestions={agentBusy ? nativeQuestions.filter((item) => item.threadId === activeThreadId).map((item) => item.question) : []}
+              onNativeAnswer={(id, answers) => desktopBridge.answerNativeAgentQuestion(activeThreadId!, id, answers, workspace)}
+              onNativeSteer={(text) => desktopBridge.steerNativeAgent(activeThreadId!, text, workspace)}
               workspace={executionWorkspace}
               projectId={activeProjectId}
               threadVisibility={threadVisibility}
@@ -2811,19 +2970,20 @@ function App() {
               cloudSignedIn={Boolean(authState?.user)}
               onRequestSignIn={() => openAuth("choice")}
               onOpenWorkspaceSettings={() => { setSettingsSection("workspace"); setSettingsOpen(true); }}
+              onCommand={runConversationCommand}
+              contextSummary={threads.find((thread) => thread.id === activeThreadId)?.context_summary}
+              compactedThroughTurnId={threads.find((thread) => thread.id === activeThreadId)?.context_summary_through_turn_id}
               agentBusy={agentBusy}
               interrupting={interrupting}
               pendingAction={pendingAction}
               changeSets={changeSets}
-              onSubmit={(draft, routedMode, effort, selectedContextLength) => submitPrompt(draft, routedMode, effort, selectedContextLength)}
+              onSubmit={submitPrompt}
               onInterrupt={() => void interruptResearchTurn()}
               canInterrupt={Boolean(runningThreadId) && !interrupting}
               researchMode={researchMode}
               onResearchMode={setResearchMode}
               reasoningEffort={reasoningEffort}
-              onReasoningEffort={setReasoningEffort}
               contextLength={contextLength}
-              onContextLength={setContextLength}
               modelCapabilities={modelCapabilities}
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
@@ -2840,6 +3000,7 @@ function App() {
               onComposerRequestApplied={(id) => setComposerRequest((current) => current?.id === id ? null : current)}
             />
           )}
+          {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
           <div className={mainSection === "library" ? "library-view-cache" : "library-view-cache hidden"} aria-hidden={mainSection !== "library"}>
             {workspaceReady && <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />}
           </div>
@@ -3029,6 +3190,7 @@ function App() {
         onAppearanceChange={setAppearance}
         bridge={desktopBridge}
         onModelSaved={setActiveModelConfig}
+        executionPreferences={{ reasoningEffort, contextLength, capabilities: modelCapabilities, onReasoningEffort: setReasoningEffort, onContextLength: setContextLength }}
         workspace={workspace}
         workspaceReady={workspaceReady}
         agentBusy={agentBusy}
@@ -3119,6 +3281,15 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   const [followingOutput, setFollowingOutput] = useState(true);
   const visibleMessages = useMemo(() => messages.slice(historyStart), [messages, historyStart]);
   const lastUserIndex = useMemo(() => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1), [visibleMessages]);
+  const nativeEventsByTurn = useMemo(() => {
+    const grouped = new Map<string, ResearchEvent[]>();
+    for (const event of trajectoryEvents) {
+      if (!event.type.startsWith("native_")) continue;
+      const turn = grouped.get(event.turn_id) ?? [];
+      turn.push(event); grouped.set(event.turn_id, turn);
+    }
+    return grouped;
+  }, [trajectoryEvents]);
 
   const scrollToLatest = useCallback(() => {
     const container = scrollRef.current;
@@ -3161,14 +3332,17 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         }}>
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart) === 1 ? "message" : "messages"}
         </button>}
-        {visibleMessages.slice(0, lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
-        {lastUserIndex >= 0 && <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />}
+        {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
+          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+          {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
+        </div>)}
+        {lastUserIndex >= 0 && (nativeTurnEvents(trajectoryEvents).length ? <NativeAgentPanel events={trajectoryEvents} busy={agentBusy} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
         {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
         {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         {pendingAction && <section className="conversation-approval">
           <div className="approval-content">
             <div className="approval-head">
-              <span className="approval-kind">{pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
+              <span className="approval-kind">{pendingAction.payload.externalAgent ? "Codex" : pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
               {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
             </div>
             <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
@@ -3189,10 +3363,15 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onSubmit, onInterrupt, onResearchMode, onReasoningEffort, onContextLength, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
+  nativeBackend: AgentBackendConfig | null;
+  onHarnessChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
+  nativeQuestions: NativeAgentQuestion[];
+  onNativeAnswer: (id: string, answers: Record<string, string[]>) => Promise<unknown>;
+  onNativeSteer: (text: string) => Promise<unknown>;
   workspace: string;
   projectId?: string | null;
   threadVisibility: "project" | "private";
@@ -3210,11 +3389,12 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   cloudSignedIn: boolean;
   onRequestSignIn: () => void;
   onOpenWorkspaceSettings: () => void;
+  onCommand: (command: ConversationCommand) => Promise<ConversationCommandResult>;
+  contextSummary?: string;
+  compactedThroughTurnId?: string | null;
   onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength, contextItems?: ContextAttachment[]) => Promise<boolean>;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
-  onReasoningEffort: (effort: ReasoningEffort) => void;
-  onContextLength: (length: ContextLength) => void;
   onAddContext: (items: ContextAttachment[]) => void;
   onRemoveContext: (id: string) => void;
   onApprove: () => void;
@@ -3231,14 +3411,17 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const { t } = useUISettings();
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const shortcutModifier = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
-  const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
-  const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextUsageOpen, setContextUsageOpen] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [cloudGateOpen, setCloudGateOpen] = useState(false);
   const [cloudNotice, setCloudNotice] = useState("");
   const [composerError, setComposerError] = useState("");
+  const [commandRunning, setCommandRunning] = useState(false);
+  const [commandNotice, setCommandNotice] = useState("");
+  const [steering, setSteering] = useState(false);
+  const reportedNativeUsage = useMemo(() => nativeUsage(trajectoryEvents), [trajectoryEvents]);
+  const slashRunningRef = useRef(false);
   const storedDraftRef = useRef<ComposerDraft | null>(readComposerDraft(draftKey));
   const [prompt, setPrompt] = useState(storedDraftRef.current?.text ?? "");
   const [promptHistory, setPromptHistory] = useState<string[]>(readComposerHistory);
@@ -3248,10 +3431,9 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const [slashIndex, setSlashIndex] = useState(0);
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
   const previousBusyRef = useRef(agentBusy);
-  const reasoningTriggerRef = useRef<HTMLButtonElement>(null);
-  const contextTriggerRef = useRef<HTMLButtonElement>(null);
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const composerBoxRef = useRef<HTMLDivElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
   // Parent activity updates can occur every second. Keep the history's event
   // handlers stable without retaining stale closures from the parent render.
@@ -3317,8 +3499,11 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
 
   const predictedMode = inferResearchMode(prompt, researchMode);
   const messageContextCharacters = useMemo(
-    () => messages.reduce((total, message) => total + message.text.length, 0),
-    [messages],
+    () => {
+      const checkpoint = compactedThroughTurnId ? messages.findIndex((message) => message.id === `${compactedThroughTurnId}:assistant`) : -1;
+      return (contextSummary?.length || 0) + messages.slice(checkpoint + 1).reduce((total, message) => total + message.text.length, 0);
+    },
+    [messages, contextSummary, compactedThroughTurnId],
   );
   const attachedContextCharacters = useMemo(
     () => contextItems.reduce((total, item) => total + estimateAttachmentContextCharacters(item), 0),
@@ -3334,26 +3519,26 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${contextCharacterLimit.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
   const contextUsagePercent = Math.round(contextUsage * 100);
-  const activeContextLength = contextLengths.find((length) => length.id === contextLength) ?? contextLengths[0];
-  const contextLengthLabel = activeContextLength?.id === "extra-long" ? t("Extra Long") : t("Standard");
   const formatContextCharacters = (value: number) => value >= 10_000 ? `${Math.round(value / 1_000)}k` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : String(value);
-  const availableThinkingEfforts = reasoningEfforts.filter((effort) => modelCapabilities.thinkingEfforts.includes(effort.id));
-  const availableContextLengths = contextLengths.filter((length) => modelCapabilities.contextLengths.includes(length.id));
-  const reasoningEffortLabel = t(reasoningEfforts.find((effort) => effort.id === reasoningEffort)?.label ?? reasoningEffort);
   const slashCommands = [
-    { id: "research", label: t("Research"), detail: t("Idea spark"), run: () => onResearchMode("idea-spark") },
-    { id: "review", label: t("Review"), detail: t("Paper review"), run: () => onResearchMode("paper-review") },
-    { id: "write", label: t("Write"), detail: t("Paper writing"), run: () => onResearchMode("paper-generation") },
-    { id: "experiment", label: t("Experiment"), detail: t("Experiment setup"), run: () => onResearchMode("experiment-setup") },
-    { id: "context", label: t("Add context"), detail: t("Files, papers, skills"), run: () => setContextPickerRequest((current) => current + 1) },
-    { id: "clear", label: t("Clear draft"), detail: t("Remove text"), run: () => setPrompt("") },
+    { id: "research", icon: Lightbulb, label: t("Research"), detail: t("Explore research ideas"), run: () => onResearchMode("idea-spark") },
+    { id: "experiment", icon: FlaskConical, label: t("Experiment"), detail: t("Set up an experiment"), run: () => onResearchMode("experiment-setup") },
+    { id: "write", icon: FilePenLine, label: t("Write"), detail: t("Draft research writing"), run: () => onResearchMode("paper-generation") },
+    { id: "review", icon: ScanSearch, label: t("Review"), detail: t("Review a paper"), run: () => onResearchMode("paper-review") },
+    { id: "init", icon: FileCog, label: t("Init"), detail: t("Set up project instructions"), run: () => onCommand("init") },
+    { id: "new", icon: Plus, label: t("New"), detail: t("Start a new conversation"), run: () => onCommand("new") },
+    { id: "undo", icon: Undo2, label: t("Undo"), detail: t("Undo the last message"), run: () => onCommand("undo") },
+    { id: "compact", icon: Shrink, label: t("Compact"), detail: t("Summarize conversation context"), run: () => onCommand("compact") },
+    { id: "fork", icon: GitFork, label: t("Fork"), detail: t("Branch from this conversation"), run: () => onCommand("fork") },
+    { id: "side", icon: PanelRight, label: t("Side"), detail: t("Open a side conversation"), run: () => onCommand("side") },
+    { id: "export", icon: Download, label: t("Export"), detail: t("Export this conversation"), run: () => onCommand("export") },
+    { id: "model", icon: Cpu, label: t("Model"), detail: t("Choose a model"), run: () => onCommand("model") },
   ];
   const filteredSlashCommands = slashQuery === null ? [] : slashCommands.filter((command) => command.id.startsWith(slashQuery) || command.label.toLowerCase().includes(slashQuery));
   const slashOpen = filteredSlashCommands.length > 0 && slashQuery !== null;
   useEffect(() => {
-    if (!availableThinkingEfforts.length) setReasoningMenuOpen(false);
-    if (!availableContextLengths.length) setContextMenuOpen(false);
-  }, [availableThinkingEfforts.length, availableContextLengths.length]);
+    if (slashOpen) document.querySelector<HTMLElement>(".composer-slash-menu .menu-item.active")?.scrollIntoView({ block: "nearest" });
+  }, [slashOpen, slashIndex, slashQuery]);
 
   async function attachPastedImage(blob: Blob) {
     if (contextItems.filter((item) => item.type === "image").length >= 4) {
@@ -3493,7 +3678,13 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     setSlashIndex(0);
   }
 
-  function runSlashCommand(command: { run: () => void }) {
+  async function runSlashCommand(command: { id: string; run: () => void | Promise<ConversationCommandResult> }) {
+    if (slashRunningRef.current) return;
+    if (queuedPrompts.length) { setComposerError(t("Send or clear queued messages before using a command.")); return; }
+    slashRunningRef.current = true;
+    setCommandRunning(true);
+    setComposerError("");
+    setCommandNotice(t("Running command…"));
     const textarea = composerRef.current;
     const caret = textarea?.selectionStart ?? prompt.length;
     const before = prompt.slice(0, caret);
@@ -3501,7 +3692,19 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     const next = start >= 0 ? `${prompt.slice(0, start)}${prompt.slice(caret)}` : prompt;
     setPrompt(next);
     setSlashQuery(null);
-    command.run();
+    try {
+      const result = await command.run();
+      if (result?.draft !== undefined) setPrompt(result.draft + (next.trim() ? `\n\n${next}` : ""));
+      setCommandNotice(result?.notice || "");
+    } catch (error) {
+      setPrompt(prompt);
+      setComposerError(String(error).replace(/^Error invoking remote method '[^']+': Error:\s*|^Error:\s*/, ""));
+      setCommandNotice("");
+    } finally { slashRunningRef.current = false; setCommandRunning(false); }
+    if (command.id === "model") {
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(".settings-modal input:not([disabled]), .settings-modal button:not([disabled])")?.focus());
+      return;
+    }
     requestAnimationFrame(() => {
       const field = composerRef.current;
       if (!field) return;
@@ -3569,8 +3772,21 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
   }
 
   async function submitCurrentPrompt() {
+    if (slashRunningRef.current) return;
+    const exactCommand = /^\/([a-z]+)$/i.exec(prompt.trim());
+    const command = exactCommand && slashCommands.find((item) => item.id === exactCommand[1].toLowerCase());
+    if (command) { await runSlashCommand(command); return; }
     if (!prompt.trim() && !contextItems.some((item) => item.type === "image")) return;
     if (agentBusy) {
+      if (nativeBackend) {
+        if (steering) return;
+        if (contextItems.length) { setComposerError(t("Send attachments after the current Codex turn finishes.")); return; }
+        setSteering(true); setComposerError("");
+        try { await onNativeSteer(prompt); rememberPrompt(prompt); setPrompt(""); }
+        catch (error) { setComposerError(String(error)); }
+        finally { setSteering(false); }
+        return;
+      }
       queueCurrentPrompt();
       return;
     }
@@ -3616,7 +3832,9 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
     <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} />
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
+      {nativeQuestions.length > 0 && <div className="native-question-stack">{nativeQuestions.map((question) => <NativeQuestionCard key={question.id} question={question} onAnswer={onNativeAnswer} />)}</div>}
       <div
+        ref={composerBoxRef}
         className={draggingFiles ? "conversation-composer drag-active" : "conversation-composer"}
         onDragEnter={(event) => {
           if (!event.dataTransfer.types.includes("Files")) return;
@@ -3657,7 +3875,8 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
           </div>)}
           {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
         </div>}
-        <textarea ref={composerRef} value={prompt} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
+        <textarea ref={composerRef} value={prompt} disabled={commandRunning} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.keyCode === 229) return;
           const textarea = event.currentTarget;
           if (slashOpen) {
             if (event.key === "ArrowDown") {
@@ -3670,7 +3889,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
               setSlashIndex((current) => Math.max(current - 1, 0));
               return;
             }
-            if (event.key === "Enter") {
+            if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               const command = filteredSlashCommands[slashIndex];
               if (command) runSlashCommand(command);
@@ -3701,9 +3920,9 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
             void submitCurrentPrompt();
           }
         }} placeholder={activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
-        <MenuSurface open={slashOpen} onClose={() => setSlashQuery(null)} anchorRef={composerRef} placement="top-start" width={320} className="composer-slash-menu" ariaLabel={t("Composer commands")} focus="none">
+        <MenuSurface open={slashOpen} onClose={() => setSlashQuery(null)} anchorRef={composerBoxRef} placement="top-start" width="anchor" minWidth={0} maxHeight={320} className="composer-slash-menu" ariaLabel={t("Composer commands")} focus="none">
           <MenuLabel>{t("Composer commands")}</MenuLabel>
-          {filteredSlashCommands.map((command, index) => <MenuItem key={command.id} className={index === slashIndex ? "active" : ""} hint={command.detail} onMouseEnter={() => setSlashIndex(index)} onClick={() => runSlashCommand(command)}>{command.label}</MenuItem>)}
+          {filteredSlashCommands.map((command, index) => <MenuItem key={command.id} icon={<command.icon size={16} strokeWidth={1.7} />} className={index === slashIndex ? "active" : ""} onMouseEnter={() => setSlashIndex(index)} onMouseDown={(event) => event.preventDefault()} onClick={() => void runSlashCommand(command)}><span className="slash-command-label">{command.label}</span><span className="slash-command-detail">{command.detail}</span></MenuItem>)}
         </MenuSurface>
         <ContextChips items={contextItems} onRemove={onRemoveContext} onClear={() => contextItems.forEach((item) => onRemoveContext(item.id))} />
         <MenuSurface open={Boolean(composerMenu)} onClose={() => setComposerMenu(null)} cursor={composerMenu} placement="bottom-start" width={300} className="composer-context-menu" ariaLabel={t("Composer actions")}>
@@ -3712,6 +3931,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
           <MenuItem icon={<ClipboardPaste size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}V`} onClick={() => { setComposerMenu(null); void pasteFromSystemClipboard(); }}>{t("Paste")}</MenuItem>
         </MenuSurface>
         {composerError && <div id="composer-error" className="composer-attachment-error" role="alert">{composerError}</div>}
+        {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
         <div className="conversation-composer-footer">
           <div className="composer-runtime-switch" aria-label="Runtime location">
             <span className="composer-runtime-local">{t("Local")}</span>
@@ -3720,26 +3940,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
             </button>
           </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          {(availableThinkingEfforts.length > 0 || availableContextLengths.length > 0) && <div className="composer-model-controls" aria-label={t("Model controls")}>
-            {availableThinkingEfforts.length > 0 && <div className="reasoning-effort-picker">
-              <button ref={reasoningTriggerRef} className={reasoningMenuOpen ? "composer-tool reasoning-trigger active" : "composer-tool reasoning-trigger"} onClick={() => { setContextMenuOpen(false); setContextUsageOpen(false); setReasoningMenuOpen((open) => !open); }} title={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-label={`${t("Thinking effort")}: ${reasoningEffortLabel}`} aria-haspopup="menu" aria-expanded={reasoningMenuOpen}>
-                <span className={`reasoning-meter ${reasoningEffort}`} aria-hidden="true"><i /><i /><i /></span><span>{reasoningEffortLabel}</span><ChevronDown size={13} />
-              </button>
-              <MenuSurface open={reasoningMenuOpen} onClose={() => setReasoningMenuOpen(false)} anchorRef={reasoningTriggerRef} placement="top-start" width={220} className="reasoning-effort-menu" ariaLabel={t("Thinking effort")}>
-                <MenuLabel>{t("Thinking effort")}</MenuLabel>
-                {availableThinkingEfforts.map((effort) => <MenuItem key={effort.id} checked={effort.id === reasoningEffort} onClick={() => { onReasoningEffort(effort.id); setReasoningMenuOpen(false); }}>{t(effort.label)}</MenuItem>)}
-              </MenuSurface>
-            </div>}
-            {availableContextLengths.length > 0 && <div className="reasoning-effort-picker">
-              <button ref={contextTriggerRef} className={contextMenuOpen ? "composer-tool context-length-trigger active" : "composer-tool context-length-trigger"} onClick={() => { setReasoningMenuOpen(false); setContextUsageOpen(false); setContextMenuOpen((open) => !open); }} title={`${t("Context length")}: ${contextLengthLabel}`} aria-label={`${t("Context length")}: ${contextLengthLabel}`} aria-haspopup="menu" aria-expanded={contextMenuOpen}>
-                <Gauge size={12} aria-hidden="true" /><span>{contextLengthLabel}</span><ChevronDown size={13} />
-              </button>
-              <MenuSurface open={contextMenuOpen} onClose={() => setContextMenuOpen(false)} anchorRef={contextTriggerRef} placement="top-start" width={220} className="reasoning-effort-menu" ariaLabel={t("Context length")}>
-                <MenuLabel>{t("Context length")}</MenuLabel>
-                {availableContextLengths.map((length) => <MenuItem key={length.id} checked={length.id === contextLength} onClick={() => { onContextLength(length.id); setContextMenuOpen(false); }}>{length.id === "extra-long" ? t("Extra Long") : t("Standard")}</MenuItem>)}
-              </MenuSurface>
-            </div>}
-          </div>}
+          <HarnessPicker backend={nativeBackend ? "codex" : "api"} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
           <button
             className={`composer-tool thread-visibility-trigger ${threadVisibility}`}
             onClick={() => onThreadVisibility(threadVisibility === "private" ? "project" : "private")}
@@ -3758,7 +3959,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
           >
             <Folder size={13} aria-hidden="true" /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : t("No workspace")}</span>
           </button>
-          <div className="context-usage-control">
+          {nativeBackend ? <NativeContextUsage usage={reportedNativeUsage} /> : <div className="context-usage-control">
             <button
               ref={contextUsageTriggerRef}
               type="button"
@@ -3768,7 +3969,7 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
               aria-haspopup="menu"
               aria-expanded={contextUsageOpen}
               title={contextUsageTitle}
-              onClick={() => { setReasoningMenuOpen(false); setContextMenuOpen(false); setContextUsageOpen((open) => !open); }}
+              onClick={() => setContextUsageOpen((open) => !open)}
             >
               <span className="context-usage-value">{contextUsageLabel}</span>
               <span
@@ -3792,8 +3993,9 @@ function ConversationView({ messages, events, trajectoryEvents, workspace, proje
               </div>
               <p className="context-usage-breakdown-note">{t("Approximate character estimate. The final request can differ after context compaction.")}</p>
             </MenuSurface>
-          </div>
+          </div>}
           <div className="composer-send-cluster">
+            {nativeBackend && agentBusy && <button className="composer-tool" type="button" disabled={steering || !canInterrupt || !prompt.trim()} onClick={() => void submitCurrentPrompt()} title={t("Steer Codex")}>{t(steering ? "Sending" : "Steer Codex")}</button>}
             <VoiceInputButton
               onTranscript={appendTranscript}
               onError={setComposerError}

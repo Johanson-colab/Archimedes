@@ -1,4 +1,5 @@
 const { JSDOM } = require("jsdom");
+const { findRepositoryUrl } = require("./paper-repository.cjs");
 const conferences = require("../shared/conferences.json");
 const { matchesDailyTopic } = require("./literature.cjs");
 
@@ -65,7 +66,9 @@ function paperRecord(meta, data) {
     title: data.title, authors: data.authors || [], year: meta.year, venue: `${meta.label} ${meta.year}`,
     abstract: data.abstract || "", url: data.url, pdf_url: data.pdf_url || "", citation_count: 0,
     source: data.source || "official-conference", published_at: "", discovered_at: "",
-    categories: data.categories || [], upvotes: 0, github_url: "", github_stars: 0,
+    categories: data.categories || [], upvotes: 0,
+    github_url: findRepositoryUrl({ paper: { title: data.title, abstract: data.abstract } }).url,
+    github_stars: 0,
     conference: {
       id: meta.id, year: meta.year, presentation: data.presentation || "unknown",
       decision: data.decision || "Accepted", track: data.track || "Main conference",

@@ -68,3 +68,40 @@ test("a read error never takes down the whole preflight", async () => {
   });
   assert.deepEqual(results.map((entry) => entry.status), ["failed", "passed"]);
 });
+
+test("a path written with the repository name in front still resolves", async () => {
+  // READMEs say "git clone … && cd a-evolve", then refer to a-evolve/pyproject.toml.
+  // The checkout root is the repository, so the prefix is not part of the path.
+  const results = await evaluateSteps({
+    steps: [step("clone", { kind: "file_exists", path: "a-evolve/pyproject.toml" })],
+    readFile: async (filePath) => {
+      if (filePath === "pyproject.toml") return "[project]";
+      throw new Error("ENOENT");
+    },
+    repoName: "a-evolve",
+  });
+  assert.equal(results[0].status, "passed");
+  assert.equal(results[0].written, "a-evolve/pyproject.toml");
+  assert.equal(results[0].resolved, "pyproject.toml", "the fallback is reported, not hidden");
+});
+
+test("the written path wins when both readings exist", async () => {
+  const results = await evaluateSteps({
+    steps: [step("clone", { kind: "file_exists", path: "repo/x.txt" })],
+    readFile: async (filePath) => `content:${filePath}`,
+    repoName: "repo",
+  });
+  assert.equal(results[0].resolved, "repo/x.txt");
+});
+
+test("an unrelated leading directory is not stripped to force a match", async () => {
+  const results = await evaluateSteps({
+    steps: [step("data", { kind: "file_exists", path: "benchmarks/data.jsonl" })],
+    readFile: async (filePath) => {
+      if (filePath === "data/data.jsonl") return "{}";
+      throw new Error("ENOENT");
+    },
+    repoName: "data",
+  });
+  assert.equal(results[0].status, "failed");
+});

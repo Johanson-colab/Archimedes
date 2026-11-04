@@ -98,6 +98,41 @@ Stopping a run aborts the in-flight `docker exec` and removes the container.
 Closing the app removes it too: a local Docker run does not survive the app, and
 the UI says so rather than pretending the job is still going.
 
+### M2: bounded diagnosis
+
+A run that stops says where, not why. `electron/reproduction/diagnose.cjs` turns
+the tail of the log into one of eleven causes, and the answer decides whether the
+run may try again.
+
+1. **Rules first.** Missing module, out-of-memory, credentials, network, missing
+   data, wrong command — matched by pattern, quoted with the line that matched.
+   No model call, no cost, no room to invent a cause.
+2. **Model only when the rules are inconclusive**, and only for the explanation
+   and the suggested command. Its evidence must appear verbatim in the log; if it
+   does not, the diagnosis degrades to `unknown` and the run stops.
+3. **Four classes are never retried automatically** — credentials, resources
+   (OOM/disk), missing repository code, ambiguous paper. Those need a person, and
+   retrying them only burns GPU hours.
+
+What a fix may change: one step's `command`. What it may never change: a
+checkpoint, or a verdict. A run that could edit its own checkpoints could turn
+any failure green.
+
+The container stays alive while a diagnosis waits (30 minutes), so applying a fix
+re-runs from the repaired step without paying for the work before it. When the
+run does continue, the old and new command are recorded as a deviation on the
+contract, so a report can say "this run needed two repairs" rather than quietly
+describing a path nobody took.
+
+A repair that is safe by construction is applied **without asking**: renaming an
+interpreter the machine does not have changes no semantics, and a person watching
+a run wants that fixed, not a dialog. The restart is announced (`Attempt 2:
+…`) and recorded as a deviation.
+
+Attempts are capped by `budget.maxFixAttempts` (default 3). At the cap the run
+ends `blocked` with the full chain of attempts, which is more useful than a
+fourth guess.
+
 ## Execution (later milestones)
 
 - The agent stays **local**; only execution is remote. This mirrors
@@ -114,11 +149,11 @@ the UI says so rather than pretending the job is still going.
 | --- | --- | --- |
 | M0 | object, list, paper entry, contract planning, approval (no execution) | done |
 | M1 | local Docker run, queue, log stream, checkpoint verdicts | done |
-| M2 | bounded diagnosis loop, budget enforcement | next |
+| M2 | bounded diagnosis, repair-and-retry, deviations | done |
 | M3 | SSH backends, environment cache, cost watchdog | planned |
 | M4 | batch across papers, aggregate report | planned |
 
-M1 stops short of comparing numbers on purpose: `checks-passed` means the
+M1 and M2 stop short of comparing numbers on purpose: `checks-passed` means the
 runbook ran, not that Table 2 matched. Metric parsing and verdicts arrive with
 M2/M3 once failures have somewhere useful to go.
 

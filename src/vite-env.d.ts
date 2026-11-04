@@ -84,6 +84,11 @@ interface ResearchDeskBridge {
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
+    createResearchThread: (input: { projectId?: string; workspacePath?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
+    forkResearchThread: (threadId: string, workspace?: string, side?: boolean) => Promise<ResearchThreadDetail>;
+    undoResearchTurn: (threadId: string, workspace?: string) => Promise<{ thread: ResearchThreadDetail; prompt: string; backupThreadId: string }>;
+    compactResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
+    exportResearchThread: (threadId: string, workspace?: string) => Promise<{ canceled: boolean; path?: string }>;
     getResearchSnapshot: () => Promise<WorkspaceSnapshot>;
     createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
@@ -112,6 +117,10 @@ interface ResearchDeskBridge {
     testModelConfig: (input: ModelConfigInput, role?: ModelRole) => Promise<ModelConnectionResult>;
     transcribeSpeech: (audio: ArrayBuffer, mimeType: string, language?: string) => Promise<{ text: string }>;
     requestMicrophoneAccess: () => Promise<boolean>;
+    listSshServers: () => Promise<SshServer[]>;
+    saveSshServer: (input: SshServerDraft) => Promise<SshServer>;
+    deleteSshServer: (id: string) => Promise<boolean>;
+    testSshServer: (input: Partial<SshServerDraft>) => Promise<SshServerTest>;
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: (projectId?: string | null) => Promise<ResearchLibrary[]>;
@@ -130,8 +139,10 @@ interface ResearchDeskBridge {
     deleteReproduction: (id: string) => Promise<boolean>;
     planReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
     preflightReproduction: (id: string, workspace?: string) => Promise<ReproductionPreflight>;
-    runReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
+    runReproduction: (id: string, options?: { backend?: "docker" | "ssh"; serverId?: string; workspace?: string }) => Promise<Reproduction>;
     stopReproduction: (id: string) => Promise<boolean>;
+    applyReproductionFix: (id: string) => Promise<Reproduction>;
+    dismissReproductionDiagnosis: (id: string) => Promise<Reproduction>;
     onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
     onReproductionRunEvent?: (callback: (payload: {
       reproductionId?: string;
@@ -141,6 +152,10 @@ interface ResearchDeskBridge {
       chunk?: string;
       status?: string;
       summary?: string;
+      attempt?: number;
+      index?: number;
+      total?: number;
+      diagnosis?: ReproductionDiagnosis | null;
       step?: { id?: string; title?: string; status?: ReproductionRunStepStatus; detail?: string; exit_code?: number | null; duration_ms?: number };
     }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
@@ -169,6 +184,11 @@ interface ResearchDeskBridge {
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
+    getAgentBackendConfig: () => Promise<AgentBackendConfig>;
+    saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
+    checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: NativeAgentModel[]; message: string }>;
+    steerNativeAgent: (threadId: string, text: string, workspace?: string) => Promise<unknown>;
+    answerNativeAgentQuestion: (threadId: string, questionId: string, answers: Record<string, string[]>, workspace?: string) => Promise<unknown>;
     claimApprovals: (threadId: string, claimed: boolean) => Promise<{ claimed: boolean }>;
     runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
     prepareFigurePlan: (input: { paperText: string; pdfData?: string; figureType: string; requirements: string; language: "en" | "zh"; connection?: FigureForgeConnection }) => Promise<{ plan: string; model: string; provider: string; source: "pdf" | "text" }>;
@@ -808,9 +828,46 @@ interface ReproductionContract {
   claims: ReproductionClaim[];
   entrypoint: { command: string; cwd: string; outputs: string[]; evidence: Array<{ path: string; line_count: number }>; unverified: string[] };
   environment: { python: string; cuda: string; install: string[]; system: string[]; source: string };
-  repo: { url: string; commit: string };
+  repo: { url: string; commit: string; branch: string };
   notes: string[];
+  deviations: ReproductionDeviation[];
   frozen_at: string | null;
+}
+
+interface ReproductionDeviation {
+  at: string;
+  attempt: number;
+  step_id: string;
+  from: string;
+  to: string;
+  reason: string;
+  class: string;
+}
+
+interface ReproductionDiagnosis {
+  class: string;
+  confidence: string;
+  evidence: string;
+  cause: string;
+  retry: boolean;
+  fix: { target: string; command: string } | null;
+  id?: string;
+  attempt?: number;
+}
+
+interface ReproductionAttempt {
+  id: string;
+  reproduction_id: string;
+  run_id: string;
+  attempt_no: number;
+  step_id: string;
+  class: string;
+  confidence: string;
+  evidence: string;
+  cause: string;
+  fix: { target: string; command: string } | null;
+  status: string;
+  created_at: string;
 }
 
 interface Reproduction {
@@ -826,6 +883,7 @@ interface Reproduction {
   created_at: string;
   updated_at: string;
   run?: ReproductionRun | null;
+  attempts?: ReproductionAttempt[];
 }
 
 type ReproductionCheckStatus = "passed" | "failed" | "needs-run" | "manual" | "blocked";
@@ -839,6 +897,7 @@ interface ReproductionRunStep {
   detail: string;
   exit_code: number | null;
   duration_ms: number;
+  resolved_path?: string;
 }
 
 type ReproductionRunStatus = "running" | "verified" | "failed" | "blocked" | "manual" | "stopped" | "timeout" | "interrupted";
@@ -860,7 +919,10 @@ interface ReproductionRun {
 
 interface ReproductionPreflight {
   commit: string;
-  results: Array<{ id: string; status: ReproductionCheckStatus; detail: string }>;
+  branch: string;
+  expected_branch: string;
+  branch_mismatch: boolean;
+  results: Array<{ id: string; status: ReproductionCheckStatus; detail: string; resolved?: string; written?: string }>;
 }
 
 interface ReproductionCreateInput { paperId?: string | null; repoUrl?: string; title?: string; budget?: Partial<Reproduction["budget"]> }
@@ -874,6 +936,36 @@ interface DailyDiscoveryResponse {
   cached: boolean;
   stale: boolean;
   warning?: string;
+}
+
+interface SshServer {
+  id: string;
+  name: string;
+  host: string;
+  user: string;
+  port: number;
+  identityFile: string;
+  workspace: string;
+  useDocker: boolean;
+  hasPassword?: boolean;
+  createdAt: string;
+}
+
+interface SshServerDraft {
+  id: string;
+  name: string;
+  host: string;
+  user: string;
+  port: number;
+  identityFile: string;
+  workspace: string;
+  useDocker: boolean;
+  password?: string;
+}
+
+interface SshServerTest {
+  ok: boolean;
+  detail: string;
 }
 
 interface DeepPaperSearchInput {
@@ -1213,6 +1305,7 @@ interface ResearchThread {
   mode: ResearchMode;
   status: string;
   context_summary: string;
+  context_summary_through_turn_id?: string | null;
   workspace_path: string | null;
   pending_actions?: number;
   turn_count: number;
@@ -1321,11 +1414,25 @@ interface AgentAction {
   id: string;
   task_id: string;
   kind: "write" | "command";
-  payload: { path?: string; content?: string; command?: string; cwd?: string; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
+  payload: { path?: string; content?: string; command?: string; cwd?: string; externalAgent?: "codex"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
   status: "pending" | "approved" | "rejected";
   created_at: string;
   resolved_at: string | null;
 }
+
+interface AgentBackendConfig {
+  backend: "api" | "codex";
+  binary: string;
+  model: string;
+  effort?: string;
+  permissionMode?: "read-only" | "workspace-write";
+}
+
+interface NativeAgentModel { id: string; label: string; efforts?: string[]; defaultEffort?: string }
+interface NativeAgentActivity { id: string; kind: string; title: string; detail: string; status: "running" | "completed" | "failed" | "interrupted"; output?: string }
+interface NativeAgentUsage { inputTokens: number; cachedInputTokens: number; outputTokens: number; totalTokens: number; modelContextWindow: number | null; lifetimeTotalTokens?: number }
+interface NativeAgentPlan { explanation: string; steps: Array<{ step: string; status: string }> }
+interface NativeAgentQuestion { id: string; questions: Array<{ id: string; header: string; question: string; isSecret?: boolean; options?: Array<{ label: string; description: string }> }> }
 
 interface AgentRunResult {
   threadId: string;
@@ -1338,7 +1445,7 @@ interface AgentRunResult {
 }
 
 interface AgentEvent {
-  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
   title: string;
   detail: string;
   threadId?: string;
@@ -1346,6 +1453,12 @@ interface AgentEvent {
   delta?: string;
   clientRunId?: string;
   action?: AgentAction;
+  activity?: NativeAgentActivity;
+  usage?: NativeAgentUsage | null;
+  plan?: NativeAgentPlan;
+  diff?: string;
+  question?: NativeAgentQuestion;
+  questionId?: string;
 }
 
 interface PaperReviewInput {

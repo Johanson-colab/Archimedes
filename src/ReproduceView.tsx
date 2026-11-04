@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, ChevronLeft, FlaskConical, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
 
+import { useUISettings } from "./i18n";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
 const STATUS_LABELS: Record<ReproductionStatus, string> = {
@@ -113,6 +114,13 @@ function checkLabel(check: ReproductionStep["check"]) {
   return `${check.url} returns ${check.status}`;
 }
 
+function clockLabel(ms: number) {
+  const total = Math.floor(ms / 1000);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function expectedLabel(claim: ReproductionClaim) {
   if (claim.expected === null) return "no reported value";
   return `${claim.expected}${claim.unit ? ` ${claim.unit}` : ""}`;
@@ -123,20 +131,28 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
+  const { t } = useUISettings();
   const [items, setItems] = useState<Reproduction[]>([]);
   const [detail, setDetail] = useState<Reproduction | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "run" | "stop" | "">("");
+  const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "run" | "stop" | "fix" | "">("");
   const [error, setError] = useState("");
   const [planStatus, setPlanStatus] = useState("");
   const [openClaim, setOpenClaim] = useState<string | null>(null);
-  const [preflight, setPreflight] = useState<Record<string, { status: ReproductionCheckStatus; detail: string }> | null>(null);
+  const [preflight, setPreflight] = useState<Record<string, { status: ReproductionCheckStatus; detail: string; resolved?: string; written?: string }> | null>(null);
+  const [preflightBranch, setPreflightBranch] = useState<{ actual: string; expected: string; mismatch: boolean } | null>(null);
   const [checking, setChecking] = useState(false);
   const [run, setRun] = useState<ReproductionRun | null>(null);
   const [runSteps, setRunSteps] = useState<Record<string, ReproductionRunStep>>({});
   const [liveLog, setLiveLog] = useState("");
   const [running, setRunning] = useState(false);
   const [runLine, setRunLine] = useState("");
+  const [diagnosis, setDiagnosis] = useState<ReproductionDiagnosis | null>(null);
+  const [currentStep, setCurrentStep] = useState<{ index: number; total: number; title: string; startedAt: number } | null>(null);
+  const [clock, setClock] = useState(Date.now());
+  const [servers, setServers] = useState<SshServer[]>([]);
+  const [target, setTarget] = useState(() => window.localStorage.getItem("archimedes-reproduce-target") || "docker");
+  const [attempts, setAttempts] = useState<ReproductionAttempt[]>([]);
   const logRef = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
@@ -166,6 +182,24 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
+    void bridge.listSshServers().then((list) => {
+      setServers(list);
+      // The saved target may point at a server that has since been removed.
+      setTarget((current) => (current !== "docker" && !list.some((server) => server.id === current) ? "docker" : current));
+    }).catch(() => setServers([]));
+  }, [bridge]);
+
+  useEffect(() => {
+    window.localStorage.setItem("archimedes-reproduce-target", target);
+  }, [target]);
+
+  useEffect(() => {
+    if (!running) return undefined;
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+
+  useEffect(() => {
     const off = bridge.onReproductionPlanEvent?.((payload) => {
       if (payload?.detail) setPlanStatus(payload.detail);
     });
@@ -183,18 +217,47 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         setLiveLog((current) => (current + payload.chunk).slice(-200_000));
         return;
       }
+      if (payload.type === "step-start" && payload.step) {
+        setCurrentStep({ index: payload.index || 0, total: payload.total || 0, title: payload.step.title || "", startedAt: Date.now() });
+        return;
+      }
       if (payload.type === "step" && payload.step?.id) {
+        setCurrentStep(null);
         const step = payload.step as ReproductionRunStep;
         setRunSteps((current) => ({ ...current, [step.id]: step }));
         return;
       }
+      if (payload.type === "attempt") {
+        setDiagnosis(null);
+        setRunning(true);
+        setRunLine(payload.attempt ? `Attempt ${payload.attempt}…` : "");
+        return;
+      }
+      if (payload.type === "repair") {
+        // A safe repair was applied without asking; keep the run going and say
+        // what changed so the restart is not a mystery.
+        setDiagnosis(null);
+        setRunning(true);
+        setRunLine(payload.detail || "");
+        return;
+      }
+      if (payload.type === "diagnosis" && payload.diagnosis) {
+        // A live diagnosis is the only one the buttons may act on: after a
+        // restart the container is gone and the suggestion is only history.
+        setDiagnosis(payload.diagnosis);
+        setRunning(false);
+        return;
+      }
       if (payload.type === "finished") {
         setRunning(false);
+        setCurrentStep(null);
+        setDiagnosis(null);
         setRunLine(payload.summary || "");
         void bridge.getReproduction(selectedId).then((record) => {
           if (!record) return;
           setDetail(record);
           setRun(record.run ?? null);
+          setAttempts(record.attempts ?? []);
         }).catch(() => {});
         void refresh();
       }
@@ -215,6 +278,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setLiveLog(previous?.log ?? "");
       setRunning(previous?.status === "running");
       setRunLine("");
+      setDiagnosis(null);
+      setAttempts(record?.attempts ?? []);
     }).catch((detailError) => { if (!cancelled) setError(readable(detailError, "Could not open this reproduction.")); });
     return () => { cancelled = true; };
   }, [bridge, selectedId]);
@@ -284,13 +349,14 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     setError("");
     try {
       const result = await bridge.preflightReproduction(detail.id);
-      setPreflight(Object.fromEntries(result.results.map((entry) => [entry.id, { status: entry.status, detail: entry.detail }])));
+      setPreflight(Object.fromEntries(result.results.map((entry) => [entry.id, { status: entry.status, detail: entry.detail, resolved: entry.resolved, written: entry.written }])));
+      setPreflightBranch({ actual: result.branch, expected: result.expected_branch, mismatch: result.branch_mismatch });
     } catch (checkError) {
       setError(readable(checkError, "Could not check the repository."));
     } finally {
       setChecking(false);
     }
-  }, [bridge, detail]);
+  }, [bridge, detail, target]);
 
   const startRun = useCallback(async () => {
     if (!detail) return;
@@ -300,7 +366,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     setLiveLog("");
     setRunSteps({});
     try {
-      const next = await bridge.runReproduction(detail.id);
+      const next = await bridge.runReproduction(detail.id, target === "docker" ? { backend: "docker" } : { backend: "ssh", serverId: target });
       setDetail(next);
       setRun(next.run ?? null);
       setRunning(true);
@@ -311,7 +377,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     } finally {
       setBusy("");
     }
-  }, [bridge, detail]);
+  }, [bridge, detail, target]);
 
   const stopRun = useCallback(async () => {
     if (!detail) return;
@@ -321,6 +387,38 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setRunLine("Stopping…");
     } catch (stopError) {
       setError(readable(stopError, "The run could not be stopped."));
+    } finally {
+      setBusy("");
+    }
+  }, [bridge, detail]);
+
+  const applyDiagnosis = useCallback(async () => {
+    if (!detail) return;
+    setBusy("fix");
+    setError("");
+    try {
+      const next = await bridge.applyReproductionFix(detail.id);
+      setDetail(next);
+      setDiagnosis(null);
+      setRunning(true);
+      setRunLine("Re-running from the repaired step…");
+    } catch (fixError) {
+      setError(readable(fixError, "The change could not be applied."));
+    } finally {
+      setBusy("");
+    }
+  }, [bridge, detail]);
+
+  const dismissDiagnosis = useCallback(async () => {
+    if (!detail) return;
+    setBusy("fix");
+    try {
+      const next = await bridge.dismissReproductionDiagnosis(detail.id);
+      setDetail(next);
+      setDiagnosis(null);
+      setRunning(false);
+    } catch (dismissError) {
+      setError(readable(dismissError, "The run could not be closed."));
     } finally {
       setBusy("");
     }
@@ -410,6 +508,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
               : null}
           </h2>
           {preflight && <p className="reproduce-preflight-summary">{preflightSummary(preflight)}</p>}
+          {preflightBranch?.mismatch && <p className="reproduce-hint warn">
+            The checkout is on {preflightBranch.actual || "another branch"}, but the plan asks for {preflightBranch.expected}. Re-plan, or generate a plan for the branch that is checked out.
+          </p>}
           <ol className="reproduce-runbook">
             {(contract.steps ?? []).map((step, index) => {
               // A checkpoint nobody has evaluated is not a green tick: it is a
@@ -437,7 +538,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                 {step.source && <p className="reproduce-hint">from {step.source}</p>}
                 {step.blocked && <p className="reproduce-hint warn">{step.blocked}</p>}
                 {preflight?.[step.id]?.detail && preflight[step.id].status === "failed" && <p className="reproduce-hint bad">{preflight[step.id].detail}</p>}
+                {preflight?.[step.id]?.resolved && preflight[step.id].written && preflight[step.id].resolved !== preflight[step.id].written && <p className="reproduce-hint">resolved as {preflight[step.id].resolved}</p>}
                 {runSteps[step.id]?.detail && <p className="reproduce-hint bad">{runSteps[step.id].detail}</p>}
+                {runSteps[step.id]?.resolved_path && step.check.kind !== "manual" && "path" in step.check && runSteps[step.id].resolved_path !== step.check.path && <p className="reproduce-hint">resolved as {runSteps[step.id].resolved_path}</p>}
                 {runSteps[step.id] && (runSteps[step.id].exit_code !== null || runSteps[step.id].duration_ms > 0) && <p className="reproduce-hint">
                   {[runSteps[step.id].exit_code !== null ? `exit ${runSteps[step.id].exit_code}` : "", stepDuration(runSteps[step.id])].filter(Boolean).join(" · ")}
                 </p>}
@@ -452,8 +555,37 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
             {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : "failed"}`}>{RUN_LABELS[run.status]}</span>}
           </h2>
           {run?.backend && <p className="reproduce-hint">{run.backend}</p>}
+          {currentStep && <p className="reproduce-step-running">
+            <LoaderCircle className="spin" size={11} />
+            <span>{currentStep.index > 0 && currentStep.total > 0 ? `${t("Step")} ${currentStep.index} / ${currentStep.total} · ` : ""}{currentStep.title}</span>
+            <span className="reproduce-elapsed">{clockLabel(Math.max(0, clock - currentStep.startedAt))}</span>
+          </p>}
           {runLine && <p className="reproduce-hint">{runLine}</p>}
           {(liveLog || running) && <pre className="reproduce-log" ref={logRef}>{liveLog || "Waiting for output…"}</pre>}
+        </section>}
+
+        {diagnosis && <section className="reproduce-block reproduce-diagnosis">
+          <h2>{t("Diagnosis")}<span className="reproduce-check-status failed">{diagnosis.class.replace(/_/g, " ")}</span></h2>
+          {diagnosis.evidence !== "insufficient" && diagnosis.evidence && <blockquote className="reproduce-diagnosis-evidence">{diagnosis.evidence}</blockquote>}
+          <p className="reproduce-diagnosis-cause">{diagnosis.cause}</p>
+          {diagnosis.fix ? <>
+            <p className="reproduce-hint">{t("Suggested change to step {step}:").replace("{step}", diagnosis.fix.target)}</p>
+            <pre className="reproduce-step-command">{diagnosis.fix.command}</pre>
+            <p className="reproduce-hint">{t("Checkpoints are not changed. Re-running records this as a deviation.")}</p>
+            <div className="reproduce-diagnosis-actions">
+              <button className="primary-button" disabled={busy !== ""} onClick={() => void applyDiagnosis()}>
+                {busy === "fix" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}{t("Apply and re-run")}
+              </button>
+              <button className="secondary-button" disabled={busy !== ""} onClick={() => void dismissDiagnosis()}>{t("Stop here")}</button>
+            </div>
+          </> : <p className="reproduce-hint warn">{t("No safe change to try. This needs a person.")}</p>}
+          {attempts.length > 0 && <ol className="reproduce-attempts">
+            {attempts.map((attempt) => <li key={attempt.id}>
+              <span className="reproduce-attempt-no">#{attempt.attempt_no}</span>
+              <span className="reproduce-attempt-class">{attempt.class.replace(/_/g, " ")}</span>
+              <span className={`reproduce-check-status ${attempt.status === "applied" ? "passed" : "manual"}`}>{attempt.status}</span>
+            </li>)}
+          </ol>}
         </section>}
 
         <section className="reproduce-block">
@@ -508,7 +640,12 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         </div>
 
         <footer className="reproduce-footer">
-          <button className="secondary-button" disabled={busy !== "" || running} onClick={() => void plan()}>
+          <button
+            className="secondary-button"
+            disabled={busy !== "" || running || Boolean(contract.frozen_at)}
+            title={contract.frozen_at ? t("Approved contracts are frozen") : ""}
+            onClick={() => void plan()}
+          >
             {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Re-plan
           </button>
           {contract.frozen_at
@@ -516,13 +653,26 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
               ? <button className="secondary-button" disabled={busy !== ""} onClick={() => void stopRun()}>
                   {busy === "stop" ? <LoaderCircle className="spin" size={14} /> : <Square size={13} />}Stop
                 </button>
-              : <button className="primary-button" disabled={busy !== ""} onClick={() => void startRun()}>
-                  {busy === "run" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}Run runbook
-                </button>
+              : <>
+                  {servers.length > 0 && <select
+                    className="settings-select reproduce-target"
+                    value={target}
+                    aria-label={t("Where to run")}
+                    onChange={(event) => setTarget(event.target.value)}
+                  >
+                    <option value="docker">{t("This Mac (Docker)")}</option>
+                    {servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
+                  </select>}
+                  <button className="primary-button" disabled={busy !== ""} onClick={() => void startRun()}>
+                  {busy === "run" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}
+                  {target === "docker" ? t("Run runbook") : `${t("Run on")} ${servers.find((server) => server.id === target)?.name || t("server")}`}
+                  </button>
+                </>
             : <button className="primary-button" disabled={busy !== ""} onClick={() => void approve()}>
                 <FlaskConical size={14} />Approve and queue
               </button>}
         </footer>
+        {contract.frozen_at && <p className="reproduce-hint">Approved contracts are frozen. Start a new reproduction to plan it differently.</p>}
         {contract.frozen_at && !running && run?.status === "verified" && <p className="reproduce-hint reproduce-queued">Every checkpoint passed. Comparing the reported numbers is the next milestone.</p>}
       </>}
     </section>;
