@@ -84,6 +84,21 @@
   --extension-source: #b19cbb;
   --extension-automation: #bf9b94;
 
+  /* --- News source identity ---------------------------------------------- */
+  --source-hn: #ff7a33;
+  --source-x: #cfd3d8;
+  --source-reddit: #ff5a36;
+  --source-github: #58a6ff;
+  --source-arxiv: #d9655a;
+  --source-lobsters: #9cc9a8;
+  --source-rss: #b9a17f;
+  --lang-typescript: #3178c6;
+  --lang-python: #3572a5;
+  --lang-rust: #dea584;
+  --lang-go: #00add8;
+  --lang-javascript: #f1e05a;
+  --lang-other: #8b949e;
+
   /* --- Layer 3: component tokens (charcoal) ------------------------------- */
   --mono-canvas: #111;
   --mono-sidebar: #1b1b1b;
@@ -283,6 +298,16 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
   --extension-plugin: #7d6747;
   --extension-source: #6e5b79;
   --extension-automation: #7d5b55;
+
+  /* --- News source identity ---------------------------------------------- */
+  --source-hn: #d9541f;
+  --source-x: #24292f;
+  --source-reddit: #d93a00;
+  --source-github: #0969da;
+  --source-arxiv: #b31b1b;
+  --source-lobsters: #2f6b46;
+  --source-rss: #7a5c33;
+  --lang-other: #6e7781;
 
   /* --- Layer 3: component tokens (paper) ---------------------------------- */
   --mono-canvas: #fbfaf8;

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, CalendarDays, FilePenLine, FlaskConical, ImagePlus, Puzzle, Radar } from "lucide-react";
+import { BookOpen, CalendarDays, FilePenLine, FlaskConical, ImagePlus, Newspaper, Puzzle, Radar } from "lucide-react";
 
 export type SidebarSection = "knowledge" | "create";
 
@@ -10,7 +10,7 @@ export type SidebarSection = "knowledge" | "create";
  * already accepts `plugin:<id>` so runtime-registered modules can join this
  * same projection once they land.
  */
-export type SidebarModuleId = "library" | "daily" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation";
+export type SidebarModuleId = "library" | "daily" | "news" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation";
 
 /** Main sections that are not modules: they stay hardcoded in App. */
 export type MainSection = "chat" | "files" | SidebarModuleId | `plugin:${string}`;
@@ -54,6 +54,7 @@ export type SidebarEntry = {
 export const coreSidebarEntries: SidebarEntry[] = [
   { id: "library", commandId: "open-library", section: "knowledge", labelKey: "Library", titleKey: "Library", icon: BookOpen, order: 10, destination: { type: "section", section: "library" }, source: "core", keepMounted: true, cacheClass: "library-view-cache", requiresWorkspace: true },
   { id: "daily", commandId: "open-daily-papers", section: "knowledge", labelKey: "Daily papers", titleKey: "Daily papers", icon: CalendarDays, order: 20, destination: { type: "section", section: "daily" }, source: "core", requiresWorkspace: true },
+  { id: "news", commandId: "open-news", section: "knowledge", labelKey: "News", titleKey: "News", icon: Newspaper, order: 25, destination: { type: "section", section: "news" }, source: "core" },
   { id: "benchmark-radar", commandId: "open-benchmark-radar", section: "knowledge", labelKey: "Benchmark Radar", titleKey: "Benchmark Radar", icon: Radar, order: 30, destination: { type: "section", section: "benchmark-radar" }, source: "core" },
   { id: "extensions", commandId: "open-extensions", section: "knowledge", labelKey: "Extensions", titleKey: "Extensions", icon: Puzzle, order: 40, destination: { type: "section", section: "extensions" }, source: "core" },
   { id: "reproduce", commandId: "open-reproduce", section: "create", labelKey: "Reproduce", titleKey: "Reproduce", icon: FlaskConical, order: 5, destination: { type: "section", section: "reproduce" }, source: "core" },
