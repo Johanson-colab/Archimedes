@@ -4200,9 +4200,16 @@ html[data-titlebar="inset"] .right-workbench .workbench-header button { -webkit-
 .agent-backend-settings .settings-text-input { width: 100%; min-width: 0; }
 .agent-backend-settings .secondary-button { color: var(--night-ink); background: var(--surface-control); border: 1px solid var(--night-line); }
 .agent-backend-settings .secondary-button:hover:not(:disabled) { background: var(--night-panel-raised); }
+.agent-backend-list { display: flex; min-width: 0; flex-direction: column; gap: 14px; }
 .agent-backend-card { overflow: hidden; background: var(--night-panel); border: 1px solid var(--night-line); border-radius: 10px; }
+.agent-backend-card-status { display: flex; flex: 0 1 auto; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.agent-backend-panel[hidden] { display: none; }
+.agent-backend-permissions { margin: 0 20px; padding: 16px 0; border-top: 1px solid var(--night-line-soft); font-size: 12px; line-height: 1.6; }
+.agent-backend-permissions strong { color: var(--night-ink); font-size: 13px; font-weight: 530; }
+.agent-backend-permissions p { margin: 5px 0 0; color: var(--night-muted); overflow-wrap: break-word; }
 .agent-backend-card-toggle { display: flex; width: 100%; align-items: center; gap: 12px; padding: 18px 20px; color: var(--night-ink); background: transparent; text-align: left; }
 .agent-backend-card-toggle:hover { background: var(--night-panel-raised); }
+.agent-backend-card-toggle:disabled { cursor: default; }
 .agent-backend-card-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .agent-backend-card-toggle > .provider-icon { flex: 0 0 auto; }
 .agent-backend-card-toggle > svg { flex: 0 0 auto; color: var(--night-muted); }
@@ -4235,6 +4242,7 @@ html[data-titlebar="inset"] .right-workbench .workbench-header button { -webkit-
   .agent-backend-fields .settings-row + .settings-row { border-top: 1px solid var(--night-line-soft); }
   .agent-backend-actions { padding-inline: 14px; }
   .agent-backend-limits { margin-inline: 14px; }
+  .agent-backend-permissions { margin-inline: 14px; }
   .ui-tabs.model-connection-tabs .ui-tab { padding-inline: 10px; }
 }
 .settings-embedded .provider-list { padding: 2px 14px 12px 0; background: transparent; border-right: 1px solid var(--night-line-soft); }

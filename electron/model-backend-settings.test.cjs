@@ -78,11 +78,20 @@ async function mount(api, role = "agent", strict = false, executionPreferences) 
   await React.act(async () => root.render(strict ? React.createElement(React.StrictMode, null, content) : content));
   return () => React.act(async () => root.unmount());
 }
-const button = (label) => [...document.querySelectorAll("button")].find((node) => node.textContent === label || node.querySelector(".ui-tab-label")?.textContent === label);
-const click = (label) => React.act(async () => { assert.ok(button(label), `button ${label} exists`); button(label).click(); });
+const button = (label) => [...document.querySelectorAll("button")].find((node) => node.textContent === label || node.getAttribute("aria-label") === label || node.querySelector(".ui-tab-label")?.textContent === label);
+async function reveal(node) {
+  const panel = node.closest('.agent-backend-panel');
+  if (panel?.hidden) await React.act(async () => document.querySelector(`[aria-controls="${panel.id}"]`).click());
+}
+async function click(label) {
+  assert.ok(button(label), `button ${label} exists`);
+  await reveal(button(label));
+  await React.act(async () => button(label).click());
+}
 async function input(label, value) {
   const field = [...document.querySelectorAll("label")].find((node) => node.textContent === label);
   const node = document.getElementById(field.htmlFor);
+  await reveal(node);
   await React.act(async () => {
     Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set.call(node, value);
     node.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
@@ -237,6 +246,9 @@ test("agent cards collapse without changing the backend and binary edits invalid
     await click("Harnesses");
     const toggle = document.querySelector(".agent-backend-card-toggle");
     const panel = document.getElementById(toggle.getAttribute("aria-controls"));
+    assert.equal(toggle.getAttribute("aria-expanded"), "false");
+    await React.act(async () => toggle.click());
+    assert.equal(toggle.getAttribute("aria-expanded"), "true");
     await React.act(async () => toggle.click());
     assert.equal(toggle.getAttribute("aria-expanded"), "false");
     assert.equal(panel.hidden, true);
@@ -333,10 +345,13 @@ test("Claude and OpenCode settings use independent drafts and explicit native ac
     assert.equal(calls.checkedBackends.at(-1).backend, "claude");
     assert.equal(calls.checkedBackends.at(-1).permissionMode, "ask");
     await click("OpenCode");
+    assert.equal(document.querySelector('.agent-backend-card[aria-label="Claude Code"] .agent-connection-status').textContent, "Connected");
+    assert.equal(document.querySelector('.agent-backend-card[aria-label="OpenCode"] .agent-connection-status').textContent, "Connection not checked");
     assert.equal(document.querySelector('.agent-backend-fields input').value, "opencode");
     await input("OpenCode model", "provider/model");
     await click("Claude Code");
     assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "sonnet");
+    assert.equal(document.querySelector('datalist option').value, "native-model");
     await click("Use Claude Code");
     assert.equal(calls.savedBackends.at(-1).backend, "claude");
     assert.equal(calls.savedBackends.at(-1).model, "sonnet");
@@ -346,6 +361,29 @@ test("Claude and OpenCode settings use independent drafts and explicit native ac
     assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "sonnet");
     await click("Codex");
     assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "codex-draft");
+  } finally { await cleanup(); }
+});
+
+test("Harnesses are three expandable cards and native permission guidance is readable static copy", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click("Harnesses");
+    const cards = [...document.querySelectorAll('.agent-backend-card')];
+    assert.equal(cards.length, 3);
+    assert.deepEqual(cards.map(card => card.getAttribute('aria-label')), ['Codex', 'Claude Code', 'OpenCode']);
+    assert.ok(cards.every(card => card.querySelector('.agent-backend-panel').hidden));
+    for (const name of ['Claude Code', 'OpenCode']) {
+      await click(name);
+      const card = document.querySelector(`.agent-backend-card[aria-label="${name}"]`);
+      assert.equal(card.querySelector('.agent-backend-card-toggle').getAttribute('aria-expanded'), 'true');
+      assert.ok(card.querySelector('.agent-backend-permissions'));
+      assert.match(card.querySelector('.agent-backend-permissions').textContent, new RegExp(name));
+      assert.doesNotMatch(card.textContent, /Native permissions|Ask for approval/);
+      assert.ok(!card.querySelector('.agent-backend-permissions .settings-row-control'));
+      if (name === 'Claude Code') assert.doesNotMatch(card.querySelector('.agent-backend-fields').textContent, /provider\/model/);
+    }
+    assert.deepEqual(calls.savedBackends, []);
+    assert.deepEqual(calls.checkedBackends, []);
   } finally { await cleanup(); }
 });
 

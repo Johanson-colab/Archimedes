@@ -1,0 +1,106 @@
+[
+  {
+    "theme": "paper",
+    "width": 1100,
+    "state": "collapsed",
+    "cards": 1,
+    "stacked": false,
+    "overflow": false
+  },
+  {
+    "theme": "paper",
+    "width": 1100,
+    "state": "Claude Code",
+    "copyWidth": 0,
+    "cardWidth": 876,
+    "lines": 17,
+    "overflow": false
+  },
+  {
+    "theme": "paper",
+    "width": 1100,
+    "state": "OpenCode",
+    "copyWidth": 0,
+    "cardWidth": 876,
+    "lines": 17,
+    "overflow": false
+  },
+  {
+    "theme": "paper",
+    "width": 680,
+    "state": "collapsed",
+    "cards": 1,
+    "stacked": false,
+    "overflow": false
+  },
+  {
+    "theme": "paper",
+    "width": 680,
+    "state": "Claude Code",
+    "copyWidth": 588,
+    "cardWidth": 618,
+    "lines": 1,
+    "overflow": false
+  },
+  {
+    "theme": "paper",
+    "width": 680,
+    "state": "OpenCode",
+    "copyWidth": 588,
+    "cardWidth": 618,
+    "lines": 1,
+    "overflow": false
+  },
+  {
+    "theme": "charcoal",
+    "width": 1100,
+    "state": "collapsed",
+    "cards": 1,
+    "stacked": false,
+    "overflow": false
+  },
+  {
+    "theme": "charcoal",
+    "width": 1100,
+    "state": "Claude Code",
+    "copyWidth": 0,
+    "cardWidth": 876,
+    "lines": 17,
+    "overflow": false
+  },
+  {
+    "theme": "charcoal",
+    "width": 1100,
+    "state": "OpenCode",
+    "copyWidth": 0,
+    "cardWidth": 876,
+    "lines": 17,
+    "overflow": false
+  },
+  {
+    "theme": "charcoal",
+    "width": 680,
+    "state": "collapsed",
+    "cards": 1,
+    "stacked": false,
+    "overflow": false
+  },
+  {
+    "theme": "charcoal",
+    "width": 680,
+    "state": "Claude Code",
+    "copyWidth": 588,
+    "cardWidth": 618,
+    "lines": 1,
+    "overflow": false
+  },
+  {
+    "theme": "charcoal",
+    "width": 680,
+    "state": "OpenCode",
+    "copyWidth": 588,
+    "cardWidth": 618,
+    "lines": 1,
+    "overflow": false
+  }
+]
