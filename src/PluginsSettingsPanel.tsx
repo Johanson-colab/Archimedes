@@ -3,7 +3,7 @@ import { Download, LoaderCircle, Puzzle, Trash2 } from "lucide-react";
 
 import { useUISettings } from "./i18n";
 import { coreSidebarEntries } from "./sidebar-registry";
-import { SettingsGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
+import { SettingsChoiceGroup, SettingsGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
 
 function readable(value: unknown, fallback: string) {
   const message = value instanceof Error ? value.message : String(value ?? "");
@@ -16,12 +16,14 @@ function readable(value: unknown, fallback: string) {
  * and removing a micro app all happen in this panel, and every change
  * reloads the live sidebar through onPluginsChanged.
  */
-export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChanged, disabledCoreModules, onCoreModuleEnabled }: {
+export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChanged, disabledCoreModules, onCoreModuleEnabled, sidebarLayout, onSidebarLayoutChange }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   onPluginsChanged?: () => void;
   disabledCoreModules: string[];
   onCoreModuleEnabled: (id: string, enabled: boolean) => void;
+  sidebarLayout: "flat" | "tabs" | "sections";
+  onSidebarLayoutChange: (layout: "flat" | "tabs" | "sections") => void;
 }) {
   const { t } = useUISettings();
   const [plugins, setPlugins] = useState<SidebarPluginRecord[]>([]);
@@ -94,6 +96,29 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
   }
 
   return <div className="settings-sections">
+    <SettingsSection title={t("Sidebar layout")}>
+      <SettingsRow
+        stacked
+        description={t("Micro app is one section by default. Group tabs and group sections split it into the Knowledge and Create groups; Work stays a separate section.")}
+      />
+      <SettingsChoiceGroup
+        value={sidebarLayout}
+        label={t("Sidebar layout")}
+        onChange={onSidebarLayoutChange}
+        options={[
+          { value: "flat", label: t("Flat") },
+          { value: "tabs", label: t("Group tabs") },
+          { value: "sections", label: t("Group sections") },
+        ]}
+      />
+      <p className="settings-row-hint">
+        {sidebarLayout === "flat"
+          ? t("All micro apps stay in one list; Knowledge and Create are merged.")
+          : sidebarLayout === "tabs"
+            ? t("A simple text tab row inside Micro app; one group is visible at a time.")
+            : t("Stacked group headings inside Micro app; every group is visible.")}
+      </p>
+    </SettingsSection>
     <SettingsSection title={t("Built-in micro apps")}>
       <SettingsRow
         stacked

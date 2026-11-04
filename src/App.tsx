@@ -1257,6 +1257,8 @@ function App() {
   const setThemePreference = (preset: ThemePreset) => setAppearance((current) => ({ ...current, preset }));
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
+  const [sidebarLayout, setSidebarLayout] = useState<"flat" | "tabs" | "sections">("flat");
+  const [activeModuleGroup, setActiveModuleGroup] = useState<"knowledge" | "create">("knowledge");
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [pluginEntries, setPluginEntries] = useState<SidebarEntry[]>([]);
@@ -1818,6 +1820,7 @@ function App() {
   const refreshSidebarSettings = useCallback(() => {
     desktopBridge.getSidebarSettings().then((settings) => {
       setDisabledCoreModules(settings.disabledCore);
+      setSidebarLayout(settings.layout);
     }).catch(() => undefined);
   }, []);
 
@@ -1835,6 +1838,11 @@ function App() {
   async function setCoreModuleEnabled(id: string, enabled: boolean) {
     const settings = await desktopBridge.setCoreModuleEnabled(id, enabled);
     setDisabledCoreModules(settings.disabledCore);
+  }
+
+  async function setSidebarLayoutMode(layout: "flat" | "tabs" | "sections") {
+    const settings = await desktopBridge.setSidebarLayout(layout);
+    setSidebarLayout(settings.layout);
   }
 
   function openWorkbench(tab: WorkbenchTabId) {
@@ -2868,17 +2876,26 @@ function App() {
   const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : activeModule ? t(activeModule.titleKey) : t("Files");
-  const moduleCommands: PaletteCommand[] = (["knowledge", "create"] as const).flatMap((section) =>
-    sidebarEntries(section)
-      .filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id))
-      .map((entry) => ({
-        id: entry.commandId,
-        group: t(section === "knowledge" ? "Knowledge" : "Create"),
-        label: t(entry.labelKey),
-        icon: <entry.icon size={15} />,
-        run: () => activateSidebarEntry(entry),
-      })),
-  );
+  const moduleGroups = useMemo(() => (["knowledge", "create"] as const).map((id) => ({
+    id,
+    label: id === "knowledge" ? t("Knowledge") : t("Create"),
+    entries: sidebarEntries(id).filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)),
+  })).filter((group) => group.entries.length > 0), [hiddenCoreModules, pluginEntries, t]);
+  const flatModuleEntries = useMemo(() => moduleGroups.flatMap((group) => group.entries), [moduleGroups]);
+  const currentModuleGroup = moduleGroups.find((group) => group.id === activeModuleGroup) ?? moduleGroups[0];
+  const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => {
+    const group = moduleGroups.find((candidate) => candidate.entries.some((item) => item.id === entry.id));
+    return {
+      id: entry.commandId,
+      group: sidebarLayout === "flat" ? t("Micro app") : group?.label ?? t("Micro app"),
+      label: t(entry.labelKey),
+      icon: <entry.icon size={15} />,
+      run: () => activateSidebarEntry(entry),
+    };
+  });
+  const moduleButton = (entry: SidebarEntry) => <button className={mainSection === entry.destination.section ? "codex-nav-item active" : "codex-nav-item"} key={entry.id} onClick={() => activateSidebarEntry(entry)} title={t(entry.labelKey)} disabled={entry.disabled}>
+    <entry.icon size={15} /><span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
+  </button>;
   const paletteCommands: PaletteCommand[] = [
     { id: "new-research", group: t("Work"), label: t("New research task"), detail: t("Start a chat in the current project"), shortcut: "Ctrl N", icon: <Plus size={15} />, run: () => startNewTask() },
     { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
@@ -2934,11 +2951,18 @@ function App() {
         </button>
 
         <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
-          {(["knowledge", "create"] as const).map((section) => <section className={`sidebar-group ${section}-group`} key={section}>
-            <div className="codex-sidebar-label">{t(section === "knowledge" ? "Knowledge" : "Create")}</div>
-            {sidebarEntries(section).filter((entry) => !hiddenCoreModules.has(entry.id)).map((entry) => <button className={mainSection === entry.destination.section ? "codex-nav-item active" : "codex-nav-item"} key={entry.id} onClick={() => activateSidebarEntry(entry)} title={t(entry.labelKey)} disabled={entry.disabled}>
-              <entry.icon size={15} /><span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
-            </button>)}
+          <div className="sidebar-section-label">{t("Micro app")}</div>
+          {sidebarLayout === "flat" && <div className="sidebar-module-list">{flatModuleEntries.map(moduleButton)}</div>}
+          {sidebarLayout === "tabs" && <>
+            <div className="sidebar-group-tabs" role="tablist" aria-label={t("Micro app groups")}>
+              {moduleGroups.map((group) => <button key={group.id} role="tab" aria-selected={currentModuleGroup?.id === group.id} className={currentModuleGroup?.id === group.id ? "sidebar-group-tab active" : "sidebar-group-tab"} onClick={() => setActiveModuleGroup(group.id)}>{group.label}</button>)}
+              <button className="sidebar-group-manage" title={t("Manage micro apps")} aria-label={t("Manage micro apps")} onClick={() => { setSettingsSection("plugins"); setSettingsOpen(true); }}><Plus size={13} /></button>
+            </div>
+            <div className="sidebar-module-list">{(currentModuleGroup?.entries ?? []).map(moduleButton)}</div>
+          </>}
+          {sidebarLayout === "sections" && moduleGroups.map((group) => <section className="sidebar-module-section" key={group.id}>
+            <div className="sidebar-group-name">{group.label}</div>
+            <div className="sidebar-module-list">{group.entries.map(moduleButton)}</div>
           </section>)}
         </nav>
 
@@ -3296,6 +3320,8 @@ function App() {
         onPluginsChanged={refreshSidebarPlugins}
         disabledCoreModules={disabledCoreModules}
         onCoreModuleEnabled={(id, enabled) => void setCoreModuleEnabled(id, enabled).catch(() => undefined)}
+        sidebarLayout={sidebarLayout}
+        onSidebarLayoutChange={(layout) => void setSidebarLayoutMode(layout).catch(() => undefined)}
       />
       {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
         bridge={desktopBridge}

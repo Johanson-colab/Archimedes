@@ -11,21 +11,28 @@ const extensions = fs.readFileSync(path.join(root, "src", "ExtensionsView.tsx"),
 const palette = fs.readFileSync(path.join(root, "src", "CommandPalette.tsx"), "utf8");
 const registry = fs.readFileSync(path.join(root, "src", "sidebar-registry.tsx"), "utf8");
 const pluginRuntime = fs.readFileSync(path.join(root, "src", "plugin-runtime.tsx"), "utf8");
+const settingsPanel = fs.readFileSync(path.join(root, "src", "PluginsSettingsPanel.tsx"), "utf8");
+const preload = fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8");
+const main = fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const i18n = readLocale();
 
-test("sidebar keeps Work below stable Knowledge and Create modules", () => {
+test("sidebar defaults to one flat Micro app section above Work", () => {
   const modules = app.indexOf('<nav className="sidebar-nav sidebar-modules"');
   const work = app.indexOf("<ProjectSidebar");
-  assert.ok(modules > 0 && work > modules, "Knowledge → Create → Work order");
+  assert.ok(modules > 0 && work > modules, "Micro app → Work order");
   assert.match(app, /\["knowledge", "create"\] as const/);
+  assert.match(app, /className="sidebar-section-label">\{t\("Micro app"\)\}/);
+  assert.match(app, /sidebarLayout === "flat" && <div className="sidebar-module-list">\{flatModuleEntries\.map\(moduleButton\)\}/);
+  assert.match(app, /sidebarLayout === "tabs"/);
+  assert.match(app, /sidebarLayout === "sections"/);
   assert.match(registry, /id: "library"[^\n]*labelKey: "Library"/);
   assert.match(registry, /id: "extensions"[^\n]*labelKey: "Extensions"/);
   assert.match(registry, /id: "writing"[^\n]*labelKey: "Paper writing"/);
   assert.match(registry, /id: "image-creation"[^\n]*labelKey: "Image creation"/);
   assert.doesNotMatch(registry, /id: "gallery"/);
   assert.doesNotMatch(registry, /badge: "Soon"[^\n]*disabled: true/);
-  assert.match(app, /sidebarEntries\(section\)\.filter\(\(entry\) => !hiddenCoreModules\.has\(entry\.id\)\)\.map/);
+  assert.match(app, /sidebarEntries\(id\)\.filter\(\(entry\) => !entry\.disabled && !hiddenCoreModules\.has\(entry\.id\)\)/);
 });
 
 test("navigation is registry-driven and every entry has a command", () => {
@@ -33,8 +40,8 @@ test("navigation is registry-driven and every entry has a command", () => {
   assert.ok(registry.includes('source?: "core" | `plugin:${string}`'));
   assert.match(registry, /commandId: string/);
   assert.match(registry, /destination: \{ type: "section"; section: MainSection \}/);
-  assert.match(app, /sidebarEntries\(section\)/);
-  assert.match(app, /flatMap\(\(section\)/);
+  assert.match(app, /sidebarEntries\(id\)/);
+  assert.match(app, /flatModuleEntries/);
 });
 
 test("sidebar modules are declared with mount semantics, not scattered conditions", () => {
@@ -80,7 +87,8 @@ test("Work rows are text-only with a folded filter and state labels", () => {
   assert.doesNotMatch(sidebar, /<Folder size=\{14\}/);
   assert.match(sidebar, /<span className="project-name">\{project\.name\}<\/span>/);
   assert.match(sidebar, /projectThreads\.length > 0 && <small>/);
-  assert.match(sidebar, /work-filter-button/);
+  assert.match(sidebar, /work-more-button/);
+  assert.match(sidebar, /<MenuLabel>\{t\("Filter"\)\}<\/MenuLabel>/);
   assert.match(sidebar, /t\("All work"\)/);
   assert.match(sidebar, /t\("Running"\)/);
   assert.match(sidebar, /t\("Needs review"\)/);
@@ -90,6 +98,27 @@ test("Work rows are text-only with a folded filter and state labels", () => {
   assert.match(sidebar, /className="work-status review"/);
   assert.match(sidebar, /thread\.status === "error"\) return "failed"/);
   assert.match(sidebar, /className="work-status failed"/);
+});
+
+test("sidebar layout modes are switchable from Micro apps settings", () => {
+  assert.match(settingsPanel, /t\("Sidebar layout"\)/);
+  assert.match(settingsPanel, /\{ value: "flat", label: t\("Flat"\) \}/);
+  assert.match(settingsPanel, /\{ value: "tabs", label: t\("Group tabs"\) \}/);
+  assert.match(settingsPanel, /\{ value: "sections", label: t\("Group sections"\) \}/);
+  assert.match(settingsPanel, /<SettingsChoiceGroup/);
+  assert.match(preload, /setSidebarLayout: \(layout\) => ipcRenderer\.invoke\("sidebar:set-layout", \{ layout \}\)/);
+  assert.match(main, /sidebar:set-layout/);
+  assert.match(app, /setSidebarLayoutMode\(layout\)/);
+});
+
+test("section labels match project-row typography and Filter lives in More", () => {
+  assert.match(css, /\.sidebar-section-label \{[^}]*font-size: 14px; font-weight: 400/);
+  assert.match(css, /\.work-heading \{[^}]*font-size: 14px; font-weight: 400/);
+  assert.match(css, /\.sidebar-group-name \{[^}]*font-size: 14px; font-weight: 400/);
+  assert.match(css, /\.work-more-button/);
+  assert.doesNotMatch(css, /\.work-heading \{[^}]*font-size: 10px/);
+  assert.match(sidebar, /<MenuLabel>\{t\("Filter"\)\}<\/MenuLabel>/);
+  assert.match(sidebar, /onNewProject\(\)/);
 });
 
 test("a selected session does not keep its project highlighted", () => {

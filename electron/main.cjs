@@ -828,6 +828,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("plugins:remove", (_event, input = {}) => sidebarPlugins.removePlugin(String(input?.id || "")));
   ipcMain.handle("sidebar:get-settings", () => sidebarSettings.getSettings());
   ipcMain.handle("sidebar:set-core-enabled", (_event, input = {}) => sidebarSettings.setCoreEnabled(String(input?.id || ""), Boolean(input?.enabled)));
+  ipcMain.handle("sidebar:set-layout", (_event, input = {}) => sidebarSettings.setLayout(String(input?.layout || "flat")));
   ipcMain.handle("extensions:read-local", (_event, input = {}) => {
     const target = path.resolve(String(input.path || ""));
     if (!allowedContextPaths.has(target)) throw new Error("This skill is not available in the current context.");
