@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-10-31",
+  "updatedAt": "2026-11-04",
   "items": [
     {
       "id": "archimedes/paper-review",
@@ -11,7 +11,10 @@
       "author": "Archimedes",
       "license": "MIT",
       "homepage": "https://github.com/Johanson-colab/Archimedes",
-      "permissions": ["read:workspace", "write:artifacts"],
+      "permissions": [
+        "read:workspace",
+        "write:artifacts"
+      ],
       "installs": 1284,
       "updatedAt": "2026-10-18",
       "files": [
@@ -30,7 +33,11 @@
       "author": "Archimedes",
       "license": "MIT",
       "homepage": "https://github.com/Johanson-colab/Archimedes",
-      "permissions": ["read:workspace", "network:search", "write:artifacts"],
+      "permissions": [
+        "read:workspace",
+        "network:search",
+        "write:artifacts"
+      ],
       "installs": 986,
       "updatedAt": "2026-10-12",
       "files": [
@@ -49,7 +56,10 @@
       "author": "Archimedes",
       "license": "MIT",
       "homepage": "https://github.com/Johanson-colab/Archimedes",
-      "permissions": ["read:workspace", "write:artifacts"],
+      "permissions": [
+        "read:workspace",
+        "write:artifacts"
+      ],
       "installs": 742,
       "updatedAt": "2026-10-08",
       "files": [
@@ -68,7 +78,11 @@
       "author": "Archimedes",
       "license": "MIT",
       "homepage": "https://github.com/Johanson-colab/Archimedes",
-      "permissions": ["read:workspace", "execute:commands", "write:workspace"],
+      "permissions": [
+        "read:workspace",
+        "execute:commands",
+        "write:workspace"
+      ],
       "installs": 611,
       "updatedAt": "2026-09-29",
       "files": [
@@ -87,14 +101,20 @@
       "author": "Zotero community",
       "license": "AGPL-3.0",
       "homepage": "https://www.zotero.org/",
-      "permissions": ["read:library", "local:network"],
+      "permissions": [
+        "read:library",
+        "local:network"
+      ],
       "installs": 2306,
       "updatedAt": "2026-10-21",
       "config": {
         "mcpServers": {
           "zotero": {
             "command": "npx",
-            "args": ["-y", "@zotero/mcp-server"]
+            "args": [
+              "-y",
+              "@zotero/mcp-server"
+            ]
           }
         }
       }
@@ -108,7 +128,11 @@
       "author": "Archimedes",
       "license": "MIT",
       "homepage": "https://www.overleaf.com/",
-      "permissions": ["read:workspace", "write:workspace", "network:overleaf"],
+      "permissions": [
+        "read:workspace",
+        "write:workspace",
+        "network:overleaf"
+      ],
       "installs": 438,
       "updatedAt": "2026-10-02",
       "config": {
@@ -125,7 +149,10 @@
       "author": "Archimedes",
       "license": "MIT",
       "homepage": "https://github.com/Johanson-colab/Archimedes",
-      "permissions": ["network:search", "write:artifacts"],
+      "permissions": [
+        "network:search",
+        "write:artifacts"
+      ],
       "installs": 355,
       "updatedAt": "2026-09-24",
       "config": {
@@ -142,11 +169,17 @@
       "author": "Archimedes",
       "license": "MIT",
       "homepage": "https://github.com/Johanson-colab/Archimedes",
-      "permissions": ["read:workspace", "execute:git"],
+      "permissions": [
+        "read:workspace",
+        "execute:git"
+      ],
       "installs": 276,
       "updatedAt": "2026-10-19",
       "config": {
-        "commands": ["git status --short", "git diff --check"]
+        "commands": [
+          "git status --short",
+          "git diff --check"
+        ]
       }
     },
     {
@@ -158,17 +191,50 @@
       "author": "Semantic Scholar",
       "license": "Apache-2.0",
       "homepage": "https://www.semanticscholar.org/",
-      "permissions": ["network:api"],
+      "permissions": [
+        "network:api"
+      ],
       "installs": 1902,
       "updatedAt": "2026-10-15",
       "config": {
         "mcpServers": {
           "semantic-scholar": {
             "command": "npx",
-            "args": ["-y", "@semanticscholar/mcp-server"]
+            "args": [
+              "-y",
+              "@semanticscholar/mcp-server"
+            ]
           }
         }
       }
+    },
+    {
+      "id": "archimedes/focus-timer",
+      "name": "Focus Timer",
+      "type": "ui-plugin",
+      "description": "A 25-minute focus sprint as a sidebar module. A minimal example of the runtime plugin format.",
+      "version": "1.0.0",
+      "author": "Archimedes",
+      "license": "MIT",
+      "homepage": "https://github.com/Johanson-colab/Archimedes",
+      "permissions": [],
+      "installs": 128,
+      "updatedAt": "2026-11-04",
+      "engine": ">=0.1",
+      "checksums": {
+        "manifest.json": "bac0922fb59fea2c20dcc6f161d58360d058665cdd61916e4dcc1102b5f0ae73",
+        "main.mjs": "54d771fdb19da7e34b3cdcbc35484aa50fff3c22d1ab4b175ff6027e3a3f81be"
+      },
+      "files": [
+        {
+          "path": "manifest.json",
+          "content": "{\n  \"id\": \"focus-timer\",\n  \"name\": \"Focus Timer\",\n  \"version\": \"1.0.0\",\n  \"section\": \"create\",\n  \"icon\": \"timer\",\n  \"entry\": \"main.mjs\",\n  \"engine\": \">=0.1\",\n  \"title\": \"Focus Timer\"\n}\n"
+        },
+        {
+          "path": "main.mjs",
+          "content": "let remaining = 25 * 60;\nlet running = false;\n\nexport function activate(context) {\n  const h = context.h;\n  setInterval(() => {\n    if (running && remaining > 0) {\n      remaining -= 1;\n      context.refresh();\n    }\n  }, 1000);\n  return {\n    view() {\n      const minutes = String(Math.floor(remaining / 60)).padStart(2, \"0\");\n      const seconds = String(remaining % 60).padStart(2, \"0\");\n      return h(\"div\", { className: \"plugin-focus-timer\" },\n        h(\"h2\", null, \"Focus timer\"),\n        h(\"p\", { className: \"plugin-focus-clock\" }, minutes + \":\" + seconds),\n        h(\"p\", { className: \"plugin-focus-hint\" }, \"A 25-minute writing sprint. The timer keeps running while Archimedes is open.\"),\n        h(\"div\", { className: \"plugin-focus-actions\" },\n          h(\"button\", { type: \"button\", className: \"plugin-focus-button\", onClick: () => { running = !running; context.refresh(); } }, running ? \"Pause\" : \"Start\"),\n          h(\"button\", { type: \"button\", className: \"plugin-focus-button\", onClick: () => { running = false; remaining = 25 * 60; context.refresh(); } }, \"Reset\")));\n    },\n  };\n}\n"
+        }
+      ]
     }
   ]
 }

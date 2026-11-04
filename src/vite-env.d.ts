@@ -67,8 +67,11 @@ interface ResearchDeskBridge {
     listExtensions: (input: { workspace?: string; limit?: number; refresh?: boolean }) => Promise<ExtensionFeed>;
     previewExtension: (input: { id: string; workspace?: string }) => Promise<ExtensionPreview>;
     installExtension: (input: { id: string; workspace?: string; scope?: "workspace" | "global" }) => Promise<ExtensionInstallResult>;
-    listInstalledExtensions: (workspace?: string) => Promise<{ skills: ContextAttachment[]; plugins: ContextAttachment[] }>;
+    listInstalledExtensions: (workspace?: string) => Promise<{ skills: ContextAttachment[]; plugins: ContextAttachment[]; uiPlugins: SidebarPluginRecord[] }>;
     readExtensionFile: (path: string, workspace?: string) => Promise<{ filename: string; content: string }>;
+    listSidebarPlugins: () => Promise<SidebarPluginRecord[]>;
+    setSidebarPluginEnabled: (id: string, enabled: boolean) => Promise<SidebarPluginRecord[]>;
+    removeSidebarPlugin: (id: string) => Promise<SidebarPluginRecord[]>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
     listWorkspaceFiles: (workspace: string, directory?: string) => Promise<WorkspaceFileTree>;
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
@@ -213,6 +216,8 @@ interface ResearchDeskBridge {
     stopTerminal: (sessionId: string) => Promise<void>;
     getJourneySettings: () => Promise<JourneySettings>;
     getWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
+    getSidebarSettings: () => Promise<{ version: number; disabledCore: string[] }>;
+    setCoreModuleEnabled: (id: string, enabled: boolean) => Promise<{ version: number; disabledCore: string[] }>;
     saveWorkbenchSettings: (input: { version?: number; order: string[]; hidden: string[] }) => Promise<{ version: number; order: string[]; hidden: string[] }>;
     resetWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
     getWorkbenchNote: (key: string) => Promise<{ content: string; updatedAt: string | null }>;
@@ -274,7 +279,7 @@ interface SkillDetail extends SkillSummary {
   content: string;
 }
 
-type ExtensionType = "skill" | "mcp" | "plugin" | "source" | "automation";
+type ExtensionType = "skill" | "mcp" | "plugin" | "source" | "automation" | "ui-plugin";
 
 type ExtensionSourceType = "archimedes" | "json" | "github" | "mcp" | "npm";
 
@@ -315,11 +320,29 @@ interface ExtensionMarketplaceItem {
   config?: Record<string, unknown> | null;
   repo?: string;
   packageName?: string;
+  engine?: string;
+  checksums?: Record<string, string> | null;
   installed?: boolean;
   installedVersion?: string;
   installedPath?: string;
   installedScope?: "workspace" | "global" | "";
   updateAvailable?: boolean;
+}
+
+interface SidebarPluginRecord {
+  id: string;
+  name: string;
+  version: string;
+  section: "knowledge" | "create" | "";
+  icon: string;
+  entry: string;
+  title?: string;
+  engine?: string;
+  enabled: boolean;
+  installedAt?: string;
+  source?: string;
+  path?: string;
+  error?: string;
 }
 
 interface ExtensionFeed {

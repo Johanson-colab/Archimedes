@@ -11,8 +11,9 @@ const MAX_ITEMS = 72;
 const MAX_FILE_BYTES = 500_000;
 const MAX_PREVIEW_CHARS = 16_000;
 
-const TYPES = new Set(["skill", "mcp", "plugin", "source", "automation"]);
+const TYPES = new Set(["skill", "mcp", "plugin", "source", "automation", "ui-plugin"]);
 const SOURCE_TYPES = new Set(["archimedes", "json", "github", "mcp", "npm"]);
+const sidebarPlugins = require("./sidebar-plugins.cjs");
 
 const DEFAULT_SOURCES = [
   {
@@ -265,8 +266,14 @@ function normalizeItem(input, source) {
     config: input.config && typeof input.config === "object" ? input.config : null,
     repo: safeString(input.repo, 300),
     packageName: safeString(input.packageName, 300),
+    engine: safeString(input.engine, 40),
+    checksums: normalizeChecksums(input.checksums),
   };
   return item;
+}
+
+function normalizeChecksums(value) {
+  return sidebarPlugins.normalizeChecksums ? sidebarPlugins.normalizeChecksums(value) : null;
 }
 
 function catalogItems(source, limit) {
@@ -462,8 +469,9 @@ function installedMetadata(workspace) {
 
 function decorateItems(items, workspace) {
   const installed = installedMetadata(workspace);
+  const uiInstalled = sidebarPlugins.installedIndex();
   return items.map((item) => {
-    const local = installed.get(item.id);
+    const local = installed.get(item.id) || uiInstalled.get(item.id);
     const available = Boolean(local);
     return {
       ...item,
@@ -562,16 +570,17 @@ function safeSlug(item) {
   return String(raw || item.name).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "extension";
 }
 
-async function installExtension({ id, workspace, scope = "workspace" } = {}) {
+async function installExtension({ id, workspace, scope = "workspace", hostVersion } = {}) {
   const targetId = safeString(id, 300);
   if (!targetId) throw new Error("Choose an extension to install.");
-  if (!workspace) throw new Error("Open a workspace before installing an extension.");
   let item = lastFeed.items.find((candidate) => candidate.id === targetId);
   if (!item) {
     const feed = await listExtensions({ workspace, limit: 72 });
     item = feed.items.find((candidate) => candidate.id === targetId);
   }
   if (!item) throw new Error("This extension is no longer in the current feed.");
+  if (item.type === "ui-plugin") return sidebarPlugins.installUiPlugin(item, { hostVersion });
+  if (!workspace) throw new Error("Open a workspace before installing an extension.");
   if (item.type !== "skill") throw new Error("Only skill packages can be installed from this release. Open the source to install other extension types.");
   if (!item.files?.length) throw new Error("This skill does not include installable files.");
   const root = scope === "global"

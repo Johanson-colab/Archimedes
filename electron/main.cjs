@@ -19,6 +19,7 @@ const terminalSettings = require("./terminal-settings.cjs");
 const journeySettings = require("./journey-settings.cjs");
 const journeySnapshots = require("./journey-snapshots.cjs");
 const workbenchSettings = require("./workbench-settings.cjs");
+const sidebarSettings = require("./sidebar-settings.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
@@ -67,6 +68,7 @@ const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github
 const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");
 const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");
 const extensionMarketplace = require("./extensions-marketplace.cjs");
+const sidebarPlugins = require("./sidebar-plugins.cjs");
 
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
@@ -82,10 +84,16 @@ let browserSessionHardened = false;
 
 app.setName("Archimedes");
 app.setAppUserModelId("com.archimedes.research");
-protocol.registerSchemesAsPrivileged([{
-  scheme: "archimedes-file",
-  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
-}]);
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "archimedes-file",
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+  {
+    scheme: "archimedes-plugin",
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+]);
 
 function cleanTerminalEnvironment() {
   return Object.fromEntries(Object.entries({
@@ -620,6 +628,8 @@ app.whenReady().then(async () => {
   workbenchSettings.initialize(app.getPath("userData"));
   workbenchNotes.initialize(app.getPath("userData"));
   extensionMarketplace.initialize(app.getPath("userData"));
+  sidebarPlugins.initialize(app.getPath("userData"));
+  sidebarSettings.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());
   const authStorageValues = new Map();
@@ -678,6 +688,21 @@ app.whenReady().then(async () => {
       return net.fetch(pathToFileURL(target).toString());
     } catch {
       return new Response("File preview unavailable.", { status: 404 });
+    }
+  });
+  protocol.handle("archimedes-plugin", (request) => {
+    try {
+      const url = new URL(request.url);
+      const target = sidebarPlugins.resolvePluginFile(url.hostname, decodeURIComponent(url.pathname.slice(1)));
+      if (!target) return new Response("Plugin file not found.", { status: 404 });
+      if (fs.statSync(target).size > 5_000_000) return new Response("Plugin file is too large.", { status: 413 });
+      const type = path.extname(target).toLowerCase();
+      const mime = { ".mjs": "text/javascript", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".html": "text/html", ".svg": "image/svg+xml", ".png": "image/png" }[type] ?? "application/octet-stream";
+      return new Response(fs.readFileSync(target), {
+        headers: { "content-type": mime, "access-control-allow-origin": "*" },
+      });
+    } catch {
+      return new Response("Plugin file unavailable.", { status: 404 });
     }
   });
 
@@ -789,13 +814,20 @@ app.whenReady().then(async () => {
   }));
   ipcMain.handle("extensions:install", (_event, input = {}) => extensionMarketplace.installExtension({
     id: input.id,
-    workspace: resolveWorkspace(input.workspace),
+    workspace: input.workspace ? resolveWorkspace(input.workspace) : "",
     scope: input.scope === "global" ? "global" : "workspace",
+    hostVersion: app.getVersion(),
   }));
   ipcMain.handle("extensions:list-installed", (_event, input = {}) => ({
     skills: installedSkills(resolveWorkspace(input.workspace)),
     plugins: installedPlugins(),
+    uiPlugins: sidebarPlugins.listPlugins(),
   }));
+  ipcMain.handle("plugins:list", () => sidebarPlugins.listPlugins());
+  ipcMain.handle("plugins:set-enabled", (_event, input = {}) => sidebarPlugins.setEnabled(String(input?.id || ""), Boolean(input?.enabled)));
+  ipcMain.handle("plugins:remove", (_event, input = {}) => sidebarPlugins.removePlugin(String(input?.id || "")));
+  ipcMain.handle("sidebar:get-settings", () => sidebarSettings.getSettings());
+  ipcMain.handle("sidebar:set-core-enabled", (_event, input = {}) => sidebarSettings.setCoreEnabled(String(input?.id || ""), Boolean(input?.enabled)));
   ipcMain.handle("extensions:read-local", (_event, input = {}) => {
     const target = path.resolve(String(input.path || ""));
     if (!allowedContextPaths.has(target)) throw new Error("This skill is not available in the current context.");
