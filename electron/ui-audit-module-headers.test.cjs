@@ -32,11 +32,14 @@ test("module-specific title headers are removed", () => {
   assert.match(library, /className="library-page daily-page">\s*<div className="daily-feed-toolbar/);
 });
 
-test("library and extensions rely on the toolbar instead of a second title block", () => {
+test("library actions live on the library canvas while extensions stay headerless", () => {
   assert.doesNotMatch(library, /Knowledge base<\/span><h1>Literature library/);
   assert.doesNotMatch(library, /Curated research directions/);
-  assert.doesNotMatch(library, /className="library-page-header"/);
-  assert.match(library, /<ToolbarActions active=\{active\}><button className="primary-button"[^>]*>.*New library/);
+  assert.doesNotMatch(library, /ToolbarActions/);
+  assert.match(library, /className="library-page-toolbar"/);
+  assert.match(library, /library-page-actions[\s\S]{0,400}New library/);
+  assert.match(library, /library-page-actions[\s\S]{0,700}Sync cloud/);
+  assert.match(css, /\.library-page-toolbar \{[^}]*justify-content: space-between/);
   assert.doesNotMatch(extensions, /extensions-heading/);
   assert.doesNotMatch(extensions, /Everything that changes what the Agent can do/);
 });
