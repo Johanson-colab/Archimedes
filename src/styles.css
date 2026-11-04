@@ -5068,7 +5068,7 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
   color: var(--night-ink);
   background: var(--night-ground);
 }
-.image-creation-tabs { display: flex; min-width: 0; align-items: center; gap: 22px; border-bottom: 1px solid var(--night-line); }
+.image-creation-tabs { display: flex; min-width: 0; align-items: center; gap: 22px; border-bottom: 0; }
 .image-creation-tab {
   position: relative; display: inline-flex; min-height: 44px; align-items: center; gap: 7px;
   padding: 0 1px; color: var(--night-muted); background: none; border: 0;
@@ -5077,7 +5077,7 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 .image-creation-tab:hover { color: var(--night-ink); }
 .image-creation-tab.active { color: var(--night-ink); }
 .image-creation-tab.active::after {
-  position: absolute; right: 0; bottom: -1px; left: 0; height: 2px;
+  position: absolute; right: 0; bottom: 0; left: 0; height: 2px;
   background: var(--accent); border-radius: 2px; content: "";
 }
 .image-creation-tab small { color: var(--night-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -5101,7 +5101,7 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 }
 .image-creation-proceedings:hover { color: var(--night-ink); border-color: var(--night-faint); }
 .image-creation-panel { min-width: 0; }
-.image-creation-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; margin: 14px 0 15px; }
+.image-creation-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; margin: 12px 0 15px; }
 .image-creation-search { height: 38px; }
 .image-creation-filter { position: relative; }
 .image-creation-filter-button {
@@ -8164,4 +8164,11 @@ html[data-menu-style="glass"] .menu-surface {
   .library-page-toolbar { align-items: flex-start; flex-direction: column; gap: 10px; }
   .library-page-actions { width: 100%; }
   .library-page-actions .primary-button, .library-page-actions .secondary-button { flex: 1; justify-content: center; }
+}
+
+/* One canvas per workspace: knowledge and create pages inherit the shell
+   background instead of painting a second near-white layer. Cards and panels
+   keep their own surface so hierarchy stays visible. */
+.main-view.knowledge-main :is(.library-page, .skills-page, .benchmark-radar-page, .image-creation-page, .reproduce-page, .paper-writing-page, .artifacts-page, .gallery-page) {
+  background: transparent;
 }
