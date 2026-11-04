@@ -1719,6 +1719,7 @@ interface BenchmarkRadarDirection {
 }
 
 interface BenchmarkRadarData {
+  source: "local" | "remote" | "cached" | "bundled";
   sourceRoot: string;
   updatedAt: string;
   radar: BenchmarkRadarRecord[];

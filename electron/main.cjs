@@ -1546,7 +1546,10 @@ app.whenReady().then(async () => {
     return deepSearchPapers(input, { modelConfig: modelConfig.getActiveModelConfig() });
   });
 
-  ipcMain.handle("benchmark-radar:get-data", () => getBenchmarkRadarData());
+  ipcMain.handle("benchmark-radar:get-data", () => getBenchmarkRadarData({
+    cachePath: path.join(app.getPath("userData"), "benchmark-radar", "public-index.json"),
+    seedPath: path.join(__dirname, "assets", "benchmark-radar", "public-index.json"),
+  }));
 
   ipcMain.handle("library:add-paper", (_event, { libraryId, paper }) => {
     if (typeof libraryId !== "string" || !paper || typeof paper.title !== "string" || !paper.title.trim()) {
