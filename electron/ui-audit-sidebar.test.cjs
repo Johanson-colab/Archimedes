@@ -10,6 +10,7 @@ const sidebar = fs.readFileSync(path.join(root, "src", "ProjectSidebar.tsx"), "u
 const extensions = fs.readFileSync(path.join(root, "src", "ExtensionsView.tsx"), "utf8");
 const palette = fs.readFileSync(path.join(root, "src", "CommandPalette.tsx"), "utf8");
 const registry = fs.readFileSync(path.join(root, "src", "sidebar-registry.tsx"), "utf8");
+const pluginRuntime = fs.readFileSync(path.join(root, "src", "plugin-runtime.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const i18n = readLocale();
 
@@ -51,6 +52,18 @@ test("sidebar modules are declared with mount semantics, not scattered condition
   assert.match(app, /entry\.keepMounted/);
   assert.match(app, /lazy\(\(\) => import\("\.\/LibraryView"\)\)/);
   assert.doesNotMatch(app, /import LibraryView from "\.\/LibraryView"/);
+});
+
+test("runtime plugins flow through the same registry projection", () => {
+  assert.match(registry, /export function registerPluginEntries/);
+  assert.match(registry, /SidebarModuleId \| `plugin:\$\{string\}`/);
+  assert.match(registry, /plugin\?: PluginContribution/);
+  assert.match(pluginRuntime, /archimedes-plugin:\/\//);
+  assert.match(pluginRuntime, /export async function loadSidebarPlugins/);
+  assert.match(pluginRuntime, /registerPluginEntries\(entries\)/);
+  assert.match(pluginRuntime, /source: `plugin:\$\{record\.id\}`/);
+  assert.match(app, /loadSidebarPlugins\(desktopBridge\)/);
+  assert.match(app, /PluginModuleView key=\{entry\.id\} entry=\{entry\}/);
 });
 
 test("Files and Artifacts leave the sidebar but stay command reachable", () => {

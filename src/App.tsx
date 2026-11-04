@@ -32,6 +32,7 @@ import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";
+import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
 import ChangesView from "./ChangesView";
 import NotesView from "./NotesView";
@@ -1105,6 +1106,9 @@ const previewBridge = {
   runPaperPresentation: async () => { throw new Error("Paper presentations run in the desktop app."); },
   revealPaperPresentation: async () => undefined,
   listReproductions: async () => [],
+  listSidebarPlugins: async () => [],
+  setSidebarPluginEnabled: async () => [],
+  removeSidebarPlugin: async () => [],
   onMenuNewChat: () => () => undefined,
   onMenuOpenFolder: () => () => undefined,
   onWorkspaceFilesChanged: (callback: (payload: { path: string }) => void) => {
@@ -1255,6 +1259,7 @@ function App() {
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
+  const [pluginEntries, setPluginEntries] = useState<SidebarEntry[]>([]);
   const [reproduceId, setReproduceId] = useState<string | null>(null);
   const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("installed");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1798,6 +1803,14 @@ function App() {
     window.addEventListener("keydown", handleWorkbenchShortcut);
     return () => window.removeEventListener("keydown", handleWorkbenchShortcut);
   }, [workbenchOpen]);
+
+  useEffect(() => {
+    let active = true;
+    loadSidebarPlugins(desktopBridge).then((entries) => {
+      if (active) setPluginEntries(entries);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   function openWorkbench(tab: WorkbenchTabId) {
     setWorkbenchTab(tab);
@@ -2866,7 +2879,7 @@ function App() {
   // once here and projected by the host loop in the render below. Activate /
   // mount gating (keepMounted · cacheClass · requiresWorkspace · open gate)
   // comes from the module registry, not from scattered conditions.
-  const sidebarModuleContent: Record<SidebarModuleId, ReactNode> = {
+  const sidebarModuleContent: Record<string, ReactNode> = {
     library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     daily: <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     "benchmark-radar": <BenchmarkRadarView />,
@@ -2875,7 +2888,10 @@ function App() {
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
     writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
   };
-  const sidebarModuleOpen: Partial<Record<SidebarModuleId, boolean>> = { "image-creation": imageCreationOpened };
+  for (const entry of pluginEntries) {
+    sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;
+  }
+  const sidebarModuleOpen: Partial<Record<string, boolean>> = { "image-creation": imageCreationOpened };
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
@@ -3024,7 +3040,7 @@ function App() {
           {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
           <Suspense fallback={null}>
             {/* View host sidebar-modules: one looping projection, semantics derived from the module registry (keepMounted/cacheClass/requiresWorkspace/open gate). */}
-            {(Object.entries(sidebarModuleContent) as [SidebarModuleId, ReactNode][]).map(([id, content]) => {
+            {(Object.entries(sidebarModuleContent) as [string, ReactNode][]).map(([id, content]) => {
               const entry = sidebarModule(id);
               if (!entry) return null;
               const active = mainSection === id;

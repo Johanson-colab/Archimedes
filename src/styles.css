@@ -8485,3 +8485,20 @@ html[data-menu-style="glass"] .menu-surface {
 .main-view.knowledge-main :is(.library-page, .skills-page, .benchmark-radar-page, .image-creation-page, .reproduce-page, .paper-writing-page, .artifacts-page, .gallery-page) {
   background: transparent;
 }
+
+/* Sidebar runtime plugins: the host provides a plain canvas; plugin markup
+   styles its own classes with theme tokens so both themes stay coherent. */
+.plugin-module-host {
+  display: flex; flex-direction: column; gap: 14px; flex: 1;
+  padding: 24px 28px; overflow-y: auto; color: var(--night-ink);
+}
+.plugin-focus-timer { display: grid; gap: 10px; width: min(100%, 420px); }
+.plugin-focus-timer h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--night-ink); }
+.plugin-focus-clock { margin: 0; font-size: 46px; font-weight: 700; letter-spacing: 1px; color: var(--night-ink); font-variant-numeric: tabular-nums; }
+.plugin-focus-hint { margin: 0; color: var(--night-muted); font-size: 12px; line-height: 1.5; }
+.plugin-focus-actions { display: flex; gap: 8px; }
+.plugin-focus-button {
+  padding: 7px 16px; color: var(--night-ink); background: var(--night-panel);
+  border: 1px solid var(--night-line); border-radius: 6px; font-size: 12px; font-weight: 620; cursor: pointer;
+}
+.plugin-focus-button:hover { border-color: var(--night-ink-soft); }

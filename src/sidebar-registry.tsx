@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { BookOpen, CalendarDays, FilePenLine, FlaskConical, ImagePlus, Puzzle, Radar } from "lucide-react";
 
@@ -12,7 +13,14 @@ export type SidebarSection = "knowledge" | "create";
 export type SidebarModuleId = "library" | "daily" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation";
 
 /** Main sections that are not modules: they stay hardcoded in App. */
-export type MainSection = "chat" | "files" | SidebarModuleId;
+export type MainSection = "chat" | "files" | SidebarModuleId | `plugin:${string}`;
+
+/** A loaded plugin module contributes one view through its activate() return. */
+export type PluginContribution = {
+  view: () => ReactNode;
+  /** Mutable context handed to activate(); the host wires refresh() on mount. */
+  context?: Record<string, unknown>;
+};
 
 export type SidebarEntry = {
   id: string;
@@ -34,6 +42,8 @@ export type SidebarEntry = {
   cacheClass?: string;
   /** Mount only when a workspace is ready. */
   requiresWorkspace?: boolean;
+  /** Set for runtime-registered plugin modules. */
+  plugin?: PluginContribution;
 };
 
 /**
@@ -51,13 +61,24 @@ export const coreSidebarEntries: SidebarEntry[] = [
   { id: "image-creation", commandId: "open-image-creation", section: "create", labelKey: "Image creation", titleKey: "Image creation", icon: ImagePlus, order: 20, destination: { type: "section", section: "image-creation" }, source: "core", keepMounted: true, cacheClass: "image-creation-view-cache" },
 ];
 
+/** Runtime plugin modules register here; the projection below merges them. */
+const pluginEntriesStore: SidebarEntry[] = [];
+
+export function registerPluginEntries(entries: SidebarEntry[]) {
+  pluginEntriesStore.splice(0, pluginEntriesStore.length, ...entries);
+}
+
+export function pluginSidebarEntries(): readonly SidebarEntry[] {
+  return pluginEntriesStore;
+}
+
 export function sidebarEntries(section: SidebarSection) {
-  return coreSidebarEntries
+  return [...coreSidebarEntries, ...pluginEntriesStore]
     .filter((entry) => entry.section === section)
     .slice()
     .sort((left, right) => left.order - right.order);
 }
 
 export function sidebarModule(id: string): SidebarEntry | undefined {
-  return coreSidebarEntries.find((entry) => entry.id === id);
+  return coreSidebarEntries.find((entry) => entry.id === id) ?? pluginEntriesStore.find((entry) => entry.id === id);
 }
