@@ -8154,3 +8154,10 @@ html[data-menu-style="glass"] .menu-surface {
     overflow-y: auto;
   }
 }
+
+/* One canvas per workspace: knowledge and create pages inherit the shell
+   background instead of painting a second near-white layer. Cards and panels
+   keep their own surface so hierarchy stays visible. */
+.main-view.knowledge-main :is(.library-page, .skills-page, .benchmark-radar-page, .image-creation-page, .reproduce-page, .paper-writing-page, .artifacts-page, .gallery-page) {
+  background: transparent;
+}
