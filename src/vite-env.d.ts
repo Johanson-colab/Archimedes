@@ -216,8 +216,9 @@ interface ResearchDeskBridge {
     stopTerminal: (sessionId: string) => Promise<void>;
     getJourneySettings: () => Promise<JourneySettings>;
     getWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
-    getSidebarSettings: () => Promise<{ version: number; disabledCore: string[] }>;
-    setCoreModuleEnabled: (id: string, enabled: boolean) => Promise<{ version: number; disabledCore: string[] }>;
+    getSidebarSettings: () => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
+    setCoreModuleEnabled: (id: string, enabled: boolean) => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
+    setSidebarLayout: (layout: "flat" | "tabs" | "sections") => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
     saveWorkbenchSettings: (input: { version?: number; order: string[]; hidden: string[] }) => Promise<{ version: number; order: string[]; hidden: string[] }>;
     resetWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
     getWorkbenchNote: (key: string) => Promise<{ content: string; updatedAt: string | null }>;

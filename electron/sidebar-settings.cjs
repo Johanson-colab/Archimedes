@@ -2,7 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SETTINGS_FILE = "sidebar-settings.json";
-const PREFERENCES_VERSION = 1;
+const PREFERENCES_VERSION = 2;
+const LAYOUTS = new Set(["flat", "tabs", "sections"]);
 
 // Must match the ids in src/sidebar-registry.tsx coreSidebarEntries.
 const CORE_MODULE_IDS = [
@@ -20,7 +21,7 @@ let settingsPath = "";
 let settings = null;
 
 function defaults() {
-  return { version: PREFERENCES_VERSION, disabledCore: [] };
+  return { version: PREFERENCES_VERSION, layout: "flat", disabledCore: [] };
 }
 
 function normalize(input = {}) {
@@ -30,7 +31,11 @@ function normalize(input = {}) {
     if (typeof value !== "string" || !CORE_ID_SET.has(value) || disabledCore.includes(value)) continue;
     disabledCore.push(value);
   }
-  return { version: PREFERENCES_VERSION, disabledCore };
+  return {
+    version: PREFERENCES_VERSION,
+    layout: LAYOUTS.has(source.layout) ? source.layout : "flat",
+    disabledCore,
+  };
 }
 
 function initialize(userDataPath) {
@@ -60,9 +65,21 @@ function setCoreEnabled(id, enabled) {
   const disabled = new Set(settings.disabledCore);
   if (enabled) disabled.delete(id);
   else disabled.add(id);
-  settings = { version: PREFERENCES_VERSION, disabledCore: CORE_MODULE_IDS.filter((value) => disabled.has(value)) };
+  settings = {
+    version: PREFERENCES_VERSION,
+    layout: settings.layout,
+    disabledCore: CORE_MODULE_IDS.filter((value) => disabled.has(value)),
+  };
   persist();
   return getSettings();
 }
 
-module.exports = { initialize, getSettings, setCoreEnabled, CORE_MODULE_IDS };
+function setLayout(layout) {
+  if (!LAYOUTS.has(layout)) throw new Error(`Unknown sidebar layout: ${layout}`);
+  if (!settings) settings = defaults();
+  settings = { ...settings, layout };
+  persist();
+  return getSettings();
+}
+
+module.exports = { initialize, getSettings, setCoreEnabled, setLayout, CORE_MODULE_IDS, LAYOUTS };

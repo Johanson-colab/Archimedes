@@ -4732,8 +4732,8 @@ html:not([data-theme="paper"]) .paper-review-notice span { color: #b9a48b; }
 .sidebar-modules .codex-nav-item:disabled:hover { background: transparent; }
 .nav-tail { margin-left: auto; flex: 0 0 auto; color: var(--sb-faint); font-size: 8px; letter-spacing: .03em; }
 
-.work-group { display: flex; min-height: 0; flex: 1; flex-direction: column; padding-top: 12px; }
-.work-heading { display: flex; height: 25px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; padding: 0 5px 5px 8px; color: var(--sb-muted); font-size: 10px; font-weight: 700; }
+.work-group { display: flex; min-height: 0; flex: 1; flex-direction: column; padding-top: 10px; }
+.work-heading { display: flex; height: 30px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; color: var(--sb-muted); font-size: 14px; font-weight: 400; }
 .work-heading-actions { position: relative; display: flex; align-items: center; gap: 1px; }
 .work-filter-button { display: inline-flex; height: 23px; align-items: center; gap: 4px; padding: 0 5px; color: var(--sb-muted); background: transparent; border-radius: 4px; font-size: 9px; }
 .work-filter-button:hover { color: var(--night-ink); background: var(--sb-hover); }
@@ -8522,3 +8522,18 @@ html[data-menu-style="glass"] .menu-surface {
   border: 1px solid var(--night-line); border-radius: 6px; font-size: 12px; font-weight: 620; cursor: pointer;
 }
 .plugin-focus-button:hover { border-color: var(--night-ink-soft); }
+
+/* Sidebar layout: flat by default; optional grouped tabs or sections. */
+.sidebar-nav.sidebar-modules { padding-top: 0; padding-bottom: 0; }
+.sidebar-section-label { display: flex; height: 30px; align-items: center; margin-top: 4px; padding: 0 8px; color: var(--sb-muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
+.sidebar-module-list { display: grid; gap: 2px; }
+.sidebar-group-tabs { display: flex; height: 32px; align-items: center; gap: 16px; margin: 2px 0 4px; padding: 0 8px; }
+.sidebar-group-tab { height: 30px; padding: 0; color: var(--sb-muted); background: transparent; border: 0; font: inherit; font-size: 14px; font-weight: 400; white-space: nowrap; cursor: pointer; }
+.sidebar-group-tab.active { color: var(--night-ink); }
+.sidebar-group-manage { display: grid; width: 24px; height: 24px; margin-left: auto; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.sidebar-group-manage:hover { color: var(--night-ink); background: var(--sb-hover); }
+.sidebar-module-section { display: grid; gap: 2px; margin-top: 4px; }
+.sidebar-group-name { display: flex; height: 30px; align-items: center; padding: 0 8px; color: var(--sb-muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
+.work-heading-actions { gap: 4px; }
+.work-more-button { display: grid; width: 24px; height: 24px; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.work-more-button:hover { color: var(--night-ink); background: var(--sb-hover); }
