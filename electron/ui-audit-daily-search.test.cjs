@@ -66,8 +66,11 @@ test("quick and deep search share one send button and search surface", () => {
   assert.doesNotMatch(library, /daily-search-input-row .*primary-button/);
   assert.match(css, /\.daily-search-panel\.deep \{ padding: 9px; \}/);
   assert.match(css, /\.daily-search-panel\.deep \.daily-search-kind button\.active \{ color: #235b45; \}/);
-  assert.match(css, /\.daily-search-send \{[^}]*color: var\(--accent\)[^}]*background: transparent/);
-  assert.match(css, /\.daily-search-send:hover:not\(:disabled\) \{[^}]*background: color-mix\(in srgb, var\(--accent\) 10%, transparent\)/);
+  // The send arrow sits inside the field, mirroring the main chat composer.
+  assert.match(css, /\.daily-search-send \{[^}]*position: absolute; right: 4px; bottom: 4px;[^}]*width: 30px; height: 30px;[^}]*color: var\(--text-muted\)[^}]*background: transparent/);
+  assert.match(css, /\.daily-search-send:hover:not\(:disabled\) \{ color: var\(--accent\); \}/);
+  assert.match(css, /\.daily-search-input-row input, \.daily-search-input-row textarea \{[^}]*padding: 10px 44px 10px 11px/);
+  assert.match(css, /\.daily-search-input-row textarea \{[^}]*padding-bottom: 40px/);
 });
 
 test("the open-paper link sits on the row surface instead of an accent chip", () => {
