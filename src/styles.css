@@ -4049,6 +4049,19 @@ html[data-titlebar="overlay"] .right-workbench .workbench-header button { -webki
 html[data-titlebar="overlay"] .workbench-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
 html[data-titlebar="overlay"] .workbench-tabs::-webkit-scrollbar { display: none; }
 
+/* macOS keeps native inset traffic lights. Give them room above the sidebar
+   wordmark and make the same title-bar surfaces draggable as on Windows. */
+html[data-titlebar="inset"] .codex-sidebar { padding-top: 20px; }
+html[data-titlebar="inset"] .codex-brand,
+html[data-titlebar="inset"] .main-toolbar,
+html[data-titlebar="inset"] .right-workbench .workbench-header { -webkit-app-region: drag; }
+html[data-titlebar="inset"] .codex-brand button,
+html[data-titlebar="inset"] .main-toolbar button,
+html[data-titlebar="inset"] .main-toolbar a,
+html[data-titlebar="inset"] .main-toolbar input,
+html[data-titlebar="inset"] .main-toolbar select,
+html[data-titlebar="inset"] .right-workbench .workbench-header button { -webkit-app-region: no-drag; }
+
 /* Global settings (issue #98): flat grouped lists modelled on opencode. */
 .settings-backdrop { z-index: 40; padding: 24px; }
 .settings-modal { display: grid; width: min(1060px, calc(100vw / var(--ui-scale, 1) - 48px)); height: min(780px, calc(100vh / var(--ui-scale, 1) - 48px)); grid-template-columns: 256px minmax(0, 1fr); overflow: hidden; color: var(--night-ink); background: var(--dialog-bg, var(--night-ground)); border: 1px solid var(--dialog-border); border-radius: var(--dialog-radius-lg); box-shadow: var(--dialog-shadow-lg); backdrop-filter: var(--dialog-backdrop-filter, none); }
