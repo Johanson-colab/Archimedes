@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
     "audit:theme": "node scripts/theme-audit.mjs",
+    "radar:sync": "node scripts/sync-benchmark-radar-index.mjs",
     "check:theme": "node scripts/check-theme-tokens.mjs",
     "codemod:theme": "node scripts/codemod-theme-colors.mjs",
     "test": "node --test electron/*.test.cjs electron/figure-forge-upstream-*.mjs electron/agent/*.test.cjs server/*.test.cjs && node scripts/check-theme-tokens.mjs",
