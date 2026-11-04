@@ -29,10 +29,10 @@ test("Paper review is registry-hosted with a real bridge and in-page controls", 
   assert.match(app, /lazy\(\(\) => import\("\.\/PaperReviewView"\)\)/);
   assert.match(app, /"paper-review": <PaperReviewView bridge=\{desktopBridge\} workspace=\{executionWorkspace\} projectId=\{activeProjectId\} active=\{mainSection === "paper-review"\} \/>/);
   assert.doesNotMatch(view, /ToolbarActions|ToolbarPortal|module-toolbar-actions/);
-  assert.match(view, /pra-head/);
+  assert.match(view, /pra-header/);
   assert.match(view, /Run simulated review/);
-  assert.match(view, /Score-conditioned reviewers/);
-  assert.match(view, /Export Markdown/);
+  assert.match(view, /pra-reviewers/);
+  assert.match(view, /t\("Export"\)/);
 });
 
 test("Library Review tab is renamed Interactive paper and the old workbench reads as reading", () => {
@@ -49,10 +49,10 @@ test("Paper review exposes venue packs, model choice and a simulated-review disc
   assert.match(view, /Main agent model/);
   assert.match(view, /Custom provider/);
   assert.match(view, /API key/);
-  assert.match(view, /Paper text is sent only to this provider/);
+  assert.match(view, /Text is sent only to the selected provider/);
   assert.match(view, /localStorage|local|Local/);
   assert.match(css, /\.pra-page/);
-  assert.match(css, /\.pra-score-hero/);
+  assert.match(css, /\.pra-score-summary/);
   assert.match(css, /\.pra-reviewer/);
   assert.doesNotMatch(css.match(/\.pra-page[\s\S]*?(?=\n\/\*|$)/)?.[0] || "", /#[0-9a-f]{3,8}\b/i);
 });
