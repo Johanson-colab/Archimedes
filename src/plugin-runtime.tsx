@@ -12,6 +12,7 @@ import {
   Table2,
   Timer,
 } from "lucide-react";
+import { researchAppCategory } from "./research-apps";
 import { registerPluginEntries, type PluginContribution, type SidebarEntry } from "./sidebar-registry";
 
 /**
@@ -72,6 +73,7 @@ async function activatePlugin(record: SidebarPluginRecord, order: number): Promi
     id: `plugin:${record.id}`,
     commandId: `open-plugin-${record.id}`,
     section: record.section === "create" ? "create" : "knowledge",
+    researchCategory: researchAppCategory(record),
     labelKey: record.name,
     titleKey: record.title || record.name,
     icon: PLUGIN_ICONS[record.icon] ?? Puzzle,

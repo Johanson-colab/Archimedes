@@ -14,11 +14,14 @@ const news = fs.readFileSync(path.join(root, "electron", "news.cjs"), "utf8");
 const sources = fs.readFileSync(path.join(root, "electron", "news-sources.cjs"), "utf8");
 const i18n = readLocale();
 
-test("News is a core micro app between Daily papers and Benchmark Radar", () => {
+test("News is a Discovery & tracking app ordered between Daily papers and Benchmark Radar", () => {
   assert.match(registry, /id: "news"[^\n]*labelKey: "News"[^\n]*icon: Newspaper/);
-  const daily = Number(registry.match(/id: "daily"[^\n]*order: (\d+)/)[1]);
-  const newsOrder = Number(registry.match(/id: "news"[^\n]*order: (\d+)/)[1]);
-  const radar = Number(registry.match(/id: "benchmark-radar"[^\n]*order: (\d+)/)[1]);
+  const metadata = require("../shared/research-apps.json").apps;
+  const daily = metadata.daily.order;
+  const newsOrder = metadata.news.order;
+  const radar = metadata["benchmark-radar"].order;
+  assert.equal(metadata.news.category, "discovery");
+  assert.equal(metadata.news.defaultEnabled, false);
   assert.ok(newsOrder > daily && newsOrder < radar, "daily → news → benchmark radar");
   assert.match(sidebarSettings, /const CORE_MODULE_IDS = \[[^\]]*"news"/);
 });

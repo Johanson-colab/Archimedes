@@ -31,6 +31,7 @@ import { type ExtensionsTab } from "./ExtensionsView";
 import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
+import { defaultDisabledResearchApps, researchAppMetadata } from "./research-apps";
 import { sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";
 import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
@@ -479,6 +480,14 @@ const previewExtensionItems: ExtensionMarketplaceItem[] = [
   { id: "archimedes/git-hygiene", canonicalId: "archimedes/git-hygiene", name: "Git Hygiene", type: "plugin", description: "Check diffs for accidental artifacts, secrets, and unreviewed generated files.", version: "1.3.0", author: "Archimedes", license: "MIT", homepage: "https://github.com/Johanson-colab/Archimedes", sourceUrl: "https://github.com/Johanson-colab/Archimedes", permissions: ["read:workspace", "execute:git"], installs: 276, size: 0, updatedAt: "2026-10-19", source: "Archimedes index", sourceId: "archimedes", sourceType: "archimedes", config: { commands: ["git status --short"] } },
   { id: "archimedes/daily-digest", canonicalId: "archimedes/daily-digest", name: "Daily Digest", type: "automation", description: "Collect new papers in a saved search and prepare a short morning brief.", version: "0.8.2", author: "Archimedes", license: "MIT", homepage: "https://github.com/Johanson-colab/Archimedes", sourceUrl: "https://github.com/Johanson-colab/Archimedes", permissions: ["network:search", "write:artifacts"], installs: 355, size: 0, updatedAt: "2026-09-24", source: "Archimedes index", sourceId: "archimedes", sourceType: "archimedes", config: { schedule: "weekdays 08:00" } },
 ];
+
+function readPreviewSidebarSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("archimedes-research-apps") || "null");
+    if (Array.isArray(saved?.disabledCore)) return { version: 3, layout: "flat" as const, disabledCore: saved.disabledCore.filter((id: unknown): id is string => typeof id === "string" && Object.hasOwn(researchAppMetadata, id)) };
+  } catch { /* Preview storage is optional. */ }
+  return { version: 3, layout: "flat" as const, disabledCore: [...defaultDisabledResearchApps] };
+}
 
 const previewBridge = {
   ...previewLibraryBridge,
@@ -1106,6 +1115,17 @@ const previewBridge = {
   runPaperPresentation: async () => { throw new Error("Paper presentations run in the desktop app."); },
   revealPaperPresentation: async () => undefined,
   listReproductions: async () => [],
+  getSidebarSettings: async () => readPreviewSidebarSettings(),
+  setCoreModuleEnabled: async (id: string, enabled: boolean) => {
+    if (!Object.hasOwn(researchAppMetadata, id)) throw new Error(`Unknown research app: ${id}`);
+    const current = readPreviewSidebarSettings();
+    const disabled = new Set(current.disabledCore);
+    if (enabled) disabled.delete(id); else disabled.add(id);
+    const next = { ...current, disabledCore: [...disabled] };
+    localStorage.setItem("archimedes-research-apps", JSON.stringify(next));
+    return next;
+  },
+  setSidebarLayout: async () => readPreviewSidebarSettings(),
   listSidebarPlugins: async () => [],
   setSidebarPluginEnabled: async () => [],
   removeSidebarPlugin: async () => [],
@@ -1259,8 +1279,6 @@ function App() {
   const setThemePreference = (preset: ThemePreset) => setAppearance((current) => ({ ...current, preset }));
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
-  const [sidebarLayout, setSidebarLayout] = useState<"flat" | "tabs" | "sections">("flat");
-  const [activeModuleGroup, setActiveModuleGroup] = useState<"knowledge" | "create" | "evaluate">("knowledge");
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [pluginEntries, setPluginEntries] = useState<SidebarEntry[]>([]);
@@ -1818,11 +1836,10 @@ function App() {
     refreshSidebarPlugins();
   }, [refreshSidebarPlugins]);
 
-  const [disabledCoreModules, setDisabledCoreModules] = useState<string[]>([]);
+  const [disabledCoreModules, setDisabledCoreModules] = useState<string[]>(defaultDisabledResearchApps);
   const refreshSidebarSettings = useCallback(() => {
     desktopBridge.getSidebarSettings().then((settings) => {
       setDisabledCoreModules(settings.disabledCore);
-      setSidebarLayout(settings.layout);
     }).catch(() => undefined);
   }, []);
 
@@ -1840,11 +1857,6 @@ function App() {
   async function setCoreModuleEnabled(id: string, enabled: boolean) {
     const settings = await desktopBridge.setCoreModuleEnabled(id, enabled);
     setDisabledCoreModules(settings.disabledCore);
-  }
-
-  async function setSidebarLayoutMode(layout: "flat" | "tabs" | "sections") {
-    const settings = await desktopBridge.setSidebarLayout(layout);
-    setSidebarLayout(settings.layout);
   }
 
   function openWorkbench(tab: WorkbenchTabId) {
@@ -2878,23 +2890,14 @@ function App() {
   const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
   const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : activeModule ? t(activeModule.titleKey) : t("Files");
-  const moduleGroups = useMemo(() => (["knowledge", "create", "evaluate"] as const).map((id) => ({
-    id,
-    label: id === "knowledge" ? t("Knowledge") : id === "create" ? t("Create") : t("Evaluate"),
-    entries: sidebarEntries(id).filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)),
-  })).filter((group) => group.entries.length > 0), [hiddenCoreModules, pluginEntries, t]);
-  const flatModuleEntries = useMemo(() => moduleGroups.flatMap((group) => group.entries), [moduleGroups]);
-  const currentModuleGroup = moduleGroups.find((group) => group.id === activeModuleGroup) ?? moduleGroups[0];
-  const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => {
-    const group = moduleGroups.find((candidate) => candidate.entries.some((item) => item.id === entry.id));
-    return {
-      id: entry.commandId,
-      group: sidebarLayout === "flat" ? t("Micro app") : group?.label ?? t("Micro app"),
-      label: t(entry.labelKey),
-      icon: <entry.icon size={15} />,
-      run: () => activateSidebarEntry(entry),
-    };
-  });
+  const flatModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
+  const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
+    id: entry.commandId,
+    group: t("Research Apps"),
+    label: t(entry.labelKey),
+    icon: <entry.icon size={15} />,
+    run: () => activateSidebarEntry(entry),
+  }));
   const moduleButton = (entry: SidebarEntry) => <button className={mainSection === entry.destination.section ? "codex-nav-item active" : "codex-nav-item"} key={entry.id} onClick={() => activateSidebarEntry(entry)} title={t(entry.labelKey)} disabled={entry.disabled}>
     <entry.icon size={15} /><span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
   </button>;
@@ -2955,19 +2958,11 @@ function App() {
         </button>
 
         <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
-          <div className="sidebar-section-label">{t("Micro app")}</div>
-          {sidebarLayout === "flat" && <div className="sidebar-module-list">{flatModuleEntries.map(moduleButton)}</div>}
-          {sidebarLayout === "tabs" && <>
-            <div className="sidebar-group-tabs" role="tablist" aria-label={t("Micro app groups")}>
-              {moduleGroups.map((group) => <button key={group.id} role="tab" aria-selected={currentModuleGroup?.id === group.id} className={currentModuleGroup?.id === group.id ? "sidebar-group-tab active" : "sidebar-group-tab"} onClick={() => setActiveModuleGroup(group.id)}>{group.label}</button>)}
-              <button className="sidebar-group-manage" title={t("Manage micro apps")} aria-label={t("Manage micro apps")} onClick={() => { setSettingsSection("plugins"); setSettingsOpen(true); }}><Plus size={13} /></button>
-            </div>
-            <div className="sidebar-module-list">{(currentModuleGroup?.entries ?? []).map(moduleButton)}</div>
-          </>}
-          {sidebarLayout === "sections" && moduleGroups.map((group) => <section className="sidebar-module-section" key={group.id}>
-            <div className="sidebar-group-name">{group.label}</div>
-            <div className="sidebar-module-list">{group.entries.map(moduleButton)}</div>
-          </section>)}
+          <div className="sidebar-section-label">
+            <span>{t("Research Apps")}</span>
+            <button className="sidebar-apps-manage" title={t("Manage Research Apps")} aria-label={t("Manage Research Apps")} onClick={() => { setSettingsSection("plugins"); setSettingsOpen(true); }}><Plus size={13} /></button>
+          </div>
+          <div className="sidebar-module-list">{flatModuleEntries.map(moduleButton)}</div>
         </nav>
 
         <ProjectSidebar
@@ -3325,9 +3320,7 @@ function App() {
         onOpenAuth={(mode) => { setSettingsOpen(false); openAuth(mode || "choice"); }}
         onPluginsChanged={refreshSidebarPlugins}
         disabledCoreModules={disabledCoreModules}
-        onCoreModuleEnabled={(id, enabled) => void setCoreModuleEnabled(id, enabled).catch(() => undefined)}
-        sidebarLayout={sidebarLayout}
-        onSidebarLayoutChange={(layout) => void setSidebarLayoutMode(layout).catch(() => undefined)}
+        onCoreModuleEnabled={setCoreModuleEnabled}
       />
       {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
         bridge={desktopBridge}

@@ -17,12 +17,14 @@ const main = fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8");
 const preload = fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8");
 const i18n = readLocale();
 
-test("Paper review is a built-in micro app in a separate Evaluate group", () => {
+test("Paper review remains available as a Writing & delivery app, hidden by default", () => {
   assert.match(registry, /id: "paper-review"[^\n]*section: "evaluate"[^\n]*labelKey: "Paper review"[^\n]*icon: ClipboardCheck/);
   assert.match(registry, /export type SidebarSection = "knowledge" \| "create" \| "evaluate"/);
   assert.match(sidebarSettings, /const CORE_MODULE_IDS = \[[^\]]*"paper-review"/);
-  assert.match(app, /\["knowledge", "create", "evaluate"\] as const/);
-  assert.match(app, /id === "create" \? t\("Create"\) : t\("Evaluate"\)/);
+  const metadata = require("../shared/research-apps.json");
+  assert.equal(metadata.apps["paper-review"].category, "writing");
+  assert.equal(metadata.apps["paper-review"].defaultEnabled, false);
+  assert.ok(app.includes("sidebarEntries().filter"));
 });
 
 test("Paper review is registry-hosted with a real bridge and in-page controls", () => {

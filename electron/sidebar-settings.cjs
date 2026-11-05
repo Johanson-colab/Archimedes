@@ -2,7 +2,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SETTINGS_FILE = "sidebar-settings.json";
-const PREFERENCES_VERSION = 2;
+const PREFERENCES_VERSION = 3;
+const researchApps = require("../shared/research-apps.json");
+const DEFAULT_DISABLED_CORE = Object.entries(researchApps.apps).filter(([, app]) => !app.defaultEnabled).map(([id]) => id);
 const LAYOUTS = new Set(["flat", "tabs", "sections"]);
 
 // Must match the ids in src/sidebar-registry.tsx coreSidebarEntries.
@@ -23,7 +25,7 @@ let settingsPath = "";
 let settings = null;
 
 function defaults() {
-  return { version: PREFERENCES_VERSION, layout: "flat", disabledCore: [] };
+  return { version: PREFERENCES_VERSION, layout: "flat", disabledCore: [...DEFAULT_DISABLED_CORE] };
 }
 
 function normalize(input = {}) {
@@ -35,8 +37,11 @@ function normalize(input = {}) {
   }
   return {
     version: PREFERENCES_VERSION,
-    layout: LAYOUTS.has(source.layout) ? source.layout : "flat",
-    disabledCore,
+    // Old layout preferences are accepted on disk, but no longer drive navigation.
+    layout: "flat",
+    disabledCore: (Number(source.version) || 0) < PREFERENCES_VERSION && disabledCore.length === 0
+      ? [...DEFAULT_DISABLED_CORE]
+      : Array.isArray(source.disabledCore) ? disabledCore : [...DEFAULT_DISABLED_CORE],
   };
 }
 
@@ -79,7 +84,8 @@ function setCoreEnabled(id, enabled) {
 function setLayout(layout) {
   if (!LAYOUTS.has(layout)) throw new Error(`Unknown sidebar layout: ${layout}`);
   if (!settings) settings = defaults();
-  settings = { ...settings, layout };
+  // Compatibility for older renderers; Research Apps has one unified list.
+  settings = { ...settings, layout: "flat" };
   persist();
   return getSettings();
 }

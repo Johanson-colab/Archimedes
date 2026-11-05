@@ -1,0 +1,92 @@
+[
+  {
+    "theme": "paper",
+    "view": "sidebar",
+    "label": "Research Apps",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Paper writing"
+    ],
+    "work": true
+  },
+  {
+    "theme": "paper",
+    "view": "settings",
+    "width": 1100,
+    "heading": "Research Apps",
+    "categories": [
+      "Discovery & tracking",
+      "Resources & evidence",
+      "Experiments & evaluation",
+      "Analysis & visualization",
+      "Writing & delivery"
+    ],
+    "enabled": 5,
+    "overflow": false,
+    "scrollable": true
+  },
+  {
+    "theme": "paper",
+    "view": "settings",
+    "width": 680,
+    "heading": "Research Apps",
+    "categories": [
+      "Discovery & tracking",
+      "Resources & evidence",
+      "Experiments & evaluation",
+      "Analysis & visualization",
+      "Writing & delivery"
+    ],
+    "enabled": 5,
+    "overflow": false,
+    "scrollable": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "sidebar",
+    "label": "Research Apps",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Paper writing"
+    ],
+    "work": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "settings",
+    "width": 1100,
+    "heading": "Research Apps",
+    "categories": [
+      "Discovery & tracking",
+      "Resources & evidence",
+      "Experiments & evaluation",
+      "Analysis & visualization",
+      "Writing & delivery"
+    ],
+    "enabled": 5,
+    "overflow": false,
+    "scrollable": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "settings",
+    "width": 680,
+    "heading": "Research Apps",
+    "categories": [
+      "Discovery & tracking",
+      "Resources & evidence",
+      "Experiments & evaluation",
+      "Analysis & visualization",
+      "Writing & delivery"
+    ],
+    "enabled": 5,
+    "overflow": false,
+    "scrollable": true
+  }
+]

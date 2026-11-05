@@ -1,29 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
-import { Download, LoaderCircle, Puzzle, Trash2 } from "lucide-react";
+import { BookOpen, Download, FilePenLine, FlaskConical, ImagePlus, LoaderCircle, Puzzle, Radar, Trash2 } from "lucide-react";
 
 import { useUISettings } from "./i18n";
+import { researchAppCategories, researchAppCategory } from "./research-apps";
 import { coreSidebarEntries } from "./sidebar-registry";
-import { SettingsChoiceGroup, SettingsGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
+import { SettingsGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
 
 function readable(value: unknown, fallback: string) {
   const message = value instanceof Error ? value.message : String(value ?? "");
   return message.replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, "").trim() || fallback;
 }
 
-/**
- * Sidebar micro apps are managed here — not in Extensions, which stays the
- * marketplace for MCP servers and skills. Installing, enabling, disabling,
- * and removing a micro app all happen in this panel, and every change
- * reloads the live sidebar through onPluginsChanged.
- */
-export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChanged, disabledCoreModules, onCoreModuleEnabled, sidebarLayout, onSidebarLayoutChange }: {
+/** Research Apps management; Extensions remains the MCP and skills marketplace. */
+export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChanged, disabledCoreModules, onCoreModuleEnabled }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   onPluginsChanged?: () => void;
   disabledCoreModules: string[];
-  onCoreModuleEnabled: (id: string, enabled: boolean) => void;
-  sidebarLayout: "flat" | "tabs" | "sections";
-  onSidebarLayoutChange: (layout: "flat" | "tabs" | "sections") => void;
+  onCoreModuleEnabled: (id: string, enabled: boolean) => Promise<void> | void;
 }) {
   const { t } = useUISettings();
   const [plugins, setPlugins] = useState<SidebarPluginRecord[]>([]);
@@ -45,11 +39,11 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       setPlugins(installed);
       setAvailable((feed?.items || []).filter((item) => item.type === "ui-plugin"));
     } catch (reason) {
-      setError(readable(reason, "Could not load the micro apps."));
+      setError(readable(reason, t("Could not load the research apps.")));
     } finally {
       setLoading(false);
     }
-  }, [bridge, workspace]);
+  }, [bridge, workspace, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -60,7 +54,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       setPlugins(await bridge.setSidebarPluginEnabled(record.id, enabled));
       onPluginsChanged?.();
     } catch (reason) {
-      setNotice(readable(reason, "The micro app could not be updated."));
+      setNotice(readable(reason, t("The research app could not be updated.")));
     } finally {
       setBusy("");
     }
@@ -74,7 +68,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       onPluginsChanged?.();
       setNotice(t("Removed {name}.", { name: record.name }));
     } catch (reason) {
-      setNotice(readable(reason, "The micro app could not be removed."));
+      setNotice(readable(reason, t("The research app could not be removed.")));
     } finally {
       setBusy("");
     }
@@ -89,102 +83,79 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
       onPluginsChanged?.();
       setNotice(t("Installed {name}.", { name: item.name }));
     } catch (reason) {
-      setNotice(readable(reason, "The micro app could not be installed."));
+      setNotice(readable(reason, t("The research app could not be installed.")));
     } finally {
       setBusy("");
     }
   }
 
+  async function toggleCore(id: string, enabled: boolean) {
+    setBusy(id);
+    setNotice("");
+    try {
+      await onCoreModuleEnabled(id, enabled);
+    } catch (reason) {
+      setNotice(readable(reason, t("The research app could not be updated.")));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  const categoryIcons = { discovery: Radar, evidence: BookOpen, experiments: FlaskConical, analysis: ImagePlus, writing: FilePenLine };
   return <div className="settings-sections">
-    <SettingsSection title={t("Sidebar layout")}>
-      <SettingsRow
-        stacked
-        description={t("Micro app is one section by default. Group tabs and group sections split it into the Knowledge, Create and Evaluate groups; Work stays a separate section.")}
-      />
-      <SettingsChoiceGroup
-        value={sidebarLayout}
-        label={t("Sidebar layout")}
-        onChange={onSidebarLayoutChange}
-        options={[
-          { value: "flat", label: t("Flat") },
-          { value: "tabs", label: t("Group tabs") },
-          { value: "sections", label: t("Group sections") },
-        ]}
-      />
-      <p className="settings-row-hint">
-        {sidebarLayout === "flat"
-          ? t("All micro apps stay in one list; Knowledge, Create and Evaluate are merged.")
-          : sidebarLayout === "tabs"
-            ? t("A simple text tab row inside Micro app; one group is visible at a time.")
-            : t("Stacked group headings inside Micro app; every group is visible.")}
-      </p>
-    </SettingsSection>
-    <SettingsSection title={t("Built-in micro apps")}>
-      <SettingsRow
-        stacked
-        description={t("Every sidebar entry is a micro app. Toggle a built-in one to hide or show it; changes apply immediately.")}
-      />
-      <SettingsGroup className="plugins-settings-list">
-        {coreSidebarEntries.map((entry) => <SettingsRow
-          key={entry.id}
-          title={t(entry.labelKey)}
-          description={t(entry.section === "knowledge" ? "Knowledge column" : entry.section === "create" ? "Create column" : "Evaluate column")}
-          icon={<entry.icon size={14} />}
-        >
-          <SettingsSwitch
-            checked={!hiddenCore.has(entry.id)}
-            label={hiddenCore.has(entry.id) ? t("Enable") : t("Disable")}
-            disabled={busy === entry.id}
-            onChange={(enabled) => onCoreModuleEnabled(entry.id, enabled)}
-          />
-        </SettingsRow>)}
-      </SettingsGroup>
-    </SettingsSection>
-    <SettingsSection title={t("Installed micro apps")}>
-      <SettingsRow
-        stacked
-        description={t("Micro apps add one view to the Knowledge, Create or Evaluate column. Changes apply immediately.")}
-      />
-      {error && <p className="settings-row-hint">{error}</p>}
-      {loading && <p className="settings-row-hint"><LoaderCircle className="spin" size={13} /> {t("Loading…")}</p>}
-      {!loading && !plugins.length && <p className="settings-row-hint">{t("No micro apps installed yet.")}</p>}
-      {!loading && plugins.length > 0 && <SettingsGroup className="plugins-settings-list">
-        {plugins.map((record) => <SettingsRow
-          key={record.id}
-          title={record.name}
-          description={record.error || `${record.version} · ${record.source || "Archimedes index"}`}
-          icon={<Puzzle size={14} />}
-        >
-          <SettingsSwitch
-            checked={record.enabled}
-            label={record.enabled ? t("Disable") : t("Enable")}
-            disabled={Boolean(record.error) || busy === record.id}
-            onChange={(enabled) => void toggle(record, enabled)}
-          />
-          <button className="settings-inline-action" title={t("Remove")} onClick={() => void remove(record)} disabled={busy === record.id}>
-            <Trash2 size={13} />
-          </button>
-        </SettingsRow>)}
-      </SettingsGroup>}
-    </SettingsSection>
-    <SettingsSection title={t("Available micro apps")}>
-      {!available.length && <p className="settings-row-hint">{t("No micro apps available yet.")}</p>}
-      {available.length > 0 && <SettingsGroup className="plugins-settings-list">
-        {available.map((item) => {
-          const installed = plugins.some((record) => record.id === item.id.split("/").pop());
-          return <SettingsRow
-            key={item.id}
-            title={item.name}
-            description={`${item.version} · ${item.description}`}
+    <p className="research-apps-summary">{t("Choose apps for your sidebar. Changes apply immediately; hiding an app keeps its research data.")}</p>
+    {error && <p className="settings-row-hint" role="alert">{error}</p>}
+    {loading && <p className="settings-row-hint"><LoaderCircle className="spin" size={13} /> {t("Loading…")}</p>}
+    {notice && <p className="settings-row-hint" role="status">{notice}</p>}
+    {researchAppCategories.map((category) => {
+      const Icon = categoryIcons[category.id];
+      const builtIn = coreSidebarEntries.filter((entry) => entry.researchCategory === category.id);
+      const installed = plugins.filter((record) => researchAppCategory(record) === category.id);
+      const candidates = available.filter((item) => researchAppCategory(item) === category.id && !plugins.some((record) => record.id === item.id.split("/").pop()));
+      return <SettingsSection key={category.id} className="research-apps-category" title={<><Icon size={15} />{t(category.label)}</>}>
+        <p className="research-apps-category-description">{t(category.description)}</p>
+        <SettingsGroup className="plugins-settings-list">
+          {builtIn.map((entry) => <SettingsRow
+            key={entry.id}
+            title={t(entry.labelKey)}
+            description={t(entry.descriptionKey ?? "Built-in research app")}
+            icon={<entry.icon size={14} />}
+          >
+            <SettingsSwitch
+              checked={!hiddenCore.has(entry.id)}
+              label={t("Show {name} in sidebar", { name: t(entry.labelKey) })}
+              disabled={Boolean(busy)}
+              onChange={(enabled) => void toggleCore(entry.id, enabled)}
+            />
+          </SettingsRow>)}
+          {installed.map((record) => <SettingsRow
+            key={record.id}
+            title={record.name}
+            description={record.error || `${t("Installed")} · ${record.version} · ${record.source || "Archimedes index"}`}
             icon={<Puzzle size={14} />}
           >
-            {installed ? <span className="settings-row-hint">{t("Installed")}</span> : <button className="settings-inline-action" title={t("Install")} onClick={() => void install(item)} disabled={busy === item.id}>
+            <SettingsSwitch
+              checked={record.enabled}
+              label={t("Show {name} in sidebar", { name: record.name })}
+              disabled={Boolean(record.error) || Boolean(busy)}
+              onChange={(enabled) => void toggle(record, enabled)}
+            />
+            <button className="settings-inline-action" title={t("Remove")} aria-label={t("Remove {name}", { name: record.name })} onClick={() => void remove(record)} disabled={Boolean(busy)}>
+              <Trash2 size={13} />
+            </button>
+          </SettingsRow>)}
+          {candidates.map((item) => <SettingsRow
+            key={item.id}
+            title={item.name}
+            description={`${t("Available")} · ${item.version} · ${item.description}`}
+            icon={<Puzzle size={14} />}
+          >
+            <button className="settings-inline-action" title={t("Install")} aria-label={t("Install {name}", { name: item.name })} onClick={() => void install(item)} disabled={Boolean(busy)}>
               {busy === item.id ? <LoaderCircle className="spin" size={13} /> : <Download size={13} />}
-            </button>}
-          </SettingsRow>;
-        })}
-      </SettingsGroup>}
-    </SettingsSection>
-    {notice && <p className="settings-row-hint">{notice}</p>}
+            </button>
+          </SettingsRow>)}
+        </SettingsGroup>
+      </SettingsSection>;
+    })}
   </div>;
 }

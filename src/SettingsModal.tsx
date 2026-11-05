@@ -64,9 +64,7 @@ type SettingsModalProps = {
   onOpenAuth: (mode?: "choice" | "password" | "signup" | "reset") => void;
   onPluginsChanged?: () => void;
   disabledCoreModules: string[];
-  onCoreModuleEnabled: (id: string, enabled: boolean) => void;
-  sidebarLayout: "flat" | "tabs" | "sections";
-  onSidebarLayoutChange: (layout: "flat" | "tabs" | "sections") => void;
+  onCoreModuleEnabled: (id: string, enabled: boolean) => Promise<void> | void;
 };
 
 const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNode }> = [
@@ -77,7 +75,7 @@ const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNod
   { id: "proactive", label: "Proactive agent", icon: <Sparkles size={15} /> },
   { id: "appearance", label: "Appearance", icon: <Palette size={15} /> },
   { id: "workbench", label: "Workbench", icon: <LayoutPanelTop size={15} /> },
-  { id: "plugins", label: "Micro apps", icon: <Puzzle size={15} /> },
+  { id: "plugins", label: "Research Apps", icon: <Puzzle size={15} /> },
   { id: "models", label: "Models", icon: <Orbit size={15} /> },
   { id: "web", label: "Web search", icon: <Globe2 size={15} /> },
   { id: "terminal", label: "Terminal", icon: <SquareTerminal size={15} /> },
@@ -146,8 +144,6 @@ export default function SettingsModal({
   onPluginsChanged,
   disabledCoreModules,
   onCoreModuleEnabled,
-  sidebarLayout,
-  onSidebarLayoutChange,
 }: SettingsModalProps) {
   const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
   const [scope, setScope] = useState<SurfaceScope | "global">("global");
@@ -276,7 +272,7 @@ export default function SettingsModal({
     proactive: { title: t("Proactive agent"), description: t("Opt-in L0 signals, evidence, and interruption limits.") },
     appearance: { title: t("Appearance"), description: t("Theme and fonts") },
     workbench: { title: t("Workbench"), description: t("Choose the tabs that appear in the right rail.") },
-    plugins: { title: t("Micro apps"), description: t("Micro apps installed from the Archimedes index and built into Archimedes.") },
+    plugins: { title: t("Research Apps"), description: t("Manage research apps by category and choose which ones appear in your sidebar.") },
     models: { title: t("Models"), description: t("API providers and harnesses") },
     web: { title: t("Web search"), description: t("Search provider and API keys") },
     terminal: { title: t("Terminal"), description: t("Shell, font, and external terminal") },
@@ -681,7 +677,7 @@ export default function SettingsModal({
 
             {section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} />}
             {section === "ssh" && <SshServersPanel bridge={bridge} />}
-            {section === "plugins" && <PluginsSettingsPanel bridge={bridge} workspace={workspace} onPluginsChanged={onPluginsChanged} disabledCoreModules={disabledCoreModules} onCoreModuleEnabled={onCoreModuleEnabled} sidebarLayout={sidebarLayout} onSidebarLayoutChange={onSidebarLayoutChange} />}
+            {section === "plugins" && <PluginsSettingsPanel bridge={bridge} workspace={workspace} onPluginsChanged={onPluginsChanged} disabledCoreModules={disabledCoreModules} onCoreModuleEnabled={onCoreModuleEnabled} />}
             {section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}
             {section === "terminal" && (terminalSettings
               ? <TerminalSettingsModal open embedded mode="settings" settings={terminalSettings} workspace={workspace} onClose={() => undefined} onSave={onSaveTerminalSettings} onOpenExternal={onOpenExternalTerminal} />

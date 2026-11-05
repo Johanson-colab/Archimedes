@@ -11,6 +11,8 @@ const HOST_ENGINE = "0.1";
 const MAX_PLUGIN_FILES = 40;
 const MAX_FILE_BYTES = 2_000_000;
 const MAX_MANIFEST_BYTES = 32_000;
+const researchApps = require("../shared/research-apps.json");
+const RESEARCH_CATEGORIES = new Set(researchApps.categories.map((category) => category.id));
 const SECTIONS = new Set(["knowledge", "create"]);
 const ICONS = new Set([
   "book-open",
@@ -83,6 +85,8 @@ function validateManifest(parsed, directoryId = "") {
   const version = safeString(parsed.version, 40) || "0.0.0";
   const section = safeString(parsed.section, 20);
   if (!SECTIONS.has(section)) return { error: 'The plugin manifest section must be "knowledge" or "create".' };
+  const researchCategory = safeString(parsed.researchCategory, 40);
+  if (researchCategory && !RESEARCH_CATEGORIES.has(researchCategory)) return { error: "The plugin research category is not supported." };
   const entry = safeString(parsed.entry, 200).replaceAll("\\", "/").replace(/^\/+/, "") || "main.mjs";
   const entryParts = entry.split("/");
   if (!entry.endsWith(".mjs") || entryParts.some((part) => !part || part === "." || part === "..")) {
@@ -97,6 +101,7 @@ function validateManifest(parsed, directoryId = "") {
       name,
       version,
       section,
+      researchCategory: researchCategory || (Object.hasOwn(researchApps.legacyAppCategories, id) ? researchApps.legacyAppCategories[id] : researchApps.legacySectionCategories[section]),
       entry,
       icon: ICONS.has(icon) ? icon : "puzzle",
       title: title || name,

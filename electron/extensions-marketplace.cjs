@@ -247,6 +247,7 @@ function normalizeItem(input, source) {
     canonicalId: safeString(input.canonicalId, 300) || id,
     name,
     type,
+    researchCategory: safeString(input.researchCategory, 40),
     description: safeString(input.description, 700),
     version: safeString(input.version, 80) || "1.0.0",
     author: safeString(input.author, 160) || source.name,

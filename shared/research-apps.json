@@ -1,0 +1,22 @@
+{
+  "categories": [
+    { "id": "discovery", "label": "Discovery & tracking", "description": "Follow papers, research news and benchmark updates." },
+    { "id": "evidence", "label": "Resources & evidence", "description": "Organize literature, sources and reusable research resources." },
+    { "id": "experiments", "label": "Experiments & evaluation", "description": "Reproduce papers, run experiments and compare results." },
+    { "id": "analysis", "label": "Analysis & visualization", "description": "Analyze data and create scientific figures." },
+    { "id": "writing", "label": "Writing & delivery", "description": "Write, review and prepare research outputs." }
+  ],
+  "apps": {
+    "library": { "category": "evidence", "defaultEnabled": true, "order": 10, "description": "Collect papers, annotations and supporting evidence." },
+    "daily": { "category": "discovery", "defaultEnabled": true, "order": 20, "description": "Discover and follow recent papers in your field." },
+    "news": { "category": "discovery", "defaultEnabled": false, "order": 60, "description": "Follow research and technology news." },
+    "benchmark-radar": { "category": "discovery", "defaultEnabled": false, "order": 70, "description": "Track benchmarks, leaderboards and evaluation updates." },
+    "extensions": { "category": "evidence", "defaultEnabled": false, "order": 80, "description": "Find skills and MCP tools that support your research apps." },
+    "reproduce": { "category": "experiments", "defaultEnabled": true, "order": 30, "description": "Turn a paper into a reproducible experiment." },
+    "writing": { "category": "writing", "defaultEnabled": true, "order": 50, "description": "Draft and revise papers with research context." },
+    "image-creation": { "category": "analysis", "defaultEnabled": true, "order": 40, "description": "Browse figure references and create images with FigureForge." },
+    "paper-review": { "category": "writing", "defaultEnabled": false, "order": 90, "description": "Review manuscripts and prioritize revisions." }
+  },
+  "legacyAppCategories": { "focus-timer": "writing" },
+  "legacySectionCategories": { "knowledge": "evidence", "create": "analysis", "evaluate": "experiments" }
+}

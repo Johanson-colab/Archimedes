@@ -1,0 +1,76 @@
+[
+  {
+    "theme": "paper",
+    "view": "sidebar",
+    "label": "Micro app",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "News",
+      "Benchmark Radar",
+      "Extensions",
+      "Reproduce",
+      "Paper writing",
+      "Image creation",
+      "Paper review"
+    ],
+    "work": true
+  },
+  {
+    "theme": "paper",
+    "view": "settings",
+    "width": 1100,
+    "heading": "Micro apps",
+    "categories": [],
+    "enabled": 9,
+    "overflow": false,
+    "scrollable": true
+  },
+  {
+    "theme": "paper",
+    "view": "settings",
+    "width": 680,
+    "heading": "Micro apps",
+    "categories": [],
+    "enabled": 9,
+    "overflow": false,
+    "scrollable": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "sidebar",
+    "label": "Micro app",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "News",
+      "Benchmark Radar",
+      "Extensions",
+      "Reproduce",
+      "Paper writing",
+      "Image creation",
+      "Paper review"
+    ],
+    "work": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "settings",
+    "width": 1100,
+    "heading": "Micro apps",
+    "categories": [],
+    "enabled": 9,
+    "overflow": false,
+    "scrollable": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "settings",
+    "width": 680,
+    "heading": "Micro apps",
+    "categories": [],
+    "enabled": 9,
+    "overflow": false,
+    "scrollable": true
+  }
+]

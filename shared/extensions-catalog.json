@@ -212,6 +212,7 @@
       "id": "archimedes/focus-timer",
       "name": "Focus Timer",
       "type": "ui-plugin",
+      "researchCategory": "writing",
       "description": "A 25-minute focus sprint as a sidebar module. A minimal example of the runtime plugin format.",
       "version": "1.0.0",
       "author": "Archimedes",

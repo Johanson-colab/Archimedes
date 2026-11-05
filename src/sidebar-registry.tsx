@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
+import { researchAppMetadata, type ResearchAppCategory } from "./research-apps";
 import type { LucideIcon } from "lucide-react";
 import { BookOpen, CalendarDays, ClipboardCheck, FilePenLine, FlaskConical, ImagePlus, Newspaper, Puzzle, Radar } from "lucide-react";
 
+// Legacy plugin sections remain compatible; research categories drive app management.
 export type SidebarSection = "knowledge" | "create" | "evaluate";
 
 /**
@@ -26,6 +28,8 @@ export type SidebarEntry = {
   id: string;
   commandId: string;
   section: SidebarSection;
+  researchCategory?: ResearchAppCategory;
+  descriptionKey?: string;
   labelKey: string;
   /** Toolbar title while the module is active. */
   titleKey: string;
@@ -51,17 +55,20 @@ export type SidebarEntry = {
  * output type can be added as one entry; it must not introduce a new
  * top-level section or push arbitrary JSX into the sidebar.
  */
-export const coreSidebarEntries: SidebarEntry[] = [
-  { id: "library", commandId: "open-library", section: "knowledge", labelKey: "Library", titleKey: "Library", icon: BookOpen, order: 10, destination: { type: "section", section: "library" }, source: "core", keepMounted: true, cacheClass: "library-view-cache", requiresWorkspace: true },
-  { id: "daily", commandId: "open-daily-papers", section: "knowledge", labelKey: "Daily papers", titleKey: "Daily papers", icon: CalendarDays, order: 20, destination: { type: "section", section: "daily" }, source: "core", requiresWorkspace: true },
-  { id: "news", commandId: "open-news", section: "knowledge", labelKey: "News", titleKey: "News", icon: Newspaper, order: 25, destination: { type: "section", section: "news" }, source: "core" },
-  { id: "benchmark-radar", commandId: "open-benchmark-radar", section: "knowledge", labelKey: "Benchmark Radar", titleKey: "Benchmark Radar", icon: Radar, order: 30, destination: { type: "section", section: "benchmark-radar" }, source: "core" },
-  { id: "extensions", commandId: "open-extensions", section: "knowledge", labelKey: "Extensions", titleKey: "Extensions", icon: Puzzle, order: 40, destination: { type: "section", section: "extensions" }, source: "core" },
-  { id: "reproduce", commandId: "open-reproduce", section: "create", labelKey: "Reproduce", titleKey: "Reproduce", icon: FlaskConical, order: 5, destination: { type: "section", section: "reproduce" }, source: "core" },
-  { id: "writing", commandId: "open-paper-writing", section: "create", labelKey: "Paper writing", titleKey: "Paper writing", icon: FilePenLine, order: 10, destination: { type: "section", section: "writing" }, source: "core", keepMounted: true, cacheClass: "paper-writing-view-cache", requiresWorkspace: true },
-  { id: "image-creation", commandId: "open-image-creation", section: "create", labelKey: "Image creation", titleKey: "Image creation", icon: ImagePlus, order: 20, destination: { type: "section", section: "image-creation" }, source: "core", keepMounted: true, cacheClass: "image-creation-view-cache" },
-  { id: "paper-review", commandId: "open-paper-review", section: "evaluate", labelKey: "Paper review", titleKey: "Paper review", icon: ClipboardCheck, order: 10, destination: { type: "section", section: "paper-review" }, source: "core" },
-];
+export const coreSidebarEntries: SidebarEntry[] = ([
+  { id: "library", commandId: "open-library", section: "knowledge", labelKey: "Library", titleKey: "Library", icon: BookOpen, destination: { type: "section", section: "library" }, source: "core", keepMounted: true, cacheClass: "library-view-cache", requiresWorkspace: true },
+  { id: "daily", commandId: "open-daily-papers", section: "knowledge", labelKey: "Daily papers", titleKey: "Daily papers", icon: CalendarDays, destination: { type: "section", section: "daily" }, source: "core", requiresWorkspace: true },
+  { id: "news", commandId: "open-news", section: "knowledge", labelKey: "News", titleKey: "News", icon: Newspaper, destination: { type: "section", section: "news" }, source: "core" },
+  { id: "benchmark-radar", commandId: "open-benchmark-radar", section: "knowledge", labelKey: "Benchmark Radar", titleKey: "Benchmark Radar", icon: Radar, destination: { type: "section", section: "benchmark-radar" }, source: "core" },
+  { id: "extensions", commandId: "open-extensions", section: "knowledge", labelKey: "Extensions", titleKey: "Extensions", icon: Puzzle, destination: { type: "section", section: "extensions" }, source: "core" },
+  { id: "reproduce", commandId: "open-reproduce", section: "create", labelKey: "Reproduce", titleKey: "Reproduce", icon: FlaskConical, destination: { type: "section", section: "reproduce" }, source: "core" },
+  { id: "writing", commandId: "open-paper-writing", section: "create", labelKey: "Paper writing", titleKey: "Paper writing", icon: FilePenLine, destination: { type: "section", section: "writing" }, source: "core", keepMounted: true, cacheClass: "paper-writing-view-cache", requiresWorkspace: true },
+  { id: "image-creation", commandId: "open-image-creation", section: "create", labelKey: "Image creation", titleKey: "Image creation", icon: ImagePlus, destination: { type: "section", section: "image-creation" }, source: "core", keepMounted: true, cacheClass: "image-creation-view-cache" },
+  { id: "paper-review", commandId: "open-paper-review", section: "evaluate", labelKey: "Paper review", titleKey: "Paper review", icon: ClipboardCheck, destination: { type: "section", section: "paper-review" }, source: "core" },
+] satisfies Omit<SidebarEntry, "order">[]).map((entry) => {
+  const metadata = researchAppMetadata[entry.id as keyof typeof researchAppMetadata];
+  return { ...entry, researchCategory: metadata.category as ResearchAppCategory, descriptionKey: metadata.description, order: metadata.order };
+});
 
 /** Runtime plugin modules register here; the projection below merges them. */
 const pluginEntriesStore: SidebarEntry[] = [];
@@ -74,9 +81,9 @@ export function pluginSidebarEntries(): readonly SidebarEntry[] {
   return pluginEntriesStore;
 }
 
-export function sidebarEntries(section: SidebarSection) {
+export function sidebarEntries(section?: SidebarSection) {
   return [...coreSidebarEntries, ...pluginEntriesStore]
-    .filter((entry) => entry.section === section)
+    .filter((entry) => !section || entry.section === section)
     .slice()
     .sort((left, right) => left.order - right.order);
 }

@@ -64,6 +64,7 @@ test("sidebar plugin installs verify checksums and land in the app plugin root",
   assert.equal(listed.length, 1);
   assert.equal(listed[0].id, "focus-timer");
   assert.equal(listed[0].section, "create");
+  assert.equal(listed[0].researchCategory, "writing");
   assert.equal(listed[0].enabled, true);
   assert.equal(listed[0].icon, "timer");
   assert.ok(plugins.installedIndex().has("archimedes/focus-timer"));
@@ -112,6 +113,16 @@ test("sidebar plugin manifests are validated before install", () => {
   const ok = plugins.validateManifest({ id: "ok-id", name: "Ok", version: "1.0.0", section: "knowledge" });
   assert.equal(ok.manifest.entry, "main.mjs");
   assert.equal(ok.manifest.icon, "puzzle");
+});
+
+test("research categories preserve old manifests and validate explicit app metadata", () => {
+  const legacy = { id: "custom-app", name: "Custom App", section: "knowledge" };
+  assert.equal(plugins.validateManifest(legacy).manifest.researchCategory, "evidence");
+  assert.equal(plugins.validateManifest({ ...legacy, id: "constructor" }).manifest.researchCategory, "evidence");
+  for (const category of ["discovery", "evidence", "experiments", "analysis", "writing"]) {
+    assert.equal(plugins.validateManifest({ ...legacy, researchCategory: category }).manifest.researchCategory, category);
+  }
+  assert.match(plugins.validateManifest({ ...legacy, researchCategory: "unsupported" }).error, /category/);
 });
 
 test("the plugin file resolver blocks traversal and missing files", () => {

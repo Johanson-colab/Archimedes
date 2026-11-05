@@ -8531,17 +8531,16 @@ html[data-menu-style="glass"] .menu-surface {
 }
 .plugin-focus-button:hover { border-color: var(--night-ink-soft); }
 
-/* Sidebar layout: flat by default; optional grouped tabs or sections. */
+/* Research Apps stays one list; categories belong in app management. */
 .sidebar-nav.sidebar-modules { padding-top: 0; padding-bottom: 0; }
 .sidebar-section-label { display: flex; height: 30px; align-items: center; margin-top: 4px; padding: 0 8px; color: var(--sb-muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
 .sidebar-module-list { display: grid; gap: 2px; }
-.sidebar-group-tabs { display: flex; height: 32px; align-items: center; gap: 16px; margin: 2px 0 4px; padding: 0 8px; }
-.sidebar-group-tab { height: 30px; padding: 0; color: var(--sb-muted); background: transparent; border: 0; font: inherit; font-size: 14px; font-weight: 400; white-space: nowrap; cursor: pointer; }
-.sidebar-group-tab.active { color: var(--night-ink); }
-.sidebar-group-manage { display: grid; width: 24px; height: 24px; margin-left: auto; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
-.sidebar-group-manage:hover { color: var(--night-ink); background: var(--sb-hover); }
-.sidebar-module-section { display: grid; gap: 2px; margin-top: 4px; }
-.sidebar-group-name { display: flex; height: 30px; align-items: center; padding: 0 8px; color: var(--sb-muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
+.sidebar-apps-manage { display: grid; width: 24px; height: 24px; margin-left: auto; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.sidebar-apps-manage:hover { color: var(--night-ink); background: var(--sb-hover); }
+.research-apps-category .settings-section-title { display: flex; align-items: center; gap: 8px; }
+.research-apps-category .settings-section-title svg { flex-shrink: 0; }
+.research-apps-category-description { margin: -4px 0 12px; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.research-apps-summary { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
 .work-heading-actions { gap: 4px; }
 .work-more-button { display: grid; width: 24px; height: 24px; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
 .work-more-button:hover { color: var(--night-ink); background: var(--sb-hover); }

@@ -318,6 +318,7 @@ interface ExtensionSource {
 }
 
 interface ExtensionMarketplaceItem {
+  researchCategory?: import("./research-apps").ResearchAppCategory;
   id: string;
   canonicalId: string;
   name: string;
@@ -349,6 +350,7 @@ interface ExtensionMarketplaceItem {
 }
 
 interface SidebarPluginRecord {
+  researchCategory?: import("./research-apps").ResearchAppCategory;
   id: string;
   name: string;
   version: string;
