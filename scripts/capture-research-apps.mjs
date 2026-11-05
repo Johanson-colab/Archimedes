@@ -9,33 +9,39 @@ import { build } from "vite";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stage = process.argv[2];
+const settingsEntry = process.argv.includes("--settings-entry");
 if (!["before", "after"].includes(stage)) throw Error("Choose before or after.");
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-research-apps-"));
-const output = path.join(root, "docs/assets/research-apps");
+const output = path.join(root, settingsEntry ? "docs/assets/sidebar-settings-position" : "docs/assets/research-apps");
 fs.mkdirSync(output, { recursive: true });
-const baselineCommit = "f12de6b";
+const baselineCommit = settingsEntry ? "44cfc9e" : "f12de6b";
 const baseline = new Map(stage === "before" ? ["PluginsSettingsPanel.tsx", "SettingsModal.tsx", "sidebar-registry.tsx", "styles.css", "i18n/translations/settings.ts"].map(name => [path.join(root, "src", name), execFileSync("git", ["show", `${baselineCommit}:src/${name}`], { cwd: root, encoding: "utf8" })]) : []);
 const appSource = stage === "before" ? execFileSync("git", ["show", `${baselineCommit}:src/App.tsx`], { cwd: root, encoding: "utf8" }) : fs.readFileSync(path.join(root, "src/App.tsx"), "utf8");
-const navigation = appSource.slice(appSource.indexOf('<nav className="sidebar-nav sidebar-modules"'), appSource.indexOf('</nav>', appSource.indexOf('<nav className="sidebar-nav sidebar-modules"')) + 6);
+const navigation = appSource.slice(appSource.indexOf('<button className="new-task-button"'), appSource.indexOf('</nav>', appSource.indexOf('<nav className="sidebar-nav sidebar-modules"')) + 6);
+const footerStart = appSource.indexOf('<div className="sidebar-runtime"');
+const footer = appSource.slice(footerStart, appSource.indexOf('</div>', footerStart) + 6);
 const button = appSource.slice(appSource.indexOf("  const moduleButton ="), appSource.indexOf("  const paletteCommands:"));
 const source = name => JSON.stringify(path.join(root, "src", name));
 fs.writeFileSync(path.join(temporary, "index.html"), '<div id="root"></div><script type="module" src="./entry.tsx"></script>');
 fs.writeFileSync(path.join(temporary, "entry.tsx"), `
 import React,{useState} from 'react'; import {createRoot} from 'react-dom/client';
-import {Plus} from 'lucide-react';
+import {Plus,Settings} from 'lucide-react';
 import {UISettingsProvider,useUISettings} from ${source("i18n.tsx")};
 import {normalizeAppearance,applyAppearance} from ${source("appearance.ts")};
 import SettingsModal from ${source("SettingsModal.tsx")};
 import ProjectSidebar from ${source("ProjectSidebar.tsx")};
+import AccountChip from ${source("AccountChip.tsx")};
 import {sidebarEntries} from ${source("sidebar-registry.tsx")};
 import {defaultDisabledResearchApps} from ${source("research-apps.ts")};
 import ${source("tokens.css")}; import ${source("styles.css")}; import ${source("typography.css")};
 const params=new URLSearchParams(location.search), theme=params.get('theme')||'paper';
+const still=document.createElement('style');still.textContent='*,*::before,*::after{animation:none!important;transition:none!important}';document.head.append(still);
 localStorage.setItem('archimedes-language',params.get('language')||'en');
 const appearance=normalizeAppearance({preset:theme}); applyAppearance(document.documentElement,appearance,theme);
 const bridge={listSidebarPlugins:async()=>[], listExtensions:async()=>({items:[]})};
 function Fixture(){
- const {t}=useUISettings(); const [disabledCoreModules,setDisabled]=useState(${stage === "before" ? "[]" : "defaultDisabledResearchApps"});
+ const agentBusy=false,startNewTask=()=>{},authState={configured:true,user:null},localIdentity=null,openAuth=()=>{},signOut=async()=>{};
+ const {t}=useUISettings(); const [disabledCoreModules,setDisabled]=useState(${stage === "before" && !settingsEntry ? "[]" : "defaultDisabledResearchApps"});
  const [settingsOpen,setSettingsOpen]=useState(params.get('view')==='settings'); const [settingsSection,setSettingsSection]=useState('plugins');
  const [mainSection,setMainSection]=useState('chat'); const [activeModuleGroup,setActiveModuleGroup]=useState('knowledge'); const sidebarLayout='sections';
  const moduleGroups=['knowledge','create','evaluate'].map(id=>({id,label:t(id==='knowledge'?'Knowledge':id==='create'?'Create':'Evaluate'),entries:sidebarEntries(id).filter(entry=>!disabledCoreModules.includes(entry.id))})).filter(group=>group.entries.length);
@@ -45,9 +51,10 @@ function Fixture(){
  ${button}
  const toggle=async(id,enabled)=>setDisabled(previous=>enabled?previous.filter(value=>value!==id):[...previous,id]);
  return <main className={'codex-shell theme-'+theme} style={{'--sidebar-width':'260px'}}>
-  <aside className="codex-sidebar"><div className="codex-brand"><strong>Archimedes</strong></div><button className="new-task-button"><Plus size={17}/><span>{t('New research')}</span></button>
+  <aside className="codex-sidebar"><div className="codex-brand"><strong>Archimedes</strong></div>
    ${navigation}
    <ProjectSidebar projects={[]} archivedProjects={[]} threads={[]} archivedThreads={[]} activeProjectId={null} activeThreadId={null} disabled={false} onNewProject={()=>{}}/>
+  ${footer}
   </aside><section/>
   <SettingsModal {...{open:settingsOpen,section:settingsSection,onSectionChange:setSettingsSection,onClose:()=>setSettingsOpen(false),appearance,theme,themePreference:theme,systemAppearance:theme,bridge,workspace:'/fixture',disabledCoreModules,onCoreModuleEnabled:toggle,sidebarLayout,onSidebarLayoutChange:()=>{}}}/>
  </main>;
@@ -56,7 +63,7 @@ createRoot(document.getElementById('root')).render(<UISettingsProvider><Fixture/
 `);
 await build({ root: temporary, configFile: false, base: "./", resolve: { dedupe: ["react", "react-dom"], alias: { react: path.join(root, "node_modules/react"), "react-dom": path.join(root, "node_modules/react-dom"), "lucide-react": path.join(root, "node_modules/lucide-react") } }, plugins: [{ name: "baseline", load(id) { return baseline.get(id); } }], build: { outDir: path.join(temporary, "dist"), minify: false, chunkSizeWarningLimit: 3000 } });
 
-function capture({ temporary, output, stage, expectedApps }) {
+function capture({ temporary, output, stage, expectedApps, settingsEntry }) {
   const { app, BrowserWindow } = require("electron");
   const fs = require("node:fs"), path = require("node:path");
   app.commandLine.appendSwitch("disable-gpu"); app.setPath("userData", path.join(temporary, "profile"));
@@ -70,6 +77,16 @@ function capture({ temporary, output, stage, expectedApps }) {
       const sidebar = await evaluate(() => ({ label: document.querySelector(".sidebar-section-label")?.textContent, apps: [...document.querySelectorAll(".sidebar-module-list button span:first-of-type")].map(node => node.textContent), work: Boolean(document.querySelector(".work-group")) }));
       observations.push({ theme, view: "sidebar", ...sidebar });
       fs.writeFileSync(path.join(output, `${theme}-sidebar-${stage}.png`), (await win.webContents.capturePage({ x: 0, y: 0, width: 260, height: 960 })).toPNG());
+      if (settingsEntry) {
+        const position = await evaluate(() => {
+          const settings = document.querySelector('.codex-sidebar button[aria-label="Settings"]');
+          return { settingsY:settings.getBoundingClientRect().y, appsY:document.querySelector('.sidebar-section-label').getBoundingClientRect().y, label:settings.textContent, count:document.querySelectorAll('.codex-sidebar button[aria-label="Settings"]').length, inFooter:Boolean(settings.closest('.sidebar-runtime')) };
+        });
+        await evaluate(() => document.querySelector('.codex-sidebar button[aria-label="Settings"]').click()); await pause();
+        observations.push({theme,view:"settings-entry",...position,opened:await evaluate(()=>document.querySelector('.settings-header h2')?.textContent === 'General')});
+        await evaluate(() => document.querySelector('[aria-label="Close settings"]').click()); await pause();
+        continue;
+      }
       for (const width of [1100, 680]) {
         win.setSize(width, 960);
         await win.loadFile(path.join(temporary, "dist/index.html"), { query: { theme, view: "settings" } }); await pause();
@@ -88,10 +105,10 @@ function capture({ temporary, output, stage, expectedApps }) {
     }
     console.log(JSON.stringify(observations));
     fs.writeFileSync(path.join(output, `${stage}-geometry.json`), JSON.stringify(observations, null, 2) + "\n");
-    const passed = stage === "before" || observations.every(item => item.view === "sidebar" ? item.label === "Research Apps" && item.apps.join("|") === expectedApps.join("|") && item.work : item.heading === "Research Apps" && item.categories.length === 5 && item.enabled === expectedApps.length && !item.overflow && item.scrollable);
+    const passed = settingsEntry ? observations.filter(item=>item.view==="settings-entry").every(item=>item.opened && item.count===1 && (stage==="before" ? item.inFooter : !item.inFooter && item.settingsY<item.appsY && item.label==="Settings")) : stage === "before" || observations.every(item => item.view === "sidebar" ? item.label === "Research Apps" && item.apps.join("|") === expectedApps.join("|") && item.work : item.heading === "Research Apps" && item.categories.length === 5 && item.enabled === expectedApps.length && !item.overflow && item.scrollable);
     win.destroy(); fs.rmSync(temporary, { recursive: true, force: true }); app.exit(passed ? 0 : 1);
   }).catch(error => { console.error(error.message); fs.rmSync(temporary, { recursive: true, force: true }); app.exit(1); });
 }
 const runner = path.join(temporary, "capture.cjs");
-fs.writeFileSync(runner, "(" + capture.toString() + ")(" + JSON.stringify({ temporary, output, stage, expectedApps: ["Library", "Daily papers", "Reproduce", "Image creation", "Data charts", "Paper writing"] }) + ");");
+fs.writeFileSync(runner, "(" + capture.toString() + ")(" + JSON.stringify({ temporary, output, stage, settingsEntry, expectedApps: ["Library", "Daily papers", "Reproduce", "Image creation", "Data charts", "Paper writing"] }) + ");");
 console.log(JSON.stringify({ runner }));

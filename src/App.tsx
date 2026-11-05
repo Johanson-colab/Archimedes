@@ -2965,6 +2965,10 @@ function App() {
           <span>{t("New research")}</span>
         </button>
 
+        <button className="codex-nav-item sidebar-settings-entry" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
+          <Settings size={15} strokeWidth={1.7} /><span>{t("Settings")}</span>
+        </button>
+
         <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
           <div className="sidebar-section-label">
             <span>{t("Research Apps")}</span>
@@ -2996,7 +3000,6 @@ function App() {
 
         <div className="sidebar-runtime">
           <AccountChip authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
-          <button className="sidebar-settings-button" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}><Settings size={15} strokeWidth={1.7} /></button>
         </div>
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>

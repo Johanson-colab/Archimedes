@@ -1,0 +1,50 @@
+[
+  {
+    "theme": "paper",
+    "view": "sidebar",
+    "label": "Research Apps",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Data charts",
+      "Paper writing"
+    ],
+    "work": true
+  },
+  {
+    "theme": "paper",
+    "view": "settings-entry",
+    "settingsY": 788.5,
+    "appsY": 123,
+    "label": "",
+    "count": 1,
+    "inFooter": true,
+    "opened": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "sidebar",
+    "label": "Research Apps",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Data charts",
+      "Paper writing"
+    ],
+    "work": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "settings-entry",
+    "settingsY": 788.5,
+    "appsY": 123,
+    "label": "",
+    "count": 1,
+    "inFooter": true,
+    "opened": true
+  }
+]

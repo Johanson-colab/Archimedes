@@ -158,6 +158,9 @@ test("Extensions uses Installed, Available, and Updates with Workbench tabs", ()
 });
 
 test("account chip is global and runtime moves to the composer", () => {
+  const settings = app.indexOf('className="codex-nav-item sidebar-settings-entry"');
+  assert.ok(settings > app.indexOf('className="new-task-button"') && settings < app.indexOf('<nav className="sidebar-nav sidebar-modules"'), "Settings is above Research Apps and Work");
+  assert.ok(!app.slice(app.indexOf('<div className="sidebar-runtime"'), app.indexOf('<div className="sidebar-resizer"')).includes('aria-label={t("Settings")}'), "footer contains account access only");
   assert.match(app, /className="sidebar-runtime"/);
   assert.match(app, /<AccountChip authState=\{authState\}/);
   assert.match(app, /className="composer-runtime-switch" aria-label="Runtime location"/);
