@@ -239,7 +239,7 @@ export default function DataChartGallery({ active, sort }: { active: boolean; so
   const [filterOpen, setFilterOpen] = useState(false);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => { if (!active) setSelectedId(null); }, [active]);
+  useEffect(() => { if (!active) { setSelectedId(null); setFilterOpen(false); } }, [active]);
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => window.clearTimeout(timer);

@@ -25,7 +25,7 @@ test("all true tab groups use the primitive", () => {
     ["src/LibraryView.tsx", /<Tabs value=\{readerView\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{searchActive \? "" : mode\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{searchKind\}/],
-    ["src/ImageCreationView.tsx", /<Tabs value=\{tab\}/],
+    ["src/ImageCreationView.tsx", /<Tabs value=\{forgeMethod\}/],
     ["src/BenchmarkRadarView.tsx", /<Tabs value=\{tab\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{aiMode\}/],
   ];
@@ -43,7 +43,9 @@ test("filters use filter groups instead of tab semantics", () => {
 
 test("actions are kept outside tab lists", () => {
   const image = read("src/ImageCreationView.tsx");
-  assert.ok(image.indexOf("</Tabs>") < image.indexOf('className="image-creation-actions"'));
+  const galleryHeader = image.slice(image.indexOf('className="image-creation-tabs"'), image.indexOf('className="image-creation-panel"'));
+  assert.ok(!galleryHeader.includes("<Tabs"), "the gallery heading is no longer a tab list");
+  assert.ok(galleryHeader.includes('className="image-creation-actions"'));
   assert.match(read("src/LibraryView.tsx"), /className="paper-reader-action reproduce-tab"/);
   assert.ok(read("src/ProactiveAgentPanel.tsx").indexOf("</FilterGroup>") < read("src/ProactiveAgentPanel.tsx").indexOf("agent-proactive-history-scope"));
 });

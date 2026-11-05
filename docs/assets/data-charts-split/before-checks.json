@@ -1,0 +1,132 @@
+[
+  {
+    "theme": "paper",
+    "view": "diagrams",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Paper writing"
+    ],
+    "charts": 0,
+    "diagrams": 6,
+    "overflow": false,
+    "requests": [
+      "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/data/figures.json"
+    ]
+  },
+  {
+    "theme": "paper",
+    "view": "forge",
+    "visible": true,
+    "steps": 4,
+    "returned": true
+  },
+  {
+    "theme": "paper",
+    "view": "charts",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Paper writing"
+    ],
+    "charts": 3,
+    "diagrams": 0,
+    "overflow": false,
+    "requests": [
+      "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/data/figures.json",
+      "https://paperfigure.net/data/index-0.json",
+      "https://paperfigure.net/data/index-1.json",
+      "https://paperfigure.net/data/index-2.json",
+      "https://paperfigure.net/data/index-3.json"
+    ]
+  },
+  {
+    "theme": "paper",
+    "view": "charts-narrow",
+    "overflow": false
+  },
+  {
+    "theme": "paper",
+    "view": "settings",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Paper writing"
+    ],
+    "charts": 0,
+    "diagrams": 0,
+    "overflow": false,
+    "requests": []
+  },
+  {
+    "theme": "charcoal",
+    "view": "diagrams",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Paper writing"
+    ],
+    "charts": 0,
+    "diagrams": 6,
+    "overflow": false,
+    "requests": [
+      "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/data/figures.json"
+    ]
+  },
+  {
+    "theme": "charcoal",
+    "view": "forge",
+    "visible": true,
+    "steps": 4,
+    "returned": true
+  },
+  {
+    "theme": "charcoal",
+    "view": "charts",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Paper writing"
+    ],
+    "charts": 3,
+    "diagrams": 0,
+    "overflow": false,
+    "requests": [
+      "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/data/figures.json",
+      "https://paperfigure.net/data/index-0.json",
+      "https://paperfigure.net/data/index-1.json",
+      "https://paperfigure.net/data/index-2.json",
+      "https://paperfigure.net/data/index-3.json"
+    ]
+  },
+  {
+    "theme": "charcoal",
+    "view": "charts-narrow",
+    "overflow": false
+  },
+  {
+    "theme": "charcoal",
+    "view": "settings",
+    "apps": [
+      "Library",
+      "Daily papers",
+      "Reproduce",
+      "Image creation",
+      "Paper writing"
+    ],
+    "charts": 0,
+    "diagrams": 0,
+    "overflow": false,
+    "requests": []
+  }
+]

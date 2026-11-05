@@ -56,7 +56,7 @@ createRoot(document.getElementById('root')).render(<UISettingsProvider><Fixture/
 `);
 await build({ root: temporary, configFile: false, base: "./", resolve: { dedupe: ["react", "react-dom"], alias: { react: path.join(root, "node_modules/react"), "react-dom": path.join(root, "node_modules/react-dom"), "lucide-react": path.join(root, "node_modules/lucide-react") } }, plugins: [{ name: "baseline", load(id) { return baseline.get(id); } }], build: { outDir: path.join(temporary, "dist"), minify: false, chunkSizeWarningLimit: 3000 } });
 
-function capture({ temporary, output, stage }) {
+function capture({ temporary, output, stage, expectedApps }) {
   const { app, BrowserWindow } = require("electron");
   const fs = require("node:fs"), path = require("node:path");
   app.commandLine.appendSwitch("disable-gpu"); app.setPath("userData", path.join(temporary, "profile"));
@@ -88,10 +88,10 @@ function capture({ temporary, output, stage }) {
     }
     console.log(JSON.stringify(observations));
     fs.writeFileSync(path.join(output, `${stage}-geometry.json`), JSON.stringify(observations, null, 2) + "\n");
-    const passed = stage === "before" || observations.every(item => item.view === "sidebar" ? item.label === "Research Apps" && item.apps.join("|") === "Library|Daily papers|Reproduce|Image creation|Paper writing" && item.work : item.heading === "Research Apps" && item.categories.length === 5 && item.enabled === 5 && !item.overflow && item.scrollable);
+    const passed = stage === "before" || observations.every(item => item.view === "sidebar" ? item.label === "Research Apps" && item.apps.join("|") === expectedApps.join("|") && item.work : item.heading === "Research Apps" && item.categories.length === 5 && item.enabled === expectedApps.length && !item.overflow && item.scrollable);
     win.destroy(); fs.rmSync(temporary, { recursive: true, force: true }); app.exit(passed ? 0 : 1);
   }).catch(error => { console.error(error.message); fs.rmSync(temporary, { recursive: true, force: true }); app.exit(1); });
 }
 const runner = path.join(temporary, "capture.cjs");
-fs.writeFileSync(runner, "(" + capture.toString() + ")(" + JSON.stringify({ temporary, output, stage }) + ");");
+fs.writeFileSync(runner, "(" + capture.toString() + ")(" + JSON.stringify({ temporary, output, stage, expectedApps: ["Library", "Daily papers", "Reproduce", "Image creation", "Data charts", "Paper writing"] }) + ");");
 console.log(JSON.stringify({ runner }));

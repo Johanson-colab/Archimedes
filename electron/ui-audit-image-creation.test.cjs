@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const registry = fs.readFileSync(path.join(root, "src", "sidebar-registry.tsx"), "utf8");
 const view = fs.readFileSync(path.join(root, "src", "ImageCreationView.tsx"), "utf8");
+const chartPage = fs.readFileSync(path.join(root, "src", "DataChartsView.tsx"), "utf8");
 const charts = fs.readFileSync(path.join(root, "src", "DataChartGallery.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const i18n = readLocale();
@@ -23,11 +24,12 @@ test("Paper diagrams is a view inside Image creation, not a second Create destin
   assert.match(i18n, /"Generate and remix research figures"/);
 });
 
-test("the page keeps Paper diagrams and Data charts in one tab row without Templates", () => {
+test("Image creation keeps Paper diagrams and FigureForge without Data charts or Templates", () => {
   assert.match(view, /className="image-creation-tabs">/);
-  assert.match(view, /<Tabs value=\{tab\}/);
+  assert.ok(view.includes('className="image-creation-heading"'));
   assert.match(view, />\s*Paper diagrams <small>/);
-  assert.match(view, />\s*Data charts\s*</);
+  assert.ok(!view.includes("DataChartGallery"));
+  assert.ok(!view.includes("image-creation-tab-charts"));
   assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard/);
   assert.match(view, /className="image-creation-actions"/);
   assert.match(view, /className="image-creation-sort"/);
@@ -42,11 +44,15 @@ test("the tab row does not draw a divider above the search bar", () => {
   assert.match(css, /\.image-creation-controls \{[^}]*margin: 12px 0 15px/);
 });
 
-test("Data charts is a separate tab with chart types and tables, but no field or venue filter", () => {
-  assert.match(view, /<Tab value="charts" id="image-creation-tab-charts"/);
-  assert.match(view, /<DataChartGallery active=\{active\} sort=\{chartSort\} \/>/);
-  assert.match(view, /<option value="preferred">Sort: AI venues first<\/option>/);
-  assert.match(view, /<option value="newest">Sort: Newest across all<\/option>/);
+test("Data charts is a separate app with chart types and tables, but no field or venue filter", () => {
+  assert.ok(registry.includes('id: "data-charts"'));
+  assert.ok(app.includes('lazy(() => import("./DataChartsView"))'));
+  assert.ok(app.includes('<DataChartsView active={mainSection === "data-charts"} />'));
+  assert.ok(app.includes('"data-charts": dataChartsOpened'));
+  assert.ok(chartPage.includes('<DataChartGallery active={active} sort={sort} />'));
+  assert.ok(chartPage.includes('t("Sort: AI venues first")'));
+  assert.ok(chartPage.includes('t("Sort: Newest across all")'));
+  assert.ok(!chartPage.includes("FigureForge"));
   assert.match(charts, /type Category = "data" \| "table"/);
   assert.match(charts, /EXCLUDED_CHARTS = new Set\(\["area", "other", "mixed"\]\)/);
   assert.match(charts, /figure\.chart_types\.some\(\(type\) => EXCLUDED_CHARTS\.has\(type\)\)/);
@@ -94,7 +100,7 @@ test("FigureForge opens as a separate workspace without a gallery composer", () 
   assert.match(view, /className="image-creation-forge-button" onClick=\{\(\) => showForge\(true\)\}/);
   assert.match(view, /className="figure-forge-page"/);
   assert.match(view, /className="figure-forge-back" onClick=\{\(\) => showForge\(false\)\}/);
-  assert.match(view, /setTab\("gallery"\); showForge\(false\)/);
+  assert.ok(view.includes('onClick={() => showForge(false)}>{t("Browse gallery")}'));
   assert.match(view, /function useAsTemplate[\s\S]*?setReferences[\s\S]*?showForge\(true\)/);
   assert.match(view, /pageRef\.current\?\.scrollIntoView\(\{ block: "start" \}\)/);
   assert.doesNotMatch(view, /<Dialog open=\{forgeOpen\}/);

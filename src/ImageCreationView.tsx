@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Search, SlidersHorizontal, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { MenuSurface } from "./Menu";
-import DataChartGallery from "./DataChartGallery";
 import { Tabs, Tab } from "./Tabs";
 
 import { Dialog } from "./Dialog";
@@ -170,10 +169,8 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS);
   const [sort, setSort] = useState("newest");
-  const [chartSort, setChartSort] = useState<"preferred" | "newest">("preferred");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"gallery" | "charts">("gallery");
   const [filterOpen, setFilterOpen] = useState(false);
   const [references, setReferences] = useState<Figure[]>([]);
   const [uploadedReferences, setUploadedReferences] = useState<Array<{ id: string; name: string; file: File; url: string }>>([]);
@@ -244,7 +241,6 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   useEffect(() => { if (!active) setSelectedId(null); }, [active]);
   useEffect(() => { uploadedReferencesRef.current = uploadedReferences; }, [uploadedReferences]);
   useEffect(() => () => { uploadedReferencesRef.current.forEach((item) => URL.revokeObjectURL(item.url)); }, []);
-  useEffect(() => { setSelectedId(null); }, [tab]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); setSelectedId(null); }, [filters, query, sort]);
   // The design contract is derived from the plan text and the exact reference
   // set. Editing either one silently invalidates it, so it is dropped rather
@@ -569,34 +565,24 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     document.getElementById(`forge-step-${index}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
 
-  return <main ref={pageRef} className={tab === "charts" ? "image-creation-page data-chart-page" : "image-creation-page"}>
+  return <main ref={pageRef} className="image-creation-page">
     {!forgeOpen && <div className="image-creation-tabs">
-      <Tabs value={tab} onChange={(value) => setTab(value as "gallery" | "charts")} label="Image creation views" className="workbench-tabs image-creation-tablist">
-        <Tab value="gallery" id="image-creation-tab-gallery" controls="image-creation-panel-gallery" className="workbench-tab">Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small></Tab>
-        <Tab value="charts" id="image-creation-tab-charts" controls="image-creation-panel-charts" className="workbench-tab">Data charts</Tab>
-      </Tabs>
+      <h2 className="image-creation-heading">Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small></h2>
       <div className="image-creation-actions">
-        {tab === "gallery" && <label className="image-creation-sort">
+        <label className="image-creation-sort">
           <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort paper diagrams">
             <option value="newest">Sort: Newest</option>
             <option value="venue">Sort: Venue / year</option>
             <option value="oldest">Sort: Oldest</option>
           </select>
           <ChevronDown size={12} aria-hidden="true" />
-        </label>}
-        {tab === "charts" && <label className="image-creation-sort">
-          <select value={chartSort} onChange={(event) => setChartSort(event.target.value as "preferred" | "newest")} aria-label="Sort data charts">
-            <option value="preferred">Sort: AI venues first</option>
-            <option value="newest">Sort: Newest across all</option>
-          </select>
-          <ChevronDown size={12} aria-hidden="true" />
-        </label>}
-        {tab === "gallery" && <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>}
+        </label>
+        <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>
         <button type="button" className="image-creation-forge-button" onClick={() => showForge(true)}><Wand2 size={14} />FigureForge</button>
       </div>
     </div>}
 
-    {!forgeOpen && (tab === "gallery" ? <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-gallery" aria-labelledby="image-creation-tab-gallery">
+    {!forgeOpen && <section className="image-creation-panel" aria-label="Paper diagrams">
       <div className="image-creation-controls">
         <label className="gallery-search image-creation-search"><Search size={17} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a published diagram, author, or topic" aria-label="Search paper diagrams" /></label>
         <div className="image-creation-filter">
@@ -621,7 +607,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
               {visibleCount < result.length && <div className="gallery-load-more"><button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show more figures <span>{Math.min(visibleCount, result.length).toLocaleString()} / {result.length.toLocaleString()}</span></button></div>}
             </>}
       <p className="gallery-credit">Figures belong to their paper authors and publishers. The catalogue and image files are served by <a href={GALLERY_ROOT} target="_blank" rel="noreferrer">Top-Conf Figure Gallery</a>. Check each paper's license before reuse.</p>
-    </div> : <div className="image-creation-panel" role="tabpanel" id="image-creation-panel-charts" aria-labelledby="image-creation-tab-charts"><DataChartGallery active={active} sort={chartSort} /></div>)}
+    </section>}
 
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
     {active && forgeOpen && <section className="figure-forge-page" aria-label={t("FigureForge planning workspace")}>
@@ -736,7 +722,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
             </div>
             <span className={`forge-pill${selectedReferenceCount >= referenceFloor ? " is-ready" : ""}`}>{selectedReferenceCount} / {referenceFloor}–{referenceCeiling}</span>
             <div className="forge-step-actions">
-              <button type="button" className="forge-secondary" onClick={() => { setTab("gallery"); showForge(false); }}>{t("Browse gallery")}</button>
+              <button type="button" className="forge-secondary" onClick={() => showForge(false)}>{t("Browse gallery")}</button>
               <button type="button" className="forge-primary" disabled={searchBusy} onClick={() => void findReferences()}>{searchBusy ? t("Searching…") : t("Search references")}</button>
             </div>
           </header>

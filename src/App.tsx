@@ -484,9 +484,13 @@ const previewExtensionItems: ExtensionMarketplaceItem[] = [
 function readPreviewSidebarSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem("archimedes-research-apps") || "null");
-    if (Array.isArray(saved?.disabledCore)) return { version: 3, layout: "flat" as const, disabledCore: saved.disabledCore.filter((id: unknown): id is string => typeof id === "string" && Object.hasOwn(researchAppMetadata, id)) };
+    if (Array.isArray(saved?.disabledCore)) {
+      const disabledCore: string[] = saved.disabledCore.filter((id: unknown): id is string => typeof id === "string" && Object.hasOwn(researchAppMetadata, id));
+      if ((Number(saved.version) || 0) < 4 && disabledCore.includes("image-creation") && !disabledCore.includes("data-charts")) disabledCore.push("data-charts");
+      return { version: 4, layout: "flat" as const, disabledCore };
+    }
   } catch { /* Preview storage is optional. */ }
-  return { version: 3, layout: "flat" as const, disabledCore: [...defaultDisabledResearchApps] };
+  return { version: 4, layout: "flat" as const, disabledCore: [...defaultDisabledResearchApps] };
 }
 
 const previewBridge = {
@@ -1146,6 +1150,7 @@ const FileCodeEditor = lazy(() => import("./FileCodeEditor"));
 // Sidebar modules are the built-in plugins: they load as separate chunks, but
 // the registry in sidebar-registry.tsx stays the single source of truth.
 const LibraryView = lazy(() => import("./LibraryView"));
+const DataChartsView = lazy(() => import("./DataChartsView"));
 const ImageCreationView = lazy(() => import("./ImageCreationView"));
 const BenchmarkRadarView = lazy(() => import("./BenchmarkRadarView"));
 const NewsView = lazy(() => import("./NewsView"));
@@ -1286,6 +1291,7 @@ function App() {
   const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("installed");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [imageCreationOpened, setImageCreationOpened] = useState(false);
+  const [dataChartsOpened, setDataChartsOpened] = useState(false);
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -1869,6 +1875,7 @@ function App() {
     const section = entry.destination.section;
     if (section === "daily") setDailyStartMode("latest");
     if (section === "image-creation") setImageCreationOpened(true);
+    if (section === "data-charts") setDataChartsOpened(true);
     setMainSection(section);
   }
 
@@ -2935,12 +2942,13 @@ function App() {
     extensions: <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />,
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
+    "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
     writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
   };
   for (const entry of pluginEntries) {
     sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;
   }
-  const sidebarModuleOpen: Partial<Record<string, boolean>> = { "image-creation": imageCreationOpened };
+  const sidebarModuleOpen: Partial<Record<string, boolean>> = { "image-creation": imageCreationOpened, "data-charts": dataChartsOpened };
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>

@@ -13,10 +13,10 @@ function initialize(t, saved) {
 }
 
 const hiddenByDefault = ["news", "benchmark-radar", "extensions", "paper-review"];
-test("new installations show exactly the five requested Research Apps", (t) => {
+test("new installations show exactly the six Research Apps including standalone data charts", (t) => {
   const { settings } = initialize(t);
-  assert.deepEqual(settings, { version: 3, layout: "flat", disabledCore: hiddenByDefault });
-  assert.deepEqual(sidebarSettings.CORE_MODULE_IDS.filter((id) => !settings.disabledCore.includes(id)), ["library", "daily", "reproduce", "writing", "image-creation"]);
+  assert.deepEqual(settings, { version: 4, layout: "flat", disabledCore: hiddenByDefault });
+  assert.deepEqual(sidebarSettings.CORE_MODULE_IDS.filter((id) => !settings.disabledCore.includes(id)), ["library", "daily", "reproduce", "writing", "image-creation", "data-charts"]);
 });
 
 test("visibility toggles persist without reapplying defaults", (t) => {
@@ -30,17 +30,17 @@ test("visibility toggles persist without reapplying defaults", (t) => {
   assert.deepEqual(sidebarSettings.initialize(root).disabledCore, ["news"]);
 });
 
-test("legacy default-all installations adopt five defaults in every old layout", (t) => {
+test("legacy default-all installations adopt Research Apps defaults in every old layout", (t) => {
   for (const layout of ["flat", "tabs", "sections"]) {
     const { settings } = initialize(t, { version: 2, layout, disabledCore: [] });
-    assert.deepEqual(settings, { version: 3, layout: "flat", disabledCore: hiddenByDefault });
+    assert.deepEqual(settings, { version: 4, layout: "flat", disabledCore: hiddenByDefault });
   }
 });
 
 test("legacy custom visibility is preserved while grouped layout is retired", (t) => {
   for (const version of [1, 2]) {
     const { settings } = initialize(t, { version, layout: "sections", disabledCore: ["daily"] });
-    assert.deepEqual(settings, { version: 3, layout: "flat", disabledCore: ["daily"] });
+    assert.deepEqual(settings, { version: 4, layout: "flat", disabledCore: ["daily"] });
   }
 });
 
@@ -59,4 +59,19 @@ test("corrupt settings fall back safely and unknown ids are sanitized", (t) => {
   assert.throws(() => sidebarSettings.setCoreEnabled("unknown", false));
   fs.writeFileSync(path.join(root, "sidebar-settings.json"), "not JSON");
   assert.deepEqual(sidebarSettings.initialize(root).disabledCore, hiddenByDefault);
+});
+
+
+test("split charts inherits Image creation visibility once and keeps later independent choices", (t) => {
+  const { root, settings } = initialize(t, { version: 3, disabledCore: ["news", "image-creation"] });
+  assert.deepEqual(settings.disabledCore, ["news", "image-creation", "data-charts"]);
+  sidebarSettings.setCoreEnabled("data-charts", true);
+  assert.deepEqual(sidebarSettings.initialize(root).disabledCore, ["news", "image-creation"]);
+  sidebarSettings.setCoreEnabled("data-charts", false);
+  assert.ok(sidebarSettings.initialize(root).disabledCore.includes("data-charts"));
+});
+
+test("upgrading version 3 keeps explicit all-visible preferences", (t) => {
+  const { settings } = initialize(t, { version: 3, layout: "flat", disabledCore: [] });
+  assert.deepEqual(settings, { version: 4, layout: "flat", disabledCore: [] });
 });

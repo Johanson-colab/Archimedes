@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SETTINGS_FILE = "sidebar-settings.json";
-const PREFERENCES_VERSION = 3;
+const PREFERENCES_VERSION = 4;
 const researchApps = require("../shared/research-apps.json");
 const DEFAULT_DISABLED_CORE = Object.entries(researchApps.apps).filter(([, app]) => !app.defaultEnabled).map(([id]) => id);
 const LAYOUTS = new Set(["flat", "tabs", "sections"]);
@@ -17,6 +17,7 @@ const CORE_MODULE_IDS = [
   "reproduce",
   "writing",
   "image-creation",
+  "data-charts",
   "paper-review",
 ];
 const CORE_ID_SET = new Set(CORE_MODULE_IDS);
@@ -35,11 +36,13 @@ function normalize(input = {}) {
     if (typeof value !== "string" || !CORE_ID_SET.has(value) || disabledCore.includes(value)) continue;
     disabledCore.push(value);
   }
+  // Charts used to belong to Image creation; preserve that visibility on upgrade.
+  if ((Number(source.version) || 0) < 4 && disabledCore.includes("image-creation") && !disabledCore.includes("data-charts")) disabledCore.push("data-charts");
   return {
     version: PREFERENCES_VERSION,
     // Old layout preferences are accepted on disk, but no longer drive navigation.
     layout: "flat",
-    disabledCore: (Number(source.version) || 0) < PREFERENCES_VERSION && disabledCore.length === 0
+    disabledCore: (Number(source.version) || 0) < 3 && disabledCore.length === 0
       ? [...DEFAULT_DISABLED_CORE]
       : Array.isArray(source.disabledCore) ? disabledCore : [...DEFAULT_DISABLED_CORE],
   };
