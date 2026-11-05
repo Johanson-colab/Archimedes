@@ -123,3 +123,42 @@ test("resolves a paper figure and caches the miss", async () => {
   assert.equal(requested.length, 1, "the figure is cached");
   assert.equal(await resolveArxivFigure("not-an-id", fetchImpl), "");
 });
+
+test("figure discovery stops streaming once the first figure URL is found", async () => {
+  let cancelled = false;
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode('<html><figure><img src="2611.90001v1/first.png">')); },
+    cancel() { cancelled = true; },
+  });
+  const result = await resolveArxivFigure("2611.90001", async () => new Response(body));
+  assert.equal(result, "https://arxiv.org/html/2611.90001v1/first.png");
+  assert.equal(cancelled, true, "the rest of a potentially large paper is not downloaded");
+});
+
+test("a stalled primary host falls back once without a retry loop", async () => {
+  const requests = [];
+  const result = await resolveArxivFigure("2611.90002", async (url, input) => {
+    assert.ok(input.signal instanceof AbortSignal);
+    requests.push(url);
+    if (url.startsWith("https://arxiv.org/")) throw new DOMException("timeout", "TimeoutError");
+    return new Response('<figure><img src="2611.90002v1/first.png"></figure>');
+  });
+  assert.equal(requests.length, 2);
+  assert.equal(result, "https://ar5iv.labs.arxiv.org/html/2611.90002v1/first.png");
+});
+
+test("duplicate lookups share a request and the figure resolver never exceeds three slots", async () => {
+  let active = 0, peak = 0, calls = 0;
+  const fetchImpl = async () => {
+    active++; calls++; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 5)); active--;
+    return new Response('<figure><img src="first.png"></figure>');
+  };
+  const results = await Promise.all([...Array.from({ length: 7 }, (_, i) => resolveArxivFigure(`2611.9010${i}`, fetchImpl)), resolveArxivFigure("2611.90100", fetchImpl)]);
+  assert.equal(calls, 7); assert.equal(peak, 3); assert.equal(results[0], results.at(-1));
+});
+
+test("an oversized stream chunk still yields a figure inside the bounded prefix", async () => {
+  const body = '<figure><img src="2611.90003v1/first.png"></figure>' + ' '.repeat(5 * 1024 * 1024);
+  assert.equal(await resolveArxivFigure("2611.90003", async () => new Response(body)), "https://arxiv.org/html/2611.90003v1/first.png");
+});

@@ -36,7 +36,7 @@ test("daily rows pair the copy with the paper figure on the right", () => {
   assert.match(library, /function DailyThumbnail\(/);
   assert.match(library, /daily-paper-thumb/);
   assert.match(library, /IntersectionObserver/);
-  assert.match(library, /bridge\.getDailyFigure/);
+  assert.match(library, /subscribeDailyFigure/);
   assert.match(css, /\.daily-paper-row \{[^}]*grid-template-columns: minmax\(0, 1fr\) 208px/);
   assert.match(css, /\.daily-paper-thumb img \{[^}]*object-fit: cover/);
   // The preview is the paper's own figure, not a generated social card.
@@ -50,7 +50,7 @@ test("a daily row opens a large paper preview without losing its inline actions"
   assert.match(library, /function DailyPaperPreview\(/);
   assert.match(library, /<Dialog open onClose=\{onClose\} size="lg" className="daily-paper-preview-dialog"/);
   assert.match(library, /className="daily-paper-preview-figure"/);
-  assert.match(library, /bridge\.getDailyFigure/);
+  assert.match(library, /subscribeDailyFigure/);
   assert.match(library, /className="daily-paper-preview-actions"/);
   assert.match(library, /role="button"[\s\S]*?setPreviewPaper\(paper\)/);
   assert.match(library, /closest\("a, button, input, textarea, select, label"\)/);

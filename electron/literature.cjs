@@ -281,6 +281,9 @@ async function discoverHuggingFacePapers(options) {
 // HTML rendering of the paper rather than a generated social card.
 const ARXIV_HTML_HOSTS = ["https://arxiv.org/html", "https://ar5iv.labs.arxiv.org/html"];
 const FIGURE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const FIGURE_MISS_TTL_MS = 2 * 60 * 1000;
+const MAX_FIGURE_CACHE_ENTRIES = 512;
+const MAX_FIGURE_HTML_BYTES = 4 * 1024 * 1024;
 // A feed of sixty rows must not turn into sixty simultaneous arXiv requests.
 const FIGURE_CONCURRENCY = 3;
 const figureCache = new Map();
@@ -289,14 +292,14 @@ let figureActive = 0;
 const figureWaiting = [];
 
 async function withFigureSlot(task) {
-  if (figureActive >= FIGURE_CONCURRENCY) await new Promise((resolve) => figureWaiting.push(resolve));
-  figureActive += 1;
+  if (figureActive < FIGURE_CONCURRENCY) figureActive += 1;
+  else await new Promise((resolve) => figureWaiting.push(resolve));
   try {
     return await task();
   } finally {
-    figureActive -= 1;
     const next = figureWaiting.shift();
     if (next) next();
+    else figureActive -= 1;
   }
 }
 
@@ -320,21 +323,51 @@ function firstFigureSrc(html) {
   return "";
 }
 
+// Stop downloading the HTML as soon as a complete figure source is available.
+async function readFirstFigure(response) {
+  if (!response.body?.getReader) return firstFigureSrc((await response.text()).slice(0, MAX_FIGURE_HTML_BYTES));
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let html = "", bytes = 0;
+  try {
+    while (bytes < MAX_FIGURE_HTML_BYTES) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const part = value.subarray(0, MAX_FIGURE_HTML_BYTES - bytes);
+      bytes += part.byteLength;
+      html += decoder.decode(part, { stream: true });
+      const src = firstFigureSrc(html);
+      if (src) return src;
+    }
+    return firstFigureSrc(html + decoder.decode());
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+function isArxivFigureUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && !url.port
+      && ["arxiv.org", "ar5iv.labs.arxiv.org", "ar5iv.org"].includes(url.hostname);
+  } catch { return false; }
+}
+
 async function fetchArxivFigure(arxivId, fetchImpl) {
   for (const host of ARXIV_HTML_HOSTS) {
     const pageUrl = `${host}/${arxivId}`;
     try {
+      // One bounded attempt per host: a slow preview must not hold a slot for a minute.
       const response = await fetchWithRetry(pageUrl, {
         headers: { Accept: "text/html", "User-Agent": "Archimedes-Research/0.1" },
-      }, { provider: "arXiv", attempts: 2, retryDelayMs: 600, timeoutMs: 15_000, fetchImpl });
-      if (!response.ok) continue;
-      // Papers without an HTML rendering answer 200 with the abstract page.
-      if (/\/abs\//.test(String(response.url || ""))) continue;
-      const src = firstFigureSrc(await response.text());
+      }, { provider: "arXiv", attempts: 1, timeoutMs: 6_000, fetchImpl });
+      if (!response.ok) { await response.body?.cancel?.(); continue; }
+      if (/\/abs\//.test(String(response.url || ""))) { await response.body?.cancel?.(); continue; }
+      const src = await readFirstFigure(response);
       if (!src) continue;
-      const url = new URL(src, pageUrl).toString();
-      if (!/^https:\/\//i.test(url)) continue;
-      return url;
+      const url = new URL(src, response.url || pageUrl).toString();
+      if (/^https:\/\//i.test(url)) return url;
     } catch {
       // Try the next mirror before giving up on this paper.
     }
@@ -346,12 +379,15 @@ async function resolveArxivFigure(arxivId, fetchImpl = fetch) {
   const id = normalizeWhitespace(arxivId);
   if (!/^\d{4}\.\d{4,5}$/.test(id)) return "";
   const cached = figureCache.get(id);
-  if (cached && Date.now() - cached.at < FIGURE_CACHE_TTL_MS) return cached.url;
+  if (cached && Date.now() - cached.at < (cached.url ? FIGURE_CACHE_TTL_MS : FIGURE_MISS_TTL_MS)) return cached.url;
   const pending = figureInflight.get(id);
   if (pending) return pending;
+  if (figureInflight.size >= 64) return "";
   const task = withFigureSlot(() => fetchArxivFigure(id, fetchImpl))
     .then((url) => {
+      figureCache.delete(id);
       figureCache.set(id, { url, at: Date.now() });
+      while (figureCache.size > MAX_FIGURE_CACHE_ENTRIES) figureCache.delete(figureCache.keys().next().value);
       return url;
     })
     .finally(() => { figureInflight.delete(id); });
@@ -559,4 +595,4 @@ async function searchAcademicPaperSources(query, requestedLimit, fetchImpl = fet
   return { papers, providers: usedProviders, warnings };
 }
 
-module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, firstFigureSrc, matchesDailyTopic, resetProviderCooldowns, resolveArxivFigure };
+module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, firstFigureSrc, matchesDailyTopic, resetProviderCooldowns, resolveArxivFigure, isArxivFigureUrl };

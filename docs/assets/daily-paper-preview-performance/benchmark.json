@@ -1,0 +1,30 @@
+{
+  "fixture": "offline synthetic 4 MiB HTML, first figure in first chunk; 1600x800 noise PNG",
+  "baseline": "200b764",
+  "html": {
+    "beforeBytes": 4194304,
+    "afterBytes": 65536,
+    "remainderCancelled": true
+  },
+  "image": {
+    "originalBytes": 4056377,
+    "thumbnailBytes": 48924,
+    "originalDimensions": [
+      1600,
+      800
+    ],
+    "thumbnailDimensions": [
+      416,
+      208
+    ]
+  },
+  "coldCache": {
+    "lookups": 1,
+    "downloads": 1
+  },
+  "afterCacheRestart": {
+    "additionalLookups": 0,
+    "additionalImageDownloads": 0,
+    "originalPreviewPreserved": true
+  }
+}

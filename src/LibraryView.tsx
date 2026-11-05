@@ -24,6 +24,7 @@ import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
 import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
+import { forgetDailyFigure, peekDailyFigure, subscribeDailyFigure } from "./daily-figures";
 import ConferenceDiscovery from "./ConferenceDiscovery";
 import PaperReviewWorkbench from "./PaperReviewWorkbench";
 import PaperCanvas, { type PaperCanvasInsert, type PaperCanvasSource } from "./PaperCanvas";
@@ -2679,24 +2680,31 @@ function readableError(error: unknown, fallback: string) {
 }
 
 function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: ResearchDeskBridge }) {
-  const [figureUrl, setFigureUrl] = useState("");
+  const [figureUrl, setFigureUrl] = useState(() => peekDailyFigure(bridge, paper.arxiv_id));
   const holder = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
+    const cached = peekDailyFigure(bridge, paper.arxiv_id);
+    setFigureUrl(cached);
     const node = holder.current;
-    const load = bridge.getDailyFigure;
-    if (!node || !paper.arxiv_id || !load) return;
-    let cancelled = false;
+    if (cached || !node || !paper.arxiv_id || !bridge.getDailyFigure) return;
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
     const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      observer.disconnect();
-      void load(paper.arxiv_id).then((url) => { if (!cancelled && url) setFigureUrl(url); }).catch(() => undefined);
-    }, { rootMargin: "320px" });
+      if (disposed) return;
+      const entry = entries.find(item => item.target === node);
+      if (!entry?.isIntersecting) { unsubscribe?.(); unsubscribe = undefined; return; }
+      if (unsubscribe) return;
+      const visible = entry.boundingClientRect.top < window.innerHeight && entry.boundingClientRect.bottom > 0;
+      unsubscribe = subscribeDailyFigure(bridge, paper.arxiv_id, true, visible ? 0 : 1, (url) => {
+        if (!disposed && url) { setFigureUrl(url); observer.disconnect(); }
+      });
+    }, { rootMargin: "160px" });
     observer.observe(node);
-    return () => { cancelled = true; observer.disconnect(); };
+    return () => { disposed = true; unsubscribe?.(); observer.disconnect(); };
   }, [bridge, paper.arxiv_id]);
   return <div className="daily-paper-thumb" ref={holder}>
     <span className="daily-paper-thumb-fallback">{paper.categories[0] || "Paper"}</span>
-    {figureUrl && <img src={figureUrl} alt="" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.remove(); }} />}
+    {figureUrl && <img src={figureUrl} alt="" decoding="async" onError={() => { forgetDailyFigure(bridge, paper.arxiv_id); setFigureUrl(""); }} />}
   </div>;
 }
 
@@ -2905,13 +2913,10 @@ function DailyPaperPreview({ paper, bridge, canSave, isAdded, isAdding, onAdd, o
   onClose: () => void;
 }) {
   const { t } = useUISettings();
-  const [figureUrl, setFigureUrl] = useState("");
+  const [figureUrl, setFigureUrl] = useState(() => peekDailyFigure(bridge, paper.arxiv_id));
   useEffect(() => {
-    const load = bridge.getDailyFigure;
-    if (!paper.arxiv_id || !load) return;
-    let cancelled = false;
-    void load(paper.arxiv_id).then((url) => { if (!cancelled && url) setFigureUrl(url); }).catch(() => undefined);
-    return () => { cancelled = true; };
+    setFigureUrl(peekDailyFigure(bridge, paper.arxiv_id));
+    return subscribeDailyFigure(bridge, paper.arxiv_id, false, -1, (url) => { if (url) setFigureUrl(url); });
   }, [bridge, paper.arxiv_id]);
   const authors = paper.authors.length ? paper.authors.join(", ") : t("Unknown authors");
   return <Dialog open onClose={onClose} size="lg" className="daily-paper-preview-dialog" ariaLabelledBy="daily-paper-preview-title">
@@ -2926,7 +2931,12 @@ function DailyPaperPreview({ paper, bridge, canSave, isAdded, isAdding, onAdd, o
     <div className="daily-paper-preview-body">
       <div className="daily-paper-preview-figure">
         <span className="daily-paper-thumb-fallback">{paper.categories[0] || "Paper"}</span>
-        {figureUrl && <img src={figureUrl} alt={t("Figure preview for {title}").replace("{title}", paper.title)} onError={(event) => { event.currentTarget.remove(); }} />}
+        {figureUrl && <img src={figureUrl} alt={t("Figure preview for {title}").replace("{title}", paper.title)} onError={() => {
+          forgetDailyFigure(bridge, paper.arxiv_id, false);
+          const fallback = peekDailyFigure(bridge, paper.arxiv_id);
+          if (fallback === figureUrl) { forgetDailyFigure(bridge, paper.arxiv_id); setFigureUrl(""); }
+          else setFigureUrl(fallback);
+        }} />}
       </div>
       <div className="daily-paper-preview-copy">
         <div className="daily-paper-preview-meta">

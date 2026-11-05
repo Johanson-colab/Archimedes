@@ -58,6 +58,7 @@ const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort }
 const webSearch = require("./web-search.cjs");
 const sshServers = require("./ssh-servers.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
+const { createDailyFigureCache } = require("./daily-figure-cache.cjs");
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
 const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
@@ -610,9 +611,11 @@ let collaborationApi = null;
 let collaborationServer = null;
 let presence = null;
 let authFlow = null;
+let dailyFigureCache = null;
 
 app.whenReady().then(async () => {
   loadLocalAgentEnvironment();
+  dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
   modelConfig.initializeModelConfig(app.getPath("userData"));
   agentBackendConfig.initialize(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
@@ -1149,9 +1152,9 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.handle("library:daily-figure", async (_event, { arxivId } = {}) => {
+  ipcMain.handle("library:daily-figure", async (_event, { arxivId, thumbnail = false } = {}) => {
     if (typeof arxivId !== "string" || !arxivId.trim()) throw new Error("An arXiv id is required.");
-    return resolveArxivFigure(arxivId);
+    return dailyFigureCache.get(arxivId.trim(), { thumbnail: thumbnail === true });
   });
 
   // Contracts are stored as written. Older ones predate steps, and a partial

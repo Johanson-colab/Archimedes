@@ -134,7 +134,7 @@ interface ResearchDeskBridge {
     listLibraryPapers: (libraryId: string, query?: string) => Promise<LibraryPaper[]>;
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
-    getDailyFigure?: (arxivId: string) => Promise<string>;
+    getDailyFigure?: (arxivId: string, options?: { thumbnail?: boolean }) => Promise<string>;
     listReproductions: () => Promise<Reproduction[]>;
     createReproduction: (input: ReproductionCreateInput) => Promise<Reproduction>;
     getReproduction: (id: string) => Promise<Reproduction | null>;

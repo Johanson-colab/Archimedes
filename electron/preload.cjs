@@ -141,7 +141,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listLibraryPapers: (libraryId, query = "") => ipcRenderer.invoke("library:list-papers", { libraryId, query }),
   searchAcademicPapers: (query, limit = 12) => ipcRenderer.invoke("library:search-external", { query, limit }),
   discoverDailyPapers: (input = {}) => ipcRenderer.invoke("library:discover-daily", input),
-  getDailyFigure: (arxivId) => ipcRenderer.invoke("library:daily-figure", { arxivId }),
+  getDailyFigure: (arxivId, options = {}) => ipcRenderer.invoke("library:daily-figure", { arxivId, thumbnail: options.thumbnail === true }),
   listReproductions: () => ipcRenderer.invoke("reproduction:list"),
   createReproduction: (input) => ipcRenderer.invoke("reproduction:create", input),
   getReproduction: (id) => ipcRenderer.invoke("reproduction:get", { id }),
