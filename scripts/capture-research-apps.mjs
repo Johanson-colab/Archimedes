@@ -9,12 +9,13 @@ import { build } from "vite";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stage = process.argv[2];
-const settingsEntry = process.argv.includes("--settings-entry");
+const settingsAlign = process.argv.includes("--settings-align");
+const settingsEntry = settingsAlign || process.argv.includes("--settings-entry");
 if (!["before", "after"].includes(stage)) throw Error("Choose before or after.");
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-research-apps-"));
-const output = path.join(root, settingsEntry ? "docs/assets/sidebar-settings-position" : "docs/assets/research-apps");
+const output = path.join(root, settingsAlign ? "docs/assets/sidebar-settings-alignment" : settingsEntry ? "docs/assets/sidebar-settings-position" : "docs/assets/research-apps");
 fs.mkdirSync(output, { recursive: true });
-const baselineCommit = settingsEntry ? "44cfc9e" : "f12de6b";
+const baselineCommit = settingsAlign ? "027dd7d" : settingsEntry ? "44cfc9e" : "f12de6b";
 const baseline = new Map(stage === "before" ? ["PluginsSettingsPanel.tsx", "SettingsModal.tsx", "sidebar-registry.tsx", "styles.css", "i18n/translations/settings.ts"].map(name => [path.join(root, "src", name), execFileSync("git", ["show", `${baselineCommit}:src/${name}`], { cwd: root, encoding: "utf8" })]) : []);
 const appSource = stage === "before" ? execFileSync("git", ["show", `${baselineCommit}:src/App.tsx`], { cwd: root, encoding: "utf8" }) : fs.readFileSync(path.join(root, "src/App.tsx"), "utf8");
 const navigation = appSource.slice(appSource.indexOf('<button className="new-task-button"'), appSource.indexOf('</nav>', appSource.indexOf('<nav className="sidebar-nav sidebar-modules"')) + 6);
@@ -63,7 +64,7 @@ createRoot(document.getElementById('root')).render(<UISettingsProvider><Fixture/
 `);
 await build({ root: temporary, configFile: false, base: "./", resolve: { dedupe: ["react", "react-dom"], alias: { react: path.join(root, "node_modules/react"), "react-dom": path.join(root, "node_modules/react-dom"), "lucide-react": path.join(root, "node_modules/lucide-react") } }, plugins: [{ name: "baseline", load(id) { return baseline.get(id); } }], build: { outDir: path.join(temporary, "dist"), minify: false, chunkSizeWarningLimit: 3000 } });
 
-function capture({ temporary, output, stage, expectedApps, settingsEntry }) {
+function capture({ temporary, output, stage, expectedApps, settingsEntry, settingsAlign }) {
   const { app, BrowserWindow } = require("electron");
   const fs = require("node:fs"), path = require("node:path");
   app.commandLine.appendSwitch("disable-gpu"); app.setPath("userData", path.join(temporary, "profile"));
@@ -80,7 +81,8 @@ function capture({ temporary, output, stage, expectedApps, settingsEntry }) {
       if (settingsEntry) {
         const position = await evaluate(() => {
           const settings = document.querySelector('.codex-sidebar button[aria-label="Settings"]');
-          return { settingsY:settings.getBoundingClientRect().y, appsY:document.querySelector('.sidebar-section-label').getBoundingClientRect().y, label:settings.textContent, count:document.querySelectorAll('.codex-sidebar button[aria-label="Settings"]').length, inFooter:Boolean(settings.closest('.sidebar-runtime')) };
+          const centerX = node => { const rect=node.getBoundingClientRect(); return rect.x + rect.width/2; };
+          return { settingsIconX:centerX(settings.querySelector('svg')),appsIconX:centerX(document.querySelector('.sidebar-apps-manage')),workIconX:centerX(document.querySelector('.work-more-button')), settingsY:settings.getBoundingClientRect().y, appsY:document.querySelector('.sidebar-section-label').getBoundingClientRect().y, label:settings.textContent, count:document.querySelectorAll('.codex-sidebar button[aria-label="Settings"]').length, inFooter:Boolean(settings.closest('.sidebar-runtime')) };
         });
         await evaluate(() => document.querySelector('.codex-sidebar button[aria-label="Settings"]').click()); await pause();
         observations.push({theme,view:"settings-entry",...position,opened:await evaluate(()=>document.querySelector('.settings-header h2')?.textContent === 'General')});
@@ -105,10 +107,10 @@ function capture({ temporary, output, stage, expectedApps, settingsEntry }) {
     }
     console.log(JSON.stringify(observations));
     fs.writeFileSync(path.join(output, `${stage}-geometry.json`), JSON.stringify(observations, null, 2) + "\n");
-    const passed = settingsEntry ? observations.filter(item=>item.view==="settings-entry").every(item=>item.opened && item.count===1 && (stage==="before" ? item.inFooter : !item.inFooter && item.settingsY<item.appsY && item.label==="Settings")) : stage === "before" || observations.every(item => item.view === "sidebar" ? item.label === "Research Apps" && item.apps.join("|") === expectedApps.join("|") && item.work : item.heading === "Research Apps" && item.categories.length === 5 && item.enabled === expectedApps.length && !item.overflow && item.scrollable);
+    const passed = settingsEntry ? observations.filter(item=>item.view==="settings-entry").every(item=>item.opened && item.count===1 && (settingsAlign ? !item.inFooter && item.settingsY<item.appsY && (stage==="before" || Math.abs(item.settingsIconX-item.appsIconX)<0.5 && Math.abs(item.settingsIconX-item.workIconX)<0.5) : stage==="before" ? item.inFooter : !item.inFooter && item.settingsY<item.appsY && item.label==="Settings")) : stage === "before" || observations.every(item => item.view === "sidebar" ? item.label === "Research Apps" && item.apps.join("|") === expectedApps.join("|") && item.work : item.heading === "Research Apps" && item.categories.length === 5 && item.enabled === expectedApps.length && !item.overflow && item.scrollable);
     win.destroy(); fs.rmSync(temporary, { recursive: true, force: true }); app.exit(passed ? 0 : 1);
   }).catch(error => { console.error(error.message); fs.rmSync(temporary, { recursive: true, force: true }); app.exit(1); });
 }
 const runner = path.join(temporary, "capture.cjs");
-fs.writeFileSync(runner, "(" + capture.toString() + ")(" + JSON.stringify({ temporary, output, stage, settingsEntry, expectedApps: ["Library", "Daily papers", "Reproduce", "Image creation", "Data charts", "Paper writing"] }) + ");");
+fs.writeFileSync(runner, "(" + capture.toString() + ")(" + JSON.stringify({ temporary, output, stage, settingsEntry, settingsAlign, expectedApps: ["Library", "Daily papers", "Reproduce", "Image creation", "Data charts", "Paper writing"] }) + ");");
 console.log(JSON.stringify({ runner }));

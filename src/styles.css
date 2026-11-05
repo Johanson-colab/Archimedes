@@ -8538,6 +8538,7 @@ html[data-menu-style="glass"] .menu-surface {
 .sidebar-section-label { display: flex; height: 30px; align-items: center; margin-top: 4px; padding: 0 8px; color: var(--sb-muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
 .sidebar-module-list { display: grid; gap: 2px; }
 .sidebar-settings-entry { flex: 0 0 auto; }
+.sidebar-settings-entry > .sidebar-settings-icon { width: 24px; height: 24px; margin-left: auto; padding: 4.5px; box-sizing: border-box; color: var(--sb-muted); }
 .sidebar-apps-manage { display: grid; width: 24px; height: 24px; margin-left: auto; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
 .sidebar-apps-manage:hover { color: var(--night-ink); background: var(--sb-hover); }
 .research-apps-category .settings-section-title { display: flex; align-items: center; gap: 8px; }

@@ -2966,7 +2966,7 @@ function App() {
         </button>
 
         <button className="codex-nav-item sidebar-settings-entry" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
-          <Settings size={15} strokeWidth={1.7} /><span>{t("Settings")}</span>
+          <span>{t("Settings")}</span><Settings className="sidebar-settings-icon" size={15} strokeWidth={1.7} aria-hidden="true" />
         </button>
 
         <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
