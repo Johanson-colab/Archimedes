@@ -125,6 +125,19 @@ observation and shown in the prompt. Nothing acts on them.
 That is deliberate. A rule table can only repair the failures someone anticipated;
 an agent that is told what the error usually means can handle the next one.
 
+### Output the prompt cannot hold
+
+The prompt shows the last seven commands, each with the tail of its output, so a
+`pip install` that prints ten thousand lines does not push the runbook out of the
+window. When a command produces more than that tail, the pilot writes the last
+512 KB to `/tmp/archimedes/<run>/<n>.log` on the target and puts the path in the
+observation.
+
+The agent greps or tails that file instead of re-running a twenty-minute install,
+and the journal shows the same path so a person can look too. The file goes
+through the backend's `writeFile` (stdin over `docker exec` or `ssh`), never by
+splicing the output into a shell command; only `/tmp/archimedes/…` is writable.
+
 ### Environment work is the job
 
 Most reproductions do not fail because the code is wrong. They fail because

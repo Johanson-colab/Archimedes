@@ -12,6 +12,7 @@
 const { spawn } = require("node:child_process");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
+const { isOutputPath } = require("./paths.cjs");
 
 const MOUNT = "/workspace";
 const DOCKER_TIMEOUT_MS = 20_000;
@@ -53,7 +54,11 @@ function imageFor(environment = {}) {
   return "python:3.11-slim";
 }
 
-function runProcess(command, args, { cwd, onData, signal, timeoutMs } = {}) {
+function quotePath(value) {
+  return `'${String(value || "").replace(/'/g, `'"'"'`)}'`;
+}
+
+function runProcess(command, args, { cwd, onData, signal, timeoutMs, stdin } = {}) {
   return new Promise((resolve) => {
     let settled = false;
     let timedOut = false;
@@ -81,6 +86,11 @@ function runProcess(command, args, { cwd, onData, signal, timeoutMs } = {}) {
       onData?.(text);
     };
 
+    if (stdin !== undefined) {
+      // A command that exits before reading stdin is normal, not an error.
+      child.stdin.on("error", () => {});
+      child.stdin.end(String(stdin));
+    }
     child.stdout.on("data", push);
     child.stderr.on("data", push);
     child.once("error", (error) => finish({ exitCode: null, error: error?.message || `${command} failed`, timedOut }));
@@ -161,6 +171,20 @@ function createDockerBackend({ checkoutDir, environment = {}, name } = {}) {
 
     exec,
     httpStatus,
+
+    /** Keeps a command's full output where the agent can grep it later. */
+    async writeFile(absolutePath, content) {
+      if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
+      const dir = path.posix.dirname(absolutePath);
+      const result = await runProcess("docker", [
+        "exec", "-i", container, "sh", "-c",
+        `umask 077; mkdir -p ${quotePath(dir)} && cat > ${quotePath(absolutePath)}`,
+      ], { stdin: String(content || ""), timeoutMs: 60_000 });
+      if (result.exitCode !== 0) {
+        throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
+      }
+      return absolutePath;
+    },
 
     async readFile(relativePath) {
       const target = path.resolve(checkoutDir, String(relativePath || ""));

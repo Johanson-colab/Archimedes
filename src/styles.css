@@ -6983,6 +6983,7 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 .reproduce-journal-result { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
 .reproduce-journal-result.ok { color: var(--state-success); }
 .reproduce-journal-result.bad { color: var(--state-danger); }
+.reproduce-journal-file { color: var(--text-faint); font-family: var(--font-mono); font-size: 9.5px; word-break: break-all; }
 .reproduce-journal-verdict { color: var(--text-secondary); font-weight: 600; }
 .reproduce-journal-verdict.passed { color: var(--state-success); }
 .reproduce-journal-verdict.failed, .reproduce-journal-verdict.blocked { color: var(--state-danger); }

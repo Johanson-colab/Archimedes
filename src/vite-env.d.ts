@@ -161,6 +161,7 @@ interface ResearchDeskBridge {
       exitCode?: number | null;
       timedOut?: boolean;
       durationMs?: number;
+      outputPath?: string;
       text?: string;
       note?: string;
       steps?: ReproductionStep[];

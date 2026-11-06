@@ -7,6 +7,7 @@
  *   prepare()            create a per-reproduction directory and clone into it
  *   exec(command)         run one step inside that directory
  *   readFile(path)        read a checkpoint's file
+ *   writeFile(path)       keep a long command's output for later grep
  *   httpStatus(url)       ask the service from the server's side of the network
  *   dispose()             leave the directory alone; logs and artifacts are the point
  *
@@ -17,6 +18,7 @@
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
+const { isOutputPath } = require("./paths.cjs");
 
 const { authFor, connectionArgs } = require("../ssh-servers.cjs");
 
@@ -117,10 +119,15 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
   const repo = `${root}/repo`;
   let prepared = false;
 
-  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true } = {}) => new Promise((resolve) => {
+  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true, stdin } = {}) => new Promise((resolve) => {
     const args = connectionArgs(target, login ? loginCommand(command) : command, { allowPassword: Boolean(password) });
     const child = spawn("ssh", args, { windowsHide: true, env: { ...process.env, ...env } });
     const out = [];
+    if (stdin !== undefined) {
+      // ssh forwards stdin over the channel; a command that exits early closes it.
+      child.stdin.on("error", () => {});
+      child.stdin.end(String(stdin));
+    }
     let settled = false;
     const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
     child.stdout.on("data", (chunk) => { out.push(chunk); onData?.(chunk.toString()); });
@@ -211,6 +218,20 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     async exec(command, { timeoutMs, onData, signal } = {}) {
       const result = await run(`cd ${quoteRemotePath(repo)} && ${command}`, { timeoutMs, onData, signal });
       return { exitCode: result.code, timedOut: Boolean(result.timedOut), error: result.error };
+    },
+
+    /** Keeps a command's full output where the agent can grep it later. */
+    async writeFile(absolutePath, content) {
+      if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
+      const dir = absolutePath.replace(/\/[^/]+$/, "");
+      const result = await run(
+        `umask 077; mkdir -p ${quoteRemotePath(dir)} && cat > ${quoteRemotePath(absolutePath)}`,
+        { timeoutMs: 120_000, login: false, stdin: content },
+      );
+      if (result.code !== 0) {
+        throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
+      }
+      return absolutePath;
     },
 
     async readFile(relativePath) {

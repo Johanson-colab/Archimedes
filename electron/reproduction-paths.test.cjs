@@ -40,3 +40,13 @@ test("the repository name comes from the URL, not from a guess", () => {
   assert.equal(repoNameFromUrl("https://github.com/A-EVO-Lab/a-evolve/tree/main"), "a-evolve");
   assert.equal(repoNameFromUrl("not a url"), "");
 });
+
+test("only the reproduction output directory is writable", () => {
+  const { isOutputPath, outputPathFor } = require("./reproduction/paths.cjs");
+  const path = outputPathFor("abc123", 7);
+  assert.equal(path, "/tmp/archimedes/abc123/7.log");
+  assert.equal(isOutputPath(path), true);
+  assert.equal(isOutputPath("/tmp/archimedes/abc/../../etc/passwd"), false);
+  assert.equal(isOutputPath("/etc/passwd"), false);
+  assert.equal(isOutputPath("/tmp/archimedes/abc/7.txt"), false);
+});

@@ -48,8 +48,14 @@ function model(decisions) {
   };
 }
 
-async function pilot({ steps, decisions, script, findings = [] }) {
+async function pilot({ steps, decisions, script, findings = [], written = null }) {
   const fake = backend(script);
+  if (written) {
+    fake.writeFile = async (filePath, content) => {
+      written.push({ path: filePath, content });
+      return filePath;
+    };
+  }
   const brain = model(decisions);
   const result = await runPilot({
     title: "A paper",
@@ -257,4 +263,37 @@ test("an error-driven fix is written back to the runbook", async () => {
   assert.equal(result.steps[0].evidence, "Successfully installed boto3-1.34.0");
   assert.match(brain.prompts[1], /command not found/);
   assert.deepEqual(fake.calls, ['python -m pip install -e ".[cl]"', 'python3 -m pip install -e ".[cl]"']);
+});
+
+test("a long output is kept on the machine and its path is offered", async () => {
+  const written = [];
+  const long = Array.from({ length: 400 }, (_, index) => `line ${index}: dependency conflict detail`).join("\n");
+  const { brain } = await pilot({
+    steps: [step("install")],
+    written,
+    script: { "pip install x": { output: long, exitCode: 1 } },
+    decisions: [
+      { action: "run", command: "pip install x" },
+      { action: "ask", question: "stop" },
+    ],
+  });
+  assert.equal(written.length, 1);
+  assert.match(written[0].path, /^\/tmp\/archimedes\/[a-z0-9]+\/1\.log$/);
+  assert.match(written[0].content, /line 399/);
+  assert.match(brain.prompts[1], /full output \(\d+ lines · \d+ KB\)/);
+  assert.match(brain.prompts[1], /grep, sed or tail it instead of re-running/);
+});
+
+test("a short output is not copied anywhere", async () => {
+  const written = [];
+  await pilot({
+    steps: [step("install")],
+    written,
+    script: { "ls": { output: "pyproject.toml\n" } },
+    decisions: [
+      { action: "run", command: "ls" },
+      { action: "ask", question: "stop" },
+    ],
+  });
+  assert.deepEqual(written, []);
 });

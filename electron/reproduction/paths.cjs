@@ -41,4 +41,20 @@ function repoNameFromUrl(value) {
   return match ? match[1].replace(/\.git$/i, "") : "";
 }
 
-module.exports = { candidatePaths, normalizePath, repoNameFromUrl };
+// Long command output is kept on the target so the agent can grep it without
+// re-running a twenty-minute install. Only this directory is writable.
+const OUTPUT_ROOT = "/tmp/archimedes";
+
+function outputPathFor(token, index) {
+  const safeToken = String(token || "").replace(/[^a-z0-9]/gi, "").slice(0, 16) || "run";
+  const safeIndex = Math.max(1, Math.trunc(Number(index) || 1));
+  return `${OUTPUT_ROOT}/${safeToken}/${safeIndex}.log`;
+}
+
+function isOutputPath(value) {
+  const text = String(value || "");
+  if (text.includes("..")) return false;
+  return new RegExp(`^${OUTPUT_ROOT}/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\\.log$`).test(text);
+}
+
+module.exports = { OUTPUT_ROOT, candidatePaths, isOutputPath, normalizePath, outputPathFor, repoNameFromUrl };

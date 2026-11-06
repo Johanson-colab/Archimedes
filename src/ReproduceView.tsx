@@ -130,7 +130,7 @@ function resultLabel(entry: { exitCode: number | null; timedOut: boolean; durati
 type JournalEntry =
   | { kind: "thought"; text: string }
   | { kind: "command"; index: number; text: string }
-  | { kind: "result"; index: number; exitCode: number | null; timedOut: boolean; durationMs: number }
+  | { kind: "result"; index: number; exitCode: number | null; timedOut: boolean; durationMs: number; path?: string }
   | { kind: "verdict"; text: string; status: ReproductionRunStepStatus; evidence: string }
   | { kind: "revise"; text: string }
   | { kind: "finding"; text: string };
@@ -239,6 +239,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           exitCode: payload.exitCode ?? null,
           timedOut: Boolean(payload.timedOut),
           durationMs: payload.durationMs || 0,
+          path: payload.outputPath || "",
         }]);
         return;
       }
@@ -534,7 +535,10 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
             {journal.map((entry, index) => <li key={index} className={`reproduce-journal-row ${entry.kind}`}>
               {entry.kind === "thought" && <span className="reproduce-journal-text">{entry.text}</span>}
               {entry.kind === "command" && <code className="reproduce-journal-command">$ {entry.text}</code>}
-              {entry.kind === "result" && <span className={`reproduce-journal-result ${entry.timedOut || entry.exitCode !== 0 ? "bad" : "ok"}`}>{resultLabel(entry)}</span>}
+              {entry.kind === "result" && <>
+                <span className={`reproduce-journal-result ${entry.timedOut || entry.exitCode !== 0 ? "bad" : "ok"}`}>{resultLabel(entry)}</span>
+                {entry.path && <span className="reproduce-journal-file">full output: {entry.path}</span>}
+              </>}
               {entry.kind === "verdict" && <>
                 <span className={`reproduce-journal-verdict ${entry.status}`}>{entry.text}</span>
                 {entry.evidence && <blockquote className="reproduce-journal-evidence">{entry.evidence}</blockquote>}
