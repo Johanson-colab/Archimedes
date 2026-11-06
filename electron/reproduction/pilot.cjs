@@ -55,7 +55,7 @@ const SYSTEM = `You are the reproduction engineer for one paper. You drive a rea
 
 Your job is to carry out the runbook below far enough to produce the paper's numbers, repairing whatever blocks you. You are the only one who can look at this machine, so act on what you see, not on what a README assumed.
 
-You act one step at a time. Every turn you return exactly ONE JSON object and nothing else.
+You act one step at a time. Every turn you return exactly ONE JSON object and nothing else. Every reply includes "thought": one short sentence in plain language saying what you just learned or what you are about to try. A person reads it while the run is going.
 
 ACTIONS
 - {"action":"run","command":"...","why":"what this tells you","timeout_min":10}
@@ -136,6 +136,7 @@ function stepLines(steps) {
     const lines = [head];
     if (step.command) lines.push(`   plan: ${step.command}`);
     if (step.checkpoint) lines.push(`   checkpoint: ${step.checkpoint}`);
+    if (step.blocked) lines.push(`   planner says: ${step.blocked}`);
     if (step.note) lines.push(`   note: ${step.note}`);
     if (step.evidence) lines.push(`   evidence: ${clip(step.evidence, 240)}`);
     return lines.join("\n");
