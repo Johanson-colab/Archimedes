@@ -60,7 +60,7 @@ const RULES = [
     hint: () => "This is GPU memory, not a code error. A smaller batch or a smaller model is the usual answer; retrying the same command will fail the same way.",
   },
   {
-    match: /NoCredentialsError|Unable to locate credentials|InvalidClientTokenId|AccessDenied|401 Unauthorized|403 Forbidden|authentication failed/i,
+    match: /NoCredentialsError|Unable to locate credentials|InvalidClientTokenId|AccessDenied|401 Unauthorized|403 Forbidden|authentication failed|ProfileNotFound|config profile .* could not be found/i,
     hint: () => "Credentials. A machine cannot register an account or obtain a key for you; this is the point to ask a person.",
   },
   {

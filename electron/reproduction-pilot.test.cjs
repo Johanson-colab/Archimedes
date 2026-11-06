@@ -186,7 +186,7 @@ test("a destructive command is refused and the run continues", async () => {
 
 test("the agent is stopped when it keeps running commands without moving the runbook", async () => {
   const decisions = [];
-  for (let index = 0; index < 12; index += 1) decisions.push({ action: "run", command: `echo ${index}` });
+  for (let index = 0; index < 21; index += 1) decisions.push({ action: "run", command: `echo ${index}` });
   const { result } = await pilot({ steps: [step("install")], decisions });
   assert.equal(result.status, "blocked");
   assert.match(result.summary, /without a verdict, a runbook change or a finding/);
@@ -312,11 +312,11 @@ test("a finding counts as progress, so diagnosis does not look like a stall", as
 
 test("the stall message says which command it gave up on", async () => {
   const decisions = [];
-  for (let index = 0; index < 11; index += 1) decisions.push({ action: "run", command: `probe ${index}` });
+  for (let index = 0; index < 21; index += 1) decisions.push({ action: "run", command: `probe ${index}` });
   const { result } = await pilot({ steps: [step("install")], decisions, script: {} });
   assert.equal(result.status, "blocked");
   assert.match(result.summary, /without a verdict, a runbook change or a finding/);
-  assert.match(result.summary, /probe 9/);
+  assert.match(result.summary, /probe 19/);
 });
 
 test("the agent sees which keys are set, never their values", async () => {
