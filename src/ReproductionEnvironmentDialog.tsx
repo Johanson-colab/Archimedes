@@ -111,7 +111,7 @@ export function ReproductionEnvironmentDialog({
         {item.required && <span className="reproduce-tag warn">required</span>}
         <span className={`reproduce-check-status ${item.hasValue ? "passed" : item.required ? "manual" : "needs-run"}`}>{item.hasValue ? "set" : "missing"}</span>
       </span>
-      {item.reason && <small>{item.reason}{item.source ? ` · ${item.source}` : ""}</small>}
+      {item.reason && <small title={`${item.reason}${item.source ? ` · ${item.source}` : ""}`}>{item.reason}{item.source ? ` · ${item.source}` : ""}</small>}
     </div>
     <div className="reproduce-env-controls">
       <input
