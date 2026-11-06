@@ -77,9 +77,9 @@ const RUN_STEP_TONES: Record<ReproductionRunStepStatus, string> = {
 const RUN_LABELS: Record<ReproductionRunStatus, string> = {
   running: "Running",
   verified: "All checkpoints passed",
-  failed: "Stopped at a failed checkpoint",
-  blocked: "Blocked by a step the plan marks impossible",
-  manual: "Stopped at a checkpoint only a person can confirm",
+  failed: "The agent could not continue",
+  blocked: "Blocked: something is missing",
+  manual: "Needs a person",
   stopped: "Stopped",
   timeout: "Ran out of time",
   interrupted: "Interrupted",
@@ -114,17 +114,26 @@ function checkLabel(check: ReproductionStep["check"]) {
   return `${check.url} returns ${check.status}`;
 }
 
-function clockLabel(ms: number) {
-  const total = Math.floor(ms / 1000);
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
 function expectedLabel(claim: ReproductionClaim) {
   if (claim.expected === null) return "no reported value";
   return `${claim.expected}${claim.unit ? ` ${claim.unit}` : ""}`;
 }
+
+function resultLabel(entry: { exitCode: number | null; timedOut: boolean; durationMs: number }) {
+  const status = entry.timedOut ? "timed out" : entry.exitCode === null ? "did not start" : `exit ${entry.exitCode}`;
+  const duration = entry.durationMs >= 1000 ? ` · ${(entry.durationMs / 1000).toFixed(1)} s` : "";
+  return `${status}${duration}`;
+}
+
+// One line per thing the agent did. The raw log below stays complete; this is
+// the story a person reads.
+type JournalEntry =
+  | { kind: "thought"; text: string }
+  | { kind: "command"; index: number; text: string }
+  | { kind: "result"; index: number; exitCode: number | null; timedOut: boolean; durationMs: number }
+  | { kind: "verdict"; text: string; status: ReproductionRunStepStatus; evidence: string }
+  | { kind: "revise"; text: string }
+  | { kind: "finding"; text: string };
 
 export default function ReproduceView({ bridge, selectedId, onSelect }: {
   bridge: ResearchDeskBridge;
@@ -135,7 +144,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [items, setItems] = useState<Reproduction[]>([]);
   const [detail, setDetail] = useState<Reproduction | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"plan" | "approve" | "delete" | "create" | "run" | "stop" | "fix" | "">("");
+  const [busy, setBusy] = useState<"plan" | "delete" | "create" | "run" | "stop" | "">("");
   const [error, setError] = useState("");
   const [planStatus, setPlanStatus] = useState("");
   const [openClaim, setOpenClaim] = useState<string | null>(null);
@@ -144,15 +153,14 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [checking, setChecking] = useState(false);
   const [run, setRun] = useState<ReproductionRun | null>(null);
   const [runSteps, setRunSteps] = useState<Record<string, ReproductionRunStep>>({});
+  const [liveSteps, setLiveSteps] = useState<ReproductionStep[] | null>(null);
   const [liveLog, setLiveLog] = useState("");
   const [running, setRunning] = useState(false);
   const [runLine, setRunLine] = useState("");
-  const [diagnosis, setDiagnosis] = useState<ReproductionDiagnosis | null>(null);
-  const [currentStep, setCurrentStep] = useState<{ index: number; total: number; title: string; startedAt: number } | null>(null);
-  const [clock, setClock] = useState(Date.now());
+  const [question, setQuestion] = useState("");
+  const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [servers, setServers] = useState<SshServer[]>([]);
   const [target, setTarget] = useState(() => window.localStorage.getItem("archimedes-reproduce-target") || "docker");
-  const [attempts, setAttempts] = useState<ReproductionAttempt[]>([]);
   const logRef = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
@@ -194,12 +202,6 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   }, [target]);
 
   useEffect(() => {
-    if (!running) return undefined;
-    const timer = setInterval(() => setClock(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [running]);
-
-  useEffect(() => {
     const off = bridge.onReproductionPlanEvent?.((payload) => {
       if (payload?.detail) setPlanStatus(payload.detail);
     });
@@ -217,47 +219,61 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         setLiveLog((current) => (current + payload.chunk).slice(-200_000));
         return;
       }
-      if (payload.type === "step-start" && payload.step) {
-        setCurrentStep({ index: payload.index || 0, total: payload.total || 0, title: payload.step.title || "", startedAt: Date.now() });
+      if (payload.type === "attempt") {
+        setRunning(true);
+        return;
+      }
+      if (payload.type === "pilot-thought" && payload.text) {
+        setJournal((current) => [...current.slice(-200), { kind: "thought", text: payload.text as string }]);
+        return;
+      }
+      if (payload.type === "pilot-command" && payload.command) {
+        setJournal((current) => [...current.slice(-200), { kind: "command", index: payload.index || 0, text: payload.command as string }]);
+        setRunLine(`$ ${payload.command}`);
+        return;
+      }
+      if (payload.type === "pilot-result") {
+        setJournal((current) => [...current.slice(-200), {
+          kind: "result",
+          index: payload.index || 0,
+          exitCode: payload.exitCode ?? null,
+          timedOut: Boolean(payload.timedOut),
+          durationMs: payload.durationMs || 0,
+        }]);
         return;
       }
       if (payload.type === "step" && payload.step?.id) {
-        setCurrentStep(null);
-        const step = payload.step as ReproductionRunStep;
+        const step = payload.step;
         setRunSteps((current) => ({ ...current, [step.id]: step }));
+        setJournal((current) => [...current.slice(-200), {
+          kind: "verdict",
+          text: `${step.title || step.id} — ${step.status}`,
+          status: step.status,
+          evidence: step.evidence || "",
+        }]);
         return;
       }
-      if (payload.type === "attempt") {
-        setDiagnosis(null);
-        setRunning(true);
-        setRunLine(payload.attempt ? `Attempt ${payload.attempt}…` : "");
+      if (payload.type === "runbook" && payload.steps) {
+        setLiveSteps(payload.steps);
+        setJournal((current) => [...current.slice(-200), {
+          kind: "revise",
+          text: [`Runbook revised to ${payload.steps?.length ?? 0} steps`, payload.note].filter(Boolean).join(" · "),
+        }]);
         return;
       }
-      if (payload.type === "repair") {
-        // A safe repair was applied without asking; keep the run going and say
-        // what changed so the restart is not a mystery.
-        setDiagnosis(null);
-        setRunning(true);
-        setRunLine(payload.detail || "");
-        return;
-      }
-      if (payload.type === "diagnosis" && payload.diagnosis) {
-        // A live diagnosis is the only one the buttons may act on: after a
-        // restart the container is gone and the suggestion is only history.
-        setDiagnosis(payload.diagnosis);
-        setRunning(false);
+      if (payload.type === "finding" && payload.text) {
+        setJournal((current) => [...current.slice(-200), { kind: "finding", text: payload.text as string }]);
         return;
       }
       if (payload.type === "finished") {
         setRunning(false);
-        setCurrentStep(null);
-        setDiagnosis(null);
         setRunLine(payload.summary || "");
+        if (payload.question) setQuestion(payload.question);
         void bridge.getReproduction(selectedId).then((record) => {
           if (!record) return;
           setDetail(record);
           setRun(record.run ?? null);
-          setAttempts(record.attempts ?? []);
+          if (record.contract) setLiveSteps(record.contract.steps);
         }).catch(() => {});
         void refresh();
       }
@@ -278,8 +294,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setLiveLog(previous?.log ?? "");
       setRunning(previous?.status === "running");
       setRunLine("");
-      setDiagnosis(null);
-      setAttempts(record?.attempts ?? []);
+      setQuestion("");
+      setJournal([]);
+      setLiveSteps(record?.contract?.steps ?? null);
     }).catch((detailError) => { if (!cancelled) setError(readable(detailError, "Could not open this reproduction.")); });
     return () => { cancelled = true; };
   }, [bridge, selectedId]);
@@ -365,6 +382,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     setRunLine("Starting…");
     setLiveLog("");
     setRunSteps({});
+    setJournal([]);
+    setQuestion("");
+    setLiveSteps(detail.contract?.steps ?? null);
     try {
       const next = await bridge.runReproduction(detail.id, target === "docker" ? { backend: "docker" } : { backend: "ssh", serverId: target });
       setDetail(next);
@@ -391,56 +411,6 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setBusy("");
     }
   }, [bridge, detail]);
-
-  const applyDiagnosis = useCallback(async () => {
-    if (!detail) return;
-    setBusy("fix");
-    setError("");
-    try {
-      const next = await bridge.applyReproductionFix(detail.id);
-      setDetail(next);
-      setDiagnosis(null);
-      setRunning(true);
-      setRunLine("Re-running from the repaired step…");
-    } catch (fixError) {
-      setError(readable(fixError, "The change could not be applied."));
-    } finally {
-      setBusy("");
-    }
-  }, [bridge, detail]);
-
-  const dismissDiagnosis = useCallback(async () => {
-    if (!detail) return;
-    setBusy("fix");
-    try {
-      const next = await bridge.dismissReproductionDiagnosis(detail.id);
-      setDetail(next);
-      setDiagnosis(null);
-      setRunning(false);
-    } catch (dismissError) {
-      setError(readable(dismissError, "The run could not be closed."));
-    } finally {
-      setBusy("");
-    }
-  }, [bridge, detail]);
-
-  const approve = useCallback(async () => {
-    if (!detail?.contract) return;
-    setBusy("approve");
-    setError("");
-    try {
-      const next = await bridge.updateReproduction(detail.id, {
-        status: "queued",
-        contract: { ...detail.contract, frozen_at: new Date().toISOString() },
-      });
-      setDetail(next);
-      await refresh();
-    } catch (approveError) {
-      setError(readable(approveError, "The contract could not be approved."));
-    } finally {
-      setBusy("");
-    }
-  }, [bridge, detail, refresh]);
 
   const remove = useCallback(async () => {
     if (!detail) return;
@@ -512,10 +482,10 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
             The checkout is on {preflightBranch.actual || "another branch"}, but the plan asks for {preflightBranch.expected}. Re-plan, or generate a plan for the branch that is checked out.
           </p>}
           <ol className="reproduce-runbook">
-            {(contract.steps ?? []).map((step, index) => {
+            {(liveSteps ?? contract.steps ?? []).map((step, index) => {
               // A checkpoint nobody has evaluated is not a green tick: it is a
               // statement of what will be checked. Only a real verdict colours it.
-              const verdict = runSteps[step.id]?.status ?? preflight?.[step.id]?.status ?? "";
+              const verdict = runSteps[step.id]?.status ?? step.status ?? preflight?.[step.id]?.status ?? "";
               const tone = verdict === "passed" ? "" : verdict === "manual" || step.check.kind === "manual" ? " manual" : verdict ? " bad" : " idle";
               const VerdictIcon = verdict === "failed" || verdict === "blocked" || verdict === "manual" || step.check.kind === "manual" ? AlertCircle : Check;
               return <li className={`reproduce-step${step.blocked ? " blocked" : ""}`} key={step.id}>
@@ -525,7 +495,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                   <strong>{step.title}</strong>
                   {runSteps[step.id]
                     ? <span className={`reproduce-check-status ${RUN_STEP_TONES[runSteps[step.id].status]}`}>{RUN_STEP_LABELS[runSteps[step.id].status]}</span>
-                    : preflight?.[step.id] ? <span className={`reproduce-check-status ${preflight[step.id].status}`}>{statusLabel(preflight[step.id].status)}</span> : null}
+                    : step.status
+                      ? <span className={`reproduce-check-status ${RUN_STEP_TONES[step.status]}`}>{RUN_STEP_LABELS[step.status]}</span>
+                      : preflight?.[step.id] ? <span className={`reproduce-check-status ${preflight[step.id].status}`}>{statusLabel(preflight[step.id].status)}</span> : null}
                   {step.blocked && <span className="reproduce-tag warn">blocked</span>}
                 </div>
                 {step.detail && <p className="reproduce-step-detail">{step.detail}</p>}
@@ -540,6 +512,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                 {preflight?.[step.id]?.detail && preflight[step.id].status === "failed" && <p className="reproduce-hint bad">{preflight[step.id].detail}</p>}
                 {preflight?.[step.id]?.resolved && preflight[step.id].written && preflight[step.id].resolved !== preflight[step.id].written && <p className="reproduce-hint">resolved as {preflight[step.id].resolved}</p>}
                 {runSteps[step.id]?.detail && <p className="reproduce-hint bad">{runSteps[step.id].detail}</p>}
+                {runSteps[step.id]?.evidence && <blockquote className="reproduce-evidence-quote">{runSteps[step.id].evidence}</blockquote>}
                 {runSteps[step.id]?.resolved_path && step.check.kind !== "manual" && "path" in step.check && runSteps[step.id].resolved_path !== step.check.path && <p className="reproduce-hint">resolved as {runSteps[step.id].resolved_path}</p>}
                 {runSteps[step.id] && (runSteps[step.id].exit_code !== null || runSteps[step.id].duration_ms > 0) && <p className="reproduce-hint">
                   {[runSteps[step.id].exit_code !== null ? `exit ${runSteps[step.id].exit_code}` : "", stepDuration(runSteps[step.id])].filter(Boolean).join(" · ")}
@@ -550,42 +523,27 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           </ol>
         </section>
 
-        {(run || running || runLine) && <section className="reproduce-block reproduce-run">
+        {(run || running || runLine || journal.length > 0) && <section className="reproduce-block reproduce-run">
           <h2>Run
-            {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : "failed"}`}>{RUN_LABELS[run.status]}</span>}
+            {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : run.status === "manual" || run.status === "stopped" || run.status === "interrupted" ? "manual" : "failed"}`}>{RUN_LABELS[run.status]}</span>}
           </h2>
           {run?.backend && <p className="reproduce-hint">{run.backend}</p>}
-          {currentStep && <p className="reproduce-step-running">
-            <LoaderCircle className="spin" size={11} />
-            <span>{currentStep.index > 0 && currentStep.total > 0 ? `${t("Step")} ${currentStep.index} / ${currentStep.total} · ` : ""}{currentStep.title}</span>
-            <span className="reproduce-elapsed">{clockLabel(Math.max(0, clock - currentStep.startedAt))}</span>
-          </p>}
           {runLine && <p className="reproduce-hint">{runLine}</p>}
-          {(liveLog || running) && <pre className="reproduce-log" ref={logRef}>{liveLog || "Waiting for output…"}</pre>}
-        </section>}
-
-        {diagnosis && <section className="reproduce-block reproduce-diagnosis">
-          <h2>{t("Diagnosis")}<span className="reproduce-check-status failed">{diagnosis.class.replace(/_/g, " ")}</span></h2>
-          {diagnosis.evidence !== "insufficient" && diagnosis.evidence && <blockquote className="reproduce-diagnosis-evidence">{diagnosis.evidence}</blockquote>}
-          <p className="reproduce-diagnosis-cause">{diagnosis.cause}</p>
-          {diagnosis.fix ? <>
-            <p className="reproduce-hint">{t("Suggested change to step {step}:").replace("{step}", diagnosis.fix.target)}</p>
-            <pre className="reproduce-step-command">{diagnosis.fix.command}</pre>
-            <p className="reproduce-hint">{t("Checkpoints are not changed. Re-running records this as a deviation.")}</p>
-            <div className="reproduce-diagnosis-actions">
-              <button className="primary-button" disabled={busy !== ""} onClick={() => void applyDiagnosis()}>
-                {busy === "fix" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}{t("Apply and re-run")}
-              </button>
-              <button className="secondary-button" disabled={busy !== ""} onClick={() => void dismissDiagnosis()}>{t("Stop here")}</button>
-            </div>
-          </> : <p className="reproduce-hint warn">{t("No safe change to try. This needs a person.")}</p>}
-          {attempts.length > 0 && <ol className="reproduce-attempts">
-            {attempts.map((attempt) => <li key={attempt.id}>
-              <span className="reproduce-attempt-no">#{attempt.attempt_no}</span>
-              <span className="reproduce-attempt-class">{attempt.class.replace(/_/g, " ")}</span>
-              <span className={`reproduce-check-status ${attempt.status === "applied" ? "passed" : "manual"}`}>{attempt.status}</span>
+          {question && <InlineNotice tone="warning" className="reproduce-question" title="Needs you">{question}</InlineNotice>}
+          {journal.length > 0 && <ol className="reproduce-journal">
+            {journal.map((entry, index) => <li key={index} className={`reproduce-journal-row ${entry.kind}`}>
+              {entry.kind === "thought" && <span className="reproduce-journal-text">{entry.text}</span>}
+              {entry.kind === "command" && <code className="reproduce-journal-command">$ {entry.text}</code>}
+              {entry.kind === "result" && <span className={`reproduce-journal-result ${entry.timedOut || entry.exitCode !== 0 ? "bad" : "ok"}`}>{resultLabel(entry)}</span>}
+              {entry.kind === "verdict" && <>
+                <span className={`reproduce-journal-verdict ${entry.status}`}>{entry.text}</span>
+                {entry.evidence && <blockquote className="reproduce-journal-evidence">{entry.evidence}</blockquote>}
+              </>}
+              {entry.kind === "revise" && <span className="reproduce-journal-text">{entry.text}</span>}
+              {entry.kind === "finding" && <span className="reproduce-journal-text"><b>Learned</b> {entry.text}</span>}
             </li>)}
           </ol>}
+          {(liveLog || running) && <pre className="reproduce-log" ref={logRef}>{liveLog || "Waiting for output…"}</pre>}
         </section>}
 
         <section className="reproduce-block">
@@ -642,38 +600,33 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         <footer className="reproduce-footer">
           <button
             className="secondary-button"
-            disabled={busy !== "" || running || Boolean(contract.frozen_at)}
-            title={contract.frozen_at ? t("Approved contracts are frozen") : ""}
+            disabled={busy !== "" || running}
+            title={running ? t("Stop the run before planning again") : ""}
             onClick={() => void plan()}
           >
             {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Re-plan
           </button>
-          {contract.frozen_at
-            ? running
-              ? <button className="secondary-button" disabled={busy !== ""} onClick={() => void stopRun()}>
-                  {busy === "stop" ? <LoaderCircle className="spin" size={14} /> : <Square size={13} />}Stop
+          {running
+            ? <button className="secondary-button" disabled={busy !== ""} onClick={() => void stopRun()}>
+                {busy === "stop" ? <LoaderCircle className="spin" size={14} /> : <Square size={13} />}Stop
+              </button>
+            : <>
+                {servers.length > 0 && <select
+                  className="settings-select reproduce-target"
+                  value={target}
+                  aria-label={t("Where to run")}
+                  onChange={(event) => setTarget(event.target.value)}
+                >
+                  <option value="docker">{t("This Mac (Docker)")}</option>
+                  {servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
+                </select>}
+                <button className="primary-button" disabled={busy !== ""} onClick={() => void startRun()}>
+                {busy === "run" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}
+                {target === "docker" ? t("Run runbook") : `${t("Run on")} ${servers.find((server) => server.id === target)?.name || t("server")}`}
                 </button>
-              : <>
-                  {servers.length > 0 && <select
-                    className="settings-select reproduce-target"
-                    value={target}
-                    aria-label={t("Where to run")}
-                    onChange={(event) => setTarget(event.target.value)}
-                  >
-                    <option value="docker">{t("This Mac (Docker)")}</option>
-                    {servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-                  </select>}
-                  <button className="primary-button" disabled={busy !== ""} onClick={() => void startRun()}>
-                  {busy === "run" ? <LoaderCircle className="spin" size={14} /> : <Play size={14} />}
-                  {target === "docker" ? t("Run runbook") : `${t("Run on")} ${servers.find((server) => server.id === target)?.name || t("server")}`}
-                  </button>
-                </>
-            : <button className="primary-button" disabled={busy !== ""} onClick={() => void approve()}>
-                <FlaskConical size={14} />Approve and queue
-              </button>}
+              </>}
         </footer>
-        {contract.frozen_at && <p className="reproduce-hint">Approved contracts are frozen. Start a new reproduction to plan it differently.</p>}
-        {contract.frozen_at && !running && run?.status === "verified" && <p className="reproduce-hint reproduce-queued">Every checkpoint passed. Comparing the reported numbers is the next milestone.</p>}
+        {!running && run?.status === "verified" && <p className="reproduce-hint reproduce-queued">Every runbook step passed with evidence. Comparing the reported numbers is the next milestone.</p>}
       </>}
     </section>;
   }

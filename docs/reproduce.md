@@ -25,10 +25,11 @@ main process and in the workspace database; every surface is an observer.
 - A paper's tab bar carries `Reproduce` after `Codebase`.
 - A finished or failed job is reported without the user having to watch it.
 
-## Contract
+## Runbook, not a program
 
-The planner (read-only, spends tokens but never touches a machine) turns a
-paper into a contract:
+The planner (read-only: it spends tokens but never touches a machine) turns a
+paper into a runbook: the numbers worth confirming, and the steps a person would
+follow to confirm them.
 
 ```json
 {
@@ -40,120 +41,130 @@ paper into a contract:
     "expected": 2.43, "unit": "x", "tolerance": 0.02,
     "evidence": { "page": 7, "table": "Table 2", "row": "VGG16", "column": "speedup", "quote": "…" }
   }],
-  "entrypoint": { "command": "python -m eval", "cwd": ".", "outputs": [] },
-  "environment": { "python": "3.10", "cuda": "12.1", "install": ["pip install -r requirements.txt"], "system": [], "source": "repo Dockerfile" },
+  "steps": [{ "id": "install", "title": "Set up the environment", "command": "python3 -m pip install -e .", "checkpoint": "python3 -c \"import boto3\" exits 0", "check": { "kind": "command", "command": "python3 -c \"import boto3\"" } }],
+  "entrypoint": { "command": "python3 -m eval", "cwd": ".", "outputs": [] },
+  "environment": { "python": "3.10", "cuda": "12.1", "install": [], "system": [], "source": "repo README" },
   "repo": { "url": "", "commit": "" },
-  "notes": []
+  "notes": [],
+  "findings": [{ "at": "…", "text": "this machine has python3 but no python" }]
 }
 ```
 
 Rules enforced by `electron/reproduction/contract.cjs`:
 
-- a contract with no claim is a planning failure, not an empty success;
+- a runbook with no claim is a planning failure, not an empty success;
 - a claim without a reported number keeps `expected: null` and stays unverifiable;
 - tolerance is relative and capped at 50%;
 - evidence must point at a PDF page.
 
-The contract is frozen when approved. Any later deviation is recorded as a
-deviation, not silently absorbed.
+The steps are **advice**. Nothing executes `check` as a predicate any more: the
+executor is an agent that reads them, tries them, and changes them when the
+machine disagrees. `findings` is what earlier runs learned about this machine, so
+the next attempt does not rediscover that `python` is called `python3`.
 
 ## Status
 
 ```
-draft → planned → queued → provisioning → running ─┬→ checks-passed
-                            ↑                      │
-                            └────── diagnosing ────┘   (max 3 attempts → blocked)
-
-checks-passed → verified | diverged        (when the reported numbers are compared)
+draft → planned → provisioning → running ─┬→ checks-passed
+                                          ├→ blocked
+                                          └→ cancelled
 ```
 
-`checks-passed` is deliberately not `verified`: every runbook checkpoint passed,
-but no number in the paper has been compared yet. Collapsing the two would let a
-plan look finished while the table it promises is still unread.
+`checks-passed` is deliberately not `verified`: every runbook step passed with
+evidence, but no number in the paper has been compared yet.
 
-`approve` is a human action. It is deliberately not exposed as an agent tool.
+There is no approval gate. Pressing `Run` is the approval; the planner is cheap
+and the runbook can be re-planned at any time.
 
-## Execution
+## Execution: the pilot
 
-### M1: local Docker
+`electron/reproduction/pilot.cjs` replaces the old step interpreter. There is one
+loop:
 
-One container per run, created from what the contract declares (`python:3.11-slim`
+1. build a state prompt: the runbook, earlier findings, the last seven commands
+   with their output, and any environment hints the last output earned;
+2. ask the model for exactly one action;
+3. carry it out;
+4. repeat until the runbook is finished, a person is needed, or the budget ends.
+
+The actions:
+
+| Action | What it does |
+| --- | --- |
+| `run` | execute one shell command in the environment, stream its output |
+| `advance` | record a step's verdict, with a quote from real output |
+| `revise` | rewrite the runbook when this machine disagrees with it |
+| `finding` | remember something about this machine for the next run |
+| `ask` | stop and ask a person for something only a person can provide |
+| `done` | finish the runbook |
+
+### Why a verdict cannot be invented
+
+`advance` carries `evidence`, and the runtime checks it before writing anything:
+
+- the quote must appear **verbatim** in output produced during this run;
+- `passed` must cite output from a command that exited 0;
+- `done` is refused while any step is still `pending` or `failed`.
+
+So the agent decides *what* is true, but the runtime decides whether it actually
+saw it. A confident sentence without a receipt is a rejected action, and the
+rejection is fed back as the next turn's hint.
+
+This is the same invariant the old runner had, moved from the plan to the
+observation: no green tick without a checkable receipt. The difference is that
+the agent can collect new evidence instead of stopping at the first predicate
+the planner guessed wrong.
+
+### Hints, not repairs
+
+`electron/reproduction/hints.cjs` reads the last output and attaches short
+notes: `python` is called `python3` here, pip ignores a plain-http index unless
+it is trusted, a local proxy cannot reach the intranet. They are attached to the
+observation and shown in the prompt. Nothing acts on them.
+
+That is deliberate. A rule table can only repair the failures someone anticipated;
+an agent that is told what the error usually means can handle the next one.
+
+### Budget and stopping
+
+- `budget.wallClockMin` (default 45) caps the run.
+- 60 turns caps a meandering agent.
+- Ten commands without an accepted verdict or a revision stop the run: that is
+  not progress, and more of it will not become progress.
+- Destructive commands (`rm -rf /`, `mkfs`, `dd of=/dev/…`, `shutdown`) are
+  refused before they reach the machine. Deleting `build/` is fine.
+
+### Local Docker
+
+One container per run, created from what the runbook declares (`python:3.11-slim`
 for `python: 3.11`, `node:20` when the install steps are npm), with the checkout
-mounted at `/workspace`. Steps are `docker exec` calls, so they share the
+mounted at `/workspace`. Every `run` is a `docker exec`, so commands share the
 environment they are building.
 
-The runner (`electron/reproduction/runner.cjs`) is deliberately dumb:
+Stopping a run aborts the in-flight exec and removes the container. Closing the
+app removes it too: a local Docker run does not survive the app, and the UI says
+so rather than pretending the job is still going.
 
-1. run the step's command;
-2. evaluate the step's `check` as its own predicate;
-3. pass → next step, anything else → stop.
+### SSH
 
-A command's exit code never overrides its checkpoint: `pip install -e .` exiting
-1 still passes a `file_exists` check if the package landed, and exiting 0 still
-fails if the import breaks. `manual` stops the run and asks a person — it never
-gets guessed. Commands that time out, or a run that exceeds `budget.wallClockMin`,
-stop with `timeout`.
+`electron/reproduction/remote.cjs` runs the same loop on a saved server: probe
+(OS, python, docker, GPU, disk), a per-reproduction directory under
+`~/.archimedes/repro/`, and a marker file so a second run reuses the checkout.
+Commands use a login shell (`bash -lc`) so the profile's proxy and PATH apply.
 
-Stopping a run aborts the in-flight `docker exec` and removes the container.
-Closing the app removes it too: a local Docker run does not survive the app, and
-the UI says so rather than pretending the job is still going.
-
-### M2: bounded diagnosis
-
-A run that stops says where, not why. `electron/reproduction/diagnose.cjs` turns
-the tail of the log into one of eleven causes, and the answer decides whether the
-run may try again.
-
-1. **Rules first.** Missing module, out-of-memory, credentials, network, missing
-   data, wrong command — matched by pattern, quoted with the line that matched.
-   No model call, no cost, no room to invent a cause.
-2. **Model only when the rules are inconclusive**, and only for the explanation
-   and the suggested command. Its evidence must appear verbatim in the log; if it
-   does not, the diagnosis degrades to `unknown` and the run stops.
-3. **Four classes are never retried automatically** — credentials, resources
-   (OOM/disk), missing repository code, ambiguous paper. Those need a person, and
-   retrying them only burns GPU hours.
-
-What a fix may change: one step's `command`. What it may never change: a
-checkpoint, or a verdict. A run that could edit its own checkpoints could turn
-any failure green.
-
-The container stays alive while a diagnosis waits (30 minutes), so applying a fix
-re-runs from the repaired step without paying for the work before it. When the
-run does continue, the old and new command are recorded as a deviation on the
-contract, so a report can say "this run needed two repairs" rather than quietly
-describing a path nobody took.
-
-A repair that is safe by construction is applied **without asking**: renaming an
-interpreter the machine does not have changes no semantics, and a person watching
-a run wants that fixed, not a dialog. The restart is announced (`Attempt 2:
-…`) and recorded as a deviation.
-
-Attempts are capped by `budget.maxFixAttempts` (default 3). At the cap the run
-ends `blocked` with the full chain of attempts, which is more useful than a
-fourth guess.
-
-## Execution (later milestones)
-
-- The agent stays **local**; only execution is remote. This mirrors
-  `pi-ssh-remote`'s tool-routing idea: the agent keeps `read`/`bash`/`edit`, and
-  the tool layer swaps the operations for remote ones. The reference project
-  lives at `~/Documents/AI Research/pi-ssh-remote`.
-- Execution backends: Docker (default), SSH (own server or AutoDL), local.
-- Jobs are detached on the remote (`nohup` + status file) so closing the app
-  does not kill a run; local Docker does stop with the app and says so.
+When the server cannot reach GitHub, the local checkout is copied with
+`tar`-over-ssh instead of cloning. A run that stops leaves the directory in
+place: the next run starts from what was already built.
 
 ## Milestones
 
 | Milestone | Scope | State |
 | --- | --- | --- |
-| M0 | object, list, paper entry, contract planning, approval (no execution) | done |
-| M1 | local Docker run, queue, log stream, checkpoint verdicts | done |
-| M2 | bounded diagnosis, repair-and-retry, deviations | done |
-| M3 | SSH backends, environment cache, cost watchdog | planned |
-| M4 | batch across papers, aggregate report | planned |
+| M0 | object, list, paper entry, planning | done |
+| M1 | Docker execution with live output | done |
+| M2 | agent-driven execution: revise, retry, ask | done |
+| M3 | SSH backend, environment reuse, findings | done |
+| M4 | compare the produced numbers with the reported ones | planned |
 
-M1 and M2 stop short of comparing numbers on purpose: `checks-passed` means the
-runbook ran, not that Table 2 matched. Metric parsing and verdicts arrive with
-M2/M3 once failures have somewhere useful to go.
-
+M4 is the remaining gap on purpose: `checks-passed` means the runbook ran, not
+that Table 2 matched. Metric parsing and numeric comparison come next.

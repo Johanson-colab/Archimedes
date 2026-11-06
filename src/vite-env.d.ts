@@ -144,8 +144,6 @@ interface ResearchDeskBridge {
     preflightReproduction: (id: string, workspace?: string) => Promise<ReproductionPreflight>;
     runReproduction: (id: string, options?: { backend?: "docker" | "ssh"; serverId?: string; workspace?: string }) => Promise<Reproduction>;
     stopReproduction: (id: string) => Promise<boolean>;
-    applyReproductionFix: (id: string) => Promise<Reproduction>;
-    dismissReproductionDiagnosis: (id: string) => Promise<Reproduction>;
     onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
     onReproductionRunEvent?: (callback: (payload: {
       reproductionId?: string;
@@ -158,8 +156,15 @@ interface ResearchDeskBridge {
       attempt?: number;
       index?: number;
       total?: number;
-      diagnosis?: ReproductionDiagnosis | null;
-      step?: { id?: string; title?: string; status?: ReproductionRunStepStatus; detail?: string; exit_code?: number | null; duration_ms?: number };
+      question?: string;
+      command?: string;
+      exitCode?: number | null;
+      timedOut?: boolean;
+      durationMs?: number;
+      text?: string;
+      note?: string;
+      steps?: ReproductionStep[];
+      step?: ReproductionRunStep;
     }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
@@ -1129,6 +1134,11 @@ type ReproductionCheck =
   | { kind: "manual"; reason: string };
 
 interface ReproductionStep {
+  // Present once the executor has worked on a step: the runbook keeps the
+  // verdicts and the quote behind them.
+  status?: ReproductionRunStepStatus;
+  evidence?: string;
+  note?: string;
   id: string;
   title: string;
   detail: string;
@@ -1174,17 +1184,6 @@ interface ReproductionDeviation {
   class: string;
 }
 
-interface ReproductionDiagnosis {
-  class: string;
-  confidence: string;
-  evidence: string;
-  cause: string;
-  retry: boolean;
-  fix: { target: string; command: string } | null;
-  id?: string;
-  attempt?: number;
-}
-
 interface ReproductionAttempt {
   id: string;
   reproduction_id: string;
@@ -1225,6 +1224,7 @@ interface ReproductionRunStep {
   title: string;
   status: ReproductionRunStepStatus;
   detail: string;
+  evidence?: string;
   exit_code: number | null;
   duration_ms: number;
   resolved_path?: string;

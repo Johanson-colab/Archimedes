@@ -23,7 +23,7 @@ test("claims keep their evidence and clamp the tolerance", () => {
       evidence: { page: "7", table: "Table 2", row: "VGG16", column: "speedup", quote: "2.43x fewer" },
     }],
   });
-  assert.equal(contract.version, 2);
+  assert.equal(contract.version, 3);
   assert.equal(contract.claims.length, 1);
   assert.equal(contract.claims[0].expected, 2.43);
   assert.equal(contract.claims[0].tolerance, 0.5, "tolerance is capped");

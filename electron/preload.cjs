@@ -151,8 +151,6 @@ contextBridge.exposeInMainWorld("researchDesk", {
   preflightReproduction: (id, workspace) => ipcRenderer.invoke("reproduction:preflight", { id, workspace }),
   runReproduction: (id, options = {}) => ipcRenderer.invoke("reproduction:run", { id, ...options }),
   stopReproduction: (id) => ipcRenderer.invoke("reproduction:stop", { id }),
-  applyReproductionFix: (id) => ipcRenderer.invoke("reproduction:apply-fix", { id }),
-  dismissReproductionDiagnosis: (id) => ipcRenderer.invoke("reproduction:dismiss-diagnosis", { id }),
   deepSearchPapers: (input) => ipcRenderer.invoke("library:deep-search", input),
   getBenchmarkRadarData: () => ipcRenderer.invoke("benchmark-radar:get-data"),
   searchConferencePapers: (input) => ipcRenderer.invoke("library:search-conferences", input),

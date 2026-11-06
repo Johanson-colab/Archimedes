@@ -6971,18 +6971,24 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 .reproduce-check-status.needs-run { color: var(--text-muted); background: var(--surface-soft); }
 .reproduce-check-status.manual, .reproduce-check-status.blocked { color: var(--state-warning); background: color-mix(in srgb, var(--state-warning) 14%, transparent); }
 .reproduce-hint.bad { color: var(--state-danger); }
-.reproduce-step-running { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; color: var(--text-secondary); font-size: 11px; }
-.reproduce-elapsed { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
 .reproduce-target { width: auto; min-width: 132px; height: 30px; }
 .reproduce-log { max-height: 280px; margin: 6px 0 0; padding: 8px 10px; overflow: auto; color: var(--text-secondary); background: var(--surface-soft); border: 1px solid var(--border-soft); border-radius: 6px; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-.reproduce-diagnosis { border-left: 2px solid var(--state-warning); padding-left: 12px; }
-.reproduce-diagnosis-evidence { margin: 6px 0; padding: 6px 10px; color: var(--text-secondary); background: var(--surface-soft); border-radius: 6px; font-family: var(--font-mono); font-size: 10.5px; white-space: pre-wrap; }
-.reproduce-diagnosis-cause { margin: 4px 0; color: var(--text-primary); font-size: 12px; line-height: 1.55; }
-.reproduce-diagnosis-actions { display: flex; gap: 8px; margin-top: 8px; }
-.reproduce-attempts { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; }
-.reproduce-attempts li { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 10.5px; }
-.reproduce-attempt-no { color: var(--text-faint); font-family: var(--font-mono); }
-.reproduce-attempt-class { min-width: 0; flex: 1; }
+.reproduce-question { margin: 8px 0 4px; }
+.reproduce-journal { display: flex; flex-direction: column; gap: 2px; margin: 8px 0 0; padding: 0; list-style: none; }
+.reproduce-journal-row { display: flex; flex-direction: column; gap: 2px; padding: 3px 0; font-size: 11.5px; line-height: 1.5; }
+.reproduce-journal-row.command { margin-top: 5px; }
+.reproduce-journal-text { color: var(--text-muted); }
+.reproduce-journal-text b { margin-right: 4px; color: var(--text-secondary); font-weight: 600; }
+.reproduce-journal-command { color: var(--text-primary); font-family: var(--font-mono); font-size: 10.5px; white-space: pre-wrap; word-break: break-word; }
+.reproduce-journal-result { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
+.reproduce-journal-result.ok { color: var(--state-success); }
+.reproduce-journal-result.bad { color: var(--state-danger); }
+.reproduce-journal-verdict { color: var(--text-secondary); font-weight: 600; }
+.reproduce-journal-verdict.passed { color: var(--state-success); }
+.reproduce-journal-verdict.failed, .reproduce-journal-verdict.blocked { color: var(--state-danger); }
+.reproduce-journal-verdict.manual { color: var(--state-warning); }
+.reproduce-journal-evidence { margin: 2px 0 4px; padding: 4px 8px; color: var(--text-muted); background: var(--surface-soft); border-left: 2px solid var(--border-default); border-radius: 4px; font-family: var(--font-mono); font-size: 10px; white-space: pre-wrap; word-break: break-word; }
+.reproduce-evidence-quote { margin: 4px 0 2px; padding: 4px 8px; color: var(--text-muted); background: var(--surface-soft); border-left: 2px solid var(--state-success); border-radius: 4px; font-family: var(--font-mono); font-size: 10px; white-space: pre-wrap; word-break: break-word; }
 .reproduce-check-kind { flex: 0 0 auto; padding: 0 5px; color: var(--text-faint); background: var(--surface-soft); border-radius: 4px; font-family: var(--font-mono); font-size: 9px; }
 .reproduce-checkpoint svg { flex: 0 0 auto; }
 .reproduce-claim-list { display: grid; overflow: hidden; margin: 0; padding: 0; background: var(--surface-panel); border: 1px solid var(--border-soft); border-radius: 10px; list-style: none; }

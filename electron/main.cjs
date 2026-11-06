@@ -42,16 +42,16 @@ const { registerNativeAgentCommands } = require("./native-agent-commands.cjs");
 const { runWindowAgent } = require("./window-agent-run.cjs");
 const { closeAllNativeClients } = require("./agent/external-backend.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
-const { isContractFrozen, normalizeContract } = require("./reproduction/contract.cjs");
+const { normalizeContract } = require("./reproduction/contract.cjs");
 const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");
 const { runPreflight } = require("./reproduction/preflight.cjs");
 const { repoNameFromUrl } = require("./reproduction/paths.cjs");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
 const { findRepository, githubSearchCandidates } = require("./reproduction/find-repository.cjs");
-const { runRunbook } = require("./reproduction/runner.cjs");
+const { runPilot } = require("./reproduction/pilot.cjs");
+const { completeJson } = require("./paper-review-model.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const { createSshBackend } = require("./reproduction/remote.cjs");
-const { applyFix, diagnose } = require("./reproduction/diagnose.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
@@ -1216,7 +1216,6 @@ app.whenReady().then(async () => {
   });
 
   const activeReproductionRuns = new Map();
-  const DIAGNOSIS_IDLE_MS = 30 * 60 * 1_000;
 
   const notifyRunFinished = (record, summary) => {
     // The user is told when they are not looking; a run that finishes while the
@@ -1230,149 +1229,122 @@ app.whenReady().then(async () => {
     }
   };
 
-  const summarizeOutcome = (outcome) => {
-    const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
-    return stopped ? `${stopped.title}: ${stopped.detail || stopped.status}` : (outcome.error || "The run stopped.");
-  };
-
   const stopSession = async (reproductionId) => {
     const session = activeReproductionRuns.get(reproductionId);
     if (!session) return null;
     activeReproductionRuns.delete(reproductionId);
-    if (session.idleTimer) clearTimeout(session.idleTimer);
     if (session.backend) await session.backend.dispose().catch(() => {});
     return session;
   };
 
   /**
-   * Runs the runbook from a step, then either finishes the reproduction or
-   * opens a diagnosis. The container stays alive between attempts on purpose:
-   * repairing step 2 and re-running from step 2 means the work done by step 1
-   * is still there.
+   * The model that drives the run. It is the same agent model configured for
+   * the rest of the app: the executor is an agent, so it uses the agent's model.
    */
-  const executeRun = async (session, startAt) => {
-    const { record, contract, send, run } = session;
-    if (!session.backend) throw new Error("The container is no longer running.");
-    session.controller = new AbortController();
-    send({ type: "attempt", attempt: session.attempt });
+  const reproductionModel = () => {
+    const active = modelConfig.getActiveModelConfig("agent");
+    if (!active.apiKey && active.provider !== "openrouter") {
+      throw new Error("Configure the main agent model in Settings before running a reproduction.");
+    }
+    return active;
+  };
 
-    let outcome = { status: "failed", steps: [], log: "", error: "" };
+  /**
+   * Hands the runbook to the pilot. There is no step loop and no repair table:
+   * the agent decides what to run next, reads the result, and records a verdict
+   * only when it can quote the output that proves it.
+   */
+  const executeRun = async (session) => {
+    const { record, send, run } = session;
+    if (!session.backend) throw new Error("The environment is no longer running.");
+    session.controller = new AbortController();
+    send({ type: "attempt", attempt: 1 });
+    send({ type: "started", detail: session.backend.describe?.() || "" });
+
+    let outcome = { status: "failed", steps: [], runbook: [], findings: [], log: "", summary: "The run could not start." };
     try {
-      outcome = await runRunbook({
-        steps: contract.steps,
-        startAt,
-        repoName: session.repoName,
+      outcome = await runPilot({
+        title: record.title,
+        summary: session.contract.summary,
+        claims: session.contract.claims,
+        repo: session.contract.repo,
+        notes: session.contract.notes,
+        steps: session.contract.steps,
+        findings: session.contract.findings || [],
         backend: session.backend,
+        target: session.backend.describe?.() || "",
+        complete: ({ system, prompt, signal }) => completeJson(reproductionModel(), {
+          system,
+          prompt,
+          signal,
+          maxTokens: 2_400,
+          // One decision is short; a slow answer is a stalled run, not a long one.
+          timeoutMs: 180_000,
+        }),
+        emit: send,
         signal: session.controller.signal,
         budgetMs: Math.max(1, Number(record.budget?.wallClockMin) || 45) * 60_000,
-        emit: (payload) => send(payload),
+        onRunbook: (steps, findings) => {
+          // Revisions and findings are written as they happen: a crash mid-run
+          // should still leave the runbook the agent had learned.
+          session.contract = { ...session.contract, steps, findings };
+          store.updateReproduction(record.id, { contract: session.contract });
+        },
       });
     } catch (error) {
-      outcome = { status: "failed", steps: [], log: "", error: error instanceof Error ? error.message : "The run failed." };
+      outcome = { ...outcome, status: "failed", summary: error instanceof Error ? error.message : "The run failed." };
     }
 
     const runStatus = outcome.status || "failed";
+    const contract = {
+      ...session.contract,
+      steps: outcome.runbook?.length ? outcome.runbook : session.contract.steps,
+      findings: outcome.findings?.length ? outcome.findings : (session.contract.findings || []),
+    };
+    session.contract = contract;
     store.updateReproductionRun(run.id, {
       status: runStatus,
       steps: outcome.steps || [],
       log: outcome.log || "",
-      error: outcome.error || "",
+      error: runStatus === "verified" ? "" : (outcome.summary || ""),
       finishedAt: new Date().toISOString(),
     });
 
     if (runStatus === "verified") {
       await stopSession(record.id);
-      store.updateReproduction(record.id, { status: "checks-passed", error: "" });
-      send({ type: "finished", status: runStatus });
+      store.updateReproduction(record.id, { contract, status: "checks-passed", error: "" });
+      send({ type: "finished", status: runStatus, summary: outcome.summary || "" });
+      notifyRunFinished(record, outcome.summary || "Every runbook step passed.");
       return;
     }
+
+    await stopSession(record.id);
     if (runStatus === "stopped") {
-      await stopSession(record.id);
-      store.updateReproduction(record.id, { status: "cancelled", error: "Stopped by the user." });
+      store.updateReproduction(record.id, { contract, status: "cancelled", error: "Stopped by the user." });
       send({ type: "finished", status: runStatus, summary: "Stopped by the user." });
       return;
     }
 
-    // Something failed. Explain it before asking for a decision: a red step with
-    // no reason just moves the problem to the person reading the log.
-    const stopped = (outcome.steps || []).find((step) => step.status !== "passed");
-    const stepId = stopped?.id || "";
-    const step = (contract.steps || []).find((entry) => entry.id === stepId) || null;
-    const summary = summarizeOutcome(outcome);
-    store.updateReproduction(record.id, { status: "diagnosing", error: summary });
-
-    let diagnosis = { class: "unknown", confidence: "low", evidence: "insufficient", cause: summary, retry: false, fix: null };
-    if (step) {
-      diagnosis = await diagnose({
-        step,
-        outcome: { exit_code: stopped?.exit_code ?? null, status: stopped?.status, detail: stopped?.detail },
-        contract,
-        log: outcome.log || "",
-        runAgent: agent.runAgent,
-        workspace: session.workspace,
-        emit: (payload) => send(payload),
-      });
-    }
-
-    const attempt = store.createReproductionAttempt({
-      reproductionId: record.id,
-      runId: run.id,
-      attemptNo: session.attempt,
-      stepId,
-      class: diagnosis.class,
-      confidence: diagnosis.confidence,
-      evidence: diagnosis.evidence,
-      cause: diagnosis.cause,
-      fix: diagnosis.fix,
-      status: "proposed",
-    });
-    session.lastDiagnosis = diagnosis;
-    session.lastAttempt = attempt;
-    session.lastStepIndex = Math.max(0, (contract.steps || []).findIndex((entry) => entry.id === stepId));
-
-    if (!diagnosis.fix) {
-      // Nothing safe to try. Stop here and say so, instead of retrying blindly.
-      await stopSession(record.id);
-      store.updateReproduction(record.id, { status: "blocked", error: diagnosis.cause });
-      send({ type: "finished", status: runStatus, summary: diagnosis.cause, diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no } });
-      notifyRunFinished(record, diagnosis.cause);
-      return;
-    }
-
-    // A repair that is safe by construction is applied without asking: a person
-    // watching a run wants the interpreter renamed, not a dialog. Every attempt
-    // is recorded and the log says what changed, so nothing happens invisibly.
-    const maxAttempts = Math.max(1, Number(record.budget?.maxFixAttempts) || 3);
-    if (session.attempt > maxAttempts) {
-      await stopSession(record.id);
-      store.updateReproduction(record.id, { status: "blocked", error: `${diagnosis.cause} (gave up after ${maxAttempts} attempts)` });
-      send({ type: "finished", status: runStatus, summary: diagnosis.cause, diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no } });
-      notifyRunFinished(record, diagnosis.cause);
-      return;
-    }
-
-    const targetId = diagnosis.fix.target;
-    const repaired = applyFix(session.contract, diagnosis, { attempt: session.attempt });
-    session.contract = repaired;
-    session.lastDiagnosis = null;
-    store.updateReproductionAttempt(attempt.id, { status: "applied" });
-    store.updateReproduction(record.id, { contract: repaired, status: "running", error: "" });
-
-    const restartAt = Math.max(0, repaired.steps.findIndex((step) => step.id === targetId));
+    const summary = outcome.summary || "The run stopped.";
+    // "manual" is the agent asking a person something. It is still a stop, but
+    // the question is the useful part and must not be buried in a log.
+    store.updateReproduction(record.id, { contract, status: "blocked", error: summary });
     send({
-      type: "repair",
-      diagnosis: { ...diagnosis, id: attempt.id, attempt: attempt.attempt_no },
-      detail: `Attempt ${session.attempt + 1}: ${diagnosis.cause}`,
+      type: "finished",
+      status: runStatus,
+      summary,
+      question: runStatus === "manual" ? summary : "",
     });
-    session.attempt += 1;
-    await executeRun(session, restartAt);
+    notifyRunFinished(record, summary);
   };
 
   ipcMain.handle("reproduction:run", async (event, { id, workspace, backend: backendKind = "docker", serverId = "" } = {}) => {
     const record = presentReproduction(store.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
     if (!record.contract) throw new Error("Generate a plan before running it.");
-    if (!record.contract.frozen_at) throw new Error("Approve the plan before running it.");
+    // Fail before cloning or starting a container: an executor with no model
+    // cannot decide anything, and provisioning costs minutes.
+    reproductionModel();
     if (activeReproductionRuns.has(record.id)) throw new Error("This reproduction is already running.");
     const repoUrl = record.contract.repo?.url || record.repo_url;
     if (!repoUrl) throw new Error("This reproduction has no repository to run against.");
@@ -1390,15 +1362,10 @@ app.whenReady().then(async () => {
       record,
       run,
       contract: record.contract,
-      attempt: 1,
       workspace: dataWorkspace,
       repoName: repoNameFromUrl(repoUrl),
       backend: null,
       controller: null,
-      lastDiagnosis: null,
-      lastAttempt: null,
-      lastStepIndex: 0,
-      idleTimer: null,
       send: (payload) => {
         if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
       },
@@ -1434,7 +1401,7 @@ app.whenReady().then(async () => {
           }
           await backend.prepare();
           store.updateReproduction(record.id, { status: "running" });
-          await executeRun(session, 0);
+          await executeRun(session);
           return;
         }
 
@@ -1453,7 +1420,7 @@ app.whenReady().then(async () => {
         await backend.prepare();
         store.updateReproduction(record.id, { status: "running" });
         session.send({ type: "started", detail: backend.describe() });
-        await executeRun(session, 0);
+        await executeRun(session);
       } catch (error) {
         const message = error instanceof Error ? error.message : "The run could not start.";
         await stopSession(record.id);
@@ -1468,45 +1435,6 @@ app.whenReady().then(async () => {
     return { ...presentReproduction(store.getReproduction(record.id)), run };
   });
 
-  ipcMain.handle("reproduction:apply-fix", async (_event, { id } = {}) => {
-    const session = activeReproductionRuns.get(String(id || ""));
-    if (!session) throw new Error("This reproduction is not waiting for a decision.");
-    const diagnosis = session.lastDiagnosis;
-    if (!diagnosis?.fix) throw new Error("This diagnosis does not propose a change.");
-    const maxAttempts = Math.max(1, Number(session.record.budget?.maxFixAttempts) || 3);
-    if (session.attempt > maxAttempts) throw new Error(`Gave up after ${maxAttempts} attempts. The remaining work needs a person.`);
-
-    const targetId = diagnosis.fix.target;
-    const contract = applyFix(session.contract, diagnosis, { attempt: session.attempt - 1 });
-    session.contract = contract;
-    session.lastDiagnosis = null;
-    if (session.idleTimer) {
-      clearTimeout(session.idleTimer);
-      session.idleTimer = null;
-    }
-    if (session.lastAttempt) store.updateReproductionAttempt(session.lastAttempt.id, { status: "applied" });
-    store.updateReproduction(id, { contract, status: "running", error: "" });
-
-    const startAt = Math.max(0, contract.steps.findIndex((step) => step.id === targetId));
-    void executeRun(session, startAt);
-    return { ...presentReproduction(store.getReproduction(id)) };
-  });
-
-  ipcMain.handle("reproduction:dismiss-diagnosis", async (_event, { id } = {}) => {
-    const session = activeReproductionRuns.get(String(id || ""));
-    if (!session) {
-      // After a restart there is no container left to dismiss; record the
-      // decision anyway so the reproduction does not stay in "diagnosing".
-      store.updateReproduction(String(id || ""), { status: "blocked" });
-      return presentReproduction(store.getReproduction(id));
-    }
-    const summary = session.lastDiagnosis?.cause || "Stopped after the failure.";
-    if (session.lastAttempt) store.updateReproductionAttempt(session.lastAttempt.id, { status: "rejected" });
-    await stopSession(id);
-    store.updateReproduction(id, { status: "blocked", error: summary });
-    return { ...presentReproduction(store.getReproduction(id)) };
-  });
-
   ipcMain.handle("reproduction:stop", async (_event, { id } = {}) => {
     const session = activeReproductionRuns.get(String(id || ""));
     // Stopping something that already finished is not an error: the button and
@@ -1519,9 +1447,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("reproduction:plan", async (event, { id, workspace } = {}) => {
     const reproduction = store.getReproduction(id);
     if (!reproduction) throw new Error("That reproduction does not exist.");
-    if (isContractFrozen(reproduction.contract)) {
-      throw new Error("This contract is approved and frozen. Start a new reproduction to plan it differently.");
-    }
     if (!reproduction.paper_id) throw new Error("Reproduction planning is only available for papers.");
     const paper = store.getPaper(reproduction.paper_id);
     if (!paper) throw new Error("The paper for this reproduction is missing.");

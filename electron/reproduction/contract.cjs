@@ -7,7 +7,7 @@
  * planner, reviewed by a human, and then frozen.
  */
 
-const CONTRACT_VERSION = 2;
+const CONTRACT_VERSION = 3;
 const MAX_CLAIMS = 12;
 const MAX_STEPS = 10;
 
@@ -211,6 +211,14 @@ function normalizeContract(input, { paperTitle = "" } = {}) {
       branch: text(value.repo?.branch, 200),
     },
     notes: Array.isArray(value.notes) ? value.notes.map((item) => text(item, 400)).filter(Boolean).slice(0, 10) : [],
+    // What the executor learned about this machine. Carried across runs so the
+    // next attempt does not rediscover that python is called python3 here.
+    findings: Array.isArray(value.findings)
+      ? value.findings
+        .filter((item) => item && typeof item === "object" && text(item.text, 400))
+        .map((item) => ({ at: text(item.at, 40), text: text(item.text, 400) }))
+        .slice(-20)
+      : [],
     // A frozen contract that gets repaired keeps the repairs: a run that needed
     // two command changes is not the same run as one that needed none.
     deviations: Array.isArray(value.deviations)
