@@ -98,6 +98,7 @@ function normalizeEnvironment(input) {
 }
 
 const CHECK_KINDS = new Set(["file_exists", "file_contains", "command", "http", "manual"]);
+const RUN_STEP_STATUSES = new Set(["pending", "passed", "failed", "blocked", "manual", "stopped"]);
 
 /**
  * A checkpoint nobody can evaluate is not a checkpoint. Each step carries a
@@ -132,6 +133,10 @@ function normalizeStep(input, index) {
   const step = input && typeof input === "object" ? input : {};
   const title = text(step.title, 200);
   if (!title) return null;
+  // A runbook step may carry the verdict the executor recorded, with the quote
+  // behind it. Reading a contract back must not erase either, or every reopened
+  // run would ask the agent to prove the work again.
+  const status = RUN_STEP_STATUSES.has(step.status) ? step.status : "";
   return {
     id: text(step.id, 80) || `step-${index + 1}`,
     title,
@@ -141,6 +146,11 @@ function normalizeStep(input, index) {
     check: normalizeCheck(step.check),
     source: text(step.source, 400),
     blocked: text(step.blocked, 600),
+    ...(status ? { status } : {}),
+    evidence: text(step.evidence, 600),
+    note: text(step.note, 400),
+    exit_code: Number.isInteger(step.exit_code) ? step.exit_code : null,
+    duration_ms: Math.max(0, Math.trunc(Number(step.duration_ms) || 0)),
   };
 }
 

@@ -201,3 +201,32 @@ test("the prompt carries what earlier runs learned and the last output", async (
   assert.match(brain.prompts[1], /The index returned no candidates/);
   assert.match(brain.prompts[1], /Table 2 reports 50\.6/);
 });
+
+test("done is refused while a runbook step has no verdict", async () => {
+  const { result, brain } = await pilot({
+    steps: [step("install")],
+    decisions: [{ action: "done" }],
+  });
+  assert.equal(result.status, "failed", "the script ran out, but nothing was marked done");
+  assert.equal(result.steps[0].status, "pending");
+  assert.match(brain.prompts[1], /still has no verdict/);
+});
+
+test("a reopened run keeps the verdicts the last one earned", async () => {
+  const { result, fake } = await pilot({
+    steps: [
+      step("install", { status: "passed", evidence: "Successfully installed boto3-1.34.0", exit_code: 0 }),
+      step("run"),
+    ],
+    script: { "bash run.sh": { output: "wrote outputs/summary.json\n" } },
+    decisions: [
+      { action: "run", command: "bash run.sh" },
+      { action: "advance", step: "run", verdict: "passed", evidence: "wrote outputs/summary.json" },
+      { action: "done", summary: "already installed; ran the evaluation" },
+    ],
+  });
+  assert.equal(result.status, "verified");
+  assert.deepEqual(result.steps.map((entry) => entry.status), ["passed", "passed"]);
+  assert.equal(result.steps[0].evidence, "Successfully installed boto3-1.34.0");
+  assert.deepEqual(fake.calls, ["bash run.sh"], "the install step is not run twice");
+});

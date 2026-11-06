@@ -202,3 +202,33 @@ test("a plan can be replaced until it is approved, and not after", () => {
   assert.equal(isContractFrozen(approved), true, "an approved contract must not be silently replaced");
   assert.equal(isContractFrozen(null), false);
 });
+
+test("a runbook read back keeps its verdicts and the quote behind them", () => {
+  const contract = normalizeContract({
+    claims: [{ statement: "Result holds" }],
+    steps: [{
+      id: "install",
+      title: "Set up the environment",
+      command: "python3 -m pip install -e .",
+      status: "passed",
+      evidence: "Successfully installed boto3-1.34.0",
+      note: "extra installed",
+      exit_code: 0,
+      duration_ms: 12_300,
+    }, {
+      id: "run",
+      title: "Run the evaluation",
+      status: "pending",
+    }],
+  });
+  assert.equal(contract.steps[0].status, "passed");
+  assert.equal(contract.steps[0].evidence, "Successfully installed boto3-1.34.0");
+  assert.equal(contract.steps[0].exit_code, 0);
+  assert.equal(contract.steps[0].duration_ms, 12_300);
+  assert.equal(contract.steps[1].status, "pending");
+});
+
+test("a freshly planned step has no verdict at all", () => {
+  const contract = normalizeContract({ claims: [{ statement: "Result holds" }], steps: [{ id: "x", title: "Do the thing" }] });
+  assert.equal("status" in contract.steps[0], false, "no badge before the executor has an opinion");
+});
