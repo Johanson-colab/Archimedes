@@ -98,6 +98,9 @@ The actions:
 | `ask` | stop and ask a person for something only a person can provide |
 | `done` | finish the runbook |
 
+Findings are shown under the run, so a person can see what the machine taught the
+agent without opening the database.
+
 ### Why a verdict cannot be invented
 
 `advance` carries `evidence`, and the runtime checks it before writing anything:
@@ -163,8 +166,9 @@ journal instead of looking like a normal operation.
 
 - `budget.wallClockMin` (default 45) caps the run.
 - 60 turns caps a meandering agent.
-- Ten commands without an accepted verdict or a revision stop the run: that is
-  not progress, and more of it will not become progress.
+- Ten commands without an accepted verdict, a revision or a finding stop the
+  run. Diagnosis is progress only when it leaves something durable behind;
+  otherwise it is a loop with extra steps.
 - Destructive commands (`rm -rf /`, `mkfs`, `dd of=/dev/…`, `shutdown`) are
   refused before they reach the machine. Deleting `build/` is fine.
 

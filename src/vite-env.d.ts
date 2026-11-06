@@ -1171,6 +1171,7 @@ interface ReproductionContract {
   environment: { python: string; cuda: string; install: string[]; system: string[]; source: string };
   repo: { url: string; commit: string; branch: string };
   notes: string[];
+  findings: Array<{ at: string; text: string }>;
   deviations: ReproductionDeviation[];
   frozen_at: string | null;
 }

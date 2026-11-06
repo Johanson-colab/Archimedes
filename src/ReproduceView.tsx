@@ -550,6 +550,13 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           {(liveLog || running) && <pre className="reproduce-log" ref={logRef}>{liveLog || "Waiting for output…"}</pre>}
         </section>}
 
+        {(contract.findings?.length ?? 0) > 0 && <section className="reproduce-block">
+          <h2>What this run learned</h2>
+          <ul className="reproduce-findings">
+            {contract.findings.slice(-8).map((finding, index) => <li key={`${finding.at}-${index}`}>{finding.text}</li>)}
+          </ul>
+        </section>}
+
         <section className="reproduce-block">
           <h2>Numbers this runbook should produce</h2>
           <ol className="reproduce-claim-list">

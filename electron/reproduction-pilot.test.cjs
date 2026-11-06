@@ -189,7 +189,7 @@ test("the agent is stopped when it keeps running commands without moving the run
   for (let index = 0; index < 12; index += 1) decisions.push({ action: "run", command: `echo ${index}` });
   const { result } = await pilot({ steps: [step("install")], decisions });
   assert.equal(result.status, "blocked");
-  assert.match(result.summary, /without moving the runbook/);
+  assert.match(result.summary, /without a verdict, a runbook change or a finding/);
 });
 
 test("the prompt carries what earlier runs learned and the last output", async () => {
@@ -296,4 +296,25 @@ test("a short output is not copied anywhere", async () => {
     ],
   });
   assert.deepEqual(written, []);
+});
+
+test("a finding counts as progress, so diagnosis does not look like a stall", async () => {
+  const decisions = [];
+  for (let index = 0; index < 12; index += 1) {
+    decisions.push({ action: "run", command: `probe ${index}` });
+    decisions.push({ action: "finding", text: `fact number ${index} about this machine` });
+  }
+  decisions.push({ action: "ask", question: "credentials are missing" });
+  const { result } = await pilot({ steps: [step("install")], decisions, script: {} });
+  assert.equal(result.status, "manual");
+  assert.equal(result.findings.length, 12);
+});
+
+test("the stall message says which command it gave up on", async () => {
+  const decisions = [];
+  for (let index = 0; index < 11; index += 1) decisions.push({ action: "run", command: `probe ${index}` });
+  const { result } = await pilot({ steps: [step("install")], decisions, script: {} });
+  assert.equal(result.status, "blocked");
+  assert.match(result.summary, /without a verdict, a runbook change or a finding/);
+  assert.match(result.summary, /probe 9/);
 });
