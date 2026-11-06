@@ -3000,7 +3000,7 @@ html:not([data-theme="paper"]) .library-glyph { color: var(--night-muted); }
 .context-picker-action:hover, .context-list-row:hover:not(:disabled),
 .composer-add-button:hover, .composer-add-button.active,
 .composer-tool:hover, .composer-tool.active,
-.outline-button:hover, .secondary-button:hover, .icon-button:hover,
+.icon-button:hover,
 .provider-option:hover, .model-catalog-list button:hover,
 .model-catalog-list button.active, .change-file-list > button:hover:not(:disabled) {
   color: var(--mono-text);
