@@ -230,3 +230,31 @@ test("a reopened run keeps the verdicts the last one earned", async () => {
   assert.equal(result.steps[0].evidence, "Successfully installed boto3-1.34.0");
   assert.deepEqual(fake.calls, ["bash run.sh"], "the install step is not run twice");
 });
+
+test("an error-driven fix is written back to the runbook", async () => {
+  const { result, fake, brain } = await pilot({
+    steps: [step("install", { command: 'python -m pip install -e ".[cl]"' })],
+    script: {
+      'python -m pip install -e ".[cl]"': { output: "bash: python: command not found\n", exitCode: 127 },
+      'python3 -m pip install -e ".[cl]"': { output: "Successfully installed boto3-1.34.0\n" },
+    },
+    decisions: [
+      { action: "run", command: 'python -m pip install -e ".[cl]"' },
+      { action: "run", command: 'python3 -m pip install -e ".[cl]"' },
+      {
+        action: "advance",
+        step: "install",
+        verdict: "passed",
+        evidence: "Successfully installed boto3-1.34.0",
+        note: "this machine has python3 but no python",
+        command: 'python3 -m pip install -e ".[cl]"',
+      },
+      { action: "done", summary: "installed" },
+    ],
+  });
+  assert.equal(result.status, "verified");
+  assert.equal(result.runbook[0].command, 'python3 -m pip install -e ".[cl]"', "the fix is what the next run starts from");
+  assert.equal(result.steps[0].evidence, "Successfully installed boto3-1.34.0");
+  assert.match(brain.prompts[1], /command not found/);
+  assert.deepEqual(fake.calls, ['python -m pip install -e ".[cl]"', 'python3 -m pip install -e ".[cl]"']);
+});

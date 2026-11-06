@@ -62,12 +62,14 @@ ACTIONS
   Run a shell command. Prefer small, inspectable commands over one giant one.
   Never start an interactive program. Long installs are fine: wait for them.
   Set timeout_min when a command legitimately needs longer than 20 minutes (up to 60).
-- {"action":"advance","step":"<runbook id>","verdict":"passed|failed|blocked|manual","evidence":"text copied verbatim from an output above","note":"one sentence"}
+- {"action":"advance","step":"<runbook id>","verdict":"passed|failed|blocked|manual","evidence":"text copied verbatim from an output above","note":"one sentence","command":"optional"}
   Record where a runbook step now stands.
   \`evidence\` must appear character-for-character in output you actually saw this run.
   \`passed\` requires that evidence to come from a command that exited 0.
   Use \`blocked\` when a person must provide something (credentials, licensed data, a bigger GPU).
   Use \`manual\` when the evidence exists but a human has to judge it.
+  If the command that made the step work differs from the plan's, pass it as \`command\`.
+  The runbook then keeps what actually ran, instead of the guess that did not.
 - {"action":"revise","steps":[{"id":"...","title":"...","detail":"...","command":"...","checkpoint":"..."}],"note":"why"}
   Change the runbook when reality differs: split a step, add one the plan missed,
   drop one that does not apply. Verdicts already recorded are kept by id.
@@ -461,6 +463,14 @@ async function runPilot({
         step.note = flatten(decision.note || "").slice(0, 400);
         step.exit_code = cited.observation?.exitCode ?? null;
         step.duration_ms = cited.observation?.durationMs || step.duration_ms;
+        // A command that needed three flags to work is the truth about this
+        // machine. Keeping the planner's guess would make the next run learn it
+        // all over again.
+        const actual = String(decision.command || "").replace(/\s+/g, " ").trim().slice(0, 2_000);
+        if (actual && actual !== step.command) {
+          emit({ type: "pilot-thought", text: `Recorded the command that worked for "${step.title}".` });
+          step.command = actual;
+        }
       }
       stalled = 0;
       emit({ type: "step", step: { ...step } });

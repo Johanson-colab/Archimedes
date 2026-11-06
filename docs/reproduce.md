@@ -92,7 +92,7 @@ The actions:
 | Action | What it does |
 | --- | --- |
 | `run` | execute one shell command in the environment, stream its output |
-| `advance` | record a step's verdict, with a quote from real output |
+| `advance` | record a step's verdict, with a quote from real output; pass the command that actually worked and the runbook keeps it |
 | `revise` | rewrite the runbook when this machine disagrees with it |
 | `finding` | remember something about this machine for the next run |
 | `ask` | stop and ask a person for something only a person can provide |
