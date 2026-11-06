@@ -7,9 +7,10 @@
  * planner, reviewed by a human, and then frozen.
  */
 
-const CONTRACT_VERSION = 3;
+const CONTRACT_VERSION = 4;
 const MAX_CLAIMS = 12;
 const MAX_STEPS = 10;
+const MAX_ENV = 24;
 
 const STATUSES = Object.freeze([
   "draft", "planned", "queued", "provisioning", "running",
@@ -98,6 +99,31 @@ function normalizeEnvironment(input) {
 }
 
 const CHECK_KINDS = new Set(["file_exists", "file_contains", "command", "http", "manual"]);
+const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,63}$/;
+
+/**
+ * A requirement is a name, not a value. The planner may say which keys the
+ * repository reads; the user decides what to put in them.
+ */
+function normalizeEnvRequirements(input) {
+  const list = Array.isArray(input) ? input : [];
+  const seen = new Set();
+  const requirements = [];
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const name = text(item.name, 64).toUpperCase();
+    if (!ENV_NAME.test(name) || seen.has(name)) continue;
+    seen.add(name);
+    requirements.push({
+      name,
+      reason: text(item.reason, 300),
+      source: text(item.source, 300),
+      required: item.required !== false,
+    });
+    if (requirements.length >= MAX_ENV) break;
+  }
+  return requirements;
+}
 const RUN_STEP_STATUSES = new Set(["pending", "passed", "failed", "blocked", "manual", "stopped"]);
 
 /**
@@ -212,6 +238,7 @@ function normalizeContract(input, { paperTitle = "" } = {}) {
     summary,
     claims,
     steps,
+    env: normalizeEnvRequirements(value.env),
     entrypoint,
     environment,
     repo: {
@@ -269,6 +296,7 @@ function describeClaim(claim) {
 module.exports = {
   CONTRACT_VERSION,
   MAX_CLAIMS,
+  MAX_ENV,
   STATUSES,
   describeClaim,
   isContractFrozen,
@@ -276,6 +304,7 @@ module.exports = {
   normalizeCheck,
   normalizeClaim,
   normalizeContract,
+  normalizeEnvRequirements,
   normalizeStep,
   normalizeTolerance,
 };

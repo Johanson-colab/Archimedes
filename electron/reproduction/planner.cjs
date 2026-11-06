@@ -49,7 +49,25 @@ function paperAttachment(paper) {
   };
 }
 
-const CONTRACT_SHAPE = `{"summary":"one sentence","steps":[{"id":"install","title":"Set up the environment","detail":"what this step accomplishes","command":"cd inference && uv pip install '.[server]'","checkpoint":"python -c \"import memt_sglang\" exits 0","check":{"kind":"command","command":"python -c \"import memt_sglang\"","expect":"exit_zero"},"source":"inference/pyproject.toml","blocked":""}],"claims":[{"id":"table2-avg","statement":"what is claimed","dataset":"...","metric":"...","expected":50.6,"unit":"points","tolerance":0.02,"step":"run-eval","evidence":{"page":20,"table":"Table 2","row":"average","column":"score","quote":"short verbatim fragment"}}],"entrypoint":{"command":"python scripts/eval.py --model X","cwd":".","outputs":["results/"]},"environment":{"python":"3.10","cuda":"12.1","install":["pip install -r requirements.txt"],"system":[],"source":"requirements.txt"},"repo":{"url":"","commit":""},"notes":["what a human should check"]}`;
+const ENV_FILE = /(^|\/)\.env\.(example|sample|template)$/i;
+
+/**
+ * The repository's own `.env.example` is a better list of required keys than
+ * anything the model remembers to mention. Only names are kept.
+ */
+function envFromFiles(files = []) {
+  const names = new Set();
+  for (const file of Array.isArray(files) ? files : []) {
+    if (!ENV_FILE.test(String(file?.path || ""))) continue;
+    for (const line of String(file.content || "").split("\n")) {
+      const match = line.match(/^\s*(?:export\s+)?([A-Z][A-Z0-9_]{2,63})\s*=/);
+      if (match) names.add(match[1]);
+    }
+  }
+  return [...names];
+}
+
+const CONTRACT_SHAPE = `{"summary":"one sentence","steps":[{"id":"install","title":"Set up the environment","detail":"what this step accomplishes","command":"cd inference && uv pip install '.[server]'","checkpoint":"python -c \"import memt_sglang\" exits 0","check":{"kind":"command","command":"python -c \"import memt_sglang\"","expect":"exit_zero"},"source":"inference/pyproject.toml","blocked":""}]],"env":[{"name":"HF_TOKEN","reason":"downloads SWE-bench Lite","source":"scripts/run_swe_evolve.sh","required":true}],"claims":[{"id":"table2-avg","statement":"what is claimed","dataset":"...","metric":"...","expected":50.6,"unit":"points","tolerance":0.02,"step":"run-eval","evidence":{"page":20,"table":"Table 2","row":"average","column":"score","quote":"short verbatim fragment"}}],"entrypoint":{"command":"python scripts/eval.py --model X","cwd":".","outputs":["results/"]},"environment":{"python":"3.10","cuda":"12.1","install":["pip install -r requirements.txt"],"system":[],"source":"requirements.txt"},"repo":{"url":"","commit":""},"notes":["what a human should check"]}`;
 
 function buildPrompt({ paper, pages, review, repoUrl, hasRepository }) {
   const digest = pageDigest(pages);
@@ -67,6 +85,7 @@ function buildPrompt({ paper, pages, review, repoUrl, hasRepository }) {
     "5. Never invent a path. Every command must reference files that exist in the repository. If nothing produces the numbers, leave `entrypoint.command` empty.",
     "6. Link each claim to the step that produces it through `claim.step`.",
     "7. Record the environment you actually see in the repository (python version, cuda, install steps) and cite the file it came from.",
+    "8. List the environment variables a person must supply in `env`: API keys, tokens, dataset roots. Names only - never a value. Read `.env.example`, the README and the code's `os.environ` usage. Mark `required:false` when the run only needs it optionally.",
     "",
     "Rules:",
     "- The runbook is read by a person and by an executor agent that can revise it when the machine disagrees. Write the honest plan, not a script that must be followed.",
@@ -174,6 +193,12 @@ async function planReproduction({ paper, pages, review, repoUrl, repoItem, works
   }
   const contract = normalizeContract(parsed, { paperTitle: paper?.title || "" });
   if (repoItem) {
+    const declared = new Set(contract.env.map((entry) => entry.name));
+    for (const name of envFromFiles(repoItem.files)) {
+      if (declared.has(name) || contract.env.length >= 24) continue;
+      declared.add(name);
+      contract.env.push({ name, reason: "listed in .env.example", source: ".env.example", required: false });
+    }
     contract.repo = {
       url: repoItem.repository.url,
       commit: String(repoItem.repository.checkout?.commit || ""),
@@ -185,4 +210,4 @@ async function planReproduction({ paper, pages, review, repoUrl, repoItem, works
   return contract;
 }
 
-module.exports = { buildPrompt, extractJson, firstJsonObject, pageDigest, parseContract, planReproduction };
+module.exports = { buildPrompt, envFromFiles, extractJson, firstJsonObject, pageDigest, parseContract, planReproduction };

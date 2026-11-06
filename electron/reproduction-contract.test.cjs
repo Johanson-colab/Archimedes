@@ -23,7 +23,7 @@ test("claims keep their evidence and clamp the tolerance", () => {
       evidence: { page: "7", table: "Table 2", row: "VGG16", column: "speedup", quote: "2.43x fewer" },
     }],
   });
-  assert.equal(contract.version, 3);
+  assert.equal(contract.version, 4);
   assert.equal(contract.claims.length, 1);
   assert.equal(contract.claims[0].expected, 2.43);
   assert.equal(contract.claims[0].tolerance, 0.5, "tolerance is capped");
@@ -231,4 +231,21 @@ test("a runbook read back keeps its verdicts and the quote behind them", () => {
 test("a freshly planned step has no verdict at all", () => {
   const contract = normalizeContract({ claims: [{ statement: "Result holds" }], steps: [{ id: "x", title: "Do the thing" }] });
   assert.equal("status" in contract.steps[0], false, "no badge before the executor has an opinion");
+});
+
+test("environment requirements are names, never values", () => {
+  const contract = normalizeContract({
+    claims: [{ statement: "Result holds" }],
+    env: [
+      { name: "HF_TOKEN", reason: "downloads SWE-bench Lite", source: "scripts/run_swe_evolve.sh" },
+      { name: "hf_token", reason: "duplicate, lower case" },
+      { name: "not a name", reason: "invalid" },
+      { name: "AWS_ACCESS_KEY_ID", reason: "Bedrock", required: true },
+      { name: "OPTIONAL_FLAG", reason: "nice to have", required: false, value: "must not survive" },
+    ],
+  });
+  assert.deepEqual(contract.env.map((entry) => entry.name), ["HF_TOKEN", "AWS_ACCESS_KEY_ID", "OPTIONAL_FLAG"]);
+  assert.equal(contract.env[0].required, true);
+  assert.equal(contract.env[2].required, false);
+  assert.equal("value" in contract.env[2], false, "a plan cannot carry a secret");
 });

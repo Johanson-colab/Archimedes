@@ -49,4 +49,5 @@ test("only the reproduction output directory is writable", () => {
   assert.equal(isOutputPath("/tmp/archimedes/abc/../../etc/passwd"), false);
   assert.equal(isOutputPath("/etc/passwd"), false);
   assert.equal(isOutputPath("/tmp/archimedes/abc/7.txt"), false);
+  assert.equal(isOutputPath("/tmp/archimedes/abc/env"), true, "the run's key file lives beside its logs");
 });

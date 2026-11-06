@@ -13,6 +13,7 @@ const { spawn } = require("node:child_process");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 const { isOutputPath } = require("./paths.cjs");
+const { envFileContent, envPrelude } = require("./env-file.cjs");
 
 const MOUNT = "/workspace";
 const DOCKER_TIMEOUT_MS = 20_000;
@@ -122,14 +123,33 @@ async function dockerVersion() {
   return String(result.output || "").trim();
 }
 
-function createDockerBackend({ checkoutDir, environment = {}, name } = {}) {
+function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {} } = {}) {
   if (!checkoutDir) throw new Error("A Docker backend needs a checkout directory.");
   const image = imageFor(environment);
   const container = name || `archimedes-repro-${Math.random().toString(36).slice(2, 10)}`;
+  const envPath = Object.keys(secrets || {}).length
+    ? `/tmp/archimedes/${Math.random().toString(36).slice(2, 10)}/env`
+    : "";
   let prepared = false;
 
+  /** Keeps a command's full output from being lost. */
+  const writeFile = async (absolutePath, content) => {
+    if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
+    const dir = path.posix.dirname(absolutePath);
+    const result = await runProcess("docker", [
+      "exec", "-i", container, "sh", "-c",
+      `umask 077; mkdir -p ${quotePath(dir)} && cat > ${quotePath(absolutePath)}`,
+    ], { stdin: String(content || ""), timeoutMs: 60_000 });
+    if (result.exitCode !== 0) {
+      throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
+    }
+    return absolutePath;
+  };
+
   const exec = async (command, { timeoutMs, onData, signal } = {}) => {
-    const result = await runProcess("docker", ["exec", container, "sh", "-lc", command], { onData, signal, timeoutMs });
+    // The keys are sourced, not passed on the command line: they never appear in
+    // the journal, the log, or the process list.
+    const result = await runProcess("docker", ["exec", container, "sh", "-lc", `${envPrelude(envPath)}${command}`], { onData, signal, timeoutMs });
     return { exitCode: result.exitCode, timedOut: result.timedOut, error: result.error };
   };
 
@@ -166,25 +186,14 @@ function createDockerBackend({ checkoutDir, environment = {}, name } = {}) {
         throw new Error(`Could not start the ${image} container: ${String(created.output || "").trim().slice(0, 400)}`);
       }
       prepared = true;
+      if (envPath) await writeFile(envPath, envFileContent(secrets));
       return { image, container };
     },
 
     exec,
     httpStatus,
 
-    /** Keeps a command's full output where the agent can grep it later. */
-    async writeFile(absolutePath, content) {
-      if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
-      const dir = path.posix.dirname(absolutePath);
-      const result = await runProcess("docker", [
-        "exec", "-i", container, "sh", "-c",
-        `umask 077; mkdir -p ${quotePath(dir)} && cat > ${quotePath(absolutePath)}`,
-      ], { stdin: String(content || ""), timeoutMs: 60_000 });
-      if (result.exitCode !== 0) {
-        throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
-      }
-      return absolutePath;
-    },
+    writeFile,
 
     async readFile(relativePath) {
       const target = path.resolve(checkoutDir, String(relativePath || ""));

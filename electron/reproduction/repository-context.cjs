@@ -14,7 +14,7 @@ const {
 } = require("../repository-checkout.cjs");
 
 const README_LIMIT = 20_000;
-const KEY_FILE = /^(readme(\.[a-z]+)?|requirements.*\.txt|environment\.ya?ml|pyproject\.toml|setup\.py|setup\.cfg|dockerfile|makefile|install\.sh|run\.sh|evaluate\.py|eval\.py|main\.py)$/i;
+const KEY_FILE = /^(readme(\.[a-z]+)?|requirements.*\.txt|environment\.ya?ml|pyproject\.toml|setup\.py|setup\.cfg|dockerfile|makefile|install\.sh|run\.sh|evaluate\.py|eval\.py|main\.py|\.env\.(example|sample|template))$/i;
 
 function repositoryId(target) {
   return `repo:${target.owner}-${target.repo}`;
@@ -63,6 +63,13 @@ async function prepareRepositoryItem(workspace, repoUrl) {
   for (const filePath of seedPaths) {
     const file = await readIfPresent(workspace, target.url, filePath, 12_000, branch);
     if (file) files.push({ path: file.path, size: file.content.length, language: path.extname(file.path).slice(1) || "text", content: file.content });
+  }
+  // The example env file is the most reliable list of required keys, so read it
+  // even when the seed cap already filled up with other files.
+  const envExample = entries.find((entry) => entry.type === "file" && /^\.env\.(example|sample|template)$/i.test(entry.name));
+  if (envExample && !files.some((file) => file.path === envExample.path)) {
+    const file = await readIfPresent(workspace, target.url, envExample.path, 12_000, branch);
+    if (file) files.push({ path: file.path, size: file.content.length, language: "text", content: file.content });
   }
 
   return {

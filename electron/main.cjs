@@ -52,6 +52,7 @@ const { runPilot } = require("./reproduction/pilot.cjs");
 const { completeJson } = require("./paper-review-model.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const { createSshBackend } = require("./reproduction/remote.cjs");
+const reproductionEnv = require("./reproduction/env-store.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
@@ -619,14 +620,16 @@ app.whenReady().then(async () => {
   modelConfig.initializeModelConfig(app.getPath("userData"));
   agentBackendConfig.initialize(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
-  sshServers.initialize(app.getPath("userData"), {
-    // Passwords are stored with the OS keychain-backed encryption, never as
-    // plain text in the settings file.
+  // Passwords and reproduction tokens share one OS keychain-backed codec; both
+  // are useless if the machine cannot encrypt, so both refuse to save instead.
+  const secretCodec = {
     encrypt: (value) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(value).toString("base64") : ""),
     decrypt: (value) => {
       try { return safeStorage.decryptString(Buffer.from(value, "base64")); } catch { return ""; }
     },
-  });
+  };
+  sshServers.initialize(app.getPath("userData"), secretCodec);
+  reproductionEnv.initialize(app.getPath("userData"), secretCodec);
   terminalSettings.initialize(app.getPath("userData"));
   journeySettings.initialize(app.getPath("userData"));
   journeySnapshots.initialize(app.getPath("userData"));
@@ -1200,6 +1203,53 @@ app.whenReady().then(async () => {
     return store.deleteReproduction(id);
   });
 
+  /**
+   * Requirements come from the plan; values come from the encrypted store. The
+   * renderer only ever sees whether a name is set, never what it is set to.
+   */
+  const reproductionEnvItems = (id) => {
+    const record = presentReproduction(store.getReproduction(id));
+    if (!record) throw new Error("That reproduction does not exist.");
+    const stored = reproductionEnv.list(record.id);
+    const has = new Map(stored.map((entry) => [entry.name, entry.hasValue]));
+    const items = [];
+    const seen = new Set();
+    for (const requirement of record.contract?.env || []) {
+      items.push({
+        name: requirement.name,
+        reason: requirement.reason || "",
+        source: requirement.source || "",
+        required: requirement.required !== false,
+        hasValue: Boolean(has.get(requirement.name)),
+      });
+      seen.add(requirement.name);
+    }
+    for (const entry of stored) {
+      if (seen.has(entry.name)) continue;
+      items.push({ name: entry.name, reason: "", source: "added by you", required: false, hasValue: entry.hasValue });
+    }
+    return items;
+  };
+
+  ipcMain.handle("reproduction:env-list", (_event, { id } = {}) => {
+    if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
+    return reproductionEnvItems(id);
+  });
+
+  ipcMain.handle("reproduction:env-set", (_event, { id, name, value } = {}) => {
+    if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
+    reproductionEnvItems(id);
+    reproductionEnv.setValue(id, name, value);
+    return reproductionEnvItems(id);
+  });
+
+  ipcMain.handle("reproduction:env-remove", (_event, { id, name } = {}) => {
+    if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
+    reproductionEnvItems(id);
+    reproductionEnv.removeValue(id, name);
+    return reproductionEnvItems(id);
+  });
+
   ipcMain.handle("reproduction:preflight", async (event, { id, workspace } = {}) => {
     const record = presentReproduction(store.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
@@ -1271,6 +1321,7 @@ app.whenReady().then(async () => {
         notes: session.contract.notes,
         steps: session.contract.steps,
         findings: session.contract.findings || [],
+        env: reproductionEnvItems(record.id).map(({ name, required, reason, hasValue }) => ({ name, required, reason, hasValue })),
         backend: session.backend,
         target: session.backend.describe?.() || "",
         complete: ({ system, prompt, signal }) => completeJson(reproductionModel(), {
@@ -1356,6 +1407,7 @@ app.whenReady().then(async () => {
     const wantsSsh = backendKind === "ssh";
     const server = wantsSsh ? sshServers.listServers().find((entry) => entry.id === serverId) : null;
     if (wantsSsh && !server) throw new Error("Choose an SSH server before running this reproduction.");
+    const secrets = reproductionEnv.values(record.id);
     const run = store.createReproductionRun({ reproductionId: record.id, backend: wantsSsh ? "ssh" : "docker" });
     const session = {
       reproductionId: record.id,
@@ -1387,7 +1439,7 @@ app.whenReady().then(async () => {
           if (local) {
             copyFrom = (await resolveAuditPath(dataWorkspace, repoUrl, "", branch).catch(() => ({ root: "" }))).root;
           }
-          const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send });
+          const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send, secrets });
           session.backend = backend;
           store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });
           session.send({ type: "preparing", detail: `Checking ${server.host}…` });
@@ -1413,7 +1465,7 @@ app.whenReady().then(async () => {
           await cloneRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions);
         }
         const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "", branch);
-        const backend = createDockerBackend({ checkoutDir: root, environment: session.contract.environment });
+        const backend = createDockerBackend({ checkoutDir: root, environment: session.contract.environment, secrets });
         session.backend = backend;
         store.updateReproductionRun(run.id, { image: backend.image, backend: backend.describe() });
         session.send({ type: "preparing", detail: `Starting ${backend.image}…` });

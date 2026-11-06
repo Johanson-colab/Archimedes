@@ -318,3 +318,23 @@ test("the stall message says which command it gave up on", async () => {
   assert.match(result.summary, /without a verdict, a runbook change or a finding/);
   assert.match(result.summary, /probe 9/);
 });
+
+test("the agent sees which keys are set, never their values", async () => {
+  const fake = backend({});
+  const brain = model([
+    { action: "ask", question: "HF_TOKEN is missing" },
+  ]);
+  await runPilot({
+    steps: [step("install")],
+    env: [
+      { name: "HF_TOKEN", required: true, reason: "downloads SWE-bench Lite", hasValue: false },
+      { name: "WANDB_API_KEY", required: false, reason: "logging", hasValue: true },
+    ],
+    backend: fake,
+    complete: brain.complete,
+  });
+  assert.match(brain.prompts[0], /USER-PROVIDED ENVIRONMENT/);
+  assert.match(brain.prompts[0], /HF_TOKEN: missing \(required\)/);
+  assert.match(brain.prompts[0], /WANDB_API_KEY: set/);
+  assert.equal(brain.prompts[0].includes("wandb-secret-value"), false);
+});

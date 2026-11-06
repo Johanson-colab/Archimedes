@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, ChevronLeft, FlaskConical, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, FlaskConical, KeyRound, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
 
 import { useUISettings } from "./i18n";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
+import { ReproductionEnvironmentDialog } from "./ReproductionEnvironmentDialog";
 const STATUS_LABELS: Record<ReproductionStatus, string> = {
   draft: "Draft",
   planned: "Plan ready",
@@ -159,6 +160,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [runLine, setRunLine] = useState("");
   const [question, setQuestion] = useState("");
   const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [envOpen, setEnvOpen] = useState(false);
   const [servers, setServers] = useState<SshServer[]>([]);
   const [target, setTarget] = useState(() => window.localStorage.getItem("archimedes-reproduce-target") || "docker");
   const logRef = useRef<HTMLPreElement | null>(null);
@@ -617,6 +619,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           >
             {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Re-plan
           </button>
+          <button className="secondary-button" disabled={busy !== ""} onClick={() => setEnvOpen(true)}>
+            <KeyRound size={14} />Environment
+          </button>
           {running
             ? <button className="secondary-button" disabled={busy !== ""} onClick={() => void stopRun()}>
                 {busy === "stop" ? <LoaderCircle className="spin" size={14} /> : <Square size={13} />}Stop
@@ -638,6 +643,13 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
               </>}
         </footer>
         {!running && run?.status === "verified" && <p className="reproduce-hint reproduce-queued">Every runbook step passed with evidence. Comparing the reported numbers is the next milestone.</p>}
+        <ReproductionEnvironmentDialog
+          bridge={bridge}
+          reproductionId={detail.id}
+          open={envOpen}
+          onClose={() => setEnvOpen(false)}
+          running={running}
+        />
       </>}
     </section>;
   }

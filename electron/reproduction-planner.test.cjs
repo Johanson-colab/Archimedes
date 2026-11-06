@@ -65,3 +65,12 @@ test("two unusable replies surface the original reason", async () => {
     /stopped before finishing/,
   );
 });
+
+test("names come from .env.example, not only from the model", () => {
+  const { envFromFiles } = require("./reproduction/planner.cjs");
+  const names = envFromFiles([
+    { path: ".env.example", content: "# keys\nHF_TOKEN=hf_xxx\nexport AWS_ACCESS_KEY_ID=\nAWS_SECRET_ACCESS_KEY=\nlower_case=no\n" },
+    { path: "README.md", content: "HF_TOKEN=should-not-be-read\n" },
+  ]);
+  assert.deepEqual(names, ["HF_TOKEN", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]);
+});

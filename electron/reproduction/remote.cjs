@@ -19,6 +19,7 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { isOutputPath } = require("./paths.cjs");
+const { envFileContent, envPrelude } = require("./env-file.cjs");
 
 const { authFor, connectionArgs } = require("../ssh-servers.cjs");
 
@@ -113,11 +114,28 @@ function probeCommand() {
   ].join("; ");
 }
 
-function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {} }) {
+function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {}, secrets = {} }) {
   const { target, password, env } = authFor(server);
   const root = remoteRoot(target.workspace || workspace, repoUrl, branch);
   const repo = `${root}/repo`;
+  const envPath = Object.keys(secrets || {}).length
+    ? `/tmp/archimedes/${Math.random().toString(36).slice(2, 10)}/env`
+    : "";
   let prepared = false;
+
+  /** Keeps a command's full output where the agent can grep it later. */
+  const writeFile = async (absolutePath, content) => {
+    if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
+    const dir = absolutePath.replace(/\/[^/]+$/, "");
+    const result = await run(
+      `umask 077; mkdir -p ${quoteRemotePath(dir)} && cat > ${quoteRemotePath(absolutePath)}`,
+      { timeoutMs: 120_000, login: false, stdin: content },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
+    }
+    return absolutePath;
+  };
 
   const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true, stdin } = {}) => new Promise((resolve) => {
     const args = connectionArgs(target, login ? loginCommand(command) : command, { allowPassword: Boolean(password) });
@@ -211,28 +229,19 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
       const commit = rev.output.trim().slice(0, 40);
       await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${quoteRemotePath(`${root}/${MARKER_FILE}`)}`, { timeoutMs: 60_000 });
       prepared = true;
+      if (envPath) await writeFile(envPath, envFileContent(secrets));
       emit({ type: "started", detail: `${target.user}@${target.host} · ${commit.slice(0, 7)}` });
       return { root, repo, commit, branch, host: target.host, user: target.user };
     },
 
     async exec(command, { timeoutMs, onData, signal } = {}) {
-      const result = await run(`cd ${quoteRemotePath(repo)} && ${command}`, { timeoutMs, onData, signal });
+      // `cd ... || exit 1` keeps the working directory from silently falling back
+      // to $HOME; the keys are sourced, so they never enter the command line.
+      const result = await run(`cd ${quoteRemotePath(repo)} || exit 1; ${envPrelude(envPath)}${command}`, { timeoutMs, onData, signal });
       return { exitCode: result.code, timedOut: Boolean(result.timedOut), error: result.error };
     },
 
-    /** Keeps a command's full output where the agent can grep it later. */
-    async writeFile(absolutePath, content) {
-      if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
-      const dir = absolutePath.replace(/\/[^/]+$/, "");
-      const result = await run(
-        `umask 077; mkdir -p ${quoteRemotePath(dir)} && cat > ${quoteRemotePath(absolutePath)}`,
-        { timeoutMs: 120_000, login: false, stdin: content },
-      );
-      if (result.code !== 0) {
-        throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
-      }
-      return absolutePath;
-    },
+    writeFile,
 
     async readFile(relativePath) {
       const absolute = path.posix.join(repo, String(relativePath || ""));
@@ -253,8 +262,8 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     },
 
     async dispose() {
-      // Nothing to tear down: the container backend owns a process, this one owns
-      // a directory that holds the logs someone will want to read.
+      // The checkout and its logs are the point; the key file is not.
+      if (envPath) await run(`rm -f ${quoteRemotePath(envPath)}`, { timeoutMs: 30_000 }).catch(() => {});
       prepared = false;
     },
   };

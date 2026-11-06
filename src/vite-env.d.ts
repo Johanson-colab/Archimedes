@@ -144,6 +144,9 @@ interface ResearchDeskBridge {
     preflightReproduction: (id: string, workspace?: string) => Promise<ReproductionPreflight>;
     runReproduction: (id: string, options?: { backend?: "docker" | "ssh"; serverId?: string; workspace?: string }) => Promise<Reproduction>;
     stopReproduction: (id: string) => Promise<boolean>;
+    listReproductionEnv: (id: string) => Promise<ReproductionEnvItem[]>;
+    setReproductionEnv: (id: string, name: string, value: string) => Promise<ReproductionEnvItem[]>;
+    removeReproductionEnv: (id: string, name: string) => Promise<ReproductionEnvItem[]>;
     onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
     onReproductionRunEvent?: (callback: (payload: {
       reproductionId?: string;
@@ -1171,9 +1174,18 @@ interface ReproductionContract {
   environment: { python: string; cuda: string; install: string[]; system: string[]; source: string };
   repo: { url: string; commit: string; branch: string };
   notes: string[];
+  env: Array<{ name: string; reason: string; source: string; required: boolean }>;
   findings: Array<{ at: string; text: string }>;
   deviations: ReproductionDeviation[];
   frozen_at: string | null;
+}
+
+interface ReproductionEnvItem {
+  name: string;
+  reason: string;
+  source: string;
+  required: boolean;
+  hasValue: boolean;
 }
 
 interface ReproductionDeviation {

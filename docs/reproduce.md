@@ -162,6 +162,22 @@ That is also why there is no write/edit tool. The common failure is not a line o
 code that needs changing, and an edit made through the shell stays visible in the
 journal instead of looking like a normal operation.
 
+### Keys the user must provide
+
+The planner lists the environment variables a person has to supply (API keys,
+tokens, dataset roots) in `env`, using the README, the code's `os.environ` reads
+and `.env.example`. It stores names only; a plan can never carry a value.
+
+`Environment` next to `Re-plan` opens that list. Values are encrypted with the
+OS keychain, never returned to the renderer, and never put in a prompt. At run
+time the values are written to a `0600` file on the target and sourced before
+each command, so a key reaches the process without appearing in `ps`, the
+journal or the run log. The agent sees `HF_TOKEN: set` or `HF_TOKEN: missing`,
+which is enough to ask for the right thing by name instead of searching the
+filesystem for credentials.
+
+A change made while a run is active applies to the next run.
+
 ### Budget and stopping
 
 - `budget.wallClockMin` (default 45) caps the run.

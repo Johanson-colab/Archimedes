@@ -54,7 +54,7 @@ function outputPathFor(token, index) {
 function isOutputPath(value) {
   const text = String(value || "");
   if (text.includes("..")) return false;
-  return new RegExp(`^${OUTPUT_ROOT}/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\\.log$`).test(text);
+  return new RegExp(`^${OUTPUT_ROOT}/[A-Za-z0-9._-]+/(?:[A-Za-z0-9._-]+\\.log|env)$`).test(text);
 }
 
 module.exports = { OUTPUT_ROOT, candidatePaths, isOutputPath, normalizePath, outputPathFor, repoNameFromUrl };
