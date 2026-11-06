@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import { KeyRound, LoaderCircle, X } from "lucide-react";
+import { ChevronDown, ChevronRight, KeyRound, LoaderCircle, X } from "lucide-react";
 
 import { Dialog } from "./Dialog";
+
+// A dataset path is not a secret and should be readable while typing; a token
+// should not sit in plain sight on a shared screen.
+function isSecretName(name: string) {
+  return /(API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i.test(name);
+}
 
 function readable(value: unknown, fallback: string) {
   const message = value instanceof Error ? value.message : String(value ?? "");
@@ -14,6 +20,9 @@ function readable(value: unknown, fallback: string) {
  * Values are write-only over IPC: the renderer learns whether a name is set,
  * never what it is. The run sources them into the command's environment, so the
  * agent can use a key without ever seeing it.
+ *
+ * Required variables are shown. Everything else has a working default and stays
+ * collapsed: eight rows with the same visual weight read as eight demands.
  */
 export function ReproductionEnvironmentDialog({
   bridge,
@@ -31,6 +40,7 @@ export function ReproductionEnvironmentDialog({
   const [items, setItems] = useState<ReproductionEnvItem[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState({ name: "", value: "" });
+  const [showOptional, setShowOptional] = useState(false);
   const [busy, setBusy] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +50,7 @@ export function ReproductionEnvironmentDialog({
     setError("");
     setValues({});
     setDraft({ name: "", value: "" });
+    setShowOptional(false);
     setLoading(true);
     void bridge.listReproductionEnv(reproductionId)
       .then(setItems)
@@ -89,11 +100,43 @@ export function ReproductionEnvironmentDialog({
     }
   };
 
+  const required = items.filter((item) => item.required);
+  const optional = items.filter((item) => !item.required && item.source !== "added by you");
+  const added = items.filter((item) => !item.required && item.source === "added by you");
+
+  const renderRow = (item: ReproductionEnvItem) => <div className="reproduce-env-row" key={item.name}>
+    <div className="reproduce-env-meta">
+      <code>{item.name}</code>
+      <span>
+        {item.required && <span className="reproduce-tag warn">required</span>}
+        <span className={`reproduce-check-status ${item.hasValue ? "passed" : item.required ? "manual" : "needs-run"}`}>{item.hasValue ? "set" : "missing"}</span>
+      </span>
+      {item.reason && <small>{item.reason}{item.source ? ` · ${item.source}` : ""}</small>}
+    </div>
+    <div className="reproduce-env-controls">
+      <input
+        type={isSecretName(item.name) ? "password" : "text"}
+        autoComplete="off"
+        spellCheck={false}
+        className="reproduce-env-input"
+        placeholder={item.hasValue ? "saved" : "value"}
+        aria-label={`${item.name} value`}
+        value={values[item.name] || ""}
+        onChange={(event) => setValues((current) => ({ ...current, [item.name]: event.target.value }))}
+        onKeyDown={(event) => { if (event.key === "Enter") void save(item.name, values[item.name] || ""); }}
+      />
+      <button className="secondary-button" disabled={busy !== "" || !(values[item.name] || "")} onClick={() => void save(item.name, values[item.name] || "")}>
+        {busy === item.name ? <LoaderCircle className="spin" size={13} /> : null}Save
+      </button>
+      {item.hasValue && <button className="quiet-icon-button" disabled={busy !== ""} onClick={() => void clear(item.name)} aria-label={`Remove ${item.name}`}><X size={13} /></button>}
+    </div>
+  </div>;
+
   return <Dialog open={open} onClose={onClose} size="md" ariaLabel="Environment">
     <header className="app-dialog-header">
       <div>
         <h2><KeyRound size={16} />Environment</h2>
-        <p>API keys and tokens injected into every command. Values stay encrypted on this Mac; the agent only sees whether a name is set.</p>
+        <p>Only the required variables block the run. Everything else has a working default. Values stay encrypted on this Mac; the agent only sees whether a name is set.</p>
       </div>
       <button className="app-dialog-close" onClick={onClose} aria-label="Close"><X size={15} /></button>
     </header>
@@ -103,37 +146,28 @@ export function ReproductionEnvironmentDialog({
       {running && <p className="reproduce-env-hint">This run already started. Changes apply to the next run.</p>}
       {loading && <p className="reproduce-env-hint"><LoaderCircle className="spin" size={12} /> Loading…</p>}
 
-      {!loading && !items.length && <p className="reproduce-env-hint">The plan did not ask for any keys. Add one below if the repository needs it.</p>}
+      {!loading && !items.length && <p className="reproduce-env-hint">The plan did not ask for any values. Add one below if the repository needs it.</p>}
 
-      <div className="reproduce-env-list">
-        {items.map((item) => <div className="reproduce-env-row" key={item.name}>
-          <div className="reproduce-env-meta">
-            <code>{item.name}</code>
-            <span>
-              {item.required && <span className="reproduce-tag warn">required</span>}
-              <span className={`reproduce-check-status ${item.hasValue ? "passed" : "manual"}`}>{item.hasValue ? "set" : "missing"}</span>
-            </span>
-            {item.reason && <small>{item.reason}{item.source ? ` · ${item.source}` : ""}</small>}
-          </div>
-          <div className="reproduce-env-controls">
-            <input
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              className="reproduce-env-input"
-              placeholder={item.hasValue ? "•••••• saved" : "value"}
-              aria-label={`${item.name} value`}
-              value={values[item.name] || ""}
-              onChange={(event) => setValues((current) => ({ ...current, [item.name]: event.target.value }))}
-              onKeyDown={(event) => { if (event.key === "Enter") void save(item.name, values[item.name] || ""); }}
-            />
-            <button className="secondary-button" disabled={busy !== "" || !(values[item.name] || "")} onClick={() => void save(item.name, values[item.name] || "")}>
-              {busy === item.name ? <LoaderCircle className="spin" size={13} /> : null}Save
-            </button>
-            {item.hasValue && <button className="quiet-icon-button" disabled={busy !== ""} onClick={() => void clear(item.name)} aria-label={`Remove ${item.name}`}><X size={13} /></button>}
-          </div>
-        </div>)}
-      </div>
+      {!loading && items.length > 0 && <p className="reproduce-env-summary">
+        {required.length} required · {optional.length} optional{added.length ? ` · ${added.length} added by you` : ""}
+      </p>}
+
+      {required.length > 0 && <div className="reproduce-env-group">
+        {required.map(renderRow)}
+      </div>}
+
+      {optional.length > 0 && <>
+        <button className="reproduce-env-toggle" onClick={() => setShowOptional((current) => !current)} aria-expanded={showOptional}>
+          {showOptional ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          {showOptional ? "Hide" : "Show"} {optional.length} optional variable{optional.length === 1 ? "" : "s"}
+        </button>
+        {showOptional && <div className="reproduce-env-group">{optional.map(renderRow)}</div>}
+      </>}
+
+      {added.length > 0 && <>
+        <h3 className="reproduce-env-heading">Added by you</h3>
+        <div className="reproduce-env-group">{added.map(renderRow)}</div>
+      </>}
 
       <div className="reproduce-env-add">
         <input
