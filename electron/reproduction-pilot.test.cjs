@@ -198,7 +198,7 @@ test("the prompt carries what earlier runs learned and the last output", async (
   });
   assert.match(brain.prompts[1], /this machine has python3 but no python/);
   assert.match(brain.prompts[1], /Could not find a version that satisfies the requirement hatchling/);
-  assert.match(brain.prompts[1], /The index returned no candidates/);
+  assert.match(brain.prompts[1], /No candidate for `hatchling`/);
   assert.match(brain.prompts[1], /Table 2 reports 50\.6/);
 });
 

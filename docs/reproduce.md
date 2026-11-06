@@ -125,6 +125,27 @@ observation and shown in the prompt. Nothing acts on them.
 That is deliberate. A rule table can only repair the failures someone anticipated;
 an agent that is told what the error usually means can handle the next one.
 
+### Environment work is the job
+
+Most reproductions do not fail because the code is wrong. They fail because
+`python` is called `python3`, a pin no longer resolves, a wheel does not exist
+for this Python or this CUDA, or the index is an intranet mirror behind a proxy.
+The README is usually a hypothesis written on the author's machine; the
+repository's own metadata (pyproject, lockfiles, CI, Dockerfile) is the evidence.
+
+The agent is told to:
+
+- diagnose with commands before changing anything;
+- treat every command as a fresh shell (`cd`, `export` and `activate` do not
+  persist), so it uses `.venv/bin/python` or repeats the activation;
+- keep the environment and the package cache inside the checkout, so a stopped
+  run resumes instead of downloading torch again;
+- record a relaxed pin or a CPU-for-GPU swap as a note and a finding.
+
+That is also why there is no write/edit tool. The common failure is not a line of
+code that needs changing, and an edit made through the shell stays visible in the
+journal instead of looking like a normal operation.
+
 ### Budget and stopping
 
 - `budget.wallClockMin` (default 45) caps the run.

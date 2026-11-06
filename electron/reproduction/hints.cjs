@@ -36,6 +36,26 @@ const RULES = [
     hint: (match) => `The module \`${match[1]}\` is not importable. The environment step probably did not install the extra that provides it.`,
   },
   {
+    match: /ResolutionImpossible|conflicting dependencies|Cannot install .* because these package versions have conflicting dependencies/i,
+    hint: () => "Two pins disagree. Find which one the repository actually needs (lockfile, CI, Dockerfile), or relax one of them. `pip install --dry-run` shows the conflict without touching the environment.",
+  },
+  {
+    match: /Failed building wheel|Could not build wheels|error: command ['"](?:gcc|g\+\+|cc)['"] failed/i,
+    hint: () => "A build dependency is missing (compiler or Python headers), or the source does not compile against this Python. Check whether a wheel exists for this version before installing a toolchain.",
+  },
+  {
+    match: /undefined symbol|libcudart|libtorch|CUDA driver version is insufficient|compiled against a different version/i,
+    hint: () => "ABI mismatch. torch, torchvision and the CUDA build have to come from one consistent set; reinstalling one of them alone usually moves the error rather than fixing it.",
+  },
+  {
+    match: /UnsatisfiableError|PackagesNotFoundError|Solving environment: failed/i,
+    hint: () => "The conda solver cannot satisfy the pins. Fewer pinned packages, or pip/uv inside the environment, is usually faster than fighting the solver.",
+  },
+  {
+    match: /requires-python|Requires-Python|is not supported on this platform/i,
+    hint: () => "This is a hard constraint of the package (Python version or platform), not a mirror problem. Changing the interpreter or the package version is the real choice.",
+  },
+  {
     match: /CUDA out of memory|OutOfMemoryError|torch\.cuda\.OutOfMemory/i,
     hint: () => "This is GPU memory, not a code error. A smaller batch or a smaller model is the usual answer; retrying the same command will fail the same way.",
   },
@@ -49,7 +69,7 @@ const RULES = [
   },
   {
     match: /Could not find a version that satisfies the requirement (\S+)/i,
-    hint: (match) => `The index returned no candidates for \`${match[1]}\`. Check the index URL, the trusted-host flag and the proxy before renaming the package.`,
+    hint: (match) => `No candidate for \`${match[1]}\`. Separate the three causes: the index (URL, trusted-host, proxy), the Python version, and whether a wheel exists for this platform. \`pip index versions ${match[1]}\` answers the first and third.`,
   },
   {
     match: /Killed|signal: killed/i,

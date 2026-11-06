@@ -511,7 +511,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                 {step.blocked && <p className="reproduce-hint warn">{step.blocked}</p>}
                 {preflight?.[step.id]?.detail && preflight[step.id].status === "failed" && <p className="reproduce-hint bad">{preflight[step.id].detail}</p>}
                 {preflight?.[step.id]?.resolved && preflight[step.id].written && preflight[step.id].resolved !== preflight[step.id].written && <p className="reproduce-hint">resolved as {preflight[step.id].resolved}</p>}
-                {runSteps[step.id]?.detail && <p className="reproduce-hint bad">{runSteps[step.id].detail}</p>}
+                {runSteps[step.id]?.detail && <p className={`reproduce-hint${runSteps[step.id].status === "failed" ? " bad" : ""}`}>{runSteps[step.id].detail}</p>}
                 {runSteps[step.id]?.evidence && <blockquote className="reproduce-evidence-quote">{runSteps[step.id].evidence}</blockquote>}
                 {runSteps[step.id]?.resolved_path && step.check.kind !== "manual" && "path" in step.check && runSteps[step.id].resolved_path !== step.check.path && <p className="reproduce-hint">resolved as {runSteps[step.id].resolved_path}</p>}
                 {runSteps[step.id] && (runSteps[step.id].exit_code !== null || runSteps[step.id].duration_ms > 0) && <p className="reproduce-hint">
