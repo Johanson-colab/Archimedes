@@ -44,12 +44,14 @@ export function ReproductionEnvironmentDialog({
   const [busy, setBusy] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [tests, setTests] = useState<Record<string, { state: "busy" | "ok" | "error"; text: string }>>({});
 
   useEffect(() => {
     if (!open) return;
     setError("");
     setValues({});
     setDraft({ name: "", value: "" });
+    setTests({});
     setShowOptional(false);
     setLoading(true);
     void bridge.listReproductionEnv(reproductionId)
@@ -81,6 +83,21 @@ export function ReproductionEnvironmentDialog({
       setError(readable(clearError, "The value could not be removed."));
     } finally {
       setBusy("");
+    }
+  };
+
+  const testToken = async (name: string) => {
+    setTests((current) => ({ ...current, [name]: { state: "busy", text: "Testing…" } }));
+    try {
+      const result = await bridge.testReproductionEnv(reproductionId, name);
+      if (!result.ok) {
+        setTests((current) => ({ ...current, [name]: { state: "error", text: result.detail || "The token was rejected." } }));
+        return;
+      }
+      const parts = [result.token || "token", result.role, result.user ? `user: ${result.user}` : ""].filter(Boolean);
+      setTests((current) => ({ ...current, [name]: { state: "ok", text: `Valid · ${parts.join(" · ")}` } }));
+    } catch (testError) {
+      setTests((current) => ({ ...current, [name]: { state: "error", text: readable(testError, "The token could not be tested.") } }));
     }
   };
 
@@ -122,14 +139,29 @@ export function ReproductionEnvironmentDialog({
         placeholder={item.hasValue ? "saved" : "value"}
         aria-label={`${item.name} value`}
         value={values[item.name] || ""}
-        onChange={(event) => setValues((current) => ({ ...current, [item.name]: event.target.value }))}
+        onChange={(event) => {
+          const value = event.target.value;
+          setValues((current) => ({ ...current, [item.name]: value }));
+          setTests((current) => {
+            if (!current[item.name]) return current;
+            const next = { ...current };
+            delete next[item.name];
+            return next;
+          });
+        }}
         onKeyDown={(event) => { if (event.key === "Enter") void save(item.name, values[item.name] || ""); }}
       />
       <button className="secondary-button" disabled={busy !== "" || !(values[item.name] || "")} onClick={() => void save(item.name, values[item.name] || "")}>
         {busy === item.name ? <LoaderCircle className="spin" size={13} /> : null}Save
       </button>
       {item.hasValue && <button className="quiet-icon-button" disabled={busy !== ""} onClick={() => void clear(item.name)} aria-label={`Remove ${item.name}`}><X size={13} /></button>}
+      {item.name === "HF_TOKEN" && item.hasValue && <button
+        className="reproduce-env-test-button"
+        disabled={tests[item.name]?.state === "busy"}
+        onClick={() => void testToken(item.name)}
+      >Test</button>}
     </div>
+    {tests[item.name] && <p className={`reproduce-env-test ${tests[item.name].state}`}>{tests[item.name].text}</p>}
   </div>;
 
   return <Dialog open={open} onClose={onClose} size="md" ariaLabel="Environment">

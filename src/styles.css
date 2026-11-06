@@ -6990,6 +6990,12 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 .reproduce-env-controls { display: flex; align-items: center; gap: 6px; }
 .reproduce-env-input { min-width: 0; height: 30px; padding: 0 8px; color: var(--text-primary); background: var(--surface-soft); border: 1px solid var(--border-soft); border-radius: 6px; font-size: 11.5px; }
 .reproduce-env-controls .reproduce-env-input { flex: 1; }
+.reproduce-env-test-button { flex: 0 0 auto; padding: 0 2px; color: var(--text-secondary); background: transparent; border: 0; font-size: 10px; text-decoration: underline; text-underline-offset: 2px; }
+.reproduce-env-test-button:disabled { opacity: .5; }
+.reproduce-env-test { grid-column: 1 / -1; margin: 2px 0 0; font-size: 10.5px; line-height: 1.45; }
+.reproduce-env-test.ok { color: var(--state-success); }
+.reproduce-env-test.error { color: var(--state-danger); }
+.reproduce-env-test.busy { color: var(--text-faint); }
 .reproduce-env-add { display: flex; gap: 6px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--border-soft); }
 .reproduce-env-add .reproduce-env-name { width: 180px; }
 .reproduce-env-add .reproduce-env-input:nth-child(2) { flex: 1; }

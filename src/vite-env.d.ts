@@ -147,6 +147,7 @@ interface ResearchDeskBridge {
     listReproductionEnv: (id: string) => Promise<ReproductionEnvItem[]>;
     setReproductionEnv: (id: string, name: string, value: string) => Promise<ReproductionEnvItem[]>;
     removeReproductionEnv: (id: string, name: string) => Promise<ReproductionEnvItem[]>;
+    testReproductionEnv: (id: string, name: string) => Promise<ReproductionEnvTestResult>;
     onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
     onReproductionRunEvent?: (callback: (payload: {
       reproductionId?: string;
@@ -1178,6 +1179,17 @@ interface ReproductionContract {
   findings: Array<{ at: string; text: string }>;
   deviations: ReproductionDeviation[];
   frozen_at: string | null;
+}
+
+interface ReproductionEnvTestResult {
+  ok: boolean;
+  provider?: string;
+  user?: string;
+  token?: string;
+  role?: string;
+  permissions?: number | null;
+  status?: number;
+  detail?: string;
 }
 
 interface ReproductionEnvItem {

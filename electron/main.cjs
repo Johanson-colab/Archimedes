@@ -53,6 +53,7 @@ const { completeJson } = require("./paper-review-model.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const { createSshBackend } = require("./reproduction/remote.cjs");
 const reproductionEnv = require("./reproduction/env-store.cjs");
+const { testHuggingFaceToken } = require("./reproduction/env-test.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
@@ -1248,6 +1249,23 @@ app.whenReady().then(async () => {
     reproductionEnvItems(id);
     reproductionEnv.removeValue(id, name);
     return reproductionEnvItems(id);
+  });
+
+  ipcMain.handle("reproduction:env-test", async (_event, { id, name } = {}) => {
+    if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
+    const key = reproductionEnv.normalizeName(name);
+    // The value is read here, in the main process, and never sent to the
+    // renderer. Only the identity of the token comes back.
+    const value = reproductionEnv.values(id)[key];
+    if (!value) throw new Error(`${key} has no saved value.`);
+    if (key !== "HF_TOKEN") return { ok: false, detail: "No test is available for this variable yet." };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    try {
+      return await testHuggingFaceToken(value, { fetchImpl: net.fetch, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
   });
 
   ipcMain.handle("reproduction:preflight", async (event, { id, workspace } = {}) => {

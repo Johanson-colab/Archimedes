@@ -176,7 +176,9 @@ journal or the run log. The agent sees `HF_TOKEN: set` or `HF_TOKEN: missing`,
 which is enough to ask for the right thing by name instead of searching the
 filesystem for credentials.
 
-A change made while a run is active applies to the next run.
+A change made while a run is active applies to the next run. `Test` on
+`HF_TOKEN` calls `whoami-v2` and reports the token's display name, role and
+account, so a saved value can be identified without showing it again.
 
 ### Budget and stopping
 
