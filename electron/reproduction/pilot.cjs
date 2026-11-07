@@ -360,6 +360,9 @@ async function runPilot({
     if (turn >= maxTurns) { finish("blocked", `Ran out of turns (${maxTurns}) with ${steps.filter((step) => step.status === "pending").length} steps still open.`); break; }
 
     turn += 1;
+    // The UI shows this the same way a CLI prints "Iteration N"; one turn is one
+    // model decision, not one command.
+    emit({ type: "pilot-turn", turn, maxTurns });
     let decision;
     try {
       decision = await askModel(complete, {

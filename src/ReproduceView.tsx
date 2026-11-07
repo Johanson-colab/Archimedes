@@ -160,6 +160,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [runLine, setRunLine] = useState("");
   const [question, setQuestion] = useState("");
   const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [progress, setProgress] = useState<{ turn: number; maxTurns: number } | null>(null);
   const [envOpen, setEnvOpen] = useState(false);
   const [servers, setServers] = useState<SshServer[]>([]);
   const [target, setTarget] = useState(() => window.localStorage.getItem("archimedes-reproduce-target") || "docker");
@@ -225,6 +226,10 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         setRunning(true);
         return;
       }
+      if (payload.type === "pilot-turn") {
+        setProgress({ turn: payload.turn || 0, maxTurns: payload.maxTurns || 0 });
+        return;
+      }
       if (payload.type === "pilot-thought" && payload.text) {
         setJournal((current) => [...current.slice(-200), { kind: "thought", text: payload.text as string }]);
         return;
@@ -270,6 +275,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       }
       if (payload.type === "finished") {
         setRunning(false);
+        setProgress(null);
         setRunLine(payload.summary || "");
         if (payload.question) setQuestion(payload.question);
         void bridge.getReproduction(selectedId).then((record) => {
@@ -299,6 +305,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setRunLine("");
       setQuestion("");
       setJournal([]);
+      setProgress(null);
       setLiveSteps(record?.contract?.steps ?? null);
     }).catch((detailError) => { if (!cancelled) setError(readable(detailError, "Could not open this reproduction.")); });
     return () => { cancelled = true; };
@@ -387,6 +394,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     setRunSteps({});
     setJournal([]);
     setQuestion("");
+    setProgress(null);
     setLiveSteps(detail.contract?.steps ?? null);
     try {
       const next = await bridge.runReproduction(detail.id, target === "docker" ? { backend: "docker" } : { backend: "ssh", serverId: target });
@@ -528,6 +536,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
 
         {(run || running || runLine || journal.length > 0) && <section className="reproduce-block reproduce-run">
           <h2>Run
+            {progress && <span className="reproduce-turn">Turn {progress.turn} / {progress.maxTurns}</span>}
             {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : run.status === "manual" || run.status === "stopped" || run.status === "interrupted" ? "manual" : "failed"}`}>{RUN_LABELS[run.status]}</span>}
           </h2>
           {run?.backend && <p className="reproduce-hint">{run.backend}</p>}

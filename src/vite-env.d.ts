@@ -166,6 +166,8 @@ interface ResearchDeskBridge {
       timedOut?: boolean;
       durationMs?: number;
       outputPath?: string;
+      turn?: number;
+      maxTurns?: number;
       text?: string;
       note?: string;
       steps?: ReproductionStep[];

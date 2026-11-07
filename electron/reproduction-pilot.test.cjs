@@ -338,3 +338,18 @@ test("the agent sees which keys are set, never their values", async () => {
   assert.match(brain.prompts[0], /WANDB_API_KEY: set/);
   assert.equal(brain.prompts[0].includes("wandb-secret-value"), false);
 });
+
+test("each turn announces itself so the run panel can show progress", async () => {
+  const events = [];
+  const { runPilot } = require("./reproduction/pilot.cjs");
+  await runPilot({
+    steps: [step("install")],
+    backend: backend({}),
+    complete: model([{ action: "ask", question: "stop" }]).complete,
+    emit: (event) => events.push(event),
+  });
+  const turns = events.filter((event) => event.type === "pilot-turn");
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].turn, 1);
+  assert.equal(turns[0].maxTurns, 60);
+});
