@@ -60,6 +60,7 @@ function bridge(overrides = {}) {
   calls.savedModels = [];
   calls.savedBackends = [];
   calls.checkedBackends = [];
+  calls.loadedCatalogs = [];
   calls.loadedBackends = 0;
   return {
     getModelConfig: async () => ({ provider: "deepseek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", hasApiKey: true }),
@@ -67,6 +68,7 @@ function bridge(overrides = {}) {
     listProviderModels: async () => ({ models: [] }),
     getAgentBackendConfig: async () => { calls.loadedBackends++; return { backend: "api", binary: "codex", model: "" }; },
     saveAgentBackendConfig: async (config) => { calls.savedBackends.push(config); return config; },
+    listCodexModelCatalog: async (config) => { calls.loadedCatalogs.push(config); return { models: [{ id: "native-model", label: "Native model", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "high" }], effectiveModelId: "native-model" }; },
     checkAgentBackend: async (config) => { calls.checkedBackends.push(config); return { ready: true, models: [{ id: "native-model", label: "Native model" }], message: "Connected" }; },
     ...overrides,
   };
@@ -304,45 +306,56 @@ test("development StrictMode double mounting remains bounded and never checks Co
   }
 });
 
-test("native effort loads on demand and all three Codex permissions are saved independently", async () => {
-  const cleanup = await mount(bridge({
-    checkAgentBackend: async (config) => { calls.checkedBackends.push(config); return { ready: true, effectiveModelId: "native-model", models: [{ id: "native-model", label: "Native model", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "high" }], message: "Connected" }; },
-  }));
+test("native selects share the same style and load supported effort options when expanded", async () => {
+  const cleanup = await mount(bridge());
   try {
     await click("Harnesses");
     const field = (label) => document.getElementById([...document.querySelectorAll("label")].find((node) => node.textContent === label)?.htmlFor);
-    assert.equal(field("Codex permissions").value, "ask");
-    assert.deepEqual([...field("Codex permissions").options].map((option) => option.value), ["ask", "auto-review", "full-access"]);
-    assert.equal(calls.checkedBackends.length, 0);
+    assert.equal(calls.loadedCatalogs.length, 0, "opening Models does not launch Codex");
     await reveal(field("Codex thinking effort"));
-    await React.act(async () => field("Codex thinking effort").click());
-    assert.equal(calls.checkedBackends.length, 1);
-    for (const value of ["Low", "Medium", "High · Default", "XHigh", "Max", "Ultra"]) assert.ok(button(value), value);
-    await click("Ultra");
-    assert.equal(field("Codex thinking effort").textContent, "Ultra");
+    const effort = field("Codex thinking effort");
+    const permission = field("Codex permissions");
+    assert.equal(calls.loadedCatalogs.length, 1, "expanding Codex loads its native catalog once");
+    assert.equal(effort.tagName, "SELECT");
+    assert.equal(permission.tagName, "SELECT");
+    assert.equal(effort.className, permission.className);
+    assert.deepEqual([...effort.options].map((option) => option.value), ["", "low", "medium", "high", "xhigh", "max", "ultra"]);
+    assert.deepEqual([...permission.options].map((option) => option.value), ["ask", "auto-review", "full-access"]);
     await React.act(async () => {
-      const permissions = field("Codex permissions");
-      permissions.value = "auto-review";
-      permissions.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      effort.value = "ultra";
+      effort.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      permission.value = "auto-review";
+      permission.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     });
     assert.equal(calls.savedBackends.length, 0);
     await click("Use Codex");
     assert.equal(calls.savedBackends.at(-1).effort, "ultra");
-    assert.equal(calls.savedBackends.at(-1).model, "");
     assert.equal(calls.savedBackends.at(-1).permissionMode, "auto-review");
-    await React.act(async () => {
-      const permissions = field("Codex permissions");
-      permissions.value = "full-access";
-      permissions.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-    });
-    await click("Save backend");
-    assert.equal(calls.savedBackends.at(-1).permissionMode, "full-access");
     assert.equal(calls.savedModels.length, 0);
     assert.ok(!document.body.textContent.includes("Capabilities and permissions"));
-    await React.act(async () => field("Codex thinking effort").click());
-    assert.ok(document.querySelector('[role="menu"]'));
-    await click("API models");
-    assert.equal(document.querySelector('[role="menu"]'), null, "changing tabs closes the native effort menu");
+  } finally { await cleanup(); }
+});
+
+test("a failed catalog request keeps the saved effort and can retry", async () => {
+  let attempts = 0;
+  const cleanup = await mount(bridge({
+    getAgentBackendConfig: async () => ({ backend: "codex", binary: "codex", model: "", effort: "high" }),
+    listCodexModelCatalog: async () => {
+      if (++attempts === 1) throw new Error("Catalog unavailable");
+      return { models: [{ id: "m", label: "Model", efforts: ["low", "high"] }], effectiveModelId: "m" };
+    },
+  }));
+  try {
+    await click("Harnesses");
+    const label = [...document.querySelectorAll("label")].find((node) => node.textContent === "Codex thinking effort");
+    const effort = document.getElementById(label.htmlFor);
+    await reveal(effort);
+    assert.equal(effort.value, "high", "saved choice is not discarded when lookup fails");
+    assert.match(document.querySelector('[role="status"]').textContent, /Catalog unavailable/);
+    await React.act(async () => effort.dispatchEvent(new dom.window.FocusEvent("focusin", { bubbles: true })));
+    assert.equal(attempts, 2);
+    assert.deepEqual([...effort.options].map((option) => option.value), ["", "low", "high"]);
+    assert.equal(effort.value, "high");
   } finally { await cleanup(); }
 });
 
@@ -417,5 +430,32 @@ test("API execution preferences can be changed in Models without switching the h
     });
     assert.deepEqual(changes, [["effort", "high"], ["context", "extra-long"]]);
     assert.deepEqual(calls.savedBackends, []);
+  } finally { await cleanup(); }
+});
+
+test("catalog loading is bounded and ignores results for a changed executable", async () => {
+  let finish;
+  const requests = [];
+  const cleanup = await mount(bridge({ listCodexModelCatalog: async (config) => {
+    requests.push(config.binary);
+    if (requests.length === 1) return new Promise((resolve) => { finish = resolve; });
+    return { models: [{ id: "new-model", label: "New", efforts: ["high"] }], effectiveModelId: "new-model" };
+  } }));
+  try {
+    await click("Harnesses");
+    const toggle = document.querySelector('.agent-backend-card[aria-label="Codex"] .agent-backend-card-toggle');
+    await React.act(async () => toggle.click());
+    await React.act(async () => toggle.click());
+    await React.act(async () => toggle.click());
+    assert.deepEqual(requests, ["codex"], "reopening does not spawn another pending process");
+    const effortLabel = [...document.querySelectorAll("label")].find((node) => node.textContent === "Codex thinking effort");
+    const effort = document.getElementById(effortLabel.htmlFor);
+    assert.equal(effort.disabled, true);
+    await input("Codex executable", "/other/codex");
+    await React.act(async () => finish({ models: [{ id: "old-model", label: "Old", efforts: ["low"] }], effectiveModelId: "old-model" }));
+    assert.deepEqual([...effort.options].map((option) => option.value), [""], "outdated results are ignored");
+    await React.act(async () => effort.dispatchEvent(new dom.window.FocusEvent("focusin", { bubbles: true })));
+    assert.deepEqual(requests, ["codex", "/other/codex"]);
+    assert.deepEqual([...effort.options].map((option) => option.value), ["", "high"]);
   } finally { await cleanup(); }
 });

@@ -5,9 +5,8 @@ import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { useUISettings } from "./i18n";
-import { MenuItem, MenuSurface } from "./Menu";
 
-export default function AgentBackendSettings({ bridge, onBackendChange, active = true }: { bridge: ResearchDeskBridge; active?: boolean; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void }) {
+export default function AgentBackendSettings({ bridge, onBackendChange }: { bridge: ResearchDeskBridge; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void }) {
   const { t } = useUISettings();
   const id = useId();
   const [config, setConfig] = useState<AgentBackendConfig>({ backend: "api", binary: "codex", model: "", effort: "", permissionMode: "ask" });
@@ -16,10 +15,13 @@ export default function AgentBackendSettings({ bridge, onBackendChange, active =
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<"check" | "save" | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [effortOpen, setEffortOpen] = useState(false);
-  const effortTrigger = useRef<HTMLButtonElement>(null);
   const [effectiveModelId, setEffectiveModelId] = useState<string>();
-  useEffect(() => { if (!active) setEffortOpen(false); }, [active]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
+  const catalogInFlight = useRef(false);
+  const codexDraft = useRef<AgentBackendConfig | null>(null);
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [connections, setConnections] = useState<Partial<Record<"codex" | "claude" | "opencode", "unchecked" | "connected" | "error">>>({});
   const [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(null);
   const [catalogs, setCatalogs] = useState<Partial<Record<"codex" | "claude" | "opencode", NativeAgentModel[]>>>({});
@@ -36,10 +38,12 @@ export default function AgentBackendSettings({ bridge, onBackendChange, active =
   function choose(next: typeof selected) {
     const profiles = { ...drafts, [selected]: fields(config) };
     setDrafts(profiles);
-    setEffortOpen(false);
     setSelected(next);
-    setConfig({ backend: next, binary: next, model: "", effort: "", ...profiles[next], permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(profiles[next]?.permissionMode || "") ? "ask" : profiles[next]?.permissionMode || "ask" });
+    const nextConfig: AgentBackendConfig = { backend: next, binary: next, model: "", effort: "", ...profiles[next], permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(profiles[next]?.permissionMode || "") ? "ask" : profiles[next]?.permissionMode || "ask" };
+    setConfig(nextConfig);
+    if (next === "codex") codexDraft.current = nextConfig;
     setFeedback(null);
+    return nextConfig;
   }
   useEffect(() => {
     let active = true;
@@ -48,7 +52,9 @@ export default function AgentBackendSettings({ bridge, onBackendChange, active =
     void bridge.getAgentBackendConfig().then((value) => {
       if (active) {
         const next = value.backend === "api" ? "codex" : value.backend;
-        setSelected(next); setConfig({ backend: next, ...fields(value), permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(value.permissionMode || "") ? "ask" : value.permissionMode || "ask" }); setDrafts(value.profiles || {});
+        const nextConfig: AgentBackendConfig = { backend: next, ...fields(value), permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(value.permissionMode || "") ? "ask" : value.permissionMode || "ask" };
+        setSelected(next); setConfig(nextConfig); setDrafts(value.profiles || {});
+        if (next === "codex") codexDraft.current = nextConfig;
         setSavedConfig(value); onBackendChange?.(value.backend);
       }
     }).catch((error) => { if (active) setLoadError(String(error)); });
@@ -56,11 +62,31 @@ export default function AgentBackendSettings({ bridge, onBackendChange, active =
   }, [bridge, loadAttempt, onBackendChange]);
 
   function edit(field: "binary" | "model", value: string) {
-    setConfig((current) => ({ ...current, [field]: value, ...(field === "model" ? { effort: "" } : {}) }));
+    const next = { ...config, [field]: value, ...(field === "model" ? { effort: "" } : {}) };
+    setConfig(next);
+    if (selected === "codex") codexDraft.current = next;
     setFeedback(null);
     if (field === "model") setEffectiveModelId(undefined);
     setConnection("unchecked");
     if (field === "binary") { setModels([]); setEffectiveModelId(undefined); }
+  }
+
+  async function loadCodexCatalog(draft: AgentBackendConfig) {
+    if (catalogInFlight.current || !draft.binary.trim()) return;
+    catalogInFlight.current = true;
+    setCatalogLoading(true);
+    setCatalogError("");
+    try {
+      const result = await bridge.listCodexModelCatalog({ ...draft, backend: "codex" });
+      if (!mounted.current || codexDraft.current?.binary !== draft.binary) return;
+      setCatalogs((current) => ({ ...current, codex: result.models }));
+      setEffectiveModelId(codexDraft.current.model === draft.model ? result.effectiveModelId : undefined);
+    } catch (error) {
+      if (mounted.current && codexDraft.current?.binary === draft.binary) setCatalogError(String(error).replace(/^Error invoking remote method '[^']+': Error:\s*|^Error:\s*/, ""));
+    } finally {
+      catalogInFlight.current = false;
+      if (mounted.current) setCatalogLoading(false);
+    }
   }
 
   async function apply(action: "check" | AgentBackendConfig["backend"]) {
@@ -72,6 +98,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, active =
         const result = await bridge.checkAgentBackend({ ...config, backend: selected });
         setModels(result.models);
         setEffectiveModelId(result.effectiveModelId);
+        setCatalogError("");
         setConnection(result.ready ? "connected" : "error");
         setFeedback({ error: !result.ready, text: t(result.message) });
       } else {
@@ -110,9 +137,10 @@ export default function AgentBackendSettings({ bridge, onBackendChange, active =
     <div className="agent-backend-list">
     {(["codex", "claude", "opencode"] as const).map((item) => <section key={item} className="agent-backend-card" aria-label={labels[item]}>
       <button type="button" className="agent-backend-card-toggle" disabled={disabled} aria-label={labels[item]} aria-expanded={expanded && selected === item} aria-controls={`${id}-${item}-config`} onClick={() => {
-        setEffortOpen(false);
-        if (selected === item) setExpanded((value) => !value);
-        else { choose(item); setExpanded(true); }
+        const opening = selected !== item || !expanded;
+        const draft = selected === item ? config : choose(item);
+        if (selected === item) setExpanded(opening); else setExpanded(true);
+        if (item === "codex" && opening && (!catalogs.codex?.length || (!draft.model && !effectiveModelId))) void loadCodexCatalog(draft);
       }}>
         <span className="provider-icon large"><img className="provider-brand-logo" src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : opencodeLogo} alt="" /></span>
         <span className="agent-backend-card-copy"><strong>{labels[item]}</strong><small>{item === "codex" ? t("Local CLI · uses your existing Codex login") : t("Local CLI · uses its existing login and configuration")}</small></span>
@@ -126,22 +154,21 @@ export default function AgentBackendSettings({ bridge, onBackendChange, active =
       {selected === item && <>
         <div className="agent-backend-fields">
           <SettingsRow stacked title={<label htmlFor={`${id}-binary`}>{t(`${name} executable`)}</label>} description={selected === "codex" ? t("Use codex from PATH or an absolute executable path. Run codex login in a terminal first.") : t("Use the CLI name or an absolute executable path. Sign in through its terminal command first.")}>
-            <input id={`${id}-binary`} className="settings-text-input settings-text-input-wide" disabled={disabled} value={config.binary} spellCheck={false} onChange={(event) => edit("binary", event.target.value)} />
+            <input id={`${id}-binary`} className="settings-text-input settings-text-input-wide" disabled={disabled} value={config.binary} spellCheck={false} onChange={(event) => edit("binary", event.target.value)} onBlur={() => { if (selected === "codex" && !models.length) void loadCodexCatalog(config); }} />
           </SettingsRow>
           <SettingsRow stacked title={<label htmlFor={`${id}-model`}>{t(`${name} model`)}</label>} description={selected === "codex" ? t("Leave empty to use your Codex configuration. API model settings do not select the Codex model.") : selected === "claude" ? t("Leave empty to use your Claude Code configuration.") : t("Leave empty to use native configuration. OpenCode model IDs use provider/model.")}>
-            <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} list={`${id}-models`} value={config.model} spellCheck={false} onChange={(event) => edit("model", event.target.value)} />
+            <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} list={`${id}-models`} value={config.model} spellCheck={false} onChange={(event) => edit("model", event.target.value)} onBlur={() => { if (selected === "codex" && !config.model && !effectiveModelId) void loadCodexCatalog(config); }} />
             <datalist id={`${id}-models`}>{models.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</datalist>
           </SettingsRow>
           {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-effort`}>{t("Codex thinking effort")}</label>} description={t("Choose from the selected Codex model's native reasoning efforts.")}>
-            <button ref={effortTrigger} id={`${id}-effort`} type="button" className="settings-select native-effort-select" disabled={disabled} aria-haspopup="menu" aria-expanded={effortOpen} onClick={() => {
-              setEffortOpen((open) => !open);
-              if (!effortOpen && (!models.length || (!config.model && !effectiveModelId))) void apply("check");
-            }}>{config.effort ? effortLabel(config.effort) : t("Codex default")}<ChevronDown size={14} /></button>
-            <MenuSurface open={active && effortOpen && expanded} onClose={() => setEffortOpen(false)} anchorRef={effortTrigger} width="anchor" ariaLabel={t("Codex thinking effort")}>
-              <MenuItem checked={!config.effort} onClick={() => { setConfig((current) => ({ ...current, effort: "" })); setEffortOpen(false); }}>{t("Codex default")}</MenuItem>
-              {nativeModel?.efforts?.map((effort) => <MenuItem key={effort} checked={config.effort === effort} onClick={() => { setConfig((current) => ({ ...current, effort })); setEffortOpen(false); }}>{effortLabel(effort)}{effort === nativeModel.defaultEffort ? ` · ${t("Default")}` : ""}</MenuItem>)}
-              {busy === "check" ? <MenuItem disabled icon={<LoaderCircle className="spin" size={13} />}>{t("Loading Codex model options…")}</MenuItem> : !nativeModel && <MenuItem onClick={() => void apply("check")}>{t("Reload Codex model options")}</MenuItem>}
-            </MenuSurface>
+            <select id={`${id}-effort`} className="settings-select" disabled={disabled || catalogLoading} value={config.effort || ""} onFocus={() => {
+              if (!models.length || (!config.model && !effectiveModelId)) void loadCodexCatalog(config);
+            }} onChange={(event) => setConfig((current) => ({ ...current, effort: event.target.value }))}>
+              <option value="">{catalogLoading ? t("Loading Codex model options…") : t("Codex default")}</option>
+              {nativeModel?.efforts?.map((effort) => <option key={effort} value={effort}>{effortLabel(effort)}{effort === nativeModel.defaultEffort ? ` · ${t("Default")}` : ""}</option>)}
+              {config.effort && !nativeModel?.efforts?.includes(config.effort) && <option value={config.effort}>{effortLabel(config.effort)}</option>}
+            </select>
+            {catalogError && <small className="agent-backend-note" role="status">{catalogError}</small>}
           </SettingsRow>}
           {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-permissions`}>{t("Codex permissions")}</label>} description={t(config.permissionMode === "full-access" ? "Run without sandbox or approval prompts." : config.permissionMode === "auto-review" ? "Codex reviews approval requests automatically." : "Ask before commands that need elevated access.")}>
             <select id={`${id}-permissions`} className="settings-select" disabled={disabled} value={config.permissionMode || "ask"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
@@ -156,7 +183,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, active =
           <p>{t(selected === "claude" ? "Uses your Claude Code permission settings. When Claude Code requests approval, you can respond in the conversation." : "Uses your OpenCode permission settings. When OpenCode requests approval, you can respond in the conversation.")}</p>
         </div>}
         <div className="agent-backend-actions">
-          <button type="button" className="secondary-button" disabled={disabled || !config.binary.trim()} onClick={() => void apply("check")}>{busy === "check" ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(`Check ${name}`)}</button>
+          <button type="button" className="secondary-button" disabled={disabled || (selected === "codex" && catalogLoading) || !config.binary.trim()} onClick={() => void apply("check")}>{busy === "check" ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(`Check ${name}`)}</button>
           <button type="button" className="primary-button" disabled={disabled || !config.binary.trim()} onClick={() => void apply(selected)}>{busy === "save" ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{savedConfig?.backend === selected ? t("Save backend") : t(`Use ${name}`)}</button>
         </div>
       </>}

@@ -335,3 +335,12 @@ test('all three permission presets reach both native setup and turn requests', a
     assert.equal(backendConfig.normalize({ permissionMode: mode }).permissionMode, mode);
   }
 });
+
+test('model catalog lookup closes the native client without starting a chat', async () => {
+  const f = fixture(p => complete(p));
+  const result = await backendConfig.listCodexModelCatalog({ backend: 'codex', binary: 'codex', model: '' }, f.args.Client);
+  assert.equal(result.effectiveModelId, 'm');
+  assert.deepEqual(result.models[0].efforts, ['high']);
+  assert.deepEqual(f.peer().calls.map(call => call.method), ['model/list', 'config/read']);
+  assert.equal(f.peer().closed, true);
+});

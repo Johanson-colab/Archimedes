@@ -864,6 +864,7 @@ const previewBridge = {
   getAgentBackendConfig: async () => ({ backend: "api", binary: "codex", model: "" }),
   saveAgentBackendConfig: async () => { throw new Error("External Agent backends require the desktop app."); },
   checkAgentBackend: async () => { throw new Error("Codex detection requires the desktop app."); },
+  listCodexModelCatalog: async () => { throw new Error("Codex detection requires the desktop app."); },
   steerNativeAgent: async () => { throw new Error("Native steering requires the desktop app."); },
   answerNativeAgentQuestion: async () => { throw new Error("Native questions require the desktop app."); },
   getModelCapabilities: async () => previewModelCapabilities,

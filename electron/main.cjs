@@ -1040,6 +1040,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("agent-backend:get", () => agentBackendConfig.get());
   ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
   ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));
+  ipcMain.handle("agent-backend:codex-models", (_event, input) => agentBackendConfig.listCodexModelCatalog(input));
 
   ipcMain.handle("model-config:list-models", (_event, input = {}, role) => modelConfig.listProviderModels(input, role));
 

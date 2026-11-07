@@ -43,6 +43,16 @@ function save(input) {
   fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
   return config;
 }
+async function listCodexModelCatalog(input = {}, Client = CodexClient) {
+  const config = normalize({ ...input, backend: "codex" });
+  const client = new Client({ binary: config.binary });
+  try {
+    await client.start();
+    const models = await listNativeModels(client);
+    const effectiveModel = await resolveNativeModel(client, config.model, models);
+    return { models, effectiveModelId: effectiveModel?.id };
+  } finally { client.close(); }
+}
 async function check(input = get(), Client = CodexClient) {
   const config = normalize(input);
   if (["claude", "opencode"].includes(config.backend)) return require("./agent/external-backend.cjs").checkNative(config);
@@ -56,4 +66,4 @@ async function check(input = get(), Client = CodexClient) {
     return { ready: true, models, effectiveModelId: effectiveModel?.id, message: "Codex is connected. Model access is verified only when a turn succeeds." };
   } finally { client.close(); }
 }
-module.exports = { initialize, get, save, check, normalize };
+module.exports = { initialize, get, save, check, listCodexModelCatalog, normalize };

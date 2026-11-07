@@ -4120,7 +4120,6 @@ html[data-titlebar="inset"] .right-workbench .workbench-header button { -webkit-
 .settings-ssh-panel .quiet-icon-button:hover { color: var(--night-ink); background: var(--night-panel-raised); }
 .settings-text-input::placeholder { color: var(--night-faint); }
 .settings-text-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201, 162, 39, .14); }
-.native-effort-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
 .settings-select:hover { border-color: color-mix(in srgb, var(--night-line) 55%, var(--night-ink)); }
 .settings-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201, 162, 39, .14); }
 .settings-choice { display: inline-flex; gap: 2px; padding: 3px; background: var(--night-ground); border: 1px solid var(--night-line-soft); border-radius: 8px; }
