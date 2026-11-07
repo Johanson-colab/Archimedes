@@ -24,7 +24,7 @@ test("reader back, tabs, and actions share one compact bar", () => {
 });
 
 test("reader controls start open and can be toggled without hovering", () => {
-  assert.match(library, /\[readerChromeOpen, setReaderChromeOpen\] = useState\(true\)/);
+  assert.match(library, /\[readerChromeOpen, setReaderChromeOpen\] = useState\(session\?\.readerChromeOpen \?\? true\)/);
   assert.match(library, /className="paper-reader-chrome-toggle"/);
   assert.match(library, /aria-expanded=\{readerChromeOpen\} aria-controls="paper-reader-bar"/);
   assert.match(library, /setReaderChromeOpen\(\(open\) => !open\)/);

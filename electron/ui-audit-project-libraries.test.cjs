@@ -9,7 +9,7 @@ const store = read("electron/store.cjs");
 const main = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
 const bridge = read("src/vite-env.d.ts");
-const library = read("src/LibraryView.tsx");
+const library = read("src/LibraryView.tsx") + read("src/LibraryWorkspace.tsx");
 const picker = read("src/ContextPicker.tsx");
 const app = read("src/App.tsx");
 const preview = read("src/library-preview.ts");
@@ -31,7 +31,7 @@ test("library IPC and renderer pass the active project", () => {
   assert.match(bridge, /listLibraries: \(projectId\?: string \| null\) => Promise<ResearchLibrary\[\]>/);
   assert.match(library, /bridge\.listLibraries\(projectId \?\? undefined\)/);
   assert.match(library, /bridge\.createLibrary\(\{ \.\.\.input, projectId: projectId \?\? null \}\)/);
-  assert.match(library, /setSelectedLibraryId\(null\);\s*setSelectedPaperId\(null\)/);
+  assert.match(library, /key=\{`\$\{workspace\}:\$\{projectId \|\| "local"\}`\}/);
   assert.match(picker, /projectId\?: string \| null/);
   assert.match(picker, /bridge\.listLibraries\(projectId \?\? undefined\)/);
   assert.match(app, /<ContextPicker bridge=\{desktopBridge\} workspace=\{workspace\} projectId=\{projectId\}/);

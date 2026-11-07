@@ -35,7 +35,6 @@ import { isDensePdfProse, mergePdfVisualRegions, pdfCaptionKind } from "./pdf-vi
 import { buildPdfHighlightSegments, PDF_HIGHLIGHT_COLORS } from "./pdf-highlight-segments";
 import { useUISettings, type Language } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
-import { useConfirm } from "./ConfirmDialog";
 import { Tabs, Tab, FilterGroup, FilterButton } from "./Tabs";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
@@ -45,11 +44,8 @@ import {
   BookOpen,
   Bookmark,
   Bot,
-  Boxes,
-  Brain,
   CalendarDays,
   ArrowUp,
-  Database,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -89,11 +85,13 @@ import {
   StickyNote,
   Trash2,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { StateView } from "./StateView";
 import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
+import LibraryWorkspace from "./LibraryWorkspace";
+import { LibraryPaperNotes, type LibraryNoteDrafts } from "./LibraryPaperNotes";
+import type { PaperReaderSession } from "./library-workspace-state";
 
 const LIBRARY_COLORS = ["#3973c8", "#2d8a68", "#a8652e", "#7a5bb5", "#b34f58"];
 const PAPER_CHAT_DEFAULT_WIDTH = 354;
@@ -176,18 +174,6 @@ function linkedProjectHost(value: string) {
   catch { return "Linked project"; }
 }
 
-const LIBRARY_GLYPHS: Array<[RegExp, LucideIcon]> = [
-  [/\bagent|tool use|workflow\b/i, Bot],
-  [/\breason|test-time|scaling|deliberat\b/i, Brain],
-  [/\brag\b|retriev|long context|context/i, Database],
-  [/\bembodied|vla|robot|vision-language\b/i, Boxes],
-];
-
-function LibraryGlyph({ name, size = 20 }: { name: string; size?: number }) {
-  const Icon = LIBRARY_GLYPHS.find(([pattern]) => pattern.test(name))?.[1] ?? Library;
-  return <span className="library-glyph" aria-hidden="true"><Icon size={size} strokeWidth={1.8} /></span>;
-}
-
 type LibraryViewProps = {
   bridge: ResearchDeskBridge;
   mode: "library" | "daily";
@@ -203,251 +189,62 @@ type LibraryViewProps = {
   onOpenProject?: (projectId: string) => void;
 };
 
-export default function LibraryView({ bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject }: LibraryViewProps) {
-  const confirm = useConfirm();
-  const { t } = useUISettings();
-  const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
-  const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
-  const [papers, setPapers] = useState<LibraryPaper[]>([]);
-  const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
-  const [readerPaperId, setReaderPaperId] = useState<string | null>(null);
-  const [localQuery, setLocalQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [libraryEditor, setLibraryEditor] = useState<ResearchLibrary | "new" | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
-  const [otherProjects, setOtherProjects] = useState<LibraryProjectSummary[]>([]);
-  const [cloudBusy, setCloudBusy] = useState(false);
-  const [cloudNotice, setCloudNotice] = useState("");
-
-  const loadLibraries = useCallback(async () => {
-    setLoading(true);
-    try {
-      const nextLibraries = await bridge.listLibraries(projectId ?? undefined);
-      setLibraries(nextLibraries);
-      setError("");
-    } catch (loadError) {
-      setError(String(loadError));
-    } finally {
-      setLoading(false);
-    }
-  }, [bridge, projectId]);
-
-  const loadPapers = useCallback(async (libraryId: string, query = "") => {
-    setLoading(true);
-    try {
-      const nextPapers = await bridge.listLibraryPapers(libraryId, query);
-      setPapers(nextPapers);
-      setSelectedPaperId((current) => nextPapers.some((paper) => paper.id === current) ? current : nextPapers[0]?.id ?? null);
-      setError("");
-    } catch (loadError) {
-      setError(String(loadError));
-    } finally {
-      setLoading(false);
-    }
-  }, [bridge]);
-
-  useEffect(() => { void loadLibraries(); }, [libraryRefreshVersion, loadLibraries]);
-
-  // Every project is created with an empty "Project library", so a zero
-  // library count never happens. Treat "no papers in this project" as the
-  // condition that looks like data loss.
-  const projectPaperCount = libraries.reduce((total, library) => total + (Number(library.paper_count) || 0), 0);
-
-  useEffect(() => {
-    if (loading || projectPaperCount > 0 || typeof bridge.listLibraryProjects !== "function") {
-      setOtherProjects([]);
-      return;
-    }
-    let cancelled = false;
-    void bridge.listLibraryProjects().then((projects) => {
-      if (cancelled) return;
-      setOtherProjects(projects.filter((project) => project.project_id !== projectId && project.paper_count > 0));
-    }).catch(() => { if (!cancelled) setOtherProjects([]); });
-    return () => { cancelled = true; };
-  }, [bridge, loading, projectId, projectPaperCount]);
-
-  useEffect(() => {
-    setSelectedLibraryId(null);
-    setSelectedPaperId(null);
-    setReaderPaperId(null);
-    setPapers([]);
-  }, [projectId]);
-
-  useEffect(() => {
-    if (!selectedLibraryId) return;
-    const timeout = window.setTimeout(() => void loadPapers(selectedLibraryId, localQuery), 160);
-    return () => window.clearTimeout(timeout);
-  }, [libraryRefreshVersion, loadPapers, localQuery, selectedLibraryId]);
-
-  const selectedLibrary = libraries.find((library) => library.id === selectedLibraryId) ?? null;
-  const selectedPaper = papers.find((paper) => paper.id === selectedPaperId) ?? null;
-  const readerPaper = papers.find((paper) => paper.id === readerPaperId) ?? null;
-
-  async function saveLibrary(input: { name: string; description: string; color: string }) {
-    if (libraryEditor === "new") await bridge.createLibrary({ ...input, projectId: projectId ?? null });
-    else if (libraryEditor) await bridge.updateLibrary(libraryEditor.id, input);
-    setLibraryEditor(null);
-    await loadLibraries();
-  }
-
-  async function deleteLibrary() {
-    if (!selectedLibrary || !(await confirm({ title: `Delete "${selectedLibrary.name}"?`, description: "Papers shared with other libraries are kept.", confirmLabel: "Delete library", destructive: true }))) return;
-    await bridge.deleteLibrary(selectedLibrary.id);
-    setSelectedLibraryId(null);
-    setPapers([]);
-    await loadLibraries();
-  }
-
-  async function updatePaper(patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) {
-    if (!selectedPaper) return;
-    const updated = await bridge.updateLibraryPaper(selectedPaper.id, patch);
-    setPapers((current) => current.map((paper) => paper.id === updated.id ? updated : paper));
-  }
-
-  async function removePaper() {
-    if (!selectedLibrary || !selectedPaper || !(await confirm({ title: "Remove paper?", description: `"${selectedPaper.title}" will be removed from this library.`, confirmLabel: "Remove paper", destructive: true }))) return;
-    await bridge.removeLibraryPaper(selectedLibrary.id, selectedPaper.id);
-    await Promise.all([loadPapers(selectedLibrary.id, localQuery), loadLibraries()]);
-  }
-
-  async function importPaper(paper: AcademicSearchResult) {
-    if (!selectedLibrary) return;
-    await bridge.addLibraryPaper(selectedLibrary.id, paper);
-    await Promise.all([loadPapers(selectedLibrary.id, localQuery), loadLibraries()]);
-  }
-
-  async function syncLibraries() {
-    if (!projectId || cloudBusy || typeof bridge.syncProjectLibraries !== "function") return;
-    setCloudBusy(true);
-    setCloudNotice("");
-    setError("");
-    try {
-      const result = await bridge.syncProjectLibraries(projectId);
-      setLibraries(result.libraries);
-      const warnings = [...(result.warnings || [])];
-      if (typeof bridge.syncProjectAnnotations === "function") {
-        const annotations = await bridge.syncProjectAnnotations(projectId);
-        warnings.push(...(annotations.warnings || []));
-      }
-      setCloudNotice(warnings.length ? warnings.join(" ") : "Libraries, papers, and annotations are in sync.");
-      onLibraryImported?.();
-      if (selectedLibraryId) await loadPapers(selectedLibraryId, localQuery);
-    } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : String(syncError));
-    } finally {
-      setCloudBusy(false);
-    }
-  }
-
-  if (mode === "daily") {
-    return <DailyDiscovery initialMode={initialDailyMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => {
-      await loadLibraries();
-      onLibraryImported?.();
-    }} />;
-  }
-
-  if (!selectedLibrary) {
-    return <section className="library-page">
-      <div className="library-page-toolbar">
-        <span className="library-page-count"><strong>{libraries.length}</strong> {t("Libraries")}</span>
-        <div className="library-page-actions">
-          <button className="primary-button" onClick={() => setLibraryEditor("new")}><Plus size={15} />{t("New library")}</button>
-          <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync shared libraries")}><Cloud size={15} />{cloudBusy ? t("Syncing…") : t("Sync cloud")}</button>
-        </div>
-      </div>
-      {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
-      {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
-      {!loading && projectPaperCount === 0 && otherProjects.length > 0 && <div className="library-project-hint">
-        <div>
-          <strong>This project has no papers yet</strong>
-          <span>Libraries are stored per project. Your papers are not lost — they are in another project.</span>
-        </div>
-        <div className="library-project-hint-actions">
-          {otherProjects.map((project) => <button className="secondary-button" key={project.project_id} onClick={() => onOpenProject?.(project.project_id)}>
-            Open {project.name} · {project.library_count} libraries · {project.paper_count} papers
-          </button>)}
-        </div>
-      </div>}
-      {loading && !libraries.length ? <LoadingState /> : !libraries.length ? <StateView
-        className="library-empty"
-        icon={<LibraryGlyph name="" />}
-        title="No libraries in this project"
-        description={otherProjects.length ? "Your libraries and papers are stored per project. They are not lost." : "Create a library to start collecting papers."}
-        action={otherProjects.length ? <>{otherProjects.map((project) => <button className="secondary-button" key={project.project_id} onClick={() => onOpenProject?.(project.project_id)}>
-          {project.name} · {project.library_count} libraries · {project.paper_count} papers
-        </button>)}</> : undefined}
-      /> : <div className="library-card-grid">
-        {libraries.map((library) => <button className="library-card" key={library.id} onClick={() => setSelectedLibraryId(library.id)}>
-          <LibraryGlyph name={library.name} />
-          <span className="library-card-copy">
-            <span className="library-card-title"><strong>{library.name}</strong><span className="library-color-dot" style={{ background: library.color }} aria-hidden="true" /></span>
-            <small>{library.description}</small>
-          </span>
-          <span className="library-card-meta"><b>{library.paper_count}</b> papers<ExternalLink size={13} /></span>
-        </button>)}
-      </div>}
-      <LibraryEditor editor={libraryEditor} active={active} onClose={() => setLibraryEditor(null)} onSave={saveLibrary} />
-    </section>;
-  }
-
-  if (readerPaper) {
-    return <PaperReadingWorkbench
-      paper={readerPaper}
-      library={selectedLibrary}
-      onBack={() => setReaderPaperId(null)}
-      onUpdate={updatePaper}
-      bridge={bridge}
-      workspace={workspace}
-      projectId={projectId}
-      onAgentRun={onAgentRun}
-      onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted}
-      onReproduceOpened={onReproduceOpened}
-    />;
-  }
-
-  return <section className="library-page library-detail-page">
-    <header className="library-detail-header">
-      <button className="icon-button" onClick={() => setSelectedLibraryId(null)} title="All libraries"><ArrowLeft size={17} /></button>
-      <div className="library-toolbar"><Search size={15} /><input value={localQuery} onChange={(event) => setLocalQuery(event.target.value)} placeholder="Search title, author, abstract, or venue" /><span>{papers.length} papers</span></div>
-      <div className="library-header-actions">
-        <button className="secondary-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title="Sync shared libraries"><Cloud size={14} />{cloudBusy ? "Syncing…" : "Sync"}</button>
-        <button className="icon-button" onClick={() => setLibraryEditor(selectedLibrary)} title="Edit library"><Pencil size={15} /></button>
-        <button className="icon-button danger" onClick={() => void deleteLibrary()} title="Delete library"><Trash2 size={15} /></button>
-        <button className="primary-button" onClick={() => setImportOpen(true)}><Plus size={15} />Import paper</button>
-      </div>
-    </header>
-    {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
-    {cloudNotice && <div className="library-cloud-notice">{cloudNotice}</div>}
-    <div className="library-split">
-      <div className="library-paper-list">
-        {loading && !papers.length ? <LoadingState /> : papers.length ? papers.map((paper) => <button className={paper.id === selectedPaperId ? "library-paper-row selected" : "library-paper-row"} key={paper.id} onClick={() => setSelectedPaperId(paper.id)}>
-          <span className="paper-row-year">{paper.year ?? "—"}</span>
-          <span><strong>{paper.title}</strong><small>{paper.authors.slice(0, 3).join(", ")}{paper.authors.length > 3 ? " et al." : ""}</small></span>
-          {paper.starred && <Star size={13} fill="currentColor" />}
-        </button>) : <StateView className="empty-library" icon={<BookOpen size={22} />} title="No matching papers" description="Import a paper or change the search query." />}
-      </div>
-      <PaperInspector paper={selectedPaper} onUpdate={updatePaper} onRemove={removePaper} onRead={() => selectedPaper && setReaderPaperId(selectedPaper.id)} />
-    </div>
-    <LibraryEditor editor={libraryEditor} active={active} onClose={() => setLibraryEditor(null)} onSave={saveLibrary} />
-    <PaperImportModal open={active && importOpen} bridge={bridge} library={selectedLibrary} onClose={() => setImportOpen(false)} onImport={importPaper} />
-  </section>;
+export default function LibraryView(props: LibraryViewProps) {
+  const { bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject } = props;
+  if (mode === "library") return <LibraryWorkspace
+    key={`${workspace}:${projectId || "local"}`}
+    bridge={bridge} projectId={projectId} active={active} refreshVersion={libraryRefreshVersion}
+    onLibraryImported={onLibraryImported} onOpenProject={onOpenProject}
+    renderReader={(readerProps) => <PaperReadingWorkbench {...readerProps} bridge={bridge} workspace={workspace} projectId={projectId} onAgentRun={onAgentRun} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} onReproduceOpened={onReproduceOpened} />}
+    renderInspector={(inspectorProps) => <PaperInspector {...inspectorProps} />}
+    renderEditor={(editorProps) => <LibraryEditor {...editorProps} active={active} />}
+    renderImport={(importProps) => <PaperImportModal {...importProps} bridge={bridge} />}
+  />;
+  return <DailyLibraryView key={projectId || "local"} bridge={bridge} projectId={projectId} initialMode={initialDailyMode} refreshVersion={libraryRefreshVersion} onLibraryImported={onLibraryImported} />;
 }
 
-function PaperInspector({ paper, onUpdate, onRemove, onRead }: { paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void }) {
-  const [notes, setNotes] = useState("");
-  useEffect(() => setNotes(paper?.notes ?? ""), [paper]);
-  if (!paper) return <div className="paper-inspector empty"><BookOpen size={24} /><span>Select a paper to inspect its record.</span></div>;
+function DailyLibraryView({ bridge, projectId, initialMode, refreshVersion, onLibraryImported }: {
+  bridge: ResearchDeskBridge; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; refreshVersion: number; onLibraryImported?: () => void;
+}) {
+  const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const alive = useRef(true);
+  const loadLibraries = useCallback(async () => {
+    try {
+      const next = await bridge.listLibraries(projectId ?? undefined);
+      if (alive.current) setLibraries(next);
+    } finally { if (alive.current) setLoading(false); }
+  }, [bridge, projectId]);
+  useEffect(() => {
+    alive.current = true;
+    void loadLibraries().catch(() => {});
+    return () => { alive.current = false; };
+  }, [loadLibraries, refreshVersion]);
+  return <DailyDiscovery initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => { await loadLibraries(); onLibraryImported?.(); }} />;
+}
+
+function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void; noteDrafts: LibraryNoteDrafts }) {
+  const { t } = useUISettings();
+  const [authorsExpanded, setAuthorsExpanded] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { setAuthorsExpanded(false); setError(""); }, [paper?.id]);
+  async function update(patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) {
+    try { await onUpdate(patch); setError(""); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+  }
+  if (!paper) return null;
+  const authors = authorsExpanded ? paper.authors : paper.authors.slice(0, 3);
   return <article className="paper-inspector">
-    <div className="paper-inspector-kicker"><span>{paper.venue || "Research paper"}</span><span>{paper.year ?? "Year unknown"}</span></div>
-    <div className="paper-inspector-title"><h2>{paper.title}</h2><button className={paper.starred ? "icon-button starred" : "icon-button"} onClick={() => void onUpdate({ starred: !paper.starred })} title={paper.starred ? "Unstar" : "Star"}><Star size={17} fill={paper.starred ? "currentColor" : "none"} /></button></div>
-    <p className="paper-authors">{paper.authors.join(", ") || "Authors unavailable"}</p>
-    {paper.conference && <div className="conference-saved-metadata"><span>{paper.conference.presentation === "unknown" ? "Unclassified" : paper.conference.presentation === "oral" ? "Oral" : paper.conference.presentation === "spotlight" ? "Spotlight" : "Poster"}</span><a href={paper.conference.presentation_source_url || paper.conference.source_url} target="_blank" rel="noreferrer">Official conference record</a></div>}
-    <p className="paper-abstract">{paper.abstract || "No abstract was returned by the metadata provider."}</p>
-    <div className="paper-record-row"><label>Reading status<select value={paper.reading_status} onChange={(event) => void onUpdate({ reading_status: event.target.value as ReadingStatus })}><option value="unread">Unread</option><option value="reading">Reading</option><option value="read">Read</option></select></label>{publicPaperRecordUrl(paper) && <a className="outline-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open source</a>}</div>
-    <button className="paper-reader-launch" onClick={onRead}><BookOpen size={15} /><span><strong>Open reading workspace</strong><small>Notes, evidence, and paper structure</small></span><ChevronRight size={16} /></button>
-    <label className="paper-notes">My notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={6} placeholder="Why is this paper useful? What should you verify?" /></label>
-    <div className="paper-inspector-actions"><button className="secondary-button danger-text" onClick={() => void onRemove()}><Trash2 size={14} />Remove</button><button className="primary-button" onClick={() => void onUpdate({ notes })}><Save size={14} />Save notes</button></div>
+    {error && <InlineNotice tone="danger">{error}</InlineNotice>}
+    <div className="paper-inspector-kicker"><span>{paper.venue || t("Research paper")}</span><span>{paper.year ?? t("Year unknown")}</span></div>
+    <div className="paper-inspector-title"><h2>{paper.title}</h2><button className={paper.starred ? "icon-button starred" : "icon-button"} onClick={() => void update({ starred: !paper.starred })} aria-label={t(paper.starred ? "Unstar paper" : "Star paper")}><Star size={17} fill={paper.starred ? "currentColor" : "none"} /></button></div>
+    <p className="paper-authors">{authors.join(", ") || t("Unknown authors")}{paper.authors.length > 3 && <button className="library-expand-authors" aria-expanded={authorsExpanded} onClick={() => setAuthorsExpanded((open) => !open)}>{t(authorsExpanded ? "Show fewer authors" : "Show all {count} authors", { count: paper.authors.length })}</button>}</p>
+    {paper.conference && <div className="conference-saved-metadata"><span>{paper.conference.presentation === "unknown" ? "Unclassified" : paper.conference.presentation === "oral" ? "Oral" : paper.conference.presentation === "spotlight" ? "Spotlight" : "Poster"}</span><a href={paper.conference.presentation_source_url || paper.conference.source_url} target="_blank" rel="noreferrer">{t("Official conference record")}</a></div>}
+    <p className="paper-abstract">{paper.abstract || t("No abstract available.")}</p>
+    <div className="paper-record-row"><label>{t("Reading status")}<select value={paper.reading_status} onChange={(event) => void update({ reading_status: event.target.value as ReadingStatus })}><option value="unread">{t("Unread")}</option><option value="reading">{t("Reading")}</option><option value="read">{t("Already read")}</option></select></label>{publicPaperRecordUrl(paper) && <a className="outline-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer"><ExternalLink size={14} />{t("Open source")}</a>}</div>
+    <button className="paper-reader-launch" onClick={onRead}><BookOpen size={15} /><span><strong>{t("Open reading workspace")}</strong><small>{t("Notes, evidence, and paper structure")}</small></span><ChevronRight size={16} /></button>
+    <LibraryPaperNotes key={paper.id} paper={paper} drafts={noteDrafts} compact onSave={(notes) => onUpdate({ notes })} />
+    <button className="secondary-button danger-text library-remove-paper" onClick={() => void onRemove()}><Trash2 size={14} />{t("Remove")}</button>
   </article>;
 }
 
@@ -611,13 +408,15 @@ const PaperChatThread = memo(function PaperChatThread({ messages, busy, aiMode, 
   </div>;
 });
 
-const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, canInterrupt, attachments, droppedAttachments, command, onAsk, onInterrupt, onRemoveAttachment, onRemoveDropped, onDropFiles }: {
+const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, canInterrupt, attachments, droppedAttachments, command, onAsk, onInterrupt, onRemoveAttachment, onRemoveDropped, onDropFiles, initialDraft = "", onDraftChange }: {
   busy: boolean; cancelling: boolean; canInterrupt: boolean; attachments: CodeChatAttachment[]; droppedAttachments: ContextAttachment[]; command: PaperChatComposerCommand;
   onAsk: (prompt: string) => boolean; onInterrupt: () => void; onRemoveAttachment: (index: number) => void;
   onRemoveDropped: (id: string) => void; onDropFiles: (files: File[], repositoryPath: string) => void;
+  initialDraft?: string; onDraftChange?: (draft: string) => void;
 }) {
   const { t } = useUISettings();
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft);
+  useEffect(() => { onDraftChange?.(draft); }, [draft, onDraftChange]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const resize = useCallback(() => {
@@ -662,8 +461,9 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
   </div>;
 });
 
-function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened }: {
+function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, session, onSessionSave, onActivityChange, noteDrafts }: {
   paper: ReaderLibraryPaper; library: ResearchLibrary; onBack: () => void;
+  session?: PaperReaderSession; onSessionSave: (session: PaperReaderSession) => void; onActivityChange: (busy: boolean) => void; noteDrafts: LibraryNoteDrafts;
   onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>;
   bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; onAgentRun?: (result: AgentRunResult) => void; onInternalReviewThreadsDeleted?: (threadIds: string[]) => void; onReproduceOpened?: (reproductionId: string) => void;
 }) {
@@ -689,8 +489,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       setReproducing(false);
     }
   }
-  const [pageNumber, setPageNumber] = useState(1);
-  const [pdfZoom, setPdfZoom] = useState(1);
+  const [pageNumber, setPageNumber] = useState(session?.pageNumber || 1);
+  const [pdfZoom, setPdfZoom] = useState(session?.pdfZoom || 1);
   const [query, setQuery] = useState("");
   const [passages, setPassages] = useState<PaperPassage[]>([]);
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
@@ -706,14 +506,15 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const [commentOpen, setCommentOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [highlightListOpen, setHighlightListOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(session?.chatOpen ?? false);
+  const [sideTab, setSideTab] = useState<"chat" | "notes">(session?.sideTab || "chat");
   const [chatWidth, setChatWidth] = useState(readPaperChatWidth);
   const chatResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
-  const [readerView, setReaderView] = useState<"paper" | "canvas" | "review" | "project" | "codebase">("paper");
+  const [readerView, setReaderView] = useState<"paper" | "canvas" | "review" | "project" | "codebase">(session?.readerView === "canvas" || session?.readerView === "review" ? session.readerView : "paper");
   const [canvasInsert, setCanvasInsert] = useState<PaperCanvasInsert | null>(null);
   const [canvasFocusHighlight, setCanvasFocusHighlight] = useState<PaperHighlight | null>(null);
-  const [readerChromeOpen, setReaderChromeOpen] = useState(true);
+  const [readerChromeOpen, setReaderChromeOpen] = useState(session?.readerChromeOpen ?? true);
   const [codebaseVisited, setCodebaseVisited] = useState(false);
   const [codeNavigationTarget, setCodeNavigationTarget] = useState<CodeNavigationTarget | null>(null);
   const [repository, setRepository] = useState<PaperRepositorySnapshot | null>(null);
@@ -752,6 +553,16 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const currentPage = reader?.pages.find((page) => page.page_number === pageNumber) ?? reader?.pages[0] ?? null;
   const lastPage = reader?.asset?.page_count ?? reader?.pages.at(-1)?.page_number ?? 1;
   const projectUrl = paper.github_url || detectedProjectUrl;
+  const sessionSnapshot = useRef({ pageNumber, pdfZoom, readerView, chatOpen, readerChromeOpen, sideTab });
+  const sessionSaveRef = useRef(onSessionSave);
+  const composerDraftRef = useRef(session?.composerDraft || "");
+  const rememberComposerDraft = useCallback((draft: string) => { composerDraftRef.current = draft; }, []);
+  sessionSnapshot.current = { pageNumber, pdfZoom, readerView, chatOpen, readerChromeOpen, sideTab };
+  sessionSaveRef.current = onSessionSave;
+  useEffect(() => () => sessionSaveRef.current({ ...sessionSnapshot.current, composerDraft: composerDraftRef.current }), []);
+  useEffect(() => { onActivityChange(chatBusy || Boolean(busy) || reproducing); }, [busy, chatBusy, onActivityChange, reproducing]);
+  useEffect(() => () => onActivityChange(false), [onActivityChange]);
+
 
   useEffect(() => {
     window.localStorage.setItem("archimedes-paper-chat-width", String(chatWidth));
@@ -850,6 +661,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   }
   function receiveFigureCapture(capture: PaperFigureCapture) {
     setFigureCapture(capture);
+    setSideTab("chat");
     setChatOpen(true);
     const objectName = capture.kind === "table" ? t("Table") : capture.kind === "equation" ? t("Equation") : t("Image");
     setComposerCommand((current) => ({ id: current.id + 1, draft: language === "zh" ? `请解释论文第 ${capture.pageNumber} 页所选${objectName}` : `Explain the selected ${objectName.toLowerCase()} from page ${capture.pageNumber} of the paper.` }));
@@ -1032,6 +844,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   async function askAI(question: string, options: { initialBriefing?: boolean } = {}) {
     const userPrompt = question.trim();
     if (!userPrompt || chatBusy) return;
+    setSideTab("chat");
     if (!workspace) { setError("Choose a workspace before starting a paper conversation."); return; }
     const quotedPassage = options.initialBriefing || !selection ? "" : `\n\nSelected passage from page ${pageNumber}:\n> ${selection}`;
     const attachedCode = options.initialBriefing ? "" : codeAttachments.map((attachment) =>
@@ -1106,10 +919,10 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   askAIRef.current = askAI;
   const askPaperSuggestion = useCallback((prompt: string) => { void askAIRef.current(prompt); }, []);
   useEffect(() => {
-    if (aiMode !== "brief" || !chatOpen || !ready || !chatHistoryLoaded || chatBusy || briefingStartedRef.current) return;
+    if (aiMode !== "brief" || sideTab !== "chat" || !chatOpen || !ready || !chatHistoryLoaded || chatBusy || briefingStartedRef.current) return;
     briefingStartedRef.current = true;
     void askAI(paperBriefingRequest(language), { initialBriefing: true });
-  }, [briefingVersion, chatBusy, chatHistoryLoaded, chatOpen, language, ready]);
+  }, [briefingVersion, chatBusy, chatHistoryLoaded, chatOpen, language, ready, sideTab]);
   async function translateSelection() {
     if (!selection || !selectionAnchor || translating) return;
     const source = selection;
@@ -1298,7 +1111,9 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         />
       </main>
       {chatOpen && readerView !== "canvas" && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
-      <aside className="paper-ai-panel">
+      <aside className={`paper-ai-panel${sideTab === "notes" ? " library-side-notes" : ""}`}>
+        <div className="library-assistant-tabs"><Tabs value={sideTab} onChange={(value) => setSideTab(value as typeof sideTab)} label={t("Reading assistant")}><Tab value="chat" icon={<MessageSquareText size={14} />}>{t("Paper chat")}</Tab><Tab value="notes" icon={<StickyNote size={14} />}>{t("Notes")}</Tab></Tabs><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")} aria-label={t("Close AI panel")}><X size={16} /></button></div>
+        {sideTab === "notes" ? <LibraryPaperNotes key={paper.id} paper={paper} drafts={noteDrafts} compact onSave={(notes) => onUpdate({ notes })} /> : <>
         <header className="paper-ai-header">
           <Tabs value={aiMode} onChange={(value) => { if (value === "audit" && !checkout) { if (projectUrl) openCodebase(projectUrl); return; } setAiMode(value as typeof aiMode); }} label={t("Paper chat mode")} variant="segmented" className="paper-ai-mode-toggle"><Tab value="brief">{t("Briefing")}</Tab><Tab value="audit" title={checkout ? t("Use the cloned repository for strict verification") : t("Open Codebase and clone the repository first")}>{t("Code audit")}</Tab></Tabs>
           <div className="paper-ai-header-actions"><button className="reader-icon-button" onClick={restartBriefing} disabled={chatBusy || aiMode !== "brief"} title={t("Read the full paper again")}><RefreshCw size={15} /></button><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")}><X size={16} /></button></div>
@@ -1308,7 +1123,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
           {selection && <div className="paper-ai-context"><span>{t("p. {page} selection", { page: pageNumber })}</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
           {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p><button className="paper-ai-figure-canvas" onClick={addFigureToCanvas} title={t("Send to canvas")}><Frame size={12} /><span>{t("Send to canvas")}</span></button></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
         </div>}
-        <PaperChatComposer busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} droppedAttachments={droppedAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} onRemoveDropped={(id) => setDroppedAttachments((current) => current.filter((item) => item.id !== id))} onDropFiles={(files, repositoryPath) => void attachPaperChatDrop(files, repositoryPath)} />
+        <PaperChatComposer initialDraft={composerDraftRef.current} onDraftChange={rememberComposerDraft} busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} droppedAttachments={droppedAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} onRemoveDropped={(id) => setDroppedAttachments((current) => current.filter((item) => item.id !== id))} onDropFiles={(files, repositoryPath) => void attachPaperChatDrop(files, repositoryPath)} />
+      </>}
       </aside></>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 430, Math.max(12, selectionAnchor.x - 170)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
@@ -2593,7 +2409,9 @@ function LibraryEditor({ editor, active = true, onClose, onSave }: { editor: Res
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(LIBRARY_COLORS[0]);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => {
+    setError("");
     setName(editor && editor !== "new" ? editor.name : "");
     setDescription(editor && editor !== "new" ? editor.description : "");
     setColor(editor && editor !== "new" ? editor.color : LIBRARY_COLORS[0]);
@@ -2602,7 +2420,9 @@ function LibraryEditor({ editor, active = true, onClose, onSave }: { editor: Res
   async function submit() {
     if (!name.trim()) return;
     setBusy(true);
-    try { await onSave({ name: name.trim(), description: description.trim(), color }); } finally { setBusy(false); }
+    try { await onSave({ name: name.trim(), description: description.trim(), color }); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setBusy(false); }
   }
   return <Dialog open={dialogOpen} onClose={onClose} size="md" className="dialog-ref library-editor-dialog" overlayClassName="modal-backdrop dialog-ref-backdrop" ariaLabelledBy="library-editor-title">
     <header className="dialog-ref-header">
@@ -2610,6 +2430,7 @@ function LibraryEditor({ editor, active = true, onClose, onSave }: { editor: Res
       <button className="dialog-ref-close" onClick={onClose} title="Close" aria-label="Close"><X size={18} /></button>
     </header>
     <div className="dialog-ref-body">
+      {error && <InlineNotice tone="danger">{error}</InlineNotice>}
       <label className="dialog-ref-field"><span>Library name</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Agentic RAG" /><small>Use a short name that identifies this research direction.</small></label>
       <label className="dialog-ref-field"><span>Description</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="What belongs in this research direction?" /><small>Optional. Briefly describe the scope of the library.</small></label>
       <div className="dialog-ref-field"><span>Color</span><div className="color-picker" aria-label="Library color">{LIBRARY_COLORS.map((swatch) => <button key={swatch} className={color === swatch ? "color-swatch selected" : "color-swatch"} style={{ background: swatch }} onClick={() => setColor(swatch)} title={swatch}>{color === swatch && <Check size={13} />}</button>)}</div></div>

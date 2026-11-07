@@ -12,7 +12,7 @@ const integrity = read("server/sql/0006_library_api_integrity.sql");
 const docs = read("docs/collaboration-api.md");
 const main = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
-const libraryView = read("src/LibraryView.tsx");
+const libraryView = read("src/LibraryView.tsx") + read("src/LibraryWorkspace.tsx");
 const bridge = read("src/vite-env.d.ts");
 
 test("library API exposes project libraries, papers, and per-user paper state", () => {

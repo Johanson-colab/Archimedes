@@ -10,6 +10,8 @@ const imageCreation = fs.readFileSync(path.join(root, "src", "ImageCreationView.
 const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const benchmark = fs.readFileSync(path.join(root, "src", "BenchmarkRadarView.tsx"), "utf8");
 const library = fs.readFileSync(path.join(root, "src", "LibraryView.tsx"), "utf8");
+const workspace = fs.readFileSync(path.join(root, "src", "LibraryWorkspace.tsx"), "utf8");
+const workspaceCss = fs.readFileSync(path.join(root, "src", "library-workspace.css"), "utf8");
 const typography = fs.readFileSync(path.join(root, "src", "typography.css"), "utf8");
 const extensions = fs.readFileSync(path.join(root, "src", "ExtensionsView.tsx"), "utf8");
 
@@ -36,22 +38,25 @@ test("library actions live on the library canvas while extensions stay headerles
   assert.doesNotMatch(library, /Knowledge base<\/span><h1>Literature library/);
   assert.doesNotMatch(library, /Curated research directions/);
   assert.doesNotMatch(library, /ToolbarActions/);
-  assert.match(library, /className="library-page-toolbar"/);
-  assert.match(library, /library-page-actions[\s\S]{0,400}New library/);
-  assert.match(library, /library-page-actions[\s\S]{0,700}Sync cloud/);
-  assert.match(css, /\.library-page-toolbar \{[^}]*justify-content: space-between/);
+  assert.match(workspace, /className="library-workspace-actions"/);
+  assert.match(workspace, /library-workspace-actions[\s\S]{0,750}syncLibraries/);
+  assert.match(workspace, /library-workspace-actions[\s\S]{0,850}Import paper/);
+  assert.match(workspace, /setEditor\("new"\)/);
+  assert.match(workspaceCss, /\.library-workspace-actions \{[^}]*align-items: center/);
   assert.doesNotMatch(extensions, /extensions-heading/);
   assert.doesNotMatch(extensions, /Everything that changes what the Agent can do/);
 });
 
-test("library detail keeps one compact toolbar row", () => {
+test("folder browsing keeps search and filters in a compact toolbar", () => {
   assert.doesNotMatch(library, /className="library-detail-title"/);
   assert.doesNotMatch(library, /<span className="eyebrow">Literature library<\/span>/);
   assert.doesNotMatch(library, /library-detail-header[\s\S]{0,400}<h1/);
   assert.doesNotMatch(library, /className="library-description"/);
   assert.doesNotMatch(library, /library-detail-header[\s\S]{0,600}<LibraryGlyph/);
-  assert.match(library, /library-detail-header[\s\S]{0,400}className="library-toolbar"/);
-  assert.match(library, /library-detail-header[\s\S]{0,800}title="All libraries"/);
+  assert.match(workspace, /className="library-browser-toolbar"/);
+  assert.match(workspace, /library-browser-toolbar[\s\S]{0,350}className="library-browser-search"/);
+  assert.match(workspace, /className="library-browser-filters"/);
+  assert.match(workspaceCss, /\.library-browser-toolbar \{[^}]*flex-wrap: wrap/);
 });
 
 test("the toolbar uses one title line and no module subtitle", () => {
