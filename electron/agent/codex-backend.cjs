@@ -19,10 +19,14 @@ function canResume(binding, { workspace, model, previousTurnId }) {
   return Boolean(binding?.native_thread_id && (!binding.backend || binding.backend === 'codex') && binding.last_turn_id && binding.workspace === workspace && binding.model === (model || '') && binding.last_turn_id === previousTurnId);
 }
 function nativePolicy(config, root) {
-  const permissionMode = config.permissionMode || 'read-only';
-  if (!['read-only', 'workspace-write'].includes(permissionMode)) throw new Error('Unsupported Codex permission mode. Full access is not available.');
-  return { setup: { cwd: root, sandbox: permissionMode, approvalPolicy: 'on-request', approvalsReviewer: 'user', ...(config.model ? { model: config.model } : {}) },
-    turn: { approvalPolicy: 'on-request', approvalsReviewer: 'user', sandboxPolicy: permissionMode === 'workspace-write'
+  const mode = config.permissionMode || 'ask';
+  if (!['ask', 'auto-review', 'full-access', 'read-only', 'workspace-write'].includes(mode)) throw new Error('Unsupported Codex permission mode.');
+  const fullAccess = mode === 'full-access';
+  const sandbox = fullAccess ? 'danger-full-access' : mode === 'read-only' ? 'read-only' : 'workspace-write';
+  const approvalPolicy = fullAccess ? 'never' : 'on-request';
+  const approvalsReviewer = mode === 'auto-review' ? 'auto_review' : 'user';
+  return { setup: { cwd: root, sandbox, approvalPolicy, approvalsReviewer, ...(config.model ? { model: config.model } : {}) },
+    turn: { approvalPolicy, approvalsReviewer, sandboxPolicy: fullAccess ? { type: 'dangerFullAccess' } : sandbox === 'workspace-write'
       ? { type: 'workspaceWrite', writableRoots: [root], networkAccess: false, excludeSlashTmp: true, excludeTmpdirEnvVar: true }
       : { type: 'readOnly', networkAccess: false }, ...(config.effort ? { effort: config.effort } : {}) } };
 }
@@ -239,7 +243,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     await client.start();
     const account = await client.request('account/read', { refreshToken: false });
     if (!account?.account) throw new Error('Codex is not signed in. Run codex login, then retry.');
-    await validateNativeChoice(client, config);
+    await validateNativeChoice(client, config, root);
     const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(resume ? { threadId: binding.native_thread_id } : {}) });
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');
@@ -252,7 +256,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     // Dirty before either RPC: a lost acknowledgement may follow real execution
     // or compaction. Future turns must not silently resume uncertain history.
     bindings.save({ native_thread_id: active.nativeThreadId, workspace: root, model: config.model || '', last_turn_id: null });
-    emit({ type: 'status', title: 'Codex backend', detail: `${compaction ? 'Compacting' : resume ? 'Resuming' : 'Starting'} Codex · ${config.permissionMode || 'read-only'} · native approvals` });
+    emit({ type: 'status', title: 'Codex backend', detail: `${compaction ? 'Compacting' : resume ? 'Resuming' : 'Starting'} Codex · ${config.permissionMode || 'ask'} · native approvals` });
     if (compaction) {
       await client.request('thread/compact/start', { threadId: active.nativeThreadId });
       accepted = true;

@@ -1,20 +1,25 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, LoaderCircle, Network, Save } from "lucide-react";
 import openaiLogo from "./assets/providers/openai.png";
 import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { useUISettings } from "./i18n";
+import { MenuItem, MenuSurface } from "./Menu";
 
-export default function AgentBackendSettings({ bridge, onBackendChange }: { bridge: ResearchDeskBridge; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void }) {
+export default function AgentBackendSettings({ bridge, onBackendChange, active = true }: { bridge: ResearchDeskBridge; active?: boolean; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void }) {
   const { t } = useUISettings();
   const id = useId();
-  const [config, setConfig] = useState<AgentBackendConfig>({ backend: "api", binary: "codex", model: "", effort: "", permissionMode: "read-only" });
+  const [config, setConfig] = useState<AgentBackendConfig>({ backend: "api", binary: "codex", model: "", effort: "", permissionMode: "ask" });
   const [savedConfig, setSavedConfig] = useState<AgentBackendConfig | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<"check" | "save" | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [effortOpen, setEffortOpen] = useState(false);
+  const effortTrigger = useRef<HTMLButtonElement>(null);
+  const [effectiveModelId, setEffectiveModelId] = useState<string>();
+  useEffect(() => { if (!active) setEffortOpen(false); }, [active]);
   const [connections, setConnections] = useState<Partial<Record<"codex" | "claude" | "opencode", "unchecked" | "connected" | "error">>>({});
   const [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(null);
   const [catalogs, setCatalogs] = useState<Partial<Record<"codex" | "claude" | "opencode", NativeAgentModel[]>>>({});
@@ -23,14 +28,17 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
   const labels = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", api: "Archimedes" };
   const name = labels[selected];
   const models = catalogs[selected] || [];
+  const nativeModel = models.find((model) => model.id === (config.model || effectiveModelId));
+  const effortLabel = (effort: string) => ({ low: "Low", medium: "Medium", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra", minimal: "Minimal", none: "None" }[effort] || effort);
   const setModels = (value: NativeAgentModel[]) => setCatalogs((current) => ({ ...current, [selected]: value }));
   const setConnection = (value: "unchecked" | "connected" | "error") => setConnections((current) => ({ ...current, [selected]: value }));
   const fields = (value: AgentBackendProfile): AgentBackendProfile => ({ binary: value.binary, model: value.model, ...(value.effort !== undefined ? { effort: value.effort } : {}), ...(value.permissionMode ? { permissionMode: value.permissionMode } : {}) });
   function choose(next: typeof selected) {
     const profiles = { ...drafts, [selected]: fields(config) };
     setDrafts(profiles);
+    setEffortOpen(false);
     setSelected(next);
-    setConfig({ backend: next, binary: next, model: "", effort: "", permissionMode: next === "codex" ? "read-only" : "ask", ...profiles[next] });
+    setConfig({ backend: next, binary: next, model: "", effort: "", ...profiles[next], permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(profiles[next]?.permissionMode || "") ? "ask" : profiles[next]?.permissionMode || "ask" });
     setFeedback(null);
   }
   useEffect(() => {
@@ -40,7 +48,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
     void bridge.getAgentBackendConfig().then((value) => {
       if (active) {
         const next = value.backend === "api" ? "codex" : value.backend;
-        setSelected(next); setConfig({ backend: next, ...fields(value) }); setDrafts(value.profiles || {});
+        setSelected(next); setConfig({ backend: next, ...fields(value), permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(value.permissionMode || "") ? "ask" : value.permissionMode || "ask" }); setDrafts(value.profiles || {});
         setSavedConfig(value); onBackendChange?.(value.backend);
       }
     }).catch((error) => { if (active) setLoadError(String(error)); });
@@ -50,8 +58,9 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
   function edit(field: "binary" | "model", value: string) {
     setConfig((current) => ({ ...current, [field]: value, ...(field === "model" ? { effort: "" } : {}) }));
     setFeedback(null);
+    if (field === "model") setEffectiveModelId(undefined);
     setConnection("unchecked");
-    if (field === "binary") setModels([]);
+    if (field === "binary") { setModels([]); setEffectiveModelId(undefined); }
   }
 
   async function apply(action: "check" | AgentBackendConfig["backend"]) {
@@ -62,10 +71,11 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
       if (action === "check") {
         const result = await bridge.checkAgentBackend({ ...config, backend: selected });
         setModels(result.models);
+        setEffectiveModelId(result.effectiveModelId);
         setConnection(result.ready ? "connected" : "error");
         setFeedback({ error: !result.ready, text: t(result.message) });
       } else {
-        const apiProfile = savedConfig.profiles?.codex || (savedConfig.backend === "codex" || savedConfig.backend === "api" ? savedConfig : { binary: "codex", model: "", effort: "", permissionMode: "read-only" as const });
+        const apiProfile = savedConfig.profiles?.codex || (savedConfig.backend === "codex" || savedConfig.backend === "api" ? savedConfig : { binary: "codex", model: "", effort: "", permissionMode: "ask" as const });
         const saved = await bridge.saveAgentBackendConfig({ ...fields(action === "api" ? apiProfile : config), backend: action });
         if (action !== "api") {
           if (saved.binary !== config.binary || saved.model !== config.model) setConnection("unchecked");
@@ -100,6 +110,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
     <div className="agent-backend-list">
     {(["codex", "claude", "opencode"] as const).map((item) => <section key={item} className="agent-backend-card" aria-label={labels[item]}>
       <button type="button" className="agent-backend-card-toggle" disabled={disabled} aria-label={labels[item]} aria-expanded={expanded && selected === item} aria-controls={`${id}-${item}-config`} onClick={() => {
+        setEffortOpen(false);
         if (selected === item) setExpanded((value) => !value);
         else { choose(item); setExpanded(true); }
       }}>
@@ -121,17 +132,22 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
             <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} list={`${id}-models`} value={config.model} spellCheck={false} onChange={(event) => edit("model", event.target.value)} />
             <datalist id={`${id}-models`}>{models.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</datalist>
           </SettingsRow>
-          {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-effort`}>{t("Codex thinking effort")}</label>} description={t("Native model capabilities come from Check Codex. Leave default to use Codex configuration.")}>
-            <select id={`${id}-effort`} className="settings-select" disabled={disabled} value={config.effort || ""} onChange={(event) => setConfig((current) => ({ ...current, effort: event.target.value }))}>
-              <option value="">{t("Codex default")}</option>
-              {models.find((item) => item.id === config.model)?.efforts?.map((effort) => <option value={effort} key={effort}>{effort}</option>)}
-              {config.effort && !models.find((item) => item.id === config.model)?.efforts?.includes(config.effort) && <option value={config.effort}>{config.effort}</option>}
-            </select>
+          {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-effort`}>{t("Codex thinking effort")}</label>} description={t("Choose from the selected Codex model's native reasoning efforts.")}>
+            <button ref={effortTrigger} id={`${id}-effort`} type="button" className="settings-select native-effort-select" disabled={disabled} aria-haspopup="menu" aria-expanded={effortOpen} onClick={() => {
+              setEffortOpen((open) => !open);
+              if (!effortOpen && (!models.length || (!config.model && !effectiveModelId))) void apply("check");
+            }}>{config.effort ? effortLabel(config.effort) : t("Codex default")}<ChevronDown size={14} /></button>
+            <MenuSurface open={active && effortOpen && expanded} onClose={() => setEffortOpen(false)} anchorRef={effortTrigger} width="anchor" ariaLabel={t("Codex thinking effort")}>
+              <MenuItem checked={!config.effort} onClick={() => { setConfig((current) => ({ ...current, effort: "" })); setEffortOpen(false); }}>{t("Codex default")}</MenuItem>
+              {nativeModel?.efforts?.map((effort) => <MenuItem key={effort} checked={config.effort === effort} onClick={() => { setConfig((current) => ({ ...current, effort })); setEffortOpen(false); }}>{effortLabel(effort)}{effort === nativeModel.defaultEffort ? ` · ${t("Default")}` : ""}</MenuItem>)}
+              {busy === "check" ? <MenuItem disabled icon={<LoaderCircle className="spin" size={13} />}>{t("Loading Codex model options…")}</MenuItem> : !nativeModel && <MenuItem onClick={() => void apply("check")}>{t("Reload Codex model options")}</MenuItem>}
+            </MenuSurface>
           </SettingsRow>}
-          {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-permissions`}>{t("Codex permissions")}</label>} description={t("Read-only allows inspection. Workspace write allows edits and commands in the project. Additional access uses native approval.")}>
-            <select id={`${id}-permissions`} className="settings-select" disabled={disabled} value={config.permissionMode || "read-only"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
-              <option value="read-only">{t("Read-only")}</option>
-              <option value="workspace-write">{t("Workspace write")}</option>
+          {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-permissions`}>{t("Codex permissions")}</label>} description={t(config.permissionMode === "full-access" ? "Run without sandbox or approval prompts." : config.permissionMode === "auto-review" ? "Codex reviews approval requests automatically." : "Ask before commands that need elevated access.")}>
+            <select id={`${id}-permissions`} className="settings-select" disabled={disabled} value={config.permissionMode || "ask"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
+              <option value="ask">{t("Ask for approval")}</option>
+              <option value="auto-review">{t("Approve for me")}</option>
+              <option value="full-access">{t("Full access")}</option>
             </select>
           </SettingsRow>}
         </div>
@@ -139,12 +155,6 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
           <strong>{t("Permissions")}</strong>
           <p>{t(selected === "claude" ? "Uses your Claude Code permission settings. When Claude Code requests approval, you can respond in the conversation." : "Uses your OpenCode permission settings. When OpenCode requests approval, you can respond in the conversation.")}</p>
         </div>}
-        <details className="agent-backend-limits">
-          <summary>{t("Capabilities and permissions")}</summary>
-          <p>{selected === "codex" ? t("Codex owns execution and context. Archimedes displays native tool activity and approval requests. Plugin/skill attachments are not supported; source metadata does not mean a paper has been read.") : t("The native agent owns execution and context. Archimedes shows tool activity and one-time approvals. Attach files or images as context; plugin/skill attachments are not supported.")}</p>
-          <p>{selected === "codex" ? t("Configured Codex MCP tools may access external services. Read-only does not prevent remote side effects.") : t("Connection checks validate the local protocol; model access is verified when a turn succeeds.")}</p>
-          {selected !== "codex" && <p>{t("Live steering, interactive questions and manual compaction are not available for this adapter yet.")}</p>}
-        </details>
         <div className="agent-backend-actions">
           <button type="button" className="secondary-button" disabled={disabled || !config.binary.trim()} onClick={() => void apply("check")}>{busy === "check" ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(`Check ${name}`)}</button>
           <button type="button" className="primary-button" disabled={disabled || !config.binary.trim()} onClick={() => void apply(selected)}>{busy === "save" ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{savedConfig?.backend === selected ? t("Save backend") : t(`Use ${name}`)}</button>

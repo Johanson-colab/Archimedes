@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { CodexClient } = require("./agent/codex-client.cjs");
-const { listNativeModels } = require("./agent/codex-models.cjs");
+const { listNativeModels, resolveNativeModel } = require("./agent/codex-models.cjs");
 let configPath;
 
 function initialize(userData) { configPath = path.join(userData, "agent-backend.json"); }
@@ -10,8 +10,8 @@ function profile(input = {}, backend = "codex") {
   const binary = String(input.binary || backend).trim();
   const model = String(input.model || "").trim();
   const effort = String(input.effort || "").trim();
-  const permissionMode = input.permissionMode || (backend === "codex" ? "read-only" : "ask");
-  if (!(backend === "codex" ? ["read-only", "workspace-write"] : ["ask"]).includes(permissionMode)) throw new Error("Unsupported native permission mode.");
+  const permissionMode = input.permissionMode || "ask";
+  if (!(backend === "codex" ? ["ask", "auto-review", "full-access", "read-only", "workspace-write"] : ["ask"]).includes(permissionMode)) throw new Error("Unsupported native permission mode.");
   if (binary !== backend && !path.isAbsolute(binary)) throw new Error("Native executable path must be absolute.");
   if (binary.length > 2000 || model.length > 160 || effort.length > 100 || /[\r\n\0]/.test(binary + model + effort)) throw new Error("Invalid native configuration.");
   return { binary, model, effort, permissionMode };
@@ -51,8 +51,9 @@ async function check(input = get(), Client = CodexClient) {
     await client.start();
     const result = await client.request("account/read", { refreshToken: false });
     if (!result?.account) throw new Error("Codex is not signed in. Run codex login in your terminal, then check again.");
-    const models = (await listNativeModels(client)).map(({ isDefault, ...model }) => model);
-    return { ready: true, models, message: "Codex is connected. Model access is verified only when a turn succeeds." };
+    const models = await listNativeModels(client);
+    const effectiveModel = await resolveNativeModel(client, config.model, models);
+    return { ready: true, models, effectiveModelId: effectiveModel?.id, message: "Codex is connected. Model access is verified only when a turn succeeds." };
   } finally { client.close(); }
 }
 module.exports = { initialize, get, save, check, normalize };

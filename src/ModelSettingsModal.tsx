@@ -312,7 +312,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       </footer>
       </div>
       {!proactiveRole && <div className="model-settings-panel model-settings-panel-agents" id={`${panelId}-agents`} role="tabpanel" aria-labelledby={`${panelId}-agents-tab`} hidden={settingsPage !== "agents"}>
-        <AgentBackendSettings bridge={bridge} onBackendChange={setActiveBackend} />
+        <AgentBackendSettings bridge={bridge} active={open && settingsPage === "agents"} onBackendChange={setActiveBackend} />
       </div>}
       </div>
     </>;

@@ -207,7 +207,7 @@ interface ResearchDeskBridge {
     runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
-    checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: NativeAgentModel[]; message: string }>;
+    checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: NativeAgentModel[]; effectiveModelId?: string; message: string }>;
     steerNativeAgent: (threadId: string, text: string, workspace?: string) => Promise<unknown>;
     answerNativeAgentQuestion: (threadId: string, questionId: string, answers: Record<string, string[]>, workspace?: string) => Promise<unknown>;
     claimApprovals: (threadId: string, claimed: boolean) => Promise<{ claimed: boolean }>;
@@ -1790,14 +1790,14 @@ interface AgentBackendProfile {
   binary: string;
   model: string;
   effort?: string;
-  permissionMode?: "read-only" | "workspace-write" | "ask";
+  permissionMode?: "read-only" | "workspace-write" | "ask" | "auto-review" | "full-access";
 }
 interface AgentBackendConfig extends AgentBackendProfile {
   backend: "api" | "codex" | "claude" | "opencode";
   profiles?: Partial<Record<"codex" | "claude" | "opencode", AgentBackendProfile>>;
 }
 
-interface NativeAgentModel { id: string; label: string; efforts?: string[]; defaultEffort?: string }
+interface NativeAgentModel { id: string; label: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }
 interface NativeAgentActivity { id: string; kind: string; title: string; detail: string; status: "running" | "completed" | "failed" | "interrupted"; output?: string }
 interface NativeAgentUsage { inputTokens: number; cachedInputTokens: number; outputTokens: number; totalTokens: number; modelContextWindow: number | null; lifetimeTotalTokens?: number }
 interface NativeAgentPlan { explanation: string; steps: Array<{ step: string; status: string }> }

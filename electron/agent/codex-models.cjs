@@ -20,12 +20,17 @@ async function listNativeModels(client) {
   }
   throw new Error('Codex model catalog exceeded the page limit.');
 }
-async function validateNativeChoice(client, config) {
+async function resolveNativeModel(client, explicitModel, models, cwd) {
+  if (explicitModel) return models.find(model => model.id === explicitModel);
+  const result = await client.request('config/read', { includeLayers: false, ...(cwd ? { cwd } : {}) });
+  const configuredModel = result?.config?.model;
+  return configuredModel ? models.find(model => model.id === configuredModel) : models.find(model => model.isDefault);
+}
+async function validateNativeChoice(client, config, cwd) {
   if (!config.model && !config.effort) return;
-  if (config.effort && !config.model) throw new Error('Select an explicit Codex model before choosing a reasoning effort.');
   const models = await listNativeModels(client);
-  const model = config.model ? models.find(m => m.id === config.model) : models.find(m => m.isDefault);
+  const model = await resolveNativeModel(client, config.model, models, cwd);
   if (!model) throw new Error('The selected Codex model is unavailable. Check the native model list before retrying.');
   if (config.effort && !model.efforts.includes(config.effort)) throw new Error(`The selected reasoning effort is not supported by Codex model ${model.label}. Choose an advertised effort or the native default.`);
 }
-module.exports = { listNativeModels, validateNativeChoice };
+module.exports = { listNativeModels, resolveNativeModel, validateNativeChoice };

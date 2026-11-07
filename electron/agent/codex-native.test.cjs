@@ -18,6 +18,7 @@ function fixture(scenario, overrides = {}) {
     async request(method, params) {
       this.calls.push({ method, params });
       if (method === 'account/read') return { account: {} };
+      if (method === 'config/read') return { config: { model: 'm' } };
       if (method === 'model/list') return { data: [{ id: 'm', model: 'm', displayName: 'Model', isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: 'high' }], defaultReasoningEffort: 'high' }] };
       if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'native-thread' } };
       if (method === 'turn/start' || method === 'thread/compact/start') {
@@ -59,7 +60,7 @@ test('native setup omits API instructions and resumes native history without rei
 });
 
 test('permissions stay bounded and explicit effort is validated against native model catalog', async () => {
-  assert.equal(backendConfig.normalize().permissionMode, 'read-only');
+  assert.equal(backendConfig.normalize().permissionMode, 'ask');
   assert.equal(backendConfig.normalize().effort, '');
   assert.throws(() => backendConfig.normalize({ permissionMode: 'danger-full-access' }), /permission/i);
   const f = fixture(p => complete(p));
@@ -73,7 +74,7 @@ test('permissions stay bounded and explicit effort is validated against native m
   await assert.rejects(backend.runCodex(invalid.args), /effort/i);
   assert.equal(invalid.peer().calls.some(x => x.method === 'turn/start'), false);
   const check = await backendConfig.check(f.args.config, f.args.Client);
-  assert.deepEqual(check.models, [{ id: 'm', label: 'Model', efforts: ['high'], defaultEffort: 'high' }]);
+  assert.deepEqual(check.models, [{ id: 'm', label: 'Model', efforts: ['high'], defaultEffort: 'high', isDefault: true }]);
 });
 
 test('native activities preserve item identities, bound output and separate commentary from final text', async () => {
@@ -222,10 +223,11 @@ test('resolved native approval expires its local wait and never replies after ex
   complete(f.peer()); await run;
 });
 
-test('explicit effort requires an explicit model instead of assuming the catalog default', async () => {
+test('explicit effort uses the effective native configuration when model is left empty', async () => {
   const f = fixture(p => complete(p)); f.args.config.effort = 'high';
-  await assert.rejects(backend.runCodex(f.args), /explicit.*model|select.*model/i);
-  assert.equal(f.peer().calls.some(c => c.method === 'turn/start'), false);
+  await backend.runCodex(f.args);
+  assert.equal(f.peer().calls.some(c => c.method === 'config/read'), true);
+  assert.equal(f.peer().calls.find(c => c.method === 'turn/start').params.effort, 'high');
 });
 
 test('oversized file changes are identified as truncated and never approved from incomplete display', async () => {
@@ -311,4 +313,25 @@ test('delayed native output emitter failures reject the run without an uncaught 
   assert.equal(f.peer().closed, true);
   assert.equal(f.saves.at(-1).last_turn_id, null);
   await assert.rejects(backend.steerNative('local-thread', 'stale'), /active/);
+});
+
+
+test('all three permission presets reach both native setup and turn requests', async () => {
+  for (const [mode, sandbox, policy, reviewer, turnType] of [
+    ['ask', 'workspace-write', 'on-request', 'user', 'workspaceWrite'],
+    ['auto-review', 'workspace-write', 'on-request', 'auto_review', 'workspaceWrite'],
+    ['full-access', 'danger-full-access', 'never', 'user', 'dangerFullAccess'],
+  ]) {
+    const f = fixture(p => complete(p)); f.args.config.permissionMode = mode;
+    await backend.runCodex(f.args);
+    const setup = f.peer().calls.find(c => c.method === 'thread/start').params;
+    const turn = f.peer().calls.find(c => c.method === 'turn/start').params;
+    assert.equal(setup.sandbox, sandbox);
+    assert.equal(setup.approvalPolicy, policy);
+    assert.equal(setup.approvalsReviewer, reviewer);
+    assert.equal(turn.approvalPolicy, policy);
+    assert.equal(turn.approvalsReviewer, reviewer);
+    assert.equal(turn.sandboxPolicy.type, turnType);
+    assert.equal(backendConfig.normalize({ permissionMode: mode }).permissionMode, mode);
+  }
 });

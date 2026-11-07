@@ -126,7 +126,7 @@ test("streaming uses restricted policy, rejects foreign events and persists only
   assert.equal(await runCodex(args), "hello");
   assert.equal(args.writes[0].last_turn_id, null);
   assert.equal(args.writes.at(-1).last_turn_id, "local-turn");
-  assert.equal(client.requests.find((item) => item.method === "thread/start").params.sandbox, "read-only");
+  assert.equal(client.requests.find((item) => item.method === "thread/start").params.sandbox, "workspace-write");
   const turn = client.requests.find((item) => item.method === "turn/start").params;
   assert.equal(turn.approvalPolicy, "on-request");
   assert.equal(turn.approvalsReviewer, "user");

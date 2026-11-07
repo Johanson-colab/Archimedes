@@ -39,7 +39,7 @@ before(async () => {
   }
   await load("SettingsPrimitives", ["SettingsGroup", "SettingsRow", "SettingsSection"]);
   await load("Tabs", ["Tab", "Tabs"]);
-  await load("Menu", ["MenuSurface"]);
+  await load("Menu", ["MenuSurface", "MenuItem"]);
   await load("AgentBackendSettings", ["AgentBackendSettings"]);
   ({ ModelSettingsModal } = await load("ModelSettingsModal", ["ModelSettingsModal"]));
 });
@@ -140,7 +140,7 @@ test("checking Codex does not activate it; explicit activation and API reset per
     await input("Codex model", "native-model");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connection not checked");
     await click("Use Codex");
-    assert.deepEqual(calls.savedBackends[0], { backend: "codex", binary: "codex", model: "native-model", effort: "" });
+    assert.deepEqual(calls.savedBackends[0], { backend: "codex", binary: "codex", model: "native-model", effort: "", permissionMode: "ask" });
     assert.ok(document.querySelector(".agent-backend-card .agent-backend-active"));
     assert.equal(document.querySelector('.model-connection-tabs .ui-tab-badge').textContent, "Codex");
     await click("Use API harness");
@@ -304,32 +304,45 @@ test("development StrictMode double mounting remains bounded and never checks Co
   }
 });
 
-test("native permissions and effort are explicit drafts and saved independently of API controls", async () => {
+test("native effort loads on demand and all three Codex permissions are saved independently", async () => {
   const cleanup = await mount(bridge({
-    checkAgentBackend: async () => ({ ready: true, models: [{ id: "native-model", label: "Native model", efforts: ["low", "high", "xhigh"] }], message: "Connected" }),
+    checkAgentBackend: async (config) => { calls.checkedBackends.push(config); return { ready: true, effectiveModelId: "native-model", models: [{ id: "native-model", label: "Native model", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "high" }], message: "Connected" }; },
   }));
   try {
     await click("Harnesses");
     const field = (label) => document.getElementById([...document.querySelectorAll("label")].find((node) => node.textContent === label)?.htmlFor);
-    assert.ok(field("Codex permissions"), "explicit permission selector exists");
-    assert.equal(field("Codex permissions").value, "read-only");
+    assert.equal(field("Codex permissions").value, "ask");
+    assert.deepEqual([...field("Codex permissions").options].map((option) => option.value), ["ask", "auto-review", "full-access"]);
     assert.equal(calls.checkedBackends.length, 0);
-    await click("Check Codex");
-    await input("Codex model", "native-model");
+    await reveal(field("Codex thinking effort"));
+    await React.act(async () => field("Codex thinking effort").click());
+    assert.equal(calls.checkedBackends.length, 1);
+    for (const value of ["Low", "Medium", "High · Default", "XHigh", "Max", "Ultra"]) assert.ok(button(value), value);
+    await click("Ultra");
+    assert.equal(field("Codex thinking effort").textContent, "Ultra");
     await React.act(async () => {
-      const select = field("Codex thinking effort");
-      select.value = "xhigh";
-      select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
       const permissions = field("Codex permissions");
-      permissions.value = "workspace-write";
+      permissions.value = "auto-review";
       permissions.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     });
-    assert.equal(calls.savedBackends.length, 0, "editing does not activate permissions");
+    assert.equal(calls.savedBackends.length, 0);
     await click("Use Codex");
-    assert.equal(calls.savedBackends.at(-1).effort, "xhigh");
-    assert.equal(calls.savedBackends.at(-1).permissionMode, "workspace-write");
+    assert.equal(calls.savedBackends.at(-1).effort, "ultra");
+    assert.equal(calls.savedBackends.at(-1).model, "");
+    assert.equal(calls.savedBackends.at(-1).permissionMode, "auto-review");
+    await React.act(async () => {
+      const permissions = field("Codex permissions");
+      permissions.value = "full-access";
+      permissions.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    });
+    await click("Save backend");
+    assert.equal(calls.savedBackends.at(-1).permissionMode, "full-access");
     assert.equal(calls.savedModels.length, 0);
-    assert.ok(!document.querySelector('option[value="danger-full-access"]'));
+    assert.ok(!document.body.textContent.includes("Capabilities and permissions"));
+    await React.act(async () => field("Codex thinking effort").click());
+    assert.ok(document.querySelector('[role="menu"]'));
+    await click("API models");
+    assert.equal(document.querySelector('[role="menu"]'), null, "changing tabs closes the native effort menu");
   } finally { await cleanup(); }
 });
 
