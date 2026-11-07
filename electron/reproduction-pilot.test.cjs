@@ -17,10 +17,18 @@ function step(id, overrides = {}) {
   };
 }
 
-function backend(script = {}) {
+function backend(script = {}, files = {}) {
   const calls = [];
   return {
     calls,
+    files,
+    async readFile(filePath) {
+      return filePath in files ? files[filePath] : null;
+    },
+    async writeRepoFile(filePath, content) {
+      files[filePath] = content;
+      return { path: filePath, bytes: Buffer.byteLength(content, "utf8") };
+    },
     async exec(command, { onData } = {}) {
       calls.push(command);
       const entry = script[command];
@@ -352,4 +360,74 @@ test("each turn announces itself so the run panel can show progress", async () =
   assert.equal(turns.length, 1);
   assert.equal(turns[0].turn, 1);
   assert.equal(turns[0].maxTurns, 60);
+});
+
+test("read_paper puts the requested slice in front of the model, not the whole paper", async () => {
+  const brain = model([
+    { action: "read_paper", query: "Table 2" },
+    { action: "ask", question: "stop" },
+  ]);
+  await runPilot({
+    steps: [step("install")],
+    paper: {
+      title: "A paper",
+      text: `START-OF-PAPER\n${"intro ".repeat(1200)}\n[page 9]\nTable 2 reports 34.02 on CL-Bench.\n${"tail ".repeat(1200)}`,
+    },
+    backend: backend({}),
+    complete: brain.complete,
+  });
+  assert.match(brain.prompts[1], /RECENT READINGS/);
+  assert.match(brain.prompts[1], /Table 2 reports 34\.02/);
+  assert.equal(brain.prompts[1].includes("START-OF-PAPER"), false, "only the requested slice, not the whole paper");
+  assert.ok(brain.prompts[1].length < 12_000, "the prompt stays bounded");
+});
+
+test("read_file returns numbered lines and a paging hint", async () => {
+  const brain = model([
+    { action: "read_file", path: "pyproject.toml", limit: 2 },
+    { action: "ask", question: "stop" },
+  ]);
+  await runPilot({
+    steps: [step("install")],
+    backend: backend({}, { "pyproject.toml": "[project]\nname = 'x'\nversion = '0.1'\n" }),
+    complete: brain.complete,
+  });
+  assert.match(brain.prompts[1], /1: \[project\]/);
+  assert.match(brain.prompts[1], /2: name = 'x'/);
+  assert.match(brain.prompts[1], /pass offset=2/);
+});
+
+test("write_file writes inside the checkout and announces it", async () => {
+  const files = {};
+  const events = [];
+  const brain = model([
+    { action: "write_file", path: "configs/eval.yaml", content: "batch_size: 2\n" },
+    { action: "ask", question: "stop" },
+  ]);
+  await runPilot({
+    steps: [step("install")],
+    backend: backend({}, files),
+    complete: brain.complete,
+    emit: (event) => events.push(event),
+  });
+  assert.equal(files["configs/eval.yaml"], "batch_size: 2\n");
+  assert.ok(events.some((event) => event.type === "pilot-write" && event.path === "configs/eval.yaml"));
+});
+
+test("edit_file refuses ambiguous text and records a unique replacement", async () => {
+  const files = { "run.sh": "echo hello\necho hello\n" };
+  const ambiguous = model([
+    { action: "edit_file", path: "run.sh", old: "echo hello", new: "echo bye" },
+    { action: "ask", question: "stop" },
+  ]);
+  await runPilot({ steps: [step("install")], backend: backend({}, files), complete: ambiguous.complete });
+  assert.match(ambiguous.prompts[1], /appears more than once/);
+  assert.equal(files["run.sh"], "echo hello\necho hello\n", "nothing was written");
+
+  const unique = model([
+    { action: "edit_file", path: "run.sh", old: "echo hello\necho hello", new: "echo bye" },
+    { action: "ask", question: "stop" },
+  ]);
+  await runPilot({ steps: [step("install")], backend: backend({}, files), complete: unique.complete });
+  assert.equal(files["run.sh"], "echo bye\n");
 });

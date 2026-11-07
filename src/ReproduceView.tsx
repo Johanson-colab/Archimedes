@@ -134,7 +134,9 @@ type JournalEntry =
   | { kind: "result"; index: number; exitCode: number | null; timedOut: boolean; durationMs: number; path?: string }
   | { kind: "verdict"; text: string; status: ReproductionRunStepStatus; evidence: string }
   | { kind: "revise"; text: string }
-  | { kind: "finding"; text: string };
+  | { kind: "finding"; text: string }
+  | { kind: "reading"; text: string }
+  | { kind: "write"; text: string };
 
 export default function ReproduceView({ bridge, selectedId, onSelect }: {
   bridge: ResearchDeskBridge;
@@ -271,6 +273,27 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       }
       if (payload.type === "finding" && payload.text) {
         setJournal((current) => [...current.slice(-200), { kind: "finding", text: payload.text as string }]);
+        return;
+      }
+      if (payload.type === "pilot-read" && payload.label) {
+        setJournal((current) => [...current.slice(-200), {
+          kind: "reading",
+          text: `${payload.label}${payload.chars ? ` · ${payload.chars} chars` : ""}`,
+        }]);
+        return;
+      }
+      if (payload.type === "pilot-write" && payload.path) {
+        setJournal((current) => [...current.slice(-200), {
+          kind: "write",
+          text: `${payload.path}${payload.bytes ? ` · ${payload.bytes} bytes` : ""}`,
+        }]);
+        return;
+      }
+      if (payload.type === "pilot-edit" && payload.path) {
+        setJournal((current) => [...current.slice(-200), {
+          kind: "write",
+          text: `${payload.path} · +${payload.added || 0}/−${payload.removed || 0} lines`,
+        }]);
         return;
       }
       if (payload.type === "finished") {
@@ -556,6 +579,8 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
               </>}
               {entry.kind === "revise" && <span className="reproduce-journal-text">{entry.text}</span>}
               {entry.kind === "finding" && <span className="reproduce-journal-text"><b>Learned</b> {entry.text}</span>}
+              {entry.kind === "reading" && <span className="reproduce-journal-text"><b>Read</b> {entry.text}</span>}
+              {entry.kind === "write" && <span className="reproduce-journal-text"><b>Changed</b> {entry.text}</span>}
             </li>)}
           </ol>}
           {(liveLog || running) && <pre className="reproduce-log" ref={logRef}>{liveLog || "Waiting for output…"}</pre>}

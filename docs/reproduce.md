@@ -95,11 +95,20 @@ The actions:
 | `advance` | record a step's verdict, with a quote from real output; pass the command that actually worked and the runbook keeps it |
 | `revise` | rewrite the runbook when this machine disagrees with it |
 | `finding` | remember something about this machine for the next run |
+| `read_paper` | page through the paper text by query or offset |
+| `read_file` | read a repository file with line numbers |
+| `write_file` | write a file inside the checkout, recorded in the journal |
+| `edit_file` | replace one unique occurrence in a file, recorded in the journal |
 | `ask` | stop and ask a person for something only a person can provide |
 | `done` | finish the runbook |
 
 Findings are shown under the run, so a person can see what the machine taught the
 agent without opening the database.
+
+The paper is held outside the prompt: `read_paper` returns only the slice the
+agent asked for, so a 57-page PDF does not ride every turn. Writes and edits are
+limited to the checkout, refused inside `.git`, and recorded in the journal. A
+patch is never allowed to be the reason a checkpoint passed.
 
 ### Why a verdict cannot be invented
 

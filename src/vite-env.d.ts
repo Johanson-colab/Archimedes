@@ -168,6 +168,12 @@ interface ResearchDeskBridge {
       outputPath?: string;
       turn?: number;
       maxTurns?: number;
+      label?: string;
+      chars?: number;
+      path?: string;
+      bytes?: number;
+      removed?: number;
+      added?: number;
       text?: string;
       note?: string;
       steps?: ReproductionStep[];

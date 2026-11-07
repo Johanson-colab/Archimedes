@@ -195,6 +195,16 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
 
     writeFile,
 
+    /** Writes a file inside the checkout. Used by the structured write/edit actions. */
+    async writeRepoFile(relativePath, content) {
+      const target = path.resolve(checkoutDir, String(relativePath || ""));
+      if (!isWithin(checkoutDir, target)) throw new Error("The path is outside the checkout.");
+      if (target.split(path.sep).includes(".git")) throw new Error("Refusing to write inside .git.");
+      await fsp.mkdir(path.dirname(target), { recursive: true });
+      await fsp.writeFile(target, String(content ?? ""), "utf8");
+      return { path: String(relativePath || ""), bytes: Buffer.byteLength(String(content ?? ""), "utf8") };
+    },
+
     async readFile(relativePath) {
       const target = path.resolve(checkoutDir, String(relativePath || ""));
       if (!isWithin(checkoutDir, target)) throw new Error("The checked path is outside the checkout.");

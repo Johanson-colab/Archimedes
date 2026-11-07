@@ -243,6 +243,25 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
 
     writeFile,
 
+    /** Writes a file inside the checkout. Used by the structured write/edit actions. */
+    async writeRepoFile(relativePath, content) {
+      const relative = String(relativePath || "");
+      const absolute = path.posix.join(repo, relative);
+      if (absolute.includes("..") || absolute.split("/").includes(".git")) {
+        throw new Error("The path is outside the checkout.");
+      }
+      const dir = path.posix.dirname(absolute);
+      const payload = String(content ?? "");
+      const result = await run(
+        `umask 022; mkdir -p ${quoteRemotePath(dir)} && cat > ${quoteRemotePath(absolute)}`,
+        { timeoutMs: 120_000, login: false, stdin: payload },
+      );
+      if (result.code !== 0) {
+        throw new Error(`Could not write ${relative}: ${String(result.output || "").trim().slice(0, 200)}`);
+      }
+      return { path: relative, bytes: Buffer.byteLength(payload, "utf8") };
+    },
+
     async readFile(relativePath) {
       const absolute = path.posix.join(repo, String(relativePath || ""));
       if (absolute.includes("..")) throw new Error("The checked path is outside the checkout.");

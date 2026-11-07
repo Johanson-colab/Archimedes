@@ -1329,7 +1329,7 @@ app.whenReady().then(async () => {
     send({ type: "attempt", attempt: 1 });
     send({ type: "started", detail: session.backend.describe?.() || "" });
 
-    let outcome = { status: "failed", steps: [], runbook: [], findings: [], log: "", summary: "The run could not start." };
+    let outcome = { status: "failed", steps: [], runbook: [], findings: [], changes: [], log: "", summary: "The run could not start." };
     try {
       outcome = await runPilot({
         title: record.title,
@@ -1339,6 +1339,19 @@ app.whenReady().then(async () => {
         notes: session.contract.notes,
         steps: session.contract.steps,
         findings: session.contract.findings || [],
+        paper: {
+          title: record.title,
+          // The executor keeps the paper text outside the prompt and pages through
+          // it only when read_paper asks; a 57-page paper must not ride every turn.
+          text: (() => {
+            const reader = record.paper_id ? store.getPaperReader(record.paper_id) : null;
+            return (reader?.pages || [])
+              .map((page) => `[page ${page.page_number}]\n${page.text || ""}`)
+              .join("\n\n")
+              .slice(0, 400_000);
+          })(),
+        },
+        repoName: session.repoName,
         env: reproductionEnvItems(record.id).map(({ name, required, reason, hasValue }) => ({ name, required, reason, hasValue })),
         backend: session.backend,
         target: session.backend.describe?.() || "",
