@@ -4,7 +4,7 @@ Library now keeps its project folders visible while opening papers and notes in 
 
 The Library overview, folder browsing and reader all share import and cloud-sync actions. Users can search across the current project, filter by reading state or favourites, sort papers, collapse the directory and inspect a paper without opening its PDF. Author lists initially show three names and can be expanded.
 
-Only one reading workbench mounts at a time. Switching tabs remembers PDF page, zoom, reader controls, assistant visibility and an unsent chat draft. Note drafts live separately from the document renderer and survive tab switches. Saving still uses `updateLibraryPaper`; failed saves retain the draft. A running paper conversation, PDF preparation or reproduction prevents switching the active document until it finishes. Up to eight document tabs can be open.
+Only one reading workbench mounts at a time. Switching tabs remembers PDF page, zoom, reader controls, assistant visibility and an unsent chat draft for open papers. Note drafts live separately from the document renderer and survive tab switches. Saving still uses `updateLibraryPaper`; failed saves retain the draft. A running paper conversation, PDF preparation or reproduction prevents switching the active document until it finishes. There is no fixed limit on document tabs.
 
 The existing PDF preparation/attachment, page search, highlighting, translation, Canvas, Interactive paper, Project, Codebase, Reproduce, chat streaming, interrupt, Enter/Shift+Enter and file-drop paths are reused. The assistant adds a Notes tab beside Paper chat and retains the existing resizer. Merely opening its Notes tab does not start a paper briefing.
 

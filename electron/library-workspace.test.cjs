@@ -106,6 +106,32 @@ test("document switching mounts one reader and protects a running paper conversa
   await ui.unmount();
 });
 
+test("more than eight papers remain open and keep their reading positions", async () => {
+  const data = fixture(1);
+  data.catalog.lib0 = Array.from({ length: 10 }, (_, i) => data.paper(`paper${i}`, `Paper ${i}`));
+  data.libraries[0].paper_count = 10;
+  function Reader({ paper, session, onSessionSave }) {
+    const [page, setPage] = React.useState(session?.pageNumber || 1);
+    const pageRef = React.useRef(page);
+    pageRef.current = page;
+    React.useEffect(() => () => onSessionSave({ pageNumber: pageRef.current, pdfZoom: 1, readerView: "paper", chatOpen: false, readerChromeOpen: true, sideTab: "chat" }), []);
+    return React.createElement("div", { "data-reader": paper.id, "data-page": page }, React.createElement("button", { onClick: () => setPage(7) }, "Page seven"));
+  }
+  const ui = await mount(data.bridge, { renderReader: (props) => React.createElement(Reader, props) });
+  await click(".library-tree-paper", "Paper 0");
+  await click("button", "Page seven");
+  for (let i = 1; i < 10; i++) await click(".library-tree-paper", `Paper ${i}`);
+  assert.equal(document.querySelectorAll(".library-document-tabs [role=tab]").length, 10);
+  assert.equal(document.querySelectorAll("[data-reader]").length, 1);
+  assert.equal(document.querySelector(".library-workspace-notices"), null);
+  await click('.library-document-tabs [role="tab"]', "Paper 0");
+  assert.equal(document.querySelector("[data-reader]").dataset.page, "7");
+  await click('.library-document-close[aria-label="Close Paper 0"]');
+  await click(".library-tree-paper", "Paper 0");
+  assert.equal(document.querySelector("[data-reader]").dataset.page, "1");
+  await ui.unmount();
+});
+
 test("removing a paper removes only that folder membership; sync still includes annotations", async () => {
   const data = fixture(2); data.catalog.lib1 = [{ ...data.catalog.lib0[0] }];
   const ui = await mount(data.bridge);

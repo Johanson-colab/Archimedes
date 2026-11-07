@@ -76,6 +76,13 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; requestQueue.current.clearPending(); }; }, []);
 
+  useEffect(() => {
+    const openPapers = new Set(documents.map((document) => document.paperId));
+    for (const paperId of sessions.current.keys()) {
+      if (!openPapers.has(paperId)) sessions.current.delete(paperId);
+    }
+  }, [documents]);
+
   const loadPapers = useCallback((id: string, force = false): Promise<LibraryPaper[]> => {
     if (!force && catalogRef.current[id]) return Promise.resolve(catalogRef.current[id]);
     const pending = requests.current.get(id);
@@ -178,8 +185,6 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
     const document = { paperId: paper.id, libraryId, kind };
     const key = libraryDocumentKey(document);
     if (!documents.some((candidate) => libraryDocumentKey(candidate) === key)) {
-      // Never silently evict an open tab (which may contain an unsaved note).
-      if (documents.length >= 8) { setNotice(t("Close a document before opening another tab.")); return; }
       setDocuments((current) => [...current, document]);
     }
     setActiveDocument(key);
@@ -310,7 +315,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
       {(error || notice) && <div className="library-workspace-notices"><InlineNotice tone={error ? "danger" : "info"}>{error || notice}</InlineNotice><button className="icon-button" aria-label={t("Dismiss notice")} onClick={() => { setError(""); setNotice(""); }}><X size={14} /></button></div>}
       {currentDocument && documentPaper && documentLibrary ? <div className="library-document-content" key={libraryDocumentKey(currentDocument)}>
         <div className="library-document-path"><FolderOpen size={13} /><button onClick={() => browse(documentLibrary.id)}>{documentLibrary.name}</button><ChevronRight size={12} /><span title={documentPaper.title}>{documentPaper.title}</span>{currentDocument.kind === "paper" && <button className="library-open-notes" onClick={() => openPaper(documentPaper, documentLibrary.id, "notes")}><FilePenLine size={13} />{t("Notes")}</button>}</div>
-        {currentDocument.kind === "notes" ? <LibraryPaperNotes key={documentPaper.id} paper={documentPaper} drafts={drafts.current} onSave={(notes) => updatePaper(documentPaper.id, { notes })} /> : renderReader({ paper: documentPaper, library: documentLibrary, onBack: () => browse(documentLibrary.id), onUpdate: (patch) => updatePaper(documentPaper.id, patch), session: sessions.current.get(documentPaper.id), onSessionSave: (session) => { sessions.current.delete(documentPaper.id); sessions.current.set(documentPaper.id, session); if (sessions.current.size > 8) sessions.current.delete(sessions.current.keys().next().value!); }, onActivityChange: setReaderBusy, noteDrafts: drafts.current })}
+        {currentDocument.kind === "notes" ? <LibraryPaperNotes key={documentPaper.id} paper={documentPaper} drafts={drafts.current} onSave={(notes) => updatePaper(documentPaper.id, { notes })} /> : renderReader({ paper: documentPaper, library: documentLibrary, onBack: () => browse(documentLibrary.id), onUpdate: (patch) => updatePaper(documentPaper.id, patch), session: sessions.current.get(documentPaper.id), onSessionSave: (session) => { sessions.current.set(documentPaper.id, session); }, onActivityChange: setReaderBusy, noteDrafts: drafts.current })}
       </div> : <div className="library-browser">
         <header className="library-browser-header"><div><h1>{library?.name || t(scope === "all" ? "All papers" : "Library")}</h1><p>{library?.description || t("Your papers and reading notes, organised by research topic.")}</p></div>{!scope && <button className="secondary-button" onClick={() => setEditor("new")}><FolderPlus size={15} />{t("New folder")}</button>}{library && <button className="icon-button" ref={menuRef} onClick={() => setMenuLibrary(library)} aria-label={t("Folder actions for {name}", { name: library.name })}><MoreHorizontal size={17} /></button>}</header>
         {!scope && !query.trim() ? <div className="library-overview">
