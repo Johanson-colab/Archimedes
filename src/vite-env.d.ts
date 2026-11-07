@@ -1662,6 +1662,7 @@ interface ResearchComment {
 
 interface ResearchThread {
   id: string;
+  kind?: "research" | "paper";
   project_id: string;
   owner_id?: string | null;
   visibility?: "project" | "private";

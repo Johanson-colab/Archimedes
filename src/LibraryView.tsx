@@ -183,19 +183,18 @@ type LibraryViewProps = {
   projectId?: string | null;
   libraryRefreshVersion?: number;
   onLibraryImported?: () => void;
-  onAgentRun?: (result: AgentRunResult) => void;
   onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
   onReproduceOpened?: (reproductionId: string) => void;
   onOpenProject?: (projectId: string) => void;
 };
 
 export default function LibraryView(props: LibraryViewProps) {
-  const { bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject } = props;
+  const { bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject } = props;
   if (mode === "library") return <LibraryWorkspace
     key={`${workspace}:${projectId || "local"}`}
     bridge={bridge} projectId={projectId} active={active} refreshVersion={libraryRefreshVersion}
     onLibraryImported={onLibraryImported} onOpenProject={onOpenProject}
-    renderReader={(readerProps) => <PaperReadingWorkbench {...readerProps} bridge={bridge} workspace={workspace} projectId={projectId} onAgentRun={onAgentRun} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} onReproduceOpened={onReproduceOpened} />}
+    renderReader={(readerProps) => <PaperReadingWorkbench {...readerProps} bridge={bridge} workspace={workspace} projectId={projectId} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} onReproduceOpened={onReproduceOpened} />}
     renderInspector={(inspectorProps) => <PaperInspector {...inspectorProps} />}
     renderEditor={(editorProps) => <LibraryEditor {...editorProps} active={active} />}
     renderImport={(importProps) => <PaperImportModal {...importProps} bridge={bridge} />}
@@ -461,11 +460,11 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
   </div>;
 });
 
-function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, onAgentRun, onInternalReviewThreadsDeleted, onReproduceOpened, session, onSessionSave, onActivityChange, noteDrafts }: {
+function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, onInternalReviewThreadsDeleted, onReproduceOpened, session, onSessionSave, onActivityChange, noteDrafts }: {
   paper: ReaderLibraryPaper; library: ResearchLibrary; onBack: () => void;
   session?: PaperReaderSession; onSessionSave: (session: PaperReaderSession) => void; onActivityChange: (busy: boolean) => void; noteDrafts: LibraryNoteDrafts;
   onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>;
-  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; onAgentRun?: (result: AgentRunResult) => void; onInternalReviewThreadsDeleted?: (threadIds: string[]) => void; onReproduceOpened?: (reproductionId: string) => void;
+  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; onInternalReviewThreadsDeleted?: (threadIds: string[]) => void; onReproduceOpened?: (reproductionId: string) => void;
 }) {
   const { language, t } = useUISettings();
   const [reader, setReader] = useState<PaperReaderState | null>(null);
@@ -877,7 +876,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setChatCancelling(false);
     stopStreamTimer();
     streamBufferRef.current = "";
-    const clientRunId = crypto.randomUUID();
+    const clientRunId = `paper-chat:${crypto.randomUUID()}`;
     activePaperRunIdRef.current = clientRunId;
     setStreamingChatText("");
     try {
@@ -901,7 +900,6 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       setChatMessages((current) => [...current, { role: "assistant", text: result.response }]);
       try { await bridge.setLibraryPaperChatThread(paper.id, result.threadId, workspace, projectId); }
       catch (saveError) { setError(readableError(saveError, "The paper conversation completed but could not be saved.")); }
-      onAgentRun?.(result);
     } catch (askError) {
       setChatMessages((current) => [...current, { role: "assistant", text: `I could not answer that yet: ${readableError(askError, "Agent request failed.")}` }]);
     } finally {

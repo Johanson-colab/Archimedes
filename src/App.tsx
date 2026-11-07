@@ -435,8 +435,8 @@ function previewSnapshot(): WorkspaceSnapshot {
     tasks: [...previewTasks].reverse(),
     projects: structuredClone(previewProjects),
     archivedProjects: structuredClone(previewArchivedProjects),
-    threads: previewThreads.map(({ turns: _turns, messages: _messages, ...thread }) => thread),
-    archivedThreads: previewArchivedThreads.map(({ turns: _turns, messages: _messages, ...thread }) => thread),
+    threads: previewThreads.filter((thread) => thread.kind !== "paper").map(({ turns: _turns, messages: _messages, ...thread }) => thread),
+    archivedThreads: previewArchivedThreads.filter((thread) => thread.kind !== "paper").map(({ turns: _turns, messages: _messages, ...thread }) => thread),
     commands: [...previewCommands].reverse(),
     actions: [...previewActions].reverse(),
   };
@@ -877,14 +877,14 @@ const previewBridge = {
   readClipboardText: async () => "",
   writeClipboardText: async () => undefined,
   readClipboardImage: async () => null,
-  runAgent: async ({ prompt, workspace, threadId, projectId, visibility = "project", mode, reasoningEffort = "medium", contextLength = "standard", contextItems, clientRunId, capabilities }: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" } }) => {
+  runAgent: async ({ prompt, workspace, threadId, projectId, visibility = "project", mode, reasoningEffort = "medium", contextLength = "standard", contextItems, clientRunId, capabilities, origin, title }: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; title?: string }) => {
     const emit = (event: AgentEvent) => emitPreviewAgentEvent({ ...event, clientRunId });
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
       const resolvedProjectId = projectId || previewProjects[0]?.id || "preview-general";
       const projectWorkspace = previewProjects.find((candidate) => candidate.id === resolvedProjectId)?.workspace_path;
-      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, owner_id: previewLocalIdentity.userId, visibility: visibility === "private" ? "private" : "project", title: prompt.slice(0, 72), mode, status: "running", context_summary: "", workspace_path: workspace || projectWorkspace || previewWorkspace, pending_actions: 0, turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
+      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, owner_id: previewLocalIdentity.userId, visibility: visibility === "private" ? "private" : "project", kind: origin === "paper" ? "paper" : "research", title: title || prompt.slice(0, 72), mode, status: "running", context_summary: "", workspace_path: workspace || projectWorkspace || previewWorkspace, pending_actions: 0, turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
       previewThreads.unshift(thread);
     }
     const turnId = crypto.randomUUID();
@@ -2010,7 +2010,7 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
-      if (event.clientRunId?.startsWith("side-chat:")) return;
+      if (event.clientRunId?.startsWith("side-chat:") || event.clientRunId?.startsWith("paper-chat:")) return;
       if (event.threadId) {
         setRunningThreadId(event.threadId);
         if (!activeThreadIdRef.current) {
@@ -2934,8 +2934,8 @@ function App() {
   // mount gating (keepMounted · cacheClass · requiresWorkspace · open gate)
   // comes from the module registry, not from scattered conditions.
   const sidebarModuleContent: Record<string, ReactNode> = {
-    library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
-    daily: <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onAgentRun={(result) => setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)])} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
+    library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
+    daily: <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     "benchmark-radar": <BenchmarkRadarView />,
     news: <NewsView bridge={desktopBridge} projectId={activeProjectId} active={mainSection === "news"} onSendToChat={sendNoteToChat} />,
     "paper-review": <PaperReviewView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} active={mainSection === "paper-review"} />,
