@@ -21,3 +21,9 @@ test("paper chat retains a resizable width on narrow layouts", () => {
   assert.match(view, /setPointerCapture\(event\.pointerId\)/);
   assert.match(view, /onKeyDown=\{handleChatResizeKey\}/);
 });
+
+test("the blinking generation cursor does not style the selected passage", () => {
+  const cursorRule = css.match(/([^{}]+)\{[^{}]*animation:\s*paper-ai-stream-blink[^{}]*\}/);
+  assert.ok(cursorRule, "generation cursor animation is present");
+  assert.equal(cursorRule[1].trim(), ".paper-ai-stream-cursor");
+});
