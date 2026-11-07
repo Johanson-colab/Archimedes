@@ -27,7 +27,7 @@ test("Paper diagrams is a view inside Image creation, not a second Create destin
 test("Image creation keeps Paper diagrams and FigureForge without Data charts or Templates", () => {
   assert.match(view, /className="image-creation-tabs">/);
   assert.ok(view.includes('className="image-creation-heading"'));
-  assert.match(view, />\s*Paper diagrams <small>/);
+  assert.match(view, /className="image-creation-heading">Paper diagrams<\/h2>/);
   assert.ok(!view.includes("DataChartGallery"));
   assert.ok(!view.includes("image-creation-tab-charts"));
   assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard/);

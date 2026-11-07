@@ -567,7 +567,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
 
   return <main ref={pageRef} className="image-creation-page">
     {!forgeOpen && <div className="image-creation-tabs">
-      <h2 className="image-creation-heading">Paper diagrams <small>{loading && !figures.length ? "…" : result.length.toLocaleString()}</small></h2>
+      <h2 className="image-creation-heading">Paper diagrams</h2>
       <div className="image-creation-actions">
         <label className="image-creation-sort">
           <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort paper diagrams">

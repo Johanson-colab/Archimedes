@@ -5104,7 +5104,6 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 }
 .image-creation-tabs { display: flex; min-width: 0; align-items: center; gap: 22px; border-bottom: 0; }
 .image-creation-heading { display: flex; min-height: 44px; align-items: center; gap: 7px; margin: 0; color: var(--night-ink); font-size: 13px; font-weight: 620; white-space: nowrap; }
-.image-creation-heading small { color: var(--night-muted); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .image-creation-tab {
   position: relative; display: inline-flex; min-height: 44px; align-items: center; gap: 7px;
   padding: 0 1px; color: var(--night-muted); background: none; border: 0;
@@ -5139,6 +5138,7 @@ html:not([data-theme="paper"]) .paper-reader-bar .reader-ask-button.active { col
 .image-creation-panel { min-width: 0; }
 .image-creation-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; margin: 12px 0 15px; }
 .image-creation-search { height: 38px; }
+.image-creation-search input { color: var(--text-primary); }
 .image-creation-filter { position: relative; }
 .image-creation-filter-button {
   display: inline-flex; height: 38px; align-items: center; gap: 7px; padding: 0 12px;
