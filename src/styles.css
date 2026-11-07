@@ -3849,7 +3849,7 @@ html[data-theme="paper"] .paper-create-backdrop {
 .theme-paper .paper-ai-context { background: var(--mono-surface-raised); border-color: #e1dcd5; }
 .theme-paper .paper-ai-context span,
 .theme-paper .paper-ai-context p,
-.theme-paper .paper-ai-evidence-scope,
+.theme-paper .paper-ai-evidence-scope { color: var(--mono-text-muted); }
 .paper-ai-stream-cursor { display: inline-block; width: 5px; height: 12px; margin: 1px 0 0 2px; vertical-align: -1px; background: currentColor; animation: paper-ai-stream-blink 1s steps(2, start) infinite; }
 @keyframes paper-ai-stream-blink { 50% { opacity: 0; } }
 
