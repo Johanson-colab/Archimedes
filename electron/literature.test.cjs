@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { fetchWithRetry, firstFigureSrc, normalizeDailyOptions, resetProviderCooldowns, resolveArxivFigure, searchAcademicPaperSources } = require("./literature.cjs");
+const { buildArxivKeywordQuery, fetchWithRetry, firstFigureSrc, matchesDailyQuery, normalizeDailyOptions, resetProviderCooldowns, resolveArxivFigure, searchAcademicPaperSources } = require("./literature.cjs");
 
 test("retries a timed-out literature request", async () => {
   let attempts = 0;
@@ -161,4 +161,29 @@ test("duplicate lookups share a request and the figure resolver never exceeds th
 test("an oversized stream chunk still yields a figure inside the bounded prefix", async () => {
   const body = '<figure><img src="2611.90003v1/first.png"></figure>' + ' '.repeat(5 * 1024 * 1024);
   assert.equal(await resolveArxivFigure("2611.90003", async () => new Response(body)), "https://arxiv.org/html/2611.90003v1/first.png");
+});
+
+test("a full title becomes one arXiv phrase, not an AND of every word", () => {
+  const title = "One Reflection Is Not Enough: Self-Correcting Autonomous Research via Multi-Hypothesis Failure Attribution";
+  assert.equal(buildArxivKeywordQuery(title), `all:"${title}"`);
+  assert.equal(buildArxivKeywordQuery("agent memory"), 'all:"agent" AND all:"memory"');
+});
+
+test("a title search ignores the selected topic, a short query keeps it", () => {
+  const title = "One Reflection Is Not Enough: Self-Correcting Autonomous Research via Multi-Hypothesis Failure Attribution";
+  const titled = normalizeDailyOptions({ topic: "gui_compute_use", query: title });
+  assert.equal(titled.topic, "all");
+  assert.ok(titled.categories.includes("cs.CV"), "a title may be cross-listed outside the feed's default categories");
+  const short = normalizeDailyOptions({ topic: "gui_compute_use", query: "computer use" });
+  assert.equal(short.topic, "gui_compute_use");
+});
+
+test("punctuation and hyphens do not break the local match", () => {
+  const paper = {
+    title: "One Reflection Is Not Enough: Self-Correcting Autonomous Research",
+    abstract: "", authors: [], categories: ["cs.AI"],
+  };
+  assert.equal(matchesDailyQuery(paper, "self correcting autonomous research"), true);
+  assert.equal(matchesDailyQuery(paper, "Self-Correcting Autonomous Research"), true);
+  assert.equal(matchesDailyQuery(paper, "unrelated topic"), false);
 });

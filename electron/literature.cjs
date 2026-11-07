@@ -145,11 +145,16 @@ function normalizeDailyOptions(input = {}) {
   const topic = typeof input.topic === "string" && DAILY_TOPICS[input.topic] ? input.topic : "all";
   const requestedCategories = Array.isArray(input.categories) ? input.categories : [];
   const requested = [...new Set(requestedCategories.filter((category) => DAILY_CATEGORIES.has(category)))];
-  const categories = topic === "all" && requested.length ? requested : DAILY_TOPICS[topic].categories;
   const query = typeof input.query === "string" ? input.query.trim().slice(0, 160) : "";
+  // An explicit title search is not a topic feed. Otherwise a title that does
+  // not contain the topic's vocabulary is filtered out before the query runs.
+  const titleSearch = query.split(/\s+/).filter(Boolean).length >= 5;
+  const categories = titleSearch
+    ? [...DAILY_CATEGORIES]
+    : (topic === "all" && requested.length ? requested : DAILY_TOPICS[topic].categories);
   const parsedLimit = Number(input.limit);
   const limit = Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, Math.trunc(parsedLimit))) : 40;
-  return { mode, range, topic, categories, query, limit };
+  return { mode, range, topic: titleSearch ? "all" : topic, categories, query, limit };
 }
 
 function rangeStart(range) {
@@ -163,15 +168,25 @@ function formatArxivDate(date) {
   return date.toISOString().replace(/[-:TZ.]/g, "").slice(0, 12);
 }
 
+function normalizeForMatch(value) {
+  return String(value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
+}
+
 function matchesDailyQuery(paper, query) {
   if (!query) return true;
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const haystack = `${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")}`.toLowerCase();
+  const terms = normalizeForMatch(query).split(" ").filter(Boolean);
+  const haystack = normalizeForMatch(`${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")}`);
   return terms.every((term) => haystack.includes(term));
 }
 
 function buildArxivKeywordQuery(query) {
-  const terms = query
+  const text = String(query || "").replace(/["\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  // A full title is a phrase. arXiv returns nothing for an AND of every word in
+  // a title: "all:One AND all:Reflection AND all:Is ..." fails on stopwords and
+  // punctuation even though the paper exists.
+  if (text.split(" ").length >= 5 || text.includes(":")) return `all:"${text}"`;
+  const terms = text
     .match(/"[^"]+"|\S+/g)
     ?.map((term) => term.replace(/^"|"$/g, "").replace(/[^\p{L}\p{N}_-]+/gu, " ").trim())
     .filter(Boolean) || [];
@@ -595,4 +610,4 @@ async function searchAcademicPaperSources(query, requestedLimit, fetchImpl = fet
   return { papers, providers: usedProviders, warnings };
 }
 
-module.exports = { discoverDailyPapers, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, firstFigureSrc, matchesDailyTopic, resetProviderCooldowns, resolveArxivFigure, isArxivFigureUrl };
+module.exports = { buildArxivKeywordQuery, discoverDailyPapers, matchesDailyQuery, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, firstFigureSrc, matchesDailyTopic, resetProviderCooldowns, resolveArxivFigure, isArxivFigureUrl };
