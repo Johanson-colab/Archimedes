@@ -1798,8 +1798,11 @@ app.whenReady().then(async () => {
     store.openWorkspace(dataWorkspace);
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
-    const backend = agentBackendConfig.get();
-    const externalBackend = input.origin === "research" && backend.backend !== "api" ? backend : null;
+    const configuredBackend = agentBackendConfig.get();
+    const selectedBackend = input.backend || configuredBackend.backend;
+    if (!["api", "codex", "claude", "opencode"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
+    const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
+    const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
     const config = externalBackend ? null : modelConfig.getActiveModelConfig();
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);

@@ -76,8 +76,12 @@ function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, Br
     const expectedTurnId = thread.turns.at(-1)?.id;
     compacting.add(key);
     try {
-      const backend = nativeBackend?.getConfig();
-      if (backend && backend.backend !== "api" && thread.kind !== "paper") {
+      const configured = nativeBackend?.getConfig();
+      const harness = thread.harness || configured?.backend;
+      const backend = configured && harness && harness !== "api"
+        ? { ...configured, ...configured.profiles?.[harness], backend: harness }
+        : null;
+      if (backend && thread.kind !== "paper") {
         const requireEditor = () => {
           if (!store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
         };

@@ -45,6 +45,7 @@ export const native: Record<string, string> = {
   "Send attachments after the current Codex turn finishes.": "请在当前 Codex 轮次结束后发送附件。",
   "Send attachments after the current native turn finishes.": "请在当前原生轮次结束后发送附件。",
   "Sending": "正在发送",
+  "Start a new chat to use this agent": "开始新聊天以使用此代理",
   "Steer Codex": "补充指令",
   "Stop the running turn before sending another native request.": "请先停止当前轮次，再发送新的原生请求。",
   "The agent needs your input": "智能体需要你的回答",

@@ -61,3 +61,17 @@ test("busy state disables switching and failed saves keep the current harness", 
     assert.match(document.querySelector(".harness-picker-trigger").textContent, /Archimedes/);
   } finally { await cleanup(); }
 });
+
+test("an established chat explains that another harness starts a new chat", async () => {
+  const changes = [];
+  const cleanup = await mount({ backend: "codex", bound: true, busy: false, onChange: async (id) => changes.push(id), onSettings: () => {} });
+  try {
+    await React.act(async () => document.querySelector(".harness-picker-trigger").click());
+    const options = [...document.querySelectorAll(".harness-picker-menu > .menu-item")];
+    assert.equal(options[0].title, "");
+    assert.match(document.querySelector(".harness-picker-notice").textContent, /Start a new chat to use this agent/);
+    for (const option of options.slice(1)) assert.match(option.title, /Start a new chat to use this agent/);
+    await React.act(async () => options[1].click());
+    assert.deepEqual(changes, ["claude"]);
+  } finally { await cleanup(); }
+});

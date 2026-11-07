@@ -477,6 +477,16 @@ function schema(db) {
   // belongs to a paper, not to the workspace sidebar. `kind` keeps the two
   // apart so a briefing that is still running never appears as a new chat.
   ensureColumn(db, "research_threads", "kind", "TEXT NOT NULL DEFAULT 'research'");
+  ensureColumn(db, "research_threads", "harness", "TEXT");
+  // Older conversations have no harness column. Recover native identity from
+  // local bindings when available, otherwise historical turns used the API.
+  const hasBindings = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'native_agent_bindings'").get();
+  if (hasBindings) {
+    const hasBackend = db.prepare("PRAGMA table_info(native_agent_bindings)").all().some((column) => column.name === "backend");
+    const bindingBackend = hasBackend ? "COALESCE((SELECT backend FROM native_agent_bindings WHERE thread_id = research_threads.id), 'codex')" : "'codex'";
+    db.exec(`UPDATE research_threads SET harness = ${bindingBackend} WHERE harness IS NULL AND id IN (SELECT thread_id FROM native_agent_bindings)`);
+  }
+  db.exec("UPDATE research_threads SET harness = 'api' WHERE harness IS NULL AND kind = 'research' AND EXISTS (SELECT 1 FROM research_turns WHERE thread_id = research_threads.id)");
   db.prepare("UPDATE research_threads SET kind = 'paper' WHERE kind = 'research' AND id IN (SELECT thread_id FROM paper_chat_threads)").run();
   db.prepare("UPDATE research_threads SET kind = 'paper' WHERE kind = 'research' AND title LIKE 'You are preparing a durable research reading guide%'").run();
   ensureColumn(db, "research_projects", "workspace_path", "TEXT");
@@ -1988,6 +1998,22 @@ function createResearchThread({ prompt, mode, projectId, workspacePath = "", vis
   return { ...thread, turn_count: 0, last_turn_at: now };
 }
 
+function bindResearchThreadHarness(id, harness) {
+  if (!["api", "codex", "claude", "opencode"].includes(harness)) throw new Error("Unknown Agent backend.");
+  const db = requireDatabase();
+  const thread = getResearchThread(id);
+  if (!canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
+  let bound = thread.harness;
+  // Imported or legacy histories may arrive after startup migration.
+  if (!bound && thread.turns.length) {
+    bound = nativeAgentBindings(id).get()?.backend || "api";
+    db.prepare("UPDATE research_threads SET harness = ? WHERE id = ? AND harness IS NULL").run(bound, id);
+  }
+  if (bound && bound !== harness) throw new Error("This conversation uses a different harness. Start a new chat to use this agent.");
+  db.prepare("UPDATE research_threads SET harness = ? WHERE id = ? AND harness IS NULL").run(harness, id);
+  return harness;
+}
+
 function setResearchThreadVisibility(id, visibility) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT id, project_id, owner_id, visibility FROM research_threads WHERE id = ?").get(id);
@@ -2376,8 +2402,8 @@ function copyResearchThread(source, { title, visibility = source.visibility, tur
     db.prepare(`INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), copy.id, turnId, event.sequence, event.type, JSON.stringify(event.payload), event.created_at);
   }
-  db.prepare("UPDATE research_threads SET context_summary = ?, context_summary_through_turn_id = ? WHERE id = ?")
-    .run(source.context_summary, turnIds.get(source.context_summary_through_turn_id) || null, copy.id);
+  db.prepare("UPDATE research_threads SET context_summary = ?, context_summary_through_turn_id = ?, harness = ? WHERE id = ?")
+    .run(source.context_summary, turnIds.get(source.context_summary_through_turn_id) || null, turns.length ? source.harness : null, copy.id);
   return getResearchThread(copy.id);
 }
 
@@ -2920,6 +2946,7 @@ function listReproductionAttempts(runId) {
 
 module.exports = {
   nativeAgentBindings,
+  bindResearchThreadHarness,
   compactResearchThread,
   forkResearchThread,
   undoResearchTurn,

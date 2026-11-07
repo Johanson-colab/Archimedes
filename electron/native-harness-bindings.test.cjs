@@ -37,3 +37,53 @@ test('native bindings preserve backend identity without publishing native IDs in
     assert.equal(bindings.get().backend, 'codex');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('a conversation stays with its first harness, including after reopening and forking', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-thread-lock-'));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-thread-close-'));
+  try {
+    store.openWorkspace(root);
+    const thread = store.createResearchThread({ prompt: 'Investigate', mode: 'free-chat' });
+    store.bindResearchThreadHarness(thread.id, 'codex');
+    const turn = store.startResearchTurn({ threadId: thread.id, taskId: null, prompt: 'Investigate', mode: 'free-chat' });
+    store.finishResearchTurn(turn.id, { response: 'Done' });
+    assert.throws(() => store.bindResearchThreadHarness(thread.id, 'claude'), /Start a new chat/);
+    assert.equal(store.bindResearchThreadHarness(thread.id, 'codex'), 'codex');
+    const fork = store.forkResearchThread(thread.id);
+    assert.equal(fork.harness, 'codex');
+    assert.throws(() => store.bindResearchThreadHarness(fork.id, 'api'), /Start a new chat/);
+    store.openWorkspace(other);
+    store.openWorkspace(root);
+    assert.equal(store.getResearchThread(thread.id).harness, 'codex');
+    assert.equal(store.getResearchThread(thread.id).messages.at(-1).text, 'Done');
+    const next = store.createResearchThread({ prompt: 'New', mode: 'free-chat' });
+    assert.equal(store.bindResearchThreadHarness(next.id, 'claude'), 'claude');
+  } finally {
+    store.openWorkspace(other);
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  }
+});
+
+test('legacy histories identify their native binding or API harness', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-legacy-'));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-legacy-close-'));
+  try {
+    store.openWorkspace(root);
+    const native = store.createResearchThread({ prompt: 'native', mode: 'free-chat' });
+    const api = store.createResearchThread({ prompt: 'api', mode: 'free-chat' });
+    for (const thread of [native, api]) {
+      const turn = store.startResearchTurn({ threadId: thread.id, taskId: null, prompt: 'hello', mode: 'free-chat' });
+      store.finishResearchTurn(turn.id, { response: 'done' });
+    }
+    store.nativeAgentBindings(native.id).save({ native_thread_id: 'private', workspace: root, model: '', last_turn_id: null, backend: 'claude' });
+    store.openWorkspace(other);
+    store.openWorkspace(root);
+    assert.equal(store.getResearchThread(native.id).harness, 'claude');
+    assert.equal(store.getResearchThread(api.id).harness, 'api');
+  } finally {
+    store.openWorkspace(other);
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  }
+});

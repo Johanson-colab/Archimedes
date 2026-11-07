@@ -863,6 +863,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
   };
   const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace, visibility, kind: origin === "paper" ? "paper" : "research", title });
+  if (!transient && origin !== "paper") store.bindResearchThreadHarness(thread.id, externalBackend?.backend || "api");
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
   const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });
   const turn = transient

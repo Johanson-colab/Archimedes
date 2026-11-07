@@ -8,8 +8,9 @@ import { MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
 import "./harness-picker.css";
 
-export default function HarnessPicker({ backend, busy, onChange, onSettings }: {
+export default function HarnessPicker({ backend, bound, busy, onChange, onSettings }: {
   backend: AgentBackendConfig["backend"];
+  bound: boolean;
   busy: boolean;
   onChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
   onSettings: () => void;
@@ -35,10 +36,11 @@ export default function HarnessPicker({ backend, busy, onChange, onSettings }: {
     </button>
     <MenuSurface open={open && !busy} onClose={() => setOpen(false)} anchorRef={trigger} placement="top-start" width={280} className="harness-picker-menu" ariaLabel={t("Harnesses")}>
       <div className="harness-picker-header"><strong>{t("Harnesses")}</strong><MenuItem className="harness-settings-button" icon={<Settings size={15} />} disabled={saving} aria-label={t("Model settings")} title={t("Model settings")} onClick={() => { setOpen(false); onSettings(); }}>{null}</MenuItem></div>
-      <MenuItem icon={<span className="harness-brand">{brand("codex")}</span>} checked={backend === "codex"} disabled={saving} onClick={() => void choose("codex")}>Codex</MenuItem>
-      <MenuItem icon={<span className="harness-brand">{brand("claude")}</span>} checked={backend === "claude"} disabled={saving} onClick={() => void choose("claude")}>Claude Code</MenuItem>
-      <MenuItem icon={<span className="harness-brand">{brand("opencode")}</span>} checked={backend === "opencode"} disabled={saving} onClick={() => void choose("opencode")}>OpenCode</MenuItem>
-      <MenuItem icon={<span className="harness-brand">{brand("api")}</span>} checked={backend === "api"} disabled={saving} onClick={() => void choose("api")}>Archimedes</MenuItem>
+      {bound && <p className="harness-picker-notice">{t("Start a new chat to use this agent")}</p>}
+      <MenuItem icon={<span className="harness-brand">{brand("codex")}</span>} checked={backend === "codex"} title={bound && backend !== "codex" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("codex")}>Codex</MenuItem>
+      <MenuItem icon={<span className="harness-brand">{brand("claude")}</span>} checked={backend === "claude"} title={bound && backend !== "claude" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("claude")}>Claude Code</MenuItem>
+      <MenuItem icon={<span className="harness-brand">{brand("opencode")}</span>} checked={backend === "opencode"} title={bound && backend !== "opencode" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("opencode")}>OpenCode</MenuItem>
+      <MenuItem icon={<span className="harness-brand">{brand("api")}</span>} checked={backend === "api"} title={bound && backend !== "api" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("api")}>Archimedes</MenuItem>
       {error && <p className="harness-picker-error" role="alert">{error}</p>}
     </MenuSurface>
   </div>;

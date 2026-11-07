@@ -877,14 +877,14 @@ const previewBridge = {
   readClipboardText: async () => "",
   writeClipboardText: async () => undefined,
   readClipboardImage: async () => null,
-  runAgent: async ({ prompt, workspace, threadId, projectId, visibility = "project", mode, reasoningEffort = "medium", contextLength = "standard", contextItems, clientRunId, capabilities, origin, title }: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; title?: string }) => {
+  runAgent: async ({ prompt, workspace, threadId, projectId, visibility = "project", mode, reasoningEffort = "medium", contextLength = "standard", contextItems, clientRunId, capabilities, origin, title, backend }: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; clientRunId?: string; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; title?: string; backend?: AgentBackendConfig["backend"] }) => {
     const emit = (event: AgentEvent) => emitPreviewAgentEvent({ ...event, clientRunId });
     const now = new Date().toISOString();
     let thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) {
       const resolvedProjectId = projectId || previewProjects[0]?.id || "preview-general";
       const projectWorkspace = previewProjects.find((candidate) => candidate.id === resolvedProjectId)?.workspace_path;
-      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, owner_id: previewLocalIdentity.userId, visibility: visibility === "private" ? "private" : "project", kind: origin === "paper" ? "paper" : "research", title: title || prompt.slice(0, 72), mode, status: "running", context_summary: "", workspace_path: workspace || projectWorkspace || previewWorkspace, pending_actions: 0, turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
+      thread = { id: crypto.randomUUID(), project_id: resolvedProjectId, owner_id: previewLocalIdentity.userId, visibility: visibility === "private" ? "private" : "project", kind: origin === "paper" ? "paper" : "research", harness: origin === "paper" ? null : backend || "api", title: title || prompt.slice(0, 72), mode, status: "running", context_summary: "", workspace_path: workspace || projectWorkspace || previewWorkspace, pending_actions: 0, turn_count: 0, created_at: now, updated_at: now, last_turn_at: now, archived_at: null, turns: [], messages: [], changeSets: [], events: [] };
       previewThreads.unshift(thread);
     }
     const turnId = crypto.randomUUID();
@@ -1351,6 +1351,11 @@ function App() {
   const [contextLength, setContextLength] = useState<ContextLength>(readContextLength);
   const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities>(previewModelCapabilities);
   const [nativeBackend, setNativeBackend] = useState<AgentBackendConfig | null>(null);
+  const [boundHarness, setBoundHarness] = useState<AgentBackendConfig["backend"] | null>(null);
+  const selectedHarness = boundHarness || nativeBackend?.backend || "api";
+  const selectedNativeBackend = selectedHarness !== "api"
+    ? { binary: selectedHarness, model: "", ...nativeBackend, ...nativeBackend?.profiles?.[selectedHarness], backend: selectedHarness }
+    : null;
   const [nativeStream, setNativeStream] = useState<{ threadId: string; events: ResearchEvent[] }>({ threadId: "", events: [] });
   const [nativeQuestions, setNativeQuestions] = useState<Array<{ threadId: string; question: NativeAgentQuestion }>>([]);
   const combinedTrajectoryEvents = useMemo(() => nativeStream.threadId === activeThreadId ? [...trajectoryEvents, ...nativeStream.events] : trajectoryEvents, [trajectoryEvents, nativeStream, activeThreadId]);
@@ -2027,6 +2032,7 @@ function App() {
             setThreads(snapshot.threads);
             setArchivedThreads(snapshot.archivedThreads ?? []);
             const runningThread = snapshot.threads.find((thread) => thread.id === event.threadId);
+            if (runningThread && activeThreadIdRef.current === runningThread.id) setBoundHarness(runningThread.harness ?? null);
             if (runningThread?.workspace_path) void desktopBridge.watchWorkspace?.(runningThread.workspace_path).catch(() => undefined);
           }).catch(() => undefined).finally(() => {
             refreshingThreadsRef.current = false;
@@ -2167,6 +2173,7 @@ function App() {
       setTrajectoryEvents(thread.events ?? []);
       setEvents([]);
       setActiveThreadId(thread.id);
+      setBoundHarness(thread.harness ?? null);
       setActiveProjectId(thread.project_id);
       setResearchMode(thread.mode);
       setChangeSets(thread.changeSets ?? []);
@@ -2175,6 +2182,7 @@ function App() {
       setTrajectoryEvents([]);
       setEvents([]);
       setActiveThreadId(null);
+      setBoundHarness(null);
       setActiveProjectId(restoreProjectId ?? snapshot.projects?.[0]?.id ?? null);
       setChangeSets([]);
     }
@@ -2275,8 +2283,10 @@ function App() {
     clearPendingAssistantDeltas();
     setChatViewNonce((current) => current + 1);
     if (projectId) setActiveProjectId(projectId);
+    threadOpenRequestRef.current += 1;
     activeThreadIdRef.current = null;
     setActiveThreadId(null);
+    setBoundHarness(null);
     setThreadVisibility("project");
     setMessages(initialMessages);
     setTrajectoryEvents([]);
@@ -2337,7 +2347,7 @@ function App() {
         const thread = await desktopBridge.compactResearchThread(threadId!, workspace);
         setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
         if (activeThreadIdRef.current === thread.id) { setTrajectoryEvents(thread.events ?? []); setNativeStream({ threadId: "", events: [] }); }
-        return { notice: t(nativeBackend?.backend === "codex" ? "Codex context compacted. Original messages are preserved." : "Context compacted. Original messages are preserved.") };
+        return { notice: t(selectedHarness === "codex" ? "Codex context compacted. Original messages are preserved." : "Context compacted. Original messages are preserved.") };
       }
     } finally { commandLockRef.current = false; }
   }
@@ -2351,6 +2361,7 @@ function App() {
     setMainSection("chat");
     activeThreadIdRef.current = threadSummary.id;
     setActiveThreadId(threadSummary.id);
+    setBoundHarness(threadSummary.harness ?? null);
     setActiveProjectId(threadSummary.project_id);
     const requestId = ++threadOpenRequestRef.current;
     try {
@@ -2358,6 +2369,7 @@ function App() {
       if (requestId !== threadOpenRequestRef.current) return;
       activeThreadIdRef.current = thread.id;
       setActiveThreadId(thread.id);
+      setBoundHarness(thread.harness ?? null);
       setActiveProjectId(thread.project_id);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
@@ -2463,6 +2475,7 @@ function App() {
         else {
           activeThreadIdRef.current = null;
           setActiveThreadId(null);
+          setBoundHarness(null);
           setMessages(initialMessages);
           setChangeSets([]);
         }
@@ -2486,6 +2499,7 @@ function App() {
       else {
         activeThreadIdRef.current = null;
         setActiveThreadId(null);
+        setBoundHarness(null);
         setActiveProjectId(snapshot.projects[0]?.id ?? null);
         setMessages(initialMessages);
         setChangeSets([]);
@@ -2508,6 +2522,7 @@ function App() {
       else {
         activeThreadIdRef.current = null;
         setActiveThreadId(null);
+        setBoundHarness(null);
         setActiveProjectId(snapshot.projects[0]?.id ?? null);
         setMessages(initialMessages);
         setChangeSets([]);
@@ -2533,10 +2548,10 @@ function App() {
     // backend is starting (including when switching from Codex back to API).
     setNativeStream({ threadId: activeThreadId || "", events: [{ id: "pending-turn", turn_id: "pending-turn", sequence: 0, type: "user_message", payload: {}, created_at: new Date().toISOString() }] });
     setNativeQuestions([]);
-    setEvents(nativeBackend && nativeBackend.backend !== "api" ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
+    setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research" });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: selectedHarness });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
@@ -2559,6 +2574,7 @@ function App() {
         setTrajectoryEvents(result.thread.events ?? []);
         setEvents([]);
         setActiveThreadId(result.threadId);
+        setBoundHarness(result.thread.harness ?? selectedHarness);
         setActiveProjectId(result.thread.project_id);
         setChangeSets(result.thread.changeSets ?? []);
         setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research thread", state: "done" } : event));
@@ -3049,7 +3065,8 @@ function App() {
               messages={messages}
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
-              nativeBackend={nativeBackend && nativeBackend.backend !== "api" ? nativeBackend : null}
+              nativeBackend={selectedNativeBackend}
+              harnessBound={Boolean(boundHarness)}
               onHarnessChange={async (backend) => {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
                 const current = await desktopBridge.getAgentBackendConfig();
@@ -3057,6 +3074,7 @@ function App() {
                 const profile = current.profiles?.[target] || (current.backend === backend ? current : { binary: target, model: "", effort: "", permissionMode: target === "codex" ? "read-only" as const : "ask" as const });
                 const saved = await desktopBridge.saveAgentBackendConfig({ ...profile, backend });
                 setNativeBackend(saved);
+                if (boundHarness && backend !== boundHarness) startNewTask();
               }}
               nativeQuestions={agentBusy ? nativeQuestions.filter((item) => item.threadId === activeThreadId).map((item) => item.question) : []}
               onNativeAnswer={(id, answers) => desktopBridge.answerNativeAgentQuestion(activeThreadId!, id, answers, workspace)}
@@ -3472,11 +3490,12 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
+  harnessBound: boolean;
   onHarnessChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
   nativeQuestions: NativeAgentQuestion[];
   onNativeAnswer: (id: string, answers: Record<string, string[]>) => Promise<unknown>;
@@ -4054,7 +4073,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, o
             </button>
           </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          <HarnessPicker backend={nativeBackend?.backend || "api"} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+          <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
           <button
             className={`composer-tool thread-visibility-trigger ${threadVisibility}`}
             onClick={() => onThreadVisibility(threadVisibility === "private" ? "project" : "private")}
