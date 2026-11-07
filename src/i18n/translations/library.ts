@@ -22,7 +22,6 @@ export const library: Record<string, string> = {
   "Canvas": "画布",
   "Choose a library": "选择文献库",
   "Clear paper search": "清除论文搜索",
-  "Close a document before opening another tab.": "请先关闭一个文档，再打开新标签。",
   "Close AI panel": "关闭 AI 面板",
   "Close preview": "关闭预览",
   "Close translation": "关闭译文",
