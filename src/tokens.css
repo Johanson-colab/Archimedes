@@ -257,12 +257,12 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
 
 
 :root[data-theme="paper"] {
-  --analysis-ground: #f5f6f7;
-  --analysis-surface: #ffffff;
-  --analysis-field: #e9edf0;
-  --analysis-ink: #25313c;
-  --analysis-muted: #596978;
-  --analysis-grid: #e6ebef;
+  --analysis-ground: #fcf8e9;
+  --analysis-surface: #fffdf4;
+  --analysis-field: #f2ecda;
+  --analysis-ink: #332e25;
+  --analysis-muted: #6a6251;
+  --analysis-grid: #eae2d0;
   --analysis-series-1: #3b6e9d;
   --analysis-series-2: #b66047;
   --analysis-series-3: #3e8069;
