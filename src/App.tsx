@@ -48,7 +48,7 @@ import ChatActivityTimeline from "./ChatActivityTimeline";
 import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
 import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions } from "./native-agent-state";
 import HarnessPicker from "./HarnessPicker";
-import NewChatModePicker, { draftForNewChatMode, type NewChatMode } from "./NewChatModePicker";
+import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
 import TrajectoryView from "./TrajectoryView";
@@ -3972,6 +3972,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const selectWelcomeWorkflow = useCallback((action: ResearchWelcomeAction) => {
     historyHandlersRef.current.onWelcomeAction(action);
     if (action === "idea") {
+      setNewChatMode("research");
+      setPrompt((current) => draftForNewChatMode(current, "research"));
       setWelcomeDismissed(true);
       requestAnimationFrame(() => composerRef.current?.focus());
     }
@@ -4028,7 +4030,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
           </div>)}
           {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
         </div>}
-        <textarea ref={composerRef} value={prompt} disabled={commandRunning} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
+        <textarea ref={composerRef} className={newChatMode === "research" && prompt === RESEARCH_EXAMPLE ? "research-example" : undefined} value={prompt} disabled={commandRunning} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;
           const textarea = event.currentTarget;
           if (slashOpen) {

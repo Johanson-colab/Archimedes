@@ -3970,6 +3970,7 @@ html:not([data-theme="paper"]) .research-workflow:hover .research-workflow-image
 .has-welcome .conversation-composer-wrap { padding-top: 38px; background: linear-gradient(180deg, transparent 0%, var(--welcome-ground) 30%); }
 .has-welcome .conversation-composer, .theme-paper .has-welcome .conversation-composer { color: var(--welcome-ink); background: var(--welcome-paper); border: 1px solid var(--welcome-line); border-radius: 8px; box-shadow: 0 10px 30px rgba(60, 50, 35, .10); }
 .has-welcome .conversation-composer textarea, .theme-paper .has-welcome .conversation-composer textarea { color: var(--welcome-ink); }
+.conversation-composer textarea.research-example, .theme-paper .conversation-composer textarea.research-example, .theme-paper .has-welcome .conversation-composer textarea.research-example { color: var(--text-muted); }
 .has-welcome .conversation-composer textarea:focus-visible { outline: none; }
 .has-welcome .conversation-composer textarea::placeholder, .theme-paper .has-welcome .conversation-composer textarea::placeholder { color: var(--welcome-muted); }
 .has-welcome .composer-add-button, .has-welcome .composer-tool, .has-welcome .composer-context { color: var(--welcome-muted); }
