@@ -34,8 +34,8 @@ test("typing leaves long history and navigation untouched while history updates 
     return React.createElement("nav", { "data-turn-count": messages.length });
   };
   const ChatActivityTimeline = () => { activityRenders += 1; return null; };
-  const buildHistory = new Function("React", "memo", "useState", "useRef", "useMemo", "useCallback", "useEffect", "ConversationMessage", "TurnRail", "ChatActivityTimeline", "NativeAgentPanel", "nativeTurnEvents", "INITIAL_VISIBLE_MESSAGE_COUNT", "HISTORY_MESSAGE_PAGE_SIZE", `${componentSource}\nreturn ConversationHistory;`);
-  const ConversationHistory = buildHistory(React, React.memo, React.useState, React.useRef, React.useMemo, React.useCallback, React.useEffect, ConversationMessage, TurnRail, ChatActivityTimeline, () => null, () => [], 60, 40);
+  const buildHistory = new Function("React", "memo", "useState", "useRef", "useMemo", "useCallback", "useEffect", "useUISettings", "ConversationMessage", "TurnRail", "ChatActivityTimeline", "NativeAgentPanel", "nativeTurnEvents", "INITIAL_VISIBLE_MESSAGE_COUNT", "HISTORY_MESSAGE_PAGE_SIZE", `${componentSource}\nreturn ConversationHistory;`);
+  const ConversationHistory = buildHistory(React, React.memo, React.useState, React.useRef, React.useMemo, React.useCallback, React.useEffect, () => ({ t: value => value }), ConversationMessage, TurnRail, ChatActivityTimeline, () => null, () => [], 60, 40);
   const messages = Array.from({ length: 100 }, (_, index) => ({ id: String(index), role: index % 2 ? "assistant" : "user", text: `Message ${index}` }));
   const stableProps = { messages, events: [], trajectoryEvents: [], agentBusy: false, interrupting: false, pendingAction: null, changeSets: [], welcomeVisible: false, onWelcomeAction: () => {}, onApprove: () => {}, onReject: () => {}, onOpenFile: () => {} };
   let setDraft;
@@ -70,6 +70,9 @@ test("typing leaves long history and navigation untouched while history updates 
     assert.equal(document.querySelectorAll("article").length, 102);
     assert.equal(document.querySelector("nav").dataset.turnCount, "102");
     assert.match(document.body.textContent, /New answer/);
+    await act(async () => root.render(React.createElement(ConversationHistory, { ...stableProps, pendingAction: { kind: 'write', payload: { path: 'paper.py', editPreview: { before: 'old text', after: 'new text' } } } })));
+    assert.match(document.querySelector('.approval-edit-preview').textContent, /old text/);
+    assert.match(document.querySelector('.approval-edit-preview').textContent, /new text/);
   } finally {
     await act(async () => root.unmount());
     dom.window.close();

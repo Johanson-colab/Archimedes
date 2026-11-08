@@ -74,6 +74,11 @@ test('approved command output reaches the next model request, and denial never e
   assert.match(toolResult.output, /verified-result/);
   assert.equal(fs.readFileSync(path.join(root, toolResult.log_path), 'utf8'), 'verified-result');
   assert.ok(result.thread.changeSets.some(changeSet => changeSet.changes.some(change => change.path === 'generated.txt' && change.status === 'created')));
+  const readCall = { id: 'log-read', function: { name: 'read_command_log', arguments: JSON.stringify({ action_id: toolResult.action_id, length: 8 }) } };
+  const logPage = await agent.executeTool({ root, threadId: result.threadId, call: readCall, emit: () => {} });
+  assert.equal(JSON.parse(logPage.content).content, 'verified');
+  assert.equal(JSON.parse(logPage.content).next_offset, 8);
+  await assert.rejects(agent.executeTool({ root, threadId: 'another-thread', call: readCall, emit: () => {} }), /unavailable/);
 
   const task = store.startTask({ prompt: 'deny' });
   const thread = store.createResearchThread({ prompt: 'deny', mode: 'free-chat' });

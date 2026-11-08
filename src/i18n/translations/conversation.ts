@@ -1,6 +1,8 @@
 export const conversation: Record<string, string> = {
+  "After": "修改后",
   "Ask a follow-up without changing the main conversation.": "在这里继续提问，不影响主对话。",
   "Ask a side question…": "在侧边对话中提问…",
+  "Before": "修改前",
   "Close side conversation": "关闭侧边对话",
   "Context compacted. Original messages are preserved.": "上下文已压缩，原始消息已保留。",
   "Conversation exported.": "对话已导出。",
@@ -9,6 +11,7 @@ export const conversation: Record<string, string> = {
   "Open in main chat": "在主对话中打开",
   "Project initialization could not start.": "无法启动项目初始化。",
   "Resize side conversation": "调整侧边对话宽度",
+  "Review change": "查看修改",
   "Running command…": "正在执行命令…",
   "Select a workspace first.": "请先选择工作区。",
   "Send or clear queued messages before using a command.": "请先发送或清空待发送消息，再使用命令。",

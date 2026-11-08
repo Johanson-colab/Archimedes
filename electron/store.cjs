@@ -6,6 +6,7 @@ const { DatabaseSync } = require("node:sqlite");
 const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
 const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles.cjs");
+const { applyApprovedWrite } = require("./agent/workspace-tools.cjs");
 
 const OUTPUT_LIMIT = 200_000;
 let database;
@@ -2582,12 +2583,7 @@ function approveAction(id) {
   if (action.status !== "pending") throw new Error("Only pending Agent actions can be approved.");
 
   if (action.kind === "write") {
-    const target = path.resolve(activeWorkspace, action.payload.path);
-    if (target !== activeWorkspace && !target.startsWith(`${activeWorkspace}${path.sep}`)) {
-      throw new Error("The write target is outside the active workspace.");
-    }
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, action.payload.content, "utf8");
+    applyApprovedWrite(action.payload, activeWorkspace);
   }
   return resolveAction(id, "approved");
 }

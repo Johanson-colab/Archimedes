@@ -38,7 +38,7 @@ function waitForApproval(actionId, signal, threadId) {
     };
     const onAbort = () => finish(null, new Error("Agent run interrupted while waiting for approval."));
     signal?.addEventListener("abort", onAbort, { once: true });
-    pendingApprovals.set(actionId, (approved) => finish({ approved, reason: approved ? "approved" : "rejected" }));
+    pendingApprovals.set(actionId, (approved, reason) => finish({ approved, reason: reason || (approved ? "approved" : "rejected") }));
     timers.push(setTimeout(() => finish({ approved: false, reason: "approval_timeout" }), MAX_APPROVAL_MS));
     if (threadId) {
       timers.push(setTimeout(() => {
@@ -48,10 +48,10 @@ function waitForApproval(actionId, signal, threadId) {
   });
 }
 
-function resolveApproval(actionId, approved) {
+function resolveApproval(actionId, approved, reason) {
   const resolve = pendingApprovals.get(actionId);
   if (!resolve) return false;
-  resolve(Boolean(approved));
+  resolve(Boolean(approved), reason);
   return true;
 }
 

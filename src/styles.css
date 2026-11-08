@@ -1272,6 +1272,10 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .approval-diff-stats { display: flex; gap: 7px; margin-left: auto; font: 9.5px "SFMono-Regular", Consolas, monospace; }
 .approval-diff-stats span:first-child { color: var(--state-success); }
 .approval-diff-stats span:last-child { color: var(--state-danger); }
+.approval-edit-preview { margin-top: 8px; color: var(--night-ink-soft); font-size: 11px; }
+.approval-edit-preview summary { cursor: pointer; color: var(--night-muted); }
+.approval-edit-preview strong { display: block; margin-top: 8px; font-size: 10px; }
+.approval-edit-preview pre { max-height: 180px; overflow: auto; padding: 8px; background: var(--surface-control); border-radius: 4px; font: 11px var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .approval-actions { display: flex; justify-content: flex-end; gap: 5px; margin-top: 8px; }
 .approval-dismiss, .approval-apply { display: inline-flex; height: 24px; align-items: center; justify-content: center; padding: 0 9px; border-radius: 4px; font-size: 9.5px; font-weight: 650; }
 .approval-dismiss { color: var(--night-muted); background: transparent; border: 1px solid transparent; }

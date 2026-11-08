@@ -15,10 +15,11 @@ const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = req
 const { evidenceForTool } = require("./agent/evidence.cjs");
 const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
 const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
-const { fileChangeForContent, snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
+const { snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
 const { runApprovedCommand } = require("./agent/command-runner.cjs");
+const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -185,13 +186,37 @@ const tools = [
     type: "function",
     function: {
       name: "read_workspace_file",
-      description: "Read a UTF-8 text file inside the active research workspace.",
+      description: "Read numbered lines from a UTF-8 file in the active workspace. Use next_line to continue.",
       parameters: {
         type: "object",
-        properties: { path: { type: "string", description: "A workspace-relative file path." } },
+        properties: { path: { type: "string", description: "A workspace-relative file path." }, start_line: { type: "integer", description: "First line, starting at 1." }, end_line: { type: "integer", description: "Last line, inclusive; at most 2000 lines." } },
         required: ["path"],
         additionalProperties: false,
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_workspace_files",
+      description: "Search literal text in visible workspace files, returning file paths and line numbers.",
+      parameters: { type: "object", properties: { query: { type: "string" }, directory: { type: "string" }, case_sensitive: { type: "boolean" } }, required: ["query"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_command_log",
+      description: "Read a page of output from a previously approved command in this conversation, using its action_id.",
+      parameters: { type: "object", properties: { action_id: { type: "string" }, offset: { type: "integer" }, length: { type: "integer" } }, required: ["action_id"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "edit_workspace_file",
+      description: "Propose an exact text replacement in a workspace file. The user reviews and approves the change before it is written.",
+      parameters: { type: "object", properties: { path: { type: "string" }, old_text: { type: "string" }, new_text: { type: "string" }, replace_all: { type: "boolean" } }, required: ["path", "old_text", "new_text"], additionalProperties: false },
     },
   },
   {
@@ -358,24 +383,12 @@ function rejectHidden(relative) {
 }
 
 function listFiles(root, directory) {
-  const target = workspacePath(root, directory);
-  const relative = relativePath(root, target);
-  if (relative !== ".") rejectHidden(relative);
+  const { target } = visibleExisting(root, directory || "", true);
   const entries = fs.readdirSync(target, { withFileTypes: true })
-    .filter((entry) => !HIDDEN_PATHS.has(entry.name) && !entry.name.startsWith("."))
+    .filter((entry) => !HIDDEN_PATHS.has(entry.name) && !entry.name.startsWith(".") && !entry.isSymbolicLink())
     .slice(0, 120)
     .map((entry) => ({ path: relativePath(root, path.join(target, entry.name)), type: entry.isDirectory() ? "directory" : "file" }));
   return entries;
-}
-
-function readFile(root, filePath) {
-  const target = workspacePath(root, filePath);
-  const relative = relativePath(root, target);
-  rejectHidden(relative);
-  const stats = fs.statSync(target);
-  if (!stats.isFile()) throw new Error("The requested path is not a file.");
-  if (stats.size > MAX_FILE_BYTES) throw new Error(`The requested file is larger than ${MAX_FILE_BYTES} bytes.`);
-  return fs.readFileSync(target, "utf8");
 }
 
 function attachedItem(items, id) {
@@ -605,7 +618,13 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     return { content: JSON.stringify(await browser(args, signal, threadId)) };
   }
   if (name === "list_workspace_files") return { content: JSON.stringify({ entries: listFiles(root, args.directory) }) };
-  if (name === "read_workspace_file") return { content: JSON.stringify({ path: args.path, content: readFile(root, args.path) }) };
+  if (name === "read_workspace_file") return { content: JSON.stringify(readLines(root, args.path, args.start_line, args.end_line)) };
+  if (name === "search_workspace_files") return { content: JSON.stringify(searchWorkspace(root, { query: args.query, directory: args.directory || "", caseSensitive: args.case_sensitive === true, signal })) };
+  if (name === "read_command_log") {
+    const action = store.getAction(args.action_id);
+    if (!threadId || action.kind !== "command" || !action.payload.managedByAgent || store.getResearchThreadIdForTask(action.task_id) !== threadId || !action.payload.commandLog) throw new Error("That command log is unavailable in this conversation.");
+    return { content: JSON.stringify(readCommandLog(root, action.payload.commandLog, args.offset, args.length)) };
+  }
   if (name === "list_attached_files") return { content: JSON.stringify({ attachment_id: args.attachment_id, entries: listAttachedFiles(contextItems, args.attachment_id, args.directory) }) };
   if (name === "read_attached_file") {
     const result = await readAttachedFile(contextItems, args.attachment_id, args.path, { startPage: args.start_page, endPage: args.end_page, signal });
@@ -697,23 +716,18 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     return { content: JSON.stringify({ artifact_id: artifact.id, path: artifact.path, title: artifact.title, kind: artifact.kind, version: artifact.version }) };
   }
 
-  if (name === "write_artifact") {
+  if (name === "write_artifact" || name === "edit_workspace_file") {
     if (capabilities.write !== "ask") throw new Error("Workspace writes are disabled in this conversation. Return the result in chat instead.");
-    if (typeof args.path !== "string" || typeof args.content !== "string" || args.content.length > 200_000) {
-      throw new Error("A write proposal needs a path and no more than 200000 characters of content.");
-    }
-    const target = workspacePath(root, args.path);
-    const relative = relativePath(root, target);
-    rejectHidden(relative);
-    const change = fileChangeForContent(root, relative, args.content);
-    const action = store.createAction({ taskId, kind: "write", payload: { path: relative, content: args.content, change } });
+    const proposal = name === "edit_workspace_file" ? prepareEdit(root, args.path, args.old_text, args.new_text, args.replace_all === true) : prepareWrite(root, args.path, args.content);
+    const relative = proposal.path;
+    const action = store.createAction({ taskId, kind: "write", payload: proposal });
     const waiting = waitForApproval(action.id, signal, threadId);
     emit({ type: "approval", title: "Approval required", detail: `Write ${relative}`, action });
     let decision;
     try { decision = await waiting; }
     catch (error) { if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected"); throw error; }
     if (!decision.approved && store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
-    return { action: store.getAction(action.id), content: JSON.stringify({ approved: decision.approved, reason: decision.reason, action_id: action.id, kind: "write", path: relative }) };
+    return { action: store.getAction(action.id), content: JSON.stringify({ approved: decision.approved, reason: decision.reason, action_id: action.id, kind: "write", path: relative, ...(proposal.replacementCount ? { replacement_count: proposal.replacementCount } : {}) }) };
   }
 
   if (name === "propose_command") {
@@ -735,10 +749,11 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     const before = snapshotWorkspace(root);
     try {
       const result = await runApprovedCommand({ root, cwd: workingDirectory, command: args.command.trim(), timeoutSeconds: args.timeout_seconds, signal, onUpdate: output => emit({ type: "tool", title: "Running command", detail: output || args.command.trim() }) });
+      store.updateActionPayload(action.id, { commandLog: result.log_path });
       emit({ type: "tool", title: "Command finished", detail: `${result.status} · exit ${result.exit_code ?? "unknown"} · ${result.log_path}` });
       return { action: store.getAction(action.id), content: JSON.stringify({ ...result, action_id: action.id, kind: "command" }) };
     } catch (error) {
-      if (error.commandResult) recordEvent({ type: "command_interrupted", payload: { action_id: action.id, ...error.commandResult } });
+      if (error.commandResult) { store.updateActionPayload(action.id, { commandLog: error.commandResult.log_path }); recordEvent({ type: "command_interrupted", payload: { action_id: action.id, ...error.commandResult } }); }
       throw error;
     } finally {
       try {

@@ -2140,7 +2140,15 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("agent:approve-action", (event, actionId) => {
     if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");
-    const action = store.approveAction(actionId);
+    let action;
+    try { action = store.approveAction(actionId); }
+    catch (error) {
+      if (error.code === "WORKSPACE_CONFLICT") {
+        store.resolveAction(actionId, "rejected");
+        agent.resolveApproval(actionId, false, "file_changed_while_awaiting_approval");
+      }
+      throw error;
+    }
     agent.resolveApproval(actionId, true);
     if (action.kind === "write" && action.payload.change && !event.sender.isDestroyed()) {
       event.sender.send("workspace:change-set", {

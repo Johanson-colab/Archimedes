@@ -2813,6 +2813,7 @@ function App() {
         await refreshWorkspaceFiles();
       }
     } catch (error) {
+      if (String(error).includes("file changed while awaiting approval")) { setPendingAction(null); clearThreadPendingAction(); }
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not approve this action: ${String(error)}` }]);
     }
   }
@@ -3421,6 +3422,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   onReject: () => void;
   onOpenFile: (filePath: string) => void;
 }) {
+  const { t } = useUISettings();
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyExpandedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -3493,6 +3495,11 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
               {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
             </div>
             <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
+            {pendingAction.payload.editPreview && <details className="approval-edit-preview">
+              <summary>{t("Review change")}</summary>
+              <strong>{t("Before")}</strong><pre>{pendingAction.payload.editPreview.before}</pre>
+              <strong>{t("After")}</strong><pre>{pendingAction.payload.editPreview.after}</pre>
+            </details>}
             <div className="approval-actions">
               <button className="approval-dismiss" onClick={onReject}>Dismiss</button>
               <button className="approval-apply" onClick={onApprove}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
