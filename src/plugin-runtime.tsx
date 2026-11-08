@@ -2,14 +2,14 @@ import { createElement, useEffect, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
-  CalendarDays,
-  FilePenLine,
+  Calendar,
+  FilePen,
   FlaskConical,
   ImagePlus,
   Puzzle,
   Radar,
-  Sparkles,
-  Table2,
+  Sparkle,
+  Table,
   Timer,
 } from "lucide-react";
 import { researchAppCategory } from "./research-apps";
@@ -25,14 +25,14 @@ import { registerPluginEntries, type PluginContribution, type SidebarEntry } fro
 
 const PLUGIN_ICONS: Record<string, LucideIcon> = {
   "book-open": BookOpen,
-  "calendar-days": CalendarDays,
-  "file-pen-line": FilePenLine,
+  "calendar-days": Calendar,
+  "file-pen-line": FilePen,
   "flask-conical": FlaskConical,
   "image-plus": ImagePlus,
   puzzle: Puzzle,
   radar: Radar,
-  sparkles: Sparkles,
-  table: Table2,
+  sparkles: Sparkle,
+  table: Table,
   timer: Timer,
 };
 

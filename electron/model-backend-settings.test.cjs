@@ -24,7 +24,7 @@ before(async () => {
   const icons = require("lucide-react");
   const scope = {
     React, ...React,
-    ...Object.fromEntries(["BrainCircuit", "Workflow", "Check", "ChevronDown", "KeyRound", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkles", "X"].map((name) => [name, icons[name]])),
+    ...Object.fromEntries(["Brain", "Workflow", "Check", "ChevronDown", "Key", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkle", "X"].map((name) => [name, icons[name]])),
     useUISettings: () => ({ t: translate }),
     createPortal: require("react-dom").createPortal,
     ...Object.fromEntries(["anthropicLogo", "claudeLogo", "opencodeLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),

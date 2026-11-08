@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { ChevronDown, ChevronUp, FileSearch, FlaskConical, Lightbulb, LoaderCircle, ScanSearch } from "lucide-react";
+import { BookOpenCheck, ChevronDown, ChevronUp, FileSearch, FlaskConical, Lightbulb, LoaderCircle } from "lucide-react";
 import PaperPresentationDeck from "./PaperPresentationDeck";
 import { Tab, Tabs } from "./Tabs";
 import { InlineNotice } from "./InlineNotice";
@@ -15,7 +15,7 @@ type ReviewPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "ven
 
 const REVIEWERS: Array<{ id: ReviewAgentId; title: string; subtitle: string; icon: typeof FileSearch }> = [
   { id: "related", title: "Related work", subtitle: "Places the claimed contribution among its closest cited predecessors.", icon: FileSearch },
-  { id: "method", title: "Method", subtitle: "Reconstructs the mechanism, assumptions, and implementation dependencies.", icon: ScanSearch },
+  { id: "method", title: "Method", subtitle: "Reconstructs the mechanism, assumptions, and implementation dependencies.", icon: BookOpenCheck },
   { id: "experiments", title: "Experiments", subtitle: "Tests whether the reported evidence is sufficient for each central claim.", icon: FlaskConical },
   { id: "limitations", title: "Limitations", subtitle: "Locates scope boundaries, failure modes, and the next falsification test.", icon: Lightbulb },
 ];

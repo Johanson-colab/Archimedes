@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronUp, Cloud, Laptop, LogIn, LogOut, Settings, ShieldCheck } from "lucide-react";
+import { ChevronUp, Cloud, Laptop, LogIn, LogOut, Settings, Shield } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
 
@@ -34,7 +34,7 @@ export default function AccountChip({ authState, identity, onOpenAuth, onOpenAcc
       {user ? <>
         <div className="account-menu-row" role="none"><Cloud size={14} /><div><strong>{t("Cloud runtime")}</strong><small>{t("Gated · credits coming with Cloud runs")}</small></div></div>
         <div className="account-menu-row" role="none"><Laptop size={14} /><div><strong>{t("Sync")}</strong><small>{t("Off · configure per project")}</small></div></div>
-        <div className="account-menu-row" role="none"><ShieldCheck size={14} /><div><strong>{identity?.deviceName || t("This device")}</strong><small>{t("Local data is preserved on sign-out")}</small></div></div>
+        <div className="account-menu-row" role="none"><Shield size={14} /><div><strong>{identity?.deviceName || t("This device")}</strong><small>{t("Local data is preserved on sign-out")}</small></div></div>
         <span className="menu-divider" role="separator" />
         <MenuItem icon={<Settings size={18} strokeWidth={1.7} />} onClick={() => { setOpen(false); onOpenAccountSettings(); }}>{t("Account settings")}</MenuItem>
         <MenuItem danger icon={<LogOut size={18} strokeWidth={1.7} />} disabled={busy} onClick={() => void signOut()}>{busy ? t("Signing out…") : t("Sign out")}</MenuItem>

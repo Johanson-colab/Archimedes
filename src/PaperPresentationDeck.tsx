@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FolderOpen, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, Expand, FolderOpen, LoaderCircle, RefreshCw, Sparkle } from "lucide-react";
 import { useUISettings, type Language } from "./i18n";
 
 type PresentationPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
@@ -586,11 +586,11 @@ export default function PaperPresentationDeck({ bridge, workspace, projectId, pa
     {error && <p className="paper-presentation-error"><AlertTriangle size={15} />{error}</p>}
     <div className="paper-presentation-entry-actions">
       {reviewReady && <button onClick={() => void generate("review")} disabled={generating || !workspace}>
-        {generating ? <LoaderCircle className="spin" size={16} /> : legacyPresentation ? <RefreshCw size={16} /> : <Sparkles size={16} />}
+        {generating ? <LoaderCircle className="spin" size={16} /> : legacyPresentation ? <RefreshCw size={16} /> : <Sparkle size={16} />}
         {generating ? emptyCopy.generatingButton : emptyCopy.reviewButton}
       </button>}
       <button className={reviewReady ? "secondary" : ""} onClick={() => void generate("paper")} disabled={generating || !workspace}>
-        {generating ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+        {generating ? <LoaderCircle className="spin" size={16} /> : <Sparkle size={16} />}
         {generating ? emptyCopy.generatingButton : emptyCopy.paperButton}
       </button>
     </div>

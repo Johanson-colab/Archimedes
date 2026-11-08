@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Search, SlidersHorizontal, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ExternalLink, GraduationCap, ImageOff, ImagePlus, LoaderCircle, Search, SlidersHorizontal, Sparkle, Upload, Wand, X } from "lucide-react";
 import { MenuSurface } from "./Menu";
 import { Tabs, Tab } from "./Tabs";
 
@@ -137,7 +137,7 @@ function FigureCard({ figure, onOpen, onUseTemplate }: {
     <button type="button" className="image-creation-card-caption" onClick={onOpen} title={figure.title}>{figure.title}</button>
     <button type="button" className="image-creation-card-use" onClick={onUseTemplate}
       title={`Use "${figure.title}" as a template`}>
-      <Sparkles size={12} />{t("Use as template")}
+      <Sparkle size={12} />{t("Use as template")}
     </button>
   </article>;
 }
@@ -578,7 +578,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
           <ChevronDown size={12} aria-hidden="true" />
         </label>
         <button type="button" className="image-creation-proceedings" onClick={onBrowseProceedings}><GraduationCap size={14} />Browse full proceedings</button>
-        <button type="button" className="image-creation-forge-button" onClick={() => showForge(true)}><Wand2 size={14} />FigureForge</button>
+        <button type="button" className="image-creation-forge-button" onClick={() => showForge(true)}><Wand size={14} />FigureForge</button>
       </div>
     </div>}
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cloud, Laptop, LockKeyhole, LogIn, ShieldCheck, UserRound } from "lucide-react";
+import { Cloud, Laptop, LockKeyhole, LogIn, Shield, UserRound } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 
@@ -77,7 +77,7 @@ export default function AccountSettingsPanel({ identity, onSave, authState, onOp
         </SettingsRow>
         <SettingsRow
           title={t("Local user ID")}
-          icon={<ShieldCheck size={14} />}
+          icon={<Shield size={14} />}
           description={t("Local projects and agent runs do not require an account.")}
           controlClassName="account-device-id"
         >
@@ -107,7 +107,7 @@ export default function AccountSettingsPanel({ identity, onSave, authState, onOp
           </SettingsRow>
           <SettingsRow
             title={t("Data & privacy")}
-            icon={<ShieldCheck size={14} />}
+            icon={<Shield size={14} />}
             description={t("Signing out keeps local projects and files. Shared project exports are available from Members.")}
           >
             {authState?.providers?.magicLink && <button className="secondary-button" onClick={() => onOpenAuth("reset")}>{t("Reset password")}</button>}

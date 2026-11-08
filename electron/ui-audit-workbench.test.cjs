@@ -49,7 +49,7 @@ test("workbench supports keyboard toggle and resizing", () => {
 });
 
 test("files use a compact workbench pane with drill-down and split modes", () => {
-  assert.match(tabs, /FolderTree/);
+  assert.match(tabs, /Files/);
   assert.match(fs.readFileSync(path.join(root, "src", "Tabs.tsx"), "utf8"), /ui-tab-badge/);
   assert.match(workbench, /activeTab === id/);
   assert.match(app, /openWorkbench\("files"\)/);

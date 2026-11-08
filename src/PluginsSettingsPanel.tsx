@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, Download, FilePenLine, FlaskConical, ImagePlus, LoaderCircle, Puzzle, Radar, Trash2 } from "lucide-react";
+import { BookOpen, Download, FilePen, FlaskConical, ImagePlus, LoaderCircle, Puzzle, Radar, Trash } from "lucide-react";
 
 import { useUISettings } from "./i18n";
 import { researchAppCategories, researchAppCategory } from "./research-apps";
@@ -101,7 +101,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
     }
   }
 
-  const categoryIcons = { discovery: Radar, evidence: BookOpen, experiments: FlaskConical, analysis: ImagePlus, writing: FilePenLine };
+  const categoryIcons = { discovery: Radar, evidence: BookOpen, experiments: FlaskConical, analysis: ImagePlus, writing: FilePen };
   return <div className="settings-sections">
     <p className="research-apps-summary">{t("Choose apps for your sidebar. Changes apply immediately; hiding an app keeps its research data.")}</p>
     {error && <p className="settings-row-hint" role="alert">{error}</p>}
@@ -141,7 +141,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
               onChange={(enabled) => void toggle(record, enabled)}
             />
             <button className="settings-inline-action" title={t("Remove")} aria-label={t("Remove {name}", { name: record.name })} onClick={() => void remove(record)} disabled={Boolean(busy)}>
-              <Trash2 size={13} />
+              <Trash size={13} />
             </button>
           </SettingsRow>)}
           {candidates.map((item) => <SettingsRow

@@ -1,0 +1,352 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archimedes icon simplification audit v2</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #f3efe6; color: #22231f; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .sheet { width: 1680px; margin: 0 auto; padding: 36px 40px 44px; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid #d9d3c5; }
+  .eyebrow { color: #a67f2a; font-size: 10px; font-weight: 750; letter-spacing: .18em; text-transform: uppercase; }
+  h1 { margin: 10px 0 8px; font-size: 38px; line-height: 1.1; letter-spacing: -.03em; font-weight: 600; }
+  .sub { max-width: 1120px; margin: 0; color: #686a61; font-size: 13.5px; line-height: 1.6; }
+  .summary { display: flex; gap: 9px; flex: 0 0 auto; }
+  .stat { min-width: 96px; padding: 10px 13px; background: #fffdf7; border: 1px solid #ddd6c8; border-radius: 10px; }
+  .stat b { display: block; font-size: 22px; line-height: 1; letter-spacing: -.02em; }
+  .stat span { display: block; margin-top: 5px; color: #7b7d73; font-size: 9px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+  .fix { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 10px 14px; color: #2f5f47; background: #e8f1ea; border: 1px solid #c9ddcf; border-radius: 9px; font-size: 11.5px; line-height: 1.5; }
+  .fix b { color: #234d39; font-weight: 700; }
+  .fix .check { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #2f6b52; color: #fff; font-size: 11px; font-weight: 800; }
+  .section-head { display: flex; align-items: baseline; gap: 12px; margin: 28px 0 12px; }
+  .section-head h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+  .section-head p { margin: 0; color: #7b7d73; font-size: 11px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .pair { position: relative; min-height: 182px; padding: 12px 13px 11px; background: #fffdf7; border: 1px solid #ddd6c8; border-radius: 12px; }
+  .delta { position: absolute; top: 10px; right: 10px; padding: 3px 7px; border-radius: 999px; background: #e6f0e8; color: #2f6b52; font-size: 9px; font-weight: 750; letter-spacing: .02em; }
+  .pair-top { display: flex; align-items: center; gap: 8px; }
+  .icon-tile { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 10px; }
+  .icon-tile.old { background: #f2eee4; color: #6e7067; }
+  .icon-tile.new { background: #e4f0e8; color: #2f6b52; }
+  .arrow { color: #b4b0a5; font-size: 16px; }
+  .names { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 11px; }
+  .old-name { color: #7b7d73; text-decoration: line-through; text-decoration-color: #c9c3b6; }
+  .name-arrow { color: #b4b0a5; font-size: 9px; }
+  .new-name { color: #22231f; font-weight: 650; }
+  .context { margin: 7px 0 0; color: #7b7d73; font-size: 10px; line-height: 1.45; }
+  .meter { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 9px; }
+  .meter span { display: block; height: 3px; border-radius: 2px; }
+  .old-bar { background: #cfc9bc; }
+  .new-bar { background: #6ea88a; }
+  .score { display: flex; justify-content: space-between; margin-top: 4px; color: #9a9c92; font-size: 8.5px; }
+  .note { margin: 7px 0 0; color: #55574f; font-size: 9.5px; line-height: 1.45; }
+  .notes { display: grid; grid-template-columns: 1.05fr 1fr; gap: 12px; margin-top: 20px; }
+  .note-box { padding: 14px 16px; background: #fffdf7; border: 1px solid #ddd6c8; border-radius: 10px; }
+  .note-box h3 { margin: 0 0 7px; color: #33342f; font-size: 11px; font-weight: 700; }
+  .note-box p { margin: 0; color: #6c6e65; font-size: 10px; line-height: 1.6; }
+  .removed { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; margin-top: 2px; }
+  .removed div { color: #6c6e65; font-size: 9px; line-height: 1.5; }
+  .removed b { color: #8a5a4b; font-weight: 650; }
+  .targets { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .target { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; color: #3f5f4c; background: #edf5ef; border: 1px solid #d5e5da; border-radius: 999px; font-size: 8.5px; font-weight: 600; }
+  .target svg { width: 12px; height: 12px; }
+  footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #d9d3c5; color: #8a8c82; font-size: 9.5px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <div>
+      <div class="eyebrow">Archimedes · Icon audit v2</div>
+      <h1>Simpler icons, one per function.</h1>
+      <p class="sub">20 collision-free replacements from the installed <code>lucide-react</code> package. Every target icon was unused before this change and appears exactly once below. Complexity = SVG shape elements + path commands.</p>
+    </div>
+    <div class="summary">
+      <div class="stat"><b>172</b><span>Lucide icons</span></div>
+      <div class="stat"><b>20</b><span>Candidates</span></div>
+      <div class="stat"><b>15</b><span>Clear wins</span></div>
+    </div>
+  </header>
+
+  <div class="fix"><span class="check">✓</span><div><b>Collision fixed.</b> In v1 both proactive AI and FigureForge used <code>Sparkle</code>. Now proactive AI uses <code>Sparkle</code>, FigureForge uses <code>Wand</code>, and every other function has its own target glyph.</div></div>
+
+  <div class="section-head"><h2>A. 推荐替换 · clear reduction</h2><p>15 high-confidence swaps; each target is unique.</p></div>
+  <div class="grid"><article class="pair">
+    <span class="delta">−7</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="Sparkles"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles" aria-hidden="true"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path><path d="M20 2v4"></path><path d="M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Sparkle"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkle" aria-hidden="true"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">Sparkles</span><span class="name-arrow">→</span><span class="new-name">Sparkle</span></div>
+    <p class="context">AI / proactive / suggestions</p>
+    <div class="meter"><span class="old-bar" style="width:68%"></span><span class="new-bar" style="width:49%"></span></div>
+    <div class="score"><span>4 shapes · 21 cmds</span><span>1 shapes · 17 cmds</span></div>
+    <p class="note">多颗星 → 单颗星；只用于 AI/主动建议</p>
+  </article><article class="pair">
+    <span class="delta">−6</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="Wand2"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wand-sparkles" aria-hidden="true"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"></path><path d="m14 7 3 3"></path><path d="M5 6v4"></path><path d="M19 14v4"></path><path d="M10 2v2"></path><path d="M7 8H3"></path><path d="M21 16h-4"></path><path d="M11 3H9"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Wand"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wand" aria-hidden="true"><path d="M15 4V2"></path><path d="M15 16v-2"></path><path d="M8 9h2"></path><path d="M20 9h2"></path><path d="M17.8 11.8 19 13"></path><path d="M15 9h.01"></path><path d="M17.8 6.2 19 5"></path><path d="m3 21 9-9"></path><path d="M12.2 6.2 11 5"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">Wand2</span><span class="name-arrow">→</span><span class="new-name">Wand</span></div>
+    <p class="context">Image creation · FigureForge</p>
+    <div class="meter"><span class="old-bar" style="width:78%"></span><span class="new-bar" style="width:62%"></span></div>
+    <div class="score"><span>8 shapes · 21 cmds</span><span>9 shapes · 14 cmds</span></div>
+    <p class="note">魔法棒 + 星 → 单支魔法棒；与 Sparkle 区分</p>
+  </article><article class="pair">
+    <span class="delta">−14</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="ChartNoAxesCombined"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chart-no-axes-combined" aria-hidden="true"><path d="M12 16v5"></path><path d="M16 14.639V21"></path><path d="M20 10.656V21"></path><path d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15"></path><path d="M4 18.463V21"></path><path d="M8 14.656V21"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="ChartLine"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chart-line" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">ChartNoAxesCombined</span><span class="name-arrow">→</span><span class="new-name">ChartLine</span></div>
+    <p class="context">Sidebar · Data charts</p>
+    <div class="meter"><span class="old-bar" style="width:57%"></span><span class="new-bar" style="width:19%"></span></div>
+    <div class="score"><span>6 shapes · 15 cmds</span><span>2 shapes · 5 cmds</span></div>
+    <p class="note">组合图表 → 单折线</p>
+  </article><article class="pair">
+    <span class="delta">−11</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="Table2"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-table2 lucide-table-2" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Table"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-table" aria-hidden="true"><path d="M12 3v18"></path><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M3 15h18"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">Table2</span><span class="name-arrow">→</span><span class="new-name">Table</span></div>
+    <p class="context">Sidebar · Data analysis</p>
+    <div class="meter"><span class="old-bar" style="width:57%"></span><span class="new-bar" style="width:27%"></span></div>
+    <div class="score"><span>1 shapes · 20 cmds</span><span>4 shapes · 6 cmds</span></div>
+    <p class="note">带表头细节 → 基础表格</p>
+  </article><article class="pair">
+    <span class="delta">−10</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="BrainCircuit"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-brain-circuit" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path><path d="M9 13a4.5 4.5 0 0 0 3-4"></path><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"></path><path d="M3.477 10.896a4 4 0 0 1 .585-.396"></path><path d="M6 18a4 4 0 0 1-1.967-.516"></path><path d="M12 13h4"></path><path d="M12 18h6a2 2 0 0 1 2 2v1"></path><path d="M12 8h8"></path><path d="M16 8V5a2 2 0 0 1 2-2"></path><circle cx="16" cy="13" r=".5"></circle><circle cx="18" cy="3" r=".5"></circle><circle cx="20" cy="21" r=".5"></circle><circle cx="20" cy="8" r=".5"></circle></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Brain"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-brain" aria-hidden="true"><path d="M12 18V5"></path><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"></path><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"></path><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"></path><path d="M18 18a4 4 0 0 0 2-7.464"></path><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"></path><path d="M6 18a4 4 0 0 1-2-7.464"></path><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">BrainCircuit</span><span class="name-arrow">→</span><span class="new-name">Brain</span></div>
+    <p class="context">Skills · AI collections / Models</p>
+    <div class="meter"><span class="old-bar" style="width:97%"></span><span class="new-bar" style="width:70%"></span></div>
+    <div class="score"><span>13 shapes · 23 cmds</span><span>8 shapes · 18 cmds</span></div>
+    <p class="note">电路大脑 → 基础大脑</p>
+  </article><article class="pair">
+    <span class="delta">−18</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="CalendarDays"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-days" aria-hidden="true"><path d="M8 2v3"></path><path d="M16 2v3"></path><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18"></path><path d="M8 13h.01"></path><path d="M12 13h.01"></path><path d="M16 13h.01"></path><path d="M8 17h.01"></path><path d="M12 17h.01"></path><path d="M16 17h.01"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Calendar"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar" aria-hidden="true"><path d="M8 2v3"></path><path d="M16 2v3"></path><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">CalendarDays</span><span class="name-arrow">→</span><span class="new-name">Calendar</span></div>
+    <p class="context">Sidebar · Daily papers</p>
+    <div class="meter"><span class="old-bar" style="width:76%"></span><span class="new-bar" style="width:27%"></span></div>
+    <div class="score"><span>10 shapes · 18 cmds</span><span>4 shapes · 6 cmds</span></div>
+    <p class="note">多日期格 → 单日历</p>
+  </article><article class="pair">
+    <span class="delta">−13</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="FolderTree"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-tree" aria-hidden="true"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M3 5a2 2 0 0 0 2 2h3"></path><path d="M3 3v13a2 2 0 0 0 2 2h3"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Files"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-files" aria-hidden="true"><path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"></path><path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"></path><path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">FolderTree</span><span class="name-arrow">→</span><span class="new-name">Files</span></div>
+    <p class="context">Workbench · Files</p>
+    <div class="meter"><span class="old-bar" style="width:100%"></span><span class="new-bar" style="width:65%"></span></div>
+    <div class="score"><span>4 shapes · 33 cmds</span><span>3 shapes · 21 cmds</span></div>
+    <p class="note">树形文件夹 → 文件堆；不与 Folder 冲突</p>
+  </article><article class="pair">
+    <span class="delta">−16</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="Microscope"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-microscope" aria-hidden="true"><path d="M6 18h8"></path><path d="M3 22h18"></path><path d="M14 22a7 7 0 1 0 0-14h-1"></path><path d="M9 14h2"></path><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"></path><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="TestTube"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-test-tube" aria-hidden="true"><path d="M14.5 2v17.5c0 1.4-1.1 2.5-2.5 2.5c-1.4 0-2.5-1.1-2.5-2.5V2"></path><path d="M8.5 2h7"></path><path d="M14.5 16h-5"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">Microscope</span><span class="name-arrow">→</span><span class="new-name">TestTube</span></div>
+    <p class="context">Skills · nature-skills</p>
+    <div class="meter"><span class="old-bar" style="width:76%"></span><span class="new-bar" style="width:32%"></span></div>
+    <div class="score"><span>6 shapes · 22 cmds</span><span>3 shapes · 9 cmds</span></div>
+    <p class="note">显微镜 → 试管，仍表示科研</p>
+  </article><article class="pair">
+    <span class="delta">−6</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="Trash2"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2 lucide-trash-2" aria-hidden="true"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Trash"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash" aria-hidden="true"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">Trash2</span><span class="name-arrow">→</span><span class="new-name">Trash</span></div>
+    <p class="context">Delete actions</p>
+    <div class="meter"><span class="old-bar" style="width:62%"></span><span class="new-bar" style="width:46%"></span></div>
+    <div class="score"><span>5 shapes · 18 cmds</span><span>3 shapes · 14 cmds</span></div>
+    <p class="note">带三条线 → 基础垃圾桶</p>
+  </article><article class="pair">
+    <span class="delta">−11</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="PenTool"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pen-tool" aria-hidden="true"><path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z"></path><path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18"></path><path d="m2.3 2.3 7.286 7.286"></path><circle cx="11" cy="11" r="2"></circle></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Pen"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pen" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">PenTool</span><span class="name-arrow">→</span><span class="new-name">Pen</span></div>
+    <p class="context">Skills · writing</p>
+    <div class="meter"><span class="old-bar" style="width:57%"></span><span class="new-bar" style="width:27%"></span></div>
+    <div class="score"><span>4 shapes · 17 cmds</span><span>1 shapes · 9 cmds</span></div>
+    <p class="note">钢笔工具 → 钢笔</p>
+  </article><article class="pair">
+    <span class="delta">−6</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="FileArchive"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-archive" aria-hidden="true"><path d="M13.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v11.5"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 12v-1"></path><path d="M8 18v-2"></path><path d="M8 7V6"></path><circle cx="8" cy="20" r="2"></circle></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Package"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-package" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"></path><path d="M12 22V12"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><path d="m7.5 4.27 9 5.15"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">FileArchive</span><span class="name-arrow">→</span><span class="new-name">Package</span></div>
+    <p class="context">File tree · archive</p>
+    <div class="meter"><span class="old-bar" style="width:70%"></span><span class="new-bar" style="width:54%"></span></div>
+    <div class="score"><span>6 shapes · 20 cmds</span><span>4 shapes · 16 cmds</span></div>
+    <p class="note">文件 + 压缩细节 → 包裹盒；不与 Archive 冲突</p>
+  </article><article class="pair">
+    <span class="delta">−10</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="KeyRound"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-key-round" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Key"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-key" aria-hidden="true"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"></path><path d="m21 2-9.6 9.6"></path><circle cx="7.5" cy="15.5" r="5.5"></circle></svg></span>
+    </div>
+    <div class="names"><span class="old-name">KeyRound</span><span class="name-arrow">→</span><span class="new-name">Key</span></div>
+    <p class="context">API / SSH keys</p>
+    <div class="meter"><span class="old-bar" style="width:51%"></span><span class="new-bar" style="width:24%"></span></div>
+    <div class="score"><span>2 shapes · 17 cmds</span><span>3 shapes · 6 cmds</span></div>
+    <p class="note">圆头钥匙 → 基础钥匙</p>
+  </article><article class="pair">
+    <span class="delta">−14</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="Shrink"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shrink" aria-hidden="true"><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8"></path><path d="M9 19.8V15m0 0H4.2M9 15l-6 6"></path><path d="M15 4.2V9m0 0h4.8M15 9l6-6"></path><path d="M9 4.2V9m0 0H4.2M9 9 3 3"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Minimize2"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minimize2 lucide-minimize-2" aria-hidden="true"><path d="m14 10 7-7"></path><path d="M20 10h-6V4"></path><path d="m3 21 7-7"></path><path d="M4 14h6v6"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">Shrink</span><span class="name-arrow">→</span><span class="new-name">Minimize2</span></div>
+    <p class="context">Compact conversation</p>
+    <div class="meter"><span class="old-bar" style="width:70%"></span><span class="new-bar" style="width:32%"></span></div>
+    <div class="score"><span>4 shapes · 22 cmds</span><span>4 shapes · 8 cmds</span></div>
+    <p class="note">四向收缩 → 对角收缩</p>
+  </article><article class="pair">
+    <span class="delta">−7</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="ClipboardPaste"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clipboard-paste" aria-hidden="true"><path d="M11 14h10"></path><path d="M16 4h2a2 2 0 0 1 2 2v1.344"></path><path d="m17 18 4-4-4-4"></path><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"></path><rect x="8" y="2" width="8" height="4" rx="1"></rect></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Clipboard"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clipboard" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">ClipboardPaste</span><span class="name-arrow">→</span><span class="new-name">Clipboard</span></div>
+    <p class="context">Paste / attachments</p>
+    <div class="meter"><span class="old-bar" style="width:51%"></span><span class="new-bar" style="width:32%"></span></div>
+    <div class="score"><span>5 shapes · 14 cmds</span><span>2 shapes · 10 cmds</span></div>
+    <p class="note">剪贴板 + 粘贴箭头 → 剪贴板</p>
+  </article><article class="pair">
+    <span class="delta">−13</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="Newspaper"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-newspaper" aria-hidden="true"><path d="M15 18h-5"></path><path d="M18 14h-8"></path><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"></path><rect width="8" height="4" x="10" y="6" rx="1"></rect></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Rss"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rss" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg></span>
+    </div>
+    <div class="names"><span class="old-name">Newspaper</span><span class="name-arrow">→</span><span class="new-name">Rss</span></div>
+    <p class="context">Sidebar · News</p>
+    <div class="meter"><span class="old-bar" style="width:54%"></span><span class="new-bar" style="width:19%"></span></div>
+    <div class="score"><span>4 shapes · 16 cmds</span><span>3 shapes · 4 cmds</span></div>
+    <p class="note">报纸排版 → RSS 信号</p>
+  </article></div>
+
+  <div class="section-head"><h2>B. 视上下文替换 · context-dependent</h2><p>5 smaller reductions; still one target per function, but the old icon carried an action/state nuance.</p></div>
+  <div class="grid"><article class="pair">
+    <span class="delta">−7</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="MessageSquareText"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square-text" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path><path d="M7 11h10"></path><path d="M7 15h6"></path><path d="M7 7h8"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="MessageCircleReply"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle-reply" aria-hidden="true"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path><path d="m10 15-3-3 3-3"></path><path d="M7 12h8a2 2 0 0 1 2 2v1"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">MessageSquareText</span><span class="name-arrow">→</span><span class="new-name">MessageCircleReply</span></div>
+    <p class="context">Comments / reading assistant</p>
+    <div class="meter"><span class="old-bar" style="width:57%"></span><span class="new-bar" style="width:38%"></span></div>
+    <div class="score"><span>4 shapes · 17 cmds</span><span>3 shapes · 11 cmds</span></div>
+    <p class="note">方形文字气泡 → 圆形回复气泡；与聊天、New chat 区分</p>
+  </article><article class="pair">
+    <span class="delta">−2</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="ShieldCheck"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-check" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="Shield"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">ShieldCheck</span><span class="name-arrow">→</span><span class="new-name">Shield</span></div>
+    <p class="context">Privacy / security</p>
+    <div class="meter"><span class="old-bar" style="width:38%"></span><span class="new-bar" style="width:32%"></span></div>
+    <div class="score"><span>2 shapes · 12 cmds</span><span>1 shapes · 11 cmds</span></div>
+    <p class="note">盾 + 勾 → 盾；勾可用状态色表达</p>
+  </article><article class="pair">
+    <span class="delta">−2</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="ScanSearch"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-search" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><circle cx="12" cy="12" r="3"></circle><path d="m16 16-1.9-1.9"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="BookOpenCheck"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-open-check" aria-hidden="true"><path d="M12 5v16"></path><path d="m16 12 2 2 4-4"></path><path d="M22 6V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2h4.001A2 2 0 0022 17v-1.344"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">ScanSearch</span><span class="name-arrow">→</span><span class="new-name">BookOpenCheck</span></div>
+    <p class="context">Paper reading / method reviewer</p>
+    <div class="meter"><span class="old-bar" style="width:62%"></span><span class="new-bar" style="width:57%"></span></div>
+    <div class="score"><span>6 shapes · 17 cmds</span><span>3 shapes · 18 cmds</span></div>
+    <p class="note">扫描框 + 放大镜 → 打开的书 + 勾；不与 Search 冲突</p>
+  </article><article class="pair">
+    <span class="delta">−5</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="MessageSquarePlus"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square-plus" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path><path d="M12 8v6"></path><path d="M9 11h6"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="MessageCirclePlus"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle-plus" aria-hidden="true"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path><path d="M8 12h8"></path><path d="M12 8v8"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">MessageSquarePlus</span><span class="name-arrow">→</span><span class="new-name">MessageCirclePlus</span></div>
+    <p class="context">New chat</p>
+    <div class="meter"><span class="old-bar" style="width:49%"></span><span class="new-bar" style="width:35%"></span></div>
+    <div class="score"><span>3 shapes · 15 cmds</span><span>3 shapes · 10 cmds</span></div>
+    <p class="note">方形加号气泡 → 圆形加号气泡；与评论、聊天区分</p>
+  </article><article class="pair">
+    <span class="delta">−2</span>
+    <div class="pair-top">
+      <span class="icon-tile old" title="FilePenLine"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-pen-line" aria-hidden="true"><path d="M14.364 13.634a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506l4.013-4.009a1 1 0 0 0-3.004-3.004z"></path><path d="M14.487 7.858A1 1 0 0 1 14 7V2"></path><path d="M20 19.645V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l2.516 2.516"></path><path d="M8 18h1"></path></svg></span>
+      <span class="arrow">→</span>
+      <span class="icon-tile new" title="FilePen"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-pen" aria-hidden="true"><path d="M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z"></path></svg></span>
+    </div>
+    <div class="names"><span class="old-name">FilePenLine</span><span class="name-arrow">→</span><span class="new-name">FilePen</span></div>
+    <p class="context">Paper writing / changed files</p>
+    <div class="meter"><span class="old-bar" style="width:76%"></span><span class="new-bar" style="width:70%"></span></div>
+    <div class="score"><span>4 shapes · 24 cmds</span><span>3 shapes · 23 cmds</span></div>
+    <p class="note">文件 + 笔 + 线 → 文件 + 笔</p>
+  </article></div>
+
+  <div class="notes">
+    <div class="note-box">
+      <h3>Target set · 20 unique glyphs</h3>
+      <p>No two rows share a target icon. The target set also did not reuse any of the 172 icons active before this change.</p>
+      <div class="targets"><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkle" aria-hidden="true"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path></svg>Sparkle</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wand" aria-hidden="true"><path d="M15 4V2"></path><path d="M15 16v-2"></path><path d="M8 9h2"></path><path d="M20 9h2"></path><path d="M17.8 11.8 19 13"></path><path d="M15 9h.01"></path><path d="M17.8 6.2 19 5"></path><path d="m3 21 9-9"></path><path d="M12.2 6.2 11 5"></path></svg>Wand</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chart-line" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>ChartLine</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-table" aria-hidden="true"><path d="M12 3v18"></path><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M3 15h18"></path></svg>Table</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-brain" aria-hidden="true"><path d="M12 18V5"></path><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"></path><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"></path><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"></path><path d="M18 18a4 4 0 0 0 2-7.464"></path><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"></path><path d="M6 18a4 4 0 0 1-2-7.464"></path><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"></path></svg>Brain</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar" aria-hidden="true"><path d="M8 2v3"></path><path d="M16 2v3"></path><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18"></path></svg>Calendar</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-files" aria-hidden="true"><path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"></path><path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"></path><path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"></path></svg>Files</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-test-tube" aria-hidden="true"><path d="M14.5 2v17.5c0 1.4-1.1 2.5-2.5 2.5c-1.4 0-2.5-1.1-2.5-2.5V2"></path><path d="M8.5 2h7"></path><path d="M14.5 16h-5"></path></svg>TestTube</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash" aria-hidden="true"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>Trash</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pen" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path></svg>Pen</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-package" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"></path><path d="M12 22V12"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><path d="m7.5 4.27 9 5.15"></path></svg>Package</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-key" aria-hidden="true"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"></path><path d="m21 2-9.6 9.6"></path><circle cx="7.5" cy="15.5" r="5.5"></circle></svg>Key</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minimize2 lucide-minimize-2" aria-hidden="true"><path d="m14 10 7-7"></path><path d="M20 10h-6V4"></path><path d="m3 21 7-7"></path><path d="M4 14h6v6"></path></svg>Minimize2</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clipboard" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path></svg>Clipboard</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rss" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>Rss</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle-reply" aria-hidden="true"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path><path d="m10 15-3-3 3-3"></path><path d="M7 12h8a2 2 0 0 1 2 2v1"></path></svg>MessageCircleReply</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg>Shield</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-open-check" aria-hidden="true"><path d="M12 5v16"></path><path d="m16 12 2 2 4-4"></path><path d="M22 6V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2h4.001A2 2 0 0022 17v-1.344"></path></svg>BookOpenCheck</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle-plus" aria-hidden="true"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>MessageCirclePlus</span><span class="target"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-pen" aria-hidden="true"><path d="M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z"></path></svg>FilePen</span></div>
+    </div>
+    <div class="note-box">
+      <h3>Removed from v1 because of collisions</h3>
+      <div class="removed">
+        <div><b>Wand2 → Sparkle</b><br>collided with Sparkles → Sparkle; now Wand</div>
+        <div><b>MessageSquareText → MessageSquare</b><br>collided with New chat; now MessageCircleReply</div>
+        <div><b>MessageSquarePlus → MessageSquare</b><br>collided with comments; now MessageCirclePlus</div>
+        <div><b>BookmarkCheck / BookMarked → Bookmark</b><br>Bookmark already means save/unsaved; kept</div>
+        <div><b>FolderOpen / FolderUp → Folder</b><br>Folder already means directory; kept</div>
+        <div><b>ArchiveRestore → Archive</b><br>Archive already means archive action; kept</div>
+        <div><b>FileArchive → Archive</b><br>same collision; now Package</div>
+        <div><b>Presentation → Monitor</b><br>Monitor already means System theme; kept</div>
+        <div><b>GitFork → GitBranch</b><br>GitBranch already means git branch; kept</div>
+        <div><b>ScanSearch → Search</b><br>Search already means search; now BookOpenCheck</div>
+        <div><b>Expand → Maximize2</b><br>Maximize2 already used; kept Expand</div>
+        <div><b>LockKeyhole → Lock</b><br>Lock already means cloud lock; kept</div>
+        <div><b>LibraryBig → Library</b><br>Library already used in LibraryWorkspace; kept</div>
+        <div><b>Workflow → GitBranch</b><br>GitBranch already used; kept</div>
+        <div><b>Settings → SlidersHorizontal</b><br>more shapes/commands, not simpler</div>
+        <div><b>Orbit → Cpu</b><br>much more complex, not simpler</div>
+      </div>
+    </div>
+  </div>
+  <footer><span>Rendered from local node_modules/lucide-react · 28px audit grid · every target was unused before the change</span><span>Archimedes UI · icon simplification experiment v2</span></footer>
+</div>
+</body>
+</html>

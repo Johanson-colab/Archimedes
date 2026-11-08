@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, LoaderCircle, Plus, Server, Trash2 } from "lucide-react";
+import { Check, LoaderCircle, Plus, Server, Trash } from "lucide-react";
 
 import { useUISettings } from "./i18n";
 import { SettingsGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
@@ -120,7 +120,7 @@ export default function SshServersPanel({ bridge }: { bridge: ResearchDeskBridge
               <div className="settings-row-actions">
                 <button className="secondary-button" disabled={busy !== ""} onClick={() => void test(server)}>{t("Test")}</button>
                 <button className="secondary-button" disabled={busy !== ""} onClick={() => edit(server)}>{t("Edit")}</button>
-                <button className="quiet-icon-button" title={t("Remove")} disabled={busy !== ""} onClick={() => void remove(server)}><Trash2 size={14} /></button>
+                <button className="quiet-icon-button" title={t("Remove")} disabled={busy !== ""} onClick={() => void remove(server)}><Trash size={14} /></button>
               </div>
             </SettingsRow>)}
           </SettingsGroup>}

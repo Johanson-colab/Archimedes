@@ -9,7 +9,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
-  Trash2,
+  Trash,
   X,
 } from "lucide-react";
 import { Dialog } from "./Dialog";
@@ -672,7 +672,7 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
           <label className="extensions-source-toggle"><input type="checkbox" checked={source.enabled} onChange={(event) => updateSource(source.id, { enabled: event.target.checked })} /><span>{source.name}</span></label>
           <span className="extensions-source-kind">{SOURCE_TYPE_LABEL[source.type]}</span>
           <span className="extensions-source-state">{source.error ? <span className="error">{source.error}</span> : source.count ? `${source.count} results` : "Not synced"}</span>
-          {!source.builtin && <button className="extensions-icon-button" onClick={() => setDraft((current) => current.filter((candidate) => candidate.id !== source.id))} aria-label={`Remove ${source.name}`}><Trash2 size={13} /></button>}
+          {!source.builtin && <button className="extensions-icon-button" onClick={() => setDraft((current) => current.filter((candidate) => candidate.id !== source.id))} aria-label={`Remove ${source.name}`}><Trash size={13} /></button>}
         </div>)}
       </div>
       {adding ? <div className="extensions-new-source">
