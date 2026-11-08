@@ -2963,7 +2963,7 @@ function App() {
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
-    "data-analysis": <DataAnalysisView />,
+    "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
     writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
   };
   for (const entry of pluginEntries) {

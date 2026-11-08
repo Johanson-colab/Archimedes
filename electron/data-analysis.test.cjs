@@ -41,15 +41,31 @@ test("example data opens a real summary, chart and preview", async () => {
     .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
   const { code } = await transformWithOxc(source, "DataAnalysisView.tsx", { jsx: { runtime: "classic" } });
   const icons = require("lucide-react");
-  const DataAnalysisView = new Function("React", "useMemo", "useRef", "useState", "BarChart3", "Download", "FileSpreadsheet", "Upload", "X", "useUISettings", "numericValue", "parseDelimited", "summarizeColumn", `${code}\nreturn DataAnalysisView;`)(React, React.useMemo, React.useRef, React.useState, icons.BarChart3, icons.Download, icons.FileSpreadsheet, icons.Upload, icons.X, () => ({ t: (key) => key }), numericValue, parseDelimited, summarizeColumn);
+  const iconNames = ["ArrowRight", "BarChart3", "ChartNoAxesCombined", "Download", "FileSpreadsheet", "LayoutGrid", "LineChart", "ScatterChart", "Sparkles", "Table2", "Upload", "X"];
+  const DataAnalysisView = new Function("React", "useMemo", "useRef", "useState", ...iconNames, "useUISettings", "numericValue", "parseDelimited", "summarizeColumn", `${code}\nreturn DataAnalysisView;`)(React, React.useMemo, React.useRef, React.useState, ...iconNames.map((name) => icons[name]), () => ({ t: (key) => key }), numericValue, parseDelimited, summarizeColumn);
   const root = createRoot(document.getElementById("root"));
+  let draft = "";
   try {
-    await React.act(async () => root.render(React.createElement(DataAnalysisView)));
-    await React.act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Try example data").click());
+    await React.act(async () => root.render(React.createElement(DataAnalysisView, { onAskAI: (text) => { draft = text; } })));
+    await React.act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Try example data").click());
     assert.match(document.body.textContent, /example.csv/);
     assert.match(document.body.textContent, /0.805/);
     assert.equal(document.querySelectorAll(".chart-mark").length, 4);
     assert.equal(document.querySelectorAll("tbody tr").length, 4);
+    await React.act(async () => document.querySelector('[aria-label="Line chart"]').click());
+    assert.equal(document.querySelector('[aria-label="Line chart"]').getAttribute("aria-pressed"), "true");
+    assert.ok(document.querySelector(".chart-line"));
+    await React.act(async () => [...document.querySelectorAll(".da-column-list button")].find((button) => button.title === "latency_ms").click());
+    assert.match(document.body.textContent, /128\.25/);
+    const input = document.querySelector('[aria-label="Analysis question"]');
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set.call(input, "Compare the models");
+      input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    });
+    await React.act(async () => document.querySelector('[aria-label="Continue in chat"]').click());
+    assert.match(draft, /Compare the models/);
+    assert.match(draft, /full dataset is not attached/);
+    assert.match(draft, /Baseline/);
   } finally {
     await React.act(async () => root.unmount());
     dom.window.close();
