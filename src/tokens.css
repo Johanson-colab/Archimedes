@@ -67,6 +67,20 @@
   --text-faint: var(--graphite-300);
   --text-on-accent: #111111;
 
+  /* Data analysis: neutral working surface and categorical scientific plots. */
+  --analysis-ground: #17191c;
+  --analysis-surface: #202328;
+  --analysis-field: #282d33;
+  --analysis-ink: #e7ebef;
+  --analysis-muted: #a1abb6;
+  --analysis-grid: #383f47;
+  --analysis-series-1: #82aeda;
+  --analysis-series-2: #d99579;
+  --analysis-series-3: #82b7a3;
+  --analysis-series-4: #d8b76c;
+  --analysis-series-5: #ce93af;
+  --analysis-series-6: #9aabbf;
+
   --accent: var(--amber-500);
   --accent-hover: var(--amber-400);
   --accent-subtle: #a6a6a6;
@@ -243,6 +257,18 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
 
 
 :root[data-theme="paper"] {
+  --analysis-ground: #f5f6f7;
+  --analysis-surface: #ffffff;
+  --analysis-field: #e9edf0;
+  --analysis-ink: #25313c;
+  --analysis-muted: #596978;
+  --analysis-grid: #e6ebef;
+  --analysis-series-1: #3b6e9d;
+  --analysis-series-2: #b66047;
+  --analysis-series-3: #3e8069;
+  --analysis-series-4: #9b792e;
+  --analysis-series-5: #a5577c;
+  --analysis-series-6: #63778f;
   /* --- Layer 1: primitives ------------------------------------------------ */
   --paper-50: #faf7f2;
   --paper-100: #f4f0e9;

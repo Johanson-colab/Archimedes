@@ -3,6 +3,7 @@ dist/
 *.tsbuildinfo
 .DS_Store
 .archimedes/
+.taste-skill/
 .[a]xiom/
 .env.local
 /scripts/.gallery-cache/
