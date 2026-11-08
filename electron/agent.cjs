@@ -20,6 +20,7 @@ const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
 const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
+const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -353,6 +354,13 @@ const tools = [
   },
 ];
 
+function createToolRegistry() {
+  const registry = new ToolRegistry();
+  for (const definition of tools) registry.register({ definition, source: "builtin", execute: (context, args) => executeBuiltInTool(context, args) });
+  return registry;
+}
+const defaultToolRegistry = createToolRegistry();
+
 function workspacePath(root, requested = "") {
   const candidate = path.resolve(root, requested || ".");
   if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
@@ -540,15 +548,8 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-async function executeTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {} }) {
-  const args = parseArguments(call.function.arguments);
+async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {} }, args) {
   const name = call.function.name;
-  recordEvent({ type: "tool_call", payload: { call_id: call.id, name, arguments: args } });
-  emit({
-    type: "tool",
-    title: name.replaceAll("_", " "),
-    detail: name === "search_academic_papers" ? "Searching scholarly metadata" : name === "web_search" ? "Searching the web" : name === "add_artifact" ? "Registering a durable output" : "Reading research sources",
-  });
 
   if (name === "search_academic_papers") {
     if (typeof args.query !== "string" || !args.query.trim()) throw new Error("Academic search requires a focused query.");
@@ -768,6 +769,10 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
   throw new Error(`Unsupported Agent tool: ${name}`);
 }
 
+async function executeTool(context) {
+  return (context.registry || defaultToolRegistry).invoke(context.call, context);
+}
+
 function applyDelta(accumulator, delta, onTextDelta) {
   if (typeof delta.content === "string" && delta.content) {
     accumulator.content += delta.content;
@@ -898,7 +903,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", researchSkill, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal }) {
+async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", researchSkill, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry }) {
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -1009,7 +1014,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort} · context: ${resolvedContextLength}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
-      const availableTools = tools.filter((tool) =>
+      const availableTools = toolRegistry.definitions().filter((tool) =>
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
         !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches));
       const message = await complete(config, messages, {
@@ -1028,29 +1033,19 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
 
       for (const call of message.tool_calls) {
         try {
-          if (call.function.name === "search_academic_papers") {
-            if (academicSearches >= policy.maxAcademicSearches) {
-              const content = JSON.stringify({ error: "The academic search budget is exhausted. Synthesize the findings already collected." });
-              messages.push({ role: "tool", tool_call_id: call.id, content });
-              recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
-              continue;
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, preflight: (name, args) => {
+            if (name === "search_academic_papers") {
+              if (academicSearches >= policy.maxAcademicSearches) throw new Error("The academic search budget is exhausted. Synthesize the findings already collected.");
+              academicSearches += 1;
             }
-            academicSearches += 1;
-          }
-          if (call.function.name === "web_search") {
-            const count = Array.isArray(parseArguments(call.function.arguments).queries) ? parseArguments(call.function.arguments).queries.length : 1;
-            if (webSearches + count > policy.maxWebSearches) {
-              const content = JSON.stringify({ error: "The web search budget is exhausted. Synthesize from the sources already opened." });
-              messages.push({ role: "tool", tool_call_id: call.id, content });
-              recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
-              continue;
+            if (name === "web_search") {
+              const count = Array.isArray(args.queries) ? args.queries.length : 1;
+              if (webSearches + count > policy.maxWebSearches) throw new Error("The web search budget is exhausted. Synthesize from the sources already opened.");
+              webSearches += count;
             }
-            webSearches += count;
-          }
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent });
+          } });
           if (result.action) actions.push(result.action);
           messages.push({ role: "tool", tool_call_id: call.id, content: result.content });
-          recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content: result.content } });
           try {
             for (const evidence of evidenceForTool(call.function.name, parseArguments(call.function.arguments), JSON.parse(result.content))) {
               recordEvent({ type: "source_evidence", payload: { call_id: call.id, ...evidence } });
@@ -1060,7 +1055,6 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
           if (controller.signal.aborted) throw error;
           const content = JSON.stringify({ error: error.message || String(error) });
           messages.push({ role: "tool", tool_call_id: call.id, content });
-          recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });
         }
       }
     }
@@ -1100,4 +1094,4 @@ function interruptAgent(threadId) {
   return true;
 }
 
-module.exports = { complete, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, setApprovalSurface, translatePaperSelection };
+module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, setApprovalSurface, translatePaperSelection };

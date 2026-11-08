@@ -1835,6 +1835,7 @@ interface AgentEvent {
   clientRunId?: string;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
+  toolCall?: { id?: string; name?: string; source: string; status: "running" | "completed" | "failed" | "interrupted"; durationMs: number };
   activity?: NativeAgentActivity;
   usage?: NativeAgentUsage | null;
   plan?: NativeAgentPlan;
