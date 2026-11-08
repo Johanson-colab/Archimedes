@@ -257,12 +257,12 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
 
 
 :root[data-theme="paper"] {
-  --analysis-ground: #fcf8e9;
-  --analysis-surface: #fffdf4;
-  --analysis-field: #f2ecda;
-  --analysis-ink: #332e25;
-  --analysis-muted: #6a6251;
-  --analysis-grid: #eae2d0;
+  --analysis-ground: var(--surface-sidebar);
+  --analysis-surface: var(--surface-panel);
+  --analysis-field: var(--surface-control);
+  --analysis-ink: var(--text-primary);
+  --analysis-muted: var(--text-muted);
+  --analysis-grid: var(--border-soft);
   --analysis-series-1: #3b6e9d;
   --analysis-series-2: #b66047;
   --analysis-series-3: #3e8069;
