@@ -48,6 +48,7 @@ import ChatActivityTimeline from "./ChatActivityTimeline";
 import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
 import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions } from "./native-agent-state";
 import HarnessPicker from "./HarnessPicker";
+import NewChatModePicker, { draftForNewChatMode, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
 import TrajectoryView from "./TrajectoryView";
@@ -3575,6 +3576,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const rejectHistoryAction = useCallback(() => historyHandlersRef.current.onReject(), []);
   const openHistoryFile = useCallback((path: string) => historyHandlersRef.current.onOpenFile(path), []);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [newChatMode, setNewChatMode] = useState<NewChatMode>("standard");
   const welcomeVisible = showWelcome && !welcomeDismissed;
 
   useEffect(() => {
@@ -3969,6 +3971,10 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} />
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
+      {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
+        setNewChatMode(mode);
+        setPrompt((current) => draftForNewChatMode(current, mode));
+      }} />}
       {nativeQuestions.length > 0 && <div className="native-question-stack">{nativeQuestions.map((question) => <NativeQuestionCard key={question.id} question={question} onAnswer={onNativeAnswer} />)}</div>}
       <div
         ref={composerBoxRef}
@@ -4056,7 +4062,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
             event.preventDefault();
             void submitCurrentPrompt();
           }
-        }} placeholder={activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
+        }} placeholder={showWelcome && newChatMode === "create" ? t("Describe a Research App you want to create.") : activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
         <MenuSurface open={slashOpen} onClose={() => setSlashQuery(null)} anchorRef={composerBoxRef} placement="top-start" width="anchor" minWidth={0} maxHeight={320} className="composer-slash-menu" ariaLabel={t("Composer commands")} focus="none">
           <MenuLabel>{t("Composer commands")}</MenuLabel>
           {filteredSlashCommands.map((command, index) => <MenuItem key={command.id} icon={<command.icon size={16} strokeWidth={1.7} />} className={index === slashIndex ? "active" : ""} onMouseEnter={() => setSlashIndex(index)} onMouseDown={(event) => event.preventDefault()} onClick={() => void runSlashCommand(command)}><span className="slash-command-label">{command.label}</span><span className="slash-command-detail">{command.detail}</span></MenuItem>)}
