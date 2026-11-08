@@ -9509,3 +9509,164 @@ html[data-menu-style="glass"] .menu-surface {
 .app-dialog .auth-body {
   gap: 10px;
 }
+
+
+/* Attempt B dialog content pass (portals live outside .theme-paper) */
+:root[data-theme="paper"] .app-dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  color: var(--night-ink);
+  background: var(--surface-canvas);
+  border-color: var(--border-soft);
+}
+:root[data-theme="paper"] .app-dialog :is(input, textarea)::placeholder {
+  color: var(--night-faint);
+}
+:root[data-theme="paper"] .external-search-box {
+  color: var(--night-muted);
+  background: var(--surface-canvas);
+  border-color: var(--border-soft);
+}
+:root[data-theme="paper"] .external-search-box input {
+  color: var(--night-ink);
+  background: transparent;
+}
+
+.app-dialog.workspace-modal:not(.paper-import-modal):not(.terminal-settings-modal) {
+  width: min(420px, calc(100vw - 32px));
+}
+.app-dialog.workspace-modal .modal-header h2 {
+  font-size: 15px;
+}
+.app-dialog.workspace-modal > p {
+  margin: 10px 0 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.app-dialog.workspace-modal label {
+  font-size: 10.5px;
+}
+.app-dialog.workspace-modal input,
+.app-dialog.workspace-modal textarea {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.app-dialog.workspace-modal .modal-actions {
+  margin-top: 0;
+  padding: 14px 0 0;
+  border-top: 0;
+}
+.app-dialog.paper-import-modal {
+  width: min(680px, calc(100vw - 32px));
+  padding: 18px 20px 16px;
+}
+.app-dialog.paper-import-modal .modal-header {
+  padding: 0;
+  border: 0;
+}
+.app-dialog.paper-import-modal .modal-header h2 {
+  font-size: 15px;
+}
+.app-dialog.paper-import-modal > p {
+  margin: 8px 0 10px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.app-dialog.paper-import-modal .external-search-box {
+  min-height: 36px;
+  padding: 0 4px 0 10px;
+  border-radius: 8px;
+}
+.app-dialog.paper-import-modal .external-search-box input {
+  height: 32px;
+  font-size: 12.5px;
+}
+.app-dialog.paper-import-modal .external-search-box .primary-button {
+  min-height: 30px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.app-dialog.paper-import-modal .external-results {
+  margin-top: 10px;
+}
+.app-dialog.paper-import-modal .external-paper {
+  padding: 9px 2px;
+}
+.app-dialog.paper-import-modal .external-paper strong {
+  font-size: 12.5px;
+}
+.app-dialog.paper-import-modal .external-paper small {
+  margin-top: 3px;
+  font-size: 10.5px;
+}
+.app-dialog.thread-comments-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+.app-dialog .thread-comment {
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.app-dialog .thread-comment header strong {
+  font-size: 11.5px;
+}
+.app-dialog .thread-comment header span {
+  font-size: 9.5px;
+}
+.app-dialog .thread-comment p {
+  margin-top: 5px;
+  font-size: 12px;
+}
+.app-dialog .thread-comment-resolve {
+  margin-top: 6px;
+  font-size: 10px;
+}
+.app-dialog .thread-comments-empty strong {
+  font-size: 12px;
+}
+.app-dialog .thread-comments-empty span {
+  font-size: 10.5px;
+}
+.app-dialog.thread-share-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+.app-dialog .thread-share-summary > div {
+  padding: 8px 10px;
+}
+.app-dialog .thread-share-summary span {
+  font-size: 10px;
+}
+.app-dialog .thread-share-summary strong {
+  font-size: 12px;
+}
+.app-dialog .thread-share-note,
+.app-dialog .thread-share-warning {
+  font-size: 11px;
+}
+.app-dialog .thread-share-link {
+  padding: 8px;
+  border-radius: 7px;
+}
+.app-dialog .thread-share-link code {
+  font-size: 10.5px;
+}
+.app-dialog .thread-share-link small {
+  font-size: 9.5px;
+}
+.app-dialog.terminal-settings-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+.app-dialog .terminal-settings-body {
+  padding: 14px 20px 4px;
+}
+.app-dialog .terminal-settings-field {
+  color: var(--night-muted);
+  font-size: 10.5px;
+}
+.app-dialog .terminal-settings-field small {
+  font-size: 9.5px;
+}
+.app-dialog .terminal-settings-field input,
+.app-dialog .terminal-settings-field select {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
