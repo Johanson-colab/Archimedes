@@ -4058,8 +4058,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
             void submitCurrentPrompt();
           }
         }} placeholder={activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
-        <MenuSurface open={slashOpen} onClose={() => setSlashQuery(null)} anchorRef={composerBoxRef} placement="top-start" width="anchor" minWidth={0} maxHeight={320} className="composer-slash-menu" ariaLabel={t("Composer commands")} focus="none">
-          <MenuLabel>{t("Composer commands")}</MenuLabel>
+        <MenuSurface open={slashOpen} onClose={() => setSlashQuery(null)} anchorRef={composerBoxRef} placement="top-start" width={560} minWidth={0} maxHeight={320} className="composer-slash-menu" ariaLabel={t("Composer commands")} focus="none">
           {filteredSlashCommands.map((command, index) => <MenuItem key={command.id} icon={<command.icon size={16} strokeWidth={1.7} />} className={index === slashIndex ? "active" : ""} onMouseEnter={() => setSlashIndex(index)} onMouseDown={(event) => event.preventDefault()} onClick={() => void runSlashCommand(command)}><span className="slash-command-label">{command.label}</span><span className="slash-command-detail">{command.detail}</span></MenuItem>)}
         </MenuSurface>
         <ContextChips items={contextItems} onRemove={onRemoveContext} onClear={() => contextItems.forEach((item) => onRemoveContext(item.id))} />

@@ -1191,8 +1191,8 @@ export default function PaperCanvas({ bridge, workspace, projectId, paperId, pap
     </div>
 
     <MenuSurface open={visibilityOpen} onClose={() => setVisibilityOpen(false)} anchorRef={visibilityButtonRef} placement="bottom-end" width={250} ariaLabel={t("Canvas visibility")}>
-      <MenuItem checked={visibility === "private"} icon={<Lock size={15} />} onClick={() => void changeVisibility("private")}>{t("Private")}<small className="paper-canvas-menu-hint">{t("Only you can open this canvas")}</small></MenuItem>
-      <MenuItem checked={visibility === "project"} icon={<Users size={15} />} disabled={!canShareProject} onClick={() => void changeVisibility("project")}>{t("Project")}<small className="paper-canvas-menu-hint">{canShareProject ? t("Project members can open and edit") : t("Sign in and publish the project to share")}</small></MenuItem>
+      <MenuItem className="menu-item-rich" checked={visibility === "private"} icon={<Lock size={15} />} onClick={() => void changeVisibility("private")}>{t("Private")}<small className="paper-canvas-menu-hint">{t("Only you can open this canvas")}</small></MenuItem>
+      <MenuItem className="menu-item-rich" checked={visibility === "project"} icon={<Users size={15} />} disabled={!canShareProject} onClick={() => void changeVisibility("project")}>{t("Project")}<small className="paper-canvas-menu-hint">{canShareProject ? t("Project members can open and edit") : t("Sign in and publish the project to share")}</small></MenuItem>
     </MenuSurface>
 
     <MenuSurface open={moreOpen} onClose={() => setMoreOpen(false)} anchorRef={moreButtonRef} placement="bottom-end" width={224} ariaLabel={t("More canvas actions")}>

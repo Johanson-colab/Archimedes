@@ -660,9 +660,9 @@ html:not([data-theme="paper"]) .codex-sidebar {
   --menu-danger-hover-ink: #ffd0cb;
   --menu-danger-hover-bg: rgba(255, 92, 80, .12);
   --menu-danger-hover-icon: #ffb0a8;
-  --menu-radius: 14px;
-  --menu-padding: 10px;
-  --menu-item-height: 34px;
+  --menu-radius: 12px;
+  --menu-padding: 8px;
+  --menu-item-height: 30px;
   --menu-item-font: 13px;
   --menu-z: 130;
 }

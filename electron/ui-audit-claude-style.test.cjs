@@ -8,9 +8,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 test("Claude-style menu and dialog tokens are in place", () => {
   const tokens = read("src/tokens.css");
-  assert.match(tokens, /--menu-radius:\s*14px/);
-  assert.match(tokens, /--menu-padding:\s*10px/);
-  assert.match(tokens, /--menu-item-height:\s*34px/);
+  assert.match(tokens, /--menu-radius:\s*12px/);
+  assert.match(tokens, /--menu-padding:\s*8px/);
+  assert.match(tokens, /--menu-item-height:\s*30px/);
   assert.match(tokens, /--menu-item-font:\s*13px/);
   assert.match(tokens, /--menu-selected-bg:/);
   assert.match(tokens, /--dialog-radius-lg:\s*16px/);
@@ -29,11 +29,11 @@ test("menus support selected rows, chevrons, and the compact harness layout", ()
   assert.match(menu, /<ChevronRight size=\{14\}/);
 
   const harness = read("src/HarnessPicker.tsx");
-  assert.match(harness, /MenuLabel/);
   assert.match(harness, /MenuDivider/);
   assert.match(harness, /chevron/);
   assert.match(harness, /Model settings/);
   assert.doesNotMatch(harness, /harness-picker-header/);
+  assert.doesNotMatch(harness, /MenuLabel/);
 });
 
 test("dialogs use the compact Attempt B size where appropriate", () => {
