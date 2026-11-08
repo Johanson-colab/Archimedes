@@ -2056,6 +2056,10 @@ function App() {
         }
       }
       if (event.type === "artifact") setArtifactsVersion((current) => current + 1);
+      if (event.type === "workspace_change" && event.changeSet) {
+        if (!event.threadId || activeThreadIdRef.current === event.threadId) setChangeSets((current) => upsertChangeSet(current, event.changeSet!));
+        return;
+      }
       if (event.type.startsWith("native_")) {
         if (event.type === "native_question" || event.type === "native_question_resolved") setNativeQuestions((current) => updateNativeQuestions(current, event));
         else if (event.type === "native_approval_resolved" && event.action) setPendingAction((current) => current?.id === event.action!.id ? null : current);
@@ -2071,7 +2075,7 @@ function App() {
         flushAssistantDeltas();
         setInterrupting(false);
         setNativeQuestions((current) => current.filter((item) => Boolean(event.threadId) && item.threadId !== event.threadId));
-        setPendingAction((current) => current?.payload.externalAgent && (!event.threadId || activeThreadIdRef.current === event.threadId) ? null : current);
+        setPendingAction((current) => current && (!event.threadId || activeThreadIdRef.current === event.threadId) ? null : current);
       }
       if (event.type === "approval" && event.action && (!event.threadId || activeThreadIdRef.current === event.threadId)) {
         setPendingAction({ ...event.action, source: "agent" });
@@ -2803,7 +2807,7 @@ function App() {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
       setPendingAction(null);
       clearThreadPendingAction();
-      if (action.kind === "command" && action.payload.command && !action.payload.externalAgent) {
+      if (action.kind === "command" && action.payload.command && !action.payload.externalAgent && !action.payload.managedByAgent) {
         await runCommand(action.payload.command, action.id);
       } else if (action.kind === "write" && action.payload.path) {
         await refreshWorkspaceFiles();

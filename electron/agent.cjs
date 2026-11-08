@@ -15,9 +15,10 @@ const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = req
 const { evidenceForTool } = require("./agent/evidence.cjs");
 const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
 const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
-const { fileChangeForContent } = require("./workspace-files.cjs");
+const { fileChangeForContent, snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
+const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -312,12 +313,13 @@ const tools = [
     type: "function",
     function: {
       name: "propose_command",
-      description: "Propose a shell command. This never executes immediately; the user must approve it.",
+      description: "Request approval to execute a shell command, then wait for its output and exit status. The command starts only after approval.",
       parameters: {
         type: "object",
         properties: {
           command: { type: "string", description: "The exact shell command to propose." },
           cwd: { type: "string", description: "Optional workspace-relative directory in which to run it." },
+          timeout_seconds: { type: "number", description: "Optional timeout in seconds, up to 3600. Defaults to 600." },
         },
         required: ["command"],
         additionalProperties: false,
@@ -705,8 +707,11 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     rejectHidden(relative);
     const change = fileChangeForContent(root, relative, args.content);
     const action = store.createAction({ taskId, kind: "write", payload: { path: relative, content: args.content, change } });
+    const waiting = waitForApproval(action.id, signal, threadId);
     emit({ type: "approval", title: "Approval required", detail: `Write ${relative}`, action });
-    const decision = await waitForApproval(action.id, signal, threadId);
+    let decision;
+    try { decision = await waiting; }
+    catch (error) { if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected"); throw error; }
     if (!decision.approved && store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
     return { action: store.getAction(action.id), content: JSON.stringify({ approved: decision.approved, reason: decision.reason, action_id: action.id, kind: "write", path: relative }) };
   }
@@ -716,12 +721,34 @@ async function executeTool({ root, taskId, threadId, turnId, call, emit, context
     if (typeof args.command !== "string" || !args.command.trim() || args.command.length > 2_000) {
       throw new Error("A command proposal needs a non-empty command of at most 2000 characters.");
     }
-    const workingDirectory = workspacePath(root, args.cwd || "");
-    const action = store.createAction({ taskId, kind: "command", payload: { command: args.command.trim(), cwd: workingDirectory } });
+    const workingDirectory = existingWorkspacePath(root, args.cwd || "");
+    if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The command working directory is not a directory.");
+    const action = store.createAction({ taskId, kind: "command", payload: { command: args.command.trim(), cwd: workingDirectory, managedByAgent: true } });
+    const waiting = waitForApproval(action.id, signal, threadId);
     emit({ type: "approval", title: "Approval required", detail: args.command.trim(), action });
-    const decision = await waitForApproval(action.id, signal, threadId);
+    let decision;
+    try { decision = await waiting; }
+    catch (error) { if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected"); throw error; }
     if (!decision.approved && store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
-    return { action: store.getAction(action.id), content: JSON.stringify({ approved: decision.approved, reason: decision.reason, action_id: action.id, kind: "command", command: args.command.trim() }) };
+    if (!decision.approved) return { action: store.getAction(action.id), content: JSON.stringify({ approved: false, reason: decision.reason, action_id: action.id, kind: "command" }) };
+    emit({ type: "tool", title: "Running command", detail: args.command.trim() });
+    const before = snapshotWorkspace(root);
+    try {
+      const result = await runApprovedCommand({ root, cwd: workingDirectory, command: args.command.trim(), timeoutSeconds: args.timeout_seconds, signal, onUpdate: output => emit({ type: "tool", title: "Running command", detail: output || args.command.trim() }) });
+      emit({ type: "tool", title: "Command finished", detail: `${result.status} · exit ${result.exit_code ?? "unknown"} · ${result.log_path}` });
+      return { action: store.getAction(action.id), content: JSON.stringify({ ...result, action_id: action.id, kind: "command" }) };
+    } catch (error) {
+      if (error.commandResult) recordEvent({ type: "command_interrupted", payload: { action_id: action.id, ...error.commandResult } });
+      throw error;
+    } finally {
+      try {
+        const changes = compareWorkspaceSnapshots(before, snapshotWorkspace(root));
+        if (changes.length) {
+          const updated = store.updateActionPayload(action.id, { changes });
+          emit({ type: "workspace_change", title: "Workspace changed", detail: `${changes.length} files`, changeSet: { id: updated.id, actionId: updated.id, taskId, threadId, turnId, kind: updated.kind, changes, createdAt: updated.created_at } });
+        }
+      } catch (error) { emit({ type: "tool", title: "Workspace changes unavailable", detail: String(error.message || error) }); }
+    }
   }
   throw new Error(`Unsupported Agent tool: ${name}`);
 }
@@ -1015,6 +1042,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
             }
           } catch { /* Evidence extraction does not change the result delivered to the model. */ }
         } catch (error) {
+          if (controller.signal.aborted) throw error;
           const content = JSON.stringify({ error: error.message || String(error) });
           messages.push({ role: "tool", tool_call_id: call.id, content });
           recordEvent({ type: "tool_result", payload: { call_id: call.id, name: call.function.name, content } });

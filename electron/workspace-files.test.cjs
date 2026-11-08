@@ -63,3 +63,14 @@ test("computes line changes for direct writes and command snapshots", () => {
   assert.deepEqual(changes.map((item) => [item.path, item.status]), [["src/index.js", "modified"], ["src/new.js", "created"]]);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test("snapshots bound retained file contents without losing change detection", (t) => {
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (let index = 0; index < 10; index += 1) fs.writeFileSync(path.join(root, `file-${index}.txt`), "x".repeat(900_000));
+  const before = snapshotWorkspace(root);
+  const retained = [...before.values()].reduce((sum, entry) => sum + (entry.content?.length || 0), 0);
+  assert.ok(retained <= 8_000_000);
+  fs.writeFileSync(path.join(root, "file-9.txt"), "y".repeat(900_000));
+  assert.deepEqual(compareWorkspaceSnapshots(before, snapshotWorkspace(root)).map(change => change.path), ["file-9.txt"]);
+});

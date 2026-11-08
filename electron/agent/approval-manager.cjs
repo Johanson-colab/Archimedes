@@ -24,6 +24,7 @@ function hasApprovalSurface(threadId) {
 
 function waitForApproval(actionId, signal, threadId) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new Error("Agent run interrupted while waiting for approval.")); return; }
     let settled = false;
     const timers = [];
     const finish = (result, error) => {

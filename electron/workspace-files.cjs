@@ -15,6 +15,7 @@ const IMAGE_EXTENSIONS = new Set([".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".pn
 const MAX_SNAPSHOT_ENTRIES = 5_000;
 const MAX_TEXT_BYTES = 2_000_000;
 const MAX_SNAPSHOT_TEXT_BYTES = 1_000_000;
+const MAX_SNAPSHOT_TOTAL_TEXT_BYTES = 8_000_000;
 
 function normalizeRelative(value = "") {
   return String(value || "").replaceAll("\\", "/").replace(/^\/+/, "");
@@ -146,6 +147,7 @@ function writeWorkspaceTextFile(root, relative, content) {
 
 function snapshotWorkspace(root) {
   const files = new Map();
+  let retainedTextBytes = 0;
 
   function visit(directory) {
     let entries;
@@ -164,12 +166,14 @@ function snapshotWorkspace(root) {
       if (!entry.isFile()) continue;
       const stats = fs.statSync(target);
       const kind = fileKind(target);
-      const content = (kind === "text" || kind === "markdown") && stats.size <= MAX_SNAPSHOT_TEXT_BYTES
+      const text = (kind === "text" || kind === "markdown") && stats.size <= MAX_SNAPSHOT_TEXT_BYTES
         ? fs.readFileSync(target, "utf8")
         : null;
-      const fingerprint = content === null
+      const fingerprint = text === null
         ? `${stats.size}:${stats.mtimeMs}`
-        : createHash("sha1").update(content).digest("hex");
+        : createHash("sha1").update(text).digest("hex");
+      const content = text !== null && retainedTextBytes + stats.size <= MAX_SNAPSHOT_TOTAL_TEXT_BYTES ? text : null;
+      if (content !== null) retainedTextBytes += stats.size;
       files.set(relativePath(root, target), { kind, content, fingerprint });
     }
   }

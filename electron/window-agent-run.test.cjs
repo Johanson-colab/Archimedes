@@ -28,3 +28,16 @@ test("normal completion, rejection and already closed windows cannot retain life
   await assert.rejects(runWindowAgent({ sender, native: true, run: async () => { runs++; } }), /closed/);
   assert.equal(runs, 0);
 });
+
+test("API execution is canceled when its owning window closes", async () => {
+  const { runWindowAgent } = require("./window-agent-run.cjs");
+  const sender = new EventEmitter();
+  sender.isDestroyed = () => false;
+  sender.send = () => {};
+  await runWindowAgent({ sender, native: false, run: async ({ externalSignal }) => {
+    assert.equal(externalSignal.aborted, false);
+    sender.emit("destroyed");
+    assert.equal(externalSignal.aborted, true);
+  } });
+  assert.equal(sender.listenerCount("destroyed"), 0);
+});
