@@ -9088,3 +9088,34 @@ html[data-menu-style="glass"] .menu-surface {
 .app-dialog :is(.news-settings-body, .pra-settings) > h2 {
   font-size: 16px;
 }
+
+
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-header {
+  padding: 22px 24px 0;
+  border-bottom: 0;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-header h2 {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-authors {
+  font-size: 12px;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-body {
+  padding: 16px 24px;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-actions {
+  padding: 16px 24px 20px;
+  border-top: 0;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-actions :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
