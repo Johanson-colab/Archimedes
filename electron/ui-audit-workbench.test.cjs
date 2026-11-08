@@ -27,7 +27,8 @@ test("terminal lives in the right workbench instead of the bottom panel", () => 
 
 test("workbench shares the sidebar top edge and overlays only on narrow screens", () => {
   assert.match(css, /\.codex-main \{[^}]*grid-template-columns: minmax\(0, 1fr\) var\(--workbench-width, 0px\)/);
-  assert.match(css, /\.right-workbench \{[^}]*grid-column: 2;[^}]*grid-row: 1 \/ -1;[^}]*grid-template-rows: 44px minmax\(0, 1fr\)/);
+  assert.match(css, /\.right-workbench \{[^}]*grid-column: 2;[^}]*grid-row: 1 \/ -1;[^}]*grid-template-rows: minmax\(0, 1fr\)/);
+  assert.match(css, /\.workbench-pane \{[^}]*grid-template-rows: 44px minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 1280px\) \{[\s\S]*?\.codex-main \{ grid-template-columns: minmax\(0, 1fr\); \}[\s\S]*?\.main-toolbar \{ padding-right: calc\(var\(--workbench-width, 0px\) \+ 18px\); \}[\s\S]*?\.right-workbench \{[^}]*position: absolute/);
 });
 
@@ -51,9 +52,9 @@ test("workbench supports keyboard toggle and resizing", () => {
 test("files use a compact workbench pane with drill-down and split modes", () => {
   assert.match(tabs, /Files/);
   assert.match(fs.readFileSync(path.join(root, "src", "Tabs.tsx"), "utf8"), /ui-tab-badge/);
-  assert.match(workbench, /activeTab === id/);
+  assert.match(workbench, /hidden=\{pane\.active !== id\}/);
   assert.match(app, /openWorkbench\("files"\)/);
-  assert.match(app, /<FilesView[\s\S]*?compact[\s\S]*?compactWidth=\{workbenchWidth\}/);
+  assert.match(app, /<FilesView[\s\S]*?compact[\s\S]*?compactWidth=\{workbenchFilesPaneWidth\}/);
   assert.match(app, /const split = compactWidth >= 560/);
   assert.match(app, /artifact-workbench-back/);
   assert.match(app, /Open full editor/);

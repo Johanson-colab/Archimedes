@@ -40,7 +40,8 @@ test("overlay title bar exposes drag regions and reserves native control space",
   assert.match(css, /html\[data-titlebar="overlay"\] \.main-toolbar \{[^}]*-webkit-app-region: drag/);
   assert.match(css, /html\[data-titlebar="overlay"\] \.main-toolbar button,[\s\S]*?-webkit-app-region: no-drag/);
   assert.match(css, /html\[data-titlebar="overlay"\] \.codex-main:not\(\.workbench-open\) \.main-toolbar \{ padding-right: calc\(18px \+ 138px\)/);
-  assert.match(css, /html\[data-titlebar="overlay"\] \.right-workbench \.workbench-header \{ padding-right: 146px/);
+  assert.match(css, /html\[data-titlebar="overlay"\] \.right-workbench \.workbench-header \{ -webkit-app-region: drag/);
+  assert.match(css, /html\[data-titlebar="overlay"\] \.workbench-panes\.row > \.workbench-pane:last-child \.workbench-header,[\s\S]*?\.workbench-panes\.column > \.workbench-pane:first-child \.workbench-header \{ padding-right: 146px/);
 });
 
 test("macOS inset traffic lights get clearance and the chrome stays draggable", () => {
