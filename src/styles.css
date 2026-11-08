@@ -8858,3 +8858,233 @@ html[data-menu-style="glass"] .menu-surface {
   .pra-dimension-reason { grid-column: 1 / -1; }
   .pra-trace li { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* Claude-style menus and dialogs (Attempt B) */
+.menu-surface {
+  gap: 1px;
+}
+.menu-surface .menu-item {
+  padding: 0 10px;
+  gap: 10px;
+}
+.menu-surface .menu-item-icon {
+  width: 18px;
+  height: 18px;
+}
+.menu-surface .menu-item-icon > svg {
+  width: 16px;
+  height: 16px;
+}
+.menu-surface .menu-item[aria-checked="true"] {
+  background: var(--menu-selected-bg);
+}
+.menu-surface .menu-item[aria-checked="true"]:hover:not(:disabled),
+.menu-surface .menu-item[aria-checked="true"]:focus-visible:not(:disabled) {
+  background: var(--menu-hover-bg);
+}
+.menu-surface .menu-item-chevron {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--menu-muted);
+}
+.menu-surface .menu-item-chevron > svg {
+  width: 14px;
+  height: 14px;
+}
+.menu-surface .menu-label {
+  padding: 6px 10px 4px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.menu-surface .menu-item-rich {
+  padding: 10px 12px;
+}
+.menu-surface .model-catalog-list button.active,
+.menu-surface .model-catalog-list button:hover:not(:disabled) {
+  color: var(--menu-hover-ink);
+  background: var(--menu-selected-bg);
+}
+
+.app-dialog {
+  border-radius: var(--dialog-radius-lg);
+  border-color: var(--dialog-border);
+  box-shadow: var(--dialog-shadow-lg);
+}
+.app-dialog.app-dialog-compact {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) {
+  padding: 22px 24px 0;
+  border-bottom: 0;
+}
+.app-dialog.app-dialog.workspace-modal .modal-header,
+.app-dialog.app-dialog.project-remove-modal .modal-header {
+  padding: 22px 24px 0;
+  border-bottom: 0;
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) h2,
+.app-dialog.app-dialog.workspace-modal .modal-header h2,
+.app-dialog.app-dialog.project-remove-modal .modal-header h2 {
+  color: var(--night-ink);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) p {
+  margin-top: 4px;
+  color: var(--night-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-dialog :is(.app-dialog-body, .dialog-ref-body, .auth-body, .thread-share-body, .thread-comments-list) {
+  padding: 16px 24px 4px;
+}
+.app-dialog.workspace-modal > p,
+.app-dialog.project-remove-modal > p {
+  margin: 12px 24px 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.app-dialog :is(.app-dialog-footer, .dialog-ref-footer, .modal-actions, .thread-share-footer, .auth-footer) {
+  padding: 16px 24px 20px;
+  border-top: 0;
+}
+.app-dialog :is(.app-dialog-footer, .dialog-ref-footer, .modal-actions, .thread-share-footer, .auth-footer) :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog .thread-comments-composer {
+  padding: 12px 24px 18px;
+  border-top: 0;
+}
+.app-dialog .thread-comments-composer textarea {
+  min-height: 72px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog .app-dialog-context {
+  padding: 12px 14px;
+  color: var(--night-ink);
+  background: var(--surface-canvas);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.app-dialog .dialog-ref-field {
+  gap: 5px;
+  font-size: 11px;
+}
+.app-dialog .dialog-ref-field input,
+.app-dialog .dialog-ref-field textarea {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog .dialog-ref-field small {
+  font-size: 10.5px;
+}
+.app-dialog .dialog-ref-folder {
+  min-height: 36px;
+  padding: 0 10px;
+  background: var(--surface-canvas);
+  border: 0;
+  border-radius: 8px;
+}
+.app-dialog .dialog-ref-folder .secondary-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.app-dialog .auth-field > span {
+  font-size: 11px;
+}
+.app-dialog .auth-field input {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog .auth-intro {
+  margin: 8px 24px 12px;
+  font-size: 12px;
+}
+.app-dialog .auth-footer {
+  padding: 16px 24px 20px;
+  border-top: 0;
+}
+.app-dialog .auth-submit {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog.paper-create-dialog {
+  padding: 22px 24px 20px;
+}
+.app-dialog.paper-create-dialog h2 {
+  font-size: 16px;
+}
+.app-dialog.paper-create-dialog p {
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+.app-dialog.paper-create-dialog input {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog.paper-create-dialog :is(.primary-button, .secondary-button) {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog.paper-project-dialog .paper-project-body {
+  padding: 16px 24px 20px;
+}
+.app-dialog.paper-project-dialog h2 {
+  font-size: 16px;
+}
+.app-dialog.paper-project-dialog p {
+  font-size: 12px;
+}
+.app-dialog.paper-project-dialog .paper-project-options input,
+.app-dialog.paper-project-dialog .paper-project-options select {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog.paper-project-dialog .paper-project-options button {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog.library-import-picker {
+  padding: 22px 24px 20px;
+}
+.app-dialog.library-import-picker h2 {
+  font-size: 16px;
+}
+.app-dialog.library-import-picker p {
+  color: var(--night-muted);
+  font-size: 12px;
+}
+.app-dialog.library-import-picker select {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog.library-import-picker footer {
+  padding-top: 16px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) {
+  padding: 16px 24px 20px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) > h2 {
+  font-size: 16px;
+}

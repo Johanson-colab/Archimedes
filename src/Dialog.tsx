@@ -2,7 +2,7 @@ import { type FormEventHandler, type ReactNode, type Ref } from "react";
 import DialogPortal from "./DialogPortal";
 import { useDialogFocus } from "./useDialogFocus";
 
-export type DialogSize = "sm" | "md" | "lg" | "gallery" | "preview" | "settings" | "full" | "palette" | "lightbox";
+export type DialogSize = "compact" | "sm" | "md" | "lg" | "gallery" | "preview" | "settings" | "full" | "palette" | "lightbox";
 
 export function Dialog({
   open,

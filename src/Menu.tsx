@@ -12,7 +12,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Check } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 
 export type MenuPlacement = "bottom-start" | "bottom-end" | "top-start" | "top-end";
 type RectLike = { left: number; top: number; right: number; bottom: number; width: number; height: number };
@@ -304,9 +304,10 @@ type MenuItemProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   shortcut?: string;
   danger?: boolean;
   checked?: boolean;
+  chevron?: boolean;
 };
 
-export function MenuItem({ icon, hint, shortcut, danger, checked, className = "", children, ...rest }: MenuItemProps) {
+export function MenuItem({ icon, hint, shortcut, danger, checked, chevron, className = "", children, ...rest }: MenuItemProps) {
   return (
     <button
       type="button"
@@ -322,6 +323,7 @@ export function MenuItem({ icon, hint, shortcut, danger, checked, className = ""
       <span className="menu-item-body">{children}</span>
       {hint && <span className="menu-item-hint">{hint}</span>}
       {shortcut && <span className="menu-item-shortcut">{shortcut}</span>}
+      {chevron && <span className="menu-item-chevron" aria-hidden="true"><ChevronRight size={14} /></span>}
       {checked !== undefined && <span className="menu-item-check" aria-hidden="true">{checked ? <Check size={15} strokeWidth={2} /> : null}</span>}
     </button>
   );
