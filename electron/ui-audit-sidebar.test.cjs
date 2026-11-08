@@ -127,7 +127,7 @@ test("project overflow actions collapse into one vertical menu", () => {
   assert.match(sidebar, /<MenuSurface[\s\S]{0,500}?className="project-more-menu"/);
   assert.match(sidebar, /Change project folder/);
   assert.match(sidebar, /<MenuDivider \/>/);
-  assert.match(sidebar, /danger icon=\{<Trash2/);
+  assert.match(sidebar, /danger icon=\{<Trash/);
 });
 
 test("Work row typography matches the Knowledge items", () => {

@@ -1,17 +1,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  BrainCircuit,
-  Workflow,
+  Brain,
   Check,
   ChevronDown,
-  KeyRound,
+  Key,
   LoaderCircle,
   Network,
   RefreshCw,
   Route,
   Save,
   Server,
-  Sparkles,
+  Sparkle,
+  Workflow,
   X,
 } from "lucide-react";
 import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg";
@@ -248,7 +248,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
 
       <div className="model-settings-content">
       {!proactiveRole && <Tabs value={settingsPage} onChange={(page) => { setModelMenuOpen(false); setSettingsPage(page); }} label={t("Model connection type")} className="model-connection-tabs">
-        <Tab value="api" id={`${panelId}-api-tab`} controls={`${panelId}-api`} icon={<KeyRound size={16} />}>{t("API models")}</Tab>
+        <Tab value="api" id={`${panelId}-api-tab`} controls={`${panelId}-api`} icon={<Key size={16} />}>{t("API models")}</Tab>
         <Tab value="agents" id={`${panelId}-agents-tab`} controls={`${panelId}-agents`} icon={<Workflow size={16} />} badge={activeBackend && activeBackend !== "api" ? ({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode" }[activeBackend]) : undefined}>{t("Harnesses")}</Tab>
       </Tabs>}
       <div className="model-settings-panel" id={`${panelId}-api`} role={proactiveRole ? undefined : "tabpanel"} aria-labelledby={proactiveRole ? undefined : `${panelId}-api-tab`} hidden={!proactiveRole && settingsPage !== "api"}>
@@ -264,11 +264,11 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
 
         <div className="provider-config">
           {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />{t("Loading configuration")}</div> : <>
-            {proactiveRole && savedConfig?.inheritedFromAgent && <div className="model-inherited-note"><Sparkles size={13} /><span>{t("Currently inheriting the main Agent model. Save below to give Proactive agent its own model.")}</span></div>}
+            {proactiveRole && savedConfig?.inheritedFromAgent && <div className="model-inherited-note"><Sparkle size={13} /><span>{t("Currently inheriting the main Agent model. Save below to give Proactive agent its own model.")}</span></div>}
             <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>
             <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
-            <label><span><KeyRound size={14} />{t("API key")}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} /></label>
-            <label><span><BrainCircuit size={14} />{t("Model")}</span><div className="model-combobox" ref={modelAnchorRef}>
+            <label><span><Key size={14} />{t("API key")}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} /></label>
+            <label><span><Brain size={14} />{t("Model")}</span><div className="model-combobox" ref={modelAnchorRef}>
               <input
                 ref={modelInputRef}
                 role="combobox"
@@ -293,7 +293,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
                 </div>
               </MenuSurface>
             </div></label>
-            <div className="model-security-note"><KeyRound size={13} /><span>{t("The API key is stored in Electron user data and never returned to the page.")}</span></div>
+            <div className="model-security-note"><Key size={13} /><span>{t("The API key is stored in Electron user data and never returned to the page.")}</span></div>
             {!proactiveRole && executionPreferences && <div className="model-execution-preferences">
               {executionPreferences.capabilities.thinkingEfforts.length > 0 && <label><span>{t("Thinking effort")}</span><select className="settings-select" aria-label={t("Thinking effort")} value={executionPreferences.reasoningEffort} onChange={(event) => executionPreferences.onReasoningEffort(event.target.value as ReasoningEffort)}>{executionPreferences.capabilities.thinkingEfforts.map((value) => <option key={value} value={value}>{t(value === "low" ? "Low" : value === "high" ? "High" : "Medium")}</option>)}</select></label>}
               {executionPreferences.capabilities.contextLengths.length > 0 && <label><span>{t("Context length")}</span><select className="settings-select" aria-label={t("Context length")} value={executionPreferences.contextLength} onChange={(event) => executionPreferences.onContextLength(event.target.value as ContextLength)}>{executionPreferences.capabilities.contextLengths.map((value) => <option key={value} value={value}>{t(value === "extra-long" ? "Extra Long" : "Standard")}</option>)}</select></label>}

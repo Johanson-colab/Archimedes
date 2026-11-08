@@ -21,7 +21,7 @@ before(async () => {
     MenuItem: ({ children, onClick }) => element("button", { onClick }, children),
     StateView: ({ title, description, action }) => element("section", null, [element("p", { key: "t" }, title), element("p", { key: "d" }, description), element("div", { key: "a" }, action)]),
   };
-  for (const icon of ["BookOpen", "ChevronDown", "ChevronRight", "Cloud", "ExternalLink", "FilePenLine", "FileText", "Folder", "FolderOpen", "FolderPlus", "Library", "ListFilter", "LoaderCircle", "MoreHorizontal", "PanelLeftClose", "PanelLeftOpen", "Pencil", "Plus", "Save", "Search", "Star", "Trash2", "X"]) scope[icon] = require("lucide-react")[icon];
+  for (const icon of ["BookOpen", "ChevronDown", "ChevronRight", "Cloud", "ExternalLink", "FilePen", "FileText", "Folder", "FolderOpen", "FolderPlus", "Library", "ListFilter", "LoaderCircle", "MoreHorizontal", "PanelLeftClose", "PanelLeftOpen", "Pencil", "Plus", "Save", "Search", "Star", "Trash", "X"]) scope[icon] = require("lucide-react")[icon];
   async function load(file, names) {
     const source = fs.readFileSync(path.join(__dirname, "../src", file), "utf8")
       .replace(/^import[\s\S]*?from\s+"[^"]+";\r?\n/gm, "")

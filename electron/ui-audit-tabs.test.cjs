@@ -21,7 +21,7 @@ test("the shared tab primitive handles roving focus and ARIA", () => {
 
 test("all true tab groups use the primitive", () => {
   const groups = [
-    ["src/RightWorkbench.tsx", /<Tabs value=\{activeTab\}/],
+    ["src/RightWorkbench.tsx", /<Tabs value=\{pane\.active\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{readerView\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{searchActive \? "" : mode\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{searchKind\}/],

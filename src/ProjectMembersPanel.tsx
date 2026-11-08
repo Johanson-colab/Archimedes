@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cloud, Download, LoaderCircle, Plus, RefreshCw, Share2, Trash2, UserPlus, Users } from "lucide-react";
+import { Cloud, Download, LoaderCircle, Plus, RefreshCw, Share2, Trash, UserPlus, Users } from "lucide-react";
 import SharedRunsPanel from "./SharedRunsPanel";
 import SharedNoteEditor from "./SharedNoteEditor";
 import { useUISettings } from "./i18n";
@@ -286,7 +286,7 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
             {member.role === "owner" && <option value="owner">{t("Owner")}</option>}
             {ROLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{t(option.label)}</option>)}
           </select>
-          {member.role !== "owner" && <button className="icon-button danger" onClick={() => void remove(member)} title={t("Remove member")} aria-label={t("Remove member")}><Trash2 size={13} /></button>}
+          {member.role !== "owner" && <button className="icon-button danger" onClick={() => void remove(member)} title={t("Remove member")} aria-label={t("Remove member")}><Trash size={13} /></button>}
         </SettingsRow>)}
       </div>
     </section>

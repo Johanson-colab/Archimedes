@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BookOpen, ChevronDown, ChevronRight, Cloud, FilePenLine, FileText, Folder, FolderOpen, FolderPlus, Library, ListFilter, LoaderCircle, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Star, Trash2, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Cloud, FilePen, FileText, Folder, FolderOpen, FolderPlus, Library, ListFilter, LoaderCircle, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Star, Trash, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
@@ -296,7 +296,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
           </div>;
         })}
         <button className="library-tree-row" onClick={() => setNotesExpanded((open) => !open)} aria-expanded={notesExpanded}><span className="library-tree-chevron">{notesExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>{notesExpanded ? <FolderOpen size={16} /> : <Folder size={16} />}<span>{t("Notes")}</span></button>
-        {notesExpanded && <div className="library-tree-papers">{allPapers.filter((paper) => paper.notes.trim() && matchLibraryPaper(paper, query)).map((paper) => <button className={`library-tree-row library-tree-paper${currentDocument?.kind === "notes" && documentPaper?.id === paper.id ? " active" : ""}`} key={paper.id} title={paper.title} onClick={() => openPaper(paper, paperLibraryId(paper), "notes")}><FilePenLine size={14} /><span>{paper.title}</span></button>)}<span className="library-tree-hint">{t("Notes are linked to their papers.")}</span></div>}
+        {notesExpanded && <div className="library-tree-papers">{allPapers.filter((paper) => paper.notes.trim() && matchLibraryPaper(paper, query)).map((paper) => <button className={`library-tree-row library-tree-paper${currentDocument?.kind === "notes" && documentPaper?.id === paper.id ? " active" : ""}`} key={paper.id} title={paper.title} onClick={() => openPaper(paper, paperLibraryId(paper), "notes")}><FilePen size={14} /><span>{paper.title}</span></button>)}<span className="library-tree-hint">{t("Notes are linked to their papers.")}</span></div>}
       </div>
       <footer><Folder size={13} /><span>{t("Project libraries")}</span><span>{libraries.length}</span></footer>
     </aside>
@@ -308,7 +308,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
           const key = libraryDocumentKey(document);
           const paper = catalog[document.libraryId]?.find((paper) => paper.id === document.paperId);
           if (!paper) return null;
-          return <div className={`library-document-tab${activeDocument === key ? " active" : ""}`} key={key}><button role="tab" aria-selected={activeDocument === key} onClick={() => { if (canNavigate()) setActiveDocument(key); }} title={paper.title}>{document.kind === "notes" ? <FilePenLine size={14} /> : <FileText size={14} />}<span>{document.kind === "notes" ? `${t("Notes")} · ` : ""}{paper.title}</span></button><button className="library-document-close" aria-label={t("Close {name}", { name: paper.title })} onClick={() => closeDocument(document)}><X size={13} /></button></div>;
+          return <div className={`library-document-tab${activeDocument === key ? " active" : ""}`} key={key}><button role="tab" aria-selected={activeDocument === key} onClick={() => { if (canNavigate()) setActiveDocument(key); }} title={paper.title}>{document.kind === "notes" ? <FilePen size={14} /> : <FileText size={14} />}<span>{document.kind === "notes" ? `${t("Notes")} · ` : ""}{paper.title}</span></button><button className="library-document-close" aria-label={t("Close {name}", { name: paper.title })} onClick={() => closeDocument(document)}><X size={13} /></button></div>;
         })}</div>
         <div className="library-workspace-actions"><button className="icon-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync cloud")} aria-label={t("Sync cloud")}>{cloudBusy ? <LoaderCircle className="spin" size={15} /> : <Cloud size={15} />}</button><button className="primary-button" onClick={beginImport}><Plus size={14} />{t("Import paper")}</button></div>
       </div>
@@ -329,7 +329,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
         </>}
       </div>}
     </div>
-    <MenuSurface open={Boolean(menuLibrary) && active} onClose={() => setMenuLibrary(null)} anchorRef={menuRef} ariaLabel={t("Folder actions")} width={220}><MenuItem icon={<Pencil size={14} />} onClick={() => { setEditor(menuLibrary); setMenuLibrary(null); }}>{t("Edit library")}</MenuItem><MenuItem icon={<Trash2 size={14} />} danger onClick={() => { const target = menuLibrary; setMenuLibrary(null); if (target) void deleteLibrary(target); }}>{t("Delete library")}</MenuItem></MenuSurface>
+    <MenuSurface open={Boolean(menuLibrary) && active} onClose={() => setMenuLibrary(null)} anchorRef={menuRef} ariaLabel={t("Folder actions")} width={220}><MenuItem icon={<Pencil size={14} />} onClick={() => { setEditor(menuLibrary); setMenuLibrary(null); }}>{t("Edit library")}</MenuItem><MenuItem icon={<Trash size={14} />} danger onClick={() => { const target = menuLibrary; setMenuLibrary(null); if (target) void deleteLibrary(target); }}>{t("Delete library")}</MenuItem></MenuSurface>
     {renderEditor({ editor, onClose: () => setEditor(null), onSave: saveLibrary })}
     {importLibrary && renderImport({ library: importLibrary, open: active, onClose: () => setImportLibraryId(null), onImport: importPaper })}
     <Dialog open={active && importPicker} onClose={() => setImportPicker(false)} size="compact" ariaLabel={t("Choose a library")} className="library-import-picker"><header><h2>{t("Choose a library")}</h2></header><p>{t("Select the folder where the imported paper should be saved.")}</p><select aria-label={t("Choose a library")} value={importChoice} onChange={(event) => setImportChoice(event.target.value)}>{libraries.map((folder) => <option value={folder.id} key={folder.id}>{folder.name}</option>)}</select><footer><button className="secondary-button" onClick={() => setImportPicker(false)}>{t("Cancel")}</button><button className="primary-button" disabled={!importChoice} onClick={() => { setImportPicker(false); setImportLibraryId(importChoice); }}>{t("Continue")}</button></footer></Dialog>

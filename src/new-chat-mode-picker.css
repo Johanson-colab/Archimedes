@@ -1,0 +1,9 @@
+.new-chat-mode-picker { position: relative; width: max-content; margin: 0 0 8px; }
+.new-chat-mode-trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 9px; color: var(--text-secondary); background: var(--surface-control); border: 1px solid var(--border-soft); border-radius: 6px; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.new-chat-mode-trigger:hover, .new-chat-mode-trigger[aria-expanded="true"] { color: var(--text-primary); background: var(--surface-control-active); }
+.new-chat-mode-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.new-chat-mode-menu .menu-item.new-chat-mode-item { min-height: 56px; align-items: flex-start; padding: 10px 12px; white-space: normal; }
+.new-chat-mode-menu .new-chat-mode-item .menu-item-icon, .new-chat-mode-menu .new-chat-mode-item .menu-item-check { margin-top: 1px; }
+.new-chat-mode-menu .new-chat-mode-item .menu-item-body { gap: 4px; }
+.new-chat-mode-menu .new-chat-mode-item strong { color: var(--text-primary); font-size: 12px; font-weight: 600; }
+.new-chat-mode-menu .new-chat-mode-item small { color: var(--text-muted); font-size: 11px; line-height: 1.4; }

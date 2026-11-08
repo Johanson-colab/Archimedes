@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ExternalLink, KeyRound, Save, X } from "lucide-react";
+import { Check, ExternalLink, Key, Save, X } from "lucide-react";
 import braveLogo from "@lobehub/icons-static-svg/icons/brave-color.svg";
 import exaLogo from "@lobehub/icons-static-svg/icons/exa-color.svg";
 import firecrawlLogo from "@lobehub/icons-static-svg/icons/firecrawl-color.svg";
@@ -78,7 +78,7 @@ export default function WebSearchSettingsModal({ bridge, open, onClose, embedded
         <SettingsRow
           stacked
           title={selected.name}
-          icon={<KeyRound size={13} />}
+          icon={<Key size={13} />}
           description={hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })}
         >
           <input className="settings-text-input settings-text-input-wide" id="web-search-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })} autoComplete="off" spellCheck={false} />
@@ -103,7 +103,7 @@ export default function WebSearchSettingsModal({ bridge, open, onClose, embedded
         </nav>
         <div className="web-data-config">
           <div className="web-data-selected"><span className={`web-data-icon large ${selected.id}`}>{selected.icon}</span><div><h3>{selected.name}</h3><p>{t(selected.description)}</p></div></div>
-          <div className="web-data-field"><label htmlFor="web-search-key"><KeyRound size={14} />{t("API key")}</label><input id="web-search-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })} autoComplete="off" spellCheck={false} /></div>
+          <div className="web-data-field"><label htmlFor="web-search-key"><Key size={14} />{t("API key")}</label><input id="web-search-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasSelectedKey ? t("Saved locally · enter a new key to replace") : t("Enter {provider} API key", { provider: selected.name })} autoComplete="off" spellCheck={false} /></div>
           <p className="web-data-security">{t("Keys are stored in Electron user data and never included in Agent messages. Search queries are sent directly to the selected provider.")}</p>
           <a className="web-data-link" href={selected.link} target="_blank" rel="noreferrer">{t("Get a {provider} API key", { provider: selected.name })} <ExternalLink size={13} /></a>
           {feedback && <p className="web-data-feedback" role="status">{feedback}</p>}

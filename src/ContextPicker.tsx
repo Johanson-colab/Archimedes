@@ -3,14 +3,14 @@ import {
   ArrowLeft,
   BookMarked,
   Check,
-  FilePlus2,
   FileImage,
+  FilePlus2,
   FolderPlus,
   LoaderCircle,
   Plug,
   Plus,
   Search,
-  Sparkles,
+  Sparkle,
   X,
 } from "lucide-react";
 import { MenuDivider, MenuLabel, MenuSurface } from "./Menu";
@@ -201,7 +201,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
           <MenuDivider />
           <PickerAction icon={<BookMarked size={16} />} label="Literature Library" detail="Add papers from your collections" onClick={() => void showLibraries()} />
           <PickerAction icon={<Plug size={16} />} label="Plugins" detail="Attach an installed plugin" onClick={() => void showResources("plugin")} />
-          <PickerAction icon={<Sparkles size={16} />} label="Skills" detail="Attach research instructions" onClick={() => void showResources("skill")} />
+          <PickerAction icon={<Sparkle size={16} />} label="Skills" detail="Attach research instructions" onClick={() => void showResources("skill")} />
         </>}
 
         {loading && <StateView tone="loading" compact className="context-picker-state" icon={<LoaderCircle className="spin" size={17} />} description="Loading..." />}
@@ -224,7 +224,7 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
         {!loading && (view === "plugins" || view === "skills") && <>
           <label className="context-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${view}`} /></label>
           <div className="context-picker-list">
-            {filteredResources.map((resource) => <button key={resource.id} data-menu-item className="menu-item menu-item-rich context-list-row" onClick={() => addResource(resource)} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkles size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
+            {filteredResources.map((resource) => <button key={resource.id} data-menu-item className="menu-item menu-item-rich context-list-row" onClick={() => addResource(resource)} disabled={selectedIds.has(resource.id)}><span className="context-source-icon">{resource.type === "plugin" ? <Plug size={15} /> : <Sparkle size={15} />}</span><span><strong>{resource.name}</strong><small>{resource.detail}</small></span>{selectedIds.has(resource.id) && <Check size={14} />}</button>)}
             {!filteredResources.length && <StateView compact className="context-picker-state" description={`No matching ${view} found.`} />}
           </div>
         </>}
@@ -261,5 +261,5 @@ function ContextTypeIcon({ type }: { type: ContextAttachmentType }) {
   if (type === "paper") return <BookMarked size={12} />;
   if (type === "image") return <FileImage size={12} />;
   if (type === "plugin") return <Plug size={12} />;
-  return <Sparkles size={12} />;
+  return <Sparkle size={12} />;
 }

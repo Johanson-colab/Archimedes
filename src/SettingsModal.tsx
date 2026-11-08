@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageSquareText, Monitor, Moon, Orbit, Palette, Puzzle, Route, Server, SlidersHorizontal, Sparkles, SquareTerminal, Sun, Type, UserRound, Users, X } from "lucide-react";
+import { Code2, FolderOpen, Globe2, Info, Languages, LayoutPanelTop, MessageCircleReply, Monitor, Moon, Orbit, Palette, Puzzle, Route, Server, SlidersHorizontal, Sparkle, SquareTerminal, Sun, Type, UserRound, Users, X } from "lucide-react";
 import JourneySettingsPanel from "./JourneySettingsPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import type { ProactiveSettings } from "./proactive-types";
@@ -72,7 +72,7 @@ const sections: Array<{ id: SettingsSection; label: string; icon: React.ReactNod
   { id: "account", label: "Account", icon: <UserRound size={15} /> },
   { id: "members", label: "Members", icon: <Users size={15} /> },
   { id: "journey", label: "Journey", icon: <Route size={15} /> },
-  { id: "proactive", label: "Proactive agent", icon: <Sparkles size={15} /> },
+  { id: "proactive", label: "Proactive agent", icon: <Sparkle size={15} /> },
   { id: "appearance", label: "Appearance", icon: <Palette size={15} /> },
   { id: "workbench", label: "Workbench", icon: <LayoutPanelTop size={15} /> },
   { id: "plugins", label: "Research Apps", icon: <Puzzle size={15} /> },

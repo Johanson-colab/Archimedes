@@ -3,33 +3,33 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
-  BrainCircuit,
+  Brain,
   Check,
   ChevronRight,
   LibraryBig,
   LoaderCircle,
-  Microscope,
-  PenTool,
+  Pen,
   Plus,
   Presentation,
   Search,
+  TestTube,
   Workflow,
 } from "lucide-react";
 
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
 const collectionAppearance: Record<string, { icon: React.ReactNode; tone: string }> = {
-  "AI-Research-SKILLs": { icon: <BrainCircuit size={22} />, tone: "green" },
-  "Research-Paper-Writing-Skills": { icon: <PenTool size={22} />, tone: "gold" },
+  "AI-Research-SKILLs": { icon: <Brain size={22} />, tone: "green" },
+  "Research-Paper-Writing-Skills": { icon: <Pen size={22} />, tone: "gold" },
   "academic-research-skills": { icon: <LibraryBig size={22} />, tone: "blue" },
-  "nature-skills": { icon: <Microscope size={22} />, tone: "teal" },
+  "nature-skills": { icon: <TestTube size={22} />, tone: "teal" },
   "paper-craft-skills": { icon: <Presentation size={22} />, tone: "coral" },
   ARIS: { icon: <Workflow size={22} />, tone: "graphite" },
 };
 
 function collectionIcon(collectionId: string, size = 22) {
   const appearance = collectionAppearance[collectionId];
-  if (!appearance) return <BrainCircuit size={size} />;
+  if (!appearance) return <Brain size={size} />;
   return <span className="skill-icon-resize" style={{ "--skill-icon-size": `${size}px` } as React.CSSProperties}>{appearance.icon}</span>;
 }
 
@@ -125,7 +125,7 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach, e
       {loading && <StateView tone="loading" className="skills-state" icon={<LoaderCircle className="spin" size={18} />} description="Indexing local skills..." />}
       {!loading && <div className="skill-collection-grid">
         {collections.map((collection) => {
-          const appearance = collectionAppearance[collection.id] || { icon: <BrainCircuit size={22} />, tone: "green" };
+          const appearance = collectionAppearance[collection.id] || { icon: <Brain size={22} />, tone: "green" };
           return <button key={collection.id} className="skill-collection-card" onClick={() => void openCollection(collection)}>
             <span className={`skill-collection-icon ${appearance.tone}`}>{appearance.icon}</span>
             <span className="skill-collection-copy"><strong>{collection.name}</strong><small>{collection.description}</small></span>
@@ -138,7 +138,7 @@ export default function SkillsView({ bridge, workspace, attachedIds, onAttach, e
     </section>;
   }
 
-  const appearance = collectionAppearance[selectedCollection.id] || { icon: <BrainCircuit size={22} />, tone: "green" };
+  const appearance = collectionAppearance[selectedCollection.id] || { icon: <Brain size={22} />, tone: "green" };
   return <section className="skills-page skills-detail-page">
     <header className="skills-detail-header">
       <button className="skills-back" onClick={() => { setSelectedCollection(null); setSelectedSkill(null); setError(""); }} title="Back to skill collections"><ArrowLeft size={16} /></button>

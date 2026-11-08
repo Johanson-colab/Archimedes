@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, KeyRound, LoaderCircle, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Key, LoaderCircle, X } from "lucide-react";
 
 import { Dialog } from "./Dialog";
 
@@ -167,7 +167,7 @@ export function ReproductionEnvironmentDialog({
   return <Dialog open={open} onClose={onClose} size="md" ariaLabel="Environment">
     <header className="app-dialog-header">
       <div>
-        <h2><KeyRound size={16} />Environment</h2>
+        <h2><Key size={16} />Environment</h2>
         <p>Only the required variables block the run. Everything else has a working default. Values stay encrypted on this Mac; the agent only sees whether a name is set.</p>
       </div>
       <button className="app-dialog-close" onClick={onClose} aria-label="Close"><X size={15} /></button>

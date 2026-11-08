@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, Book, Bookmark, BookmarkCheck, ExternalLink, LoaderCircle, Newspaper, RefreshCw, Search, Settings2, Sparkles } from "lucide-react";
+import { BadgeCheck, Book, Bookmark, BookmarkCheck, ExternalLink, LoaderCircle, RefreshCw, Rss, Search, Settings2, Sparkle } from "lucide-react";
 import { FilterButton, Tab, Tabs } from "./Tabs";
 import { StateView } from "./StateView";
 import { Dialog } from "./Dialog";
@@ -466,7 +466,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
           {item.saved ? <BookmarkCheck size={12} /> : <Bookmark size={12} />}{item.saved ? t("Saved") : t("Save")}
         </button>
         <button type="button" className="news-action" onClick={() => askAbout(item)} title={t("Ask AI")}>
-          <Sparkles size={12} />{t("Ask AI")}
+          <Sparkle size={12} />{t("Ask AI")}
         </button>
         <button type="button" className="news-action" onClick={() => openItem(item)} title={t("Open original")}>
           <ExternalLink size={12} />{t("Open link")}
@@ -529,7 +529,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
       : items.length === 0
         ? <StateView
           tone="empty"
-          icon={<Newspaper size={18} />}
+          icon={<Rss size={18} />}
           title={t("No news yet")}
           description={t("Enable sources or add a feed to start collecting stories.")}
           action={<button type="button" className="secondary-button" onClick={() => void refresh()}>{t("Refresh now")}</button>}

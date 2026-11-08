@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import * as Y from "yjs";
 import {
+  AlertTriangle,
   ArrowUpRight,
   Check,
   ChevronDown,
@@ -20,14 +21,13 @@ import {
   Redo2,
   Square,
   StickyNote,
-  Trash2,
+  Trash,
   Type,
   Undo2,
   Users,
   X,
   ZoomIn,
   ZoomOut,
-  AlertTriangle,
 } from "lucide-react";
 import { MenuItem, MenuDivider, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
@@ -1203,7 +1203,7 @@ export default function PaperCanvas({ bridge, workspace, projectId, paperId, pap
       <MenuDivider />
       <MenuItem icon={<FileJson size={15} />} onClick={exportJson}>{t("Export JSON")}</MenuItem>
       <MenuItem icon={<Download size={15} />} onClick={() => void exportPng()}>{t("Export PNG")}</MenuItem>
-      <MenuItem danger icon={<Trash2 size={15} />} disabled={!selectedId} onClick={() => { deleteSelected(); setMoreOpen(false); }}>{t("Delete selection")}</MenuItem>
+      <MenuItem danger icon={<Trash size={15} />} disabled={!selectedId} onClick={() => { deleteSelected(); setMoreOpen(false); }}>{t("Delete selection")}</MenuItem>
     </MenuSurface>
   </section>;
 }
