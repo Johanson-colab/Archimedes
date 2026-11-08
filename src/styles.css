@@ -9670,3 +9670,9 @@ html[data-menu-style="glass"] .menu-surface {
   border-radius: 7px;
   font-size: 12.5px;
 }
+
+
+:root[data-theme="paper"] .app-dialog .command-palette-search input {
+  background: transparent;
+  border-color: transparent;
+}
