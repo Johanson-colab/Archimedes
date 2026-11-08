@@ -8888,3 +8888,791 @@ html[data-menu-style="glass"] .menu-surface {
   .pra-dimension-reason { grid-column: 1 / -1; }
   .pra-trace li { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* Claude-style menus and dialogs (Attempt B) */
+.menu-surface {
+  gap: 1px;
+}
+.menu-surface .menu-item {
+  padding: 0 10px;
+  gap: 10px;
+}
+.menu-surface .menu-item-icon {
+  width: 18px;
+  height: 18px;
+}
+.menu-surface .menu-item-icon > svg {
+  width: 16px;
+  height: 16px;
+}
+.menu-surface .menu-item[aria-checked="true"] {
+  background: var(--menu-selected-bg);
+}
+.menu-surface .menu-item[aria-checked="true"]:hover:not(:disabled),
+.menu-surface .menu-item[aria-checked="true"]:focus-visible:not(:disabled) {
+  background: var(--menu-hover-bg);
+}
+.menu-surface .menu-item-chevron {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--menu-muted);
+}
+.menu-surface .menu-item-chevron > svg {
+  width: 14px;
+  height: 14px;
+}
+.menu-surface .menu-label {
+  padding: 6px 10px 4px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.menu-surface .menu-item-rich {
+  padding: 10px 12px;
+}
+.menu-surface .model-catalog-list button.active,
+.menu-surface .model-catalog-list button:hover:not(:disabled) {
+  color: var(--menu-hover-ink);
+  background: var(--menu-selected-bg);
+}
+
+.app-dialog {
+  border-radius: var(--dialog-radius-lg);
+  border-color: var(--dialog-border);
+  box-shadow: var(--dialog-shadow-lg);
+}
+.app-dialog.app-dialog-compact {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) {
+  padding: 22px 24px 0;
+  border-bottom: 0;
+}
+.app-dialog.app-dialog.workspace-modal .modal-header,
+.app-dialog.app-dialog.project-remove-modal .modal-header {
+  padding: 22px 24px 0;
+  border-bottom: 0;
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) h2,
+.app-dialog.app-dialog.workspace-modal .modal-header h2,
+.app-dialog.app-dialog.project-remove-modal .modal-header h2 {
+  color: var(--night-ink);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) p {
+  margin-top: 4px;
+  color: var(--night-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-dialog :is(.app-dialog-body, .dialog-ref-body, .auth-body, .thread-share-body, .thread-comments-list) {
+  padding: 16px 24px 4px;
+}
+.app-dialog.workspace-modal > p,
+.app-dialog.project-remove-modal > p {
+  margin: 12px 24px 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.app-dialog :is(.app-dialog-footer, .dialog-ref-footer, .modal-actions, .thread-share-footer, .auth-footer) {
+  padding: 16px 24px 20px;
+  border-top: 0;
+}
+.app-dialog :is(.app-dialog-footer, .dialog-ref-footer, .modal-actions, .thread-share-footer, .auth-footer) :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog .thread-comments-composer {
+  padding: 12px 24px 18px;
+  border-top: 0;
+}
+.app-dialog .thread-comments-composer textarea {
+  min-height: 72px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog .app-dialog-context {
+  padding: 12px 14px;
+  color: var(--night-ink);
+  background: var(--surface-canvas);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.app-dialog .dialog-ref-field {
+  gap: 5px;
+  font-size: 11px;
+}
+.app-dialog .dialog-ref-field input,
+.app-dialog .dialog-ref-field textarea {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog .dialog-ref-field small {
+  font-size: 10.5px;
+}
+.app-dialog .dialog-ref-folder {
+  min-height: 36px;
+  padding: 0 10px;
+  background: var(--surface-canvas);
+  border: 0;
+  border-radius: 8px;
+}
+.app-dialog .dialog-ref-folder .secondary-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.app-dialog .auth-field > span {
+  font-size: 11px;
+}
+.app-dialog .auth-field input {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog .auth-intro {
+  margin: 8px 24px 12px;
+  font-size: 12px;
+}
+.app-dialog .auth-footer {
+  padding: 16px 24px 20px;
+  border-top: 0;
+}
+.app-dialog .auth-submit {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog.paper-create-dialog {
+  padding: 22px 24px 20px;
+}
+.app-dialog.paper-create-dialog h2 {
+  font-size: 16px;
+}
+.app-dialog.paper-create-dialog p {
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+.app-dialog.paper-create-dialog input {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog.paper-create-dialog :is(.primary-button, .secondary-button) {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog.paper-project-dialog .paper-project-body {
+  padding: 16px 24px 20px;
+}
+.app-dialog.paper-project-dialog h2 {
+  font-size: 16px;
+}
+.app-dialog.paper-project-dialog p {
+  font-size: 12px;
+}
+.app-dialog.paper-project-dialog .paper-project-options input,
+.app-dialog.paper-project-dialog .paper-project-options select {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog.paper-project-dialog .paper-project-options button {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog.library-import-picker {
+  padding: 22px 24px 20px;
+}
+.app-dialog.library-import-picker h2 {
+  font-size: 16px;
+}
+.app-dialog.library-import-picker p {
+  color: var(--night-muted);
+  font-size: 12px;
+}
+.app-dialog.library-import-picker select {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.app-dialog.library-import-picker footer {
+  padding-top: 16px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) {
+  padding: 16px 24px 20px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) > h2 {
+  font-size: 16px;
+}
+
+
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-header {
+  padding: 22px 24px 0;
+  border-bottom: 0;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-header h2 {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-authors {
+  font-size: 12px;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-body {
+  padding: 16px 24px;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-actions {
+  padding: 16px 24px 20px;
+  border-top: 0;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-actions :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+
+/* Attempt B density pass */
+.menu-surface {
+  gap: 0;
+}
+.menu-surface .menu-item {
+  padding: 0 8px;
+  gap: 8px;
+}
+.menu-surface .menu-item-icon {
+  width: 16px;
+  height: 16px;
+}
+.menu-surface .menu-item-icon > svg {
+  width: 15px;
+  height: 15px;
+}
+.menu-surface .menu-label {
+  padding: 4px 8px 2px;
+  font-size: 10.5px;
+}
+.menu-surface .menu-divider {
+  margin: 4px 8px;
+}
+.menu-surface .menu-item-rich {
+  padding: 8px 10px;
+  gap: 8px;
+}
+.menu-surface .menu-item-rich .menu-item-body strong {
+  font-size: 12.5px;
+}
+.menu-surface .menu-item-rich .menu-item-body small {
+  font-size: 10.5px;
+}
+.menu-surface .menu-item-hint {
+  font-size: 10.5px;
+}
+.menu-surface .menu-item-shortcut {
+  font-size: 11px;
+}
+
+.composer-slash-menu .menu-item {
+  min-height: 30px;
+  padding: 0 8px;
+}
+.composer-slash-menu .menu-item-body {
+  gap: 10px;
+}
+.composer-slash-menu .slash-command-label {
+  flex-basis: 84px;
+  font-size: 12.5px;
+}
+.composer-slash-menu .slash-command-detail {
+  font-size: 10.5px;
+}
+
+.account-menu .account-menu-header {
+  padding: 8px 8px 6px;
+  gap: 8px;
+}
+.account-menu .account-menu-header .account-avatar.large {
+  width: 30px;
+  height: 30px;
+  font-size: 11px;
+}
+.account-menu .account-menu-header strong {
+  font-size: 12px;
+}
+.account-menu .account-menu-header small {
+  font-size: 10px;
+}
+.account-menu .account-plan {
+  padding: 2px 5px;
+  font-size: 8px;
+}
+.account-menu .account-menu-note {
+  margin: 2px 8px 6px;
+  font-size: 9.5px;
+}
+
+.image-creation-filter-panel .gallery-facet {
+  gap: 8px;
+}
+.image-creation-filter-panel .gallery-facet-label {
+  padding-top: 5px;
+  font-size: 10px;
+}
+.image-creation-filter-panel .gallery-facet-options {
+  gap: 4px;
+}
+.image-creation-filter-panel .gallery-facet-options button {
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.image-creation-filter-panel .gallery-facet-options button:hover {
+  color: var(--night-ink);
+  border-color: var(--border-strong);
+}
+.image-creation-filter-panel .gallery-facet-options button.selected {
+  color: var(--night-ink);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-canvas));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-soft));
+}
+.image-creation-filter-panel > header {
+  padding: 10px 12px 8px;
+}
+.image-creation-filter-panel > header strong {
+  font-size: 11px;
+}
+.image-creation-filter-panel > header button {
+  color: var(--night-muted);
+  font-size: 10px;
+}
+
+.app-dialog.app-dialog-compact {
+  width: min(440px, calc(100vw - 32px));
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) {
+  padding: 18px 20px 0;
+}
+.app-dialog.app-dialog.workspace-modal .modal-header,
+.app-dialog.app-dialog.project-remove-modal .modal-header {
+  padding: 18px 20px 0;
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) h2,
+.app-dialog.app-dialog.workspace-modal .modal-header h2,
+.app-dialog.app-dialog.project-remove-modal .modal-header h2 {
+  font-size: 15px;
+}
+.app-dialog.app-dialog :is(.app-dialog-header, .dialog-ref-header, .modal-header, .auth-header, .thread-share-header, .thread-comments-header) p {
+  margin-top: 3px;
+  font-size: 11.5px;
+}
+.app-dialog :is(.app-dialog-body, .dialog-ref-body, .auth-body, .thread-share-body, .thread-comments-list) {
+  padding: 14px 20px 2px;
+}
+.app-dialog.workspace-modal > p,
+.app-dialog.project-remove-modal > p {
+  margin: 10px 20px 0;
+  font-size: 12.5px;
+}
+.app-dialog :is(.app-dialog-footer, .dialog-ref-footer, .modal-actions, .thread-share-footer, .auth-footer) {
+  padding: 14px 20px 16px;
+}
+.app-dialog :is(.app-dialog-footer, .dialog-ref-footer, .modal-actions, .thread-share-footer, .auth-footer) :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.app-dialog .app-dialog-context {
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+.app-dialog .dialog-ref-field {
+  gap: 4px;
+  font-size: 10.5px;
+}
+.app-dialog .dialog-ref-field input,
+.app-dialog .dialog-ref-field textarea {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.app-dialog .dialog-ref-field small {
+  font-size: 10px;
+}
+.app-dialog .dialog-ref-folder {
+  min-height: 34px;
+  padding: 0 9px;
+  border-radius: 7px;
+}
+.app-dialog .dialog-ref-folder .secondary-button {
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 10.5px;
+}
+.app-dialog .auth-field > span {
+  font-size: 10.5px;
+}
+.app-dialog .auth-field input {
+  height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.app-dialog .auth-intro {
+  margin: 6px 20px 10px;
+  font-size: 11.5px;
+}
+.app-dialog .auth-footer {
+  padding: 14px 20px 16px;
+}
+.app-dialog .auth-submit {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.app-dialog .thread-comments-composer {
+  padding: 10px 20px 14px;
+}
+.app-dialog .thread-comments-composer textarea {
+  min-height: 64px;
+}
+.app-dialog.paper-create-dialog {
+  padding: 18px 20px 16px;
+}
+.app-dialog.paper-create-dialog h2 {
+  font-size: 15px;
+}
+.app-dialog.paper-create-dialog p {
+  font-size: 11.5px;
+  margin-bottom: 12px;
+}
+.app-dialog.paper-create-dialog input {
+  height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.app-dialog.paper-create-dialog :is(.primary-button, .secondary-button) {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.app-dialog.paper-project-dialog {
+  width: min(620px, calc(100vw - 32px));
+}
+.app-dialog.paper-project-dialog .paper-project-body {
+  padding: 14px 20px 16px;
+}
+.app-dialog.paper-project-dialog h2 {
+  font-size: 15px;
+}
+.app-dialog.paper-project-dialog p {
+  font-size: 11.5px;
+}
+.app-dialog.paper-project-dialog .paper-project-options input,
+.app-dialog.paper-project-dialog .paper-project-options select {
+  height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.app-dialog.paper-project-dialog .paper-project-options button {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.app-dialog.library-editor-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+.app-dialog.library-import-picker {
+  width: min(420px, calc(100vw - 32px));
+  padding: 18px 20px 16px;
+}
+.app-dialog.library-import-picker h2 {
+  font-size: 15px;
+}
+.app-dialog.library-import-picker p {
+  font-size: 11.5px;
+}
+.app-dialog.library-import-picker select {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.app-dialog.library-import-picker footer {
+  padding-top: 14px;
+}
+.app-dialog.auth-modal {
+  width: min(420px, calc(100vw - 28px));
+}
+.app-dialog.confirm-dialog,
+.app-dialog.project-remove-modal {
+  width: min(420px, calc(100vw - 32px));
+}
+.app-dialog.daily-paper-preview-dialog {
+  width: min(880px, calc(100vw - 36px));
+  max-height: min(720px, calc(100vh - 48px));
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-header {
+  padding: 18px 20px 0;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-header h2 {
+  font-size: 15px;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-authors {
+  font-size: 11.5px;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-body {
+  padding: 14px 20px;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-actions {
+  padding: 14px 20px 16px;
+}
+.app-dialog.daily-paper-preview-dialog .daily-paper-preview-actions :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) {
+  padding: 14px 20px 16px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) > h2 {
+  font-size: 15px;
+}
+.app-dialog :is(.news-settings-body, .pra-settings) :is(.primary-button, .secondary-button, .danger-button) {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.settings-modal.app-dialog {
+  width: min(940px, calc(100vw - 40px));
+  height: min(700px, calc(100vh - 40px));
+  grid-template-columns: 236px minmax(0, 1fr);
+}
+.app-dialog .settings-body {
+  padding: 16px 20px;
+}
+.command-palette.app-dialog {
+  width: min(520px, 100%);
+}
+.command-palette-search {
+  padding: 10px 12px;
+}
+.command-palette-item {
+  min-height: 34px;
+  padding: 4px 8px;
+}
+.command-palette-group-label {
+  font-size: 9px;
+  letter-spacing: .04em;
+}
+
+
+.image-creation-filter-panel .gallery-facet-options button {
+  color: var(--night-muted);
+  background: var(--surface-canvas);
+  border-color: var(--border-soft);
+}
+.image-creation-filter-panel .gallery-facet-options button:hover {
+  color: var(--night-ink);
+  border-color: var(--border-strong);
+}
+.settings-modal .settings-header {
+  padding: 18px 22px 12px;
+  border-bottom: 0;
+}
+.settings-modal .settings-header h2 {
+  font-size: 18px;
+}
+.settings-modal .settings-header p {
+  font-size: 11.5px;
+}
+.app-dialog .auth-body {
+  gap: 10px;
+}
+
+
+/* Attempt B dialog content pass (portals live outside .theme-paper) */
+:root[data-theme="paper"] .app-dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  color: var(--night-ink);
+  background: var(--surface-canvas);
+  border-color: var(--border-soft);
+}
+:root[data-theme="paper"] .app-dialog :is(input, textarea)::placeholder {
+  color: var(--night-faint);
+}
+:root[data-theme="paper"] .external-search-box {
+  color: var(--night-muted);
+  background: var(--surface-canvas);
+  border-color: var(--border-soft);
+}
+:root[data-theme="paper"] .external-search-box input {
+  color: var(--night-ink);
+  background: transparent;
+}
+
+.app-dialog.workspace-modal:not(.paper-import-modal):not(.terminal-settings-modal) {
+  width: min(420px, calc(100vw - 32px));
+}
+.app-dialog.workspace-modal .modal-header h2 {
+  font-size: 15px;
+}
+.app-dialog.workspace-modal > p {
+  margin: 10px 0 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.app-dialog.workspace-modal label {
+  font-size: 10.5px;
+}
+.app-dialog.workspace-modal input,
+.app-dialog.workspace-modal textarea {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.app-dialog.workspace-modal .modal-actions {
+  margin-top: 0;
+  padding: 14px 0 0;
+  border-top: 0;
+}
+.app-dialog.paper-import-modal {
+  width: min(680px, calc(100vw - 32px));
+  padding: 18px 20px 16px;
+}
+.app-dialog.paper-import-modal .modal-header {
+  padding: 0;
+  border: 0;
+}
+.app-dialog.paper-import-modal .modal-header h2 {
+  font-size: 15px;
+}
+.app-dialog.paper-import-modal > p {
+  margin: 8px 0 10px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.app-dialog.paper-import-modal .external-search-box {
+  min-height: 36px;
+  padding: 0 4px 0 10px;
+  border-radius: 8px;
+}
+.app-dialog.paper-import-modal .external-search-box input {
+  height: 32px;
+  font-size: 12.5px;
+}
+.app-dialog.paper-import-modal .external-search-box .primary-button {
+  min-height: 30px;
+  border-radius: 7px;
+  font-size: 11.5px;
+}
+.app-dialog.paper-import-modal .external-results {
+  margin-top: 10px;
+}
+.app-dialog.paper-import-modal .external-paper {
+  padding: 9px 2px;
+}
+.app-dialog.paper-import-modal .external-paper strong {
+  font-size: 12.5px;
+}
+.app-dialog.paper-import-modal .external-paper small {
+  margin-top: 3px;
+  font-size: 10.5px;
+}
+.app-dialog.thread-comments-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+.app-dialog .thread-comment {
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.app-dialog .thread-comment header strong {
+  font-size: 11.5px;
+}
+.app-dialog .thread-comment header span {
+  font-size: 9.5px;
+}
+.app-dialog .thread-comment p {
+  margin-top: 5px;
+  font-size: 12px;
+}
+.app-dialog .thread-comment-resolve {
+  margin-top: 6px;
+  font-size: 10px;
+}
+.app-dialog .thread-comments-empty strong {
+  font-size: 12px;
+}
+.app-dialog .thread-comments-empty span {
+  font-size: 10.5px;
+}
+.app-dialog.thread-share-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+.app-dialog .thread-share-summary > div {
+  padding: 8px 10px;
+}
+.app-dialog .thread-share-summary span {
+  font-size: 10px;
+}
+.app-dialog .thread-share-summary strong {
+  font-size: 12px;
+}
+.app-dialog .thread-share-note,
+.app-dialog .thread-share-warning {
+  font-size: 11px;
+}
+.app-dialog .thread-share-link {
+  padding: 8px;
+  border-radius: 7px;
+}
+.app-dialog .thread-share-link code {
+  font-size: 10.5px;
+}
+.app-dialog .thread-share-link small {
+  font-size: 9.5px;
+}
+.app-dialog.terminal-settings-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+.app-dialog .terminal-settings-body {
+  padding: 14px 20px 4px;
+}
+.app-dialog .terminal-settings-field {
+  color: var(--night-muted);
+  font-size: 10.5px;
+}
+.app-dialog .terminal-settings-field small {
+  font-size: 9.5px;
+}
+.app-dialog .terminal-settings-field input,
+.app-dialog .terminal-settings-field select {
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+
+
+:root[data-theme="paper"] .app-dialog .command-palette-search input {
+  background: transparent;
+  border-color: transparent;
+}

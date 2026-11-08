@@ -129,7 +129,7 @@ export default function AuthModal({ open, authState, initialMode = "choice", onC
         ? "Reset password"
         : "Sign in";
 
-  return <Dialog open={open} onClose={onClose} size="sm" className="auth-modal" overlayClassName="modal-backdrop auth-backdrop" ariaLabel="Sign in to Archimedes">
+  return <Dialog open={open} onClose={onClose} size="compact" className="auth-modal" overlayClassName="modal-backdrop auth-backdrop" ariaLabel="Sign in to Archimedes">
       <header className="auth-header">
         <h2>{title}</h2>
         <button className="auth-close" onClick={onClose} aria-label="Close sign-in">×</button>

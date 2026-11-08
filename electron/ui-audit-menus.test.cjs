@@ -59,7 +59,10 @@ test("menu primitive owns positioning, dismissal and keyboard behaviour", () => 
   assert.match(css, /var\(--menu-radius\)/);
   assert.match(css, /var\(--menu-item-height\)/);
   assert.match(tokens, /--menu-surface:/);
-  assert.match(tokens, /--menu-item-height: 44px/);
+  assert.match(tokens, /--menu-item-height: 30px/);
+  assert.match(tokens, /--menu-padding: 8px/);
+  assert.match(tokens, /--menu-radius: 12px/);
+  assert.match(tokens, /--menu-selected-bg:/);
 });
 
 test("menu style presets apply to the shared surface", () => {

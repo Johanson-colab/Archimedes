@@ -21,7 +21,7 @@ function ConfirmDialog({ request, onClose }: { request: ConfirmRequest; onClose:
     open
     onClose={() => onClose(false)}
     role="alertdialog"
-    size="sm"
+    size="compact"
     className="confirm-dialog"
     overlayClassName="dialog-overlay app-dialog-overlay"
     ariaLabelledBy="confirm-dialog-title"
@@ -30,10 +30,12 @@ function ConfirmDialog({ request, onClose }: { request: ConfirmRequest; onClose:
     <header className="app-dialog-header">
       <div>
         <h2 id="confirm-dialog-title">{request.destructive && <AlertTriangle size={17} />}{request.title}</h2>
-        {request.description && <p id="confirm-dialog-description">{request.description}</p>}
       </div>
       <button className="app-dialog-close" onClick={() => onClose(false)} aria-label="Close"><X size={17} /></button>
     </header>
+    {request.description && <div className="app-dialog-body">
+      <div className="app-dialog-context" id="confirm-dialog-description">{request.description}</div>
+    </div>}
     <footer className="app-dialog-footer">
       <button className="secondary-button" onClick={() => onClose(false)}>{request.cancelLabel || "Cancel"}</button>
       <button className={request.destructive ? "danger-button" : "primary-button"} onClick={() => onClose(true)}>{request.confirmLabel || "Confirm"}</button>

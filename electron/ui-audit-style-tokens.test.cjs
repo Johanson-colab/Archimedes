@@ -50,11 +50,11 @@ test("dialog style tokens cover settings, project, and gallery surfaces", () => 
   assert.match(styles, /\.modal-backdrop, \.gallery-dialog-backdrop \{ background: var\(--dialog-backdrop\)/);
 });
 
-test("default geometry stays at the pre-token values", () => {
+test("default geometry follows the Attempt B scale", () => {
   assert.match(tokens, /--button-height: var\(--control-height\)/);
   assert.match(tokens, /--button-radius: var\(--radius-control\)/);
   assert.match(tokens, /--button-secondary-radius: 5px/);
-  assert.match(tokens, /--dialog-radius-lg: 12px/);
-  assert.match(tokens, /--dialog-radius-md: 9px/);
-  assert.match(tokens, /--dialog-radius-sm: 7px/);
+  assert.match(tokens, /--dialog-radius-lg: 16px/);
+  assert.match(tokens, /--dialog-radius-md: 10px/);
+  assert.match(tokens, /--dialog-radius-sm: 8px/);
 });

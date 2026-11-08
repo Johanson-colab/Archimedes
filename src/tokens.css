@@ -230,10 +230,10 @@
   --button-secondary-hover-ink: #ffffff;
   --button-secondary-hover-border: #4a4d5e;
 
-  --dialog-radius-lg: 12px;
-  --dialog-radius-md: 9px;
-  --dialog-radius-sm: 7px;
-  --dialog-shadow-lg: 0 30px 90px rgba(10, 10, 8, .38);
+  --dialog-radius-lg: 16px;
+  --dialog-radius-md: 10px;
+  --dialog-radius-sm: 8px;
+  --dialog-shadow-lg: 0 24px 70px rgba(0, 0, 0, .5), 0 2px 10px rgba(0, 0, 0, .25);
   --dialog-shadow-md: 0 24px 70px rgba(0, 0, 0, .58);
   --dialog-shadow-sm: 0 20px 60px rgba(0, 0, 0, .3);
   --dialog-border: var(--border-default);
@@ -380,6 +380,7 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
   --button-secondary-hover-border: #d2cbc2;
 
   --dialog-shadow-md: 0 24px 64px rgba(59, 53, 46, .16);
+  --dialog-shadow-lg: 0 24px 70px rgba(59, 53, 46, .18), 0 2px 10px rgba(59, 53, 46, .06);
   --dialog-border-strong: #ddd7cf;
 
   --code-bg: #f4f1ec;
@@ -647,6 +648,7 @@ html:not([data-theme="paper"]) .codex-sidebar {
   --menu-muted: rgba(242, 242, 240, .52);
   --menu-icon: #a3a3a0;
   --menu-hover-bg: rgba(255, 255, 255, .065);
+  --menu-selected-bg: rgba(255, 255, 255, .075);
   --menu-hover-ink: #ffffff;
   --menu-hover-icon: #e8e8e5;
   --menu-disabled-ink: rgba(242, 242, 240, .38);
@@ -659,9 +661,9 @@ html:not([data-theme="paper"]) .codex-sidebar {
   --menu-danger-hover-bg: rgba(255, 92, 80, .12);
   --menu-danger-hover-icon: #ffb0a8;
   --menu-radius: 12px;
-  --menu-padding: 6px;
-  --menu-item-height: 44px;
-  --menu-item-font: 14px;
+  --menu-padding: 8px;
+  --menu-item-height: 30px;
+  --menu-item-font: 13px;
   --menu-z: 130;
 }
 
@@ -673,6 +675,7 @@ html:not([data-theme="paper"]) .codex-sidebar {
   --menu-muted: rgba(42, 40, 35, .52);
   --menu-icon: #7c776e;
   --menu-hover-bg: rgba(32, 30, 26, .06);
+  --menu-selected-bg: rgba(32, 30, 26, .06);
   --menu-hover-ink: #14120f;
   --menu-hover-icon: #4d483f;
   --menu-disabled-ink: rgba(42, 40, 35, .38);

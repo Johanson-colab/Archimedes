@@ -154,10 +154,10 @@ test("slash menu presents the requested commands and connects all actions", () =
   ]);
   assert.equal([...commands.matchAll(/detail: t\(/g)].length, 12);
   assert.equal([...commands.matchAll(/run: \(\) =>/g)].length, 12);
-  assert.match(app, /anchorRef=\{composerBoxRef\} placement="top-start" width="anchor"/);
+  assert.match(app, /anchorRef=\{composerBoxRef\} placement="top-start" width=\{560\}/);
   assert.match(app, /minWidth=\{0\} maxHeight=\{320\} className="composer-slash-menu"/);
   assert.doesNotMatch(app, /slash-command-soon/);
-  assert.match(css, /\.composer-slash-menu \.menu-item \{ min-height: 32px; padding: 0 10px; font-size: 12px; \}/);
+  assert.match(css, /\.composer-slash-menu \.menu-item \{[\s\S]*?min-height: 30px;[\s\S]*?padding: 0 8px;/);
   assert.match(app, /scrollIntoView\(\{ block: "nearest" \}\)/);
 });
 

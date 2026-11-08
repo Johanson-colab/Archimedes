@@ -236,7 +236,7 @@ export function NewProjectModal({ open, name, onName, workspacePath, onWorkspace
 }) {
   const { t } = useUISettings();
   if (!open) return null;
-  return <Dialog open onClose={onClose} size="md" className="dialog-ref project-create-modal" overlayClassName="modal-backdrop dialog-ref-backdrop" ariaLabelledBy="new-project-title">
+  return <Dialog open onClose={onClose} size="compact" className="dialog-ref project-create-modal" overlayClassName="modal-backdrop dialog-ref-backdrop" ariaLabelledBy="new-project-title">
     <header className="dialog-ref-header">
       <div><h2 id="new-project-title">{t("New project")}</h2><p>{t("A project groups related chats and runs them inside one folder. Every chat keeps its own history.")}</p></div>
       <button className="dialog-ref-close" onClick={onClose} aria-label={t("Close")}><X size={18} /></button>
@@ -257,7 +257,7 @@ export function ProjectRemoveModal({ project, onClose, onRemove }: { project: Re
   const { t } = useUISettings();
   if (!project) return null;
   const chatLabel = project.chat_count === 1 ? t("1 chat") : t("{count} chats", { count: project.chat_count });
-  return <Dialog open onClose={onClose} size="sm" className="workspace-modal project-remove-modal" ariaLabel={t("Remove {name}", { name: project.name })}>
+  return <Dialog open onClose={onClose} size="compact" className="workspace-modal project-remove-modal" ariaLabel={t("Remove {name}", { name: project.name })}>
     <header className="modal-header"><div><h2>{t("Remove project?")}</h2></div><button className="app-dialog-close" onClick={onClose} aria-label={t("Close")}><X size={16} /></button></header>
     <p>{t("{name} and its {chats}, research turns, and recorded Agent actions will be permanently deleted. Files in the project folder are not deleted.", { name: project.name, chats: chatLabel })}</p>
     <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="danger-button" onClick={onRemove}><Trash size={14} />{t("Remove project")}</button></div>
@@ -267,7 +267,7 @@ export function ProjectRemoveModal({ project, onClose, onRemove }: { project: Re
 export function ThreadRemoveModal({ thread, error, onClose, onRemove }: { thread: ResearchThread | null; error: string; onClose: () => void; onRemove: () => void }) {
   const { t } = useUISettings();
   if (!thread) return null;
-  return <Dialog open onClose={onClose} size="sm" className="workspace-modal project-remove-modal" ariaLabel={t("Delete chat?")}>
+  return <Dialog open onClose={onClose} size="compact" className="workspace-modal project-remove-modal" ariaLabel={t("Delete chat?")}>
     <header className="modal-header"><div><h2>{t("Delete chat?")}</h2></div><button className="app-dialog-close" onClick={onClose} aria-label={t("Close")}><X size={16} /></button></header>
     <p>{t("{title}, its research turns, recorded Agent actions, and chat history will be permanently deleted.", { title: thread.title })}</p>
     {error && <p className="project-rename-error" role="alert">{error}</p>}

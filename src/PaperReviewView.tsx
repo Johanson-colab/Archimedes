@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Dialog } from "./Dialog";
+import { useConfirm } from "./ConfirmDialog";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { Tab, Tabs } from "./Tabs";
 import { StateView } from "./StateView";
@@ -118,6 +119,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
   active: boolean;
 }) {
   const { t, language } = useUISettings();
+  const confirm = useConfirm();
   const [settings, setSettings] = useState<PublicPaperReviewSettings | null>(null);
   const [venues, setVenues] = useState<PaperReviewVenueSummary[]>([]);
   const [papers, setPapers] = useState<PaperReviewPaperSummary[]>([]);
@@ -289,7 +291,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
   }
 
   async function removeRun(run: PaperReviewRunSummary) {
-    if (!window.confirm(t("Delete this review run? This cannot be undone."))) return;
+    if (!(await confirm({ title: t("Delete this review run? This cannot be undone."), confirmLabel: t("Delete"), destructive: true }))) return;
     try {
       await bridge.deletePaperReviewRun(run.id);
       const rows = await refreshRuns();

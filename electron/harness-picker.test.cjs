@@ -10,8 +10,8 @@ before(async () => {
   React = require("react"); ({ createRoot } = require("react-dom/client"));
   const { transformWithOxc } = await import("vite");
   const icons = require("lucide-react");
-  const scope = { React, ...React, createPortal: require("react-dom").createPortal, Check: icons.Check, ChevronDown: icons.ChevronDown, Settings: icons.Settings, useUISettings: () => ({ t: (key) => key }), ArchimedesMark: () => React.createElement("svg"), openaiLogo: "openai", claudeLogo: "claude", opencodeLogo: "opencode" };
-  for (const [file, names] of [["Menu", ["MenuSurface", "MenuItem"]], ["HarnessPicker", ["HarnessPicker"]]]) {
+  const scope = { React, ...React, createPortal: require("react-dom").createPortal, Check: icons.Check, ChevronDown: icons.ChevronDown, ChevronRight: icons.ChevronRight, Settings: icons.Settings, useUISettings: () => ({ t: (key) => key }), ArchimedesMark: () => React.createElement("svg"), openaiLogo: "openai", claudeLogo: "claude", opencodeLogo: "opencode" };
+  for (const [file, names] of [["Menu", ["MenuSurface", "MenuItem", "MenuDivider", "MenuLabel"]], ["HarnessPicker", ["HarnessPicker"]]]) {
     const text = fs.readFileSync(path.join(__dirname, `../src/${file}.tsx`), "utf8").replace(/^import[\s\S]*?from\s+"[^"]+";\r?\n/gm, "").replace(/^import "[^"]+";\r?\n/gm, "").replace(/export default function/g, "function").replace(/export function/g, "function");
     const { code } = await transformWithOxc(text, `${file}.tsx`, { jsx: { runtime: "classic" } });
     Object.assign(scope, new Function(...Object.keys(scope), `${code.replace(/^export \{\};?$/gm, "")}\nreturn {${names}};`)(...Object.values(scope)));
@@ -24,6 +24,9 @@ async function mount(props) {
   await React.act(async () => root.render(React.createElement(Picker, props)));
   return () => React.act(async () => root.unmount());
 }
+function harnessOptions() {
+  return [...document.querySelectorAll(".harness-picker-menu > .menu-item")].filter((node) => node.textContent !== "Model settings");
+}
 test("harness picker exposes four entries, switches only supported runtimes and opens Models", async () => {
   const changes = []; let settings = 0;
   const cleanup = await mount({ backend: "codex", busy: false, onChange: async (id) => changes.push(id), onSettings: () => { settings++; } });
@@ -31,8 +34,9 @@ test("harness picker exposes four entries, switches only supported runtimes and 
     assert.deepEqual(changes, []);
     const open = () => React.act(async () => document.querySelector(".harness-picker-trigger").click());
     await open();
-    const options = [...document.querySelectorAll(".harness-picker-menu > .menu-item")];
+    const options = harnessOptions();
     assert.equal(options.length, 4);
+    assert.ok(document.querySelector('[aria-label="Model settings"]'));
     assert.deepEqual(options.map((node) => node.querySelector(".menu-item-body").textContent), ["Codex", "Claude Code", "OpenCode", "Archimedes"]);
     assert.equal(options[1].disabled, false); assert.equal(options[2].disabled, false);
     await React.act(async () => options[3].click());
@@ -41,7 +45,6 @@ test("harness picker exposes four entries, switches only supported runtimes and 
     await React.act(async () => {
       const menu = document.querySelector('[role="menu"]');
       menu.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "End", bubbles: true }));
-      menu.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
     assert.equal(document.activeElement.getAttribute("aria-label"), "Model settings");
     await React.act(async () => document.querySelector('[aria-label="Model settings"]').click());
@@ -56,7 +59,7 @@ test("busy state disables switching and failed saves keep the current harness", 
   cleanup = await mount({ backend: "api", busy: false, onChange: async () => { throw new Error("Save failed"); }, onSettings: () => {} });
   try {
     await React.act(async () => document.querySelector(".harness-picker-trigger").click());
-    await React.act(async () => document.querySelector(".harness-picker-menu > .menu-item").click());
+    await React.act(async () => harnessOptions()[0].click());
     assert.match(document.querySelector('[role="alert"]').textContent, /Save failed/);
     assert.match(document.querySelector(".harness-picker-trigger").textContent, /Archimedes/);
   } finally { await cleanup(); }
@@ -67,7 +70,7 @@ test("an established chat explains that another harness starts a new chat", asyn
   const cleanup = await mount({ backend: "codex", bound: true, busy: false, onChange: async (id) => changes.push(id), onSettings: () => {} });
   try {
     await React.act(async () => document.querySelector(".harness-picker-trigger").click());
-    const options = [...document.querySelectorAll(".harness-picker-menu > .menu-item")];
+    const options = harnessOptions();
     assert.equal(options[0].title, "");
     assert.match(document.querySelector(".harness-picker-notice").textContent, /Start a new chat to use this agent/);
     for (const option of options.slice(1)) assert.match(option.title, /Start a new chat to use this agent/);
