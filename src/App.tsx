@@ -232,7 +232,7 @@ const COMPOSER_DRAFT_STORAGE_PREFIX = "archimedes-composer-draft:";
 const COMPOSER_HISTORY_STORAGE_KEY = "archimedes-composer-history";
 const COMPOSER_HISTORY_LIMIT = 30;
 
-type ComposerDraft = { text: string; selectionStart: number; selectionEnd: number };
+type ComposerDraft = { text: string; selectionStart: number; selectionEnd: number; newChatMode?: NewChatMode };
 type QueuedPrompt = { id: string; draft: string; mode: ResearchMode; reasoningEffort: ReasoningEffort; contextLength: ContextLength; contextItems: ContextAttachment[] };
 
 function readComposerDraft(key: string): ComposerDraft | null {
@@ -245,6 +245,7 @@ function readComposerDraft(key: string): ComposerDraft | null {
       text: value.text,
       selectionStart: typeof value.selectionStart === "number" ? value.selectionStart : value.text.length,
       selectionEnd: typeof value.selectionEnd === "number" ? value.selectionEnd : value.text.length,
+      newChatMode: value.newChatMode === "research" || value.newChatMode === "create" ? value.newChatMode : "standard",
     };
   } catch {
     return null;
@@ -2545,7 +2546,7 @@ function App() {
     }
   }
 
-  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength, submittedContextOverride?: ContextAttachment[]): Promise<boolean> {
+  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength, submittedContextOverride?: ContextAttachment[], researchSkill?: "idea-spark"): Promise<boolean> {
     const question = draft.trim();
     const submittedContext = submittedContextOverride ?? contextItems;
     const hasPastedImage = submittedContext.some((item) => item.type === "image");
@@ -2566,7 +2567,7 @@ function App() {
     setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: selectedHarness });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, researchSkill, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: selectedHarness });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
@@ -3535,7 +3536,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   onCommand: (command: ConversationCommand) => Promise<ConversationCommandResult>;
   contextSummary?: string;
   compactedThroughTurnId?: string | null;
-  onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength, contextItems?: ContextAttachment[]) => Promise<boolean>;
+  onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength, contextItems?: ContextAttachment[], researchSkill?: "idea-spark") => Promise<boolean>;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
   onAddContext: (items: ContextAttachment[]) => void;
@@ -3586,7 +3587,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const rejectHistoryAction = useCallback(() => historyHandlersRef.current.onReject(), []);
   const openHistoryFile = useCallback((path: string) => historyHandlersRef.current.onOpenFile(path), []);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
-  const [newChatMode, setNewChatMode] = useState<NewChatMode>("standard");
+  const [newChatMode, setNewChatMode] = useState<NewChatMode>(storedDraftRef.current?.newChatMode ?? "standard");
   const welcomeVisible = showWelcome && !welcomeDismissed;
 
   useEffect(() => {
@@ -3604,6 +3605,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     if (composerRequest && appliedComposerRequestRef.current === composerRequest.id) return;
     const stored = readComposerDraft(draftKey);
     storedDraftRef.current = stored;
+    setNewChatMode(stored?.newChatMode ?? "standard");
     setPrompt(stored?.text ?? "");
     setHistoryIndex(-1);
     if (!stored) return;
@@ -3621,8 +3623,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     const textarea = composerRef.current;
     const start = textarea?.selectionStart ?? prompt.length;
     const end = textarea?.selectionEnd ?? prompt.length;
-    writeComposerDraft(draftKey, prompt ? { text: prompt, selectionStart: start, selectionEnd: end } : null);
-  }, [draftKey, prompt]);
+    writeComposerDraft(draftKey, prompt || newChatMode !== "standard" ? { text: prompt, selectionStart: start, selectionEnd: end, newChatMode } : null);
+  }, [draftKey, prompt, newChatMode]);
 
   useEffect(() => {
     const onFocusComposer = (event: KeyboardEvent) => {
@@ -3945,7 +3947,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     setPrompt("");
     setComposerError("");
     onResearchMode(predictedMode);
-    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext);
+    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext, nativeBackend && newChatMode === "research" ? "idea-spark" : undefined);
     if (!sent) setPrompt((current) => current.trim() ? current : draft);
     requestAnimationFrame(() => {
       const textarea = composerRef.current;

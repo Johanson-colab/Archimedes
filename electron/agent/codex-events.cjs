@@ -1,4 +1,5 @@
 const { randomUUID } = require('node:crypto');
+const { skillReadActivity } = require('./research-skills.cjs');
 const OUTPUT_LIMIT = 32768;
 const TEXT_LIMIT = 1_000_000;
 const ITEM_LIMIT = 512;
@@ -69,7 +70,8 @@ function createNativeEvents({ emit = () => {}, recordEvent = () => {}, onError =
     if (item.type === 'agentMessage') output = e.text;
     else if (typeof item.aggregatedOutput === 'string') output = item.aggregatedOutput;
     else if (item.type === 'mcpToolCall' && (item.result || item.error)) output = JSON.stringify(item.result || item.error);
-    return { id: e.id, kind, title, detail: clip(detail), status, ...(output ? { output: tail(output) } : {}) };
+    const skillRead = skillReadActivity({ tool: item.type, command: item.type === 'commandExecution' ? item.command : '', filePath: item.path });
+    return { id: e.id, kind, title, ...(skillRead ? { ...skillRead, title: `Codex · ${skillRead.title}` } : {}), detail: clip(detail), status, ...(output ? { output: tail(output) } : {}) };
   }
   function snapshot(type, field, value) { snapshots.set(type, { type, field, value, dirty: true }); schedule(); }
   function handle(method, params) {

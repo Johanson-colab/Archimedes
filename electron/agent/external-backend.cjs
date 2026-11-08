@@ -7,6 +7,7 @@ const { closeAllCodexClients } = require('./codex-client.cjs');
 const { NativeProcess, closeAllExternalClients } = require('./native-process.cjs');
 const { claudeLaunch, initializeClaude, claudePrompt, handleClaude } = require('./claude-backend.cjs');
 const { opencodeLaunch, initializeOpenCode, openCodeModels, configureOpenCode, openCodePrompt, handleOpenCode } = require('./opencode-backend.cjs');
+const { prepareResearchSkill, skillReadActivity } = require('./research-skills.cjs');
 const active = new Map();
 const clip = (value, max = 4000) => String(value ?? '').slice(0, max);
 function canResumeExternal(binding, { backend, workspace, model, previousTurnId }) {
@@ -24,7 +25,7 @@ function boundedText(value, max) {
   return '';
 }
 async function runExternal(options) {
-  const { config, workspace, thread, turn, contextItems = [], bindings, emit = () => {}, recordEvent = () => {}, approve = async () => false, signal = new AbortController().signal, Client = NativeProcess, timeoutMs = 30 * 60_000 } = options;
+  const { config, workspace, thread, turn, contextItems = [], researchSkill, bindings, emit = () => {}, recordEvent = () => {}, approve = async () => false, signal = new AbortController().signal, Client = NativeProcess, timeoutMs = 30 * 60_000 } = options;
   assertPolicy(config);
   const backend = config.backend, title = backend === 'claude' ? 'Claude Code' : 'OpenCode';
   const root = fs.realpathSync(workspace);
@@ -33,11 +34,15 @@ async function runExternal(options) {
   const previousTurnId = (thread.turns || []).filter(t => t.id !== turn.id).at(-1)?.id || null;
   const binding = bindings.get();
   const resume = canResumeExternal(binding, { backend, workspace: root, model: config.model, previousTurnId });
-  const prompt = codex.userPrompt(thread, turn, resume, attachments);
+  if (thread.id && active.has(thread.id)) throw new Error('This chat already has an active native turn.');
+  if (signal.aborted) throw new Error(`${title} turn interrupted before skill setup.`);
+  const skill = prepareResearchSkill({ workspace: root, backend, thread, requested: researchSkill, emit, recordEvent });
+  // ACP has no developer-instructions field. Native skill discovery is paired
+  // with an explicit per-turn workflow request; no user config is overwritten.
+  const prompt = (backend === 'opencode' && skill ? `${skill.instructions}\n\nUser request:\n` : '') + codex.userPrompt(thread, turn, resume, attachments);
   const input = backend === 'claude' ? claudePrompt(prompt, contextItems) : openCodePrompt(prompt, contextItems);
   if (Buffer.byteLength(JSON.stringify(input)) > 8 * 1024 * 1024 - 1000) throw new Error('Native attachments exceed the protocol limit. No request was sent.');
-  if (thread.id && active.has(thread.id)) throw new Error('This chat already has an active native turn.');
-  const launch = backend === 'claude' ? claudeLaunch({ config, root, resume, binding }) : opencodeLaunch({ config, root });
+  const launch = backend === 'claude' ? claudeLaunch({ config, root, resume, binding, skill }) : opencodeLaunch({ config, root });
   const client = new Client(launch);
   let response = '', streamed = false, settled = false, sent = false, resultStatus = 'failed';
   const approvals = new Map(), resolved = new Set(), items = new Map();
@@ -56,7 +61,9 @@ async function runExternal(options) {
     if (!items.has(id) && items.size >= 512) throw new Error(`${title} exceeded the native activity limit.`);
     const old = items.get(id) || { id: randomUUID(), kind: clip(update.tool || 'tool', 120), title: `${title} · ${clip(update.tool || 'tool', 120)}`, status: 'running', detail: '' };
     const input = update.input || {};
-    const item = { ...old, ...(update.title ? { title: `${title} · ${clip(update.title, 500)}` } : {}), ...(update.tool ? { kind: clip(update.tool, 120) } : {}), ...(update.status ? { status: ['completed', 'failed', 'interrupted'].includes(update.status) ? update.status : 'running' } : {}), detail: clip(input.command || input.file_path || input.path || update.title || old.detail), ...(update.output ? { output: boundedText(update.output, 32768) } : {}) };
+    const item = { ...old, ...(update.title ? { title: `${title} · ${clip(update.title, 500)}` } : {}), ...(update.tool ? { kind: clip(update.tool, 120) } : {}), ...(update.status ? { status: ['completed', 'failed', 'interrupted'].includes(update.status) ? update.status : 'running' } : {}), detail: clip(input.command || input.file_path || input.filePath || input.path || update.title || old.detail), ...(update.output ? { output: boundedText(update.output, 32768) } : {}) };
+    const skillRead = skillReadActivity({ tool: update.tool || old.kind, input });
+    if (skillRead) Object.assign(item, skillRead, { title: `${title} · ${skillRead.title}` });
     const first = !items.has(id), ended = old.status === 'running' && item.status !== 'running';
     items.set(id, item);
     if (first || ended) {

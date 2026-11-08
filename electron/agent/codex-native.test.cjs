@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const os = require('node:os');
 const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const backend = require('./codex-backend.cjs');
 const backendConfig = require('../agent-backend-config.cjs');
@@ -57,6 +58,32 @@ test('native setup omits API instructions and resumes native history without rei
   resumed.args.bindings.get = () => ({ native_thread_id: 'native-thread', workspace: fs.realpathSync(os.tmpdir()), model: '', last_turn_id: 'prior' });
   await backend.runCodex(resumed.args);
   assert.equal(resumed.peer().calls.find(x => x.method === 'turn/start').params.input[0].text, 'Current request');
+});
+
+test('Research uses a native Codex skill input and restores its run on the next native turn', async t => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-codex-research-'));
+  t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
+  const f = fixture(p => {
+    p.send('item/started', { item: { id: 'skill-read', type: 'commandExecution', command: `cat '${path.join(workspace, '.agents/skills/archimedes-idea-spark/SKILL.md')}'` } });
+    p.send('item/completed', { item: { id: 'skill-read', type: 'commandExecution', command: `cat '${path.join(workspace, '.agents/skills/archimedes-idea-spark/SKILL.md')}'`, exitCode: 0 } });
+    complete(p);
+  }, { workspace, researchSkill: 'idea-spark' });
+  await backend.runCodex(f.args);
+  const setup = f.peer().calls.find(c => c.method === 'thread/start').params;
+  assert.match(setup.developerInstructions, /IdeaSpark/);
+  assert.equal(setup.sandbox, 'read-only');
+  const turn = f.peer().calls.find(c => c.method === 'turn/start').params;
+  const input = turn.input.find(i => i.type === 'skill');
+  assert.equal(input.name, 'archimedes-idea-spark');
+  assert.ok(fs.existsSync(input.path));
+  assert.equal(turn.sandboxPolicy.type, 'readOnly');
+  assert.ok(f.records.some(e => e.type === 'native_activity' && e.payload.activity.kind === 'skill'));
+  const originalState = f.records.find(e => e.type === 'research_skill');
+  const resumed = fixture(p => complete(p), { workspace });
+  resumed.args.thread.events = [originalState];
+  await backend.runCodex(resumed.args);
+  assert.equal(resumed.records.find(e => e.type === 'research_skill').payload.runRelative, originalState.payload.runRelative);
+  assert.match(resumed.peer().calls.find(c => c.method === 'thread/start').params.developerInstructions, /Resume it/);
 });
 
 test('permissions stay bounded and explicit effort is validated against native model catalog', async () => {

@@ -5,6 +5,7 @@ const { CodexClient } = require('./codex-client.cjs');
 const { createNativeEvents } = require('./codex-events.cjs');
 const { validateNativeChoice } = require('./codex-models.cjs');
 const { assertJsonSize, VISIBLE_IMPORT_LIMIT } = require('./codex-limits.cjs');
+const { prepareResearchSkill, SKILL_NAME } = require('./research-skills.cjs');
 const activeNativeRuns = new Map();
 
 function nativeContext(items = []) {
@@ -115,7 +116,7 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   return { answered: true };
 }
 
-async function nativeSession({ config, workspace, thread, turn, contextItems = [], signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
+async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
   const root = fs.realpathSync(workspace);
   const policy = nativePolicy(config, root);
   const attachments = nativeContext(contextItems);
@@ -125,6 +126,8 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
   if (thread.id && activeNativeRuns.has(thread.id)) throw new Error('This chat already has an active native Codex operation.');
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments);
+  if (signal.aborted) throw new Error('Codex turn interrupted before skill setup.');
+  const skill = compaction ? null : prepareResearchSkill({ workspace: root, backend: 'codex', thread, requested: researchSkill, emit, recordEvent });
   const client = new Client({ binary: config.binary });
   const events = createNativeEvents({ emit, recordEvent, onError: (error) => {
     try { finish(error); }
@@ -244,7 +247,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     const account = await client.request('account/read', { refreshToken: false });
     if (!account?.account) throw new Error('Codex is not signed in. Run codex login, then retry.');
     await validateNativeChoice(client, config, root);
-    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(resume ? { threadId: binding.native_thread_id } : {}) });
+    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(skill ? { developerInstructions: skill.instructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : {}) });
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');
     if (resume && active.nativeThreadId !== binding.native_thread_id) throw new Error('Codex returned a different native thread while resuming. No request was replayed.');
@@ -262,6 +265,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
       accepted = true;
     } else {
       const input = [{ type: 'text', text: prompt }];
+      if (skill) input.push({ type: 'skill', name: SKILL_NAME, path: skill.skillFile });
       for (const attachment of contextItems.filter(item => item.type === 'image' && item.image?.dataUrl).slice(0, 4)) input.push({ type: 'image', url: attachment.image.dataUrl });
       const started = await client.request('turn/start', { threadId: active.nativeThreadId, input, ...policy.turn });
       accepted = true;

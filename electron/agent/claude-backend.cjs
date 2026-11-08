@@ -1,11 +1,12 @@
 const { randomUUID } = require('node:crypto');
-function claudeLaunch({ config, root, resume, binding }) {
+function claudeLaunch({ config, root, resume, binding, skill }) {
   const sessionId = resume ? binding.native_thread_id : randomUUID();
   if (!/^[a-f0-9-]{36}$/i.test(sessionId)) throw new Error('Invalid Claude native session binding. No request was sent.');
   const args = ['--print', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'default', '--permission-prompt-tool', 'stdio'];
   args.push(resume ? `--resume=${sessionId}` : `--session-id=${sessionId}`);
   if (config.model) args.push('--model', config.model);
   if (config.effort) args.push('--effort', config.effort);
+  if (skill) args.push('--append-system-prompt', skill.instructions);
   return { backend: 'claude', binary: config.binary || 'claude', cwd: root, args, sessionId };
 }
 function claudeModels(initialized) {

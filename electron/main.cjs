@@ -1804,12 +1804,15 @@ app.whenReady().then(async () => {
     if (!["api", "codex", "claude", "opencode"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
     const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
+    if (input.researchSkill != null && input.researchSkill !== "idea-spark") throw new Error("Unknown Research skill.");
+    if (input.researchSkill && !externalBackend) throw new Error("IdeaSpark Research mode currently requires a native harness.");
     const config = externalBackend ? null : modelConfig.getActiveModelConfig();
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
     if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
     return runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
       externalBackend,
+      researchSkill: input.researchSkill,
       externalSignal,
       prompt: input.prompt.trim(),
       workspace,

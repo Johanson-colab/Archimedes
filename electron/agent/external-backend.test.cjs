@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { runNative, canResumeExternal, checkNative, compactNative, steerNative } = require('./external-backend.cjs');
 class Fixture extends EventEmitter {
   constructor(o) { super(); this.options=o; this.closed=false; this.sent=[]; Fixture.last=this; }
@@ -46,6 +49,38 @@ class ACPFixture extends Fixture {
     return Promise.resolve({});
   }
 }
+test('Claude Research installs native skills and appends its workflow without changing permissions', async t => {
+ const o=options();o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-claude-research-'));
+ t.after(()=>fs.rmSync(o.workspace,{recursive:true,force:true}));
+ o.researchSkill='idea-spark';const records=[];o.recordEvent=e=>records.push(e);
+ assert.equal(await runNative(o),'Hello');
+ const args=Fixture.last.options.args;
+ const instructions=args[args.indexOf('--append-system-prompt')+1];
+ assert.match(instructions,/\.claude\/skills\/archimedes-idea-spark/);
+ assert.match(instructions,/RUN_DIR=/);
+ assert.equal(args[args.indexOf('--permission-mode')+1],'default');
+ assert.equal(args.includes('--dangerously-skip-permissions'),false);
+ assert.equal(records.some(e=>e.type==='research_skill'),true);
+ assert.equal(o.events.filter(e=>e.type==='native_activity').length,0);
+});
+test('OpenCode Research installs its skills and explicitly requests the workflow through ACP', async t => {
+ const o=options('opencode');o.Client=ACPFixture;o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-opencode-research-'));
+ t.after(()=>fs.rmSync(o.workspace,{recursive:true,force:true}));
+ o.researchSkill='idea-spark';const records=[];o.recordEvent=e=>records.push(e);
+ assert.equal(await runNative(o),'ACP answer');
+ const prompt=Fixture.last.sent.find(c=>c.method==='session/prompt').params.prompt;
+ assert.match(prompt[0].text,/\.opencode\/skills\/archimedes-idea-spark/);
+ assert.match(prompt[0].text,/User request:\nhi/);
+ assert.deepEqual(Fixture.last.options.args,['acp']);
+ assert.equal(Fixture.last.options.env,undefined);
+ const state=records.find(e=>e.type==='research_skill');
+ const run=path.join(o.workspace,state.payload.runRelative);
+ assert.equal(fs.statSync(run).isDirectory(),true);
+ // Fresh process and an omitted renderer selection must still resume Research.
+ o.thread.events=[state];o.researchSkill=undefined;
+ assert.equal(await runNative(o),'ACP answer');
+ assert.equal(records.filter(e=>e.type==='research_skill').at(-1).payload.runRelative,state.payload.runRelative);
+});
 test('OpenCode validates model via ACP config and does not render session replay or thoughts',async()=>{
  const o=options('opencode');o.Client=ACPFixture;o.config.model='p/model';assert.equal(await runNative(o),'ACP answer');
  assert.equal(o.saves.at(-1).backend,'opencode');assert.equal(JSON.stringify(o.events).includes('OLD REPLAY'),false);assert.equal(JSON.stringify(o.events).includes('PRIVATE'),false);
