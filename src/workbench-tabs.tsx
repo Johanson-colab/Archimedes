@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Compass, FolderTree, GalleryVerticalEnd, GitCompareArrows, ListTree, Milestone, NotebookPen, SquareTerminal } from "lucide-react";
+import { Compass, Files, GalleryVerticalEnd, GitCompareArrows, ListTree, Milestone, NotebookPen, SquareTerminal } from "lucide-react";
 
 export type WorkbenchTabId = "journey" | "trajectory" | "files" | "changes" | "artifacts" | "notes" | "terminal" | "browser";
 
@@ -23,7 +23,7 @@ export type WorkbenchTabDefinition = {
 export const WORKBENCH_TAB_DEFINITIONS: WorkbenchTabDefinition[] = [
   { id: "journey", labelKey: "Journey", descriptionKey: "Research narrative, evidence, and progress.", icon: <Milestone size={13} /> },
   { id: "trajectory", labelKey: "Trajectory", descriptionKey: "Raw agent events and tool calls.", icon: <ListTree size={13} /> },
-  { id: "files", labelKey: "Files", descriptionKey: "Browse, preview, and edit workspace files.", icon: <FolderTree size={13} /> },
+  { id: "files", labelKey: "Files", descriptionKey: "Browse, preview, and edit workspace files.", icon: <Files size={13} /> },
   { id: "changes", labelKey: "Changes", descriptionKey: "Files changed by the agent in this conversation.", icon: <GitCompareArrows size={13} /> },
   { id: "artifacts", labelKey: "Artifacts", descriptionKey: "Agent outputs collected from this conversation: figures, PDFs, data, Markdown, and web previews.", icon: <GalleryVerticalEnd size={13} />, optional: true },
   { id: "notes", labelKey: "Notes", descriptionKey: "A scratchpad for ideas and prompt drafts.", icon: <NotebookPen size={13} /> },

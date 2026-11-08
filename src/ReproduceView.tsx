@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, ChevronLeft, FlaskConical, KeyRound, LoaderCircle, Play, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, FlaskConical, Key, LoaderCircle, Play, Plus, RefreshCw, Square, Trash } from "lucide-react";
 
 import { useUISettings } from "./i18n";
 import { InlineNotice } from "./InlineNotice";
@@ -475,7 +475,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         <h1>{detail.title}</h1>
         <span className={`reproduce-status ${STATUS_TONE[detail.status]}`}>{STATUS_LABELS[detail.status]}</span>
         <div className="reproduce-header-actions">
-          <button className="quiet-icon-button" title="Delete" disabled={busy !== ""} onClick={() => void remove()}><Trash2 size={14} /></button>
+          <button className="quiet-icon-button" title="Delete" disabled={busy !== ""} onClick={() => void remove()}><Trash size={14} /></button>
         </div>
       </header>
 
@@ -654,7 +654,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
             {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Re-plan
           </button>
           <button className="secondary-button" disabled={busy !== ""} onClick={() => setEnvOpen(true)}>
-            <KeyRound size={14} />Environment
+            <Key size={14} />Environment
           </button>
           {running
             ? <button className="secondary-button" disabled={busy !== ""} onClick={() => void stopRun()}>

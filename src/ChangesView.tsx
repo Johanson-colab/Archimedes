@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FilePlus2, FilePenLine, FileX2, GitCompareArrows } from "lucide-react";
+import { FilePen, FilePlus2, FileX2, GitCompareArrows } from "lucide-react";
 import { useUISettings } from "./i18n";
 
 type ChangesViewProps = {
@@ -26,7 +26,7 @@ function formatChangeTime(value: string, language: "en" | "zh") {
 function changeIcon(status: WorkspaceFileChange["status"]) {
   if (status === "created") return <FilePlus2 size={14} />;
   if (status === "deleted") return <FileX2 size={14} />;
-  return <FilePenLine size={14} />;
+  return <FilePen size={14} />;
 }
 
 export default function ChangesView({ changeSets, hasThread, onOpenFile }: ChangesViewProps) {

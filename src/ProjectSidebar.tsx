@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, FolderOpen, MessageSquarePlus, MoreHorizontal, MoreVertical, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, FolderOpen, MessageCirclePlus, MoreHorizontal, MoreVertical, Pencil, Plus, Trash, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
 import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";
@@ -154,14 +154,14 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
           {showArchivedProjects && <div className="archived-project-list">
             {archivedProjects.map((project) => <div className="archived-project-row" key={project.id}>
               <span title={project.workspace_path || project.name}><strong>{project.name}</strong>{project.chat_count > 0 && <small>{project.chat_count}</small>}</span>
-              <div><button onClick={() => onArchiveProject(project, false)} title={t("Restore {name}", { name: project.name })} disabled={disabled}><ArchiveRestore size={12} /></button><button onClick={() => onRemoveProject(project)} title={t("Remove {name}", { name: project.name })} disabled={disabled}><Trash2 size={12} /></button></div>
+              <div><button onClick={() => onArchiveProject(project, false)} title={t("Restore {name}", { name: project.name })} disabled={disabled}><ArchiveRestore size={12} /></button><button onClick={() => onRemoveProject(project)} title={t("Remove {name}", { name: project.name })} disabled={disabled}><Trash size={12} /></button></div>
             </div>)}
           </div>}
         </>}
         {archivedThreads.length > 0 && <>
         <div className="work-subheading">{t("Archived chats")}</div>
         <div className="archived-chat-list">
-          {archivedThreads.map((thread) => <div className="archived-chat-row" key={thread.id}><span title={thread.title}>{thread.title}</span><div><button onClick={() => onArchiveThread(thread, false)} title={t("Restore chat")} disabled={disabled}><ArchiveRestore size={12} /></button><button className="archived-chat-delete" onClick={() => onRemoveThread(thread)} title={t("Permanently delete chat")} disabled={disabled}><Trash2 size={12} /></button></div></div>)}
+          {archivedThreads.map((thread) => <div className="archived-chat-row" key={thread.id}><span title={thread.title}>{thread.title}</span><div><button onClick={() => onArchiveThread(thread, false)} title={t("Restore chat")} disabled={disabled}><ArchiveRestore size={12} /></button><button className="archived-chat-delete" onClick={() => onRemoveThread(thread)} title={t("Permanently delete chat")} disabled={disabled}><Trash size={12} /></button></div></div>)}
         </div>
         </>}
         {!archivedProjects.length && !archivedThreads.length && <div className="work-empty">{emptyCopy}</div>}
@@ -187,7 +187,7 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                 }} /></span>
                 : <button className="project-select" onClick={() => toggleProject(project.id)} title={`${project.name}${project.workspace_path ? ` · ${project.workspace_path}` : ""}`} aria-expanded={isExpanded}><span className="project-name">{project.name}</span>{projectThreads.length > 0 && <small>{projectThreads.length}</small>}</button>}
               <span className="project-row-actions">
-                <button onClick={() => onNewChat(project.id)} title={t("New chat in {name}", { name: project.name })} disabled={disabled}><MessageSquarePlus size={13} /></button>
+                <button onClick={() => onNewChat(project.id)} title={t("New chat in {name}", { name: project.name })} disabled={disabled}><MessageCirclePlus size={13} /></button>
                 <button className={menuOpen ? "project-more-button active" : "project-more-button"} onClick={(event) => { projectAnchorRef.current = event.currentTarget; setProjectMenu((current) => current?.project.id === project.id ? null : { project }); }} title={t("More project actions")} aria-label={t("More project actions")} aria-haspopup="menu" aria-expanded={menuOpen} disabled={disabled}><MoreVertical size={14} /></button>
               </span>
               <MenuSurface open={menuOpen} onClose={() => setProjectMenu(null)} anchorRef={projectAnchorRef} placement="bottom-end" width={300} className="project-more-menu" ariaLabel={t("Project actions")}>
@@ -195,7 +195,7 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                 <MenuItem icon={<Pencil size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}>{t("Rename")}</MenuItem>
                 <MenuItem icon={<Archive size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}>{t("Archive")}</MenuItem>
                 <MenuDivider />
-                <MenuItem danger icon={<Trash2 size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onRemoveProject(project); }} disabled={disabled}>{t("Remove")}</MenuItem>
+                <MenuItem danger icon={<Trash size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onRemoveProject(project); }} disabled={disabled}>{t("Remove")}</MenuItem>
               </MenuSurface>
             </div>
             {isExpanded && <div className="project-chat-list">
@@ -260,7 +260,7 @@ export function ProjectRemoveModal({ project, onClose, onRemove }: { project: Re
   return <Dialog open onClose={onClose} size="sm" className="workspace-modal project-remove-modal" ariaLabel={t("Remove {name}", { name: project.name })}>
     <header className="modal-header"><div><h2>{t("Remove project?")}</h2></div><button className="app-dialog-close" onClick={onClose} aria-label={t("Close")}><X size={16} /></button></header>
     <p>{t("{name} and its {chats}, research turns, and recorded Agent actions will be permanently deleted. Files in the project folder are not deleted.", { name: project.name, chats: chatLabel })}</p>
-    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="danger-button" onClick={onRemove}><Trash2 size={14} />{t("Remove project")}</button></div>
+    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="danger-button" onClick={onRemove}><Trash size={14} />{t("Remove project")}</button></div>
   </Dialog>;
 }
 
@@ -271,6 +271,6 @@ export function ThreadRemoveModal({ thread, error, onClose, onRemove }: { thread
     <header className="modal-header"><div><h2>{t("Delete chat?")}</h2></div><button className="app-dialog-close" onClick={onClose} aria-label={t("Close")}><X size={16} /></button></header>
     <p>{t("{title}, its research turns, recorded Agent actions, and chat history will be permanently deleted.", { title: thread.title })}</p>
     {error && <p className="project-rename-error" role="alert">{error}</p>}
-    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="danger-button" onClick={onRemove}><Trash2 size={14} />{t("Delete chat")}</button></div>
+    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="danger-button" onClick={onRemove}><Trash size={14} />{t("Delete chat")}</button></div>
   </Dialog>;
 }

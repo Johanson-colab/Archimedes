@@ -76,72 +76,71 @@ import ArchimedesMark from "./brand/ArchimedesMark";
 import ArchimedesWordmark from "./brand/ArchimedesWordmark";
 import {
   AlertTriangle,
-  BookOpen,
   ArrowDown,
-  CalendarDays,
+  ArrowUp,
+  BookOpen,
+  BookOpenCheck,
+  Calendar,
   Check,
-  CircleDot,
-  ClipboardPaste,
-  Cloud,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleDot,
+  Clipboard,
+  Cloud,
   Copy,
   Cpu,
   Download,
   File,
-  FileArchive,
   FileAudio,
   FileBraces,
   FileCode,
   FileCode2,
-  ArrowUp,
   FileCog,
   FileImage,
   FileJson,
   FileLock,
+  FilePen,
   FileSpreadsheet,
   FileTerminal,
   FileText,
   FileType,
   FileVideo,
   Flag,
-  GitCompareArrows,
-  GitFork,
-  NotebookPen,
+  FlaskConical,
   Folder,
   FolderOpen,
-  FlaskConical,
+  GitCompareArrows,
+  GitFork,
   ImagePlus,
-  Images,
   Laptop,
   Lightbulb,
   LoaderCircle,
   Lock,
   Maximize2,
   MessageCircle,
-  MessageSquareText,
+  MessageCircleReply,
+  Minimize2,
+  NotebookPen,
+  Package,
   PanelLeftClose,
-  Puzzle,
   PanelLeftOpen,
   PanelRight,
   PanelRightClose,
   PanelRightOpen,
-  FilePenLine,
   Play,
   Plus,
-  RefreshCw,
+  Puzzle,
   Radar,
+  RefreshCw,
   Route,
   Save,
   Scissors,
   Search,
   Settings,
   Share2,
-  ShieldCheck,
-  Shrink,
-  ScanSearch,
-  Sparkles,
+  Shield,
+  Sparkle,
   Square,
   SquareTerminal,
   Undo2,
@@ -184,8 +183,8 @@ const researchModes: Array<{ id: ResearchMode; label: string; description: strin
   { id: "free-chat", label: "Free chat", description: "Talk with AI without a predefined workflow", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },
   { id: "idea-spark", label: "Idea spark", description: "Find gaps and form testable research ideas", icon: <Lightbulb size={15} />, placeholder: "Describe a topic, observation, or open question..." },
   { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
-  { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePenLine size={15} />, placeholder: "What section or argument would you like to write?" },
-  { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <ScanSearch size={15} />, placeholder: "What paper or draft would you like to review?" },
+  { id: "paper-generation", label: "Paper writing", description: "Plan and draft an evidence-grounded paper", icon: <FilePen size={15} />, placeholder: "What section or argument would you like to write?" },
+  { id: "paper-review", label: "Paper review", description: "Critique claims, methods, and presentation", icon: <BookOpenCheck size={15} />, placeholder: "What paper or draft would you like to review?" },
 ];
 
 const previewModelCapabilities: ModelCapabilities = {
@@ -2933,8 +2932,8 @@ function App() {
     { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
     { id: "open-chat", group: t("Work"), label: t("Open current chat"), icon: <MessageCircle size={15} />, run: () => setMainSection("chat") },
     { id: "research-path", group: t("Panels"), label: t("Research path"), detail: researchPanelOpen ? t("Hide the Research path panel") : t("Show the Research path panel"), icon: <Route size={15} />, run: () => setResearchPanelOpen((open) => !open) },
-    { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? (proactive.modelReady ? t("Start proactive suggestions") : t("Set up proactive suggestions")) : t("Review suggestions"), icon: <Sparkles size={15} />, run: toggleProactiveDock },
-    { id: "proactive-settings", group: t("System"), label: t("Proactive settings"), icon: <ShieldCheck size={15} />, run: () => { setSettingsSection("proactive"); setSettingsOpen(true); } },
+    { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? (proactive.modelReady ? t("Start proactive suggestions") : t("Set up proactive suggestions")) : t("Review suggestions"), icon: <Sparkle size={15} />, run: toggleProactiveDock },
+    { id: "proactive-settings", group: t("System"), label: t("Proactive settings"), icon: <Shield size={15} />, run: () => { setSettingsSection("proactive"); setSettingsOpen(true); } },
     ...moduleCommands,
     { id: "extensions-installed", group: t("Extensions"), label: t("Installed extensions"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("installed"); setMainSection("extensions"); } },
     { id: "extensions-available", group: t("Extensions"), label: t("Browse extensions"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("available"); setMainSection("extensions"); } },
@@ -3036,7 +3035,7 @@ function App() {
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
             </div>}
             {activeThreadId && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share thread snapshot")} aria-label={t("Share thread snapshot")}><Share2 size={15} /></button>}
-            {activeThreadId && <button className="quiet-icon-button" onClick={() => setCommentsOpen(true)} title={t("Thread comments")} aria-label={t("Thread comments")}><MessageSquareText size={15} /></button>}
+            {activeThreadId && <button className="quiet-icon-button" onClick={() => setCommentsOpen(true)} title={t("Thread comments")} aria-label={t("Thread comments")}><MessageCircleReply size={15} /></button>}
             <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={() => setResearchPanelOpen((open) => !open)}
@@ -3053,7 +3052,7 @@ function App() {
               aria-label={proactive.open ? t("Hide Proactive agent") : t("Show Proactive agent")}
               aria-pressed={proactive.open}
             >
-              <Sparkles size={16} />
+              <Sparkle size={16} />
               {proactive.queuedCount > 0 && <span className="dock-badge" aria-label={`${proactive.queuedCount} queued suggestions`}>{proactive.queuedCount > 9 ? "9+" : proactive.queuedCount}</span>}
             </button>
             <button className={workbenchOpen ? "quiet-icon-button workbench-toggle open" : "quiet-icon-button workbench-toggle"} onClick={toggleWorkbench} title={workbenchOpen ? `${t("Hide workbench")} (Ctrl+\`)` : `${t("Show workbench")} (Ctrl+\`)`} aria-label={workbenchOpen ? t("Hide workbench") : t("Show workbench")} aria-pressed={workbenchOpen}>
@@ -3280,7 +3279,7 @@ function App() {
       </section>
 
       {proactiveNotice && <div className="proactive-toast" role="status">
-        <Sparkles size={14} />
+        <Sparkle size={14} />
         <span>{proactiveNotice}</span>
         <button onClick={() => setProactiveNotice("")} aria-label={t("Dismiss")}><X size={12} /></button>
       </div>}
@@ -3660,12 +3659,12 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const slashCommands = [
     { id: "research", icon: Lightbulb, label: t("Research"), detail: t("Explore research ideas"), run: () => onResearchMode("idea-spark") },
     { id: "experiment", icon: FlaskConical, label: t("Experiment"), detail: t("Set up an experiment"), run: () => onResearchMode("experiment-setup") },
-    { id: "write", icon: FilePenLine, label: t("Write"), detail: t("Draft research writing"), run: () => onResearchMode("paper-generation") },
-    { id: "review", icon: ScanSearch, label: t("Paper reading"), detail: t("Read a paper interactively"), run: () => onResearchMode("paper-review") },
+    { id: "write", icon: FilePen, label: t("Write"), detail: t("Draft research writing"), run: () => onResearchMode("paper-generation") },
+    { id: "review", icon: BookOpenCheck, label: t("Paper reading"), detail: t("Read a paper interactively"), run: () => onResearchMode("paper-review") },
     { id: "init", icon: FileCog, label: t("Init"), detail: t("Set up project instructions"), run: () => onCommand("init") },
     { id: "new", icon: Plus, label: t("New"), detail: t("Start a new conversation"), run: () => onCommand("new") },
     { id: "undo", icon: Undo2, label: t("Undo"), detail: t("Undo the last message"), run: () => onCommand("undo") },
-    { id: "compact", icon: Shrink, label: t("Compact"), detail: t("Summarize conversation context"), run: () => onCommand("compact") },
+    { id: "compact", icon: Minimize2, label: t("Compact"), detail: t("Summarize conversation context"), run: () => onCommand("compact") },
     { id: "fork", icon: GitFork, label: t("Fork"), detail: t("Branch from this conversation"), run: () => onCommand("fork") },
     { id: "side", icon: PanelRight, label: t("Side"), detail: t("Open a side conversation"), run: () => onCommand("side") },
     { id: "export", icon: Download, label: t("Export"), detail: t("Export this conversation"), run: () => onCommand("export") },
@@ -4066,7 +4065,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
         <MenuSurface open={Boolean(composerMenu)} onClose={() => setComposerMenu(null)} cursor={composerMenu} placement="bottom-start" width={300} className="composer-context-menu" ariaLabel={t("Composer actions")}>
           <MenuItem icon={<Scissors size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}X`} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd} onClick={() => { setComposerMenu(null); void copySelection(true); }}>{t("Cut")}</MenuItem>
           <MenuItem icon={<Copy size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}C`} disabled={composerRef.current?.selectionStart === composerRef.current?.selectionEnd} onClick={() => { setComposerMenu(null); void copySelection(); }}>{t("Copy")}</MenuItem>
-          <MenuItem icon={<ClipboardPaste size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}V`} onClick={() => { setComposerMenu(null); void pasteFromSystemClipboard(); }}>{t("Paste")}</MenuItem>
+          <MenuItem icon={<Clipboard size={18} strokeWidth={1.7} />} shortcut={`${shortcutModifier}V`} onClick={() => { setComposerMenu(null); void pasteFromSystemClipboard(); }}>{t("Paste")}</MenuItem>
         </MenuSurface>
         {composerError && <div id="composer-error" className="composer-attachment-error" role="alert">{composerError}</div>}
         {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
@@ -4307,7 +4306,7 @@ function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "pa
   if (entry.kind === "image" || ["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "svg", "avif"].includes(extension)) return <FileImage size={14} />;
   if (["mp4", "mov", "webm", "mkv", "avi"].includes(extension)) return <FileVideo size={14} />;
   if (["mp3", "wav", "ogg", "flac", "m4a"].includes(extension)) return <FileAudio size={14} />;
-  if (["zip", "tar", "gz", "tgz", "rar", "7z", "bz2"].includes(extension)) return <FileArchive size={14} />;
+  if (["zip", "tar", "gz", "tgz", "rar", "7z", "bz2"].includes(extension)) return <Package size={14} />;
   if (["csv", "tsv", "xls", "xlsx"].includes(extension)) return <FileSpreadsheet size={14} />;
   if (["json", "jsonl"].includes(extension)) return <FileJson size={14} />;
   if (["yaml", "yml", "toml", "ini", "cfg", "conf", "env"].includes(extension) || /^(dockerfile|makefile)$/.test(name)) return <FileCog size={14} />;
@@ -4423,7 +4422,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
             <button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}>Preview</button>
             <button className={mode === "edit" ? "active" : ""} onClick={() => setMode("edit")}>Edit</button>
           </div>
-          {editing && <button className="secondary-button artifact-comment-button" disabled={!selection} onClick={() => setCommentOpen(true)} title={selection ? `Comment on lines ${selection.startLine}${selection.endLine !== selection.startLine ? `-${selection.endLine}` : ""}` : "Select text in the editor to comment"}><MessageSquareText size={12} />Comment</button>}
+          {editing && <button className="secondary-button artifact-comment-button" disabled={!selection} onClick={() => setCommentOpen(true)} title={selection ? `Comment on lines ${selection.startLine}${selection.endLine !== selection.startLine ? `-${selection.endLine}` : ""}` : "Select text in the editor to comment"}><MessageCircleReply size={12} />Comment</button>}
           {(saving || dirty) && <span className={`artifact-save-state ${saving ? "saving" : "unsaved"}`}>
             {saving ? <LoaderCircle className="spin" size={11} /> : <CircleDot size={11} />}
             {saving ? "Saving" : "Unsaved"}

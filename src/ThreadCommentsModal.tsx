@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, MessageSquareText, Send, X } from "lucide-react";
+import { Check, MessageCircleReply, Send, X } from "lucide-react";
 import { Dialog } from "./Dialog";
 
 import { InlineNotice } from "./InlineNotice";
@@ -70,7 +70,7 @@ export default function ThreadCommentsModal({ bridge, workspace, projectId, thre
           <header><strong>{comment.author_name}</strong><span>{new Date(comment.created_at).toLocaleString()}</span></header>
           <p>{comment.body}</p>
           <button className="thread-comment-resolve" onClick={() => void toggleResolved(comment)}>{comment.resolved_at ? "Reopen" : <><Check size={11} />Resolve</>}</button>
-        </article>) : <StateView className="thread-comments-empty" icon={<MessageSquareText size={18} />} title="No comments yet" description="Leave a note for collaborators without changing the research transcript." />}
+        </article>) : <StateView className="thread-comments-empty" icon={<MessageCircleReply size={18} />} title="No comments yet" description="Leave a note for collaborators without changing the research transcript." />}
       </div>
       <div className="thread-comments-composer">
         <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Add a comment for the project" rows={3} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void submit(); }} />

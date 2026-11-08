@@ -15,7 +15,7 @@ const sources = fs.readFileSync(path.join(root, "electron", "news-sources.cjs"),
 const i18n = readLocale();
 
 test("News is a Discovery & tracking app ordered between Daily papers and Benchmark Radar", () => {
-  assert.match(registry, /id: "news"[^\n]*labelKey: "News"[^\n]*icon: Newspaper/);
+  assert.match(registry, /id: "news"[^\n]*labelKey: "News"[^\n]*icon: Rss/);
   const metadata = require("../shared/research-apps.json").apps;
   const daily = metadata.daily.order;
   const newsOrder = metadata.news.order;

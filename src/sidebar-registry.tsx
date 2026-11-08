@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { researchAppMetadata, type ResearchAppCategory } from "./research-apps";
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, CalendarDays, ChartNoAxesCombined, ClipboardCheck, FilePenLine, FlaskConical, ImagePlus, Newspaper, Puzzle, Radar, Table2 } from "lucide-react";
+import { BookOpen, Calendar, ChartLine, ClipboardCheck, FilePen, FlaskConical, ImagePlus, Puzzle, Radar, Rss, Table } from "lucide-react";
 
 // Legacy plugin sections remain compatible; research categories drive app management.
 export type SidebarSection = "knowledge" | "create" | "evaluate";
@@ -57,15 +57,15 @@ export type SidebarEntry = {
  */
 export const coreSidebarEntries: SidebarEntry[] = ([
   { id: "library", commandId: "open-library", section: "knowledge", labelKey: "Library", titleKey: "Library", icon: BookOpen, destination: { type: "section", section: "library" }, source: "core", keepMounted: true, cacheClass: "library-view-cache", requiresWorkspace: true },
-  { id: "daily", commandId: "open-daily-papers", section: "knowledge", labelKey: "Daily papers", titleKey: "Daily papers", icon: CalendarDays, destination: { type: "section", section: "daily" }, source: "core", requiresWorkspace: true },
-  { id: "news", commandId: "open-news", section: "knowledge", labelKey: "News", titleKey: "News", icon: Newspaper, destination: { type: "section", section: "news" }, source: "core" },
+  { id: "daily", commandId: "open-daily-papers", section: "knowledge", labelKey: "Daily papers", titleKey: "Daily papers", icon: Calendar, destination: { type: "section", section: "daily" }, source: "core", requiresWorkspace: true },
+  { id: "news", commandId: "open-news", section: "knowledge", labelKey: "News", titleKey: "News", icon: Rss, destination: { type: "section", section: "news" }, source: "core" },
   { id: "benchmark-radar", commandId: "open-benchmark-radar", section: "knowledge", labelKey: "Benchmark Radar", titleKey: "Benchmark Radar", icon: Radar, destination: { type: "section", section: "benchmark-radar" }, source: "core" },
   { id: "extensions", commandId: "open-extensions", section: "knowledge", labelKey: "Extensions", titleKey: "Extensions", icon: Puzzle, destination: { type: "section", section: "extensions" }, source: "core" },
   { id: "reproduce", commandId: "open-reproduce", section: "create", labelKey: "Reproduce", titleKey: "Reproduce", icon: FlaskConical, destination: { type: "section", section: "reproduce" }, source: "core" },
-  { id: "writing", commandId: "open-paper-writing", section: "create", labelKey: "Paper writing", titleKey: "Paper writing", icon: FilePenLine, destination: { type: "section", section: "writing" }, source: "core", keepMounted: true, cacheClass: "paper-writing-view-cache", requiresWorkspace: true },
+  { id: "writing", commandId: "open-paper-writing", section: "create", labelKey: "Paper writing", titleKey: "Paper writing", icon: FilePen, destination: { type: "section", section: "writing" }, source: "core", keepMounted: true, cacheClass: "paper-writing-view-cache", requiresWorkspace: true },
   { id: "image-creation", commandId: "open-image-creation", section: "create", labelKey: "Image creation", titleKey: "Image creation", icon: ImagePlus, destination: { type: "section", section: "image-creation" }, source: "core", keepMounted: true, cacheClass: "image-creation-view-cache" },
-  { id: "data-charts", commandId: "open-data-charts", section: "create", labelKey: "Data charts", titleKey: "Data charts", icon: ChartNoAxesCombined, destination: { type: "section", section: "data-charts" }, source: "core", keepMounted: true, cacheClass: "data-charts-view-cache" },
-  { id: "data-analysis", commandId: "open-data-analysis", section: "create", labelKey: "Data analysis", titleKey: "Data analysis", icon: Table2, destination: { type: "section", section: "data-analysis" }, source: "core", keepMounted: true, cacheClass: "data-analysis-view-cache" },
+  { id: "data-charts", commandId: "open-data-charts", section: "create", labelKey: "Data charts", titleKey: "Data charts", icon: ChartLine, destination: { type: "section", section: "data-charts" }, source: "core", keepMounted: true, cacheClass: "data-charts-view-cache" },
+  { id: "data-analysis", commandId: "open-data-analysis", section: "create", labelKey: "Data analysis", titleKey: "Data analysis", icon: Table, destination: { type: "section", section: "data-analysis" }, source: "core", keepMounted: true, cacheClass: "data-analysis-view-cache" },
   { id: "paper-review", commandId: "open-paper-review", section: "evaluate", labelKey: "Paper review", titleKey: "Paper review", icon: ClipboardCheck, destination: { type: "section", section: "paper-review" }, source: "core" },
 ] satisfies Omit<SidebarEntry, "order">[]).map((entry) => {
   const metadata = researchAppMetadata[entry.id as keyof typeof researchAppMetadata];

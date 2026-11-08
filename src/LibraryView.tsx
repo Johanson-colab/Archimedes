@@ -39,13 +39,12 @@ import { Tabs, Tab, FilterGroup, FilterButton } from "./Tabs";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import {
-  AlignLeft,
   ArrowLeft,
-  BookOpen,
-  Bookmark,
-  Bot,
-  CalendarDays,
   ArrowUp,
+  Bookmark,
+  BookOpen,
+  Bot,
+  Calendar,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -57,19 +56,19 @@ import {
   ExternalLink,
   FileCode2,
   FileText,
+  Flame,
   FlaskConical,
   Folder,
   FolderOpen,
   Frame,
   GitBranch,
-  Flame,
   GraduationCap,
   Highlighter,
   Languages,
   Library,
   ListTree,
   LoaderCircle,
-  MessageSquareText,
+  MessageCircleReply,
   Minus,
   PanelRightClose,
   PanelRightOpen,
@@ -78,12 +77,12 @@ import {
   RefreshCw,
   Save,
   Search,
-  ShieldCheck,
+  Shield,
+  Sparkle,
   Square,
-  Sparkles,
   Star,
   StickyNote,
-  Trash2,
+  Trash,
   X,
 } from "lucide-react";
 import { StateView } from "./StateView";
@@ -243,7 +242,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { pap
     <div className="paper-record-row"><label>{t("Reading status")}<select value={paper.reading_status} onChange={(event) => void update({ reading_status: event.target.value as ReadingStatus })}><option value="unread">{t("Unread")}</option><option value="reading">{t("Reading")}</option><option value="read">{t("Already read")}</option></select></label>{publicPaperRecordUrl(paper) && <a className="outline-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer"><ExternalLink size={14} />{t("Open source")}</a>}</div>
     <button className="paper-reader-launch" onClick={onRead}><BookOpen size={15} /><span><strong>{t("Open reading workspace")}</strong><small>{t("Notes, evidence, and paper structure")}</small></span><ChevronRight size={16} /></button>
     <LibraryPaperNotes key={paper.id} paper={paper} drafts={noteDrafts} compact onSave={(notes) => onUpdate({ notes })} />
-    <button className="secondary-button danger-text library-remove-paper" onClick={() => void onRemove()}><Trash2 size={14} />{t("Remove")}</button>
+    <button className="secondary-button danger-text library-remove-paper" onClick={() => void onRemove()}><Trash size={14} />{t("Remove")}</button>
   </article>;
 }
 
@@ -1079,7 +1078,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
             <div>{reader?.highlights.length ? reader.highlights.map((highlight) => <article key={highlight.id}>
               <button className="paper-highlight-entry" onClick={() => { setPageNumber(highlight.page_number); setHighlightListOpen(false); }}><span><i className={`paper-highlight-dot ${highlight.color}`} />{t("Page {page}", { page: highlight.page_number })}</span><p>{highlight.quote}</p>{highlight.note && <small>{highlight.note}</small>}</button>
               <button className="paper-highlight-canvas" onClick={() => addHighlightToCanvas(highlight)} title={t("Add to canvas")} aria-label={t("Add to canvas")}><Frame size={13} /></button>
-              <button className="paper-highlight-delete" onClick={() => void deleteHighlight(highlight.id)} title={t("Delete this highlight or note")}><Trash2 size={13} /></button>
+              <button className="paper-highlight-delete" onClick={() => void deleteHighlight(highlight.id)} title={t("Delete this highlight or note")}><Trash size={13} /></button>
             </article>) : <p className="paper-highlight-empty">{t("No highlights or notes yet.")}</p>}</div>
           </aside>}
           {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
@@ -1110,7 +1109,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </main>
       {chatOpen && readerView !== "canvas" && <><div className="paper-chat-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper chat panel" aria-valuemin={PAPER_CHAT_MIN_WIDTH} aria-valuemax={PAPER_CHAT_MAX_WIDTH} aria-valuenow={chatWidth} tabIndex={0} onPointerDown={beginChatResize} onPointerMove={moveChatResize} onPointerUp={endChatResize} onPointerCancel={endChatResize} onDoubleClick={() => setChatWidth(PAPER_CHAT_DEFAULT_WIDTH)} onKeyDown={handleChatResizeKey} />
       <aside className={`paper-ai-panel${sideTab === "notes" ? " library-side-notes" : ""}`}>
-        <div className="library-assistant-tabs"><Tabs value={sideTab} onChange={(value) => setSideTab(value as typeof sideTab)} label={t("Reading assistant")}><Tab value="chat" icon={<MessageSquareText size={14} />}>{t("Paper chat")}</Tab><Tab value="notes" icon={<StickyNote size={14} />}>{t("Notes")}</Tab></Tabs><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")} aria-label={t("Close AI panel")}><X size={16} /></button></div>
+        <div className="library-assistant-tabs"><Tabs value={sideTab} onChange={(value) => setSideTab(value as typeof sideTab)} label={t("Reading assistant")}><Tab value="chat" icon={<MessageCircleReply size={14} />}>{t("Paper chat")}</Tab><Tab value="notes" icon={<StickyNote size={14} />}>{t("Notes")}</Tab></Tabs><button className="reader-icon-button" onClick={() => setChatOpen(false)} title={t("Close AI panel")} aria-label={t("Close AI panel")}><X size={16} /></button></div>
         {sideTab === "notes" ? <LibraryPaperNotes key={paper.id} paper={paper} drafts={noteDrafts} compact onSave={(notes) => onUpdate({ notes })} /> : <>
         <header className="paper-ai-header">
           <Tabs value={aiMode} onChange={(value) => { if (value === "audit" && !checkout) { if (projectUrl) openCodebase(projectUrl); return; } setAiMode(value as typeof aiMode); }} label={t("Paper chat mode")} variant="segmented" className="paper-ai-mode-toggle"><Tab value="brief">{t("Briefing")}</Tab><Tab value="audit" title={checkout ? t("Use the cloned repository for strict verification") : t("Open Codebase and clone the repository first")}>{t("Code audit")}</Tab></Tabs>
@@ -1126,7 +1125,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </aside></>}
     </div>
     {selection && selectionAnchor && <div className="paper-selection-menu" style={{ left: Math.min(window.innerWidth - 430, Math.max(12, selectionAnchor.x - 170)), top: Math.max(12, selectionAnchor.y - 58) }} onMouseDown={(event) => event.preventDefault()}>
-      <button ref={highlightTriggerRef} aria-haspopup="menu" aria-expanded={highlightPickerOpen} onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />{t("Highlight")}</button><button onClick={translateSelection}><Languages size={15} />{t("Translate")}</button><button onClick={() => setCommentOpen(true)}><MessageSquareText size={15} />{t("Comment")}</button><button onClick={openAskForSelection}><Bot size={15} />{t("Ask AI")}</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash2 size={14} />{t("Delete highlight")}</button>}<button className="add-to-canvas-action" onClick={addSelectionToCanvas}><Frame size={15} />{t("Add to canvas")}</button>
+      <button ref={highlightTriggerRef} aria-haspopup="menu" aria-expanded={highlightPickerOpen} onClick={() => setHighlightPickerOpen((value) => !value)}><Highlighter size={15} />{t("Highlight")}</button><button onClick={translateSelection}><Languages size={15} />{t("Translate")}</button><button onClick={() => setCommentOpen(true)}><MessageCircleReply size={15} />{t("Comment")}</button><button onClick={openAskForSelection}><Bot size={15} />{t("Ask AI")}</button>{selectedHighlight && <button className="remove-highlight-action" onClick={() => void deleteSelectedHighlight()}><Trash size={14} />{t("Delete highlight")}</button>}<button className="add-to-canvas-action" onClick={addSelectionToCanvas}><Frame size={15} />{t("Add to canvas")}</button>
       <MenuSurface open={highlightPickerOpen} onClose={() => setHighlightPickerOpen(false)} anchorRef={highlightTriggerRef} placement="bottom-start" width={220} className="paper-highlight-picker" ariaLabel={t("Highlight color")}>
         {HIGHLIGHT_COLORS.map((color) => <MenuItem key={color.value} checked={selectedHighlight?.color === color.value} icon={<span className="highlight-dot" style={{ background: PDF_HIGHLIGHT_COLORS[color.value ?? "yellow"] ?? "transparent" }} />} onClick={() => { setHighlightPickerOpen(false); void saveHighlight("", color.value); }}>{t(color.label)}</MenuItem>)}
       </MenuSurface>
@@ -1345,7 +1344,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
     return () => cancelAnimationFrame(frame);
   }, [activeFile?.path, activeRange, fileLoading]);
 
-  if (!checkout) return <div className="codebase-empty"><span className="paper-reader-empty-icon"><ShieldCheck size={24} /></span><h2>Start a strict code audit</h2><p>Clone this public repository locally to inspect the full file tree, select code, and verify paper claims against the implementation. The checkout is read-only here and no repository code is executed.</p>{error && <div className="reader-runtime-error">{error}</div>}<button className="primary-button" disabled={loading || !workspace} onClick={onClone}>{loading ? <LoaderCircle className="spin" size={15} /> : <GitBranch size={15} />}{loading ? "Cloning repository…" : "Clone for code audit"}</button>{!workspace && <small>Choose a workspace before cloning a repository.</small>}</div>;
+  if (!checkout) return <div className="codebase-empty"><span className="paper-reader-empty-icon"><Shield size={24} /></span><h2>Start a strict code audit</h2><p>Clone this public repository locally to inspect the full file tree, select code, and verify paper claims against the implementation. The checkout is read-only here and no repository code is executed.</p>{error && <div className="reader-runtime-error">{error}</div>}<button className="primary-button" disabled={loading || !workspace} onClick={onClone}>{loading ? <LoaderCircle className="spin" size={15} /> : <GitBranch size={15} />}{loading ? "Cloning repository…" : "Clone for code audit"}</button>{!workspace && <small>Choose a workspace before cloning a repository.</small>}</div>;
 
   return <div className="codebase-workspace">
     <header className="codebase-toolbar"><span><GitBranch size={14} />{checkout.owner}/{checkout.repo}</span><span>{checkout.branch} · {checkout.commit.slice(0, 8)} · {checkout.file_count.toLocaleString()} files</span></header>
@@ -1377,7 +1376,7 @@ const RepositoryCodebaseView = memo(function RepositoryCodebaseView({ bridge, ur
             const after = lines.slice(activeRange.end).join("\n");
             return <>{before}{before && "\n"}<span className="code-target-line" data-code-line={activeRange.start}>{selected}</span>{after && "\n"}{after}</>;
           })()}</code></pre>}
-          {snippet ? <div className="codebase-selection"><span>{activeFile.path} line {snippetLine}</span><button className="secondary-button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onAddToChat(activeFile, snippet, snippetLine); setSnippet(""); window.getSelection()?.removeAllRanges(); }}><MessageSquareText size={13} />Add to chat</button><button className="reader-icon-button" onClick={() => setSnippet("")} title="Discard code selection"><X size={13} /></button></div> : null}
+          {snippet ? <div className="codebase-selection"><span>{activeFile.path} line {snippetLine}</span><button className="secondary-button" onMouseDown={(event) => event.preventDefault()} onClick={() => { onAddToChat(activeFile, snippet, snippetLine); setSnippet(""); window.getSelection()?.removeAllRanges(); }}><MessageCircleReply size={13} />Add to chat</button><button className="reader-icon-button" onClick={() => setSnippet("")} title="Discard code selection"><X size={13} /></button></div> : null}
         </> : <div className="codebase-editor-empty">{fileLoading ? <><LoaderCircle className="spin" size={18} />Opening file…</> : <><FileCode2 size={24} /><strong>Select a source file</strong><span>Choose a file in the explorer, then select code to add it to the evidence conversation.</span></>}</div>}
       </section>
     </div>
@@ -2669,7 +2668,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     <div className={searchKind === "deep" ? "daily-search-panel deep" : "daily-search-panel"}>
       <Tabs value={searchKind} onChange={(value) => changeSearchKind(value as typeof searchKind)} label="Paper search type" variant="segmented" className="daily-search-kind">
         <Tab value="quick" icon={<Search size={12} />}>Quick search</Tab>
-        <Tab value="deep" icon={<Sparkles size={12} />}>Deep search</Tab>
+        <Tab value="deep" icon={<Sparkle size={12} />}>Deep search</Tab>
       </Tabs>
       <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
         <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title={searchKind === "deep" ? "Deep search" : "Search"} aria-label={searchKind === "deep" ? "Deep search" : "Search"}>{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
@@ -2677,7 +2676,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}{searchKind === "quick" && searchActive && response?.options?.topic === "all" && topic !== "all" ? " · title search across all topics" : ""}</span></div>}
     </div>
     {error && <InlineNotice tone={deepResponse ? "warning" : "danger"} className={deepResponse ? "daily-search-warning" : "library-error"}>{error}</InlineNotice>}
-    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<CalendarDays size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;
