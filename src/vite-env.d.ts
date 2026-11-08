@@ -1,6 +1,17 @@
 /// <reference types="vite/client" />
 
 type FigureForgeConnection = { provider: string; baseUrl?: string; apiKey?: string; model?: string };
+type WorkbenchLayoutSnapshot = {
+  orientation: "row" | "column";
+  focused: string;
+  panes: Array<{ id: string; tabs: string[]; active: string; size: number }>;
+};
+type WorkbenchSettingsSnapshot = {
+  version: number;
+  order: string[];
+  hidden: string[];
+  layout?: WorkbenchLayoutSnapshot;
+};
 interface ResearchDeskBridge {
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
@@ -234,7 +245,7 @@ interface ResearchDeskBridge {
     runTerminal: (input: { command: string; cwd?: string; actionId?: string }) => Promise<{ sessionId: string; commandRunId: string; workspace: string }>;
     stopTerminal: (sessionId: string) => Promise<void>;
     getJourneySettings: () => Promise<JourneySettings>;
-    getWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
+    getWorkbenchSettings: () => Promise<WorkbenchSettingsSnapshot>;
     getSidebarSettings: () => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
     setCoreModuleEnabled: (id: string, enabled: boolean) => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
     setSidebarLayout: (layout: "flat" | "tabs" | "sections") => Promise<{ version: number; layout: "flat" | "tabs" | "sections"; disabledCore: string[] }>;
@@ -256,8 +267,8 @@ interface ResearchDeskBridge {
     deletePaperReviewRun: (runId: string) => Promise<{ deleted: boolean }>;
     exportPaperReviewRun: (runId: string) => Promise<{ saved: boolean; path: string }>;
     onPaperReviewProgress: (callback: (payload: PaperReviewProgress) => void) => () => void;
-    saveWorkbenchSettings: (input: { version?: number; order: string[]; hidden: string[] }) => Promise<{ version: number; order: string[]; hidden: string[] }>;
-    resetWorkbenchSettings: () => Promise<{ version: number; order: string[]; hidden: string[] }>;
+    saveWorkbenchSettings: (input: { version?: number; order: string[]; hidden: string[]; layout?: WorkbenchLayoutSnapshot }) => Promise<WorkbenchSettingsSnapshot>;
+    resetWorkbenchSettings: () => Promise<WorkbenchSettingsSnapshot>;
     getWorkbenchNote: (key: string) => Promise<{ content: string; updatedAt: string | null }>;
     saveWorkbenchNote: (key: string, content: string) => Promise<{ content: string; updatedAt: string | null }>;
     deleteWorkbenchNote: (key: string) => Promise<{ deleted: boolean }>;

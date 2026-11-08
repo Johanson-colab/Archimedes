@@ -144,6 +144,7 @@ npm test
 - [Authentication](docs/auth.md)
 - [Artifacts](docs/artifacts.md)
 - [Reproduction](docs/reproduce.md)
+- [Workbench split panes](docs/workbench-split-panes.md)
 - [Collaboration](docs/collaboration-api.md)
 - [Theme tokens](docs/theme-tokens.md)
 

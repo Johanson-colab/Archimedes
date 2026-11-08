@@ -42,7 +42,7 @@ import SideConversation from "./SideConversation";
 import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 import BrowserView from "./BrowserView";
-import { DEFAULT_WORKBENCH_PREFERENCES, normalizeWorkbenchPreferences, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
+import { DEFAULT_WORKBENCH_PREFERENCES, normalizeWorkbenchPreferences, selectWorkbenchTab, visibleWorkbenchPaneTabs, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
 import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
@@ -1317,8 +1317,10 @@ function App() {
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
-  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTabId>("trajectory");
   const [workbenchPreferences, setWorkbenchPreferences] = useState<WorkbenchTabPreferences>(DEFAULT_WORKBENCH_PREFERENCES);
+  const workbenchLayout = workbenchPreferences.layout;
+  /** A tab can stay visible in a second pane while another pane is focused. */
+  const workbenchPaneTabs = useMemo(() => visibleWorkbenchPaneTabs(workbenchLayout), [workbenchLayout]);
   const [noteValues, setNoteValues] = useState<Record<string, string>>({});
   const [noteLoadedKey, setNoteLoadedKey] = useState<string | null>(null);
   const [noteSaveState, setNoteSaveState] = useState<"idle" | "saving" | "saved">("idle");
@@ -1334,6 +1336,11 @@ function App() {
     const saved = Number(localStorage.getItem("archimedes-workbench-width"));
     return Number.isFinite(saved) && saved > 0 ? clampWorkbenchWidth(saved) : defaultWorkbenchWidth();
   });
+  const workbenchFilesPaneWidth = useMemo(() => {
+    const pane = workbenchLayout.panes.find((entry) => entry.tabs.includes("files"));
+    if (!pane || workbenchLayout.orientation === "column") return workbenchWidth;
+    return Math.max(240, Math.round(workbenchWidth * pane.size / 100));
+  }, [workbenchLayout, workbenchWidth]);
   const [runningSession, setRunningSession] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [interrupting, setInterrupting] = useState(false);
@@ -1738,16 +1745,16 @@ function App() {
   }, [noteKey, noteLoadedKey, noteValues]);
 
   useEffect(() => {
-    if (workbenchTab !== "changes") return;
+    if (!workbenchPaneTabs.has("changes")) return;
     setSeenChangeSetIds(new Set(changeSets.map((changeSet) => changeSet.id)));
-  }, [changeSets, workbenchTab]);
+  }, [changeSets, workbenchPaneTabs]);
 
   useEffect(() => {
-    if (!activeThreadId || (workbenchOpen && workbenchTab === "artifacts")) { setArtifactsBadge(0); return; }
+    if (!activeThreadId || (workbenchOpen && workbenchPaneTabs.has("artifacts"))) { setArtifactsBadge(0); return; }
     let cancelled = false;
     void desktopBridge.countUnseenArtifacts(activeThreadId).then((count) => { if (!cancelled) setArtifactsBadge(count); }).catch(() => undefined);
     return () => { cancelled = true; };
-  }, [activeThreadId, artifactsVersion, workbenchOpen, workbenchTab]);
+  }, [activeThreadId, artifactsVersion, workbenchOpen, workbenchPaneTabs]);
 
   async function saveJourneySettings(patch: Partial<JourneySettings>) {
     const optimistic = normalizeJourneySettings({ ...journeySettings, ...patch });
@@ -1777,6 +1784,10 @@ function App() {
     void desktopBridge.saveWorkbenchSettings(normalized).catch(() => undefined);
   }
 
+  function chooseWorkbenchTab(tab: WorkbenchTabId) {
+    updateWorkbenchPreferences(selectWorkbenchTab(workbenchPreferences, tab));
+  }
+
   async function resetWorkbenchPreferences() {
     try {
       const next = await desktopBridge.resetWorkbenchSettings();
@@ -1802,10 +1813,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!terminalSettings || terminalSettings.onboarded || !workbenchOpen || workbenchTab !== "terminal") return;
+    if (!terminalSettings || terminalSettings.onboarded || !workbenchOpen || !workbenchPaneTabs.has("terminal")) return;
     setTerminalSettingsMode("onboarding");
     setTerminalSettingsOpen(true);
-  }, [terminalSettings, workbenchOpen, workbenchTab]);
+  }, [terminalSettings, workbenchOpen, workbenchPaneTabs]);
 
   async function saveTerminalSettings(patch: Partial<TerminalSettings>) {
     const next = await desktopBridge.saveTerminalSettings(patch);
@@ -1874,7 +1885,7 @@ function App() {
   }
 
   function openWorkbench(tab: WorkbenchTabId) {
-    setWorkbenchTab(tab);
+    chooseWorkbenchTab(tab);
     setWorkbenchOpen(true);
   }
 
@@ -1890,7 +1901,7 @@ function App() {
 
   function openTrajectoryAt(ordinal?: number) {
     setTrajectoryFocusOrdinal(typeof ordinal === "number" ? ordinal : null);
-    setWorkbenchTab("trajectory");
+    chooseWorkbenchTab("trajectory");
   }
 
   async function closeWorkbench() {
@@ -3180,10 +3191,9 @@ function App() {
         <RightWorkbench
           open={workbenchOpen}
           width={workbenchWidth}
-          activeTab={workbenchTab}
           preferences={workbenchPreferences}
           badges={{ changes: changesBadge, files: dirtyFilePaths.size, artifacts: artifactsBadge }}
-          onTabChange={setWorkbenchTab}
+          onTabChange={chooseWorkbenchTab}
           onPreferencesChange={updateWorkbenchPreferences}
           onOpenSettings={() => { setSettingsSection("workbench"); setSettingsOpen(true); }}
           onWidthChange={(width) => setWorkbenchWidth(clampWorkbenchWidth(width))}
@@ -3196,7 +3206,7 @@ function App() {
               settings={journeySettings}
               pendingAction={pendingAction}
               agentBusy={agentBusy && Boolean(activeThreadId) && runningThreadId === activeThreadId}
-              active={workbenchOpen && workbenchTab === "journey"}
+              active={workbenchOpen && workbenchPaneTabs.has("journey")}
               onOpenTrajectory={() => openTrajectoryAt()}
               onOpenTrajectoryAt={openTrajectoryAt}
               onOpenSettings={() => { setSettingsSection("journey"); setSettingsOpen(true); }}
@@ -3210,13 +3220,13 @@ function App() {
               model={activeModelConfig?.model}
               modeLabel={researchModes.find((mode) => mode.id === researchMode)?.label ?? researchMode}
               onCopy={(text) => desktopBridge.writeClipboardText(text)}
-              onOpenJourney={() => setWorkbenchTab("journey")}
+              onOpenJourney={() => chooseWorkbenchTab("journey")}
               focusOrdinal={trajectoryFocusOrdinal}
               onFocusApplied={() => setTrajectoryFocusOrdinal(null)}
             />,
             files: <FilesView
               compact
-              compactWidth={workbenchWidth}
+              compactWidth={workbenchFilesPaneWidth}
               workspace={executionWorkspace}
               tree={fileTree}
               openFiles={openFiles}
@@ -3250,7 +3260,7 @@ function App() {
               threadId={activeThreadId}
               currentTurnId={trajectoryEvents.at(-1)?.turn_id ?? null}
               changeSets={changeSets}
-              active={workbenchOpen && workbenchTab === "artifacts"}
+              active={workbenchOpen && workbenchPaneTabs.has("artifacts")}
               version={artifactsVersion}
               onOpenFile={(filePath) => void openFilePane(filePath)}
               onSeen={() => setArtifactsBadge(0)}
@@ -3264,15 +3274,15 @@ function App() {
               onChange={(content) => setNoteValues((current) => ({ ...current, [noteKey]: content }))}
               onSend={sendNoteToChat}
             />,
-            browser: <BrowserView active={workbenchOpen && workbenchTab === "browser"} onOpenExternal={(url) => desktopBridge.openExternalUrl(url)} />,
+            browser: <BrowserView active={workbenchOpen && workbenchPaneTabs.has("browser")} onOpenExternal={(url) => desktopBridge.openExternalUrl(url)} />,
             terminal: <TerminalPanel
               bridge={desktopBridge}
-              open={workbenchOpen && workbenchTab === "terminal"}
+              open={workbenchOpen && workbenchPaneTabs.has("terminal")}
               theme={theme}
               workspace={executionWorkspace}
               settings={terminalSettings}
               orientation="right"
-              onClose={() => setWorkbenchTab("journey")}
+              onClose={() => chooseWorkbenchTab("journey")}
               onOpenSettings={() => { setSettingsSection("terminal"); setSettingsOpen(true); }}
             />,
           }}
