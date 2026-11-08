@@ -29,7 +29,7 @@ test("workbench layout model stores split panes with a bounded orientation", () 
   assert.match(tabs, /export function closeWorkbenchPane/);
   assert.match(tabs, /export function resizeWorkbenchPanes/);
   assert.match(tabs, /export function showWorkbenchTab/);
-  assert.match(tabs, /export function visibleWorkbenchPaneTabs/);
+  assert.match(tabs, /export function activeWorkbenchPaneTabs/);
   assert.match(tabs, /tabs\.filter\(\(id\) => id !== tab\)/);
   assert.match(tabs, /layout\.panes\.length >= MAX_WORKBENCH_PANES/);
   assert.equal((tabs.match(/layout: normalizeWorkbenchLayout\(source\.layout/g) || []).length, 1);
@@ -64,10 +64,10 @@ test("workbench panels are partitioned so a tab never mounts twice", () => {
   assert.match(tabs, /pane\.tabs\.includes/);
   assert.match(right, /pane\.tabs\.map/);
   assert.doesNotMatch(right, /visited/);
-  assert.match(app, /visibleWorkbenchPaneTabs/);
-  assert.match(app, /workbenchPaneTabs\.has\("terminal"\)/);
-  assert.match(app, /workbenchPaneTabs\.has\("browser"\)/);
-  assert.match(app, /workbenchPaneTabs\.has\("journey"\)/);
+  assert.match(app, /activeWorkbenchPaneTabs/);
+  assert.match(app, /workbenchActiveTabs\.has\("terminal"\)/);
+  assert.match(app, /workbenchActiveTabs\.has\("browser"\)/);
+  assert.match(app, /workbenchActiveTabs\.has\("journey"\)/);
   assert.match(app, /compactWidth=\{workbenchFilesPaneWidth\}/);
   assert.doesNotMatch(app, /workbenchTab ===/);
 });

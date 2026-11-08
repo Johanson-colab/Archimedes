@@ -33,7 +33,7 @@ test("Browser is an optional workbench tab that starts hidden", () => {
 
 test("Browser panel is mounted only after its tab is opened", () => {
   assert.match(app, /import BrowserView from "\.\/BrowserView"/);
-  assert.match(app, /browser: <BrowserView active=\{workbenchOpen && workbenchPaneTabs\.has\("browser"\)\} onOpenExternal=/);
+  assert.match(app, /browser: <BrowserView active=\{workbenchOpen && workbenchActiveTabs\.has\("browser"\)\} onOpenExternal=/);
   assert.match(app, /openExternalUrl/);
   assert.match(bridge, /openExternalUrl: \(url: string\) => Promise<\{ opened: boolean \}>/);
   assert.match(preload, /app:open-external/);

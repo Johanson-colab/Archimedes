@@ -220,9 +220,9 @@ export function workbenchPaneForTab(layout: WorkbenchLayout, tab: WorkbenchTabId
   return layout.panes.find((pane) => pane.tabs.includes(tab));
 }
 
-/** Tabs that are visible in any pane. Used to decide which panels are awake. */
-export function visibleWorkbenchPaneTabs(layout: WorkbenchLayout): Set<WorkbenchTabId> {
-  return new Set(layout.panes.flatMap((pane) => pane.tabs));
+/** Tabs currently selected in at least one pane. Used to decide which panels are awake. */
+export function activeWorkbenchPaneTabs(layout: WorkbenchLayout): Set<WorkbenchTabId> {
+  return new Set(layout.panes.map((pane) => pane.active));
 }
 
 function replacePane(layout: WorkbenchLayout, paneId: string, update: (pane: WorkbenchPane) => WorkbenchPane): WorkbenchLayout {
