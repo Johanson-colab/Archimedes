@@ -57,16 +57,16 @@ async function mount(overrides = {}, onCoreModuleEnabled) {
 const headings = () => [...document.querySelectorAll("h3")].map((node) => node.textContent);
 const row = (name) => [...document.querySelectorAll(".settings-row")].find((node) => node.querySelector(".settings-row-title")?.textContent === name);
 
-test("all ten built-ins appear once in the five issue categories with six enabled", async () => {
+test("all eleven built-ins appear once in the five issue categories with seven enabled", async () => {
   const unmount = await mount();
   try {
     assert.deepEqual(headings(), ["Discovery & tracking", "Resources & evidence", "Experiments & evaluation", "Analysis & visualization", "Writing & delivery"]);
-    const expected = { "Daily papers": 0, News: 0, "Benchmark Radar": 0, Library: 1, Extensions: 1, Reproduce: 2, "Image creation": 3, "Data charts": 3, "Paper writing": 4, "Paper review": 4 };
+    const expected = { "Daily papers": 0, News: 0, "Benchmark Radar": 0, Library: 1, Extensions: 1, Reproduce: 2, "Image creation": 3, "Data charts": 3, "Data analysis": 3, "Paper writing": 4, "Paper review": 4 };
     for (const [name, index] of Object.entries(expected)) {
       assert.equal(row(name)?.closest("section").querySelector("h3").textContent, headings()[index]);
     }
-    assert.equal(document.querySelectorAll('[role="switch"]').length, 10);
-    assert.equal(document.querySelectorAll('[role="switch"][aria-checked="true"]').length, 6);
+    assert.equal(document.querySelectorAll('[role="switch"]').length, 11);
+    assert.equal(document.querySelectorAll('[role="switch"][aria-checked="true"]').length, 7);
     assert.ok(!document.body.textContent.includes("Sidebar layout"));
     assert.ok(!document.body.textContent.includes("Micro app"));
     await React.act(async () => row("News").querySelector("button").click());
@@ -110,7 +110,7 @@ test("legacy and categorized plugins share the catalog without duplicate install
 });
 
 test("sidebar order is independent of category; explicit plugin metadata overrides legacy sections", () => {
-  assert.deepEqual(registry.sidebarEntries().filter((entry) => !metadata.defaultDisabledResearchApps.includes(entry.id)).map((entry) => entry.id), ["library", "daily", "reproduce", "image-creation", "data-charts", "writing"]);
+  assert.deepEqual(registry.sidebarEntries().filter((entry) => !metadata.defaultDisabledResearchApps.includes(entry.id)).map((entry) => entry.id), ["library", "daily", "reproduce", "image-creation", "data-charts", "data-analysis", "writing"]);
   assert.equal(metadata.researchAppCategory({ id: "custom", researchCategory: "experiments", section: "create" }), "experiments");
   assert.equal(metadata.researchAppCategory({ id: "legacy", section: "knowledge" }), "evidence");
   assert.equal(metadata.researchAppCategory({ id: "unknown", researchCategory: "invalid" }), "evidence");

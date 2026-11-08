@@ -17,6 +17,7 @@ import { misc as miscStrings } from "./i18n/translations/misc";
 import { native as nativeStrings } from "./i18n/translations/native";
 import { news as newsStrings } from "./i18n/translations/news";
 import { paperReview as paperReviewStrings } from "./i18n/translations/paperReview";
+import { dataAnalysis as dataAnalysisStrings } from "./i18n/translations/dataAnalysis";
 
 export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
@@ -52,6 +53,7 @@ const translations: Record<string, string> = {
   ...nativeStrings,
   ...newsStrings,
   ...paperReviewStrings,
+  ...dataAnalysisStrings,
 };
 
 type UISettings = {

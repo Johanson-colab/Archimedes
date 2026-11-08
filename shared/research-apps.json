@@ -16,6 +16,7 @@
     "writing": { "category": "writing", "defaultEnabled": true, "order": 50, "description": "Draft and revise papers with research context." },
     "image-creation": { "category": "analysis", "defaultEnabled": true, "order": 40, "description": "Browse figure references and create images with FigureForge." },
     "data-charts": { "category": "analysis", "defaultEnabled": true, "order": 45, "description": "Explore data charts and tables from research papers." },
+    "data-analysis": { "category": "analysis", "defaultEnabled": true, "order": 46, "description": "Explore local datasets, summary statistics and charts." },
     "paper-review": { "category": "writing", "defaultEnabled": false, "order": 90, "description": "Review manuscripts and prioritize revisions." }
   },
   "legacyAppCategories": { "focus-timer": "writing" },

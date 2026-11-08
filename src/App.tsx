@@ -1152,6 +1152,7 @@ const FileCodeEditor = lazy(() => import("./FileCodeEditor"));
 // the registry in sidebar-registry.tsx stays the single source of truth.
 const LibraryView = lazy(() => import("./LibraryView"));
 const DataChartsView = lazy(() => import("./DataChartsView"));
+const DataAnalysisView = lazy(() => import("./DataAnalysisView"));
 const ImageCreationView = lazy(() => import("./ImageCreationView"));
 const BenchmarkRadarView = lazy(() => import("./BenchmarkRadarView"));
 const NewsView = lazy(() => import("./NewsView"));
@@ -1293,6 +1294,7 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [imageCreationOpened, setImageCreationOpened] = useState(false);
   const [dataChartsOpened, setDataChartsOpened] = useState(false);
+  const [dataAnalysisOpened, setDataAnalysisOpened] = useState(false);
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -1882,6 +1884,7 @@ function App() {
     if (section === "daily") setDailyStartMode("latest");
     if (section === "image-creation") setImageCreationOpened(true);
     if (section === "data-charts") setDataChartsOpened(true);
+    if (section === "data-analysis") setDataAnalysisOpened(true);
     setMainSection(section);
   }
 
@@ -2960,12 +2963,13 @@ function App() {
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
+    "data-analysis": <DataAnalysisView />,
     writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
   };
   for (const entry of pluginEntries) {
     sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;
   }
-  const sidebarModuleOpen: Partial<Record<string, boolean>> = { "image-creation": imageCreationOpened, "data-charts": dataChartsOpened };
+  const sidebarModuleOpen: Partial<Record<string, boolean>> = { "image-creation": imageCreationOpened, "data-charts": dataChartsOpened, "data-analysis": dataAnalysisOpened };
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
