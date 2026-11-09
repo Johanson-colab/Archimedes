@@ -40,8 +40,8 @@ test("file tabs are larger and view actions are plain text", () => {
   assert.match(css, /\.artifact-tab-close:hover \{[^}]*background: transparent/);
   assert.match(css, /\.artifact-workbench-body \.artifact-editor-pane \.artifact-editor-header\.compact \{[\s\S]*?position: absolute;[\s\S]*?background: transparent;/);
   assert.doesNotMatch(app, /artifact-workbench-toolbar/);
-  assert.match(app, /fontSize: "13px", lineHeight: 1.65/);
-  assert.match(editor, /fontSize: "13px"/);
+  assert.match(app, /fontSize: "var\(--file-content-font-size, 13px\)", lineHeight: 1\.65/);
+  assert.match(editor, /fontSize: "var\(--file-content-font-size, 13px\)"/);
 });
 
 test("comment composer shares the chat surface language", () => {
