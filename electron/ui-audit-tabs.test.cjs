@@ -53,7 +53,7 @@ test("actions are kept outside tab lists", () => {
 
 test("canceled groups keep their existing tab implementation", () => {
   assert.match(read("src/ExtensionsView.tsx"), /workbench-tab active/);
-  assert.match(read("src/App.tsx"), /<div className="artifact-tabs" role="tablist"/);
+  assert.match(read("src/App.tsx"), /<div ref=\{tabsRef\} className="artifact-tabs" role="tablist"/);
   assert.match(read("src/TerminalPanel.tsx"), /<div className="terminal-tab-list" role="tablist"/);
   assert.match(read("src/JourneyView.tsx"), /<div className="journey-views">/);
   assert.match(read("src/SettingsModal.tsx"), /<nav className="settings-nav"/);

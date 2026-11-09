@@ -15,7 +15,7 @@ const settings = read("src/SettingsModal.tsx");
 
 test("workbench and full editor share the tabbed file shell", () => {
   assert.match(app, /className=\{compact \? "artifact-editor-pane compact" : "artifact-editor-pane"\}/);
-  assert.match(app, /const tabs = openFiles\.length > 0 \? <div className="artifact-tabs"/);
+  assert.match(app, /const tabs = openFiles\.length > 0 \? <div ref=\{tabsRef\} className="artifact-tabs"/);
   assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
   assert.match(app, /artifact-browser-heading/);
   assert.match(app, /activeModule \? t\(activeModule\.titleKey\) : t\("Files"\)/);
@@ -95,11 +95,30 @@ test("file icons default to the real OpenCode sprite and switch across styles", 
   assert.doesNotMatch(settings, /setFileIconStyle\("colorful"\)/);
 });
 
-test("the full Files view exposes the workbench return action", () => {
+test("the full Files view keeps the conversation title and a compact tab-strip return action", () => {
   assert.match(app, /onRestore\?: \(\) => void/);
-  assert.match(app, /artifact-workbench-full-shell/);
+  assert.match(app, /mainSection === "chat" \|\| mainSection === "files"/);
+  assert.match(app, /activeThread\?\.title \?\? t\("New research task"\)/);
+  assert.match(app, /artifact-tabs-row artifact-tabs-row-full/);
+  assert.match(app, /artifact-tabs-restore/);
   assert.match(app, /Restore to workbench/);
   assert.match(app, /onRestore=\{\(\) => \{ setMainSection\("chat"\); openWorkbench\("files"\); \}\}/);
-  assert.match(css, /\.artifact-workbench-full-shell\.with-return-bar/);
-  assert.match(css, /\.artifact-workbench-return-bar/);
+  assert.doesNotMatch(app, /artifact-workbench-full-shell/);
+  assert.doesNotMatch(app, /artifact-workbench-return-bar/);
+  assert.match(css, /\.artifact-tabs-row-full/);
+  assert.match(css, /\.artifact-tabs-restore/);
+});
+
+test("file tabs hide their scrollbar until hover and map wheel to horizontal scroll", () => {
+  assert.match(app, /addEventListener\("wheel", handleWheel, \{ passive: false \}\)/);
+  assert.match(app, /element\.scrollLeft \+= event\.deltaY/);
+  assert.match(css, /\.artifact-tabs:hover::-webkit-scrollbar-thumb/);
+  assert.match(css, /\.artifact-tabs \{[^}]*scrollbar-color: transparent transparent;/);
+});
+
+test("Files preview surfaces and the terminal viewport share the conversation canvas", () => {
+  assert.match(css, /\.artifact-workbench-body \.artifact-preview-surface,[\s\S]*?background: var\(--mono-canvas\)/);
+  assert.match(css, /\.artifact-workbench-body \.code-preview > pre \{[^}]*background: transparent/);
+  assert.match(css, /\.artifact-tabs-row \{[^}]*background: var\(--mono-canvas\)/);
+  assert.match(css, /\.terminal-surface \.xterm \.xterm-viewport \{[^}]*background-color: transparent/);
 });

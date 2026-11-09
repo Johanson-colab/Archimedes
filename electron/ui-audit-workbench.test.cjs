@@ -71,7 +71,7 @@ test("files use a compact workbench pane with drill-down and split modes", () =>
 });
 
 test("files use a tab-first header without a path strip", () => {
-  assert.match(app, /const tabs = openFiles\.length > 0 \? <div className="artifact-tabs"/);
+  assert.match(app, /const tabs = openFiles\.length > 0 \? <div ref=\{tabsRef\} className="artifact-tabs"/);
   assert.match(app, /artifact-editor-header compact/);
   assert.match(app, /className="artifact-tabs-row"/);
   assert.doesNotMatch(app, /artifact-workbench-location/);
