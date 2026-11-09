@@ -20,7 +20,7 @@ test("workbench and full editor share the tabbed file shell", () => {
   assert.match(app, /artifact-workbench artifact-workbench-full/);
   assert.match(app, /closingFullEditor \? " is-closing" : ""/);
   assert.match(app, /artifact-browser-heading/);
-  assert.match(app, /activeModule \? t\(activeModule\.titleKey\) : t\("Files"\)/);
+  assert.match(app, /const activeModule = mainSection === "chat" \|\| mainSection === "files" \? null : sidebarModule\(mainSection\)/);
   assert.match(read("src/sidebar-registry.tsx"), /id: "writing"[^\n]*titleKey: "Paper writing"/);
   assert.match(app, /artifact-workbench-body split/);
   assert.doesNotMatch(app, /className="files-page"/);
@@ -100,7 +100,8 @@ test("file icons default to the real OpenCode sprite and switch across styles", 
 test("the full Files view keeps the conversation title and a compact tab-strip return action", () => {
   assert.match(app, /onRestore\?: \(\) => void/);
   assert.match(app, /mainSection === "chat" \|\| mainSection === "files"/);
-  assert.match(app, /activeThread\?\.title \?\? t\("New research task"\)/);
+  assert.match(app, /<SessionSwitcher/);
+  assert.match(app, /activeSessionId=\{activeThreadId\}/);
   assert.match(app, /artifact-tabs-row artifact-tabs-row-full/);
   assert.match(app, /artifact-tabs-restore/);
   assert.match(app, /Restore to workbench/);

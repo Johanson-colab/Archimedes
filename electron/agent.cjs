@@ -981,13 +981,13 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, visibility = "project", mode = "idea-spark", researchSkill, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry }) {
+async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "idea-spark", researchSkill, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry }) {
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
   };
-  const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace, visibility, kind: origin === "paper" ? "paper" : "research", title });
+  const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace, workspaceId, visibility, kind: origin === "paper" ? "paper" : "research", title });
   if (!transient && origin !== "paper") store.bindResearchThreadHarness(thread.id, externalBackend?.backend || "api");
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
   const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });

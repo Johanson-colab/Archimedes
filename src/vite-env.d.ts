@@ -98,7 +98,7 @@ interface ResearchDeskBridge {
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
-    createResearchThread: (input: { projectId?: string; workspacePath?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
+    createResearchThread: (input: { projectId?: string; workspacePath?: string; workspaceId?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
     forkResearchThread: (threadId: string, workspace?: string, side?: boolean) => Promise<ResearchThreadDetail>;
     undoResearchTurn: (threadId: string, workspace?: string) => Promise<{ thread: ResearchThreadDetail; prompt: string; backupThreadId: string }>;
     compactResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
@@ -107,6 +107,11 @@ interface ResearchDeskBridge {
     createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     setResearchProjectWorkspace: (id: string, workspacePath: string) => Promise<ResearchProject>;
+    listResearchWorkspaces: (projectId?: string | null) => Promise<ProjectWorkspace[]>;
+    createResearchWorkspace: (projectId: string, kind?: ProjectWorkspaceKind) => Promise<ProjectWorkspace>;
+    deleteResearchWorkspace: (id: string) => Promise<{ deleted: boolean }>;
+    pinResearchThread: (id: string, pinned?: boolean) => Promise<ResearchThreadDetail>;
+    markResearchThreadViewed: (id: string) => Promise<{ id: string; last_viewed_at: string; unread_count: number }>;
     archiveResearchProject: (id: string, archived?: boolean) => Promise<{ archived: boolean }>;
     deleteResearchProject: (id: string) => Promise<{ deleted: boolean }>;
     archiveResearchThread: (id: string, archived?: boolean) => Promise<ResearchThreadDetail>;
@@ -215,7 +220,7 @@ interface ResearchDeskBridge {
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark"; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark"; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
     listCodexModelCatalog: (input: AgentBackendConfig) => Promise<{ models: NativeAgentModel[]; effectiveModelId?: string }>;
@@ -712,11 +717,14 @@ interface WorkspaceFileTree {
 
 interface ResearchArtifact {
   id: string;
+  project_id?: string | null;
   thread_id: string;
   turn_id: string | null;
   path: string;
   title: string;
   kind: "image" | "pdf" | "csv" | "json" | "markdown" | "html" | "svg" | "text" | "other";
+  storage?: "local" | "remote";
+  sha256?: string;
   size_bytes: number;
   modified_at: string;
   version: number;
@@ -1448,6 +1456,7 @@ interface WorkspaceSnapshot {
   archivedProjects: ResearchProject[];
   threads: ResearchThread[];
   archivedThreads: ResearchThread[];
+  workspaces: ProjectWorkspace[];
   commands: Array<{
     id: string;
     command: string;
@@ -1617,6 +1626,9 @@ interface GuestShareSnapshot {
   comments?: Array<Record<string, unknown>>;
 }
 
+type GitState = "none" | "empty" | "ready" | "nested" | "suspicious";
+type ProjectWorkspaceKind = "shared" | "worktree" | "sandbox";
+
 interface ResearchProject {
   id: string;
   owner_id?: string | null;
@@ -1624,11 +1636,27 @@ interface ResearchProject {
   name: string;
   description: string;
   workspace_path: string | null;
+  environment_id?: string | null;
+  git_state?: GitState;
+  git_branch?: string | null;
   chat_count: number;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
   last_chat_at: string | null;
+}
+
+interface ProjectWorkspace {
+  id: string;
+  project_id: string;
+  kind: ProjectWorkspaceKind;
+  root: string;
+  base_ref: string | null;
+  last_session_id: string | null;
+  created_at: string;
+  updated_at: string;
+  session_count: number;
+  is_default: boolean;
 }
 
 interface ProjectMember {
@@ -1685,6 +1713,12 @@ interface ResearchThread {
   context_summary: string;
   context_summary_through_turn_id?: string | null;
   workspace_path: string | null;
+  workspace_id?: string | null;
+  parent_id?: string | null;
+  fork_id?: string | null;
+  pinned?: number | boolean;
+  last_viewed_at?: string | null;
+  unread_count?: number;
   pending_actions?: number;
   turn_count: number;
   created_at: string;

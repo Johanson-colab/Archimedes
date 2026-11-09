@@ -63,7 +63,7 @@ test("the toolbar uses one title line and no module subtitle", () => {
   assert.doesNotMatch(app, /mainSubtitle/);
   assert.doesNotMatch(app, /Live research feed/);
   assert.doesNotMatch(app, /Benchmark intelligence/);
-  assert.match(app, /<div className="conversation-title"><strong>\{mainTitle\}<\/strong><\/div>/);
+  assert.match(app, /<SessionSwitcher/);
 });
 
 test("removing the second header reclaims vertical space", () => {

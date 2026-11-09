@@ -34,10 +34,10 @@ test("typing leaves long history and navigation untouched while history updates 
     return React.createElement("nav", { "data-turn-count": messages.length });
   };
   const ChatActivityTimeline = () => { activityRenders += 1; return null; };
-  const buildHistory = new Function("React", "memo", "useState", "useRef", "useMemo", "useCallback", "useEffect", "useUISettings", "ConversationMessage", "TurnRail", "ChatActivityTimeline", "NativeAgentPanel", "nativeTurnEvents", "INITIAL_VISIBLE_MESSAGE_COUNT", "HISTORY_MESSAGE_PAGE_SIZE", `${componentSource}\nreturn ConversationHistory;`);
-  const ConversationHistory = buildHistory(React, React.memo, React.useState, React.useRef, React.useMemo, React.useCallback, React.useEffect, () => ({ t: value => value }), ConversationMessage, TurnRail, ChatActivityTimeline, () => null, () => [], 60, 40);
+  const buildHistory = new Function("React", "memo", "useState", "useRef", "useMemo", "useCallback", "useEffect", "useLayoutEffect", "useUISettings", "ConversationMessage", "TurnRail", "ChatActivityTimeline", "NativeAgentPanel", "nativeTurnEvents", "INITIAL_VISIBLE_MESSAGE_COUNT", "HISTORY_MESSAGE_PAGE_SIZE", `${componentSource}\nreturn ConversationHistory;`);
+  const ConversationHistory = buildHistory(React, React.memo, React.useState, React.useRef, React.useMemo, React.useCallback, React.useEffect, React.useLayoutEffect, () => ({ t: value => value }), ConversationMessage, TurnRail, ChatActivityTimeline, () => null, () => [], 60, 40);
   const messages = Array.from({ length: 100 }, (_, index) => ({ id: String(index), role: index % 2 ? "assistant" : "user", text: `Message ${index}` }));
-  const stableProps = { messages, events: [], trajectoryEvents: [], agentBusy: false, interrupting: false, pendingAction: null, changeSets: [], welcomeVisible: false, onWelcomeAction: () => {}, onApprove: () => {}, onReject: () => {}, onOpenFile: () => {} };
+  const stableProps = { messages, events: [], trajectoryEvents: [], agentBusy: false, interrupting: false, pendingAction: null, changeSets: [], welcomeVisible: false, onWelcomeAction: () => {}, onApprove: () => {}, onReject: () => {}, onOpenFile: () => {}, initialScrollTop: null, onScrollTop: () => {} };
   let setDraft;
   let setHistory;
   function Harness() {
