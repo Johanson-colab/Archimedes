@@ -228,6 +228,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   savePaperReviewSettings: (patch) => ipcRenderer.invoke("paper-review-app:save-settings", patch),
   listPaperReviewVenues: () => ipcRenderer.invoke("paper-review-app:list-venues"),
   listPaperReviewPapers: (input) => ipcRenderer.invoke("paper-review-app:list-papers", input),
+  stagePaperToSlidesPdf: (workspace, path) => ipcRenderer.invoke("paper-to-slides:stage", { workspace, path }),
   choosePaperReviewPdf: () => ipcRenderer.invoke("paper-review-app:choose-pdf"),
   createPaperReviewRun: (input) => ipcRenderer.invoke("paper-review-app:create", input),
   getPaperReviewRun: (runId) => ipcRenderer.invoke("paper-review-app:get-run", { runId }),

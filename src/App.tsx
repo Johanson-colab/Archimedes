@@ -1173,6 +1173,7 @@ const FileCodeEditor = lazy(() => import("./FileCodeEditor"));
 const LibraryView = lazy(() => import("./LibraryView"));
 const DataChartsView = lazy(() => import("./DataChartsView"));
 const DataAnalysisView = lazy(() => import("./DataAnalysisView"));
+const PaperToSlidesView = lazy(() => import("./PaperToSlidesView"));
 const ImageCreationView = lazy(() => import("./ImageCreationView"));
 const BenchmarkRadarView = lazy(() => import("./BenchmarkRadarView"));
 const NewsView = lazy(() => import("./NewsView"));
@@ -2728,13 +2729,13 @@ function App() {
     }
   }
 
-  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength, submittedContextOverride?: ContextAttachment[], researchSkill?: "idea-spark"): Promise<boolean> {
+  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength, submittedContextOverride?: ContextAttachment[], researchSkill?: "idea-spark" | "paper-to-slides", backendOverride?: "codex" | "claude", forceNew = false, mineruToken?: string): Promise<boolean> {
     const question = draft.trim();
     const submittedContext = submittedContextOverride ?? contextItems;
     const hasPastedImage = submittedContext.some((item) => item.type === "image");
     if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current) return false;
     const requestPrompt = question || "Please analyze the attached image.";
-    const submittedThreadId = activeThreadIdRef.current;
+    const submittedThreadId = forceNew ? null : activeThreadIdRef.current;
 
     setResearchMode(requestedMode);
 
@@ -2749,7 +2750,7 @@ function App() {
     setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: selectedHarness });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
@@ -2772,7 +2773,7 @@ function App() {
         setTrajectoryEvents(result.thread.events ?? []);
         setEvents([]);
         setActiveThreadId(result.threadId);
-        setBoundHarness(result.thread.harness ?? selectedHarness);
+        setBoundHarness(result.thread.harness ?? backendOverride ?? selectedHarness);
         setActiveProjectId(result.thread.project_id);
         if (result.thread.workspace_id) setActiveWorkspaceId(result.thread.workspace_id);
         setChangeSets(result.thread.changeSets ?? []);
@@ -3197,6 +3198,13 @@ function App() {
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
     "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
+    "paper-to-slides": <PaperToSlidesView bridge={desktopBridge} workspace={executionWorkspace} busy={agentBusy} onStart={async ({ pdfPath, backend, language, length, instructions, mineruToken }) => {
+      const staged = await desktopBridge.stagePaperToSlidesPdf(executionWorkspace, pdfPath);
+      startNewTask();
+      const prompt = [`Create a paper presentation using the bundled paper2slides skill.`, `Input PDF: ${JSON.stringify(staged)}`, `Slide and speaker-note language: ${language}.`, `Length: ${length}.`, `Use relevant original figures and tables; check visual quality and factual accuracy. Save an editable PPTX and report the output path.`, instructions ? `Additional user instructions: ${instructions}` : ""].filter(Boolean).join("\n");
+      await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, [], "paper-to-slides", backend, true, mineruToken || undefined);
+    }} />,
+
     writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
   };
   for (const entry of pluginEntries) {

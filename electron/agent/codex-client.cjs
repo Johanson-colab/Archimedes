@@ -17,9 +17,10 @@ function executableCandidates(binary = "codex") {
 }
 
 class CodexClient extends EventEmitter {
-  constructor({ binary = "codex", spawnImpl = spawn, requestTimeout = 20_000 } = {}) {
+  constructor({ binary = "codex", spawnImpl = spawn, requestTimeout = 20_000, env = {} } = {}) {
     super();
     this.binary = binary;
+    this.env = env;
     this.spawnImpl = spawnImpl;
     this.requestTimeout = requestTimeout;
     this.pending = new Map();
@@ -33,7 +34,7 @@ class CodexClient extends EventEmitter {
     if (!binary) throw new Error("Codex CLI was not found. Install Codex and run codex login, or set its absolute executable path.");
     // Never use a shell or expose an app-server network listener.
     if (process.platform === "win32" && binary.endsWith(".cmd")) throw new Error("Select the native codex.exe executable; Windows .cmd launchers are not supported yet.");
-    const env = { ...process.env };
+    const env = { ...process.env, ...this.env };
     delete env.CODEX_THREAD_ID;
     this.child = this.spawnImpl(binary, ["app-server", "--listen", "stdio://"], { stdio: ["pipe", "pipe", "pipe"], env, windowsHide: true, detached: process.platform !== "win32" });
     clients.add(this);

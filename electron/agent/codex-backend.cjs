@@ -116,7 +116,7 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   return { answered: true };
 }
 
-async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
+async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, mineruToken, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
   const root = fs.realpathSync(workspace);
   const policy = nativePolicy(config, root);
   const attachments = nativeContext(contextItems);
@@ -128,7 +128,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments);
   if (signal.aborted) throw new Error('Codex turn interrupted before skill setup.');
   const skill = compaction ? null : prepareResearchSkill({ workspace: root, backend: 'codex', thread, requested: researchSkill, emit, recordEvent });
-  const client = new Client({ binary: config.binary });
+  const client = new Client({ binary: config.binary, ...(mineruToken ? { env: { MINERU_API_TOKEN: mineruToken } } : {}) });
   const events = createNativeEvents({ emit, recordEvent, onError: (error) => {
     try { finish(error); }
     finally { client.close(); }
@@ -265,7 +265,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
       accepted = true;
     } else {
       const input = [{ type: 'text', text: prompt }];
-      if (skill) input.push({ type: 'skill', name: SKILL_NAME, path: skill.skillFile });
+      if (skill) input.push({ type: 'skill', name: skill.skillName || SKILL_NAME, path: skill.skillFile });
       for (const attachment of contextItems.filter(item => item.type === 'image' && item.image?.dataUrl).slice(0, 4)) input.push({ type: 'image', url: attachment.image.dataUrl });
       const started = await client.request('turn/start', { threadId: active.nativeThreadId, input, ...policy.turn });
       accepted = true;

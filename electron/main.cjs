@@ -854,6 +854,10 @@ app.whenReady().then(async () => {
     store.openWorkspace(resolvedWorkspace);
     return paperReview.listPapers({ projectId: String(input?.projectId || "") });
   });
+  ipcMain.handle("paper-to-slides:stage", (event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace || windowWorkspaces.get(event.sender.id));
+    return require("./paper-to-slides.cjs").stagePdf(workspace, input.path);
+  });
   ipcMain.handle("paper-review-app:choose-pdf", async (event) => {
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
     const options = {
@@ -1829,8 +1833,10 @@ app.whenReady().then(async () => {
     if (!["api", "codex", "claude", "opencode"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
     const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
-    if (input.researchSkill != null && input.researchSkill !== "idea-spark") throw new Error("Unknown Research skill.");
-    if (input.researchSkill && input.origin !== "research") throw new Error("IdeaSpark is available only in Work conversations.");
+    if (input.researchSkill != null && !["idea-spark", "paper-to-slides"].includes(input.researchSkill)) throw new Error("Unknown Research skill.");
+    if (input.researchSkill === "paper-to-slides" && !["codex", "claude"].includes(selectedBackend)) throw new Error("Paper to Slides requires Codex or Claude Code.");
+    if (input.researchSkill && input.origin !== "research") throw new Error("Research skills are available only in Work conversations.");
+    if (input.mineruToken != null && (input.researchSkill !== "paper-to-slides" || typeof input.mineruToken !== "string" || input.mineruToken.length > 8192 || /[\r\n]/.test(input.mineruToken))) throw new Error("Invalid MinerU token.");
     const config = externalBackend ? null : modelConfig.getActiveModelConfig();
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
@@ -1838,6 +1844,7 @@ app.whenReady().then(async () => {
     return runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
       externalBackend,
       researchSkill: input.researchSkill,
+      mineruToken: input.mineruToken || undefined,
       externalSignal,
       prompt: input.prompt.trim(),
       workspace,

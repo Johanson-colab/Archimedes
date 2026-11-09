@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const { preparePaperSlidesSkill } = require('./paper-to-slides-skill.cjs');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 
@@ -84,6 +85,7 @@ function researchSelection(thread, requested) {
 }
 
 function prepareResearchSkill({ workspace, backend, thread, requested, emit = () => {}, recordEvent = () => {} }) {
+  if (requested === 'paper-to-slides' || (requested == null && [...(thread.events || [])].reverse().find(e => e.type === 'research_skill')?.payload?.skill === 'paper-to-slides')) return preparePaperSlidesSkill({ workspace, backend, thread, requested, emit, recordEvent });
   const { enabled, previous } = researchSelection(thread, requested);
   if (!enabled) return null;
   if (!SKILL_DIRS[backend]) throw new Error('Unsupported IdeaSpark harness.');
