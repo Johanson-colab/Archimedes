@@ -3,18 +3,14 @@ import {
   Archive,
   ArchiveRestore,
   Box,
-  Check,
   ChevronDown,
-  Folder,
   GitBranch,
   Lock,
   Pin,
   PinOff,
-  Plus,
-  Search,
   Trash,
 } from "lucide-react";
-import { MenuDivider, MenuLabel, MenuItem, MenuSurface } from "./Menu";
+import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
 
 type SessionFilter = "all" | "mine" | "shared" | "archived";
@@ -125,7 +121,6 @@ export default function SessionSwitcher({
   const { t, language } = useUISettings();
   const sessionButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
-  const searchRef = useRef<HTMLInputElement | null>(null);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -167,11 +162,6 @@ export default function SessionSwitcher({
     onOpenSession(session);
   }
 
-  function openSearch() {
-    setSessionOpen(true);
-    requestAnimationFrame(() => searchRef.current?.focus());
-  }
-
   function renderSessionRow(session: ResearchThread) {
     const status = sessionStatus(session, runningThreadId);
     const pinnedNow = isPinned(session);
@@ -188,7 +178,6 @@ export default function SessionSwitcher({
             {session.title}
           </span>
           <span className="session-row-meta">
-            {status !== "idle" && <span className={`session-row-state ${status}`}>{statusLabel(status, t)}</span>}
             <span>{relativeTime(session.last_turn_at || session.updated_at, language)}</span>
             {session.owner_id === currentUserId && <span>{t("Mine")}</span>}
           </span>
@@ -225,7 +214,6 @@ export default function SessionSwitcher({
           aria-haspopup="dialog"
           aria-expanded={workspaceOpen}
         >
-          {workspace?.kind === "worktree" ? <GitBranch size={12} /> : workspace?.kind === "sandbox" ? <Box size={12} /> : <Folder size={12} />}
           <span>{workspaceLabel(workspace, t)}</span>
           <ChevronDown size={12} />
         </button>
@@ -257,13 +245,6 @@ export default function SessionSwitcher({
       ariaLabel={t("Workspaces")}
       className="workspace-switcher-popover"
     >
-      <div className="session-switcher-head">
-        <div>
-          <strong>{t("Workspaces")}</strong>
-          <small>{gitState}</small>
-        </div>
-        <Box size={16} aria-hidden="true" />
-      </div>
       <div className="workspace-list">
         {workspaces.map((entry) => <div className={`workspace-option${entry.id === workspace?.id ? " active" : ""}`} key={entry.id}>
           <button
@@ -271,15 +252,11 @@ export default function SessionSwitcher({
             onClick={() => { setWorkspaceOpen(false); onSelectWorkspace(entry); }}
             title={entry.root}
           >
-            <span className="workspace-option-icon">
-              {entry.kind === "worktree" ? <GitBranch size={14} /> : entry.kind === "sandbox" ? <Box size={14} /> : <Folder size={14} />}
-            </span>
             <span className="workspace-option-copy">
               <span>{workspaceLabel(entry, t)}</span>
               <small>{entry.root}</small>
             </span>
             <span className="workspace-option-count">{entry.session_count}</span>
-            {entry.id === workspace?.id && <Check size={14} aria-hidden="true" />}
           </button>
           {!entry.is_default && <button
             className="workspace-option-delete"
@@ -290,7 +267,6 @@ export default function SessionSwitcher({
         </div>)}
       </div>
       <MenuDivider />
-      <MenuLabel>{t("New isolated workspace")}</MenuLabel>
       <MenuItem
         icon={<GitBranch size={16} />}
         disabled={!canWorktree || creatingWorkspace}
@@ -302,7 +278,6 @@ export default function SessionSwitcher({
         disabled={creatingWorkspace}
         onClick={() => { setWorkspaceOpen(false); onCreateWorkspace("sandbox"); }}
       >{t("New sandbox")}</MenuItem>
-      <div className="workspace-git-note">{gitState}</div>
     </MenuSurface>
 
     <MenuSurface
@@ -317,19 +292,8 @@ export default function SessionSwitcher({
       ariaLabel={t("Sessions")}
       className="session-switcher-popover"
     >
-      <div className="session-switcher-head">
-        <div>
-          <strong>{t("Sessions")}</strong>
-          <small>{project?.name || t("No project")} / {workspaceLabel(workspace, t)}</small>
-        </div>
-        <button className="session-new-button" onClick={() => { setSessionOpen(false); onNewSession(); }} title={t("New session")} aria-label={t("New session")}>
-          <Plus size={15} />
-        </button>
-      </div>
       <label className="session-search">
-        <Search size={14} aria-hidden="true" />
         <input
-          ref={searchRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t("Search sessions")}
@@ -352,14 +316,9 @@ export default function SessionSwitcher({
         >{id === "all" ? t("All") : id === "mine" ? t("Mine") : id === "shared" ? t("Shared") : t("Archived")}</button>)}
       </div>
       <div className="session-list">
-        {pinned.length > 0 && <>
-          <div className="session-group-label"><Pin size={11} />{t("Pinned")}</div>
-          {pinned.map(renderSessionRow)}
-        </>}
-        {rest.length > 0 && <>
-          {pinned.length > 0 && <div className="session-group-label">{filter === "archived" ? t("Archived") : t("Recent")}</div>}
-          {rest.map(renderSessionRow)}
-        </>}
+        {pinned.map(renderSessionRow)}
+        {pinned.length > 0 && rest.length > 0 && <MenuDivider />}
+        {rest.map(renderSessionRow)}
         {!filtered.length && <div className="session-empty">
           <strong>{filter === "archived" ? t("No archived sessions") : query ? t("No sessions match") : t("No sessions here yet")}</strong>
           <span>{t("Sessions stay inside their workspace, so switching does not move files.")}</span>
@@ -368,8 +327,7 @@ export default function SessionSwitcher({
       </div>
       <div className="session-switcher-foot">
         <span>{filtered.length === 1 ? t("{count} session", { count: 1 }) : t("{count} sessions", { count: filtered.length })}</span>
-        <span className="session-foot-hint">{t("Alt+↑/↓ switches sessions")}</span>
-        <button className="session-open-search" onClick={openSearch} title={t("Focus search")} aria-label={t("Focus search")}><Search size={12} /></button>
+        <button className="session-new-link" onClick={() => { setSessionOpen(false); onNewSession(); }}>{t("New session")}</button>
       </div>
     </MenuSurface>
   </>;

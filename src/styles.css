@@ -10006,22 +10006,21 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   display: inline-flex;
   min-width: 0;
   max-width: min(34vw, 380px);
-  height: 28px;
+  height: 27px;
   flex: 0 1 auto;
   align-items: center;
   gap: 7px;
-  padding: 0 9px;
+  padding: 0 6px;
   color: var(--text-secondary);
   background: transparent;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
+  border: 0;
+  border-radius: 6px;
   font-size: 11px;
 }
 .session-chip:hover,
 .session-chip.open {
   color: var(--menu-ink);
   background: var(--menu-hover-bg);
-  border-color: var(--border-default);
 }
 .session-chip-title {
   min-width: 0;
@@ -10032,43 +10031,18 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 }
 .session-chip > svg { flex: 0 0 auto; }
 .session-status {
-  width: 7px;
-  height: 7px;
+  width: 2px;
+  height: 12px;
   flex: 0 0 auto;
   background: var(--text-faint);
-  border-radius: 50%;
+  border-radius: 1px;
 }
-.session-status.running { background: var(--state-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--state-success) 18%, transparent); }
+.session-status.running { background: var(--accent); animation: sidebar-running-sheen 2.1s linear infinite; }
 .session-status.review { background: var(--state-warning); }
 .session-status.failed { background: var(--state-danger); }
 .session-status.unread { background: var(--accent); }
 
 .menu-surface.session-switcher-popover { padding: 0; overflow: hidden; }
-.session-switcher-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 13px 14px 10px;
-  border-bottom: 1px solid var(--menu-divider);
-}
-.session-switcher-head > div { min-width: 0; }
-.session-switcher-head strong { display: block; color: var(--menu-ink); font-size: 13px; font-weight: 680; }
-.session-switcher-head small { display: block; margin-top: 2px; overflow: hidden; color: var(--menu-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.session-switcher-head > svg { color: var(--menu-icon); }
-.session-new-button,
-.session-open-search {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 auto;
-  place-items: center;
-  color: var(--menu-icon);
-  background: var(--menu-hover-bg);
-  border-radius: 6px;
-}
-.session-new-button:hover,
-.session-open-search:hover { color: var(--menu-hover-ink); background: var(--menu-selected-bg); }
 .session-search {
   display: flex;
   align-items: center;
@@ -10119,17 +10093,6 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   padding: 0 6px 6px;
   scrollbar-width: thin;
 }
-.session-group-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 8px 4px;
-  color: var(--menu-muted);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
 .session-row {
   display: flex;
   align-items: stretch;
@@ -10172,10 +10135,6 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   color: var(--menu-muted);
   font-size: 9.5px;
 }
-.session-row-state.running { color: var(--state-success); }
-.session-row-state.review { color: var(--state-warning); }
-.session-row-state.failed { color: var(--state-danger); }
-.session-row-state.unread { color: var(--accent); }
 .session-row-actions {
   display: flex;
   flex: 0 0 auto;
@@ -10212,14 +10171,21 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 .session-switcher-foot {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 7px 12px;
   color: var(--menu-muted);
   border-top: 1px solid var(--menu-divider);
   font-size: 9.5px;
 }
-.session-foot-hint { margin-left: auto; color: var(--menu-shortcut); }
-.session-open-search { width: 22px; height: 22px; background: transparent; }
+.session-new-link {
+  padding: 2px 4px;
+  color: var(--menu-muted);
+  background: transparent;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.session-new-link:hover { color: var(--menu-hover-ink); background: var(--menu-hover-bg); }
 
 .workspace-list { display: grid; gap: 2px; padding: 4px 6px 8px; }
 .workspace-option { display: flex; align-items: stretch; border-radius: 7px; }
@@ -10237,16 +10203,6 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   background: transparent;
   text-align: left;
 }
-.workspace-option-icon {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  place-items: center;
-  color: var(--menu-icon);
-  background: var(--menu-hover-bg);
-  border-radius: 6px;
-}
 .workspace-option-copy { display: grid; min-width: 0; flex: 1; gap: 1px; }
 .workspace-option-copy > span { overflow: hidden; color: var(--menu-ink); font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-option-copy small { overflow: hidden; color: var(--menu-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -10260,12 +10216,6 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   border-radius: 5px;
 }
 .workspace-option-delete:hover { color: var(--menu-danger); background: var(--menu-danger-hover-bg); }
-.workspace-git-note {
-  padding: 4px 14px 10px;
-  color: var(--menu-muted);
-  font-size: 9.5px;
-  line-height: 1.4;
-}
 
 @media (hover: none) {
   .session-row-actions { opacity: 1; }
@@ -10289,13 +10239,11 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
     max-height: none;
     flex: 1 1 auto;
   }
-  .session-switcher-popover .session-switcher-head,
   .session-switcher-popover .session-search,
   .session-switcher-popover .session-filters,
-  .session-switcher-popover .session-switcher-foot,
-  .workspace-switcher-popover .session-switcher-head { flex: 0 0 auto; }
+  .session-switcher-popover .session-switcher-foot { flex: 0 0 auto; }
   .workspace-switcher-popover .workspace-list { min-height: 0; overflow-y: auto; flex: 1 1 auto; }
-  .session-switcher-popover .session-search { margin-top: 14px; }
+  .session-switcher-popover .session-search { margin-top: 12px; }
   .session-switcher-popover .session-filters { flex-wrap: wrap; padding-bottom: 12px; }
   .toolbar-breadcrumb { display: none; }
   .session-chip { max-width: 54vw; }

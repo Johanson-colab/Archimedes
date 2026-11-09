@@ -76,13 +76,15 @@ test("the main toolbar carries a breadcrumb and one session chip instead of tabs
 test("session search, filters, pinning, archiving and status are exposed", () => {
   assert.match(switcher, /placeholder=\{t\("Search sessions"\)\}/);
   assert.match(switcher, /FILTERS: SessionFilter\[\] = \["all", "mine", "shared", "archived"\]/);
-  assert.match(switcher, /t\("Pinned"\)/);
+  assert.match(switcher, /pinned\.length > 0 && rest\.length > 0 && <MenuDivider \/>/);
   assert.match(switcher, /onPinSession\(session, !pinnedNow\)/);
   assert.match(switcher, /onArchiveSession\(session, filter !== "archived"\)/);
   assert.match(switcher, /session-status \$\{status\}/);
   assert.match(switcher, /sessionStatus\(session, runningThreadId\)/);
   assert.match(switcher, /pending_actions/);
   assert.match(switcher, /unread_count/);
+  assert.match(switcher, /className="session-new-link"/);
+  assert.doesNotMatch(switcher, /session-switcher-head|session-new-button|session-open-search|workspace-option-icon|workspace-git-note|session-row-state|session-group-label/);
 });
 
 test("the switcher only sees the active workspace and preserves sessions across switches", () => {
@@ -111,7 +113,9 @@ test("workspace switching and isolated workspace creation are wired in the rende
 test("the switcher adapts to narrow screens as a full-height sheet", () => {
   assert.match(css, /\.menu-surface\.session-switcher-popover \{ padding: 0; overflow: hidden; \}/);
   assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*?\.menu-surface\.session-switcher-popover/);
-  assert.match(css, /\.session-status\.running \{ background: var\(--state-success\)/);
+  assert.match(css, /\.session-status \{\s*width: 2px;\s*height: 12px;[^}]*border-radius: 1px/);
+  assert.match(css, /\.session-status\.running \{ background: var\(--accent\); animation: sidebar-running-sheen/);
+  assert.match(css, /\.session-chip \{[^}]*border: 0/);
   assert.match(css, /\.session-row\.active \{ background: var\(--menu-selected-bg\); box-shadow: inset 2px 0 0 var\(--accent\)/);
   assert.match(css, /\.workspace-option-copy small \{/);
 });
