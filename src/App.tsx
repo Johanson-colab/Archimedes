@@ -2720,6 +2720,43 @@ function App() {
     setFileError("");
   }
 
+  async function closeOtherFilePanes(keepPath: string) {
+    const current = openFilesRef.current;
+    const closing = current.filter((file) => file.path !== keepPath);
+    if (closing.length === 0) return;
+    const dirtyCount = closing.filter((file) => isDraftDirty(fileDraftsRef.current[file.path])).length;
+    if (dirtyCount > 0 && !(await confirm({ title: "Close other files?", description: `${dirtyCount} other file${dirtyCount === 1 ? "" : "s"} have unsaved changes.`, confirmLabel: "Close others", destructive: true }))) return;
+    const keep = current.find((file) => file.path === keepPath) ?? null;
+    const next = keep ? [keep] : [];
+    openFilesRef.current = next;
+    setOpenFiles(next);
+    const nextDrafts = { ...fileDraftsRef.current };
+    for (const file of closing) delete nextDrafts[file.path];
+    setDrafts(nextDrafts);
+    setFileConflicts((records) => closing.reduce((acc, file) => withoutKey(acc, file.path), records));
+    setFileErrors((records) => closing.reduce((acc, file) => withoutKey(acc, file.path), records));
+    setSelectedFilePath(keep?.path ?? null);
+    setSelectedFile(keep);
+    setFileSelection(null);
+    setFileError("");
+  }
+
+  async function closeAllFilePanes() {
+    const current = openFilesRef.current;
+    if (current.length === 0) return;
+    const dirtyCount = current.filter((file) => isDraftDirty(fileDraftsRef.current[file.path])).length;
+    if (dirtyCount > 0 && !(await confirm({ title: "Close all files?", description: `${dirtyCount} file${dirtyCount === 1 ? "" : "s"} have unsaved changes.`, confirmLabel: "Close all", destructive: true }))) return;
+    openFilesRef.current = [];
+    setOpenFiles([]);
+    setDrafts({});
+    setFileConflicts({});
+    setFileErrors({});
+    setSelectedFilePath(null);
+    setSelectedFile(null);
+    setFileSelection(null);
+    setFileError("");
+  }
+
   function updateFileDraft(filePath: string, content: string) {
     const draft = fileDraftsRef.current[filePath];
     if (!draft || draft.content === content) return;
@@ -3167,7 +3204,7 @@ function App() {
             })}
           </Suspense>
           {mainSection === "files" && (
-            <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} onFileSelectionChange={(path, selection) => setFileSelection(selection ? { file: selectedFile ?? { name: path.split("/").at(-1) ?? path, path, kind: "text", size: 0, modifiedAt: "" }, selection } : null)}
+            <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onCloseOtherFiles={(filePath) => void closeOtherFilePanes(filePath)} onCloseAllFiles={() => void closeAllFilePanes()} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} onFileSelectionChange={(path, selection) => setFileSelection(selection ? { file: selectedFile ?? { name: path.split("/").at(-1) ?? path, path, kind: "text", size: 0, modifiedAt: "" }, selection } : null)}
               onRestore={() => { setMainSection("chat"); openWorkbench("files"); }} />
           )}
         </div>
@@ -3258,6 +3295,8 @@ function App() {
               onOpenFile={(filePath) => void openFilePane(filePath)}
               onSelectOpenFile={(file) => selectOpenFilePane(file)}
               onCloseFile={closeFilePane}
+              onCloseOtherFiles={(filePath) => void closeOtherFilePanes(filePath)}
+              onCloseAllFiles={() => void closeAllFilePanes()}
               onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)}
               onRefresh={() => void refreshWorkspaceFiles()}
               onNewFile={() => setModal("file")}
@@ -4635,7 +4674,7 @@ function readFilesPaneWidth() {
   return Number.isFinite(saved) && saved >= FILES_PANE_MIN_WIDTH ? saved : FILES_PANE_DEFAULT_WIDTH;
 }
 
-function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewFile, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, onFileSelectionChange, compact = false, compactWidth = 0, onOpenFull, onRestore }: {
+function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onCloseOtherFiles, onCloseAllFiles, onLoadDirectory, onRefresh, onNewFile, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, onFileSelectionChange, compact = false, compactWidth = 0, onOpenFull, onRestore }: {
   workspace: string;
   tree: WorkspaceFileTree;
   openFiles: WorkspaceFilePreview[];
@@ -4652,6 +4691,8 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   onOpenFile: (filePath: string) => void;
   onSelectOpenFile: (file: WorkspaceFilePreview) => void;
   onCloseFile: (filePath: string) => void;
+  onCloseOtherFiles: (filePath: string) => void;
+  onCloseAllFiles: () => void;
   onLoadDirectory: (directory: string) => void;
   onRefresh: () => void;
   onNewFile: () => void;
@@ -4666,11 +4707,13 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   onOpenFull?: () => void;
   onRestore?: () => void;
 }) {
+  const { t } = useUISettings();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [compactPane, setCompactPane] = useState<"browse" | "editor">(selectedPath ? "editor" : "browse");
   const [filesPaneWidth, setFilesPaneWidth] = useState(readFilesPaneWidth);
   const [filesListCollapsed, setFilesListCollapsed] = useState(false);
   const [filesEditorCollapsed, setFilesEditorCollapsed] = useState(false);
+  const [tabMenu, setTabMenu] = useState<{ file: WorkspaceFilePreview; x: number; y: number } | null>(null);
   const [closingFullEditor, setClosingFullEditor] = useState(false);
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const tabsScrollerRef = useRef<HTMLDivElement | null>(null);
@@ -4788,6 +4831,43 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     });
   }
 
+  function absoluteWorkspacePath(filePath: string) {
+    const separator = workspace.includes("\\") ? "\\" : "/";
+    const root = workspace.replace(/[\\/]+$/, "");
+    return `${root}${separator}${filePath.replace(/^[\\/]+/, "").split("/").join(separator)}`;
+  }
+
+  async function copyTabPath(filePath: string, relative: boolean) {
+    const text = relative ? filePath : absoluteWorkspacePath(filePath);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      try { document.execCommand("copy"); } finally { area.remove(); }
+    }
+  }
+
+  const tabContextMenu = tabMenu ? <MenuSurface
+    open
+    onClose={() => setTabMenu(null)}
+    cursor={{ x: tabMenu.x, y: tabMenu.y }}
+    ariaLabel={t("File tab actions")}
+    minWidth={200}
+    width={210}
+  >
+    <MenuItem onClick={() => { setTabMenu(null); onCloseFile(tabMenu.file.path); }}>{t("Close")}</MenuItem>
+    <MenuItem onClick={() => { setTabMenu(null); onCloseOtherFiles(tabMenu.file.path); }}>{t("Close others")}</MenuItem>
+    <MenuItem onClick={() => { setTabMenu(null); onCloseAllFiles(); }}>{t("Close all")}</MenuItem>
+    <MenuDivider />
+    <MenuItem onClick={() => { setTabMenu(null); void copyTabPath(tabMenu.file.path, false); }}>{t("Copy path")}</MenuItem>
+    <MenuItem onClick={() => { setTabMenu(null); void copyTabPath(tabMenu.file.path, true); }}>{t("Copy relative path")}</MenuItem>
+  </MenuSurface> : null;
+
   function restoreFullEditor() {
     if (!onRestore || closingFullEditor) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -4797,7 +4877,6 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     setClosingFullEditor(true);
     window.setTimeout(onRestore, 150);
   }
-
   function startFilesPaneResize(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -4848,7 +4927,11 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
 
   const tabs = openFiles.length > 0 ? <div className="artifact-tabs-scroller" ref={tabsScrollerRef}>
     <div ref={tabsRef} className="artifact-tabs" role="tablist" aria-label="Open files" onScroll={syncTabsScrollbar}>
-      {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
+      {openFiles.map((openFile) => <div
+        className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"}
+        key={openFile.path}
+        onContextMenu={(event) => { event.preventDefault(); setTabMenu({ file: openFile, x: event.clientX, y: event.clientY }); }}
+      >
         <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
           {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
           <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}><WorkspaceFileGlyph entry={{ type: "file", kind: openFile.kind, path: openFile.path }} /></span><span className="artifact-tab-name">{openFile.name}</span>
@@ -4918,6 +5001,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
           {!filesEditorCollapsed && editor}
         </> : showingEditor ? editor : browser}
       </div>
+      {tabContextMenu}
     </div>;
   }
 
@@ -4927,6 +5011,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
       <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>
       {editor}
     </div>
+    {tabContextMenu}
   </div>;
 }
 
