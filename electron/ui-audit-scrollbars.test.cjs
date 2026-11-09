@@ -23,10 +23,10 @@ test("scrollbars share theme tokens and hide native arrow buttons", () => {
 
 test("conversation scrollbar reveals only while hovering the transcript", () => {
   assert.match(css, /\.conversation-scroll::-webkit-scrollbar-thumb \{[^}]*background-color: transparent;/);
-  assert.match(css, /\.conversation-scroll:hover::-webkit-scrollbar-thumb \{[^}]*background-color: var\(--scrollbar-thumb\);/);
-  assert.match(css, /\.conversation-scroll:hover::-webkit-scrollbar-thumb:hover \{[^}]*var\(--scrollbar-thumb-hover\)/);
+  assert.match(css, /\.conversation-scroll-area:hover \.conversation-scroll::-webkit-scrollbar-thumb \{[^}]*background-color: var\(--scrollbar-thumb\);/);
+  assert.match(css, /\.conversation-scroll-area:hover \.conversation-scroll::-webkit-scrollbar-thumb:hover \{[^}]*var\(--scrollbar-thumb-hover\)/);
   assert.match(css, /\.conversation-scroll \{ scrollbar-color: transparent transparent; \}/);
-  assert.match(css, /\.conversation-scroll:hover \{ scrollbar-color: var\(--scrollbar-thumb\) transparent; \}/);
+  assert.match(css, /\.conversation-scroll-area:hover \.conversation-scroll \{ scrollbar-color: var\(--scrollbar-thumb\) transparent; \}/);
 });
 
 test("intentionally hidden scrollbars stay hidden", () => {
