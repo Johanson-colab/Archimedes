@@ -56,15 +56,25 @@ sidebar never lists individual conversations.
 | Item | Name |
 | --- | --- |
 | shared workspace | `Main workspace` (localized by the UI) |
-| worktree | `Worktree 1`, `Worktree 2`, … |
-| sandbox | `Sandbox 1`, `Sandbox 2`, … |
+| isolated workspace, user named | the name typed in the New workspace dialog |
+| isolated workspace, blank name | next unused entry from `shared/workspace-names.json` |
+| after the library is exhausted | random English building name such as `Cedar Atelier` |
 | session with a prompt | the first prompt, shortened to 72 characters |
 | new empty session | `New session` |
 | fork / side conversation | `Fork: …` / `Side: …` |
 
-The project-row `+` creates one workspace directly: a worktree when the project
-repository is ready, otherwise a sandbox. The full workspace menu still offers
-both choices, but hides Git worktrees for folders without `.git`.
+`shared/workspace-names.json` collects studios and residences of scientists,
+philosophers, writers and artists — from `Einstein House Bern` and `Down House`
+to `Yinbing Shi`, `Lülin Shuwu`, and `Laohu Weiba`. It contains more than one
+hundred unique entries. Suggestions skip names already used by any workspace,
+so the library is consumed globally. Once every library name is taken, the
+backend falls back to unique random English building names.
+
+The project-row `+`, the workspace menu, and the sidebar all open the same New
+workspace dialog. The name can be left blank to take the next library name, and
+the type can be Sandbox or Worktree (Worktree is hidden without `.git`). The
+workspace menu also exposes a pencil action for renaming later; names are
+unique within a project and are stored in `project_workspaces.name`.
 
 ### Session switcher
 
@@ -116,6 +126,10 @@ conversations remain project-visible by default.
 | Narrow sheet | Composer footer |
 | --- | --- |
 | ![Full-height session sheet](./assets/workspace-session/narrow-sheet.png) | ![Composer footer without duplicate runtime controls](./assets/workspace-session/composer-footer.png) |
+
+| New workspace dialog | Rename workspace |
+| --- | --- |
+| ![New workspace with a suggested studio name](./assets/workspace-session/workspace-name-dialog.png) | ![Rename workspace dialog](./assets/workspace-session/workspace-rename-dialog.png) |
 
 ## Decisions on the open questions in #273
 

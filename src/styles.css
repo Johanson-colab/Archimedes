@@ -10174,15 +10174,17 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 .workspace-option-copy > span { overflow: hidden; color: var(--menu-ink); font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-option-copy small { overflow: hidden; color: var(--menu-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-option-count { color: var(--menu-muted); font-size: 9px; }
-.workspace-option-delete {
+.workspace-option-actions { display: flex; flex: 0 0 auto; align-items: center; }
+.workspace-option-action {
   display: grid;
-  width: 27px;
+  width: 25px;
   place-items: center;
   color: var(--menu-muted);
   background: transparent;
   border-radius: 5px;
 }
-.workspace-option-delete:hover { color: var(--menu-danger); background: var(--menu-danger-hover-bg); }
+.workspace-option-action:hover { color: var(--menu-hover-ink); background: var(--menu-hover-bg); }
+.workspace-option-action.danger:hover { color: var(--menu-danger); background: var(--menu-danger-hover-bg); }
 
 @media (hover: none) {
   .session-row-actions { opacity: 1; }
@@ -10214,4 +10216,37 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   .session-switcher-popover .session-filters { flex-wrap: wrap; padding-bottom: 12px; }
   .toolbar-breadcrumb { display: none; }
   .session-chip { max-width: 54vw; }
+}
+
+/* Workspace creation and rename */
+.workspace-kind-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.workspace-kind-options button {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  color: var(--text-muted);
+  background: var(--surface-control);
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  text-align: left;
+}
+.workspace-kind-options button.active {
+  color: var(--text-primary);
+  background: var(--selected);
+  border-color: var(--accent);
+}
+.workspace-kind-options button > svg { flex: 0 0 auto; margin-top: 1px; color: var(--text-faint); }
+.workspace-kind-options button.active > svg { color: var(--accent); }
+.workspace-kind-options button > span { display: grid; min-width: 0; gap: 2px; }
+.workspace-kind-options strong { font-size: 11px; font-weight: 650; }
+.workspace-kind-options small { overflow: hidden; color: var(--text-faint); font-size: 9px; line-height: 1.35; text-overflow: ellipsis; }
+.workspace-name-dialog .dialog-ref-field { margin-top: 12px; }
+@media (max-width: 620px) {
+  .workspace-kind-options { grid-template-columns: minmax(0, 1fr); }
 }

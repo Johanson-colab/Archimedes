@@ -5,6 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 const { spawnSync } = require("node:child_process");
 const store = require("./store.cjs");
+const nameLibrary = require("../shared/workspace-names.json");
 
 function closeStore() {
   const idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-idle-"));
@@ -67,9 +68,9 @@ test("sessions are filtered by workspace and can be pinned and marked viewed", (
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Workspace filter", workspacePath: projectFolder });
     const sandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
-    assert.equal(sandbox.name, "Sandbox 1");
+    assert.equal(sandbox.name, nameLibrary[0].name);
     const secondSandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
-    assert.equal(secondSandbox.name, "Sandbox 2");
+    assert.equal(secondSandbox.name, nameLibrary[1].name);
     store.deleteProjectWorkspace(secondSandbox.id);
     const shared = store.defaultProjectWorkspace(project.id);
     const sharedThread = store.createResearchThread({ prompt: "Shared work", mode: "free-chat", projectId: project.id });
@@ -136,6 +137,29 @@ test("sandboxes copy project files without caches or app data", () => {
   }
 });
 
+test("workspaces accept a user name and can be renamed later", () => {
+  const { root, primary, projectFolder } = makeRoots("rename");
+  try {
+    store.openWorkspace(primary);
+    const project = store.createResearchProject({ name: "Named project", workspacePath: projectFolder });
+    const named = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox", name: "Quiet Room" });
+    assert.equal(named.name, "Quiet Room");
+    assert.throws(
+      () => store.createProjectWorkspace({ projectId: project.id, kind: "sandbox", name: "quiet room" }),
+      /already exists/i,
+    );
+    const other = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox", name: "Other Room" });
+    const renamed = store.renameProjectWorkspace(named.id, "Reading Room");
+    assert.equal(renamed.name, "Reading Room");
+    assert.equal(store.renameProjectWorkspace(named.id, "Reading Room").name, "Reading Room");
+    assert.throws(() => store.renameProjectWorkspace(named.id, other.name), /already exists/i);
+    assert.throws(() => store.renameProjectWorkspace(named.id, "  "), /name is required/i);
+  } finally {
+    closeStore();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("git projects can open and remove a worktree workspace", () => {
   const { root, primary, projectFolder } = makeRoots("worktree");
   try {
@@ -145,7 +169,7 @@ test("git projects can open and remove a worktree workspace", () => {
     assert.equal(store.getResearchProject(project.id).git_state, "ready");
     const worktree = store.createProjectWorkspace({ projectId: project.id, kind: "worktree" });
     assert.equal(worktree.kind, "worktree");
-    assert.equal(worktree.name, "Worktree 1");
+    assert.equal(worktree.name, nameLibrary[0].name);
     assert.equal(fs.existsSync(path.join(worktree.root, "README.md")), true);
     assert.ok(worktree.base_ref);
 
