@@ -9860,3 +9860,13 @@ html[data-file-icons="minimal"] .workspace-tree-row .tree-file-icon,
 html[data-file-icons="minimal"] .artifact-tab .tree-file-icon {
   display: none;
 }
+
+
+/* Match the OpenCode desktop tree: folders are identified by their chevron,
+   file rows carry the actual file-type artwork. */
+html[data-file-icons="opencode"] .workspace-tree-row.is-directory {
+  grid-template-columns: 14px minmax(0, 1fr);
+}
+html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-icon {
+  display: none;
+}

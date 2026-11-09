@@ -65,6 +65,8 @@ test("file icons default to the real OpenCode sprite and switch across styles", 
   assert.match(app, /<WorkspaceFileGlyph entry=\{entry\} expanded=\{isExpanded\} \/>/);
   assert.match(css, /\.tree-file-icon \.file-glyph-image/);
   assert.match(css, /html\[data-file-icons="opencode"\] \.tree-file-icon\.tone-folder/);
+  assert.match(css, /html\[data-file-icons="opencode"\] \.workspace-tree-row\.is-directory/);
+  assert.match(css, /html\[data-file-icons="opencode"\] \.workspace-tree-row\.is-directory \.tree-file-icon \{[^}]*display: none;/);
   assert.match(css, /html\[data-file-icons="outline"\] \.tree-file-icon:not\(\.tone-folder\) \.file-glyph-text/);
   assert.match(css, /html\[data-file-icons="minimal"\] \.workspace-tree-row/);
   assert.match(css, /html\[data-file-icons="material"\] \{/);
