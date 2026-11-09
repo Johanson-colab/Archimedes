@@ -66,6 +66,7 @@ import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
 import { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, formatFileComment, isDraftDirty, isEditableFile, markDraftSaved, mergeRefreshedFiles, prepareFileContent, toEditorText, type FileComment, type FileDraft, type FileSelection } from "./file-editor";
+import { shortcutMatches } from "./file-text-size";
 import { previewLibraryBridge } from "./library-preview";
 import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
@@ -4469,6 +4470,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   onSelectionChange?: (selection: FileSelection | null) => void;
   compact?: boolean;
 }) {
+  const { fileTextSize, fileTextShortcuts, increaseFileTextSize, decreaseFileTextSize, resetFileTextSize } = useUISettings();
   const [mode, setMode] = useState<"preview" | "edit">("preview");
   const [selection, setSelection] = useState<FileSelection | null>(null);
   const [commentOpen, setCommentOpen] = useState(false);
@@ -4495,6 +4497,26 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
     window.addEventListener("keydown", handleSave);
     return () => window.removeEventListener("keydown", handleSave);
   }, [dirty]);
+
+  useEffect(() => {
+    if (!file) return;
+    const handleTextSize = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.target instanceof Element && event.target.closest(".app-dialog, [role=\"dialog\"]")) return;
+      if (shortcutMatches(event, fileTextShortcuts.increase)) {
+        event.preventDefault();
+        increaseFileTextSize();
+      } else if (shortcutMatches(event, fileTextShortcuts.decrease)) {
+        event.preventDefault();
+        decreaseFileTextSize();
+      } else if (shortcutMatches(event, fileTextShortcuts.reset)) {
+        event.preventDefault();
+        resetFileTextSize();
+      }
+    };
+    window.addEventListener("keydown", handleTextSize);
+    return () => window.removeEventListener("keydown", handleTextSize);
+  }, [file, fileTextShortcuts, increaseFileTextSize, decreaseFileTextSize, resetFileTextSize]);
 
   if (loading) return <div className="artifact-empty"><RefreshCw className="spin" size={18} />Loading file...</div>;
   if (error) return <div className="artifact-empty error"><FileText size={22} /><strong>Could not open this file</strong><span>{error}</span></div>;
@@ -4540,7 +4562,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
         </>}
       </div>}
     </div>
-    <div className={`artifact-preview-surface${editing ? " editing" : ""}`}>
+    <div className={`artifact-preview-surface${editing ? " editing" : ""}`} style={{ "--file-content-font-size": `${fileTextSize}px` } as React.CSSProperties}>
       {editing ? <Suspense fallback={<div className="artifact-empty"><LoaderCircle className="spin" size={18} />Loading editor...</div>}>
         <FileCodeEditor filePath={file.path} value={draft?.content ?? ""} onChange={(value) => onDraftChange(file.path, value)} onSave={onSave} onSelectionChange={(selection) => { setSelection(selection); onSelectionChange?.(selection); }} />
       </Suspense> : <>
@@ -4578,7 +4600,7 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
       wrapLongLines={false}
       lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", textAlign: "right", userSelect: "none" }}
       lineProps={{ className: "syntax-line" }}
-      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "13px", lineHeight: 1.65, tabSize: 2 }}
+      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "var(--file-content-font-size, 13px)", lineHeight: 1.65, tabSize: 2 }}
       codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
     >{content || " "}</SyntaxHighlighter>
   </div>;
