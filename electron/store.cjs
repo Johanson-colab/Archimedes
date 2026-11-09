@@ -1,6 +1,7 @@
 const { createHash, randomUUID } = require("node:crypto");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
 const { detectGitState, gitBranch } = require("./git-state.cjs");
+const { normalizeWorkspaceName, suggestWorkspaceName, workspaceNameAvailable } = require("./workspace-names.cjs");
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -173,6 +174,7 @@ function schema(db) {
       id TEXT PRIMARY KEY NOT NULL,
       project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
       kind TEXT NOT NULL DEFAULT 'shared',
+      name TEXT NOT NULL DEFAULT '',
       root TEXT NOT NULL,
       base_ref TEXT,
       last_session_id TEXT,
@@ -548,6 +550,7 @@ function schema(db) {
   ensureColumn(db, "research_artifacts", "project_id", "TEXT");
   ensureColumn(db, "research_artifacts", "storage", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "research_artifacts", "sha256", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "project_workspaces", "name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
   ensureColumn(db, "libraries", "cloud_library_id", "TEXT");
@@ -1840,6 +1843,22 @@ function refreshProjectGitState(db, projectId) {
   return db.prepare("SELECT * FROM research_projects WHERE id = ?").get(projectId);
 }
 
+/**
+ * Isolated workspaces get a name from the curated studio/residence library on
+ * creation. Existing unnamed workspaces are backfilled the same way; once the
+ * library is exhausted, the helper falls back to random building names.
+ */
+function assignMissingWorkspaceNames(db) {
+  const rows = db.prepare(`
+    SELECT id FROM project_workspaces
+    WHERE kind <> 'shared' AND (name IS NULL OR name = '')
+    ORDER BY created_at ASC
+  `).all();
+  for (const row of rows) {
+    db.prepare("UPDATE project_workspaces SET name = ? WHERE id = ?").run(suggestWorkspaceName(db), row.id);
+  }
+}
+
 function ensureProjectEnvironment(db, project) {
   if (project.environment_id) {
     const existing = db.prepare("SELECT id FROM project_environments WHERE id = ? AND project_id = ?")
@@ -1885,6 +1904,7 @@ function hydrateProjectWorkspace(row, counts = {}) {
     id: row.id,
     project_id: row.project_id,
     kind: WORKSPACE_KINDS.has(row.kind) ? row.kind : "shared",
+    name: row.name || "",
     root: row.root,
     base_ref: row.base_ref || null,
     last_session_id: row.last_session_id || null,
@@ -1958,6 +1978,7 @@ function migrateProjectWorkspaces(db) {
     `).run(workspace.id, project.id, project.id);
     refreshProjectGitState(db, project.id);
   }
+  assignMissingWorkspaceNames(db);
   db.prepare(`
     UPDATE research_artifacts
     SET project_id = (SELECT project_id FROM research_threads WHERE research_threads.id = research_artifacts.thread_id)
@@ -1984,7 +2005,7 @@ function createSandboxCopy(source, destination) {
   copyDirectory(source, destination);
 }
 
-function createProjectWorkspace({ projectId, kind = "shared" } = {}) {
+function createProjectWorkspace({ projectId, kind = "shared", name = "" } = {}) {
   const db = requireDatabase();
   if (typeof projectId !== "string" || !projectId) throw new Error("A project is required.");
   if (!WORKSPACE_KINDS.has(kind)) throw new Error("Unknown workspace kind.");
@@ -1994,6 +2015,10 @@ function createProjectWorkspace({ projectId, kind = "shared" } = {}) {
   const shared = ensureProjectSharedWorkspace(db, project);
   if (kind === "shared") return hydrateProjectWorkspace(shared, shared);
 
+  const requestedName = normalizeWorkspaceName(name);
+  if (requestedName && !workspaceNameAvailable(db, projectId, requestedName)) {
+    throw new Error("A workspace with this name already exists in this project.");
+  }
   const root = resolveProjectRoot(project);
   if (!root) throw new Error("Bind a project folder before creating a workspace.");
   const id = randomUUID();
@@ -2026,16 +2051,44 @@ function createProjectWorkspace({ projectId, kind = "shared" } = {}) {
     createSandboxCopy(root, workspaceRoot);
   }
 
+  const resolvedName = requestedName || suggestWorkspaceName(db);
   db.prepare(`
-    INSERT INTO project_workspaces (id, project_id, kind, root, base_ref, last_session_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
-  `).run(id, projectId, kind, workspaceRoot, baseRef, now, now);
+    INSERT INTO project_workspaces (id, project_id, kind, name, root, base_ref, last_session_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
+  `).run(id, projectId, kind, resolvedName, workspaceRoot, baseRef, now, now);
   recordAuditEvent(db, {
     projectId,
     action: "workspace.created",
     targetType: "workspace",
     targetId: id,
-    metadata: { kind, root: workspaceRoot, baseRef },
+    metadata: { kind, name: resolvedName, root: workspaceRoot, baseRef },
+  });
+  return getProjectWorkspace(id);
+}
+
+function suggestProjectWorkspaceName() {
+  const db = requireDatabase();
+  return suggestWorkspaceName(db);
+}
+
+function renameProjectWorkspace(id, name) {
+  const db = requireDatabase();
+  const workspace = db.prepare("SELECT id, project_id FROM project_workspaces WHERE id = ?").get(id);
+  if (!workspace) throw new Error("Workspace not found.");
+  if (!canAccessProject(workspace.project_id, "editor")) throw new Error("You do not have permission to change this project.");
+  const normalized = normalizeWorkspaceName(name);
+  if (!normalized) throw new Error("A workspace name is required.");
+  if (!workspaceNameAvailable(db, workspace.project_id, normalized, id)) {
+    throw new Error("A workspace with this name already exists in this project.");
+  }
+  db.prepare("UPDATE project_workspaces SET name = ?, updated_at = ? WHERE id = ?")
+    .run(normalized, timestamp(), id);
+  recordAuditEvent(db, {
+    projectId: workspace.project_id,
+    action: "workspace.renamed",
+    targetType: "workspace",
+    targetId: id,
+    metadata: { name: normalized },
   });
   return getProjectWorkspace(id);
 }
@@ -3422,7 +3475,9 @@ module.exports = {
   listProjectWorkspaces,
   markResearchThreadViewed,
   pinResearchThread,
+  renameProjectWorkspace,
   setWorkspaceLastSession,
+  suggestProjectWorkspaceName,
   getResearchProject,
   linkResearchProjectToCloud,
   importCloudProject,

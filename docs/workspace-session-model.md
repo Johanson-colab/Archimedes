@@ -47,6 +47,35 @@ Sessions are single-instance and belong to exactly one workspace. Deleting a
 non-shared workspace moves its sessions back to the shared workspace; a Git
 worktree is removed with `git worktree remove --force`.
 
+The left sidebar now follows the same hierarchy: `Projects`, then the
+workspaces under each project. Session titles stay in the session switcher; the
+sidebar never lists individual conversations.
+
+#### Workspace and session names
+
+| Item | Name |
+| --- | --- |
+| shared workspace | `Main workspace` (localized by the UI) |
+| isolated workspace, user named | the name typed in the New workspace dialog |
+| isolated workspace, blank name | next unused entry from `shared/workspace-names.json` |
+| after the library is exhausted | random English building name such as `Cedar Atelier` |
+| session with a prompt | the first prompt, shortened to 72 characters |
+| new empty session | `New session` |
+| fork / side conversation | `Fork: …` / `Side: …` |
+
+`shared/workspace-names.json` collects studios and residences of scientists,
+philosophers, writers and artists — from `Einstein House Bern` and `Down House`
+to `Yinbing Shi`, `Lülin Shuwu`, and `Laohu Weiba`. It contains more than one
+hundred unique entries. Suggestions skip names already used by any workspace,
+so the library is consumed globally. Once every library name is taken, the
+backend falls back to unique random English building names.
+
+The project-row `+`, the workspace menu, and the sidebar all open the same New
+workspace dialog. The name can be left blank to take the next library name, and
+the type can be Sandbox or Worktree (Worktree is hidden without `.git`). The
+workspace menu also exposes a pencil action for renaming later; names are
+unique within a project and are stored in `project_workspaces.name`.
+
 ### Session switcher
 
 The main toolbar now shows:
@@ -58,7 +87,7 @@ Project / Workspace        ● Session title ▾
 The chip opens a searchable popover with:
 
 - `All`, `Mine`, `Shared`, and `Archived` filters;
-- pinned sessions, then recent sessions;
+- pinned sessions first, separated from the rest by a divider;
 - per-session status: running, needs review, failed, unread, idle;
 - pin/unpin and archive/restore actions;
 - `Alt+↑/↓` or `Ctrl+Shift+[ / ]` to move between sessions in the current
@@ -67,22 +96,40 @@ The chip opens a searchable popover with:
   palette shortcut;
 - a full-height sheet below 720px instead of a floating popover.
 
+The selected session uses a quiet background highlight with no extra accent
+bar, and the footer keeps only a text `New session` action.
+
 Session switching keeps per-session composer drafts and conversation scroll
 positions. It does not stop a running turn.
 
+### Composer
+
+The composer footer now keeps the context picker, harness picker, workspace
+folder shortcut, and context usage. The duplicate `Local` / `Cloud` runtime
+switch and the `Project` / `Private` visibility toggle were removed; new
+conversations remain project-visible by default.
+
 ## Screenshots
 
-| Main toolbar | Session switcher |
+| Projects → workspaces | Main toolbar |
 | --- | --- |
-| ![Toolbar breadcrumb and session chip](./assets/workspace-session/main-toolbar.png) | ![Pinned and recent sessions](./assets/workspace-session/session-switcher.png) |
+| ![Projects and workspaces in the sidebar](./assets/workspace-session/sidebar-workspaces.png) | ![Toolbar breadcrumb and session chip](./assets/workspace-session/main-toolbar.png) |
 
-| Search | Archived |
+| Session switcher | Search |
 | --- | --- |
-| ![Search sessions](./assets/workspace-session/session-search.png) | ![Archived sessions](./assets/workspace-session/session-archive.png) |
+| ![Pinned and recent sessions](./assets/workspace-session/session-switcher.png) | ![Search sessions](./assets/workspace-session/session-search.png) |
 
-| Workspace menu | Narrow sheet |
+| Archived | Workspace menu |
 | --- | --- |
-| ![Shared and worktree workspaces](./assets/workspace-session/workspace-menu.png) | ![Full-height session sheet](./assets/workspace-session/narrow-sheet.png) |
+| ![Archived sessions](./assets/workspace-session/session-archive.png) | ![Workspace menu without Git worktree](./assets/workspace-session/workspace-menu.png) |
+
+| Narrow sheet | Composer footer |
+| --- | --- |
+| ![Full-height session sheet](./assets/workspace-session/narrow-sheet.png) | ![Composer footer without duplicate runtime controls](./assets/workspace-session/composer-footer.png) |
+
+| New workspace dialog | Rename workspace |
+| --- | --- |
+| ![New workspace with a suggested studio name](./assets/workspace-session/workspace-name-dialog.png) | ![Rename workspace dialog](./assets/workspace-session/workspace-rename-dialog.png) |
 
 ## Decisions on the open questions in #273
 

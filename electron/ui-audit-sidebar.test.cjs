@@ -79,11 +79,18 @@ test("Files and Artifacts leave the sidebar but stay command reachable", () => {
   assert.match(app, /id: "terminal", group: t\("Panels"\)/);
 });
 
-test("Work rows are text-only with a folded filter and state labels", () => {
+test("Projects list workspaces under each project with a folded filter", () => {
   assert.doesNotMatch(sidebar, /project-toggle/);
   assert.doesNotMatch(sidebar, /<Folder size=\{14\}/);
   assert.match(sidebar, /<span className="project-name">\{project\.name\}<\/span>/);
-  assert.match(sidebar, /projectThreads\.length > 0 && <small>/);
+  assert.match(sidebar, /t\("Projects"\)/);
+  assert.match(sidebar, /projectWorkspaces\.length > 0 && <small>/);
+  assert.match(sidebar, /onNewWorkspace\(project\.id\)/);
+  assert.match(sidebar, /<Plus size=\{13\} \/>/);
+  assert.match(sidebar, /projectWorkspaces\.map\(\(workspace\)/);
+  assert.match(sidebar, /workspaceName\(workspace, t\)/);
+  assert.doesNotMatch(sidebar, /projectThreads\.map/);
+  assert.doesNotMatch(sidebar, /onOpenThread|onArchiveThread|onRemoveThread/);
   assert.match(sidebar, /work-more-button/);
   assert.match(sidebar, /<MenuLabel>\{t\("Filter"\)\}<\/MenuLabel>/);
   assert.match(sidebar, /t\("All work"\)/);
@@ -91,10 +98,7 @@ test("Work rows are text-only with a folded filter and state labels", () => {
   assert.match(sidebar, /t\("Needs review"\)/);
   assert.match(sidebar, /t\("Automations"\)/);
   assert.match(sidebar, /t\("Archived"\)/);
-  assert.match(sidebar, /className="work-status running"/);
-  assert.match(sidebar, /className="work-status review"/);
   assert.match(sidebar, /thread\.status === "error"\) return "failed"/);
-  assert.match(sidebar, /className="work-status failed"/);
 });
 
 test("Research Apps settings groups apps into categories without a layout selector", () => {
@@ -117,9 +121,10 @@ test("section labels match project-row typography and Filter lives in More", () 
   assert.match(sidebar, /onNewProject\(\)/);
 });
 
-test("a selected session does not keep its project highlighted", () => {
-  assert.match(sidebar, /const isActiveProject = activeProjectId === project\.id && !activeThreadId/);
+test("the project stays highlighted while its active workspace is selected", () => {
+  assert.match(sidebar, /const isActiveProject = activeProjectId === project\.id;/);
   assert.match(sidebar, /className=\{isActiveProject \? "project-tree-row active" : "project-tree-row"\}/);
+  assert.match(sidebar, /activeWorkspaceId === workspace\.id \? "project-chat-row active"/);
 });
 
 test("project overflow actions collapse into one vertical menu", () => {
@@ -157,18 +162,16 @@ test("Extensions uses Installed, Available, and Updates with Workbench tabs", ()
   assert.match(app, /setExtensionsTab\("installed"\)/);
 });
 
-test("account chip is global and runtime moves to the composer", () => {
+test("account chip is global and the composer drops duplicate runtime controls", () => {
   const settings = app.indexOf('className="codex-nav-item sidebar-settings-entry"');
-  assert.ok(settings > app.indexOf('className="new-task-button"') && settings < app.indexOf('<nav className="sidebar-nav sidebar-modules"'), "Settings is above Research Apps and Work");
+  assert.ok(settings > app.indexOf('className="new-task-button"') && settings < app.indexOf('<nav className="sidebar-nav sidebar-modules"'), "Settings is above Research Apps and Projects");
   assert.ok(!app.slice(app.indexOf('<div className="sidebar-runtime"'), app.indexOf('<div className="sidebar-resizer"')).includes('aria-label={t("Settings")}'), "footer contains account access only");
   assert.match(app, /className="sidebar-runtime"/);
   assert.match(app, /<AccountChip authState=\{authState\}/);
-  assert.match(app, /className="composer-runtime-switch" aria-label="Runtime location"/);
-  assert.match(app, /className="composer-runtime-local"/);
-  assert.match(app, /composer-runtime-cloud/);
-  assert.match(app, /Cloud runs need an account/);
+  assert.doesNotMatch(app, /composer-runtime-switch|composer-runtime-local|composer-runtime-cloud|cloud-gate/);
+  assert.doesNotMatch(app, /thread-visibility-trigger/);
   assert.match(css, /\.account-chip \{ display: flex;/);
-  assert.match(css, /\.composer-runtime-switch \{ display: inline-flex;/);
+  assert.doesNotMatch(css, /\.composer-runtime-switch|\.cloud-gate|\.thread-visibility-trigger/);
   assert.doesNotMatch(app, /className="runtime-tabs" role="group"/);
   assert.match(i18n, /"Local": "本地"/);
   assert.match(i18n, /"Cloud": "云端"/);

@@ -85,11 +85,8 @@ test("composer uses harness selection while execution preferences live in Models
   assert.match(app, /executionPreferences=\{\{ reasoningEffort, contextLength/);
 });
 
-test("runtime is status-first and context usage exposes a readable breakdown", () => {
-  assert.doesNotMatch(app, /composer-runtime-switch" role="group"/);
-  assert.match(app, /className="composer-runtime-local"/);
-  assert.doesNotMatch(app, /composer-runtime-dot/);
-  assert.match(app, /className=\{cloudSignedIn \? "composer-runtime-cloud signed-in" : "composer-runtime-cloud locked"\}/);
+test("context usage exposes a readable breakdown without runtime chrome", () => {
+  assert.doesNotMatch(app, /composer-runtime-switch|composer-runtime-local|composer-runtime-cloud|cloud-gate/);
   assert.match(app, /role="progressbar"/);
   assert.match(app, /aria-valuenow=\{contextUsagePercent\}/);
   assert.match(app, /className="context-usage-breakdown"/);

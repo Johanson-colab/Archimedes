@@ -108,7 +108,9 @@ interface ResearchDeskBridge {
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     setResearchProjectWorkspace: (id: string, workspacePath: string) => Promise<ResearchProject>;
     listResearchWorkspaces: (projectId?: string | null) => Promise<ProjectWorkspace[]>;
-    createResearchWorkspace: (projectId: string, kind?: ProjectWorkspaceKind) => Promise<ProjectWorkspace>;
+    createResearchWorkspace: (projectId: string, kind?: ProjectWorkspaceKind, name?: string) => Promise<ProjectWorkspace>;
+    renameResearchWorkspace: (id: string, name: string) => Promise<ProjectWorkspace>;
+    suggestResearchWorkspaceName: () => Promise<string>;
     deleteResearchWorkspace: (id: string) => Promise<{ deleted: boolean }>;
     pinResearchThread: (id: string, pinned?: boolean) => Promise<ResearchThreadDetail>;
     markResearchThreadViewed: (id: string) => Promise<{ id: string; last_viewed_at: string; unread_count: number }>;
@@ -1651,6 +1653,7 @@ interface ProjectWorkspace {
   id: string;
   project_id: string;
   kind: ProjectWorkspaceKind;
+  name: string;
   root: string;
   base_ref: string | null;
   last_session_id: string | null;

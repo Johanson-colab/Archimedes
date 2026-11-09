@@ -52,7 +52,7 @@ test("Account settings exposes cloud sign-in without replacing local identity", 
 });
 
 
-test("the account chip, auth modal, and composer gate keep local work available", () => {
+test("the account chip and auth modal keep local work available", () => {
   assert.match(chip, /Cloud agents & sync/);
   assert.match(chip, /Sign out/);
   assert.match(chip, /account-menu/);
@@ -67,6 +67,5 @@ test("the account chip, auth modal, and composer gate keep local work available"
   assert.match(main, /auth:oauth/);
   assert.match(main, /auth:reset-password/);
   assert.match(main, /flowType: "pkce"/);
-  assert.match(app, /Cloud runs need an account/);
-  assert.match(app, /cloudSignedIn/);
+  assert.doesNotMatch(app, /Cloud runs need an account|cloudSignedIn/);
 });

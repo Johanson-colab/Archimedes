@@ -1025,8 +1025,19 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("research-workspace:create", (_event, input = {}) => {
     if (typeof input.projectId !== "string" || !input.projectId) throw new Error("A research project is required.");
-    return store.createProjectWorkspace({ projectId: input.projectId, kind: input.kind || "shared" });
+    return store.createProjectWorkspace({
+      projectId: input.projectId,
+      kind: input.kind || "shared",
+      name: typeof input.name === "string" ? input.name : "",
+    });
   });
+
+  ipcMain.handle("research-workspace:rename", (_event, input = {}) => {
+    if (typeof input.id !== "string" || !input.id) throw new Error("A workspace ID is required.");
+    return store.renameProjectWorkspace(input.id, input.name);
+  });
+
+  ipcMain.handle("research-workspace:suggest-name", () => store.suggestProjectWorkspaceName());
 
   ipcMain.handle("research-workspace:delete", (_event, input = {}) => {
     if (typeof input.id !== "string" || !input.id) throw new Error("A workspace ID is required.");

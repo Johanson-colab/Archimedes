@@ -29,7 +29,7 @@ import { chooseIconName } from "./file-icons/opencode/choose-icon-name";
 import { ensureOpenCodeSprite } from "./file-icons/opencode/sprite";
 import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
 import ContextPicker, { ContextChips } from "./ContextPicker";
-import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
+import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import { type ExtensionsTab } from "./ExtensionsView";
 import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
@@ -39,6 +39,7 @@ import { sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, typ
 import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
 import SessionSwitcher from "./SessionSwitcher";
+import WorkspaceDialog from "./WorkspaceDialog";
 import ChangesView from "./ChangesView";
 import NotesView from "./NotesView";
 import VoiceInputButton from "./VoiceInputButton";
@@ -95,7 +96,6 @@ import {
   ChevronRight,
   CircleDot,
   Clipboard,
-  Cloud,
   Copy,
   Cpu,
   Download,
@@ -124,7 +124,6 @@ import {
   Laptop,
   Lightbulb,
   LoaderCircle,
-  Lock,
   Maximize2,
   MessageCircle,
   MessageCircleReply,
@@ -152,7 +151,6 @@ import {
   Square,
   SquareTerminal,
   Undo2,
-  Users,
   X,
 } from "lucide-react";
 
@@ -449,6 +447,7 @@ function previewSnapshot(): WorkspaceSnapshot {
       id: `preview-workspace-${project.id}`,
       project_id: project.id,
       kind: "shared",
+      name: "",
       root: project.workspace_path || DEFAULT_WORKSPACE,
       base_ref: null,
       last_session_id: null,
@@ -1335,6 +1334,13 @@ function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [workspaceDialog, setWorkspaceDialog] = useState<
+    | { mode: "create"; projectId: string; kind: ProjectWorkspaceKind }
+    | { mode: "rename"; workspace: ProjectWorkspace }
+    | null
+  >(null);
+  const [workspaceSuggestion, setWorkspaceSuggestion] = useState("");
+  const [workspaceDialogError, setWorkspaceDialogError] = useState("");
   const [sessionSwitcherSignal, setSessionSwitcherSignal] = useState(0);
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
   const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
@@ -1420,8 +1426,6 @@ function App() {
   const [newProjectError, setNewProjectError] = useState("");
   const [projectFolderError, setProjectFolderError] = useState("");
   const [projectToRemove, setProjectToRemove] = useState<ResearchProject | null>(null);
-  const [threadToRemove, setThreadToRemove] = useState<ResearchThread | null>(null);
-  const [threadRemoveError, setThreadRemoveError] = useState("");
   const [fileName, setFileName] = useState("");
   const [fileDrafts, setFileDrafts] = useState<Record<string, FileDraft>>({});
   const [fileSaving, setFileSaving] = useState<Set<string>>(new Set());
@@ -2344,19 +2348,6 @@ function App() {
     }
   }
 
-  async function changeThreadVisibility(visibility: "project" | "private") {
-    if (activeThreadId) {
-      try {
-        await desktopBridge.setResearchThreadVisibility(activeThreadId, visibility);
-        setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, visibility } : thread));
-      } catch (error) {
-        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not change thread visibility: ${String(error)}` }]);
-        return;
-      }
-    }
-    setThreadVisibility(visibility);
-  }
-
   function startNewTask(projectId = activeProjectId, workspaceId = activeWorkspaceId) {
     if (agentBusy) return;
     writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
@@ -2529,16 +2520,45 @@ function App() {
     }
   }
 
-  async function createWorkspace(kind: ProjectWorkspaceKind) {
-    if (!activeProjectId || creatingWorkspace) return;
+  function openWorkspaceCreator(projectId: string, kind?: ProjectWorkspaceKind) {
+    if (!projectId) return;
+    const project = projects.find((entry) => entry.id === projectId) ?? null;
+    const resolvedKind = kind ?? (project?.git_state === "ready" ? "worktree" : "sandbox");
+    setWorkspaceDialogError("");
+    setWorkspaceSuggestion("");
+    setWorkspaceDialog({ mode: "create", projectId, kind: resolvedKind });
+    void desktopBridge.suggestResearchWorkspaceName?.()
+      .then((name) => setWorkspaceSuggestion(name || ""))
+      .catch(() => setWorkspaceSuggestion(""));
+  }
+
+  function createWorkspace(kind: ProjectWorkspaceKind) {
+    if (activeProjectId) openWorkspaceCreator(activeProjectId, kind);
+  }
+
+  function openWorkspaceRename(workspaceToRename: ProjectWorkspace) {
+    setWorkspaceDialogError("");
+    setWorkspaceSuggestion("");
+    setWorkspaceDialog({ mode: "rename", workspace: workspaceToRename });
+  }
+
+  async function submitWorkspaceDialog({ name, kind }: { name: string; kind: ProjectWorkspaceKind }) {
+    if (!workspaceDialog || creatingWorkspace) return;
     setCreatingWorkspace(true);
-    setProjectFolderError("");
+    setWorkspaceDialogError("");
     try {
-      const created = await desktopBridge.createResearchWorkspace(activeProjectId, kind);
-      setWorkspaces((current) => [...current.filter((entry) => entry.id !== created.id), created]);
-      await selectWorkspace(created);
+      if (workspaceDialog.mode === "create") {
+        const created = await desktopBridge.createResearchWorkspace(workspaceDialog.projectId, kind, name);
+        setWorkspaces((current) => [...current.filter((entry) => entry.id !== created.id), created]);
+        setWorkspaceDialog(null);
+        await selectWorkspace(created);
+      } else {
+        const updated = await desktopBridge.renameResearchWorkspace(workspaceDialog.workspace.id, name);
+        setWorkspaces((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+        setWorkspaceDialog(null);
+      }
     } catch (error) {
-      setProjectFolderError(error instanceof Error ? error.message : String(error));
+      setWorkspaceDialogError(error instanceof Error ? error.message : String(error));
     } finally {
       setCreatingWorkspace(false);
     }
@@ -2647,38 +2667,6 @@ function App() {
       const next = snapshot.threads.find((candidate) => candidate.workspace_id === thread.workspace_id)
         ?? snapshot.threads.find((candidate) => candidate.project_id === thread.project_id);
       if (next) await openResearchThread(next); else startNewTask(thread.project_id, thread.workspace_id);
-    }
-  }
-
-  async function removeThread(thread: ResearchThread) {
-    if (agentBusy) return;
-    if (typeof desktopBridge.deleteResearchThread !== "function") {
-      setThreadRemoveError("Restart the desktop app to finish installing chat deletion.");
-      return;
-    }
-    try {
-      await desktopBridge.deleteResearchThread(thread.id);
-      setThreadRemoveError("");
-      setThreadToRemove(null);
-      const snapshot = await desktopBridge.openWorkspace(workspace);
-      setProjects(snapshot.projects);
-      setArchivedProjects(snapshot.archivedProjects ?? []);
-      setThreads(snapshot.threads);
-      setArchivedThreads(snapshot.archivedThreads);
-      setWorkspaces(snapshot.workspaces ?? []);
-      if (activeThreadId === thread.id) {
-        const next = snapshot.threads[0];
-        if (next) await openResearchThread(next);
-        else {
-          activeThreadIdRef.current = null;
-          setActiveThreadId(null);
-          setBoundHarness(null);
-          setMessages(initialMessages);
-          setChangeSets([]);
-        }
-      }
-    } catch (error) {
-      setThreadRemoveError(error instanceof Error ? error.message : "The chat could not be deleted.");
     }
   }
 
@@ -3150,6 +3138,10 @@ function App() {
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
   const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
   const conversationScrollKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${activeWorkspace?.id ?? executionWorkspace}`;
+  const workspaceDialogProjectId = workspaceDialog
+    ? workspaceDialog.mode === "create" ? workspaceDialog.projectId : workspaceDialog.workspace.project_id
+    : null;
+  const workspaceDialogProject = projects.find((project) => project.id === workspaceDialogProjectId) ?? null;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
   const flatModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
   const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
@@ -3244,19 +3236,18 @@ function App() {
           archivedProjects={archivedProjects}
           threads={threads}
           archivedThreads={archivedThreads}
+          workspaces={workspaces}
           activeProjectId={activeProjectId}
-          activeThreadId={activeThreadId}
+          activeWorkspaceId={activeWorkspace?.id ?? null}
           runningThreadId={runningThreadId}
           disabled={agentBusy}
           onNewProject={openNewProject}
-          onNewChat={(projectId) => startNewTask(projectId)}
+          onNewWorkspace={(projectId) => openWorkspaceCreator(projectId)}
           onRenameProject={(projectId, name) => renameProject(projectId, name)}
           onArchiveProject={(project, archived) => void archiveProject(project, archived)}
           onRemoveProject={setProjectToRemove}
           onChangeProjectWorkspace={(project) => void changeProjectWorkspace(project)}
-          onOpenThread={(thread) => void openResearchThread(thread)}
-          onArchiveThread={(thread, archived) => void archiveThread(thread, archived)}
-          onRemoveThread={(thread) => { setThreadRemoveError(""); setThreadToRemove(thread); }}
+          onOpenWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
           filterError={projectFolderError}
         />
 
@@ -3285,6 +3276,7 @@ function App() {
             onArchiveSession={(session, archived) => void archiveThread(session, archived)}
             onSelectWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
             onCreateWorkspace={(kind) => void createWorkspace(kind)}
+            onRenameWorkspace={openWorkspaceRename}
             onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
             openSignal={sessionSwitcherSignal}
           />
@@ -3345,10 +3337,6 @@ function App() {
               onNativeSteer={(text) => desktopBridge.steerNativeAgent(activeThreadId!, text, workspace)}
               workspace={executionWorkspace}
               projectId={activeProjectId}
-              threadVisibility={threadVisibility}
-              onThreadVisibility={(visibility) => void changeThreadVisibility(visibility)}
-              cloudSignedIn={Boolean(authState?.user)}
-              onRequestSignIn={() => openAuth("choice")}
               onOpenWorkspaceSettings={() => { setSettingsSection("workspace"); setSettingsOpen(true); }}
               onCommand={runConversationCommand}
               contextSummary={threads.find((thread) => thread.id === activeThreadId)?.context_summary}
@@ -3648,9 +3636,21 @@ function App() {
         onCreate={() => void createProject()}
         error={newProjectError}
       />
+      <WorkspaceDialog
+        open={Boolean(workspaceDialog)}
+        mode={workspaceDialog?.mode ?? "create"}
+        projectName={workspaceDialogProject?.name}
+        workspace={workspaceDialog?.mode === "rename" ? workspaceDialog.workspace : null}
+        suggestedName={workspaceSuggestion}
+        initialKind={workspaceDialog?.mode === "create" ? workspaceDialog.kind : "sandbox"}
+        canWorktree={workspaceDialogProject?.git_state === "ready"}
+        busy={creatingWorkspace}
+        error={workspaceDialogError}
+        onClose={() => { if (!creatingWorkspace) { setWorkspaceDialog(null); setWorkspaceDialogError(""); } }}
+        onSubmit={(input) => void submitWorkspaceDialog(input)}
+      />
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
-      <ThreadRemoveModal thread={threadToRemove} error={threadRemoveError} onClose={() => { setThreadRemoveError(""); setThreadToRemove(null); }} onRemove={() => threadToRemove && void removeThread(threadToRemove)} />
     </main>
   );
 }
@@ -3783,7 +3783,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -3795,8 +3795,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   onNativeSteer: (text: string) => Promise<unknown>;
   workspace: string;
   projectId?: string | null;
-  threadVisibility: "project" | "private";
-  onThreadVisibility: (visibility: "project" | "private") => void;
   agentBusy: boolean;
   interrupting: boolean;
   canInterrupt: boolean;
@@ -3807,8 +3805,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   contextLength: ContextLength;
   modelCapabilities: ModelCapabilities;
   contextItems: ContextAttachment[];
-  cloudSignedIn: boolean;
-  onRequestSignIn: () => void;
   onOpenWorkspaceSettings: () => void;
   onCommand: (command: ConversationCommand) => Promise<ConversationCommandResult>;
   contextSummary?: string;
@@ -3837,8 +3833,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const [contextUsageOpen, setContextUsageOpen] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
-  const [cloudGateOpen, setCloudGateOpen] = useState(false);
-  const [cloudNotice, setCloudNotice] = useState("");
   const [composerError, setComposerError] = useState("");
   const [commandRunning, setCommandRunning] = useState(false);
   const [commandNotice, setCommandNotice] = useState("");
@@ -4294,13 +4288,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
         }}
       >
         {draggingFiles && <div className="composer-drop-target">{t("Drop files or folders to attach")}</div>}
-        {cloudGateOpen && <div className="cloud-gate" role="status">
-          <span className="cloud-gate-icon"><Cloud size={16} /></span>
-          <div><strong>Cloud runs need an account</strong><span>Your draft, attachments, and selected context stay here. Sign in to use cloud agents and sync; local work stays available.</span></div>
-          <button className="primary-button" onClick={() => { setCloudGateOpen(false); onRequestSignIn(); }}>Sign in</button>
-          <button className="secondary-button" onClick={() => setCloudGateOpen(false)}>Stay local</button>
-        </div>}
-        {cloudNotice && <div className="cloud-gate notice"><span className="cloud-gate-icon"><Cloud size={16} /></span><div><strong>{cloudNotice}</strong><span>Local runs remain fully available.</span></div><button className="secondary-button" onClick={() => setCloudNotice("")}>Dismiss</button></div>}
         {queuedPrompts.length > 0 && <div className="composer-queue" aria-label={t("Queued messages")}>
           {queuedPrompts.map((item, index) => <div className="composer-queue-item" key={item.id}>
             <span className="composer-queue-index">{index + 1}</span>
@@ -4366,23 +4353,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
         {composerError && <div id="composer-error" className="composer-attachment-error" role="alert">{composerError}</div>}
         {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
         <div className="conversation-composer-footer">
-          <div className="composer-runtime-switch" aria-label="Runtime location">
-            <span className="composer-runtime-local">{t("Local")}</span>
-            <button className={cloudSignedIn ? "composer-runtime-cloud signed-in" : "composer-runtime-cloud locked"} onClick={() => cloudSignedIn ? setCloudNotice("Cloud runtime is coming soon.") : setCloudGateOpen(true)} title={cloudSignedIn ? "Cloud runtime is coming soon" : "Sign in to use cloud runs"}>
-              {!cloudSignedIn && <Lock size={10} />}{t("Cloud")}<span>{cloudSignedIn ? t("Soon") : t("Locked")}</span>
-            </button>
-          </div>
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
           <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
-          <button
-            className={`composer-tool thread-visibility-trigger ${threadVisibility}`}
-            onClick={() => onThreadVisibility(threadVisibility === "private" ? "project" : "private")}
-            title={threadVisibility === "private" ? "Private draft. Only you can see this thread." : "Project thread. Project members can see this thread."}
-            aria-label={threadVisibility === "private" ? "Make thread project-visible" : "Make thread private"}
-          >
-            {threadVisibility === "private" ? <Lock size={12} /> : <Users size={12} />}
-            <span>{threadVisibility === "private" ? t("Private") : t("Project")}</span>
-          </button>
           <button
             type="button"
             className="composer-context"

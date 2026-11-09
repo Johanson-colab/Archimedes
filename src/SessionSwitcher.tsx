@@ -6,12 +6,14 @@ import {
   ChevronDown,
   GitBranch,
   Lock,
+  Pencil,
   Pin,
   PinOff,
   Trash,
 } from "lucide-react";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
+import { workspaceName } from "./workspace-name";
 
 type SessionFilter = "all" | "mine" | "shared" | "archived";
 type SessionStatus = "idle" | "running" | "review" | "failed" | "unread";
@@ -32,6 +34,7 @@ type SessionSwitcherProps = {
   onArchiveSession: (session: ResearchThread, archived: boolean) => void;
   onSelectWorkspace: (workspace: ProjectWorkspace) => void;
   onCreateWorkspace: (kind: ProjectWorkspaceKind) => void;
+  onRenameWorkspace: (workspace: ProjectWorkspace) => void;
   onDeleteWorkspace: (workspace: ProjectWorkspace) => void;
   openSignal: number;
 };
@@ -63,13 +66,6 @@ function relativeTime(value: string | null | undefined, language: "en" | "zh") {
   if (Math.abs(days) < 30) return formatter.format(-days, "day");
   const months = Math.round(days / 30);
   return formatter.format(-months, "month");
-}
-
-function workspaceLabel(workspace: ProjectWorkspace | null, t: (key: string, values?: Record<string, string | number>) => string) {
-  if (!workspace) return t("Main workspace");
-  if (workspace.kind === "worktree") return workspace.base_ref ? t("Worktree · {ref}", { ref: workspace.base_ref }) : t("Worktree");
-  if (workspace.kind === "sandbox") return t("Sandbox");
-  return t("Main workspace");
 }
 
 function gitStateLabel(project: ResearchProject | null, workspace: ProjectWorkspace | null, t: (key: string, values?: Record<string, string | number>) => string) {
@@ -115,6 +111,7 @@ export default function SessionSwitcher({
   onArchiveSession,
   onSelectWorkspace,
   onCreateWorkspace,
+  onRenameWorkspace,
   onDeleteWorkspace,
   openSignal,
 }: SessionSwitcherProps) {
@@ -214,7 +211,7 @@ export default function SessionSwitcher({
           aria-haspopup="dialog"
           aria-expanded={workspaceOpen}
         >
-          <span>{workspaceLabel(workspace, t)}</span>
+          <span>{workspaceName(workspace, t)}</span>
           <ChevronDown size={12} />
         </button>
       </div>
@@ -253,26 +250,33 @@ export default function SessionSwitcher({
             title={entry.root}
           >
             <span className="workspace-option-copy">
-              <span>{workspaceLabel(entry, t)}</span>
+              <span>{workspaceName(entry, t)}</span>
               <small>{entry.root}</small>
             </span>
             <span className="workspace-option-count">{entry.session_count}</span>
           </button>
-          {!entry.is_default && <button
-            className="workspace-option-delete"
-            onClick={() => { setWorkspaceOpen(false); onDeleteWorkspace(entry); }}
-            title={t("Delete workspace")}
-            aria-label={t("Delete workspace")}
-          ><Trash size={13} /></button>}
+          <span className="workspace-option-actions">
+            <button
+              className="workspace-option-action"
+              onClick={() => { setWorkspaceOpen(false); onRenameWorkspace(entry); }}
+              title={t("Rename workspace")}
+              aria-label={t("Rename workspace")}
+            ><Pencil size={13} /></button>
+            {!entry.is_default && <button
+              className="workspace-option-action danger"
+              onClick={() => { setWorkspaceOpen(false); onDeleteWorkspace(entry); }}
+              title={t("Delete workspace")}
+              aria-label={t("Delete workspace")}
+            ><Trash size={13} /></button>}
+          </span>
         </div>)}
       </div>
       <MenuDivider />
-      <MenuItem
+      {canWorktree && <MenuItem
         icon={<GitBranch size={16} />}
-        disabled={!canWorktree || creatingWorkspace}
-        hint={canWorktree ? undefined : t("Git required")}
+        disabled={creatingWorkspace}
         onClick={() => { setWorkspaceOpen(false); onCreateWorkspace("worktree"); }}
-      >{t("New worktree")}</MenuItem>
+      >{t("New worktree")}</MenuItem>}
       <MenuItem
         icon={<Box size={16} />}
         disabled={creatingWorkspace}
@@ -305,7 +309,6 @@ export default function SessionSwitcher({
             }
           }}
         />
-        <span className="session-search-shortcut">Ctrl ⇧ K</span>
       </label>
       <div className="session-filters" role="group" aria-label={t("Session filters")}>
         {FILTERS.map((id) => <button
@@ -326,7 +329,6 @@ export default function SessionSwitcher({
         </div>}
       </div>
       <div className="session-switcher-foot">
-        <span>{filtered.length === 1 ? t("{count} session", { count: 1 }) : t("{count} sessions", { count: filtered.length })}</span>
         <button className="session-new-link" onClick={() => { setSessionOpen(false); onNewSession(); }}>{t("New session")}</button>
       </div>
     </MenuSurface>
