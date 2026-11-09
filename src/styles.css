@@ -9817,7 +9817,8 @@ html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.acti
   outline-offset: 2px;
 }
 
-/* File-tree icon styles. "badges" renders OpenCode-like extension chips. */
+/* File-tree icon styles. "opencode" renders the real vscode-icons sprite;
+   the remaining styles switch between lucide glyphs, outline chips and none. */
 .tree-file-icon .file-glyph-icon {
   display: grid;
   place-items: center;
@@ -9825,23 +9826,17 @@ html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.acti
 .tree-file-icon .file-glyph-text {
   display: none;
 }
-html[data-file-icons="badges"] {
-  --file-tone-folder: var(--text-faint);
-  --file-tone-tex: var(--extension-source);
-  --file-tone-config: var(--accent);
-  --file-tone-code: var(--accent);
-  --file-tone-style: var(--extension-source);
-  --file-tone-markdown: var(--extension-mcp);
-  --file-tone-image: var(--state-success);
-  --file-tone-pdf: var(--state-danger);
-  --file-tone-shell: var(--state-success);
-  --file-tone-file: var(--text-faint);
+.tree-file-icon .file-glyph-image {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
-html[data-file-icons="badges"] .tree-file-icon:not(.tone-folder) .file-glyph-icon,
+html[data-file-icons="opencode"] .tree-file-icon.tone-folder {
+  color: var(--text-muted) !important;
+}
 html[data-file-icons="outline"] .tree-file-icon:not(.tone-folder) .file-glyph-icon {
   display: none;
 }
-html[data-file-icons="badges"] .tree-file-icon:not(.tone-folder) .file-glyph-text,
 html[data-file-icons="outline"] .tree-file-icon:not(.tone-folder) .file-glyph-text {
   display: inline-grid;
   min-width: 17px;
@@ -9849,8 +9844,8 @@ html[data-file-icons="outline"] .tree-file-icon:not(.tone-folder) .file-glyph-te
   place-items: center;
   padding: 0 2px;
   color: currentColor;
-  background: color-mix(in srgb, currentColor 18%, transparent);
-  border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+  background: transparent;
+  border: 1px solid currentColor;
   border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 7px;
@@ -9858,18 +9853,10 @@ html[data-file-icons="outline"] .tree-file-icon:not(.tone-folder) .file-glyph-te
   letter-spacing: -.02em;
   line-height: 1;
 }
-html[data-file-icons="outline"] .tree-file-icon:not(.tone-folder) .file-glyph-text {
-  background: transparent;
-  border-color: currentColor;
-}
-html[data-file-icons="badges"] .workspace-tree-row.is-directory,
 html[data-file-icons="minimal"] .workspace-tree-row {
   grid-template-columns: 14px minmax(0, 1fr);
 }
-html[data-file-icons="badges"] .workspace-tree-row.is-directory .tree-file-icon,
-html[data-file-icons="minimal"] .workspace-tree-row .tree-file-icon {
-  display: none;
-}
+html[data-file-icons="minimal"] .workspace-tree-row .tree-file-icon,
 html[data-file-icons="minimal"] .artifact-tab .tree-file-icon {
   display: none;
 }

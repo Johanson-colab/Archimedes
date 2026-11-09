@@ -49,29 +49,41 @@ test("comment composer shares the chat surface language", () => {
   assert.match(app, /Ask Archimedes about this passage/);
 });
 
-test("file icons default to OpenCode badges and switch across palettes", () => {
+test("file icons default to the real OpenCode sprite and switch across styles", () => {
   assert.match(app, /function workspaceFileTone/);
   assert.match(app, /function workspaceFileGlyphLabel/);
   assert.match(app, /function workspaceFileGlyphSvg/);
+  assert.match(app, /function WorkspaceFileGlyph/);
+  assert.match(app, /chooseIconName\(entry\.path/);
+  assert.match(app, /ensureOpenCodeSprite/);
   assert.match(app, /<FileJson size=\{14\} \/>/);
   assert.match(app, /<FileTerminal size=\{14\} \/>/);
   assert.match(app, /<FileImage size=\{14\} \/>/);
   assert.match(app, /<FileCog size=\{14\} \/>/);
-  assert.match(app, /workspaceFileIcon\(\{ type: "file", kind: openFile\.kind, path: openFile\.path \}\)/);
   assert.match(app, /className=\{`tree-file-icon tone-\$\{workspaceFileTone\(entry\)\}`\}/);
   assert.match(app, /className=\{`workspace-tree-row\$\{isDirectory \? " is-directory" : ""\}/);
-  assert.match(css, /\.tree-file-icon\.tone-folder \{/);
-  assert.match(css, /html\[data-file-icons="monochrome"\] \.tree-file-icon/);
-  assert.match(css, /html\[data-file-icons="badges"\] \.tree-file-icon:not\(\.tone-folder\) \.file-glyph-text/);
+  assert.match(app, /<WorkspaceFileGlyph entry=\{entry\} expanded=\{isExpanded\} \/>/);
+  assert.match(css, /\.tree-file-icon \.file-glyph-image/);
+  assert.match(css, /html\[data-file-icons="opencode"\] \.tree-file-icon\.tone-folder/);
   assert.match(css, /html\[data-file-icons="outline"\] \.tree-file-icon:not\(\.tone-folder\) \.file-glyph-text/);
   assert.match(css, /html\[data-file-icons="minimal"\] \.workspace-tree-row/);
-  assert.match(i18nSource, /export type FileIconStyle = "badges" \| "city-lights" \| "material" \| "seti" \| "outline" \| "monochrome" \| "minimal"/);
+  assert.match(css, /html\[data-file-icons="material"\] \{/);
+  assert.match(css, /html\[data-file-icons="seti"\] \{/);
+
+  const sprite = read("src/assets/file-icons/opencode-sprite.svg");
+  assert.match(sprite, /<symbol[^>]+id="Javascript"/);
+  assert.match(sprite, /<symbol[^>]+id="Markdown"/);
+  assert.match(read("src/file-icons/opencode/sprite.ts"), /opencode-sprite\.svg\?raw/);
+  assert.match(read("src/file-icons/opencode/choose-icon-name.ts"), /export function chooseIconName/);
+  assert.ok(fs.existsSync(path.join(root, "src", "file-icons", "opencode", "LICENSE.opencode")));
+
+  assert.match(i18nSource, /export type FileIconStyle = "opencode" \| "city-lights" \| "material" \| "seti" \| "outline" \| "monochrome" \| "minimal"/);
   assert.match(i18nSource, /FILE_ICON_STYLE_STORAGE_KEY/);
   assert.match(i18nSource, /FILE_ICON_STYLE_VERSION_KEY/);
   assert.match(i18nSource, /stored === "city-lights" \|\| stored === "monochrome" \|\| stored === "material"/);
   assert.match(i18nSource, /document\.documentElement\.dataset\.fileIcons = fileIconStyle/);
   assert.match(settings, /onChange=\{setFileIconStyle\}/);
-  assert.match(settings, /value: "badges"/);
+  assert.match(settings, /value: "opencode"/);
   assert.match(settings, /value: "city-lights"/);
   assert.match(settings, /value: "material"/);
   assert.match(settings, /value: "seti"/);
@@ -79,8 +91,6 @@ test("file icons default to OpenCode badges and switch across palettes", () => {
   assert.match(settings, /value: "monochrome"/);
   assert.match(settings, /value: "minimal"/);
   assert.doesNotMatch(settings, /setFileIconStyle\("colorful"\)/);
-  assert.match(css, /html\[data-file-icons="material"\] \{/);
-  assert.match(css, /html\[data-file-icons="seti"\] \{/);
 });
 
 test("the full Files view exposes the workbench return action", () => {

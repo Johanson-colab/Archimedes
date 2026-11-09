@@ -660,7 +660,7 @@ export default function SettingsModal({
                         value={fileIconStyle}
                         label={t("File icons")}
                         options={[
-                          { value: "badges", label: t("OpenCode") },
+                          { value: "opencode", label: t("OpenCode") },
                           { value: "city-lights", label: t("City Lights") },
                           { value: "material", label: t("Material") },
                           { value: "seti", label: t("Seti") },

@@ -24,6 +24,8 @@ import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
 import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import { applyAppearance, readAppearance, resolveTheme, writeAppearance, type AppearanceSettings, type AppTheme, type ThemePreset } from "./appearance";
+import { chooseIconName } from "./file-icons/opencode/choose-icon-name";
+import { ensureOpenCodeSprite } from "./file-icons/opencode/sprite";
 import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal, ThreadRemoveModal } from "./ProjectSidebar";
@@ -4381,11 +4383,30 @@ function workspaceFileGlyphSvg(entry: Pick<WorkspaceFileEntry, "type" | "kind" |
   return <File size={14} />;
 }
 
-function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
-  return <>
-    <span className="file-glyph-icon">{workspaceFileGlyphSvg(entry)}</span>
-    {entry.type === "file" && <span className="file-glyph-text" aria-hidden="true">{workspaceFileGlyphLabel(entry)}</span>}
-  </>;
+function WorkspaceFileGlyph({ entry, expanded = false }: { entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">; expanded?: boolean }) {
+  const { fileIconStyle } = useUISettings();
+  const [spriteReady, setSpriteReady] = useState(false);
+  useEffect(() => {
+    if (fileIconStyle !== "opencode") return;
+    let cancelled = false;
+    void ensureOpenCodeSprite().then(() => {
+      if (!cancelled) setSpriteReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [fileIconStyle]);
+
+  if (fileIconStyle === "minimal") return null;
+
+  if (fileIconStyle === "opencode" && spriteReady) {
+    const name = chooseIconName(entry.path, entry.type === "directory" ? "directory" : "file", expanded);
+    return <svg className="file-glyph-image" aria-hidden="true"><use href={`#${name}`} /></svg>;
+  }
+
+  if (fileIconStyle === "outline" && entry.type === "file") {
+    return <span className="file-glyph-text" aria-hidden="true">{workspaceFileGlyphLabel(entry)}</span>;
+  }
+
+  return <span className="file-glyph-icon">{workspaceFileGlyphSvg(entry)}</span>;
 }
 
 function workspaceFileTone(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
@@ -4422,7 +4443,7 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
   return <div className="workspace-tree-node">
     <button className={`workspace-tree-row${isDirectory ? " is-directory" : ""}${entry.path === selectedPath ? " active" : ""}`} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
       <span className="tree-disclosure">{isLoading ? <RefreshCw className="spin" size={11} /> : isDirectory ? isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}</span>
-      <span className={`tree-file-icon tone-${workspaceFileTone(entry)}`}>{workspaceFileIcon(entry)}</span>
+      <span className={`tree-file-icon tone-${workspaceFileTone(entry)}`}><WorkspaceFileGlyph entry={entry} expanded={isExpanded} /></span>
       <strong>{entry.name}</strong>
     </button>
     {isExpanded && entry.children?.map((child) => <WorkspaceTreeNode key={child.path} entry={child} depth={depth + 1} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={onToggle} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
@@ -4480,7 +4501,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   return <section className="artifact-editor">
     <div className="artifact-editor-top">
       {(editable || !compact) && <div className={compact ? "artifact-editor-header compact" : "artifact-editor-header"}>
-        {!compact && <><span className={`tree-file-icon tone-${workspaceFileTone({ type: "file", kind: file.kind, path: file.path })}`}>{workspaceFileIcon({ type: "file", kind: file.kind, path: file.path })}</span>
+        {!compact && <><span className={`tree-file-icon tone-${workspaceFileTone({ type: "file", kind: file.kind, path: file.path })}`}><WorkspaceFileGlyph entry={{ type: "file", kind: file.kind, path: file.path }} /></span>
         <strong>{file.path}</strong>
         <small>{formatFileSize(file.size)}</small></>}
         {editable && <div className="artifact-editor-actions">
@@ -4722,7 +4743,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
       <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
         {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
-        <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}>{workspaceFileIcon({ type: "file", kind: openFile.kind, path: openFile.path })}</span><span className="artifact-tab-name">{openFile.name}</span>
+        <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}><WorkspaceFileGlyph entry={{ type: "file", kind: openFile.kind, path: openFile.path }} /></span><span className="artifact-tab-name">{openFile.name}</span>
       </button>
       <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
     </div>)}

@@ -23,7 +23,7 @@ export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
 export type InterfaceFont = "system" | "geist";
 export type MonoFont = "system" | "geist-mono";
-export type FileIconStyle = "badges" | "city-lights" | "material" | "seti" | "outline" | "monochrome" | "minimal";
+export type FileIconStyle = "opencode" | "city-lights" | "material" | "seti" | "outline" | "monochrome" | "minimal";
 export type ChatVerbosity = "low" | "medium" | "high";
 
 const LANGUAGE_STORAGE_KEY = "archimedes-language";
@@ -97,16 +97,16 @@ function readMonoFont(): MonoFont {
 }
 
 function readFileIconStyle(): FileIconStyle {
-  if (typeof window === "undefined") return "badges";
+  if (typeof window === "undefined") return "opencode";
   const stored = window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY);
-  if (window.localStorage.getItem(FILE_ICON_STYLE_VERSION_KEY) !== "2") {
-    window.localStorage.setItem(FILE_ICON_STYLE_VERSION_KEY, "2");
-    if (!stored || stored === "city-lights") {
-      window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, "badges");
-      return "badges";
+  if (window.localStorage.getItem(FILE_ICON_STYLE_VERSION_KEY) !== "3") {
+    window.localStorage.setItem(FILE_ICON_STYLE_VERSION_KEY, "3");
+    if (!stored || stored === "city-lights" || stored === "badges") {
+      window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, "opencode");
+      return "opencode";
     }
   }
-  return stored === "city-lights" || stored === "monochrome" || stored === "material" || stored === "seti" || stored === "outline" || stored === "minimal" ? stored : "badges";
+  return stored === "city-lights" || stored === "monochrome" || stored === "material" || stored === "seti" || stored === "outline" || stored === "minimal" ? stored : "opencode";
 }
 
 function readChatVerbosity(): ChatVerbosity {
