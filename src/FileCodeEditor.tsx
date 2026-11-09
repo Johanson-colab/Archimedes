@@ -23,7 +23,7 @@ const highlightStyle = HighlightStyle.define([
 ]);
 
 const editorTheme = EditorView.theme({
-  "&": { height: "100%", color: "var(--code-fg)", backgroundColor: "var(--code-bg)", fontSize: "13px" },
+  "&": { height: "100%", color: "var(--code-fg)", backgroundColor: "var(--mono-canvas)", fontSize: "13px" },
   ".cm-scroller": {
     overflow: "auto",
     fontFamily: "var(--font-mono)",
@@ -32,7 +32,7 @@ const editorTheme = EditorView.theme({
   ".cm-content": { padding: "13px 0 28px", caretColor: "var(--code-fg)" },
   ".cm-gutters": {
     color: "var(--code-line-number)",
-    backgroundColor: "var(--code-bg)",
+    backgroundColor: "var(--mono-canvas)",
     border: "none",
   },
   ".cm-activeLine": { backgroundColor: "var(--code-line-hover)" },
