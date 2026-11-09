@@ -3386,8 +3386,8 @@ html[data-theme="paper"] .paper-create-backdrop {
 .theme-paper .smart-terminal, .theme-paper .smart-terminal-tabs, .theme-paper .terminal-surfaces {
   color: #37342f; background: var(--mono-surface); border-color: #e5e1db;
 }
-.theme-paper .right-workbench { color: #37342f; background: var(--surface-canvas); border-color: #e8e4de; }
-.theme-paper .workbench-header { background: #efede9; border-color: #e8e4de; }
+.theme-paper .right-workbench { color: #37342f; background: var(--workbench-ground); border-color: transparent; }
+.theme-paper .workbench-header { background: var(--workbench-ground); border-color: transparent; }
 .theme-paper .workbench-tab { color: #77726b; }
 .theme-paper .workbench-tab:hover { color: #252422; background: #e9e5df; }
 .theme-paper .workbench-tab.active { color: #252422; background: var(--selected); box-shadow: none; }
