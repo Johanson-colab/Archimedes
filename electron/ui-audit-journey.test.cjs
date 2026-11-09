@@ -125,7 +125,7 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(css, /journey-evidence-empty/);
   assert.match(css, /compact-tabs \.journey-chapter-sources/);
   assert.match(tokens, /--surface-canvas: #1b1b1b/);
-  assert.match(tokens, /--workbench-ground: var\(--surface-canvas\)/);
+  assert.match(tokens, /--workbench-ground: var\(--mono-canvas\)/);
 });
 
 test("journey settings control view, merging, cadence, and pins", () => {

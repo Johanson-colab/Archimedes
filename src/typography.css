@@ -169,15 +169,15 @@ pre,
 .research-welcome-copy h1 { font-weight: 600; }
 .research-workflow-copy strong { font-weight: 600; }
 
-/* Warm surface pass. */
+/* Neutral surface pass. */
 html:not([data-theme="paper"]) .codex-shell,
 html:not([data-theme="paper"]) .codex-main,
-html:not([data-theme="paper"]) .main-view { background: var(--night-ground); }
-html:not([data-theme="paper"]) .codex-sidebar { background: var(--night-sidebar); }
-html:not([data-theme="paper"]) .main-toolbar { background: #141110; border-color: var(--night-line-soft); }
-html:not([data-theme="paper"]) .right-workbench { background: #181513; border-color: var(--night-line); }
-html:not([data-theme="paper"]) .workbench-header { background: #141110; border-color: var(--night-line); }
-html:not([data-theme="paper"]) .workbench-tab:hover { background: #24201d; }
+html:not([data-theme="paper"]) .main-view { background: var(--mono-canvas); }
+html:not([data-theme="paper"]) .codex-sidebar { background: var(--mono-sidebar); }
+html:not([data-theme="paper"]) .main-toolbar { background: var(--mono-canvas); border-color: transparent; }
+html:not([data-theme="paper"]) .right-workbench { background: var(--mono-canvas); border-color: transparent; border-left-color: var(--night-line); }
+html:not([data-theme="paper"]) .workbench-header { background: var(--mono-canvas); border-color: transparent; }
+html:not([data-theme="paper"]) .workbench-tab:hover { background: var(--surface-control); }
 html:not([data-theme="paper"]) .settings-modal { background: #181513; border-color: #3a332f; }
 html:not([data-theme="paper"]) .settings-sidebar { background: #141110; border-color: #2d2825; }
 html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-color: #3a332f; }

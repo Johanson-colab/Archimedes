@@ -653,17 +653,20 @@ export default function SettingsModal({
                 <div className="settings-group">
                   <SettingsRow
                     title={<>{t("File icons")}</>}
-                    description={<>{t("Choose the icon palette for file trees.")}</>}
+                    description={<>{t("Choose the file-tree icon set, from OpenCode artwork to monochrome glyphs.")}</>}
                   >
                       <SettingsChoiceGroup
                         className="file-icon-choice"
                         value={fileIconStyle}
                         label={t("File icons")}
                         options={[
+                          { value: "opencode", label: t("OpenCode") },
                           { value: "city-lights", label: t("City Lights") },
                           { value: "material", label: t("Material") },
                           { value: "seti", label: t("Seti") },
+                          { value: "outline", label: t("Outline") },
                           { value: "monochrome", label: t("Monochrome") },
+                          { value: "minimal", label: t("Minimal") },
                         ]}
                         onChange={setFileIconStyle}
                       />

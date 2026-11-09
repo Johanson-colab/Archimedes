@@ -13,7 +13,7 @@ test("warm type layer loads after the layout stylesheet", () => {
   assert.match(main, /import "\.\/styles\.css";\s*import "\.\/typography\.css";/);
 });
 
-test("charcoal uses warm neutral surfaces and ink", () => {
+test("charcoal uses a neutral runtime surface and ink", () => {
   assert.match(tokens, /--graphite-950: #141110/);
   assert.match(tokens, /--surface-ground: var\(--graphite-950\)/);
   assert.match(tokens, /--graphite-900: #1b1816/);
@@ -24,7 +24,9 @@ test("charcoal uses warm neutral surfaces and ink", () => {
   assert.match(tokens, /--text-primary: var\(--graphite-50\)/);
   assert.match(tokens, /--graphite-200: #a5a09c/);
   assert.match(tokens, /--text-muted: var\(--graphite-200\)/);
-  assert.match(typography, /html:not\(\[data-theme="paper"\]\) \.main-toolbar \{ background: #141110/);
+  assert.match(tokens, /--mono-canvas: #161616/);
+  assert.match(tokens, /--mono-sidebar: #1d1d1d/);
+  assert.match(typography, /html:not\(\[data-theme="paper"\]\) \.main-toolbar \{ background: var\(--mono-canvas\); border-color: transparent; \}/);
 });
 
 test("paper keeps a warm light palette", () => {

@@ -23,7 +23,7 @@ export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
 export type InterfaceFont = "system" | "geist";
 export type MonoFont = "system" | "geist-mono";
-export type FileIconStyle = "city-lights" | "material" | "seti" | "monochrome";
+export type FileIconStyle = "opencode" | "city-lights" | "material" | "seti" | "outline" | "monochrome" | "minimal";
 export type ChatVerbosity = "low" | "medium" | "high";
 
 const LANGUAGE_STORAGE_KEY = "archimedes-language";
@@ -31,6 +31,7 @@ const TEXT_SIZE_STORAGE_KEY = "archimedes-text-size";
 const INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";
 const MONO_FONT_STORAGE_KEY = "archimedes-mono-font";
 const FILE_ICON_STYLE_STORAGE_KEY = "archimedes-file-icon-style";
+const FILE_ICON_STYLE_VERSION_KEY = "archimedes-file-icon-style-version";
 const CHAT_VERBOSITY_STORAGE_KEY = "archimedes-chat-verbosity";
 export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 0.9, default: 1, large: 1.1, larger: 1.2 };
 
@@ -96,9 +97,16 @@ function readMonoFont(): MonoFont {
 }
 
 function readFileIconStyle(): FileIconStyle {
-  if (typeof window === "undefined") return "city-lights";
+  if (typeof window === "undefined") return "opencode";
   const stored = window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY);
-  return stored === "monochrome" || stored === "material" || stored === "seti" ? stored : "city-lights";
+  if (window.localStorage.getItem(FILE_ICON_STYLE_VERSION_KEY) !== "3") {
+    window.localStorage.setItem(FILE_ICON_STYLE_VERSION_KEY, "3");
+    if (!stored || stored === "city-lights" || stored === "badges") {
+      window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, "opencode");
+      return "opencode";
+    }
+  }
+  return stored === "city-lights" || stored === "monochrome" || stored === "material" || stored === "seti" || stored === "outline" || stored === "minimal" ? stored : "opencode";
 }
 
 function readChatVerbosity(): ChatVerbosity {
