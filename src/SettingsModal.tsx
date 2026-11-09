@@ -653,7 +653,7 @@ export default function SettingsModal({
                 <div className="settings-group">
                   <SettingsRow
                     title={<>{t("File icons")}</>}
-                    description={<>{t("Choose the icon palette for file trees.")}</>}
+                    description={<>{t("Choose the file-tree icon set, from OpenCode artwork to monochrome glyphs.")}</>}
                   >
                       <SettingsChoiceGroup
                         className="file-icon-choice"

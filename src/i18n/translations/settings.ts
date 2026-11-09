@@ -42,6 +42,7 @@ export const settings: Record<string, string> = {
   "Chat verbosity": "聊天详细程度",
   "Choose apps for your sidebar. Changes apply immediately; hiding an app keeps its research data.": "选择侧栏显示的应用，更改立即生效；隐藏应用会保留已有科研资料。",
   "Choose how Archimedes looks. System follows the operating system.": "选择 Archimedes 的外观。跟随系统会使用操作系统的设置。",
+  "Choose the file-tree icon set, from OpenCode artwork to monochrome glyphs.": "选择文件树图标集，从 OpenCode 原版图标到单色字形。",
   "Choose the icon palette for file trees.": "选择文件树使用的图标配色。",
   "Choose the language for the Archimedes interface.": "选择 Archimedes 界面使用的语言。",
   "Choose the model Proactive agent uses for replies and live observation.": "选择主动助手用于回复和实时观察的模型。",
