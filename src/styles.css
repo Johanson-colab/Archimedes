@@ -1818,16 +1818,17 @@ body.workbench-panes-resizing-column { cursor: row-resize; user-select: none; }
 .artifact-workbench-divider:hover::after, .artifact-workbench-divider:focus-visible::after, body.files-pane-resizing .artifact-workbench-divider::after { width: 2px; background: var(--accent); }
 .artifact-workbench-divider span { position: absolute; top: 50%; left: 1px; width: 5px; height: 26px; margin-top: -13px; background: #262626; border: 1px solid #3a3a3a; border-radius: 3px; }
 .artifact-workbench-divider:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
-.artifact-workbench-pane-toggles { display: flex; gap: 2px; margin-right: 4px; padding: 2px; background: #202020; border: 1px solid #303030; border-radius: 6px; }
+.artifact-workbench-pane-toggles { display: flex; gap: 2px; margin-right: 4px; padding: 0; background: transparent; border: 0; border-radius: 0; }
 .artifact-workbench-pane-toggles button { display: grid; width: 24px; height: 22px; place-items: center; color: #8f8f8f; background: transparent; border-radius: 4px; }
-.artifact-workbench-pane-toggles button:hover { color: #f4f4f4; background: #2a2a2a; }
-.artifact-workbench-pane-toggles button.active { color: #f4f4f4; background: #303030; }
+.artifact-workbench-pane-toggles button:hover { color: #f4f4f4; background: transparent; }
+.artifact-workbench-pane-toggles button.active { color: #f4f4f4; background: transparent; }
+.artifact-workbench-pane-toggles button:not(.active) { opacity: .6; }
 body.files-pane-resizing { cursor: col-resize; user-select: none; }
 body.files-pane-resizing * { cursor: col-resize !important; }
 .artifact-workbench-body .artifact-editor-pane { width: 100%; height: 100%; }
 .artifact-workbench-body.split .artifact-browser-title { padding-inline: 6px; }
 .artifact-workbench-body .artifact-browser-title { height: 34px; }
-.artifact-workbench-body .artifact-tabs { min-height: 35px; }
+.artifact-workbench-body .artifact-tabs { min-height: 0; }
 .artifact-workbench-body .artifact-editor-header { min-height: 40px; }
 .artifact-workbench-body .artifact-preview-surface { height: 100%; }
 
@@ -1846,7 +1847,7 @@ body.workbench-resizing * { cursor: col-resize !important; }
   display: none;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: 34px minmax(0, 1fr);
+  grid-template-rows: 40px minmax(0, 1fr);
   color: #41413d;
   background: #f8f8f6;
   border-top: 1px solid #d9d9d4;
@@ -1889,7 +1890,7 @@ body.workbench-resizing * { cursor: col-resize !important; }
 .terminal-tab-list { display: flex; min-width: 0; align-self: stretch; overflow: auto hidden; }
 .terminal-tab { display: flex; min-width: 0; max-width: 190px; align-items: center; border-right: 1px solid #ddddD8; }
 .terminal-tab.active { background: #f8f8f6; box-shadow: inset 0 -2px #2e765d; }
-.terminal-tab-select { display: flex; min-width: 0; height: 100%; align-items: center; gap: 6px; padding: 0 5px 0 9px; color: #777771; background: transparent; font-size: 10px; }
+.terminal-tab-select { display: flex; min-width: 0; height: 100%; align-items: center; gap: 6px; padding: 0 5px 0 9px; color: #777771; background: transparent; font-size: 12px; font-weight: 550; }
 .terminal-tab.active .terminal-tab-select { color: #30302d; }
 .terminal-tab-select > span { min-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .terminal-tab-select i { color: #a16d49; font-size: 8px; font-style: normal; }
@@ -3406,9 +3407,9 @@ html[data-theme="paper"] .paper-create-backdrop {
 .theme-paper .artifact-workbench-divider { background: var(--workbench-ground); }
 .theme-paper .artifact-workbench-divider::after { background: transparent; }
 .theme-paper .artifact-workbench-divider span { background: var(--surface-canvas); border-color: #ded8d0; }
-.theme-paper .artifact-workbench-pane-toggles { background: #eeeae4; border-color: #e0dbd2; }
+.theme-paper .artifact-workbench-pane-toggles { background: transparent; border-color: transparent; }
 .theme-paper .artifact-workbench-pane-toggles button { color: #77726b; }
-.theme-paper .artifact-workbench-pane-toggles button:hover, .theme-paper .artifact-workbench-pane-toggles button.active { color: #252422; background: var(--mono-surface); }
+.theme-paper .artifact-workbench-pane-toggles button:hover, .theme-paper .artifact-workbench-pane-toggles button.active { color: #252422; background: transparent; }
 .theme-paper .artifact-tab.active .artifact-tab-main > svg { color: #35322e; }
 .theme-paper .trajectory-view { color: #37342f; background: var(--workbench-ground); }
 .theme-paper .trajectory-stat span, .theme-paper .trajectory-section-title, .theme-paper .trajectory-section-head p { color: var(--rail-row-muted); }
@@ -5508,12 +5509,21 @@ html[data-theme="paper"] .image-creation-tab small { color: #6f6a63; }
 .artifact-editor-pane.compact { position: relative; }
 .artifact-workbench-body .artifact-editor-pane.compact { grid-template-rows: minmax(0, 1fr); }
 .artifact-tabs-row {
+  --file-tabs-row-height: 40px;
   display: flex;
-  height: 38px;
+  height: var(--file-tabs-row-height);
+  min-height: var(--file-tabs-row-height);
   min-width: 0;
   align-items: stretch;
   background: var(--surface-canvas);
   border-bottom: 1px solid var(--border-soft);
+}
+.artifact-tabs-scroller {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex: 1;
 }
 .artifact-tabs-row .artifact-tabs {
   min-height: 0;
@@ -5522,11 +5532,14 @@ html[data-theme="paper"] .image-creation-tab small { color: #6f6a63; }
   min-width: 0;
   background: transparent;
   border-bottom: 0;
+  scrollbar-width: none;
 }
+.artifact-tabs-row .artifact-tabs::-webkit-scrollbar { display: none; }
 .artifact-tabs-row .artifact-tab { height: 100%; }
-.artifact-tabs-row .artifact-workbench-actions { margin-left: auto; padding: 0 6px; border-left: 1px solid var(--border-soft); }
-.artifact-workbench-body .artifact-editor-pane.compact .artifact-editor { position: relative; }
-.artifact-workbench-body .artifact-editor-pane.compact .artifact-editor-header.compact {
+.artifact-tabs-row .artifact-workbench-actions { height: 100%; margin-left: auto; padding: 0 7px; border-left: 1px solid var(--border-soft); }
+.artifact-tabs-row .artifact-workbench-actions button { width: 26px; height: 26px; }
+.artifact-workbench-body .artifact-editor-pane .artifact-editor { position: relative; }
+.artifact-workbench-body .artifact-editor-pane .artifact-editor-header.compact {
   position: absolute;
   z-index: 4;
   top: 0;
@@ -5536,6 +5549,7 @@ html[data-theme="paper"] .image-creation-tab small { color: #6f6a63; }
   background: transparent;
   border: 0;
 }
+.artifact-workbench-full .artifact-editor-pane { grid-template-rows: auto minmax(0, 1fr); }
 .artifact-editor-header.compact .artifact-editor-actions { gap: 8px; }
 .artifact-editor-header.compact .artifact-view-toggle { height: auto; gap: 8px; padding: 0; background: transparent; border-radius: 0; }
 .artifact-editor-header.compact .artifact-view-toggle button { height: 24px; padding: 0; color: var(--rail-row-muted); background: transparent; border-radius: 0; box-shadow: none; font-size: 11px; font-weight: 550; }
@@ -6007,8 +6021,8 @@ html[data-file-icons="monochrome"] .tree-file-icon { color: var(--rail-row-muted
 
 .artifact-workbench-full { height: 100%; grid-template-rows: minmax(0, 1fr); background: var(--workbench-ground); }
 .artifact-workbench-full .artifact-workbench-body { height: 100%; }
-.artifact-workbench-full .artifact-tabs { min-height: 38px; }
-.artifact-workbench-body .artifact-tabs { min-height: 38px; }
+.artifact-workbench-full .artifact-tabs { min-height: 0; }
+.artifact-workbench-body .artifact-tabs { min-height: 0; }
 .artifact-tab { min-width: 120px; max-width: 230px; }
 .artifact-tab-main { gap: 7px; padding: 0 7px 0 11px; }
 .artifact-tab-main .artifact-tab-name { overflow: hidden; font-size: 12px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
@@ -9769,9 +9783,11 @@ html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.acti
 }
 
 
-/* Full Files view: the restore control sits in the tab strip. */
+/* Full Files view: the restore control sits in the tab strip, which matches
+   the 40px Files row used inside the workbench. */
 .artifact-tabs-row-full {
-  height: 35px;
+  height: 40px;
+  min-height: 40px;
 }
 .artifact-tabs-row-actions {
   display: flex;
@@ -9797,6 +9813,26 @@ html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.acti
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+@keyframes files-full-enter {
+  from { opacity: 0; transform: translateY(6px) scale(.996); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes files-full-exit {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(4px) scale(.997); }
+}
+.artifact-workbench-full {
+  transform-origin: 62% 0;
+  animation: files-full-enter .18s cubic-bezier(.22, .8, .28, 1);
+}
+.artifact-workbench-full.is-closing {
+  pointer-events: none;
+  animation: files-full-exit .15s ease-in forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .artifact-workbench-full,
+  .artifact-workbench-full.is-closing { animation: none; }
+}
 
 /* Files preview/edit surfaces share the conversation canvas. */
 .artifact-workbench-body .artifact-preview-surface,
@@ -9814,25 +9850,43 @@ html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.acti
   background: transparent;
 }
 
-/* The file tab strip keeps its scrollbar out of the way until hovered, and
-   maps a vertical wheel to horizontal scrolling when the tabs overflow. */
-@media (hover: hover) {
-  .artifact-tabs {
-    scrollbar-color: transparent transparent;
-  }
-  .artifact-tabs::-webkit-scrollbar-thumb {
-    background-color: transparent;
-  }
-  .artifact-tabs:hover::-webkit-scrollbar-thumb {
-    background-color: var(--scrollbar-thumb);
-  }
-  .artifact-tabs:hover::-webkit-scrollbar-thumb:hover {
-    background-color: var(--scrollbar-thumb-hover);
-  }
-  @supports not selector(::-webkit-scrollbar) {
-    .artifact-tabs { scrollbar-color: transparent transparent; }
-    .artifact-tabs:hover { scrollbar-color: var(--scrollbar-thumb) transparent; }
-  }
+/* The tab strip uses a floating scrollbar. It sits over the bottom edge of the
+   tabs instead of taking layout space, appears only when the tabs overflow and
+   the pointer is over the strip, and can be dragged. */
+.artifact-tabs-scrollbar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 8px;
+  padding: 2px 0 1px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+.artifact-tabs-scrollbar.visible {
+  pointer-events: auto;
+}
+.artifact-tabs-scroller:hover .artifact-tabs-scrollbar.visible,
+.artifact-tabs-scrollbar.dragging {
+  opacity: 1;
+}
+.artifact-tabs-scrollbar > span {
+  display: block;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--scrollbar-thumb);
+  cursor: grab;
+}
+.artifact-tabs-scrollbar > span:hover,
+.artifact-tabs-scrollbar.dragging > span {
+  background: var(--scrollbar-thumb-hover);
+}
+.artifact-tabs-scrollbar.dragging > span {
+  cursor: grabbing;
+}
+@media (prefers-reduced-motion: reduce) {
+  .artifact-tabs-scrollbar { transition: none; }
 }
 
 /* xterm's viewport defaults to black; let the terminal surface paint instead. */

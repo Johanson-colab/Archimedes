@@ -89,6 +89,8 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
   ChevronRight,
   CircleDot,
   Clipboard,
@@ -4669,7 +4671,66 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   const [filesPaneWidth, setFilesPaneWidth] = useState(readFilesPaneWidth);
   const [filesListCollapsed, setFilesListCollapsed] = useState(false);
   const [filesEditorCollapsed, setFilesEditorCollapsed] = useState(false);
+  const [closingFullEditor, setClosingFullEditor] = useState(false);
   const tabsRef = useRef<HTMLDivElement | null>(null);
+  const tabsScrollerRef = useRef<HTMLDivElement | null>(null);
+  const tabsScrollThumbRef = useRef<HTMLSpanElement | null>(null);
+  const [tabsOverflow, setTabsOverflow] = useState(false);
+  const [tabsScrollbarDragging, setTabsScrollbarDragging] = useState(false);
+  const syncTabsScrollbar = useCallback(() => {
+    const element = tabsRef.current;
+    const scroller = tabsScrollerRef.current;
+    const thumb = tabsScrollThumbRef.current;
+    if (!element || !scroller || !thumb) return;
+    const overflow = element.scrollWidth > element.clientWidth + 1;
+    setTabsOverflow(overflow);
+    if (!overflow) return;
+    const track = scroller.clientWidth;
+    const width = Math.max(28, Math.round(track * (element.clientWidth / element.scrollWidth)));
+    const maxScroll = element.scrollWidth - element.clientWidth;
+    const offset = maxScroll > 0 ? (element.scrollLeft / maxScroll) * (track - width) : 0;
+    thumb.style.width = `${width}px`;
+    thumb.style.transform = `translateX(${Math.round(offset)}px)`;
+  }, []);
+  useEffect(() => {
+    const element = tabsRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(syncTabsScrollbar);
+    observer.observe(element);
+    if (tabsScrollerRef.current) observer.observe(tabsScrollerRef.current);
+    window.addEventListener("resize", syncTabsScrollbar);
+    syncTabsScrollbar();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", syncTabsScrollbar);
+    };
+  }, [openFiles.length, syncTabsScrollbar]);
+  function startTabsScrollbarDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const element = tabsRef.current;
+    const scroller = tabsScrollerRef.current;
+    if (!element || !scroller) return;
+    const maxScroll = element.scrollWidth - element.clientWidth;
+    if (maxScroll <= 0) return;
+    event.preventDefault();
+    const track = scroller.clientWidth;
+    const thumbWidth = Math.max(28, track * (element.clientWidth / element.scrollWidth));
+    const startX = event.clientX;
+    const startScroll = element.scrollLeft;
+    const scrollPerPixel = maxScroll / Math.max(1, track - thumbWidth);
+    setTabsScrollbarDragging(true);
+    const handleMove = (moveEvent: PointerEvent) => {
+      element.scrollLeft = startScroll + (moveEvent.clientX - startX) * scrollPerPixel;
+    };
+    const handleUp = () => {
+      setTabsScrollbarDragging(false);
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+  }
   useEffect(() => {
     const element = tabsRef.current;
     if (!element) return;
@@ -4727,6 +4788,16 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     });
   }
 
+  function restoreFullEditor() {
+    if (!onRestore || closingFullEditor) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onRestore();
+      return;
+    }
+    setClosingFullEditor(true);
+    window.setTimeout(onRestore, 150);
+  }
+
   function startFilesPaneResize(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -4775,20 +4846,29 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const tabs = openFiles.length > 0 ? <div ref={tabsRef} className="artifact-tabs" role="tablist" aria-label="Open files">
-    {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
-      <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
-        {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
-        <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}><WorkspaceFileGlyph entry={{ type: "file", kind: openFile.kind, path: openFile.path }} /></span><span className="artifact-tab-name">{openFile.name}</span>
-      </button>
-      <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
-    </div>)}
+  const tabs = openFiles.length > 0 ? <div className="artifact-tabs-scroller" ref={tabsScrollerRef}>
+    <div ref={tabsRef} className="artifact-tabs" role="tablist" aria-label="Open files" onScroll={syncTabsScrollbar}>
+      {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
+        <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
+          {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
+          <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}><WorkspaceFileGlyph entry={{ type: "file", kind: openFile.kind, path: openFile.path }} /></span><span className="artifact-tab-name">{openFile.name}</span>
+        </button>
+        <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
+      </div>)}
+    </div>
+    <div
+      className={`artifact-tabs-scrollbar${tabsOverflow ? " visible" : ""}${tabsScrollbarDragging ? " dragging" : ""}`}
+      aria-hidden="true"
+      onPointerDown={startTabsScrollbarDrag}
+    >
+      <span ref={tabsScrollThumbRef} />
+    </div>
   </div> : null;
 
   const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
     {!compact && <div className="artifact-tabs-row artifact-tabs-row-full">
       {tabs}
-      {onRestore && <div className="artifact-tabs-row-actions"><button className="artifact-tabs-restore" onClick={onRestore} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /></button></div>}
+      {onRestore && <div className="artifact-tabs-row-actions"><button className="artifact-tabs-restore" onClick={restoreFullEditor} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /></button></div>}
     </div>}
     <FilePreview
       compact
@@ -4823,8 +4903,8 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
         {tabs}
         <div className="artifact-workbench-actions">
           {split && <div className="artifact-workbench-pane-toggles" role="group" aria-label="File panes">
-            <button className={filesListCollapsed ? "" : "active"} onClick={toggleFilesList} title={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-label={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-pressed={!filesListCollapsed}>{filesListCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button>
-            <button className={filesEditorCollapsed ? "" : "active"} onClick={toggleFilesEditor} title={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-label={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-pressed={!filesEditorCollapsed}>{filesEditorCollapsed ? <PanelRightOpen size={13} /> : <PanelRightClose size={13} />}</button>
+            <button className={filesListCollapsed ? "" : "active"} onClick={toggleFilesList} title={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-label={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-pressed={!filesListCollapsed}>{filesListCollapsed ? <ChevronsRight size={13} /> : <ChevronsLeft size={13} />}</button>
+            <button className={filesEditorCollapsed ? "" : "active"} onClick={toggleFilesEditor} title={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-label={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-pressed={!filesEditorCollapsed}>{filesEditorCollapsed ? <ChevronsLeft size={13} /> : <ChevronsRight size={13} />}</button>
           </div>}
           <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>
           <button onClick={onNewFile} title="New file" aria-label="New file"><Plus size={14} /></button>
@@ -4841,7 +4921,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     </div>;
   }
 
-  return <div className="artifact-workbench artifact-workbench-full">
+  return <div className={`artifact-workbench artifact-workbench-full${closingFullEditor ? " is-closing" : ""}`}>
     <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
       {browser}
       <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>
