@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const app = read("src/App.tsx");
 const switcher = read("src/SessionSwitcher.tsx");
+const workspaceDialog = read("src/WorkspaceDialog.tsx");
 const store = read("electron/store.cjs");
 const preload = read("electron/preload.cjs");
 const main = read("electron/main.cjs");
@@ -47,16 +48,22 @@ test("git state is detected without making git a project requirement", () => {
 
 test("workspace and session actions cross the desktop bridge", () => {
   assert.match(preload, /listResearchWorkspaces: \(projectId = null\)/);
-  assert.match(preload, /createResearchWorkspace: \(projectId, kind = "shared"\)/);
+  assert.match(preload, /createResearchWorkspace: \(projectId, kind = "shared", name = ""\)/);
+  assert.match(preload, /renameResearchWorkspace: \(id, name\)/);
+  assert.match(preload, /suggestResearchWorkspaceName: \(\)/);
   assert.match(preload, /deleteResearchWorkspace: \(id\)/);
   assert.match(preload, /pinResearchThread: \(id, pinned = true\)/);
   assert.match(preload, /markResearchThreadViewed: \(id\)/);
   assert.match(main, /ipcMain\.handle\("research-workspace:list"/);
   assert.match(main, /ipcMain\.handle\("research-workspace:create"/);
+  assert.match(main, /ipcMain\.handle\("research-workspace:rename"/);
+  assert.match(main, /ipcMain\.handle\("research-workspace:suggest-name"/);
   assert.match(main, /ipcMain\.handle\("research-workspace:delete"/);
   assert.match(main, /ipcMain\.handle\("research-thread:pin"/);
   assert.match(main, /ipcMain\.handle\("research-thread:mark-viewed"/);
   assert.match(types, /listResearchWorkspaces: \(projectId\?: string \| null\)/);
+  assert.match(types, /renameResearchWorkspace: \(id: string, name: string\)/);
+  assert.match(types, /suggestResearchWorkspaceName: \(\)/);
   assert.match(types, /workspaceId\?: string/);
   assert.match(types, /interface ProjectWorkspace/);
   assert.match(types, /workspaces: ProjectWorkspace\[\]/);
@@ -101,16 +108,43 @@ test("the switcher only sees the active workspace and preserves sessions across 
 
 test("workspace switching and isolated workspace creation are wired in the renderer", () => {
   assert.match(app, /async function selectWorkspace/);
-  assert.match(app, /async function createWorkspace/);
+  assert.match(app, /function openWorkspaceCreator/);
+  assert.match(app, /async function submitWorkspaceDialog/);
   assert.match(app, /async function deleteWorkspace/);
   assert.match(app, /const resolvedKind = kind \?\? \(project\?\.git_state === "ready" \? "worktree" : "sandbox"\)/);
-  assert.match(app, /createResearchWorkspace\(projectId, resolvedKind\)/);
-  assert.match(app, /onNewWorkspace=\{\(projectId\) => void createWorkspaceForProject\(projectId\)\}/);
+  assert.match(app, /createResearchWorkspace\(workspaceDialog\.projectId, kind, name\)/);
+  assert.match(app, /renameResearchWorkspace\(workspaceDialog\.workspace\.id, name\)/);
+  assert.match(app, /suggestResearchWorkspaceName\?\.\(\)/);
+  assert.match(app, /onNewWorkspace=\{\(projectId\) => openWorkspaceCreator\(projectId\)\}/);
+  assert.match(app, /<WorkspaceDialog/);
   assert.match(app, /deleteResearchWorkspace\(workspaceToDelete\.id\)/);
   assert.match(switcher, /onCreateWorkspace\("worktree"\)/);
   assert.match(switcher, /onCreateWorkspace\("sandbox"\)/);
+  assert.match(switcher, /onRenameWorkspace\(entry\)/);
   assert.match(switcher, /project\?\.git_state === "ready"/);
   assert.match(switcher, /\{canWorktree && <MenuItem/);
+});
+
+test("the workspace dialog accepts a custom name, a type, and later renames", () => {
+  assert.match(workspaceDialog, /mode === "create" \? t\("New workspace"\) : t\("Rename workspace"\)/);
+  assert.match(workspaceDialog, /placeholder=\{mode === "create" \? \(suggestedName \? t\("Leave blank for \{name\}", \{ name: suggestedName \}\)/);
+  assert.match(workspaceDialog, /onChange=\{\(event\) => setName\(event\.target\.value\)\}/);
+  assert.match(workspaceDialog, /className=\{kind === "sandbox" \? "active" : ""\}/);
+  assert.match(workspaceDialog, /canWorktree && <button/);
+  assert.match(workspaceDialog, /onSubmit\(\{ name: name\.trim\(\), kind \}\)/);
+  assert.match(workspaceDialog, /t\("Create workspace"\)/);
+  assert.match(workspaceDialog, /t\("Save name"\)/);
+});
+
+test("the naming library is exposed through the store and suggestions skip used names", () => {
+  const names = read("electron/workspace-names.cjs");
+  const library = JSON.parse(read("shared/workspace-names.json"));
+  assert.ok(library.length >= 100);
+  assert.match(names, /function suggestWorkspaceName/);
+  assert.match(names, /WORKSPACE_NAME_LIBRARY/);
+  assert.match(names, /randomBuildingName/);
+  assert.match(store, /suggestProjectWorkspaceName/);
+  assert.match(store, /renameProjectWorkspace/);
 });
 
 test("the switcher adapts to narrow screens as a full-height sheet", () => {

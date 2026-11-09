@@ -6,6 +6,7 @@ import {
   ChevronDown,
   GitBranch,
   Lock,
+  Pencil,
   Pin,
   PinOff,
   Trash,
@@ -33,6 +34,7 @@ type SessionSwitcherProps = {
   onArchiveSession: (session: ResearchThread, archived: boolean) => void;
   onSelectWorkspace: (workspace: ProjectWorkspace) => void;
   onCreateWorkspace: (kind: ProjectWorkspaceKind) => void;
+  onRenameWorkspace: (workspace: ProjectWorkspace) => void;
   onDeleteWorkspace: (workspace: ProjectWorkspace) => void;
   openSignal: number;
 };
@@ -109,6 +111,7 @@ export default function SessionSwitcher({
   onArchiveSession,
   onSelectWorkspace,
   onCreateWorkspace,
+  onRenameWorkspace,
   onDeleteWorkspace,
   openSignal,
 }: SessionSwitcherProps) {
@@ -252,12 +255,20 @@ export default function SessionSwitcher({
             </span>
             <span className="workspace-option-count">{entry.session_count}</span>
           </button>
-          {!entry.is_default && <button
-            className="workspace-option-delete"
-            onClick={() => { setWorkspaceOpen(false); onDeleteWorkspace(entry); }}
-            title={t("Delete workspace")}
-            aria-label={t("Delete workspace")}
-          ><Trash size={13} /></button>}
+          <span className="workspace-option-actions">
+            <button
+              className="workspace-option-action"
+              onClick={() => { setWorkspaceOpen(false); onRenameWorkspace(entry); }}
+              title={t("Rename workspace")}
+              aria-label={t("Rename workspace")}
+            ><Pencil size={13} /></button>
+            {!entry.is_default && <button
+              className="workspace-option-action danger"
+              onClick={() => { setWorkspaceOpen(false); onDeleteWorkspace(entry); }}
+              title={t("Delete workspace")}
+              aria-label={t("Delete workspace")}
+            ><Trash size={13} /></button>}
+          </span>
         </div>)}
       </div>
       <MenuDivider />

@@ -1,0 +1,987 @@
+[
+  {
+    "id": "einstein-house-bern",
+    "name": "Einstein House Bern",
+    "localName": "Einstein-Haus Bern",
+    "person": "Albert Einstein",
+    "category": "science",
+    "place": "Bern, Switzerland"
+  },
+  {
+    "id": "down-house",
+    "name": "Down House",
+    "localName": "Down House",
+    "person": "Charles Darwin",
+    "category": "science",
+    "place": "Downe, England"
+  },
+  {
+    "id": "monks-house",
+    "name": "Monk's House",
+    "localName": "Monk's House",
+    "person": "Virginia Woolf",
+    "category": "literature",
+    "place": "Rodmell, England"
+  },
+  {
+    "id": "charleston-farmhouse",
+    "name": "Charleston Farmhouse",
+    "localName": "Charleston Farmhouse",
+    "person": "Vanessa Bell",
+    "category": "art",
+    "place": "Sussex, England"
+  },
+  {
+    "id": "batemans",
+    "name": "Bateman's",
+    "localName": "Bateman's",
+    "person": "Rudyard Kipling",
+    "category": "literature",
+    "place": "Burwash, England"
+  },
+  {
+    "id": "hill-top",
+    "name": "Hill Top",
+    "localName": "Hill Top",
+    "person": "Beatrix Potter",
+    "category": "literature",
+    "place": "Near Sawrey, England"
+  },
+  {
+    "id": "dove-cottage",
+    "name": "Dove Cottage",
+    "localName": "Dove Cottage",
+    "person": "William Wordsworth",
+    "category": "literature",
+    "place": "Grasmere, England"
+  },
+  {
+    "id": "rydal-mount",
+    "name": "Rydal Mount",
+    "localName": "Rydal Mount",
+    "person": "William Wordsworth",
+    "category": "literature",
+    "place": "Rydal, England"
+  },
+  {
+    "id": "coleridge-cottage",
+    "name": "Coleridge Cottage",
+    "localName": "Coleridge Cottage",
+    "person": "Samuel Taylor Coleridge",
+    "category": "literature",
+    "place": "Nether Stowey, England"
+  },
+  {
+    "id": "keats-house",
+    "name": "Keats House",
+    "localName": "Keats House",
+    "person": "John Keats",
+    "category": "literature",
+    "place": "London, England"
+  },
+  {
+    "id": "casa-guidi",
+    "name": "Casa Guidi",
+    "localName": "Casa Guidi",
+    "person": "Elizabeth Barrett Browning",
+    "category": "literature",
+    "place": "Florence, Italy"
+  },
+  {
+    "id": "hauteville-house",
+    "name": "Hauteville House",
+    "localName": "Hauteville House",
+    "person": "Victor Hugo",
+    "category": "literature",
+    "place": "Guernsey"
+  },
+  {
+    "id": "maison-de-balzac",
+    "name": "Maison de Balzac",
+    "localName": "Maison de Balzac",
+    "person": "Honoré de Balzac",
+    "category": "literature",
+    "place": "Paris, France"
+  },
+  {
+    "id": "nohant",
+    "name": "Nohant",
+    "localName": "Maison de George Sand",
+    "person": "George Sand",
+    "category": "literature",
+    "place": "Nohant, France"
+  },
+  {
+    "id": "villa-arnaga",
+    "name": "Villa Arnaga",
+    "localName": "Villa Arnaga",
+    "person": "Edmond Rostand",
+    "category": "literature",
+    "place": "Cambo-les-Bains, France"
+  },
+  {
+    "id": "shakespeares-birthplace",
+    "name": "Shakespeare's Birthplace",
+    "localName": "Shakespeare's Birthplace",
+    "person": "William Shakespeare",
+    "category": "literature",
+    "place": "Stratford-upon-Avon, England"
+  },
+  {
+    "id": "anne-hathaways-cottage",
+    "name": "Anne Hathaway's Cottage",
+    "localName": "Anne Hathaway's Cottage",
+    "person": "Anne Hathaway",
+    "category": "literature",
+    "place": "Shottery, England"
+  },
+  {
+    "id": "abbotsford-house",
+    "name": "Abbotsford House",
+    "localName": "Abbotsford House",
+    "person": "Walter Scott",
+    "category": "literature",
+    "place": "Scottish Borders"
+  },
+  {
+    "id": "burns-cottage",
+    "name": "Burns Cottage",
+    "localName": "Burns Cottage",
+    "person": "Robert Burns",
+    "category": "literature",
+    "place": "Alloway, Scotland"
+  },
+  {
+    "id": "bronte-parsonage",
+    "name": "Brontë Parsonage",
+    "localName": "Brontë Parsonage",
+    "person": "Brontë family",
+    "category": "literature",
+    "place": "Haworth, England"
+  },
+  {
+    "id": "jane-austens-house",
+    "name": "Jane Austen's House",
+    "localName": "Chawton Cottage",
+    "person": "Jane Austen",
+    "category": "literature",
+    "place": "Chawton, England"
+  },
+  {
+    "id": "dickens-house",
+    "name": "Dickens House",
+    "localName": "48 Doughty Street",
+    "person": "Charles Dickens",
+    "category": "literature",
+    "place": "London, England"
+  },
+  {
+    "id": "gads-hill-place",
+    "name": "Gad's Hill Place",
+    "localName": "Gad's Hill Place",
+    "person": "Charles Dickens",
+    "category": "literature",
+    "place": "Higham, England"
+  },
+  {
+    "id": "shaws-corner",
+    "name": "Shaw's Corner",
+    "localName": "Shaw's Corner",
+    "person": "George Bernard Shaw",
+    "category": "literature",
+    "place": "Ayot St Lawrence, England"
+  },
+  {
+    "id": "dylan-thomas-boathouse",
+    "name": "Dylan Thomas Boathouse",
+    "localName": "Dylan Thomas Boathouse",
+    "person": "Dylan Thomas",
+    "category": "literature",
+    "place": "Laugharne, Wales"
+  },
+  {
+    "id": "hardys-cottage",
+    "name": "Hardy's Cottage",
+    "localName": "Hardy's Cottage",
+    "person": "Thomas Hardy",
+    "category": "literature",
+    "place": "Higher Bockhampton, England"
+  },
+  {
+    "id": "max-gate",
+    "name": "Max Gate",
+    "localName": "Max Gate",
+    "person": "Thomas Hardy",
+    "category": "literature",
+    "place": "Dorchester, England"
+  },
+  {
+    "id": "mark-twain-house",
+    "name": "Mark Twain House",
+    "localName": "Mark Twain House",
+    "person": "Mark Twain",
+    "category": "literature",
+    "place": "Hartford, USA"
+  },
+  {
+    "id": "longfellow-house",
+    "name": "Longfellow House",
+    "localName": "Craigie House",
+    "person": "Henry Wadsworth Longfellow",
+    "category": "literature",
+    "place": "Cambridge, USA"
+  },
+  {
+    "id": "orchard-house",
+    "name": "Orchard House",
+    "localName": "Orchard House",
+    "person": "Louisa May Alcott",
+    "category": "literature",
+    "place": "Concord, USA"
+  },
+  {
+    "id": "emily-dickinson-homestead",
+    "name": "Emily Dickinson Homestead",
+    "localName": "Emily Dickinson Homestead",
+    "person": "Emily Dickinson",
+    "category": "literature",
+    "place": "Amherst, USA"
+  },
+  {
+    "id": "arrowhead",
+    "name": "Arrowhead",
+    "localName": "Herman Melville's Arrowhead",
+    "person": "Herman Melville",
+    "category": "literature",
+    "place": "Pittsfield, USA"
+  },
+  {
+    "id": "house-of-seven-gables",
+    "name": "House of the Seven Gables",
+    "localName": "House of the Seven Gables",
+    "person": "Nathaniel Hawthorne",
+    "category": "literature",
+    "place": "Salem, USA"
+  },
+  {
+    "id": "walden-cabin",
+    "name": "Walden Cabin",
+    "localName": "Thoreau's Cabin",
+    "person": "Henry David Thoreau",
+    "category": "literature",
+    "place": "Concord, USA"
+  },
+  {
+    "id": "sunnyside",
+    "name": "Sunnyside",
+    "localName": "Sunnyside",
+    "person": "Washington Irving",
+    "category": "literature",
+    "place": "Tarrytown, USA"
+  },
+  {
+    "id": "poe-cottage",
+    "name": "Poe Cottage",
+    "localName": "Edgar Allan Poe Cottage",
+    "person": "Edgar Allan Poe",
+    "category": "literature",
+    "place": "New York, USA"
+  },
+  {
+    "id": "hemingway-house",
+    "name": "Hemingway House",
+    "localName": "Ernest Hemingway Home",
+    "person": "Ernest Hemingway",
+    "category": "literature",
+    "place": "Key West, USA"
+  },
+  {
+    "id": "rowan-oak",
+    "name": "Rowan Oak",
+    "localName": "Rowan Oak",
+    "person": "William Faulkner",
+    "category": "literature",
+    "place": "Oxford, USA"
+  },
+  {
+    "id": "the-mount",
+    "name": "The Mount",
+    "localName": "Edith Wharton's The Mount",
+    "person": "Edith Wharton",
+    "category": "literature",
+    "place": "Lenox, USA"
+  },
+  {
+    "id": "connemara",
+    "name": "Connemara",
+    "localName": "Carl Sandburg Home",
+    "person": "Carl Sandburg",
+    "category": "literature",
+    "place": "Flat Rock, USA"
+  },
+  {
+    "id": "tao-house",
+    "name": "Tao House",
+    "localName": "Tao House",
+    "person": "Eugene O'Neill",
+    "category": "literature",
+    "place": "Danville, USA"
+  },
+  {
+    "id": "goethe-house",
+    "name": "Goethe House",
+    "localName": "Goethe-Haus",
+    "person": "Johann Wolfgang von Goethe",
+    "category": "literature",
+    "place": "Frankfurt, Germany"
+  },
+  {
+    "id": "goethe-garden-house",
+    "name": "Goethe Garden House",
+    "localName": "Goethes Gartenhaus",
+    "person": "Johann Wolfgang von Goethe",
+    "category": "literature",
+    "place": "Weimar, Germany"
+  },
+  {
+    "id": "schiller-house",
+    "name": "Schiller House",
+    "localName": "Schillerhaus",
+    "person": "Friedrich Schiller",
+    "category": "literature",
+    "place": "Weimar, Germany"
+  },
+  {
+    "id": "bach-house",
+    "name": "Bach House",
+    "localName": "Bachhaus",
+    "person": "Johann Sebastian Bach",
+    "category": "music",
+    "place": "Eisenach, Germany"
+  },
+  {
+    "id": "mozart-birthplace",
+    "name": "Mozart Birthplace",
+    "localName": "Mozart Geburtshaus",
+    "person": "Wolfgang Amadeus Mozart",
+    "category": "music",
+    "place": "Salzburg, Austria"
+  },
+  {
+    "id": "mozart-residence",
+    "name": "Mozart Residence",
+    "localName": "Mozart Wohnhaus",
+    "person": "Wolfgang Amadeus Mozart",
+    "category": "music",
+    "place": "Salzburg, Austria"
+  },
+  {
+    "id": "beethoven-house",
+    "name": "Beethoven House",
+    "localName": "Beethoven-Haus",
+    "person": "Ludwig van Beethoven",
+    "category": "music",
+    "place": "Bonn, Germany"
+  },
+  {
+    "id": "wahnfried",
+    "name": "Wahnfried",
+    "localName": "Haus Wahnfried",
+    "person": "Richard Wagner",
+    "category": "music",
+    "place": "Bayreuth, Germany"
+  },
+  {
+    "id": "freud-museum",
+    "name": "Freud Museum",
+    "localName": "Berggasse 19",
+    "person": "Sigmund Freud",
+    "category": "science",
+    "place": "Vienna, Austria"
+  },
+  {
+    "id": "nietzsche-archive",
+    "name": "Nietzsche Archive",
+    "localName": "Nietzsche-Archiv",
+    "person": "Friedrich Nietzsche",
+    "category": "philosophy",
+    "place": "Weimar, Germany"
+  },
+  {
+    "id": "hegel-house",
+    "name": "Hegel House",
+    "localName": "Hegel-Haus",
+    "person": "Georg Wilhelm Friedrich Hegel",
+    "category": "philosophy",
+    "place": "Stuttgart, Germany"
+  },
+  {
+    "id": "karl-marx-house",
+    "name": "Karl Marx House",
+    "localName": "Karl-Marx-Haus",
+    "person": "Karl Marx",
+    "category": "philosophy",
+    "place": "Trier, Germany"
+  },
+  {
+    "id": "yasnaya-polyana",
+    "name": "Yasnaya Polyana",
+    "localName": "Yasnaya Polyana",
+    "person": "Leo Tolstoy",
+    "category": "literature",
+    "place": "Tula, Russia"
+  },
+  {
+    "id": "melikhovo",
+    "name": "Melikhovo",
+    "localName": "Melikhovo",
+    "person": "Anton Chekhov",
+    "category": "literature",
+    "place": "Moscow region, Russia"
+  },
+  {
+    "id": "white-dacha",
+    "name": "White Dacha",
+    "localName": "Belaya Dacha",
+    "person": "Anton Chekhov",
+    "category": "literature",
+    "place": "Yalta"
+  },
+  {
+    "id": "spasskoye-lutovinovo",
+    "name": "Spasskoye-Lutovinovo",
+    "localName": "Spasskoye-Lutovinovo",
+    "person": "Ivan Turgenev",
+    "category": "literature",
+    "place": "Oryol, Russia"
+  },
+  {
+    "id": "dostoevsky-house",
+    "name": "Dostoevsky House",
+    "localName": "Dostoevsky House",
+    "person": "Fyodor Dostoevsky",
+    "category": "literature",
+    "place": "St. Petersburg, Russia"
+  },
+  {
+    "id": "boldino-estate",
+    "name": "Boldino Estate",
+    "localName": "Boldino",
+    "person": "Alexander Pushkin",
+    "category": "literature",
+    "place": "Nizhny Novgorod, Russia"
+  },
+  {
+    "id": "pasternak-dacha",
+    "name": "Pasternak Dacha",
+    "localName": "Pasternak Dacha",
+    "person": "Boris Pasternak",
+    "category": "literature",
+    "place": "Peredelkino, Russia"
+  },
+  {
+    "id": "jorasanko-thakur-bari",
+    "name": "Jorasanko Thakur Bari",
+    "localName": "Jorasanko Thakur Bari",
+    "person": "Rabindranath Tagore",
+    "category": "literature",
+    "place": "Kolkata, India"
+  },
+  {
+    "id": "santiniketan",
+    "name": "Santiniketan",
+    "localName": "Santiniketan",
+    "person": "Rabindranath Tagore",
+    "category": "literature",
+    "place": "West Bengal, India"
+  },
+  {
+    "id": "sabarmati-ashram",
+    "name": "Sabarmati Ashram",
+    "localName": "Sabarmati Ashram",
+    "person": "Mahatma Gandhi",
+    "category": "philosophy",
+    "place": "Ahmedabad, India"
+  },
+  {
+    "id": "kafka-house",
+    "name": "Kafka House",
+    "localName": "Kafka House",
+    "person": "Franz Kafka",
+    "category": "literature",
+    "place": "Prague, Czechia"
+  },
+  {
+    "id": "jung-house",
+    "name": "Jung House",
+    "localName": "Jung House Küsnacht",
+    "person": "Carl Jung",
+    "category": "science",
+    "place": "Küsnacht, Switzerland"
+  },
+  {
+    "id": "kant-house",
+    "name": "Kant House",
+    "localName": "Kant House",
+    "person": "Immanuel Kant",
+    "category": "philosophy",
+    "place": "Königsberg"
+  },
+  {
+    "id": "kierkegaard-house",
+    "name": "Kierkegaard House",
+    "localName": "Kierkegaard's Residence",
+    "person": "Søren Kierkegaard",
+    "category": "philosophy",
+    "place": "Copenhagen, Denmark"
+  },
+  {
+    "id": "andersen-house",
+    "name": "Andersen House",
+    "localName": "Hans Christian Andersen House",
+    "person": "Hans Christian Andersen",
+    "category": "literature",
+    "place": "Odense, Denmark"
+  },
+  {
+    "id": "ibsen-museum",
+    "name": "Ibsen Museum",
+    "localName": "Ibsen Museum",
+    "person": "Henrik Ibsen",
+    "category": "literature",
+    "place": "Oslo, Norway"
+  },
+  {
+    "id": "strindberg-museum",
+    "name": "Strindberg Museum",
+    "localName": "Strindberg Museum",
+    "person": "August Strindberg",
+    "category": "literature",
+    "place": "Stockholm, Sweden"
+  },
+  {
+    "id": "marbacka",
+    "name": "Mårbacka",
+    "localName": "Mårbacka",
+    "person": "Selma Lagerlöf",
+    "category": "literature",
+    "place": "Värmland, Sweden"
+  },
+  {
+    "id": "ainola",
+    "name": "Ainola",
+    "localName": "Ainola",
+    "person": "Jean Sibelius",
+    "category": "music",
+    "place": "Järvenpää, Finland"
+  },
+  {
+    "id": "maison-de-zola",
+    "name": "Maison de Zola",
+    "localName": "Maison de Zola",
+    "person": "Émile Zola",
+    "category": "literature",
+    "place": "Médan, France"
+  },
+  {
+    "id": "monet-house",
+    "name": "Monet House",
+    "localName": "Maison de Monet",
+    "person": "Claude Monet",
+    "category": "art",
+    "place": "Giverny, France"
+  },
+  {
+    "id": "van-gogh-house",
+    "name": "Van Gogh House",
+    "localName": "Van Gogh House",
+    "person": "Vincent van Gogh",
+    "category": "art",
+    "place": "Zundert, Netherlands"
+  },
+  {
+    "id": "rembrandt-house",
+    "name": "Rembrandt House",
+    "localName": "Rembrandthuis",
+    "person": "Rembrandt",
+    "category": "art",
+    "place": "Amsterdam, Netherlands"
+  },
+  {
+    "id": "rubens-house",
+    "name": "Rubens House",
+    "localName": "Rubenshuis",
+    "person": "Peter Paul Rubens",
+    "category": "art",
+    "place": "Antwerp, Belgium"
+  },
+  {
+    "id": "yinbing-shi",
+    "name": "Yinbing Shi",
+    "localName": "饮冰室",
+    "person": "Liang Qichao",
+    "category": "literature",
+    "place": "Tianjin, China",
+    "englishName": "Ice-Drinking Studio"
+  },
+  {
+    "id": "lulin-shuwu",
+    "name": "Lülin Shuwu",
+    "localName": "绿林书屋",
+    "person": "Lu Xun",
+    "category": "literature",
+    "place": "Beijing, China",
+    "englishName": "Greenwood Study"
+  },
+  {
+    "id": "laohu-weiba",
+    "name": "Laohu Weiba",
+    "localName": "老虎尾巴",
+    "person": "Lu Xun",
+    "category": "literature",
+    "place": "Beijing, China",
+    "englishName": "Tiger's Tail"
+  },
+  {
+    "id": "yuanyuan-tang",
+    "name": "Yuanyuan Tang",
+    "localName": "缘缘堂",
+    "person": "Feng Zikai",
+    "category": "literature",
+    "place": "Tongxiang, China",
+    "englishName": "Yuanyuan Hall"
+  },
+  {
+    "id": "moye-jingshe",
+    "name": "Moye Jingshe",
+    "localName": "摩耶精舍",
+    "person": "Zhang Daqian",
+    "category": "art",
+    "place": "Taipei, Taiwan",
+    "englishName": "Moye Retreat"
+  },
+  {
+    "id": "jiping-tang",
+    "name": "Jiping Tang",
+    "localName": "寄萍堂",
+    "person": "Qi Baishi",
+    "category": "art",
+    "place": "Beijing, China",
+    "englishName": "Jiping Hall"
+  },
+  {
+    "id": "shi-niu-tang",
+    "name": "Shi Niu Tang",
+    "localName": "师牛堂",
+    "person": "Li Keran",
+    "category": "art",
+    "place": "Beijing, China",
+    "englishName": "Shi Niu Hall"
+  },
+  {
+    "id": "wanmu-caotang",
+    "name": "Wanmu Caotang",
+    "localName": "万木草堂",
+    "person": "Kang Youwei",
+    "category": "philosophy",
+    "place": "Guangzhou, China",
+    "englishName": "Wanmu Cottage"
+  },
+  {
+    "id": "su-shu-lou",
+    "name": "Su Shu Lou",
+    "localName": "素书楼",
+    "person": "Qian Mu",
+    "category": "philosophy",
+    "place": "Taipei, Taiwan",
+    "englishName": "Su Shu Pavilion"
+  },
+  {
+    "id": "lao-she-residence",
+    "name": "Lao She Residence",
+    "localName": "老舍故居",
+    "person": "Lao She",
+    "category": "literature",
+    "place": "Beijing, China"
+  },
+  {
+    "id": "ba-jin-residence",
+    "name": "Ba Jin Residence",
+    "localName": "巴金故居",
+    "person": "Ba Jin",
+    "category": "literature",
+    "place": "Shanghai, China"
+  },
+  {
+    "id": "mao-dun-residence",
+    "name": "Mao Dun Residence",
+    "localName": "茅盾故居",
+    "person": "Mao Dun",
+    "category": "literature",
+    "place": "Wuzhen, China"
+  },
+  {
+    "id": "guo-moruo-residence",
+    "name": "Guo Moruo Residence",
+    "localName": "郭沫若故居",
+    "person": "Guo Moruo",
+    "category": "literature",
+    "place": "Beijing, China"
+  },
+  {
+    "id": "bing-xin-residence",
+    "name": "Bing Xin Residence",
+    "localName": "冰心故居",
+    "person": "Bing Xin",
+    "category": "literature",
+    "place": "Fuzhou, China"
+  },
+  {
+    "id": "shen-congwen-residence",
+    "name": "Shen Congwen Residence",
+    "localName": "沈从文故居",
+    "person": "Shen Congwen",
+    "category": "literature",
+    "place": "Fenghuang, China"
+  },
+  {
+    "id": "zhu-ziqing-residence",
+    "name": "Zhu Ziqing Residence",
+    "localName": "朱自清故居",
+    "person": "Zhu Ziqing",
+    "category": "literature",
+    "place": "Yangzhou, China"
+  },
+  {
+    "id": "hu-shi-residence",
+    "name": "Hu Shi Residence",
+    "localName": "胡适故居",
+    "person": "Hu Shi",
+    "category": "philosophy",
+    "place": "Jixi, China"
+  },
+  {
+    "id": "cai-yuanpei-residence",
+    "name": "Cai Yuanpei Residence",
+    "localName": "蔡元培故居",
+    "person": "Cai Yuanpei",
+    "category": "philosophy",
+    "place": "Shaoxing, China"
+  },
+  {
+    "id": "wang-guowei-residence",
+    "name": "Wang Guowei Residence",
+    "localName": "王国维故居",
+    "person": "Wang Guowei",
+    "category": "philosophy",
+    "place": "Haining, China"
+  },
+  {
+    "id": "liang-qichao-residence",
+    "name": "Liang Qichao Residence",
+    "localName": "梁启超故居",
+    "person": "Liang Qichao",
+    "category": "literature",
+    "place": "Xinhui, China"
+  },
+  {
+    "id": "xu-zhimo-residence",
+    "name": "Xu Zhimo Residence",
+    "localName": "徐志摩故居",
+    "person": "Xu Zhimo",
+    "category": "literature",
+    "place": "Haining, China"
+  },
+  {
+    "id": "lin-yutang-residence",
+    "name": "Lin Yutang Residence",
+    "localName": "林语堂故居",
+    "person": "Lin Yutang",
+    "category": "literature",
+    "place": "Zhangzhou, China"
+  },
+  {
+    "id": "eileen-chang-residence",
+    "name": "Eileen Chang Residence",
+    "localName": "张爱玲故居",
+    "person": "Eileen Chang",
+    "category": "literature",
+    "place": "Shanghai, China"
+  },
+  {
+    "id": "qian-zhongshu-residence",
+    "name": "Qian Zhongshu Residence",
+    "localName": "钱钟书故居",
+    "person": "Qian Zhongshu",
+    "category": "literature",
+    "place": "Wuxi, China"
+  },
+  {
+    "id": "lu-xun-residence",
+    "name": "Lu Xun Residence",
+    "localName": "鲁迅故居",
+    "person": "Lu Xun",
+    "category": "literature",
+    "place": "Shaoxing, China"
+  },
+  {
+    "id": "soong-ching-ling-residence",
+    "name": "Soong Ching-ling Residence",
+    "localName": "宋庆龄故居",
+    "person": "Soong Ching-ling",
+    "category": "politics",
+    "place": "Shanghai, China"
+  },
+  {
+    "id": "sun-yat-sen-residence",
+    "name": "Sun Yat-sen Residence",
+    "localName": "孙中山故居",
+    "person": "Sun Yat-sen",
+    "category": "politics",
+    "place": "Zhongshan, China"
+  },
+  {
+    "id": "mei-lanfang-residence",
+    "name": "Mei Lanfang Residence",
+    "localName": "梅兰芳故居",
+    "person": "Mei Lanfang",
+    "category": "opera",
+    "place": "Beijing, China"
+  },
+  {
+    "id": "qi-baishi-residence",
+    "name": "Qi Baishi Residence",
+    "localName": "齐白石故居",
+    "person": "Qi Baishi",
+    "category": "art",
+    "place": "Xiangtan, China"
+  },
+  {
+    "id": "xu-beihong-residence",
+    "name": "Xu Beihong Residence",
+    "localName": "徐悲鸿故居",
+    "person": "Xu Beihong",
+    "category": "art",
+    "place": "Yixing, China"
+  },
+  {
+    "id": "huang-binhong-residence",
+    "name": "Huang Binhong Residence",
+    "localName": "黄宾虹故居",
+    "person": "Huang Binhong",
+    "category": "art",
+    "place": "Hangzhou, China"
+  },
+  {
+    "id": "li-shutong-residence",
+    "name": "Li Shutong Residence",
+    "localName": "李叔同故居",
+    "person": "Li Shutong",
+    "category": "art",
+    "place": "Tianjin, China"
+  },
+  {
+    "id": "qiu-jin-residence",
+    "name": "Qiu Jin Residence",
+    "localName": "秋瑾故居",
+    "person": "Qiu Jin",
+    "category": "literature",
+    "place": "Shaoxing, China"
+  },
+  {
+    "id": "ding-ling-residence",
+    "name": "Ding Ling Residence",
+    "localName": "丁玲故居",
+    "person": "Ding Ling",
+    "category": "literature",
+    "place": "Linli, China"
+  },
+  {
+    "id": "xiao-hong-residence",
+    "name": "Xiao Hong Residence",
+    "localName": "萧红故居",
+    "person": "Xiao Hong",
+    "category": "literature",
+    "place": "Harbin, China"
+  },
+  {
+    "id": "ai-qing-residence",
+    "name": "Ai Qing Residence",
+    "localName": "艾青故居",
+    "person": "Ai Qing",
+    "category": "literature",
+    "place": "Jinhua, China"
+  },
+  {
+    "id": "wen-yiduo-residence",
+    "name": "Wen Yiduo Residence",
+    "localName": "闻一多故居",
+    "person": "Wen Yiduo",
+    "category": "literature",
+    "place": "Xishui, China"
+  },
+  {
+    "id": "cao-yu-residence",
+    "name": "Cao Yu Residence",
+    "localName": "曹禺故居",
+    "person": "Cao Yu",
+    "category": "literature",
+    "place": "Tianjin, China"
+  },
+  {
+    "id": "lin-huiyin-residence",
+    "name": "Lin Huiyin Residence",
+    "localName": "林徽因故居",
+    "person": "Lin Huiyin",
+    "category": "architecture",
+    "place": "Beijing, China"
+  },
+  {
+    "id": "liang-sicheng-residence",
+    "name": "Liang Sicheng Residence",
+    "localName": "梁思成故居",
+    "person": "Liang Sicheng",
+    "category": "architecture",
+    "place": "Beijing, China"
+  },
+  {
+    "id": "chen-yinke-residence",
+    "name": "Chen Yinke Residence",
+    "localName": "陈寅恪故居",
+    "person": "Chen Yinke",
+    "category": "history",
+    "place": "Guangzhou, China"
+  },
+  {
+    "id": "feng-youlan-residence",
+    "name": "Feng Youlan Residence",
+    "localName": "冯友兰故居",
+    "person": "Feng Youlan",
+    "category": "philosophy",
+    "place": "Tanghe, China"
+  },
+  {
+    "id": "zhu-guangqian-residence",
+    "name": "Zhu Guangqian Residence",
+    "localName": "朱光潜故居",
+    "person": "Zhu Guangqian",
+    "category": "philosophy",
+    "place": "Tongcheng, China"
+  },
+  {
+    "id": "fei-xiaotong-residence",
+    "name": "Fei Xiaotong Residence",
+    "localName": "费孝通故居",
+    "person": "Fei Xiaotong",
+    "category": "sociology",
+    "place": "Wujiang, China"
+  },
+  {
+    "id": "zhang-taiyan-residence",
+    "name": "Zhang Taiyan Residence",
+    "localName": "章太炎故居",
+    "person": "Zhang Taiyan",
+    "category": "philosophy",
+    "place": "Hangzhou, China"
+  }
+]

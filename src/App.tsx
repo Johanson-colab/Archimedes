@@ -39,6 +39,7 @@ import { sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, typ
 import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
 import SessionSwitcher from "./SessionSwitcher";
+import WorkspaceDialog from "./WorkspaceDialog";
 import ChangesView from "./ChangesView";
 import NotesView from "./NotesView";
 import VoiceInputButton from "./VoiceInputButton";
@@ -1332,6 +1333,13 @@ function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [workspaceDialog, setWorkspaceDialog] = useState<
+    | { mode: "create"; projectId: string; kind: ProjectWorkspaceKind }
+    | { mode: "rename"; workspace: ProjectWorkspace }
+    | null
+  >(null);
+  const [workspaceSuggestion, setWorkspaceSuggestion] = useState("");
+  const [workspaceDialogError, setWorkspaceDialogError] = useState("");
   const [sessionSwitcherSignal, setSessionSwitcherSignal] = useState(0);
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
   const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
@@ -2511,25 +2519,48 @@ function App() {
     }
   }
 
-  async function createWorkspaceForProject(projectId: string, kind?: ProjectWorkspaceKind) {
-    if (!projectId || creatingWorkspace) return;
+  function openWorkspaceCreator(projectId: string, kind?: ProjectWorkspaceKind) {
+    if (!projectId) return;
     const project = projects.find((entry) => entry.id === projectId) ?? null;
     const resolvedKind = kind ?? (project?.git_state === "ready" ? "worktree" : "sandbox");
+    setWorkspaceDialogError("");
+    setWorkspaceSuggestion("");
+    setWorkspaceDialog({ mode: "create", projectId, kind: resolvedKind });
+    void desktopBridge.suggestResearchWorkspaceName?.()
+      .then((name) => setWorkspaceSuggestion(name || ""))
+      .catch(() => setWorkspaceSuggestion(""));
+  }
+
+  function createWorkspace(kind: ProjectWorkspaceKind) {
+    if (activeProjectId) openWorkspaceCreator(activeProjectId, kind);
+  }
+
+  function openWorkspaceRename(workspaceToRename: ProjectWorkspace) {
+    setWorkspaceDialogError("");
+    setWorkspaceSuggestion("");
+    setWorkspaceDialog({ mode: "rename", workspace: workspaceToRename });
+  }
+
+  async function submitWorkspaceDialog({ name, kind }: { name: string; kind: ProjectWorkspaceKind }) {
+    if (!workspaceDialog || creatingWorkspace) return;
     setCreatingWorkspace(true);
-    setProjectFolderError("");
+    setWorkspaceDialogError("");
     try {
-      const created = await desktopBridge.createResearchWorkspace(projectId, resolvedKind);
-      setWorkspaces((current) => [...current.filter((entry) => entry.id !== created.id), created]);
-      await selectWorkspace(created);
+      if (workspaceDialog.mode === "create") {
+        const created = await desktopBridge.createResearchWorkspace(workspaceDialog.projectId, kind, name);
+        setWorkspaces((current) => [...current.filter((entry) => entry.id !== created.id), created]);
+        setWorkspaceDialog(null);
+        await selectWorkspace(created);
+      } else {
+        const updated = await desktopBridge.renameResearchWorkspace(workspaceDialog.workspace.id, name);
+        setWorkspaces((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+        setWorkspaceDialog(null);
+      }
     } catch (error) {
-      setProjectFolderError(error instanceof Error ? error.message : String(error));
+      setWorkspaceDialogError(error instanceof Error ? error.message : String(error));
     } finally {
       setCreatingWorkspace(false);
     }
-  }
-
-  async function createWorkspace(kind: ProjectWorkspaceKind) {
-    if (activeProjectId) await createWorkspaceForProject(activeProjectId, kind);
   }
 
   async function deleteWorkspace(workspaceToDelete: ProjectWorkspace) {
@@ -3106,6 +3137,10 @@ function App() {
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
   const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
   const conversationScrollKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${activeWorkspace?.id ?? executionWorkspace}`;
+  const workspaceDialogProjectId = workspaceDialog
+    ? workspaceDialog.mode === "create" ? workspaceDialog.projectId : workspaceDialog.workspace.project_id
+    : null;
+  const workspaceDialogProject = projects.find((project) => project.id === workspaceDialogProjectId) ?? null;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
   const flatModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
   const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
@@ -3199,7 +3234,7 @@ function App() {
           runningThreadId={runningThreadId}
           disabled={agentBusy}
           onNewProject={openNewProject}
-          onNewWorkspace={(projectId) => void createWorkspaceForProject(projectId)}
+          onNewWorkspace={(projectId) => openWorkspaceCreator(projectId)}
           onRenameProject={(projectId, name) => renameProject(projectId, name)}
           onArchiveProject={(project, archived) => void archiveProject(project, archived)}
           onRemoveProject={setProjectToRemove}
@@ -3233,6 +3268,7 @@ function App() {
             onArchiveSession={(session, archived) => void archiveThread(session, archived)}
             onSelectWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
             onCreateWorkspace={(kind) => void createWorkspace(kind)}
+            onRenameWorkspace={openWorkspaceRename}
             onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
             openSignal={sessionSwitcherSignal}
           />
@@ -3591,6 +3627,19 @@ function App() {
         onClose={() => { setNewProjectOpen(false); setNewProjectName(""); setNewProjectError(""); }}
         onCreate={() => void createProject()}
         error={newProjectError}
+      />
+      <WorkspaceDialog
+        open={Boolean(workspaceDialog)}
+        mode={workspaceDialog?.mode ?? "create"}
+        projectName={workspaceDialogProject?.name}
+        workspace={workspaceDialog?.mode === "rename" ? workspaceDialog.workspace : null}
+        suggestedName={workspaceSuggestion}
+        initialKind={workspaceDialog?.mode === "create" ? workspaceDialog.kind : "sandbox"}
+        canWorktree={workspaceDialogProject?.git_state === "ready"}
+        busy={creatingWorkspace}
+        error={workspaceDialogError}
+        onClose={() => { if (!creatingWorkspace) { setWorkspaceDialog(null); setWorkspaceDialogError(""); } }}
+        onSubmit={(input) => void submitWorkspaceDialog(input)}
       />
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
