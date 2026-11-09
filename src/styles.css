@@ -1471,7 +1471,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .workbench-pane { position: relative; display: grid; min-width: 0; min-height: 0; grid-template-rows: 44px minmax(0, 1fr); overflow: hidden; background: var(--workbench-ground); }
 .workbench-pane.focused > .workbench-header { box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent) 44%, transparent); }
 .workbench-pane.drop-into { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent); }
-.workbench-pane-divider { position: relative; z-index: 2; background: var(--night-ground); cursor: col-resize; touch-action: none; }
+.workbench-pane-divider { position: relative; z-index: 2; background: transparent; cursor: col-resize; touch-action: none; }
 .workbench-panes.column > .workbench-pane-divider { cursor: row-resize; }
 .workbench-pane-divider::after { position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: var(--night-line); content: ""; transition: background .15s ease; }
 .workbench-panes.column > .workbench-pane-divider::after { top: 3px; right: 0; bottom: auto; left: 0; width: auto; height: 1px; }
@@ -9705,7 +9705,7 @@ html[data-menu-style="glass"] .menu-surface {
 html:not([data-theme="paper"]) .right-workbench,
 .theme-paper .right-workbench {
   background: var(--workbench-ground);
-  border-left-color: transparent;
+  border-left-color: var(--night-line);
 }
 html:not([data-theme="paper"]) .workbench-header,
 .theme-paper .workbench-header {
@@ -9722,11 +9722,11 @@ html:not([data-theme="paper"]) .workbench-pane.focused > .workbench-header,
 }
 html:not([data-theme="paper"]) .workbench-pane-divider,
 .theme-paper .workbench-pane-divider {
-  background: var(--workbench-ground);
+  background: transparent;
 }
 html:not([data-theme="paper"]) .workbench-pane-divider::after,
 .theme-paper .workbench-pane-divider::after {
-  background: transparent;
+  background: var(--night-line);
 }
 html:not([data-theme="paper"]) .workbench-pane-divider:hover::after,
 html:not([data-theme="paper"]) .workbench-pane-divider:focus-visible::after,
@@ -9758,4 +9758,118 @@ html:not([data-theme="paper"]) .artifact-workbench-divider::after,
 html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.active,
 .theme-paper .workbench-pane:not(.focused) .workbench-tab.active {
   opacity: .66;
+}
+
+
+/* Full Files view: the inverse of the workbench "Open full editor" action. */
+.artifact-workbench-full-shell {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+.artifact-workbench-full-shell.with-return-bar {
+  grid-template-rows: 38px minmax(0, 1fr);
+}
+.artifact-workbench-return-bar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  background: var(--workbench-ground);
+  border-bottom: 1px solid var(--border-soft);
+}
+.artifact-workbench-return-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.artifact-workbench-return-title svg {
+  color: var(--night-muted);
+}
+.artifact-workbench-return {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  color: var(--text-secondary);
+  background: var(--surface-control);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.artifact-workbench-return:hover {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+}
+.artifact-workbench-return:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* File-tree icon styles. "badges" renders OpenCode-like extension chips. */
+.tree-file-icon .file-glyph-icon {
+  display: grid;
+  place-items: center;
+}
+.tree-file-icon .file-glyph-text {
+  display: none;
+}
+html[data-file-icons="badges"] {
+  --file-tone-folder: var(--text-faint);
+  --file-tone-tex: var(--extension-source);
+  --file-tone-config: var(--accent);
+  --file-tone-code: var(--accent);
+  --file-tone-style: var(--extension-source);
+  --file-tone-markdown: var(--extension-mcp);
+  --file-tone-image: var(--state-success);
+  --file-tone-pdf: var(--state-danger);
+  --file-tone-shell: var(--state-success);
+  --file-tone-file: var(--text-faint);
+}
+html[data-file-icons="badges"] .tree-file-icon:not(.tone-folder) .file-glyph-icon,
+html[data-file-icons="outline"] .tree-file-icon:not(.tone-folder) .file-glyph-icon {
+  display: none;
+}
+html[data-file-icons="badges"] .tree-file-icon:not(.tone-folder) .file-glyph-text,
+html[data-file-icons="outline"] .tree-file-icon:not(.tone-folder) .file-glyph-text {
+  display: inline-grid;
+  min-width: 17px;
+  height: 16px;
+  place-items: center;
+  padding: 0 2px;
+  color: currentColor;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+html[data-file-icons="outline"] .tree-file-icon:not(.tone-folder) .file-glyph-text {
+  background: transparent;
+  border-color: currentColor;
+}
+html[data-file-icons="badges"] .workspace-tree-row.is-directory,
+html[data-file-icons="minimal"] .workspace-tree-row {
+  grid-template-columns: 14px minmax(0, 1fr);
+}
+html[data-file-icons="badges"] .workspace-tree-row.is-directory .tree-file-icon,
+html[data-file-icons="minimal"] .workspace-tree-row .tree-file-icon {
+  display: none;
+}
+html[data-file-icons="minimal"] .artifact-tab .tree-file-icon {
+  display: none;
 }

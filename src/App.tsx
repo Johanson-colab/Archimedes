@@ -3159,7 +3159,8 @@ function App() {
             })}
           </Suspense>
           {mainSection === "files" && (
-            <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} onFileSelectionChange={(path, selection) => setFileSelection(selection ? { file: selectedFile ?? { name: path.split("/").at(-1) ?? path, path, kind: "text", size: 0, modifiedAt: "" }, selection } : null)} />
+            <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} onFileSelectionChange={(path, selection) => setFileSelection(selection ? { file: selectedFile ?? { name: path.split("/").at(-1) ?? path, path, kind: "text", size: 0, modifiedAt: "" }, selection } : null)}
+              onRestore={() => { setMainSection("chat"); openWorkbench("files"); }} />
           )}
         </div>
         <AgentLayer
@@ -4329,7 +4330,35 @@ const WorkspaceChangesCard = memo(function WorkspaceChangesCard({ changeSet, onO
   </section>;
 });
 
-function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
+function workspaceFileGlyphLabel(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
+  if (entry.type === "directory") return "";
+  const name = entry.path.split("/").at(-1)?.toLowerCase() || "";
+  const extension = name.includes(".") ? name.split(".").at(-1) || "" : "";
+  const labels: Record<string, string> = {
+    ts: "TS", tsx: "TS", js: "JS", jsx: "JS", mjs: "JS", cjs: "JS",
+    json: "{}", jsonl: "{}", md: "MD", mdx: "MD", txt: "TXT", rst: "TXT",
+    css: "CSS", scss: "CSS", less: "CSS", html: "<>", htm: "<>", xml: "<>",
+    py: "PY", go: "GO", rs: "RS", java: "JV", c: "C", cc: "C", cpp: "C", h: "C", hpp: "C", ipynb: "IPY",
+    sh: "SH", zsh: "SH", bash: "SH", fish: "SH",
+    yml: "YML", yaml: "YML", toml: "TML", ini: "INI", cfg: "CFG", conf: "CFG", env: "ENV",
+    tex: "TEX", latex: "TEX", bib: "BIB", cls: "TEX", sty: "TEX", bst: "TEX",
+    pdf: "PDF", png: "IMG", jpg: "IMG", jpeg: "IMG", webp: "IMG", gif: "IMG", bmp: "IMG", ico: "IMG", svg: "SVG", avif: "IMG",
+    zip: "ZIP", tar: "ZIP", gz: "ZIP", tgz: "ZIP", rar: "ZIP", "7z": "ZIP", bz2: "ZIP",
+    csv: "CSV", tsv: "CSV", xls: "XLS", xlsx: "XLS",
+    mp4: "VID", mov: "VID", webm: "VID", mkv: "VID", avi: "VID",
+    mp3: "AUD", wav: "AUD", ogg: "AUD", flac: "AUD", m4a: "AUD",
+    lock: "LCK",
+  };
+  if (labels[extension]) return labels[extension];
+  if (name === "dockerfile") return "DK";
+  if (name === "makefile") return "MK";
+  if (entry.kind === "image") return "IMG";
+  if (entry.kind === "pdf") return "PDF";
+  if (entry.kind === "markdown") return "MD";
+  return extension ? extension.slice(0, 3).toUpperCase() : "FILE";
+}
+
+function workspaceFileGlyphSvg(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
   if (entry.type === "directory") return <Folder size={14} />;
   const name = entry.path.split("/").at(-1)?.toLowerCase() || "";
   const extension = name.includes(".") ? name.split(".").at(-1) || "" : "";
@@ -4350,6 +4379,13 @@ function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "pa
   if (["css", "scss", "less", "html", "htm", "xml"].includes(extension)) return <FileCode2 size={14} />;
   if (extension === "lock") return <FileLock size={14} />;
   return <File size={14} />;
+}
+
+function workspaceFileIcon(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
+  return <>
+    <span className="file-glyph-icon">{workspaceFileGlyphSvg(entry)}</span>
+    {entry.type === "file" && <span className="file-glyph-text" aria-hidden="true">{workspaceFileGlyphLabel(entry)}</span>}
+  </>;
 }
 
 function workspaceFileTone(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "path">) {
@@ -4384,7 +4420,7 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
     if (isExpanded && entry.children === undefined && !isLoading) onLoadDirectory(entry.path);
   }, [entry.children, entry.path, isExpanded, isLoading, onLoadDirectory]);
   return <div className="workspace-tree-node">
-    <button className={entry.path === selectedPath ? "workspace-tree-row active" : "workspace-tree-row"} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
+    <button className={`workspace-tree-row${isDirectory ? " is-directory" : ""}${entry.path === selectedPath ? " active" : ""}`} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
       <span className="tree-disclosure">{isLoading ? <RefreshCw className="spin" size={11} /> : isDirectory ? isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}</span>
       <span className={`tree-file-icon tone-${workspaceFileTone(entry)}`}>{workspaceFileIcon(entry)}</span>
       <strong>{entry.name}</strong>
@@ -4552,7 +4588,7 @@ function readFilesPaneWidth() {
   return Number.isFinite(saved) && saved >= FILES_PANE_MIN_WIDTH ? saved : FILES_PANE_DEFAULT_WIDTH;
 }
 
-function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewFile, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, onFileSelectionChange, compact = false, compactWidth = 0, onOpenFull }: {
+function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onLoadDirectory, onRefresh, onNewFile, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, onFileSelectionChange, compact = false, compactWidth = 0, onOpenFull, onRestore }: {
   workspace: string;
   tree: WorkspaceFileTree;
   openFiles: WorkspaceFilePreview[];
@@ -4581,6 +4617,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   compact?: boolean;
   compactWidth?: number;
   onOpenFull?: () => void;
+  onRestore?: () => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [compactPane, setCompactPane] = useState<"browse" | "editor">(selectedPath ? "editor" : "browse");
@@ -4744,11 +4781,17 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     </div>;
   }
 
-  return <div className="artifact-workbench artifact-workbench-full">
-    <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
-      {browser}
-      <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>
-      {editor}
+  return <div className={`artifact-workbench-full-shell${onRestore ? " with-return-bar" : ""}`}>
+    {onRestore && <div className="artifact-workbench-return-bar">
+      <span className="artifact-workbench-return-title"><Maximize2 size={14} /><strong>Full editor</strong></span>
+      <button className="artifact-workbench-return" onClick={onRestore} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /><span>Restore to workbench</span></button>
+    </div>}
+    <div className="artifact-workbench artifact-workbench-full">
+      <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
+        {browser}
+        <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>
+        {editor}
+      </div>
     </div>
   </div>;
 }

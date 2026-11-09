@@ -206,5 +206,5 @@ test("agent journey is derived from raw trajectory events", () => {
   assert.doesNotMatch(journey, /const phases = \[/);
   assert.doesNotMatch(journey, /derived progress/i);
   assert.match(css, /\.trajectory-json \{[^}]*white-space: pre-wrap/);
-  assert.match(css, /\.theme-paper \.right-workbench \{[^}]*background: var\(--surface-canvas\)/);
+  assert.match(css, /\.theme-paper \.right-workbench \{[^}]*background: var\(--workbench-ground\)/);
 });

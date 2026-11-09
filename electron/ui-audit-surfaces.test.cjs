@@ -26,21 +26,21 @@ test("charcoal conversation text stays neutral", () => {
   assert.match(css, /\.conversation-message\.user p \{ color: #ededed; \}/);
 });
 
-test("workbench chrome shares the conversation canvas", () => {
+test("workbench chrome shares the conversation canvas and keeps structural rules", () => {
   const tokens = read("src/tokens.css");
   assert.match(tokens, /--workbench-ground: var\(--mono-canvas\)/);
 
   const css = read("src/styles.css");
-  assert.match(css, /html:not\(\[data-theme="paper"\]\) \.right-workbench,\s*\.theme-paper \.right-workbench \{[^}]*background: var\(--workbench-ground\);[^}]*border-left-color: transparent;/);
+  assert.match(css, /html:not\(\[data-theme="paper"\]\) \.right-workbench,\s*\.theme-paper \.right-workbench \{[^}]*background: var\(--workbench-ground\);[^}]*border-left-color: var\(--night-line\);/);
   assert.match(css, /html:not\(\[data-theme="paper"\]\) \.workbench-header,\s*\.theme-paper \.workbench-header \{[^}]*background: var\(--workbench-ground\);[^}]*border-bottom-color: transparent;/);
-  assert.match(css, /\.workbench-pane-divider::after \{[^}]*background: transparent;/);
+  assert.match(css, /\.workbench-pane-divider::after \{[^}]*background: var\(--night-line\);/);
   assert.match(css, /\.workbench-pane\.focused > \.workbench-header \{[^}]*box-shadow: none;/);
   assert.match(css, /\.workbench-pane:not\(\.focused\) \.workbench-tab\.active \{[^}]*opacity: \.66;/);
 });
 
-test("the workbench shell no longer paints its own seam", () => {
+test("the workbench shell keeps its canvas while reserving a single seam", () => {
   const typography = read("src/typography.css");
   assert.match(typography, /html:not\(\[data-theme="paper"\]\) \.main-toolbar \{ background: var\(--mono-canvas\); border-color: transparent; \}/);
-  assert.match(typography, /html:not\(\[data-theme="paper"\]\) \.right-workbench \{ background: var\(--mono-canvas\); border-color: transparent; \}/);
+  assert.match(typography, /html:not\(\[data-theme="paper"\]\) \.right-workbench \{ background: var\(--mono-canvas\); border-color: transparent; border-left-color: var\(--night-line\); \}/);
   assert.match(typography, /html:not\(\[data-theme="paper"\]\) \.workbench-header \{ background: var\(--mono-canvas\); border-color: transparent; \}/);
 });

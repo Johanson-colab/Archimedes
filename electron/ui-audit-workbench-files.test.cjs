@@ -49,26 +49,45 @@ test("comment composer shares the chat surface language", () => {
   assert.match(app, /Ask Archimedes about this passage/);
 });
 
-test("file icons default to City Lights and still switch to monochrome", () => {
+test("file icons default to OpenCode badges and switch across palettes", () => {
   assert.match(app, /function workspaceFileTone/);
+  assert.match(app, /function workspaceFileGlyphLabel/);
+  assert.match(app, /function workspaceFileGlyphSvg/);
   assert.match(app, /<FileJson size=\{14\} \/>/);
   assert.match(app, /<FileTerminal size=\{14\} \/>/);
   assert.match(app, /<FileImage size=\{14\} \/>/);
   assert.match(app, /<FileCog size=\{14\} \/>/);
   assert.match(app, /workspaceFileIcon\(\{ type: "file", kind: openFile\.kind, path: openFile\.path \}\)/);
   assert.match(app, /className=\{`tree-file-icon tone-\$\{workspaceFileTone\(entry\)\}`\}/);
+  assert.match(app, /className=\{`workspace-tree-row\$\{isDirectory \? " is-directory" : ""\}/);
   assert.match(css, /\.tree-file-icon\.tone-folder \{/);
   assert.match(css, /html\[data-file-icons="monochrome"\] \.tree-file-icon/);
-  assert.match(i18nSource, /export type FileIconStyle = "city-lights" \| "material" \| "seti" \| "monochrome"/);
+  assert.match(css, /html\[data-file-icons="badges"\] \.tree-file-icon:not\(\.tone-folder\) \.file-glyph-text/);
+  assert.match(css, /html\[data-file-icons="outline"\] \.tree-file-icon:not\(\.tone-folder\) \.file-glyph-text/);
+  assert.match(css, /html\[data-file-icons="minimal"\] \.workspace-tree-row/);
+  assert.match(i18nSource, /export type FileIconStyle = "badges" \| "city-lights" \| "material" \| "seti" \| "outline" \| "monochrome" \| "minimal"/);
   assert.match(i18nSource, /FILE_ICON_STYLE_STORAGE_KEY/);
-  assert.match(i18nSource, /stored === "monochrome" \|\| stored === "material" \|\| stored === "seti"/);
+  assert.match(i18nSource, /FILE_ICON_STYLE_VERSION_KEY/);
+  assert.match(i18nSource, /stored === "city-lights" \|\| stored === "monochrome" \|\| stored === "material"/);
   assert.match(i18nSource, /document\.documentElement\.dataset\.fileIcons = fileIconStyle/);
   assert.match(settings, /onChange=\{setFileIconStyle\}/);
+  assert.match(settings, /value: "badges"/);
   assert.match(settings, /value: "city-lights"/);
   assert.match(settings, /value: "material"/);
   assert.match(settings, /value: "seti"/);
+  assert.match(settings, /value: "outline"/);
   assert.match(settings, /value: "monochrome"/);
+  assert.match(settings, /value: "minimal"/);
   assert.doesNotMatch(settings, /setFileIconStyle\("colorful"\)/);
   assert.match(css, /html\[data-file-icons="material"\] \{/);
   assert.match(css, /html\[data-file-icons="seti"\] \{/);
+});
+
+test("the full Files view exposes the workbench return action", () => {
+  assert.match(app, /onRestore\?: \(\) => void/);
+  assert.match(app, /artifact-workbench-full-shell/);
+  assert.match(app, /Restore to workbench/);
+  assert.match(app, /onRestore=\{\(\) => \{ setMainSection\("chat"\); openWorkbench\("files"\); \}\}/);
+  assert.match(css, /\.artifact-workbench-full-shell\.with-return-bar/);
+  assert.match(css, /\.artifact-workbench-return-bar/);
 });
