@@ -9751,3 +9751,11 @@ html:not([data-theme="paper"]) .artifact-workbench-divider::after,
 .theme-paper .artifact-workbench-divider::after {
   background: transparent;
 }
+
+
+/* With the pane underline gone, an unfocused split pane still reads as
+   inactive because its selected tab is dimmed instead of outlined. */
+html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.active,
+.theme-paper .workbench-pane:not(.focused) .workbench-tab.active {
+  opacity: .66;
+}

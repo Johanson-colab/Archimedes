@@ -35,6 +35,7 @@ test("workbench chrome shares the conversation canvas", () => {
   assert.match(css, /html:not\(\[data-theme="paper"\]\) \.workbench-header,\s*\.theme-paper \.workbench-header \{[^}]*background: var\(--workbench-ground\);[^}]*border-bottom-color: transparent;/);
   assert.match(css, /\.workbench-pane-divider::after \{[^}]*background: transparent;/);
   assert.match(css, /\.workbench-pane\.focused > \.workbench-header \{[^}]*box-shadow: none;/);
+  assert.match(css, /\.workbench-pane:not\(\.focused\) \.workbench-tab\.active \{[^}]*opacity: \.66;/);
 });
 
 test("the workbench shell no longer paints its own seam", () => {
