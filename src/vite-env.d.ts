@@ -1650,6 +1650,7 @@ interface ProjectWorkspace {
   id: string;
   project_id: string;
   kind: ProjectWorkspaceKind;
+  name: string;
   root: string;
   base_ref: string | null;
   last_session_id: string | null;

@@ -103,11 +103,14 @@ test("workspace switching and isolated workspace creation are wired in the rende
   assert.match(app, /async function selectWorkspace/);
   assert.match(app, /async function createWorkspace/);
   assert.match(app, /async function deleteWorkspace/);
-  assert.match(app, /createResearchWorkspace\(activeProjectId, kind\)/);
+  assert.match(app, /const resolvedKind = kind \?\? \(project\?\.git_state === "ready" \? "worktree" : "sandbox"\)/);
+  assert.match(app, /createResearchWorkspace\(projectId, resolvedKind\)/);
+  assert.match(app, /onNewWorkspace=\{\(projectId\) => void createWorkspaceForProject\(projectId\)\}/);
   assert.match(app, /deleteResearchWorkspace\(workspaceToDelete\.id\)/);
   assert.match(switcher, /onCreateWorkspace\("worktree"\)/);
   assert.match(switcher, /onCreateWorkspace\("sandbox"\)/);
   assert.match(switcher, /project\?\.git_state === "ready"/);
+  assert.match(switcher, /\{canWorktree && <MenuItem/);
 });
 
 test("the switcher adapts to narrow screens as a full-height sheet", () => {
@@ -116,7 +119,7 @@ test("the switcher adapts to narrow screens as a full-height sheet", () => {
   assert.match(css, /\.session-status \{\s*width: 2px;\s*height: 12px;[^}]*border-radius: 1px/);
   assert.match(css, /\.session-status\.running \{ background: var\(--accent\); animation: sidebar-running-sheen/);
   assert.match(css, /\.session-chip \{[^}]*border: 0/);
-  assert.match(css, /\.session-row\.active \{ background: var\(--menu-selected-bg\); box-shadow: inset 2px 0 0 var\(--accent\)/);
+  assert.match(css, /\.session-row\.active \{ background: var\(--menu-selected-bg\); \}/);
   assert.match(css, /\.workspace-option-copy small \{/);
 });
 

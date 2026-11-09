@@ -51,5 +51,5 @@ test("dialogs use the compact Attempt B size where appropriate", () => {
   const sidebar = read("src/ProjectSidebar.tsx");
   assert.match(sidebar, /size="compact" className="dialog-ref project-create-modal"/);
   assert.match(sidebar, /size="compact" className="workspace-modal project-remove-modal"/);
-  assert.equal((sidebar.match(/size="compact"/g) || []).length, 3);
+  assert.equal((sidebar.match(/size="compact"/g) || []).length, 2);
 });
