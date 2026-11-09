@@ -1,5 +1,6 @@
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -3998,7 +3999,9 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   }, []);
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
-    <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} />
+    <WorkspaceMarkdownProvider workspace={workspace} onOpenFile={openHistoryFile}>
+      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} />
+    </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
       {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
@@ -4212,8 +4215,9 @@ const MarkdownContent = memo(function MarkdownContent({ content }: { content: st
   return <ReactMarkdown
     remarkPlugins={[remarkGfm, remarkMath]}
     rehypePlugins={[rehypeKatex]}
+    urlTransform={workspaceMarkdownUrlTransform}
     components={{
-      a: ({ children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
+      a: WorkspaceMarkdownLink,
       code: ({ className, children, ...props }) => {
         const language = /language-([\w-]+)/.exec(className || "")?.[1];
         if (!language) return <code className={className} {...props}>{children}</code>;
