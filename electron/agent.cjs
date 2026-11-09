@@ -22,6 +22,7 @@ const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
+const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
@@ -597,6 +598,8 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       let response = "";
       const approvedOutputs = new Set();
       for (let round = 0; round < 12; round += 1) {
+        const bounded = boundActiveContext(messages, contextCharacterLimit(config, "standard"));
+        if (bounded.removed || bounded.clipped) workerRecord({ type: "active_context_bounded", payload: bounded });
         const message = await complete(config, messages, { signal, availableTools: definitions, reasoningEffort, requireComplete: true });
         messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
         if (!message.tool_calls.length) { response = message.content || ""; break; }
@@ -1091,6 +1094,11 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort} · context: ${resolvedContextLength}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
+      const bounded = boundActiveContext(messages, contextCharacterLimit(config, resolvedContextLength));
+      if (bounded.removed || bounded.clipped) {
+        recordEvent({ type: "active_context_bounded", payload: bounded });
+        emitTurn({ type: "status", title: "Context adjusted", detail: "Older tool output was removed from the active model context; saved events remain available." });
+      }
       const availableTools = toolRegistry.definitions().filter((tool) =>
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
         !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches));
@@ -1140,6 +1148,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
       content: "The tool budget for this turn is exhausted. Do not request more tools. Synthesize the best useful final answer from the evidence already collected, explicitly state important gaps, and suggest a focused next step.",
     });
     emitTurn({ type: "status", title: "Synthesizing findings", detail: "Tool budget reached; preparing an evidence-aware answer" });
+    boundActiveContext(messages, contextCharacterLimit(config, resolvedContextLength));
     const finalMessage = await complete(config, messages, {
       signal: controller.signal,
       allowTools: false,
