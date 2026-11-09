@@ -666,7 +666,7 @@ export default function SettingsModal({
                           { value: "city-lights", label: t("City Lights") },
                           { value: "material", label: t("Material") },
                           { value: "seti", label: t("Seti") },
-                          { value: "outline", label: t("Outline") },
+                          { value: "outline", label: t("Outline style") },
                           { value: "monochrome", label: t("Monochrome") },
                           { value: "minimal", label: t("Minimal") },
                         ]}

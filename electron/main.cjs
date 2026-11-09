@@ -1014,6 +1014,31 @@ app.whenReady().then(async () => {
     return store.setResearchProjectWorkspace(input.id, input.workspacePath);
   });
 
+  ipcMain.handle("research-workspace:list", (_event, input = {}) => {
+    if (input.projectId != null && typeof input.projectId !== "string") throw new Error("A project ID must be a string.");
+    return store.listProjectWorkspaces(input.projectId || null);
+  });
+
+  ipcMain.handle("research-workspace:create", (_event, input = {}) => {
+    if (typeof input.projectId !== "string" || !input.projectId) throw new Error("A research project is required.");
+    return store.createProjectWorkspace({ projectId: input.projectId, kind: input.kind || "shared" });
+  });
+
+  ipcMain.handle("research-workspace:delete", (_event, input = {}) => {
+    if (typeof input.id !== "string" || !input.id) throw new Error("A workspace ID is required.");
+    return store.deleteProjectWorkspace(input.id);
+  });
+
+  ipcMain.handle("research-thread:pin", (_event, input = {}) => {
+    if (typeof input.id !== "string" || !input.id) throw new Error("A research thread ID is required.");
+    return store.pinResearchThread(input.id, input.pinned !== false);
+  });
+
+  ipcMain.handle("research-thread:mark-viewed", (_event, input = {}) => {
+    if (typeof input.id !== "string" || !input.id) throw new Error("A research thread ID is required.");
+    return store.markResearchThreadViewed(input.id);
+  });
+
   ipcMain.handle("research-project:archive", (_event, input = {}) => {
     if (typeof input.id !== "string") throw new Error("A research project ID is required.");
     return store.archiveResearchProject(input.id, input.archived !== false);
@@ -1818,6 +1843,7 @@ app.whenReady().then(async () => {
       workspace,
       threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
       projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
+      workspaceId: typeof input.workspaceId === "string" && input.workspaceId ? input.workspaceId : undefined,
       visibility: input.visibility === "private" ? "private" : "project",
       mode,
       reasoningEffort,

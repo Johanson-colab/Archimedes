@@ -24,7 +24,7 @@ test("projects persist a bound folder and sessions snapshot their inherited fold
 test("agent and review runs separate the data workspace from the execution folder", () => {
   assert.match(main, /const dataWorkspace = workspaceForWindow\(BrowserWindow\.fromWebContents\(event\.sender\)\) \|\| workspace;/);
   assert.match(main, /store\.openWorkspace\(dataWorkspace\);/);
-  assert.match(agent, /createResearchThread\(\{ prompt, mode, projectId, workspacePath: workspace, visibility, kind: origin === "paper" \? "paper" : "research", title \}\)/);
+  assert.match(agent, /createResearchThread\(\{ prompt, mode, projectId, workspacePath: workspace, workspaceId, visibility, kind: origin === "paper" \? "paper" : "research", title \}\)/);
   assert.match(main, /ipcMain\.handle\("research-project:set-workspace"/);
   assert.match(preload, /setResearchProjectWorkspace: \(id, workspacePath\)/);
   assert.match(types, /setResearchProjectWorkspace: \(id: string, workspacePath: string\)/);
@@ -39,7 +39,7 @@ test("live running and review states refresh without reopening the data workspac
 });
 
 test("the renderer resolves session → project → primary workspace for tools", () => {
-  assert.match(app, /const executionWorkspace = activeThread\?\.workspace_path \|\| activeProject\?\.workspace_path \|\| workspace;/);
+  assert.match(app, /const executionWorkspace = activeThread\?\.workspace_path \|\| activeWorkspace\?\.root \|\| activeProject\?\.workspace_path \|\| workspace;/);
   assert.match(app, /runAgent\(\{ prompt: requestPrompt, workspace: executionWorkspace/);
   assert.match(app, /runTerminal\(\{ command: trimmedCommand, cwd: executionWorkspace/);
   assert.match(app, /writeWorkspaceFile\(executionWorkspace/);

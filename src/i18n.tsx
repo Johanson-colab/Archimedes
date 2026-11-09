@@ -24,6 +24,7 @@ import {
   clampFileTextSize,
   type FileTextShortcuts,
 } from "./file-text-size";
+import { session as sessionStrings } from "./i18n/translations/session";
 
 export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
@@ -63,6 +64,7 @@ const translations: Record<string, string> = {
   ...newsStrings,
   ...paperReviewStrings,
   ...dataAnalysisStrings,
+  ...sessionStrings,
 };
 
 type UISettings = {

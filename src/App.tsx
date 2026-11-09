@@ -1,4 +1,4 @@
-import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
+import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
 import remarkGfm from "remark-gfm";
@@ -38,6 +38,7 @@ import { defaultDisabledResearchApps, researchAppMetadata } from "./research-app
 import { sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";
 import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
+import SessionSwitcher from "./SessionSwitcher";
 import ChangesView from "./ChangesView";
 import NotesView from "./NotesView";
 import VoiceInputButton from "./VoiceInputButton";
@@ -444,6 +445,18 @@ function previewSnapshot(): WorkspaceSnapshot {
     archivedProjects: structuredClone(previewArchivedProjects),
     threads: previewThreads.filter((thread) => thread.kind !== "paper").map(({ turns: _turns, messages: _messages, ...thread }) => thread),
     archivedThreads: previewArchivedThreads.filter((thread) => thread.kind !== "paper").map(({ turns: _turns, messages: _messages, ...thread }) => thread),
+    workspaces: previewProjects.map((project) => ({
+      id: `preview-workspace-${project.id}`,
+      project_id: project.id,
+      kind: "shared",
+      root: project.workspace_path || DEFAULT_WORKSPACE,
+      base_ref: null,
+      last_session_id: null,
+      created_at: project.created_at,
+      updated_at: project.updated_at,
+      session_count: 0,
+      is_default: true,
+    })),
     commands: [...previewCommands].reverse(),
     actions: [...previewActions].reverse(),
   };
@@ -1316,8 +1329,12 @@ function App() {
   const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
   const [threads, setThreads] = useState<ResearchThread[]>([]);
   const [archivedThreads, setArchivedThreads] = useState<ResearchThread[]>([]);
+  const [workspaces, setWorkspaces] = useState<ProjectWorkspace[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [sessionSwitcherSignal, setSessionSwitcherSignal] = useState(0);
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
   const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -1420,10 +1437,40 @@ function App() {
   const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
   const mainWorkspaceRef = useRef<HTMLDivElement | null>(null);
+  const conversationScrollPositionsRef = useRef(new Map<string, number>());
   const threadsRef = useRef<ResearchThread[]>([]);
   const refreshingThreadsRef = useRef(false);
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? null;
+  const projectWorkspaces = useMemo(
+    () => workspaces.filter((entry) => entry.project_id === activeProjectId),
+    [activeProjectId, workspaces],
+  );
+  const activeWorkspace = projectWorkspaces.find((entry) => entry.id === activeWorkspaceId)
+    ?? projectWorkspaces.find((entry) => entry.is_default)
+    ?? projectWorkspaces[0]
+    ?? null;
+  const workspaceSessions = useMemo(
+    () => activeWorkspace ? threads.filter((thread) => thread.workspace_id === activeWorkspace.id) : threads,
+    [activeWorkspace, threads],
+  );
+  const archivedWorkspaceSessions = useMemo(
+    () => activeWorkspace ? archivedThreads.filter((thread) => thread.workspace_id === activeWorkspace.id) : archivedThreads,
+    [activeWorkspace, archivedThreads],
+  );
+  useEffect(() => {
+    if (!projectWorkspaces.length) {
+      setActiveWorkspaceId(null);
+      return;
+    }
+    if (activeThread?.workspace_id && projectWorkspaces.some((entry) => entry.id === activeThread.workspace_id)) {
+      if (activeWorkspaceId !== activeThread.workspace_id) setActiveWorkspaceId(activeThread.workspace_id);
+      return;
+    }
+    if (!activeWorkspaceId || !projectWorkspaces.some((entry) => entry.id === activeWorkspaceId)) {
+      setActiveWorkspaceId((projectWorkspaces.find((entry) => entry.is_default) ?? projectWorkspaces[0]).id);
+    }
+  }, [activeProjectId, activeThread?.workspace_id, activeWorkspaceId, projectWorkspaces]);
   useEffect(() => {
     if (activeThread?.visibility === "private" || activeThread?.visibility === "project") setThreadVisibility(activeThread.visibility);
     if (!activeThreadId) setCommentsOpen(false);
@@ -1454,7 +1501,7 @@ function App() {
   // Research data lives in the primary workspace. Agent tools, files, terminal,
   // and paper writing operate inside the session folder: session snapshot →
   // project folder → primary workspace.
-  const executionWorkspace = activeThread?.workspace_path || activeProject?.workspace_path || workspace;
+  const executionWorkspace = activeThread?.workspace_path || activeWorkspace?.root || activeProject?.workspace_path || workspace;
   const draftNoteKey = `draft:${workspace || "workspace"}`;
   const noteKey = activeThreadId ?? draftNoteKey;
   const noteValue = noteLoadedKey === noteKey ? noteValues[noteKey] ?? "" : "";
@@ -2053,6 +2100,7 @@ function App() {
             setArchivedProjects(snapshot.archivedProjects ?? []);
             setThreads(snapshot.threads);
             setArchivedThreads(snapshot.archivedThreads ?? []);
+            setWorkspaces(snapshot.workspaces ?? []);
             const runningThread = snapshot.threads.find((thread) => thread.id === event.threadId);
             if (runningThread && activeThreadIdRef.current === runningThread.id) setBoundHarness(runningThread.harness ?? null);
             if (runningThread?.workspace_path) void desktopBridge.watchWorkspace?.(runningThread.workspace_path).catch(() => undefined);
@@ -2154,6 +2202,7 @@ function App() {
     setArchivedProjects(snapshot.archivedProjects ?? []);
     setThreads(snapshot.threads);
     setArchivedThreads(snapshot.archivedThreads ?? []);
+    setWorkspaces(snapshot.workspaces ?? []);
     const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace);
     setFileTree(nextTree);
     setLoadingDirectories(new Set());
@@ -2201,6 +2250,7 @@ function App() {
       setActiveThreadId(thread.id);
       setBoundHarness(thread.harness ?? null);
       setActiveProjectId(thread.project_id);
+      if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
       setResearchMode(thread.mode);
       setChangeSets(thread.changeSets ?? []);
     } else {
@@ -2209,7 +2259,11 @@ function App() {
       setEvents([]);
       setActiveThreadId(null);
       setBoundHarness(null);
-      setActiveProjectId(restoreProjectId ?? snapshot.projects?.[0]?.id ?? null);
+      const nextProjectId = restoreProjectId ?? snapshot.projects?.[0]?.id ?? null;
+      setActiveProjectId(nextProjectId);
+      const nextWorkspace = (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId && entry.is_default)
+        ?? (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId);
+      setActiveWorkspaceId(nextWorkspace?.id ?? null);
       setChangeSets([]);
     }
 
@@ -2302,13 +2356,17 @@ function App() {
     setThreadVisibility(visibility);
   }
 
-  function startNewTask(projectId = activeProjectId) {
+  function startNewTask(projectId = activeProjectId, workspaceId = activeWorkspaceId) {
     if (agentBusy) return;
     writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
     setMainSection("chat");
     clearPendingAssistantDeltas();
     setChatViewNonce((current) => current + 1);
     if (projectId) setActiveProjectId(projectId);
+    const targetWorkspace = workspaces.find((entry) => entry.id === workspaceId && entry.project_id === projectId)
+      ?? workspaces.find((entry) => entry.project_id === projectId && entry.is_default)
+      ?? workspaces.find((entry) => entry.project_id === projectId);
+    setActiveWorkspaceId(targetWorkspace?.id ?? null);
     threadOpenRequestRef.current += 1;
     activeThreadIdRef.current = null;
     setActiveThreadId(null);
@@ -2366,6 +2424,7 @@ function App() {
         const snapshot = await desktopBridge.getResearchSnapshot();
         setThreads(snapshot.threads);
         setArchivedThreads(snapshot.archivedThreads ?? []);
+        setWorkspaces(snapshot.workspaces ?? []);
         await desktopBridge.clearJourneySummary(threadId!).catch(() => undefined);
         return { draft: result.prompt, notice: t("Last turn undone. Files are unchanged. A backup is available in archived chats.") };
       }
@@ -2389,6 +2448,9 @@ function App() {
     setActiveThreadId(threadSummary.id);
     setBoundHarness(threadSummary.harness ?? null);
     setActiveProjectId(threadSummary.project_id);
+    if (threadSummary.workspace_id) setActiveWorkspaceId(threadSummary.workspace_id);
+    void desktopBridge.markResearchThreadViewed?.(threadSummary.id).catch(() => undefined);
+    setThreads((current) => current.map((item) => item.id === threadSummary.id ? { ...item, unread_count: 0 } : item));
     const requestId = ++threadOpenRequestRef.current;
     try {
       const thread = await desktopBridge.getResearchThread(threadSummary.id, workspace);
@@ -2397,6 +2459,7 @@ function App() {
       setActiveThreadId(thread.id);
       setBoundHarness(thread.harness ?? null);
       setActiveProjectId(thread.project_id);
+      if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
       setEvents([]);
@@ -2430,10 +2493,12 @@ function App() {
     try {
       const project = await desktopBridge.createResearchProject({ name, workspacePath: newProjectWorkspace || workspace });
       setProjects((current) => [project, ...current]);
+      const projectSpaces = await desktopBridge.listResearchWorkspaces(project.id).catch(() => []);
+      setWorkspaces((current) => [...current.filter((entry) => entry.project_id !== project.id), ...projectSpaces]);
       setNewProjectName("");
       setNewProjectError("");
       setNewProjectOpen(false);
-      startNewTask(project.id);
+      startNewTask(project.id, projectSpaces.find((entry) => entry.is_default)?.id);
     } catch (error) {
       setNewProjectError(error instanceof Error ? error.message : String(error));
     }
@@ -2445,7 +2510,106 @@ function App() {
     setArchivedProjects(snapshot.archivedProjects ?? []);
     setThreads(snapshot.threads);
     setArchivedThreads(snapshot.archivedThreads);
+    setWorkspaces(snapshot.workspaces ?? []);
   }
+
+  async function selectWorkspace(workspaceToOpen: ProjectWorkspace) {
+    if (workspaceToOpen.id === activeWorkspace?.id) return;
+    setActiveWorkspaceId(workspaceToOpen.id);
+    if (workspaceToOpen.project_id !== activeProjectId) setActiveProjectId(workspaceToOpen.project_id);
+    const next = threads.find((thread) => thread.workspace_id === workspaceToOpen.id);
+    if (next) await openResearchThread(next);
+    else {
+      startNewTask(workspaceToOpen.project_id, workspaceToOpen.id);
+      // The new workspace may not be in the state snapshot yet, so make the
+      // explicit choice win over startNewTask's default-workspace fallback.
+      setActiveWorkspaceId(workspaceToOpen.id);
+      setActiveProjectId(workspaceToOpen.project_id);
+    }
+  }
+
+  async function createWorkspace(kind: ProjectWorkspaceKind) {
+    if (!activeProjectId || creatingWorkspace) return;
+    setCreatingWorkspace(true);
+    setProjectFolderError("");
+    try {
+      const created = await desktopBridge.createResearchWorkspace(activeProjectId, kind);
+      setWorkspaces((current) => [...current.filter((entry) => entry.id !== created.id), created]);
+      await selectWorkspace(created);
+    } catch (error) {
+      setProjectFolderError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  }
+
+  async function deleteWorkspace(workspaceToDelete: ProjectWorkspace) {
+    if (workspaceToDelete.is_default) return;
+    if (!(await confirm({
+      title: t("Delete this workspace?"),
+      description: t("Its sessions move back to the main workspace. Its files stay on disk until you remove them, except for a Git worktree created here."),
+      confirmLabel: t("Delete workspace"),
+      destructive: true,
+    }))) return;
+    try {
+      await desktopBridge.deleteResearchWorkspace(workspaceToDelete.id);
+      const snapshot = await desktopBridge.openWorkspace(workspace);
+      setProjects(snapshot.projects);
+      setArchivedProjects(snapshot.archivedProjects ?? []);
+      setThreads(snapshot.threads);
+      setArchivedThreads(snapshot.archivedThreads ?? []);
+      setWorkspaces(snapshot.workspaces ?? []);
+      if (activeWorkspace?.id === workspaceToDelete.id) {
+        const fallback = (snapshot.workspaces ?? []).find((entry) => entry.project_id === workspaceToDelete.project_id && entry.is_default);
+        const next = snapshot.threads.find((thread) => thread.workspace_id === fallback?.id);
+        if (next) await openResearchThread(next);
+        else startNewTask(workspaceToDelete.project_id, fallback?.id);
+      }
+    } catch (error) {
+      setProjectFolderError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function pinSession(session: ResearchThread, pinned: boolean) {
+    const apply = (items: ResearchThread[]) => items.map((item) => item.id === session.id ? { ...item, pinned: pinned ? 1 : 0 } : item);
+    setThreads(apply);
+    setArchivedThreads(apply);
+    try {
+      await desktopBridge.pinResearchThread(session.id, pinned);
+    } catch {
+      setThreads((items) => items.map((item) => item.id === session.id ? { ...item, pinned: session.pinned } : item));
+    }
+  }
+
+  useEffect(() => {
+    function isTypingTarget(target: EventTarget | null) {
+      const element = target as HTMLElement | null;
+      if (!element || typeof element.matches !== "function") return false;
+      return element.matches("input, textarea, select") || element.isContentEditable;
+    }
+    function handleSessionShortcut(event: KeyboardEvent) {
+      const modifier = event.metaKey || event.ctrlKey;
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSessionSwitcherSignal((value) => value + 1);
+        return;
+      }
+      if (isTypingTarget(event.target)) return;
+      const bracket = modifier && event.shiftKey && (event.code === "BracketLeft" || event.code === "BracketRight");
+      const altArrow = event.altKey && !modifier && (event.key === "ArrowUp" || event.key === "ArrowDown");
+      if (!bracket && !altArrow) return;
+      if (!workspaceSessions.length) return;
+      event.preventDefault();
+      const direction = bracket ? (event.code === "BracketLeft" ? -1 : 1) : (event.key === "ArrowUp" ? -1 : 1);
+      const index = workspaceSessions.findIndex((session) => session.id === activeThreadId);
+      const nextIndex = index < 0
+        ? (direction > 0 ? 0 : workspaceSessions.length - 1)
+        : (index + direction + workspaceSessions.length) % workspaceSessions.length;
+      void openResearchThread(workspaceSessions[nextIndex]);
+    }
+    window.addEventListener("keydown", handleSessionShortcut);
+    return () => window.removeEventListener("keydown", handleSessionShortcut);
+  }, [activeThreadId, workspaceSessions]);
 
   async function changeProjectWorkspace(project: ResearchProject) {
     if (agentBusy) return;
@@ -2454,6 +2618,9 @@ function App() {
     try {
       const updated = await desktopBridge.setResearchProjectWorkspace(project.id, selected);
       setProjects((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
+      setWorkspaces((current) => current.map((entry) => entry.project_id === updated.id && entry.is_default
+        ? { ...entry, root: updated.workspace_path || entry.root }
+        : entry));
       setProjectFolderError("");
     } catch (error) {
       setProjectFolderError(error instanceof Error ? error.message : String(error));
@@ -2474,9 +2641,11 @@ function App() {
     setArchivedProjects(snapshot.archivedProjects ?? []);
     setThreads(snapshot.threads);
     setArchivedThreads(snapshot.archivedThreads);
+    setWorkspaces(snapshot.workspaces ?? []);
     if (archived && activeThreadId === thread.id) {
-      const next = snapshot.threads.find((candidate) => candidate.project_id === thread.project_id);
-      if (next) await openResearchThread(next); else startNewTask(thread.project_id);
+      const next = snapshot.threads.find((candidate) => candidate.workspace_id === thread.workspace_id)
+        ?? snapshot.threads.find((candidate) => candidate.project_id === thread.project_id);
+      if (next) await openResearchThread(next); else startNewTask(thread.project_id, thread.workspace_id);
     }
   }
 
@@ -2495,6 +2664,7 @@ function App() {
       setArchivedProjects(snapshot.archivedProjects ?? []);
       setThreads(snapshot.threads);
       setArchivedThreads(snapshot.archivedThreads);
+      setWorkspaces(snapshot.workspaces ?? []);
       if (activeThreadId === thread.id) {
         const next = snapshot.threads[0];
         if (next) await openResearchThread(next);
@@ -2519,6 +2689,7 @@ function App() {
     setArchivedProjects(snapshot.archivedProjects ?? []);
     setThreads(snapshot.threads);
     setArchivedThreads(snapshot.archivedThreads);
+    setWorkspaces(snapshot.workspaces ?? []);
     if (archived && activeProjectId === project.id) {
       const nextThread = snapshot.threads[0];
       if (nextThread) await openResearchThread(nextThread);
@@ -2542,6 +2713,7 @@ function App() {
     setArchivedProjects(snapshot.archivedProjects ?? []);
     setThreads(snapshot.threads);
     setArchivedThreads(snapshot.archivedThreads);
+    setWorkspaces(snapshot.workspaces ?? []);
     if (activeProjectId === project.id) {
       const nextThread = snapshot.threads[0];
       if (nextThread) await openResearchThread(nextThread);
@@ -2577,7 +2749,7 @@ function App() {
     setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, visibility: threadVisibility, mode: requestedMode, researchSkill, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: selectedHarness });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: selectedHarness });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
@@ -2602,6 +2774,7 @@ function App() {
         setActiveThreadId(result.threadId);
         setBoundHarness(result.thread.harness ?? selectedHarness);
         setActiveProjectId(result.thread.project_id);
+        if (result.thread.workspace_id) setActiveWorkspaceId(result.thread.workspace_id);
         setChangeSets(result.thread.changeSets ?? []);
         setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research thread", state: "done" } : event));
         const proposedAction = result.actions.find((action) => action.status === "pending");
@@ -2975,10 +3148,8 @@ function App() {
   const dirtyFilePaths = useMemo(() => new Set(Object.values(fileDrafts).filter(isDraftDirty).map((draft) => draft.path)), [fileDrafts]);
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
   const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
+  const conversationScrollKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${activeWorkspace?.id ?? executionWorkspace}`;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
-  const mainTitle = mainSection === "chat" || mainSection === "files"
-    ? activeThread?.title ?? t("New research task")
-    : activeModule ? t(activeModule.titleKey) : t("Files");
   const flatModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
   const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
     id: entry.commandId,
@@ -3090,7 +3261,25 @@ function App() {
       <section className={workbenchOpen ? "codex-main workbench-open" : "codex-main"} style={{ "--workbench-width": workbenchOpen ? `${workbenchWidth}px` : "0px" } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
           {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
-          <div className="conversation-title"><strong>{mainTitle}</strong></div>
+          <SessionSwitcher
+            project={activeProject}
+            workspace={activeWorkspace}
+            workspaces={projectWorkspaces}
+            sessions={workspaceSessions}
+            archivedSessions={archivedWorkspaceSessions}
+            activeSessionId={activeThreadId}
+            runningThreadId={runningThreadId}
+            currentUserId={localIdentity?.userId ?? "local-user"}
+            creatingWorkspace={creatingWorkspace}
+            onOpenSession={(session) => void openResearchThread(session)}
+            onNewSession={() => startNewTask()}
+            onPinSession={(session, pinned) => void pinSession(session, pinned)}
+            onArchiveSession={(session, archived) => void archiveThread(session, archived)}
+            onSelectWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
+            onCreateWorkspace={(kind) => void createWorkspace(kind)}
+            onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
+            openSignal={sessionSwitcherSignal}
+          />
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
             {presenceMembers.length > 0 && <div className="presence-stack" title={presenceMembers.map((member) => member.displayName).join(", ")} aria-label={`${presenceMembers.length} collaborators online`}>
@@ -3178,6 +3367,8 @@ function App() {
               onWelcomeAction={openWelcomeWorkflow}
               composerRequest={composerRequest}
               draftKey={composerDraftKey}
+              initialScrollTop={conversationScrollPositionsRef.current.get(conversationScrollKey) ?? null}
+              onScrollTop={(top) => conversationScrollPositionsRef.current.set(conversationScrollKey, top)}
               currentFile={selectedFile}
               currentSelection={fileSelection}
               onComposerRequestApplied={(id) => setComposerRequest((current) => current?.id === id ? null : current)}
@@ -3456,7 +3647,7 @@ function App() {
   );
 }
 
-const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile }: {
+const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -3469,6 +3660,8 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   onApprove: () => void;
   onReject: () => void;
   onOpenFile: (filePath: string) => void;
+  initialScrollTop: number | null;
+  onScrollTop: (top: number) => void;
 }) {
   const { t } = useUISettings();
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
@@ -3503,6 +3696,23 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     }
   }, []);
 
+  const handleScroll = useCallback(() => {
+    updateFollowState();
+    const container = scrollRef.current;
+    if (container) onScrollTop(container.scrollTop);
+  }, [onScrollTop, updateFollowState]);
+
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container || initialScrollTop == null) return;
+    container.scrollTop = initialScrollTop;
+    followOutputRef.current = false;
+    setFollowingOutput(false);
+    // Restore once when this session mounts; later message updates keep their
+    // normal follow-output behaviour.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (welcomeVisible) {
       followOutputRef.current = true;
@@ -3521,7 +3731,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   }, [messages.length]);
 
   return <div className="conversation-scroll-area">
-    <div className="conversation-scroll" ref={scrollRef} onScroll={updateFollowState}>
+    <div className="conversation-scroll" ref={scrollRef} onScroll={handleScroll}>
       {welcomeVisible ? <ResearchWelcome onSelect={onWelcomeAction} /> : <div className="conversation-thread">
         {historyStart > 0 && <button className="conversation-load-history" onClick={() => {
           historyExpandedRef.current = true;
@@ -3565,7 +3775,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, threadVisibility, onThreadVisibility, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, cloudSignedIn, onRequestSignIn, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop }: {
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -3607,6 +3817,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   onWelcomeAction: (action: ResearchWelcomeAction) => void;
   composerRequest: { id: string; text: string; mode?: "append" | "replace" } | null;
   draftKey: string;
+  initialScrollTop: number | null;
+  onScrollTop: (top: number) => void;
   currentFile?: WorkspaceFilePreview | null;
   currentSelection?: { file: WorkspaceFilePreview; selection: FileSelection } | null;
   onComposerRequestApplied: (id: string) => void;
@@ -4038,7 +4250,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
     <WorkspaceMarkdownProvider workspace={workspace} onOpenFile={openHistoryFile}>
-      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} />
+      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} />
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">

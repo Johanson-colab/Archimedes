@@ -55,7 +55,15 @@ function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, Br
   }
   ipcMain.handle("research-thread:create", (event, input = {}) => {
     store.openWorkspace(dataWorkspace(event, input));
-    const thread = store.createResearchThread({ prompt: "New conversation", title: typeof input.title === "string" ? input.title : "New conversation", mode: "free-chat", projectId: input.projectId, workspacePath: input.workspacePath, visibility: input.visibility });
+    const thread = store.createResearchThread({
+      prompt: "New conversation",
+      title: typeof input.title === "string" ? input.title : "New conversation",
+      mode: "free-chat",
+      projectId: input.projectId,
+      workspacePath: input.workspacePath,
+      workspaceId: input.workspaceId,
+      visibility: input.visibility,
+    });
     return store.getResearchThread(thread.id);
   });
   ipcMain.handle("research-thread:fork", (event, input = {}) => {

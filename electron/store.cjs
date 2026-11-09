@@ -1,5 +1,7 @@
-const { randomUUID } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
+const { detectGitState, gitBranch } = require("./git-state.cjs");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
@@ -9,6 +11,10 @@ const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles
 const { applyApprovedWrite } = require("./agent/workspace-tools.cjs");
 
 const OUTPUT_LIMIT = 200_000;
+const GIT_STATES = new Set(["none", "empty", "ready", "nested", "suspicious"]);
+const WORKSPACE_KINDS = new Set(["shared", "worktree", "sandbox"]);
+/** Sandboxes are an isolated copy; never copy caches, VCS data, or the app DB. */
+const SANDBOX_SKIP = new Set([".git", ".archimedes", "node_modules", "dist", "build", ".next"]);
 let database;
 let activeWorkspace;
 let localIdentity = {
@@ -145,9 +151,33 @@ function schema(db) {
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       workspace_path TEXT,
+      environment_id TEXT,
+      git_state TEXT NOT NULL DEFAULT 'none',
+      git_branch TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS project_environments (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'local',
+      provider TEXT NOT NULL DEFAULT 'local',
+      binding_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS project_workspaces (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'shared',
+      root TEXT NOT NULL,
+      base_ref TEXT,
+      last_session_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS project_members (
@@ -169,6 +199,12 @@ function schema(db) {
       status TEXT NOT NULL,
       context_summary TEXT NOT NULL DEFAULT '',
       workspace_path TEXT,
+      workspace_id TEXT,
+      parent_id TEXT,
+      fork_id TEXT,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      last_viewed_at TEXT,
+      unread_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT
@@ -432,11 +468,14 @@ function schema(db) {
 
     CREATE TABLE IF NOT EXISTS research_artifacts (
       id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT,
       thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
       turn_id TEXT,
       path TEXT NOT NULL,
       title TEXT NOT NULL,
       kind TEXT NOT NULL,
+      storage TEXT NOT NULL DEFAULT 'local',
+      sha256 TEXT NOT NULL DEFAULT '',
       size_bytes INTEGER NOT NULL DEFAULT 0,
       modified_at TEXT NOT NULL,
       version INTEGER NOT NULL DEFAULT 1,
@@ -494,6 +533,21 @@ function schema(db) {
   ensureColumn(db, "research_threads", "workspace_path", "TEXT");
   ensureColumn(db, "research_projects", "owner_id", "TEXT");
   ensureColumn(db, "research_projects", "cloud_project_id", "TEXT");
+  ensureColumn(db, "research_projects", "environment_id", "TEXT");
+  ensureColumn(db, "research_projects", "git_state", "TEXT NOT NULL DEFAULT 'none'");
+  ensureColumn(db, "research_projects", "git_branch", "TEXT");
+  // Sessions are conversations inside a workspace; the folder they snapshot
+  // stays in workspace_path so older clients keep working.
+  ensureColumn(db, "research_threads", "workspace_id", "TEXT");
+  ensureColumn(db, "research_threads", "parent_id", "TEXT");
+  ensureColumn(db, "research_threads", "fork_id", "TEXT");
+  ensureColumn(db, "research_threads", "pinned", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "research_threads", "last_viewed_at", "TEXT");
+  ensureColumn(db, "research_threads", "unread_count", "INTEGER NOT NULL DEFAULT 0");
+  // Artifact metadata records where a produced file lives without moving it.
+  ensureColumn(db, "research_artifacts", "project_id", "TEXT");
+  ensureColumn(db, "research_artifacts", "storage", "TEXT NOT NULL DEFAULT 'local'");
+  ensureColumn(db, "research_artifacts", "sha256", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
   ensureColumn(db, "libraries", "cloud_library_id", "TEXT");
@@ -509,6 +563,10 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_projects_updated ON research_projects(updated_at DESC);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_research_projects_cloud ON research_projects(cloud_project_id) WHERE cloud_project_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_research_threads_workspace ON research_threads(workspace_id, archived_at, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_project_environments_project ON project_environments(project_id);
+    CREATE INDEX IF NOT EXISTS idx_project_workspaces_project ON project_workspaces(project_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_research_artifacts_project ON research_artifacts(project_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_libraries_project ON libraries(project_id, updated_at DESC);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_libraries_cloud ON libraries(cloud_library_id) WHERE cloud_library_id IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_cloud ON papers(cloud_paper_id) WHERE cloud_paper_id IS NOT NULL;
@@ -861,6 +919,8 @@ function openWorkspace(workspacePath) {
   database.prepare("UPDATE research_projects SET workspace_path = ? WHERE workspace_path IS NULL OR workspace_path = ''")
     .run(workspacePath);
 
+  migrateProjectWorkspaces(database);
+
   return getSnapshot();
 }
 
@@ -873,6 +933,7 @@ function getSnapshot() {
     archivedProjects: listResearchProjects({ archived: true }),
     threads: listResearchThreads(),
     archivedThreads: listResearchThreads({ archived: true }),
+    workspaces: listProjectWorkspaces(),
     commands: db.prepare("SELECT id, command, cwd, status, output, exit_code, created_at, completed_at FROM command_runs ORDER BY created_at DESC LIMIT 24").all(),
     actions: db.prepare("SELECT id, task_id, kind, payload_json, status, created_at, resolved_at FROM agent_actions ORDER BY created_at DESC LIMIT 24").all().map(hydrateAction),
   };
@@ -1751,6 +1812,282 @@ function setDailyFeedCache(cacheKey, response) {
   return { ...response, fetched_at: fetchedAt };
 }
 
+function normalizeGitState(value) {
+  return GIT_STATES.has(value) ? value : "none";
+}
+
+function resolveProjectRoot(project) {
+  const candidate = String(project?.workspace_path || "").trim();
+  if (candidate) return path.resolve(candidate);
+  return activeWorkspace ? path.resolve(activeWorkspace) : "";
+}
+
+function refreshProjectGitState(db, projectId) {
+  const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(projectId);
+  if (!project) return null;
+  const root = resolveProjectRoot(project);
+  let state = "none";
+  let branch = null;
+  try {
+    state = normalizeGitState(detectGitState(root));
+    branch = state === "ready" ? gitBranch(root) : null;
+  } catch {
+    state = "none";
+    branch = null;
+  }
+  db.prepare("UPDATE research_projects SET git_state = ?, git_branch = ? WHERE id = ?")
+    .run(state, branch, projectId);
+  return db.prepare("SELECT * FROM research_projects WHERE id = ?").get(projectId);
+}
+
+function ensureProjectEnvironment(db, project) {
+  if (project.environment_id) {
+    const existing = db.prepare("SELECT id FROM project_environments WHERE id = ? AND project_id = ?")
+      .get(project.environment_id, project.id);
+    if (existing) return existing.id;
+  }
+  const now = timestamp();
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO project_environments (id, project_id, kind, provider, binding_json, created_at, updated_at)
+    VALUES (?, ?, 'local', 'local', '{}', ?, ?)
+  `).run(id, project.id, now, now);
+  db.prepare("UPDATE research_projects SET environment_id = ? WHERE id = ?").run(id, project.id);
+  return id;
+}
+
+function ensureProjectSharedWorkspace(db, project) {
+  const root = resolveProjectRoot(project);
+  if (!root) return null;
+  const existing = db.prepare(`
+    SELECT * FROM project_workspaces WHERE project_id = ? AND kind = 'shared'
+    ORDER BY created_at ASC LIMIT 1
+  `).get(project.id);
+  const now = timestamp();
+  if (existing) {
+    if (existing.root !== root) {
+      db.prepare("UPDATE project_workspaces SET root = ?, updated_at = ? WHERE id = ?").run(root, now, existing.id);
+      existing.root = root;
+    }
+    return existing;
+  }
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO project_workspaces (id, project_id, kind, root, base_ref, last_session_id, created_at, updated_at)
+    VALUES (?, ?, 'shared', ?, NULL, NULL, ?, ?)
+  `).run(id, project.id, root, now, now);
+  return db.prepare("SELECT * FROM project_workspaces WHERE id = ?").get(id);
+}
+
+function hydrateProjectWorkspace(row, counts = {}) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    kind: WORKSPACE_KINDS.has(row.kind) ? row.kind : "shared",
+    root: row.root,
+    base_ref: row.base_ref || null,
+    last_session_id: row.last_session_id || null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    session_count: Number(counts.session_count) || 0,
+    is_default: row.kind === "shared",
+  };
+}
+
+function listProjectWorkspaces(projectId = null) {
+  const db = requireDatabase();
+  const rows = db.prepare(`
+    SELECT project_workspaces.*,
+      (SELECT COUNT(*) FROM research_threads
+        WHERE research_threads.workspace_id = project_workspaces.id
+          AND research_threads.archived_at IS NULL
+          AND COALESCE(research_threads.kind, 'research') = 'research') AS session_count
+    FROM project_workspaces
+    WHERE (? IS NULL OR project_workspaces.project_id = ?)
+    ORDER BY CASE project_workspaces.kind WHEN 'shared' THEN 0 WHEN 'sandbox' THEN 1 ELSE 2 END,
+      project_workspaces.created_at ASC
+  `).all(projectId, projectId);
+  return rows.map((row) => hydrateProjectWorkspace(row, row));
+}
+
+function getProjectWorkspace(id) {
+  const db = requireDatabase();
+  const row = db.prepare(`
+    SELECT project_workspaces.*,
+      (SELECT COUNT(*) FROM research_threads
+        WHERE research_threads.workspace_id = project_workspaces.id
+          AND research_threads.archived_at IS NULL
+          AND COALESCE(research_threads.kind, 'research') = 'research') AS session_count
+    FROM project_workspaces WHERE project_workspaces.id = ?
+  `).get(id);
+  return hydrateProjectWorkspace(row, row || {});
+}
+
+function defaultProjectWorkspace(projectId) {
+  const db = requireDatabase();
+  const row = db.prepare(`
+    SELECT project_workspaces.*,
+      (SELECT COUNT(*) FROM research_threads
+        WHERE research_threads.workspace_id = project_workspaces.id
+          AND research_threads.archived_at IS NULL
+          AND COALESCE(research_threads.kind, 'research') = 'research') AS session_count
+    FROM project_workspaces
+    WHERE project_workspaces.project_id = ? AND project_workspaces.kind = 'shared'
+    ORDER BY project_workspaces.created_at ASC LIMIT 1
+  `).get(projectId);
+  return hydrateProjectWorkspace(row, row || {});
+}
+
+/**
+ * Projects created before workspaces existed get one shared workspace rooted
+ * at the project folder, and every historical session is attached to it. This
+ * keeps old data readable without copying any files.
+ */
+function migrateProjectWorkspaces(db) {
+  const projects = db.prepare("SELECT * FROM research_projects ORDER BY created_at ASC").all();
+  for (const project of projects) {
+    ensureProjectEnvironment(db, project);
+    const workspace = ensureProjectSharedWorkspace(db, project);
+    if (!workspace) continue;
+    db.prepare(`
+      UPDATE research_threads SET workspace_id = ?
+      WHERE project_id = ?
+        AND (workspace_id IS NULL OR workspace_id = ''
+          OR workspace_id NOT IN (SELECT id FROM project_workspaces WHERE project_id = ?))
+    `).run(workspace.id, project.id, project.id);
+    refreshProjectGitState(db, project.id);
+  }
+  db.prepare(`
+    UPDATE research_artifacts
+    SET project_id = (SELECT project_id FROM research_threads WHERE research_threads.id = research_artifacts.thread_id)
+    WHERE project_id IS NULL
+  `).run();
+  db.prepare("UPDATE research_artifacts SET storage = 'local' WHERE storage IS NULL OR storage = ''").run();
+}
+
+function createSandboxCopy(source, destination) {
+  fs.mkdirSync(destination, { recursive: true });
+  function copyDirectory(from, to) {
+    for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+      if (SANDBOX_SKIP.has(entry.name)) continue;
+      const sourcePath = path.join(from, entry.name);
+      const targetPath = path.join(to, entry.name);
+      if (entry.isDirectory()) {
+        fs.mkdirSync(targetPath, { recursive: true });
+        copyDirectory(sourcePath, targetPath);
+      } else if (entry.isFile()) {
+        fs.copyFileSync(sourcePath, targetPath);
+      }
+    }
+  }
+  copyDirectory(source, destination);
+}
+
+function createProjectWorkspace({ projectId, kind = "shared" } = {}) {
+  const db = requireDatabase();
+  if (typeof projectId !== "string" || !projectId) throw new Error("A project is required.");
+  if (!WORKSPACE_KINDS.has(kind)) throw new Error("Unknown workspace kind.");
+  if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to change this project.");
+  const project = db.prepare("SELECT * FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId);
+  if (!project) throw new Error("Research project not found.");
+  const shared = ensureProjectSharedWorkspace(db, project);
+  if (kind === "shared") return hydrateProjectWorkspace(shared, shared);
+
+  const root = resolveProjectRoot(project);
+  if (!root) throw new Error("Bind a project folder before creating a workspace.");
+  const id = randomUUID();
+  const shortId = id.slice(0, 8);
+  const now = timestamp();
+  let workspaceRoot;
+  let baseRef = null;
+
+  if (kind === "worktree") {
+    const refreshed = refreshProjectGitState(db, projectId);
+    if (refreshed?.git_state !== "ready") {
+      throw new Error("Create a commit in the project repository before opening a worktree.");
+    }
+    baseRef = refreshed.git_branch || "HEAD";
+    workspaceRoot = path.join(root, ".archimedes", "worktrees", shortId);
+    fs.mkdirSync(path.dirname(workspaceRoot), { recursive: true });
+    const branch = `archimedes/${shortId}`;
+    const result = spawnSync("git", ["-C", root, "worktree", "add", "-b", branch, workspaceRoot, baseRef], {
+      encoding: "utf8",
+      timeout: 120_000,
+      windowsHide: true,
+    });
+    if (result.error || result.status !== 0) {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      const detail = String(result.stderr || result.stdout || result.error?.message || "").trim();
+      throw new Error(`Could not create the worktree${detail ? `: ${detail}` : "."}`);
+    }
+  } else {
+    workspaceRoot = path.join(root, ".archimedes", "sandboxes", shortId);
+    createSandboxCopy(root, workspaceRoot);
+  }
+
+  db.prepare(`
+    INSERT INTO project_workspaces (id, project_id, kind, root, base_ref, last_session_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+  `).run(id, projectId, kind, workspaceRoot, baseRef, now, now);
+  recordAuditEvent(db, {
+    projectId,
+    action: "workspace.created",
+    targetType: "workspace",
+    targetId: id,
+    metadata: { kind, root: workspaceRoot, baseRef },
+  });
+  return getProjectWorkspace(id);
+}
+
+function deleteProjectWorkspace(id) {
+  const db = requireDatabase();
+  const workspace = db.prepare("SELECT * FROM project_workspaces WHERE id = ?").get(id);
+  if (!workspace) throw new Error("Workspace not found.");
+  if (!canAccessProject(workspace.project_id, "editor")) throw new Error("You do not have permission to change this project.");
+  if (workspace.kind === "shared") throw new Error("The shared workspace cannot be deleted.");
+  const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(workspace.project_id);
+  const fallback = ensureProjectSharedWorkspace(db, project);
+  if (workspace.kind === "worktree") {
+    const result = spawnSync("git", ["-C", resolveProjectRoot(project), "worktree", "remove", "--force", workspace.root], {
+      encoding: "utf8",
+      timeout: 60_000,
+      windowsHide: true,
+    });
+    if (result.error || result.status !== 0) fs.rmSync(workspace.root, { recursive: true, force: true });
+    spawnSync("git", ["-C", resolveProjectRoot(project), "worktree", "prune"], {
+      encoding: "utf8",
+      timeout: 30_000,
+      windowsHide: true,
+    });
+  } else {
+    fs.rmSync(workspace.root, { recursive: true, force: true });
+  }
+  const now = timestamp();
+  if (fallback) {
+    db.prepare("UPDATE research_threads SET workspace_id = ?, workspace_path = ?, updated_at = ? WHERE workspace_id = ?")
+      .run(fallback.id, fallback.root, now, workspace.id);
+  }
+  db.prepare("DELETE FROM project_workspaces WHERE id = ?").run(workspace.id);
+  db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, workspace.project_id);
+  recordAuditEvent(db, {
+    projectId: workspace.project_id,
+    action: "workspace.deleted",
+    targetType: "workspace",
+    targetId: workspace.id,
+    metadata: { kind: workspace.kind, root: workspace.root },
+  });
+  return { deleted: true };
+}
+
+function setWorkspaceLastSession(workspaceId, sessionId) {
+  const db = requireDatabase();
+  if (!workspaceId || !sessionId) return { updated: false };
+  const result = db.prepare("UPDATE project_workspaces SET last_session_id = ?, updated_at = ? WHERE id = ?")
+    .run(sessionId, timestamp(), workspaceId);
+  return { updated: Number(result.changes) > 0 };
+}
+
 function listResearchProjects({ archived = false } = {}) {
   const db = requireDatabase();
   return db.prepare(`
@@ -1795,8 +2132,16 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(project.id, project.owner_id, project.name, project.description, project.workspace_path, project.created_at, project.updated_at);
   ensureProjectMember(db, project.id, project.owner_id, "owner");
+  ensureProjectEnvironment(db, project);
+  ensureProjectSharedWorkspace(db, project);
+  const refreshed = refreshProjectGitState(db, project.id);
   ensureProjectLibraries(db);
-  return project;
+  return {
+    ...project,
+    environment_id: refreshed?.environment_id ?? null,
+    git_state: refreshed?.git_state ?? "none",
+    git_branch: refreshed?.git_branch ?? null,
+  };
 }
 
 function getResearchProject(id) {
@@ -1877,8 +2222,11 @@ function setResearchProjectWorkspace(id, workspacePath) {
   const result = db.prepare("UPDATE research_projects SET workspace_path = ?, updated_at = ? WHERE id = ?")
     .run(resolvedWorkspace, now, id);
   if (!result.changes) throw new Error("Research project not found.");
-  return listResearchProjects().find((project) => project.id === id)
-    || listResearchProjects({ archived: true }).find((project) => project.id === id);
+  const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(id);
+  ensureProjectSharedWorkspace(db, project);
+  refreshProjectGitState(db, id);
+  return listResearchProjects().find((item) => item.id === id)
+    || listResearchProjects({ archived: true }).find((item) => item.id === id);
 }
 
 function renameResearchProject(id, name) {
@@ -1937,7 +2285,7 @@ function deleteResearchProject(id) {
   return { deleted: true };
 }
 
-function listResearchThreads({ archived = false, projectId = null } = {}) {
+function listResearchThreads({ archived = false, projectId = null, workspaceId = null } = {}) {
   const db = requireDatabase();
   return db.prepare(`
     SELECT research_threads.*,
@@ -1951,6 +2299,7 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
     LEFT JOIN paper_chat_threads ON paper_chat_threads.thread_id = research_threads.id
     WHERE CASE WHEN ? = 1 THEN research_threads.archived_at IS NOT NULL ELSE research_threads.archived_at IS NULL END
       AND (? IS NULL OR research_threads.project_id = ?)
+      AND (? IS NULL OR research_threads.workspace_id = ?)
       AND paper_chat_threads.thread_id IS NULL
       AND COALESCE(research_threads.kind, 'research') = 'research'
       AND EXISTS (SELECT 1 FROM project_members WHERE project_members.project_id = research_threads.project_id AND project_members.user_id = ?)
@@ -1958,21 +2307,40 @@ function listResearchThreads({ archived = false, projectId = null } = {}) {
     GROUP BY research_threads.id
     ORDER BY research_threads.updated_at DESC
     LIMIT 120
-  `).all(archived ? 1 : 0, projectId, projectId, localIdentity.userId, localIdentity.userId);
+  `).all(archived ? 1 : 0, projectId, projectId, workspaceId, workspaceId, localIdentity.userId, localIdentity.userId);
 }
 
-function createResearchThread({ prompt, mode, projectId, workspacePath = "", visibility = "project", kind = "research", title }) {
+function createResearchThread({
+  prompt,
+  mode,
+  projectId,
+  workspacePath = "",
+  workspaceId = null,
+  visibility = "project",
+  kind = "research",
+  title,
+  parentId = null,
+  forkId = null,
+} = {}) {
   const db = requireDatabase();
   const selectedProject = projectId
     ? db.prepare("SELECT id, workspace_path FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId)
     : null;
   if (projectId && (!selectedProject || !canAccessProject(projectId, "editor"))) throw new Error("You do not have access to create a thread in this project.");
   const resolvedProjectId = selectedProject?.id || ensureDefaultProject(db);
+  const projectRow = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(resolvedProjectId);
+  let workspace = workspaceId
+    ? db.prepare("SELECT * FROM project_workspaces WHERE id = ? AND project_id = ?").get(workspaceId, resolvedProjectId)
+    : null;
+  if (workspaceId && !workspace) throw new Error("That workspace does not belong to this project.");
+  if (!workspace) workspace = ensureProjectSharedWorkspace(db, projectRow);
   const projectWorkspace = selectedProject?.workspace_path
-    || db.prepare("SELECT workspace_path FROM research_projects WHERE id = ?").get(resolvedProjectId)?.workspace_path;
+    || projectRow?.workspace_path
+    || workspace?.root;
   // A session inherits its project's folder by default. Passing an explicit
   // path only snapshots that default; it is not a required binding step.
   const resolvedWorkspace = normalizeWorkspacePath(workspacePath)
+    || workspace?.root
     || projectWorkspace
     || activeWorkspace;
   const now = timestamp();
@@ -1987,15 +2355,26 @@ function createResearchThread({ prompt, mode, projectId, workspacePath = "", vis
     status: "idle",
     context_summary: "",
     workspace_path: resolvedWorkspace,
+    workspace_id: workspace?.id ?? null,
+    parent_id: typeof parentId === "string" && parentId ? parentId : null,
+    fork_id: typeof forkId === "string" && forkId ? forkId : null,
+    pinned: 0,
+    last_viewed_at: null,
+    unread_count: 0,
     created_at: now,
     updated_at: now,
     archived_at: null,
   };
   db.prepare(`
-    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, workspace_path, created_at, updated_at, kind)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(thread.id, thread.project_id, thread.owner_id, thread.visibility, thread.title, thread.mode, thread.status, thread.context_summary, thread.workspace_path, thread.created_at, thread.updated_at, thread.kind);
+    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, workspace_path, workspace_id, parent_id, fork_id, pinned, last_viewed_at, unread_count, created_at, updated_at, kind)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, ?, ?)
+  `).run(
+    thread.id, thread.project_id, thread.owner_id, thread.visibility, thread.title, thread.mode,
+    thread.status, thread.context_summary, thread.workspace_path, thread.workspace_id,
+    thread.parent_id, thread.fork_id, thread.created_at, thread.updated_at, thread.kind,
+  );
   db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, resolvedProjectId);
+  if (workspace?.id) setWorkspaceLastSession(workspace.id, thread.id);
   return { ...thread, turn_count: 0, last_turn_at: now };
 }
 
@@ -2100,6 +2479,26 @@ function archiveResearchThread(id, archived = true) {
   db.prepare("UPDATE research_threads SET archived_at = ?, updated_at = ? WHERE id = ?").run(archived ? now : null, now, id);
   if (thread.project_id) db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, thread.project_id);
   return getResearchThread(id);
+}
+
+function pinResearchThread(id, pinned = true) {
+  const db = requireDatabase();
+  const thread = db.prepare("SELECT id, project_id FROM research_threads WHERE id = ?").get(id);
+  if (!thread) throw new Error("Research thread not found.");
+  db.prepare("UPDATE research_threads SET pinned = ?, updated_at = ? WHERE id = ?")
+    .run(pinned ? 1 : 0, timestamp(), id);
+  return getResearchThread(id);
+}
+
+/** Mark the session as seen without changing the conversation's updated time. */
+function markResearchThreadViewed(id) {
+  const db = requireDatabase();
+  const row = db.prepare("SELECT id, workspace_id, last_viewed_at FROM research_threads WHERE id = ?").get(id);
+  if (!row) throw new Error("Research thread not found.");
+  const viewedAt = timestamp();
+  db.prepare("UPDATE research_threads SET last_viewed_at = ?, unread_count = 0 WHERE id = ?").run(viewedAt, id);
+  if (row.workspace_id) setWorkspaceLastSession(row.workspace_id, id);
+  return { id, last_viewed_at: viewedAt, unread_count: 0 };
 }
 
 function deleteResearchThread(id) {
@@ -2388,9 +2787,19 @@ function assertEditableIdleThread(id) {
 
 // Copies get new IDs and no task bindings: historical approvals must never be
 // executable from a fork. Source text and evidence events remain available.
-function copyResearchThread(source, { title, visibility = source.visibility, turns = source.turns } = {}) {
+function copyResearchThread(source, { title, visibility = source.visibility, turns = source.turns, forkId = null, parentId = null } = {}) {
   const db = requireDatabase();
-  const copy = createResearchThread({ prompt: source.title, title, mode: source.mode, projectId: source.project_id, workspacePath: source.workspace_path, visibility });
+  const copy = createResearchThread({
+    prompt: source.title,
+    title,
+    mode: source.mode,
+    projectId: source.project_id,
+    workspacePath: source.workspace_path,
+    workspaceId: source.workspace_id || null,
+    visibility,
+    forkId,
+    parentId,
+  });
   const turnIds = new Map();
   for (const turn of turns) {
     const id = randomUUID();
@@ -2414,7 +2823,7 @@ function forkResearchThread(id, { side = false } = {}) {
   const db = requireDatabase();
   db.exec("BEGIN");
   try {
-    const copy = copyResearchThread(source, { title: `${side ? "Side" : "Fork"}: ${source.title}` });
+    const copy = copyResearchThread(source, { title: `${side ? "Side" : "Fork"}: ${source.title}`, forkId: source.id });
     recordAuditEvent(db, { projectId: source.project_id, action: "thread.forked", targetType: "thread", targetId: copy.id, metadata: { sourceThreadId: id, side } });
     db.exec("COMMIT");
     return copy;
@@ -2612,11 +3021,14 @@ function finishCommand(id, exitCode, status = "completed") {
 function hydrateArtifact(row) {
   return {
     id: row.id,
+    project_id: row.project_id || null,
     thread_id: row.thread_id,
     turn_id: row.turn_id || null,
     path: row.path,
     title: row.title,
     kind: row.kind,
+    storage: row.storage === "remote" ? "remote" : "local",
+    sha256: row.sha256 || "",
     size_bytes: Number(row.size_bytes) || 0,
     modified_at: row.modified_at,
     version: Number(row.version) || 1,
@@ -2637,7 +3049,7 @@ function listArtifacts(threadId) {
   const db = requireDatabase();
   if (!threadId) return [];
   return db.prepare(`
-    SELECT id, thread_id, turn_id, path, title, kind, size_bytes, modified_at, version, source, created_at, updated_at, seen
+    SELECT id, project_id, thread_id, turn_id, path, title, kind, storage, sha256, size_bytes, modified_at, version, source, created_at, updated_at, seen
     FROM research_artifacts WHERE thread_id = ? ORDER BY updated_at DESC, created_at DESC
   `).all(threadId).map(hydrateArtifact);
 }
@@ -2645,35 +3057,51 @@ function listArtifacts(threadId) {
 function getArtifact(id) {
   const db = requireDatabase();
   const row = db.prepare(`
-    SELECT id, thread_id, turn_id, path, title, kind, size_bytes, modified_at, version, source, created_at, updated_at, seen
+    SELECT id, project_id, thread_id, turn_id, path, title, kind, storage, sha256, size_bytes, modified_at, version, source, created_at, updated_at, seen
     FROM research_artifacts WHERE id = ?
   `).get(id);
   return row ? hydrateArtifact(row) : null;
 }
 
-function upsertArtifact({ threadId, turnId = null, path: artifactPath, title = "", kind = "other", sizeBytes = 0, modifiedAt = timestamp(), source = "agent" } = {}) {
+function artifactSha256(thread, normalizedPath) {
+  const root = String(thread.workspace_path || "").trim();
+  if (!root) return "";
+  const target = path.resolve(root, normalizedPath);
+  const resolvedRoot = path.resolve(root);
+  if (target !== resolvedRoot && !target.startsWith(`${resolvedRoot}${path.sep}`)) return "";
+  try {
+    if (!fs.statSync(target).isFile()) return "";
+    return createHash("sha256").update(fs.readFileSync(target)).digest("hex");
+  } catch {
+    return "";
+  }
+}
+
+function upsertArtifact({ threadId, turnId = null, path: artifactPath, title = "", kind = "other", sizeBytes = 0, modifiedAt = timestamp(), source = "agent", storage = "local", sha256 = "" } = {}) {
   const db = requireDatabase();
   if (!threadId) throw new Error("An artifact needs a research thread.");
-  const thread = db.prepare("SELECT id FROM research_threads WHERE id = ?").get(threadId);
+  const thread = db.prepare("SELECT id, project_id, workspace_path FROM research_threads WHERE id = ?").get(threadId);
   if (!thread) throw new Error("Research thread not found.");
   const normalizedPath = normalizeArtifactPath(artifactPath);
   const now = timestamp();
+  const artifactHash = String(sha256 || "").trim() || artifactSha256(thread, normalizedPath);
+  const artifactStorage = storage === "remote" ? "remote" : "local";
   const existing = db.prepare("SELECT * FROM research_artifacts WHERE thread_id = ? AND path = ?").get(threadId, normalizedPath);
   const artifactTitle = String(title || existing?.title || normalizedPath.split("/").at(-1) || normalizedPath).trim();
   if (existing) {
     const version = Number(existing.version || 1) + 1;
     db.prepare(`
       UPDATE research_artifacts
-      SET turn_id = ?, title = ?, kind = ?, size_bytes = ?, modified_at = ?, version = ?, source = ?, updated_at = ?, seen = 0
+      SET project_id = ?, turn_id = ?, title = ?, kind = ?, storage = ?, sha256 = ?, size_bytes = ?, modified_at = ?, version = ?, source = ?, updated_at = ?, seen = 0
       WHERE id = ?
-    `).run(turnId, artifactTitle, kind, Number(sizeBytes) || 0, modifiedAt, version, source, now, existing.id);
+    `).run(thread.project_id, turnId, artifactTitle, kind, artifactStorage, artifactHash, Number(sizeBytes) || 0, modifiedAt, version, source, now, existing.id);
     return getArtifact(existing.id);
   }
   const id = randomUUID();
   db.prepare(`
-    INSERT INTO research_artifacts (id, thread_id, turn_id, path, title, kind, size_bytes, modified_at, version, source, created_at, updated_at, seen)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 0)
-  `).run(id, threadId, turnId, normalizedPath, artifactTitle, kind, Number(sizeBytes) || 0, modifiedAt, source, now, now);
+    INSERT INTO research_artifacts (id, project_id, thread_id, turn_id, path, title, kind, storage, sha256, size_bytes, modified_at, version, source, created_at, updated_at, seen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 0)
+  `).run(id, thread.project_id, threadId, turnId, normalizedPath, artifactTitle, kind, artifactStorage, artifactHash, Number(sizeBytes) || 0, modifiedAt, source, now, now);
   return getArtifact(id);
 }
 
@@ -2987,6 +3415,14 @@ module.exports = {
   createLibrary,
   createAction,
   createResearchProject,
+  createProjectWorkspace,
+  defaultProjectWorkspace,
+  deleteProjectWorkspace,
+  getProjectWorkspace,
+  listProjectWorkspaces,
+  markResearchThreadViewed,
+  pinResearchThread,
+  setWorkspaceLastSession,
   getResearchProject,
   linkResearchProjectToCloud,
   importCloudProject,
