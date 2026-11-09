@@ -4647,6 +4647,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   const [filesPaneWidth, setFilesPaneWidth] = useState(readFilesPaneWidth);
   const [filesListCollapsed, setFilesListCollapsed] = useState(false);
   const [filesEditorCollapsed, setFilesEditorCollapsed] = useState(false);
+  const [closingFullEditor, setClosingFullEditor] = useState(false);
   const tabsRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const element = tabsRef.current;
@@ -4703,6 +4704,16 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
       if (next && filesListCollapsed) setFilesListCollapsed(false);
       return next;
     });
+  }
+
+  function restoreFullEditor() {
+    if (!onRestore || closingFullEditor) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onRestore();
+      return;
+    }
+    setClosingFullEditor(true);
+    window.setTimeout(onRestore, 150);
   }
 
   function startFilesPaneResize(event: React.PointerEvent<HTMLDivElement>) {
@@ -4766,7 +4777,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
     {!compact && <div className="artifact-tabs-row artifact-tabs-row-full">
       {tabs}
-      {onRestore && <div className="artifact-tabs-row-actions"><button className="artifact-tabs-restore" onClick={onRestore} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /></button></div>}
+      {onRestore && <div className="artifact-tabs-row-actions"><button className="artifact-tabs-restore" onClick={restoreFullEditor} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /></button></div>}
     </div>}
     <FilePreview
       compact
@@ -4819,7 +4830,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     </div>;
   }
 
-  return <div className="artifact-workbench artifact-workbench-full">
+  return <div className={`artifact-workbench artifact-workbench-full${closingFullEditor ? " is-closing" : ""}`}>
     <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
       {browser}
       <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>

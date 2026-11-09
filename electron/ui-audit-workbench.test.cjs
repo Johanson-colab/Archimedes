@@ -81,7 +81,8 @@ test("files use a tab-first header without a path strip", () => {
 
 test("the full editor shares the workbench shell and hides duplicate titles", () => {
   assert.doesNotMatch(app, /!compact && <div className="artifact-browser-title">/);
-  assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
+  assert.match(app, /artifact-workbench artifact-workbench-full/);
+  assert.match(app, /closingFullEditor \? " is-closing" : ""/);
   assert.match(app, /className="artifact-browser-heading"/);
   assert.doesNotMatch(app, /artifact-workbench-location/);
   assert.doesNotMatch(app, /<FolderOpen size=\{13\} \/><strong>Files<\/strong>/);

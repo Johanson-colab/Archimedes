@@ -5517,8 +5517,8 @@ html[data-theme="paper"] .image-creation-tab small { color: #6f6a63; }
 }
 .artifact-tabs-row .artifact-tab { height: 100%; }
 .artifact-tabs-row .artifact-workbench-actions { margin-left: auto; padding: 0 6px; border-left: 1px solid var(--border-soft); }
-.artifact-workbench-body .artifact-editor-pane.compact .artifact-editor { position: relative; }
-.artifact-workbench-body .artifact-editor-pane.compact .artifact-editor-header.compact {
+.artifact-workbench-body .artifact-editor-pane .artifact-editor { position: relative; }
+.artifact-workbench-body .artifact-editor-pane .artifact-editor-header.compact {
   position: absolute;
   z-index: 4;
   top: 0;
@@ -5528,6 +5528,7 @@ html[data-theme="paper"] .image-creation-tab small { color: #6f6a63; }
   background: transparent;
   border: 0;
 }
+.artifact-workbench-full .artifact-editor-pane { grid-template-rows: auto minmax(0, 1fr); }
 .artifact-editor-header.compact .artifact-editor-actions { gap: 8px; }
 .artifact-editor-header.compact .artifact-view-toggle { height: auto; gap: 8px; padding: 0; background: transparent; border-radius: 0; }
 .artifact-editor-header.compact .artifact-view-toggle button { height: 24px; padding: 0; color: var(--rail-row-muted); background: transparent; border-radius: 0; box-shadow: none; font-size: 11px; font-weight: 550; }
@@ -9761,9 +9762,11 @@ html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.acti
 }
 
 
-/* Full Files view: the restore control sits in the tab strip. */
+/* Full Files view: the restore control sits in the tab strip, which matches
+   the 40px Files row used inside the workbench. */
 .artifact-tabs-row-full {
-  height: 35px;
+  height: 40px;
+  min-height: 40px;
 }
 .artifact-tabs-row-actions {
   display: flex;
@@ -9788,6 +9791,26 @@ html:not([data-theme="paper"]) .workbench-pane:not(.focused) .workbench-tab.acti
 .artifact-tabs-restore:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+@keyframes files-full-enter {
+  from { opacity: 0; transform: translateY(6px) scale(.996); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes files-full-exit {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(4px) scale(.997); }
+}
+.artifact-workbench-full {
+  transform-origin: 62% 0;
+  animation: files-full-enter .18s cubic-bezier(.22, .8, .28, 1);
+}
+.artifact-workbench-full.is-closing {
+  pointer-events: none;
+  animation: files-full-exit .15s ease-in forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .artifact-workbench-full,
+  .artifact-workbench-full.is-closing { animation: none; }
 }
 
 /* Files preview/edit surfaces share the conversation canvas. */

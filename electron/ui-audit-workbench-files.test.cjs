@@ -16,7 +16,8 @@ const settings = read("src/SettingsModal.tsx");
 test("workbench and full editor share the tabbed file shell", () => {
   assert.match(app, /className=\{compact \? "artifact-editor-pane compact" : "artifact-editor-pane"\}/);
   assert.match(app, /const tabs = openFiles\.length > 0 \? <div ref=\{tabsRef\} className="artifact-tabs"/);
-  assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
+  assert.match(app, /artifact-workbench artifact-workbench-full/);
+  assert.match(app, /closingFullEditor \? " is-closing" : ""/);
   assert.match(app, /artifact-browser-heading/);
   assert.match(app, /activeModule \? t\(activeModule\.titleKey\) : t\("Files"\)/);
   assert.match(read("src/sidebar-registry.tsx"), /id: "writing"[^\n]*titleKey: "Paper writing"/);
@@ -36,7 +37,7 @@ test("file tabs are larger and view actions are plain text", () => {
   assert.match(css, /\.artifact-editor-header \.artifact-view-toggle \{[\s\S]*?background: transparent/);
   assert.match(css, /\.artifact-editor-header \.artifact-save-button,[\s\S]*?background: transparent; border: 0;/);
   assert.match(css, /\.artifact-tab-close:hover \{[^}]*background: transparent/);
-  assert.match(css, /\.artifact-editor-pane\.compact \.artifact-editor-header\.compact \{[\s\S]*?position: absolute;[\s\S]*?background: transparent;/);
+  assert.match(css, /\.artifact-workbench-body \.artifact-editor-pane \.artifact-editor-header\.compact \{[\s\S]*?position: absolute;[\s\S]*?background: transparent;/);
   assert.doesNotMatch(app, /artifact-workbench-toolbar/);
   assert.match(app, /fontSize: "13px", lineHeight: 1.65/);
   assert.match(editor, /fontSize: "13px"/);
@@ -105,8 +106,19 @@ test("the full Files view keeps the conversation title and a compact tab-strip r
   assert.match(app, /onRestore=\{\(\) => \{ setMainSection\("chat"\); openWorkbench\("files"\); \}\}/);
   assert.doesNotMatch(app, /artifact-workbench-full-shell/);
   assert.doesNotMatch(app, /artifact-workbench-return-bar/);
-  assert.match(css, /\.artifact-tabs-row-full/);
+  assert.match(css, /\.artifact-tabs-row-full \{[^}]*height: 40px;/);
   assert.match(css, /\.artifact-tabs-restore/);
+});
+
+test("full Files floats view actions over the file and animates between modes", () => {
+  assert.match(css, /\.artifact-workbench-full \.artifact-editor-pane \{ grid-template-rows: auto minmax\(0, 1fr\); \}/);
+  assert.match(css, /\.artifact-workbench-body \.artifact-editor-pane \.artifact-editor-header\.compact/);
+  assert.match(app, /closingFullEditor/);
+  assert.match(app, /restoreFullEditor/);
+  assert.match(app, /prefers-reduced-motion: reduce/);
+  assert.match(css, /@keyframes files-full-enter/);
+  assert.match(css, /@keyframes files-full-exit/);
+  assert.match(css, /\.artifact-workbench-full\.is-closing/);
 });
 
 test("file tabs hide their scrollbar until hover and map wheel to horizontal scroll", () => {
