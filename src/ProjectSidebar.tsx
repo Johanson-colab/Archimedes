@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, FolderOpen, MessageCirclePlus, MoreHorizontal, MoreVertical, Pencil, Plus, Trash, X } from "lucide-react";
+import { Archive, ArchiveRestore, FolderOpen, MoreHorizontal, MoreVertical, Pencil, Plus, Trash, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
 import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";
+import { workspaceName } from "./workspace-name";
 
 export type WorkFilter = "all" | "running" | "review" | "automations" | "archived";
 
@@ -18,29 +19,23 @@ function needsAttention(thread: ResearchThread, runningThreadId?: string | null)
   return state === "review" || state === "failed";
 }
 
-function folderName(workspacePath: string | null | undefined) {
-  if (!workspacePath) return "";
-  return workspacePath.split(/[\\/]/).filter(Boolean).at(-1) ?? workspacePath;
-}
-
-export default function ProjectSidebar({ projects, archivedProjects, threads, archivedThreads, activeProjectId, activeThreadId, runningThreadId, disabled, onNewProject, onNewChat, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenThread, onArchiveThread, onRemoveThread, filterError }: {
+export default function ProjectSidebar({ projects, archivedProjects, threads, archivedThreads, workspaces, activeProjectId, activeWorkspaceId, runningThreadId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, filterError }: {
   projects: ResearchProject[];
   archivedProjects: ResearchProject[];
   threads: ResearchThread[];
   archivedThreads: ResearchThread[];
+  workspaces: ProjectWorkspace[];
   activeProjectId: string | null;
-  activeThreadId: string | null;
+  activeWorkspaceId: string | null;
   runningThreadId?: string | null;
   disabled: boolean;
   onNewProject: () => void;
-  onNewChat: (projectId: string) => void;
+  onNewWorkspace: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => Promise<void>;
   onArchiveProject: (project: ResearchProject, archived: boolean) => void;
   onRemoveProject: (project: ResearchProject) => void;
   onChangeProjectWorkspace: (project: ResearchProject) => void;
-  onOpenThread: (thread: ResearchThread) => void;
-  onArchiveThread: (thread: ResearchThread, archived: boolean) => void;
-  onRemoveThread: (thread: ResearchThread) => void;
+  onOpenWorkspace: (workspace: ProjectWorkspace) => void;
   filterError?: string;
 }) {
   const { t } = useUISettings();
@@ -122,7 +117,7 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
     ? projects
     : projects.filter((project) => visibleProjectIds.has(project.id));
   const emptyCopy = filter === "all"
-    ? t("No work yet")
+    ? t("No projects yet")
     : filter === "running"
       ? t("Nothing is running")
       : filter === "review"
@@ -133,7 +128,7 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
 
   return <section className="sidebar-group projects-group work-group">
     <div className="work-heading">
-      <span>{t("Work")}</span>
+      <span>{t("Projects")}</span>
       <div className="work-heading-actions">
         <button ref={filterButtonRef} className="work-more-button" onClick={() => setFilterOpen((open) => !open)} title={t("More work actions")} aria-label={t("More work actions")} aria-haspopup="menu" aria-expanded={filterOpen} disabled={disabled}>
           <MoreHorizontal size={15} />
@@ -158,18 +153,13 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
             </div>)}
           </div>}
         </>}
-        {archivedThreads.length > 0 && <>
-        <div className="work-subheading">{t("Archived chats")}</div>
-        <div className="archived-chat-list">
-          {archivedThreads.map((thread) => <div className="archived-chat-row" key={thread.id}><span title={thread.title}>{thread.title}</span><div><button onClick={() => onArchiveThread(thread, false)} title={t("Restore chat")} disabled={disabled}><ArchiveRestore size={12} /></button><button className="archived-chat-delete" onClick={() => onRemoveThread(thread)} title={t("Permanently delete chat")} disabled={disabled}><Trash size={12} /></button></div></div>)}
-        </div>
-        </>}
+        {archivedThreads.length > 0 && <div className="work-empty">{t("{count} archived sessions", { count: archivedThreads.length })}</div>}
         {!archivedProjects.length && !archivedThreads.length && <div className="work-empty">{emptyCopy}</div>}
       </> : <>
         {visibleProjects.map((project) => {
-          const projectThreads = visibleThreads.filter((thread) => thread.project_id === project.id);
+          const projectWorkspaces = workspaces.filter((workspace) => workspace.project_id === project.id);
           const isExpanded = expanded.has(project.id) || filter !== "all";
-          const isActiveProject = activeProjectId === project.id && !activeThreadId;
+          const isActiveProject = activeProjectId === project.id;
           const menuOpen = projectMenu?.project.id === project.id;
           return <div className="project-node" key={project.id}>
             <div className={isActiveProject ? "project-tree-row active" : "project-tree-row"}>
@@ -185,9 +175,9 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                     setEditingProjectId(null);
                   }
                 }} /></span>
-                : <button className="project-select" onClick={() => toggleProject(project.id)} title={`${project.name}${project.workspace_path ? ` · ${project.workspace_path}` : ""}`} aria-expanded={isExpanded}><span className="project-name">{project.name}</span>{projectThreads.length > 0 && <small>{projectThreads.length}</small>}</button>}
+                : <button className="project-select" onClick={() => toggleProject(project.id)} title={`${project.name}${project.workspace_path ? ` · ${project.workspace_path}` : ""}`} aria-expanded={isExpanded}><span className="project-name">{project.name}</span>{projectWorkspaces.length > 0 && <small>{projectWorkspaces.length}</small>}</button>}
               <span className="project-row-actions">
-                <button onClick={() => onNewChat(project.id)} title={t("New chat in {name}", { name: project.name })} disabled={disabled}><MessageCirclePlus size={13} /></button>
+                <button onClick={() => onNewWorkspace(project.id)} title={t("New workspace")} aria-label={t("New workspace")} disabled={disabled}><Plus size={13} /></button>
                 <button className={menuOpen ? "project-more-button active" : "project-more-button"} onClick={(event) => { projectAnchorRef.current = event.currentTarget; setProjectMenu((current) => current?.project.id === project.id ? null : { project }); }} title={t("More project actions")} aria-label={t("More project actions")} aria-haspopup="menu" aria-expanded={menuOpen} disabled={disabled}><MoreVertical size={14} /></button>
               </span>
               <MenuSurface open={menuOpen} onClose={() => setProjectMenu(null)} anchorRef={projectAnchorRef} placement="bottom-end" width={300} className="project-more-menu" ariaLabel={t("Project actions")}>
@@ -199,19 +189,13 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
               </MenuSurface>
             </div>
             {isExpanded && <div className="project-chat-list">
-              {projectThreads.map((thread) => {
-                const state = threadWorkState(thread, runningThreadId);
-                return <div className={activeThreadId === thread.id ? "project-chat-row active" : "project-chat-row"} key={thread.id}>
-                  <button className="project-chat-open" onClick={() => onOpenThread(thread)} title={`${thread.title}${thread.workspace_path ? ` · ${folderName(thread.workspace_path)}` : ""}`}>
-                    <span className="project-chat-title">{thread.title}</span>
-                    {state === "running" && <span className="work-status running" title={t("Agent running")}>{t("Running")}</span>}
-                    {state === "review" && <span className="work-status review" title={t("Needs review")}><i aria-hidden="true" />{t("Review")}</span>}
-                    {state === "failed" && <span className="work-status failed" title={t("Last turn failed")}>{t("Failed")}</span>}
-                  </button>
-                  <button className="project-chat-archive" onClick={() => onArchiveThread(thread, true)} title={t("Archive chat")} disabled={disabled}><Archive size={12} /></button>
-                </div>;
-              })}
-              {!projectThreads.length && filter === "all" && <div className="project-chat-empty">{t("No chats yet")}</div>}
+              {projectWorkspaces.map((workspace) => <div className={activeWorkspaceId === workspace.id ? "project-chat-row active" : "project-chat-row"} key={workspace.id}>
+                <button className="project-chat-open" onClick={() => onOpenWorkspace(workspace)} title={workspace.root}>
+                  <span className="project-chat-title">{workspaceName(workspace, t)}</span>
+                  {workspace.session_count > 0 && <span className="project-chat-count">{workspace.session_count}</span>}
+                </button>
+              </div>)}
+              {!projectWorkspaces.length && filter === "all" && <div className="project-chat-empty">{t("No workspaces yet")}</div>}
             </div>}
           </div>;
         })}
@@ -264,13 +248,4 @@ export function ProjectRemoveModal({ project, onClose, onRemove }: { project: Re
   </Dialog>;
 }
 
-export function ThreadRemoveModal({ thread, error, onClose, onRemove }: { thread: ResearchThread | null; error: string; onClose: () => void; onRemove: () => void }) {
-  const { t } = useUISettings();
-  if (!thread) return null;
-  return <Dialog open onClose={onClose} size="compact" className="workspace-modal project-remove-modal" ariaLabel={t("Delete chat?")}>
-    <header className="modal-header"><div><h2>{t("Delete chat?")}</h2></div><button className="app-dialog-close" onClick={onClose} aria-label={t("Close")}><X size={16} /></button></header>
-    <p>{t("{title}, its research turns, recorded Agent actions, and chat history will be permanently deleted.", { title: thread.title })}</p>
-    {error && <p className="project-rename-error" role="alert">{error}</p>}
-    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>{t("Cancel")}</button><button className="danger-button" onClick={onRemove}><Trash size={14} />{t("Delete chat")}</button></div>
-  </Dialog>;
-}
+

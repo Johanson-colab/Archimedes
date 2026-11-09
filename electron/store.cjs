@@ -173,6 +173,7 @@ function schema(db) {
       id TEXT PRIMARY KEY NOT NULL,
       project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
       kind TEXT NOT NULL DEFAULT 'shared',
+      name TEXT NOT NULL DEFAULT '',
       root TEXT NOT NULL,
       base_ref TEXT,
       last_session_id TEXT,
@@ -548,6 +549,7 @@ function schema(db) {
   ensureColumn(db, "research_artifacts", "project_id", "TEXT");
   ensureColumn(db, "research_artifacts", "storage", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "research_artifacts", "sha256", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "project_workspaces", "name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
   ensureColumn(db, "libraries", "cloud_library_id", "TEXT");
@@ -1840,6 +1842,47 @@ function refreshProjectGitState(db, projectId) {
   return db.prepare("SELECT * FROM research_projects WHERE id = ?").get(projectId);
 }
 
+function workspaceNamePrefix(kind) {
+  return kind === "worktree" ? "Worktree" : kind === "sandbox" ? "Sandbox" : "";
+}
+
+/**
+ * Workspace names stay short and stable: Main workspace for the shared folder,
+ * then Worktree 1 / Sandbox 1 for isolated benches. Sessions keep using the
+ * first prompt as their title, so workspace and session naming never collide.
+ */
+function nextWorkspaceName(db, projectId, kind) {
+  const prefix = workspaceNamePrefix(kind);
+  if (!prefix) return "";
+  const rows = db.prepare("SELECT name FROM project_workspaces WHERE project_id = ? AND kind = ?").all(projectId, kind);
+  const pattern = new RegExp(`^${prefix} (\\d+)$`);
+  let highest = 0;
+  for (const row of rows) {
+    const match = pattern.exec(String(row.name || ""));
+    if (match) highest = Math.max(highest, Number(match[1]) || 0);
+  }
+  return `${prefix} ${highest + 1}`;
+}
+
+function assignMissingWorkspaceNames(db, projectId) {
+  for (const kind of ["worktree", "sandbox"]) {
+    const prefix = workspaceNamePrefix(kind);
+    const rows = db.prepare("SELECT id, name FROM project_workspaces WHERE project_id = ? AND kind = ? ORDER BY created_at ASC")
+      .all(projectId, kind);
+    const pattern = new RegExp(`^${prefix} (\\d+)$`);
+    let highest = 0;
+    for (const row of rows) {
+      const match = pattern.exec(String(row.name || ""));
+      if (match) highest = Math.max(highest, Number(match[1]) || 0);
+    }
+    for (const row of rows) {
+      if (row.name) continue;
+      highest += 1;
+      db.prepare("UPDATE project_workspaces SET name = ? WHERE id = ?").run(`${prefix} ${highest}`, row.id);
+    }
+  }
+}
+
 function ensureProjectEnvironment(db, project) {
   if (project.environment_id) {
     const existing = db.prepare("SELECT id FROM project_environments WHERE id = ? AND project_id = ?")
@@ -1885,6 +1928,7 @@ function hydrateProjectWorkspace(row, counts = {}) {
     id: row.id,
     project_id: row.project_id,
     kind: WORKSPACE_KINDS.has(row.kind) ? row.kind : "shared",
+    name: row.name || "",
     root: row.root,
     base_ref: row.base_ref || null,
     last_session_id: row.last_session_id || null,
@@ -1956,6 +2000,7 @@ function migrateProjectWorkspaces(db) {
         AND (workspace_id IS NULL OR workspace_id = ''
           OR workspace_id NOT IN (SELECT id FROM project_workspaces WHERE project_id = ?))
     `).run(workspace.id, project.id, project.id);
+    assignMissingWorkspaceNames(db, project.id);
     refreshProjectGitState(db, project.id);
   }
   db.prepare(`
@@ -2027,9 +2072,9 @@ function createProjectWorkspace({ projectId, kind = "shared" } = {}) {
   }
 
   db.prepare(`
-    INSERT INTO project_workspaces (id, project_id, kind, root, base_ref, last_session_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
-  `).run(id, projectId, kind, workspaceRoot, baseRef, now, now);
+    INSERT INTO project_workspaces (id, project_id, kind, name, root, base_ref, last_session_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
+  `).run(id, projectId, kind, nextWorkspaceName(db, projectId, kind), workspaceRoot, baseRef, now, now);
   recordAuditEvent(db, {
     projectId,
     action: "workspace.created",

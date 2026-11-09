@@ -23,9 +23,9 @@ test("daily dates use an explicit English locale", () => {
 });
 
 test("zero counts and empty archived groups are hidden", () => {
-  assert.match(sidebar, /projectThreads\.length > 0 && <small>/);
+  assert.match(sidebar, /projectWorkspaces\.length > 0 && <small>/);
   assert.match(sidebar, /archivedProjects\.length > 0 && <>/);
-  assert.match(sidebar, /archivedThreads\.length > 0 && <>/);
+  assert.match(sidebar, /archivedThreads\.length > 0 && <div className="work-empty">/);
   assert.match(app, /"sidebar-runtime"/);
   assert.doesNotMatch(app, />Choose workspace</);
 });

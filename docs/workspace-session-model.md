@@ -47,6 +47,25 @@ Sessions are single-instance and belong to exactly one workspace. Deleting a
 non-shared workspace moves its sessions back to the shared workspace; a Git
 worktree is removed with `git worktree remove --force`.
 
+The left sidebar now follows the same hierarchy: `Projects`, then the
+workspaces under each project. Session titles stay in the session switcher; the
+sidebar never lists individual conversations.
+
+#### Workspace and session names
+
+| Item | Name |
+| --- | --- |
+| shared workspace | `Main workspace` (localized by the UI) |
+| worktree | `Worktree 1`, `Worktree 2`, … |
+| sandbox | `Sandbox 1`, `Sandbox 2`, … |
+| session with a prompt | the first prompt, shortened to 72 characters |
+| new empty session | `New session` |
+| fork / side conversation | `Fork: …` / `Side: …` |
+
+The project-row `+` creates one workspace directly: a worktree when the project
+repository is ready, otherwise a sandbox. The full workspace menu still offers
+both choices, but hides Git worktrees for folders without `.git`.
+
 ### Session switcher
 
 The main toolbar now shows:
@@ -58,7 +77,7 @@ Project / Workspace        ● Session title ▾
 The chip opens a searchable popover with:
 
 - `All`, `Mine`, `Shared`, and `Archived` filters;
-- pinned sessions, then recent sessions;
+- pinned sessions first, separated from the rest by a divider;
 - per-session status: running, needs review, failed, unread, idle;
 - pin/unpin and archive/restore actions;
 - `Alt+↑/↓` or `Ctrl+Shift+[ / ]` to move between sessions in the current
@@ -67,22 +86,36 @@ The chip opens a searchable popover with:
   palette shortcut;
 - a full-height sheet below 720px instead of a floating popover.
 
+The selected session uses a quiet background highlight with no extra accent
+bar, and the footer keeps only a text `New session` action.
+
 Session switching keeps per-session composer drafts and conversation scroll
 positions. It does not stop a running turn.
 
+### Composer
+
+The composer footer now keeps the context picker, harness picker, workspace
+folder shortcut, and context usage. The duplicate `Local` / `Cloud` runtime
+switch and the `Project` / `Private` visibility toggle were removed; new
+conversations remain project-visible by default.
+
 ## Screenshots
 
-| Main toolbar | Session switcher |
+| Projects → workspaces | Main toolbar |
 | --- | --- |
-| ![Toolbar breadcrumb and session chip](./assets/workspace-session/main-toolbar.png) | ![Pinned and recent sessions](./assets/workspace-session/session-switcher.png) |
+| ![Projects and workspaces in the sidebar](./assets/workspace-session/sidebar-workspaces.png) | ![Toolbar breadcrumb and session chip](./assets/workspace-session/main-toolbar.png) |
 
-| Search | Archived |
+| Session switcher | Search |
 | --- | --- |
-| ![Search sessions](./assets/workspace-session/session-search.png) | ![Archived sessions](./assets/workspace-session/session-archive.png) |
+| ![Pinned and recent sessions](./assets/workspace-session/session-switcher.png) | ![Search sessions](./assets/workspace-session/session-search.png) |
 
-| Workspace menu | Narrow sheet |
+| Archived | Workspace menu |
 | --- | --- |
-| ![Shared and worktree workspaces](./assets/workspace-session/workspace-menu.png) | ![Full-height session sheet](./assets/workspace-session/narrow-sheet.png) |
+| ![Archived sessions](./assets/workspace-session/session-archive.png) | ![Workspace menu without Git worktree](./assets/workspace-session/workspace-menu.png) |
+
+| Narrow sheet | Composer footer |
+| --- | --- |
+| ![Full-height session sheet](./assets/workspace-session/narrow-sheet.png) | ![Composer footer without duplicate runtime controls](./assets/workspace-session/composer-footer.png) |
 
 ## Decisions on the open questions in #273
 

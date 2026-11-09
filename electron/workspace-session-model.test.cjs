@@ -43,6 +43,7 @@ test("opening an existing database attaches projects and sessions to a shared wo
     const shared = store.defaultProjectWorkspace(project.id);
     assert.ok(shared);
     assert.equal(shared.kind, "shared");
+    assert.equal(shared.name, "");
     assert.equal(shared.root, path.resolve(projectFolder));
     assert.equal(shared.is_default, true);
     assert.equal(store.getResearchThread(thread.id).workspace_id, shared.id);
@@ -66,6 +67,10 @@ test("sessions are filtered by workspace and can be pinned and marked viewed", (
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Workspace filter", workspacePath: projectFolder });
     const sandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
+    assert.equal(sandbox.name, "Sandbox 1");
+    const secondSandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
+    assert.equal(secondSandbox.name, "Sandbox 2");
+    store.deleteProjectWorkspace(secondSandbox.id);
     const shared = store.defaultProjectWorkspace(project.id);
     const sharedThread = store.createResearchThread({ prompt: "Shared work", mode: "free-chat", projectId: project.id });
     const sandboxThread = store.createResearchThread({
@@ -140,6 +145,7 @@ test("git projects can open and remove a worktree workspace", () => {
     assert.equal(store.getResearchProject(project.id).git_state, "ready");
     const worktree = store.createProjectWorkspace({ projectId: project.id, kind: "worktree" });
     assert.equal(worktree.kind, "worktree");
+    assert.equal(worktree.name, "Worktree 1");
     assert.equal(fs.existsSync(path.join(worktree.root, "README.md")), true);
     assert.ok(worktree.base_ref);
 

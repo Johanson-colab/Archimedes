@@ -44,12 +44,9 @@ test("thread snapshots can be inspected and downloaded from a share dialog", () 
   assert.match(css, /\.thread-share-modal/);
 });
 
-test("the composer exposes a project/private thread toggle", () => {
+test("the composer no longer duplicates the thread visibility toggle", () => {
   assert.match(app, /const \[threadVisibility, setThreadVisibility\] = useState<"project" \| "private">\("project"\)/);
   assert.match(app, /visibility: threadVisibility/);
-  assert.match(app, /changeThreadVisibility/);
-  assert.match(app, /thread-visibility-trigger/);
-  assert.match(app, /Private draft/);
-  assert.match(app, /Project thread/);
-  assert.match(css, /\.thread-visibility-trigger/);
+  assert.doesNotMatch(app, /changeThreadVisibility|thread-visibility-trigger/);
+  assert.doesNotMatch(css, /\.thread-visibility-trigger/);
 });
