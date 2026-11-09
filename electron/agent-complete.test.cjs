@@ -95,3 +95,18 @@ test("completes without a text callback, as the proactive agent does", async () 
     assert.equal(result.content, "OK");
   } finally { global.fetch = originalFetch; }
 });
+
+test('model requests retry rate limits without rerunning any tool', async () => {
+  const originalFetch = global.fetch;
+  let requests = 0;
+  global.fetch = async () => {
+    requests++;
+    if (requests === 1) return { ok: false, status: 429, headers: { get: key => key === 'retry-after' ? '0' : null }, body: { cancel: async () => {} } };
+    return successfulResponse();
+  };
+  try {
+    const response = await complete({ provider: 'custom', baseUrl: 'https://example.test/v1', model: 'fixture', apiKey: 'test' }, [{ role: 'user', content: 'test' }], {});
+    assert.equal(response.content, 'OK');
+    assert.equal(requests, 2);
+  } finally { global.fetch = originalFetch; }
+});

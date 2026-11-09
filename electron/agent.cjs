@@ -21,6 +21,7 @@ const { runNative } = require("./agent/external-backend.cjs");
 const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
+const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
@@ -592,33 +593,38 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const allowed = new Set(["list_skills", "read_skill_resource", "read_research_sentinel", "list_workspace_files", "read_workspace_file", "search_workspace_files", "write_artifact", "edit_workspace_file", "search_academic_papers", "web_search", "open_web_page", "read_public_pdf", "find_in_pdf", "find_in_page"]);
     const definitions = registry.definitions().filter(item => allowed.has(item.function.name));
     workerRecord({ type: "phase_started", payload: { output_paths: outputs } });
-    let response = "";
-    const approvedOutputs = new Set();
-    for (let round = 0; round < 12; round += 1) {
-      const message = await complete(config, messages, { signal, availableTools: definitions, reasoningEffort, requireComplete: true });
-      messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
-      if (!message.tool_calls.length) { response = message.content || ""; break; }
-      for (const child of message.tool_calls) {
-        try {
-          const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, preflight: (toolName, toolArgs) => {
-            if (!allowed.has(toolName)) throw new Error("Tool unavailable in isolated phase.");
-            if ((toolName === "write_artifact" || toolName === "edit_workspace_file") && !outputs.includes(String(toolArgs.path || "").replaceAll("\\", "/"))) throw new Error("The file was not declared as a phase output.");
-          } });
-          if (["write_artifact", "edit_workspace_file"].includes(child.function.name)) {
-            const value = JSON.parse(result.content);
-            if (value.approved === true && outputs.includes(value.path)) approvedOutputs.add(value.path);
+    try {
+      let response = "";
+      const approvedOutputs = new Set();
+      for (let round = 0; round < 12; round += 1) {
+        const message = await complete(config, messages, { signal, availableTools: definitions, reasoningEffort, requireComplete: true });
+        messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
+        if (!message.tool_calls.length) { response = message.content || ""; break; }
+        for (const child of message.tool_calls) {
+          try {
+            const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, preflight: (toolName, toolArgs) => {
+              if (!allowed.has(toolName)) throw new Error("Tool unavailable in isolated phase.");
+              if ((toolName === "write_artifact" || toolName === "edit_workspace_file") && !outputs.includes(String(toolArgs.path || "").replaceAll("\\", "/"))) throw new Error("The file was not declared as a phase output.");
+            } });
+            if (["write_artifact", "edit_workspace_file"].includes(child.function.name)) {
+              const value = JSON.parse(result.content);
+              if (value.approved === true && outputs.includes(value.path)) approvedOutputs.add(value.path);
+            }
+            messages.push({ role: "tool", tool_call_id: child.id, content: result.content });
+          } catch (error) {
+            if (signal?.aborted) throw error;
+            messages.push({ role: "tool", tool_call_id: child.id, content: JSON.stringify({ error: error.message || String(error) }) });
           }
-          messages.push({ role: "tool", tool_call_id: child.id, content: result.content });
-        } catch (error) {
-          if (signal?.aborted) throw error;
-          messages.push({ role: "tool", tool_call_id: child.id, content: JSON.stringify({ error: error.message || String(error) }) });
         }
       }
+      if (!response) throw new Error("Isolated phase did not finish within its tool budget. Inspect its outputs before retrying.");
+      const missing = outputs.filter(value => { try { return !approvedOutputs.has(value) || !fs.statSync(visibleExisting(root, value, false).target).isFile(); } catch { return true; } });
+      workerRecord({ type: "phase_finished", payload: { output_paths: outputs, missing } });
+      return { content: JSON.stringify({ worker_id: workerId, status: missing.length ? "incomplete" : "finished", output_paths: outputs, missing, summary: response.slice(0, 4000) }) };
+    } catch (error) {
+      workerRecord({ type: "phase_failed", payload: { output_paths: outputs, interrupted: Boolean(signal?.aborted), error: String(error.message || error).slice(0, 500) } });
+      throw error;
     }
-    if (!response) throw new Error("Isolated phase did not finish within its tool budget. Inspect its outputs before retrying.");
-    const missing = outputs.filter(value => { try { return !approvedOutputs.has(value) || !fs.statSync(visibleExisting(root, value, false).target).isFile(); } catch { return true; } });
-    workerRecord({ type: "phase_finished", payload: { output_paths: outputs, missing } });
-    return { content: JSON.stringify({ worker_id: workerId, status: missing.length ? "incomplete" : "finished", output_paths: outputs, missing, summary: response.slice(0, 4000) }) };
   }
   if (name === "search_academic_papers") {
     if (typeof args.query !== "string" || !args.query.trim()) throw new Error("Academic search requires a focused query.");
@@ -865,7 +871,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
   const request = { model: config.model, messages, stream: true, ...nativeReasoning };
   if (tokenLimit) request.max_tokens = tokenLimit;
   if (allowTools && availableTools.length) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
-  const requestCompletion = (body) => fetch(`${config.baseUrl}/chat/completions`, {
+  const requestCompletion = (body) => fetchModelWithRetry(`${config.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
     body: JSON.stringify(body),

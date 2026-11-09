@@ -62,6 +62,39 @@ function compactTurns(turns, previousSummary) {
   return clip(`Earlier research context (automatically compacted):\n${lines.join("\n")}`, MAX_SUMMARY_CHARS);
 }
 
+// Restore only complete call/result groups; incomplete groups violate both model protocols.
+function restoreToolHistory(events, turnId, budget) {
+  const relevant = (events || []).filter(event => event.turn_id === turnId && !event.payload?.worker_id).slice(-200);
+  const groups = [];
+  for (let i = 0; i < relevant.length; i += 1) {
+    const event = relevant[i];
+    const calls = event.type === "assistant_step" && event.payload?.tool_calls;
+    if (!Array.isArray(calls) || !calls.length || calls.length > 16) continue;
+    if (calls.some(call => !call?.id || !call?.function?.name || typeof call.function.arguments !== "string" || call.function.arguments.length > 8000)) continue;
+    if (new Set(calls.map(call => call.id)).size !== calls.length) continue;
+    const subsequent = relevant.slice(i + 1);
+    const nextStep = subsequent.findIndex(item => item.type === "assistant_step");
+    const results = nextStep < 0 ? subsequent : subsequent.slice(0, nextStep);
+    const messages = [{ role: "assistant", content: clip(event.payload.content, 2000), tool_calls: calls }];
+    for (const call of calls) {
+      const match = results.find(item => item.type === "tool_result" && item.payload?.call_id === call.id);
+      if (!match || typeof match.payload.content !== "string") break;
+      messages.push({ role: "tool", tool_call_id: call.id, content: clip(match.payload.content, 4000) });
+    }
+    if (messages.length !== calls.length + 1) continue;
+    const size = JSON.stringify(messages).length;
+    if (size <= budget) groups.push({ messages, size });
+  }
+  const selected = [];
+  let used = 0;
+  for (let i = groups.length - 1; i >= 0; i -= 1) {
+    if (used + groups[i].size > budget) continue;
+    selected.unshift(...groups[i].messages);
+    used += groups[i].size;
+  }
+  return { messages: selected, size: used };
+}
+
 function prepareConversation({ thread, currentTurnId, attachmentManifest = "", mode, reasoningInstruction = "", projectInstructions = "", contextCharacterLimit = MAX_CONTEXT_CHARS }) {
   const currentIndex = thread.turns.findIndex((turn) => turn.id === currentTurnId);
   if (currentIndex < 0) throw new Error("The active research turn is missing from its thread.");
@@ -92,8 +125,16 @@ function prepareConversation({ thread, currentTurnId, attachmentManifest = "", m
       content: `${clip(summary, MAX_SUMMARY_CHARS)}\nThis summary is continuity context, not a source of evidence. Re-open files or papers before making source-dependent claims.`,
     });
   }
+  let toolHistoryBudget = Math.min(32_000, Math.max(0, contextCharacterLimit - used));
+  const restored = new Map();
+  for (let i = selected.length - 1; i >= 0 && toolHistoryBudget > 0; i -= 1) {
+    const group = restoreToolHistory(thread.events, selected[i].id, Math.min(16_000, toolHistoryBudget));
+    restored.set(selected[i].id, group.messages);
+    toolHistoryBudget -= group.size;
+  }
   for (const turn of selected) {
     messages.push({ role: "user", content: clip(turn.user_message) });
+    messages.push(...(restored.get(turn.id) || []));
     messages.push({ role: "assistant", content: clip(turn.assistant_message) });
   }
   messages.push({ role: "user", content: `${clip(currentTurn.user_message)}${attachmentManifest}` });

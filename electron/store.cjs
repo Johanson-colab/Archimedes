@@ -2374,6 +2374,7 @@ function getResearchThreadContext(id) {
     title: thread.title,
     mode: thread.mode,
     context_summary: thread.context_summary,
+    events: thread.events,
     turns: checkpoint >= 0 ? thread.turns.slice(checkpoint + 1) : thread.turns,
   };
 }

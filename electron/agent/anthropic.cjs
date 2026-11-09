@@ -1,3 +1,5 @@
+const { fetchModelWithRetry } = require("./model-retry.cjs");
+
 function parseArguments(value) {
   try { return JSON.parse(value || "{}"); } catch { return {}; }
 }
@@ -53,7 +55,7 @@ function normalizeBlocks(blocks) {
 }
 
 async function completeAnthropic(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = [], maxOutputTokens, allowLargeOutput = false, requireComplete = false }) {
-  const response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/messages`, {
+  const response = await fetchModelWithRetry(`${config.baseUrl.replace(/\/+$/, "")}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" },
     body: JSON.stringify(toAnthropicRequest(config, messages, { allowTools, availableTools, maxOutputTokens, allowLargeOutput })),

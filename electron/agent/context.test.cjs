@@ -95,3 +95,17 @@ test("accepts the selected extra-long context budget when preserving history", (
   assert.equal(conversation.compacted, false);
   assert.equal(conversation.messages.filter((message) => message.role === "assistant").length, 8);
 });
+
+test('restores bounded complete tool groups while excluding worker and orphan results', () => {
+  const call = { id: 'call-1', type: 'function', function: { name: 'read_workspace_file', arguments: '{"path":"a.md"}' } };
+  const thread = { context_summary: '', turns: [{ id: 'old', user_message: 'Read it', assistant_message: 'Done' }, { id: 'new', user_message: 'Continue', assistant_message: '' }], events: [
+    { turn_id: 'old', type: 'assistant_step', payload: { tool_calls: [call], content: '' } },
+    { turn_id: 'old', type: 'tool_result', payload: { call_id: 'call-1', content: '{"text":"evidence"}' } },
+    { turn_id: 'old', type: 'tool_result', payload: { call_id: 'call-1', worker_id: 'worker', content: 'private worker data' } },
+    { turn_id: 'old', type: 'assistant_step', payload: { tool_calls: [{ ...call, id: 'orphan' }] } },
+  ] };
+  const result = prepareConversation({ thread, currentTurnId: 'new', mode: 'free-chat' });
+  assert.deepEqual(result.messages.map(m => m.role), ['system', 'user', 'assistant', 'tool', 'assistant', 'user']);
+  assert.equal(result.messages[3].tool_call_id, 'call-1');
+  assert.doesNotMatch(JSON.stringify(result.messages), /private worker data|orphan/);
+});
