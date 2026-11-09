@@ -2935,9 +2935,7 @@ function App() {
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
   const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
-  const mainTitle = mainSection === "chat" || mainSection === "files"
-    ? activeThread?.title ?? t("New research task")
-    : activeModule ? t(activeModule.titleKey) : t("Files");
+  const mainTitle = mainSection === "chat" ? activeThread?.title ?? t("New research task") : activeModule ? t(activeModule.titleKey) : t("Files");
   const flatModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
   const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
     id: entry.commandId,
@@ -4647,18 +4645,6 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   const [filesPaneWidth, setFilesPaneWidth] = useState(readFilesPaneWidth);
   const [filesListCollapsed, setFilesListCollapsed] = useState(false);
   const [filesEditorCollapsed, setFilesEditorCollapsed] = useState(false);
-  const tabsRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const element = tabsRef.current;
-    if (!element) return;
-    const handleWheel = (event: WheelEvent) => {
-      if (event.deltaX !== 0 || element.scrollWidth <= element.clientWidth) return;
-      event.preventDefault();
-      element.scrollLeft += event.deltaY;
-    };
-    element.addEventListener("wheel", handleWheel, { passive: false });
-    return () => element.removeEventListener("wheel", handleWheel);
-  }, [openFiles.length]);
   const workspaceName = workspace.split("/").filter(Boolean).at(-1) || "Workspace";
   useEffect(() => {
     if (!selectedPath) {
@@ -4753,7 +4739,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const tabs = openFiles.length > 0 ? <div ref={tabsRef} className="artifact-tabs" role="tablist" aria-label="Open files">
+  const tabs = openFiles.length > 0 ? <div className="artifact-tabs" role="tablist" aria-label="Open files">
     {openFiles.map((openFile) => <div className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"} key={openFile.path}>
       <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
         {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
@@ -4764,10 +4750,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   </div> : null;
 
   const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
-    {!compact && <div className="artifact-tabs-row artifact-tabs-row-full">
-      {tabs}
-      {onRestore && <div className="artifact-tabs-row-actions"><button className="artifact-tabs-restore" onClick={onRestore} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /></button></div>}
-    </div>}
+    {!compact && tabs}
     <FilePreview
       compact
       file={file}
@@ -4819,11 +4802,17 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     </div>;
   }
 
-  return <div className="artifact-workbench artifact-workbench-full">
-    <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
-      {browser}
-      <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>
-      {editor}
+  return <div className={`artifact-workbench-full-shell${onRestore ? " with-return-bar" : ""}`}>
+    {onRestore && <div className="artifact-workbench-return-bar">
+      <span className="artifact-workbench-return-title"><Maximize2 size={14} /><strong>Full editor</strong></span>
+      <button className="artifact-workbench-return" onClick={onRestore} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /><span>Restore to workbench</span></button>
+    </div>}
+    <div className="artifact-workbench artifact-workbench-full">
+      <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
+        {browser}
+        <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>
+        {editor}
+      </div>
     </div>
   </div>;
 }
