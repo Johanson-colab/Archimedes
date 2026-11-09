@@ -3963,7 +3963,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     setPrompt("");
     setComposerError("");
     onResearchMode(predictedMode);
-    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext, nativeBackend && newChatMode === "research" ? "idea-spark" : undefined);
+    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext, newChatMode === "research" ? "idea-spark" : undefined);
     if (!sent) setPrompt((current) => current.trim() ? current : draft);
     requestAnimationFrame(() => {
       const textarea = composerRef.current;

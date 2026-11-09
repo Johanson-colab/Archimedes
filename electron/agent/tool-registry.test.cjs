@@ -110,3 +110,55 @@ test('registered external adapters are advertised and invoked through the actual
   assert.deepEqual(second.map(m => JSON.parse(m.content).source), ['mcp','research-app']);
   assert.deepEqual(result.thread.events.filter(e => e.type === 'tool_result').map(e => e.payload.source), ['mcp','research-app']);
 });
+
+test('API IdeaSpark invokes a fresh isolated model context and records correlated phase events', async t => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-api-phase-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  store.openWorkspace(root); modelConfig.initializeModelConfig(root);
+  fs.writeFileSync(path.join(root, 'model-config.json'), JSON.stringify({ provider: 'custom', baseUrl: 'https://example.test/v1', model: 'fixture', apiKey: 'test' }));
+  const previous = global.fetch;
+  t.after(() => { global.fetch = previous; });
+  let count = 0;
+  global.fetch = async (_url, options) => {
+    const request = JSON.parse(options.body); count++;
+    let message;
+    if (count === 1) {
+      assert.ok(request.messages.some(m => String(m.content).includes('Research mode: use the installed IdeaSpark')));
+      message = { role: 'assistant', content: '', tool_calls: [call('run_isolated_phase', { task: 'Return search queries', output_paths: [] })] };
+    } else if (count === 2) {
+      assert.equal(request.messages.length, 2);
+      assert.equal(request.messages[1].content, 'Return search queries');
+      assert.ok(!request.messages.some(m => String(m.content).includes('private main prompt')));
+      assert.ok(!request.tools.some(tool => tool.function.name === 'propose_command' || tool.function.name === 'run_isolated_phase'));
+      message = { role: 'assistant', content: 'query one; query two' };
+    } else {
+      assert.equal(JSON.parse(request.messages.at(-1).content).status, 'finished');
+      message = { role: 'assistant', content: 'Queries ready.' };
+    }
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message }] }) };
+  };
+  const result = await runAgent({ prompt: 'private main prompt', workspace: root, origin: 'research', researchSkill: 'idea-spark', mode: 'free-chat', capabilities: { command: 'ask', write: 'ask' } });
+  assert.equal(result.status, 'completed');
+  const started = result.thread.events.find(event => event.type === 'phase_started');
+  const finished = result.thread.events.find(event => event.type === 'phase_finished');
+  assert.ok(started?.payload.worker_id);
+  assert.equal(finished.payload.worker_id, started.payload.worker_id);
+});
+
+test('an existing output is not proof that an isolated phase wrote it', async t => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-api-output-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const runRelative = 'ideaspark_run/research-example';
+  fs.mkdirSync(path.join(root, runRelative, 'phase1'), { recursive: true });
+  fs.writeFileSync(path.join(root, runRelative, 'phase1/output.json'), 'old');
+  const previous = global.fetch;
+  t.after(() => { global.fetch = previous; });
+  global.fetch = async () => ({ ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: 'done' } }] }) });
+  const registry = createToolRegistry();
+  const phaseCall = call('run_isolated_phase', { task: 'Write output', output_paths: [`${runRelative}/phase1/output.json`] });
+  const result = await registry.invoke(phaseCall, {
+    root, registry, call: phaseCall, config: { provider: 'custom', baseUrl: 'https://example.test/v1', model: 'fixture', apiKey: 'test' }, signal: new AbortController().signal,
+    researchRun: { runRelative, runDirectory: path.join(root, runRelative) }, capabilities: { write: 'ask', command: 'ask' },
+  });
+  assert.equal(JSON.parse(result.content).status, 'incomplete');
+});

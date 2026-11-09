@@ -1805,7 +1805,7 @@ app.whenReady().then(async () => {
     const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
     if (input.researchSkill != null && input.researchSkill !== "idea-spark") throw new Error("Unknown Research skill.");
-    if (input.researchSkill && !externalBackend) throw new Error("IdeaSpark Research mode currently requires a native harness.");
+    if (input.researchSkill && input.origin !== "research") throw new Error("IdeaSpark is available only in Work conversations.");
     const config = externalBackend ? null : modelConfig.getActiveModelConfig();
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);

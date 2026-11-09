@@ -21,14 +21,14 @@ test('Standard turns do not install skills or allocate a run; API research is ex
   const root = workspace(t);
   assert.equal(setup(root, { requested: undefined }).skill, null);
   assert.deepEqual(fs.readdirSync(root), []);
-  assert.throws(() => setup(root, { backend: 'api' }), /requires Codex/);
+  assert.throws(() => setup(root, { backend: 'unknown' }), /Unsupported/);
   assert.deepEqual(fs.readdirSync(root), []);
   assert.throws(() => setup(root, { requested: 'other' }), /Unknown/);
 });
 
 test('all native harnesses receive the complete relocatable package without credentials', t => {
   const root = workspace(t);
-  for (const backend of Object.keys(SKILL_DIRS)) {
+  for (const backend of ['codex', 'claude', 'opencode']) {
     const { skill, records, events } = setup(root, { backend });
     const directory = path.dirname(skill.skillFile);
     assert.ok(skill.skillFile.startsWith(path.join(root, SKILL_DIRS[backend])));
@@ -118,4 +118,13 @@ test('bundled navigator executes from a foreign cwd and reports the first stage 
   assert.match(run.stdout, /phase0/);
   assert.match(run.stdout, /phase0 --query/);
   assert.deepEqual(fs.readdirSync(skill.runDirectory), []);
+});
+
+test('API Research installs and resumes its own IdeaSpark package', t => {
+  const root = workspace(t);
+  const first = setup(root, { backend: 'api' });
+  assert.match(first.skill.instructions, /run_isolated_phase/);
+  assert.ok(first.skill.skillFile.startsWith(path.join(root, '.archimedes/skills')));
+  const resumed = setup(root, { backend: 'api', requested: undefined, thread: { id: 'thread', events: first.records } });
+  assert.equal(resumed.skill.runDirectory, first.skill.runDirectory);
 });

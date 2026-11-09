@@ -4,7 +4,7 @@ const { createHash, randomUUID } = require('node:crypto');
 
 const SOURCE = path.join(__dirname, '../assets/research-skills/idea-spark');
 const SKILL_NAME = 'archimedes-idea-spark';
-const SKILL_DIRS = { codex: '.agents/skills', claude: '.claude/skills', opencode: '.opencode/skills' };
+const SKILL_DIRS = { codex: '.agents/skills', claude: '.claude/skills', opencode: '.opencode/skills', api: '.archimedes/skills' };
 const OWNER = '.archimedes-skill.json';
 const digest = content => createHash('sha256').update(content).digest('hex');
 
@@ -86,7 +86,7 @@ function researchSelection(thread, requested) {
 function prepareResearchSkill({ workspace, backend, thread, requested, emit = () => {}, recordEvent = () => {} }) {
   const { enabled, previous } = researchSelection(thread, requested);
   if (!enabled) return null;
-  if (!SKILL_DIRS[backend]) throw new Error('IdeaSpark Research mode currently requires Codex, Claude Code or OpenCode. Select one of these harnesses to start this workflow.');
+  if (!SKILL_DIRS[backend]) throw new Error('Unsupported IdeaSpark harness.');
   const root = fs.realpathSync(workspace);
   const skillFile = installSkill(root, backend);
   let runRelative;
@@ -118,7 +118,13 @@ function prepareResearchSkill({ workspace, backend, thread, requested, emit = ()
     'Follow the selected native permissions. A denied operation is not approval to bypass it. Report blockers and retain run artifacts for an explicit retry. Do not claim the skill was read, scripts executed or stages completed without actual tool results.',
     'IdeaSpark produces an audited research idea and falsification plan; it does not itself execute the proposed experiments or write a complete paper.',
   ].join('\n');
-  return { ...state, skillFile, runDirectory, instructions };
+  const apiInstructions = [
+    'Research mode: use the installed IdeaSpark skill. First call list_skills and read_skill_resource for its SKILL.md.',
+    `The skill ID is ${SKILL_DIRS[backend]}/${SKILL_NAME}; the run directory is ${runRelative}.`,
+    'Follow the skill navigator scripts/run.py next and its actual outputs. Run commands only through propose_command and obtain approval for writes. Use run_isolated_phase for LLM stages, with the exact prompt, inputs and output paths specified by the navigator.',
+    'Do not claim stages completed without checking their real outputs; explain blocked or denied operations. Continue the same run on subsequent turns.',
+  ].join(' ');
+  return { ...state, skillFile, runDirectory, instructions: backend === 'api' ? apiInstructions : instructions };
 }
 
 // Label actual native reads only; preparing files is not a skill-read event.

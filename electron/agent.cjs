@@ -21,6 +21,8 @@ const { runNative } = require("./agent/external-backend.cjs");
 const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
+const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
+const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -354,6 +356,13 @@ const tools = [
   },
 ];
 
+tools.push(
+  { type: "function", function: { name: "list_skills", description: "List skills installed in the current workspace. Read the relevant SKILL.md before using a skill.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
+  { type: "function", function: { name: "read_skill_resource", description: "Read a text resource belonging to a discovered workspace skill, such as SKILL.md or references/setup.md.", parameters: { type: "object", properties: { skill_id: { type: "string" }, path: { type: "string" } }, required: ["skill_id", "path"], additionalProperties: false } } },
+  { type: "function", function: { name: "read_research_sentinel", description: "Read a workflow sentinel in the current IdeaSpark run, such as phase0/.intent_extraction_pending.", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false } } },
+  { type: "function", function: { name: "run_isolated_phase", description: "Run one research skill LLM stage in a fresh context. Declare its task and workspace-relative output paths. Writes require user approval; commands are unavailable in the stage.", parameters: { type: "object", properties: { task: { type: "string", maxLength: 12000 }, output_paths: { type: "array", items: { type: "string" }, maxItems: 4 } }, required: ["task", "output_paths"], additionalProperties: false } } },
+);
+
 function createToolRegistry() {
   const registry = new ToolRegistry();
   for (const definition of tools) registry.register({ definition, source: "builtin", execute: (context, args) => executeBuiltInTool(context, args) });
@@ -548,9 +557,69 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {} }, args) {
+async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort }, args) {
   const name = call.function.name;
 
+  if (name === "list_skills") return { content: JSON.stringify({ skills: discoverSkills(root) }) };
+  if (name === "read_skill_resource") return { content: JSON.stringify(readSkillResource(root, args.skill_id, args.path)) };
+  if (name === "read_research_sentinel") {
+    if (!researchRun || typeof args.path !== "string" || !/^(?:[A-Za-z0-9_-]+\/)*\.(?:[A-Za-z0-9_-]+_pending|lit_grounding_mode|retrieved_at)$/.test(args.path)) throw new Error("Invalid research sentinel path.");
+    let target = researchRun.runDirectory;
+    for (const part of args.path.split("/")) {
+      target = path.join(target, part);
+      const entry = fs.lstatSync(target);
+      if (entry.isSymbolicLink()) throw new Error("Linked research sentinels are not supported.");
+    }
+    const stat = fs.statSync(target);
+    if (!stat.isFile() || stat.size > 64000) throw new Error("Research sentinel is not a bounded text file.");
+    return { content: JSON.stringify({ path: args.path, content: fs.readFileSync(target, "utf8") }) };
+  }
+  if (name === "run_isolated_phase") {
+    if (!researchRun) throw new Error("Isolated research phases require an active IdeaSpark run.");
+    const outputs = args.output_paths.map(value => {
+      if (typeof value !== "string" || path.isAbsolute(value) || value.split(/[\\/]/).some(part => !part || part === "." || part === ".." || part.startsWith("."))) throw new Error("Invalid phase output path.");
+      const normalized = value.replaceAll("\\", "/");
+      if (!normalized.startsWith(`${researchRun.runRelative}/`)) throw new Error("Phase outputs must be inside the current IdeaSpark run.");
+      return normalized;
+    });
+    if (new Set(outputs).size !== outputs.length) throw new Error("Phase output paths must be unique.");
+    const workerId = randomUUID();
+    const workerRecord = event => recordEvent({ ...event, payload: { ...event.payload, worker_id: workerId, parent_call_id: call.id } });
+    const messages = [
+      { role: "system", content: `You are an isolated research phase worker. Follow the phase task using available tools. You may write only these declared files: ${JSON.stringify(outputs)}. Writes need user approval. Do not claim success without tool evidence. Do not execute commands.` },
+      { role: "user", content: args.task },
+    ];
+    const allowed = new Set(["list_skills", "read_skill_resource", "read_research_sentinel", "list_workspace_files", "read_workspace_file", "search_workspace_files", "write_artifact", "edit_workspace_file", "search_academic_papers", "web_search", "open_web_page", "read_public_pdf", "find_in_pdf", "find_in_page"]);
+    const definitions = registry.definitions().filter(item => allowed.has(item.function.name));
+    workerRecord({ type: "phase_started", payload: { output_paths: outputs } });
+    let response = "";
+    const approvedOutputs = new Set();
+    for (let round = 0; round < 12; round += 1) {
+      const message = await complete(config, messages, { signal, availableTools: definitions, reasoningEffort, requireComplete: true });
+      messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
+      if (!message.tool_calls.length) { response = message.content || ""; break; }
+      for (const child of message.tool_calls) {
+        try {
+          const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, preflight: (toolName, toolArgs) => {
+            if (!allowed.has(toolName)) throw new Error("Tool unavailable in isolated phase.");
+            if ((toolName === "write_artifact" || toolName === "edit_workspace_file") && !outputs.includes(String(toolArgs.path || "").replaceAll("\\", "/"))) throw new Error("The file was not declared as a phase output.");
+          } });
+          if (["write_artifact", "edit_workspace_file"].includes(child.function.name)) {
+            const value = JSON.parse(result.content);
+            if (value.approved === true && outputs.includes(value.path)) approvedOutputs.add(value.path);
+          }
+          messages.push({ role: "tool", tool_call_id: child.id, content: result.content });
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          messages.push({ role: "tool", tool_call_id: child.id, content: JSON.stringify({ error: error.message || String(error) }) });
+        }
+      }
+    }
+    if (!response) throw new Error("Isolated phase did not finish within its tool budget. Inspect its outputs before retrying.");
+    const missing = outputs.filter(value => { try { return !approvedOutputs.has(value) || !fs.statSync(visibleExisting(root, value, false).target).isFile(); } catch { return true; } });
+    workerRecord({ type: "phase_finished", payload: { output_paths: outputs, missing } });
+    return { content: JSON.stringify({ worker_id: workerId, status: missing.length ? "incomplete" : "finished", output_paths: outputs, missing, summary: response.slice(0, 4000) }) };
+  }
   if (name === "search_academic_papers") {
     if (typeof args.query !== "string" || !args.query.trim()) throw new Error("Academic search requires a focused query.");
     const papers = await searchAcademicPapers(args.query, args.limit);
@@ -981,6 +1050,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
       emitTurn({ type: "complete", title: "Native turn complete", detail: "Native execution finished" });
       return finish(response, "completed");
     }
+    const researchRun = !transient && origin === "research" ? prepareResearchSkill({ workspace, backend: "api", thread: store.getResearchThread(thread.id), requested: researchSkill, emit: emitTurn, recordEvent }) : null;
     const context = prepareConversation({
       // Internal review workers are intentionally not persisted, but their
       // active turn still has to be present for the normal context builder.
@@ -997,6 +1067,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
       recordEvent({ type: "context_compacted", payload: { omitted_turn_count: context.omittedTurnCount } });
     }
     const messages = context.messages;
+    if (researchRun) messages.splice(1, 0, { role: "system", content: researchRun.instructions });
     const images = contextItems.filter((item) => item.type === "image" && item.image?.dataUrl).slice(0, 4);
     const currentMessage = messages.at(-1);
     if (images.length && currentMessage?.role === "user") {
@@ -1009,7 +1080,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
     let webSearches = 0;
     const foundPapers = new Map();
     const pdfCache = new Map();
-    const maxToolRounds = policy.maxToolRounds;
+    const maxToolRounds = researchRun ? Math.max(policy.maxToolRounds, 32) : policy.maxToolRounds;
     const turnCapabilities = transient ? DEFAULT_CAPABILITIES : normalizeCapabilities(capabilities);
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort} · context: ${resolvedContextLength}` });
 
@@ -1033,7 +1104,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, visibility = "
 
       for (const call of message.tool_calls) {
         try {
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, preflight: (name, args) => {
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
             if (name === "search_academic_papers") {
               if (academicSearches >= policy.maxAcademicSearches) throw new Error("The academic search budget is exhausted. Synthesize the findings already collected.");
               academicSearches += 1;
