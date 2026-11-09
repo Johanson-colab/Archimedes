@@ -16,6 +16,8 @@ import { TEXT_SIZE_SCALE, useUISettings, type ChatVerbosity, type InterfaceFont,
 import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RADIUS_MIN, DENSITY_DEFAULT, SURFACE_DEFAULT, SURFACE_DEPTH_DEFAULT, SURFACE_DEPTH_MAX, SURFACE_DEPTH_MIN, contrastIssues, normalizeAppearance, parseThemePack, themePackSettings, toThemePack, type AppearanceSettings, type AppearanceStyles, type AppTheme, type ButtonStyle, type CardStyle, type ContrastIssue, type Density, type DialogStyle, type InputStyle, type MenuStyle, type MotionStyle, type ShadowStyle, type ShapeStyle, type SurfaceAppearance, type SurfaceScope, type SurfaceStyles, type ThemePack, type ThemePreset } from "./appearance";
 import { Dialog } from "./Dialog";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection as SettingsSectionView } from "./SettingsPrimitives";
+import ShortcutRecorder from "./ShortcutRecorder";
+import type { FileTextSizeAction } from "./file-text-size";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "plugins" | "models" | "web" | "terminal" | "ssh" | "workspace" | "about" | "account" | "members";
 
@@ -145,7 +147,7 @@ export default function SettingsModal({
   disabledCoreModules,
   onCoreModuleEnabled,
 }: SettingsModalProps) {
-  const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, t } = useUISettings();
+  const { language, setLanguage, textSize, setTextSize, interfaceFont, setInterfaceFont, monoFont, setMonoFont, fileIconStyle, setFileIconStyle, chatVerbosity, setChatVerbosity, fileTextShortcuts, setFileTextShortcut, resetFileTextShortcuts, t } = useUISettings();
   const [scope, setScope] = useState<SurfaceScope | "global">("global");
   const [pendingPack, setPendingPack] = useState<ThemePack | null>(null);
   const [packWarnings, setPackWarnings] = useState<ContrastIssue[]>([]);
@@ -671,6 +673,26 @@ export default function SettingsModal({
                         onChange={setFileIconStyle}
                       />
 
+                  </SettingsRow>
+                  <SettingsRow
+                    title={<>{t("Text size shortcuts")}</>}
+                    description={<>{t("Adjust the size of Markdown previews, code previews, and the editor.")}</>}
+                    hint={<>{t("Click to record a new shortcut.")}</>}
+                    stacked
+                  >
+                    <div className="shortcut-recorder-group">
+                      {([
+                        ["increase", t("Increase")],
+                        ["decrease", t("Decrease")],
+                        ["reset", t("Reset")],
+                      ] as Array<[FileTextSizeAction, string]>).map(([action, label]) => (
+                        <label className="shortcut-recorder-field" key={action}>
+                          {label}
+                          <ShortcutRecorder value={fileTextShortcuts[action]} label={label} onChange={(shortcut) => setFileTextShortcut(action, shortcut)} />
+                        </label>
+                      ))}
+                      <button type="button" className="shortcut-recorder-reset" onClick={resetFileTextShortcuts}>{t("Reset shortcuts")}</button>
+                    </div>
                   </SettingsRow>
                 </div>
                             </SettingsSectionView>

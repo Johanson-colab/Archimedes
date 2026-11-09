@@ -15,8 +15,10 @@ const settings = read("src/SettingsModal.tsx");
 
 test("workbench and full editor share the tabbed file shell", () => {
   assert.match(app, /className=\{compact \? "artifact-editor-pane compact" : "artifact-editor-pane"\}/);
-  assert.match(app, /const tabs = openFiles\.length > 0 \? <div ref=\{tabsRef\} className="artifact-tabs"/);
-  assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
+  assert.match(app, /const tabs = openFiles\.length > 0 \? <div className="artifact-tabs-scroller" ref=\{tabsScrollerRef\}>/);
+  assert.match(app, /<div ref=\{tabsRef\} className="artifact-tabs" role="tablist"[^>]*onScroll=\{syncTabsScrollbar\}/);
+  assert.match(app, /artifact-workbench artifact-workbench-full/);
+  assert.match(app, /closingFullEditor \? " is-closing" : ""/);
   assert.match(app, /artifact-browser-heading/);
   assert.match(app, /activeModule \? t\(activeModule\.titleKey\) : t\("Files"\)/);
   assert.match(read("src/sidebar-registry.tsx"), /id: "writing"[^\n]*titleKey: "Paper writing"/);
@@ -24,10 +26,10 @@ test("workbench and full editor share the tabbed file shell", () => {
   assert.doesNotMatch(app, /className="files-page"/);
   assert.doesNotMatch(app, /Browse the active folder and inspect files created or changed by Archimedes/);
   assert.match(css, /\.artifact-editor-pane\.compact \{ position: relative; \}/);
-  assert.match(css, /\.artifact-tabs-row \{[\s\S]*?height: 38px;/);
+  assert.match(css, /\.artifact-tabs-row \{[\s\S]*?--file-tabs-row-height: 40px;[\s\S]*?height: var\(--file-tabs-row-height\);/);
   assert.match(css, /\.artifact-tabs-row \.artifact-tabs \{[\s\S]*?height: 100%;/);
   assert.doesNotMatch(css, /padding-right: 258px/);
-  assert.match(css, /\.artifact-tabs-row \.artifact-workbench-actions \{ margin-left: auto;/);
+  assert.match(css, /\.artifact-tabs-row \.artifact-workbench-actions \{[^}]*margin-left: auto;/);
 });
 
 test("file tabs are larger and view actions are plain text", () => {
@@ -36,10 +38,10 @@ test("file tabs are larger and view actions are plain text", () => {
   assert.match(css, /\.artifact-editor-header \.artifact-view-toggle \{[\s\S]*?background: transparent/);
   assert.match(css, /\.artifact-editor-header \.artifact-save-button,[\s\S]*?background: transparent; border: 0;/);
   assert.match(css, /\.artifact-tab-close:hover \{[^}]*background: transparent/);
-  assert.match(css, /\.artifact-editor-pane\.compact \.artifact-editor-header\.compact \{[\s\S]*?position: absolute;[\s\S]*?background: transparent;/);
+  assert.match(css, /\.artifact-workbench-body \.artifact-editor-pane \.artifact-editor-header\.compact \{[\s\S]*?position: absolute;[\s\S]*?background: transparent;/);
   assert.doesNotMatch(app, /artifact-workbench-toolbar/);
-  assert.match(app, /fontSize: "13px", lineHeight: 1.65/);
-  assert.match(editor, /fontSize: "13px"/);
+  assert.match(app, /fontSize: "var\(--file-content-font-size, 13px\)", lineHeight: 1\.65/);
+  assert.match(editor, /fontSize: "var\(--file-content-font-size, 13px\)"/);
 });
 
 test("comment composer shares the chat surface language", () => {
@@ -105,15 +107,43 @@ test("the full Files view keeps the conversation title and a compact tab-strip r
   assert.match(app, /onRestore=\{\(\) => \{ setMainSection\("chat"\); openWorkbench\("files"\); \}\}/);
   assert.doesNotMatch(app, /artifact-workbench-full-shell/);
   assert.doesNotMatch(app, /artifact-workbench-return-bar/);
-  assert.match(css, /\.artifact-tabs-row-full/);
+  assert.match(css, /\.artifact-tabs-row-full \{[^}]*height: 40px;/);
   assert.match(css, /\.artifact-tabs-restore/);
 });
 
-test("file tabs hide their scrollbar until hover and map wheel to horizontal scroll", () => {
+test("full Files floats view actions over the file and animates between modes", () => {
+  assert.match(css, /\.artifact-workbench-full \.artifact-editor-pane \{ grid-template-rows: auto minmax\(0, 1fr\); \}/);
+  assert.match(css, /\.artifact-workbench-body \.artifact-editor-pane \.artifact-editor-header\.compact/);
+  assert.match(app, /closingFullEditor/);
+  assert.match(app, /restoreFullEditor/);
+  assert.match(app, /prefers-reduced-motion: reduce/);
+  assert.match(css, /@keyframes files-full-enter/);
+  assert.match(css, /@keyframes files-full-exit/);
+  assert.match(css, /\.artifact-workbench-full\.is-closing/);
+});
+
+test("file tabs use a floating scrollbar and map wheel to horizontal scroll", () => {
   assert.match(app, /addEventListener\("wheel", handleWheel, \{ passive: false \}\)/);
   assert.match(app, /element\.scrollLeft \+= event\.deltaY/);
-  assert.match(css, /\.artifact-tabs:hover::-webkit-scrollbar-thumb/);
-  assert.match(css, /\.artifact-tabs \{[^}]*scrollbar-color: transparent transparent;/);
+  assert.match(app, /className=\{`artifact-tabs-scrollbar\$\{tabsOverflow \? " visible" : ""\}/);
+  assert.match(app, /startTabsScrollbarDrag/);
+  assert.match(css, /\.artifact-tabs-scroller:hover \.artifact-tabs-scrollbar\.visible/);
+  assert.match(css, /\.artifact-tabs-scrollbar \{[\s\S]*?position: absolute;[\s\S]*?bottom: 0;/);
+  assert.match(css, /\.artifact-tabs-row \.artifact-tabs::-webkit-scrollbar \{ display: none; \}/);
+});
+
+test("file and terminal tab rows share the same height and label style", () => {
+  assert.match(css, /\.artifact-tabs-row \{[\s\S]*?--file-tabs-row-height: 40px;/);
+  assert.match(css, /\.smart-terminal \{[\s\S]*?grid-template-rows: 40px minmax\(0, 1fr\);/);
+  assert.match(css, /\.artifact-tab-main \.artifact-tab-name \{[^}]*font-size: 12px; font-weight: 550;/);
+  assert.match(css, /\.terminal-tab-select \{[^}]*font-size: 12px; font-weight: 550;/);
+});
+
+test("pane collapse buttons are plain icons without a grouped background", () => {
+  assert.match(app, /<ChevronsLeft size=\{13\} \/>/);
+  assert.match(app, /<ChevronsRight size=\{13\} \/>/);
+  assert.match(css, /\.artifact-workbench-pane-toggles \{[^}]*background: transparent; border: 0;/);
+  assert.match(css, /\.artifact-workbench-pane-toggles button\.active \{[^}]*background: transparent;/);
 });
 
 test("Files preview surfaces and the terminal viewport share the conversation canvas", () => {

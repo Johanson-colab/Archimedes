@@ -66,6 +66,7 @@ import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
 import { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, formatFileComment, isDraftDirty, isEditableFile, markDraftSaved, mergeRefreshedFiles, prepareFileContent, toEditorText, type FileComment, type FileDraft, type FileSelection } from "./file-editor";
+import { shortcutMatches } from "./file-text-size";
 import { previewLibraryBridge } from "./library-preview";
 import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
@@ -88,6 +89,8 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
   ChevronRight,
   CircleDot,
   Clipboard,
@@ -4508,6 +4511,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
   onSelectionChange?: (selection: FileSelection | null) => void;
   compact?: boolean;
 }) {
+  const { fileTextSize, fileTextShortcuts, increaseFileTextSize, decreaseFileTextSize, resetFileTextSize } = useUISettings();
   const [mode, setMode] = useState<"preview" | "edit">("preview");
   const [selection, setSelection] = useState<FileSelection | null>(null);
   const [commentOpen, setCommentOpen] = useState(false);
@@ -4534,6 +4538,26 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
     window.addEventListener("keydown", handleSave);
     return () => window.removeEventListener("keydown", handleSave);
   }, [dirty]);
+
+  useEffect(() => {
+    if (!file) return;
+    const handleTextSize = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.target instanceof Element && event.target.closest(".app-dialog, [role=\"dialog\"]")) return;
+      if (shortcutMatches(event, fileTextShortcuts.increase)) {
+        event.preventDefault();
+        increaseFileTextSize();
+      } else if (shortcutMatches(event, fileTextShortcuts.decrease)) {
+        event.preventDefault();
+        decreaseFileTextSize();
+      } else if (shortcutMatches(event, fileTextShortcuts.reset)) {
+        event.preventDefault();
+        resetFileTextSize();
+      }
+    };
+    window.addEventListener("keydown", handleTextSize);
+    return () => window.removeEventListener("keydown", handleTextSize);
+  }, [file, fileTextShortcuts, increaseFileTextSize, decreaseFileTextSize, resetFileTextSize]);
 
   if (loading) return <div className="artifact-empty"><RefreshCw className="spin" size={18} />Loading file...</div>;
   if (error) return <div className="artifact-empty error"><FileText size={22} /><strong>Could not open this file</strong><span>{error}</span></div>;
@@ -4579,7 +4603,7 @@ function FilePreview({ file, draft, dirty, saving, conflict, saveError, loading,
         </>}
       </div>}
     </div>
-    <div className={`artifact-preview-surface${editing ? " editing" : ""}`}>
+    <div className={`artifact-preview-surface${editing ? " editing" : ""}`} style={{ "--file-content-font-size": `${fileTextSize}px` } as React.CSSProperties}>
       {editing ? <Suspense fallback={<div className="artifact-empty"><LoaderCircle className="spin" size={18} />Loading editor...</div>}>
         <FileCodeEditor filePath={file.path} value={draft?.content ?? ""} onChange={(value) => onDraftChange(file.path, value)} onSave={onSave} onSelectionChange={(selection) => { setSelection(selection); onSelectionChange?.(selection); }} />
       </Suspense> : <>
@@ -4617,7 +4641,7 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
       wrapLongLines={false}
       lineNumberStyle={{ minWidth: "43px", paddingRight: "13px", textAlign: "right", userSelect: "none" }}
       lineProps={{ className: "syntax-line" }}
-      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "13px", lineHeight: 1.65, tabSize: 2 }}
+      customStyle={{ minWidth: "max-content", minHeight: "100%", margin: 0, padding: "13px 22px 28px 0", fontSize: "var(--file-content-font-size, 13px)", lineHeight: 1.65, tabSize: 2 }}
       codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
     >{content || " "}</SyntaxHighlighter>
   </div>;
@@ -4690,7 +4714,66 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   const [filesListCollapsed, setFilesListCollapsed] = useState(false);
   const [filesEditorCollapsed, setFilesEditorCollapsed] = useState(false);
   const [tabMenu, setTabMenu] = useState<{ file: WorkspaceFilePreview; x: number; y: number } | null>(null);
+  const [closingFullEditor, setClosingFullEditor] = useState(false);
   const tabsRef = useRef<HTMLDivElement | null>(null);
+  const tabsScrollerRef = useRef<HTMLDivElement | null>(null);
+  const tabsScrollThumbRef = useRef<HTMLSpanElement | null>(null);
+  const [tabsOverflow, setTabsOverflow] = useState(false);
+  const [tabsScrollbarDragging, setTabsScrollbarDragging] = useState(false);
+  const syncTabsScrollbar = useCallback(() => {
+    const element = tabsRef.current;
+    const scroller = tabsScrollerRef.current;
+    const thumb = tabsScrollThumbRef.current;
+    if (!element || !scroller || !thumb) return;
+    const overflow = element.scrollWidth > element.clientWidth + 1;
+    setTabsOverflow(overflow);
+    if (!overflow) return;
+    const track = scroller.clientWidth;
+    const width = Math.max(28, Math.round(track * (element.clientWidth / element.scrollWidth)));
+    const maxScroll = element.scrollWidth - element.clientWidth;
+    const offset = maxScroll > 0 ? (element.scrollLeft / maxScroll) * (track - width) : 0;
+    thumb.style.width = `${width}px`;
+    thumb.style.transform = `translateX(${Math.round(offset)}px)`;
+  }, []);
+  useEffect(() => {
+    const element = tabsRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(syncTabsScrollbar);
+    observer.observe(element);
+    if (tabsScrollerRef.current) observer.observe(tabsScrollerRef.current);
+    window.addEventListener("resize", syncTabsScrollbar);
+    syncTabsScrollbar();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", syncTabsScrollbar);
+    };
+  }, [openFiles.length, syncTabsScrollbar]);
+  function startTabsScrollbarDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const element = tabsRef.current;
+    const scroller = tabsScrollerRef.current;
+    if (!element || !scroller) return;
+    const maxScroll = element.scrollWidth - element.clientWidth;
+    if (maxScroll <= 0) return;
+    event.preventDefault();
+    const track = scroller.clientWidth;
+    const thumbWidth = Math.max(28, track * (element.clientWidth / element.scrollWidth));
+    const startX = event.clientX;
+    const startScroll = element.scrollLeft;
+    const scrollPerPixel = maxScroll / Math.max(1, track - thumbWidth);
+    setTabsScrollbarDragging(true);
+    const handleMove = (moveEvent: PointerEvent) => {
+      element.scrollLeft = startScroll + (moveEvent.clientX - startX) * scrollPerPixel;
+    };
+    const handleUp = () => {
+      setTabsScrollbarDragging(false);
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+  }
   useEffect(() => {
     const element = tabsRef.current;
     if (!element) return;
@@ -4785,6 +4868,15 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     <MenuItem onClick={() => { setTabMenu(null); void copyTabPath(tabMenu.file.path, true); }}>{t("Copy relative path")}</MenuItem>
   </MenuSurface> : null;
 
+  function restoreFullEditor() {
+    if (!onRestore || closingFullEditor) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onRestore();
+      return;
+    }
+    setClosingFullEditor(true);
+    window.setTimeout(onRestore, 150);
+  }
   function startFilesPaneResize(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -4833,24 +4925,33 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
-  const tabs = openFiles.length > 0 ? <div ref={tabsRef} className="artifact-tabs" role="tablist" aria-label="Open files">
-    {openFiles.map((openFile) => <div
-      className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"}
-      key={openFile.path}
-      onContextMenu={(event) => { event.preventDefault(); setTabMenu({ file: openFile, x: event.clientX, y: event.clientY }); }}
+  const tabs = openFiles.length > 0 ? <div className="artifact-tabs-scroller" ref={tabsScrollerRef}>
+    <div ref={tabsRef} className="artifact-tabs" role="tablist" aria-label="Open files" onScroll={syncTabsScrollbar}>
+      {openFiles.map((openFile) => <div
+        className={openFile.path === selectedPath ? "artifact-tab active" : "artifact-tab"}
+        key={openFile.path}
+        onContextMenu={(event) => { event.preventDefault(); setTabMenu({ file: openFile, x: event.clientX, y: event.clientY }); }}
+      >
+        <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
+          {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
+          <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}><WorkspaceFileGlyph entry={{ type: "file", kind: openFile.kind, path: openFile.path }} /></span><span className="artifact-tab-name">{openFile.name}</span>
+        </button>
+        <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
+      </div>)}
+    </div>
+    <div
+      className={`artifact-tabs-scrollbar${tabsOverflow ? " visible" : ""}${tabsScrollbarDragging ? " dragging" : ""}`}
+      aria-hidden="true"
+      onPointerDown={startTabsScrollbarDrag}
     >
-      <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
-        {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
-        <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}><WorkspaceFileGlyph entry={{ type: "file", kind: openFile.kind, path: openFile.path }} /></span><span className="artifact-tab-name">{openFile.name}</span>
-      </button>
-      <button className="artifact-tab-close" onClick={() => onCloseFile(openFile.path)} title={`Close ${openFile.name}`}><X size={12} /></button>
-    </div>)}
+      <span ref={tabsScrollThumbRef} />
+    </div>
   </div> : null;
 
   const editor = <div className={compact ? "artifact-editor-pane compact" : "artifact-editor-pane"}>
     {!compact && <div className="artifact-tabs-row artifact-tabs-row-full">
       {tabs}
-      {onRestore && <div className="artifact-tabs-row-actions"><button className="artifact-tabs-restore" onClick={onRestore} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /></button></div>}
+      {onRestore && <div className="artifact-tabs-row-actions"><button className="artifact-tabs-restore" onClick={restoreFullEditor} title="Restore to workbench" aria-label="Restore to workbench"><Minimize2 size={13} /></button></div>}
     </div>}
     <FilePreview
       compact
@@ -4885,8 +4986,8 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
         {tabs}
         <div className="artifact-workbench-actions">
           {split && <div className="artifact-workbench-pane-toggles" role="group" aria-label="File panes">
-            <button className={filesListCollapsed ? "" : "active"} onClick={toggleFilesList} title={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-label={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-pressed={!filesListCollapsed}>{filesListCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button>
-            <button className={filesEditorCollapsed ? "" : "active"} onClick={toggleFilesEditor} title={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-label={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-pressed={!filesEditorCollapsed}>{filesEditorCollapsed ? <PanelRightOpen size={13} /> : <PanelRightClose size={13} />}</button>
+            <button className={filesListCollapsed ? "" : "active"} onClick={toggleFilesList} title={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-label={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-pressed={!filesListCollapsed}>{filesListCollapsed ? <ChevronsRight size={13} /> : <ChevronsLeft size={13} />}</button>
+            <button className={filesEditorCollapsed ? "" : "active"} onClick={toggleFilesEditor} title={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-label={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-pressed={!filesEditorCollapsed}>{filesEditorCollapsed ? <ChevronsLeft size={13} /> : <ChevronsRight size={13} />}</button>
           </div>}
           <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>
           <button onClick={onNewFile} title="New file" aria-label="New file"><Plus size={14} /></button>
@@ -4904,7 +5005,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
     </div>;
   }
 
-  return <div className="artifact-workbench artifact-workbench-full">
+  return <div className={`artifact-workbench artifact-workbench-full${closingFullEditor ? " is-closing" : ""}`}>
     <div className="artifact-workbench-body split" style={{ "--files-pane-width": `${filesPaneWidth}px` } as React.CSSProperties}>
       {browser}
       <div className="artifact-workbench-divider" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-valuemin={FILES_PANE_MIN_WIDTH} aria-valuemax={1200} aria-valuenow={filesPaneWidth} tabIndex={0} onPointerDown={startFilesPaneResize} onDoubleClick={() => setFilesPaneWidth(FILES_PANE_DEFAULT_WIDTH)} onKeyDown={handleFilesPaneResizeKey}><span /></div>

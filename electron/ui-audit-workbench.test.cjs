@@ -71,7 +71,8 @@ test("files use a compact workbench pane with drill-down and split modes", () =>
 });
 
 test("files use a tab-first header without a path strip", () => {
-  assert.match(app, /const tabs = openFiles\.length > 0 \? <div ref=\{tabsRef\} className="artifact-tabs"/);
+  assert.match(app, /const tabs = openFiles\.length > 0 \? <div className="artifact-tabs-scroller" ref=\{tabsScrollerRef\}>/);
+  assert.match(app, /<div ref=\{tabsRef\} className="artifact-tabs" role="tablist"[^>]*onScroll=\{syncTabsScrollbar\}/);
   assert.match(app, /artifact-editor-header compact/);
   assert.match(app, /className="artifact-tabs-row"/);
   assert.doesNotMatch(app, /artifact-workbench-location/);
@@ -81,7 +82,8 @@ test("files use a tab-first header without a path strip", () => {
 
 test("the full editor shares the workbench shell and hides duplicate titles", () => {
   assert.doesNotMatch(app, /!compact && <div className="artifact-browser-title">/);
-  assert.match(app, /className="artifact-workbench artifact-workbench-full"/);
+  assert.match(app, /artifact-workbench artifact-workbench-full/);
+  assert.match(app, /closingFullEditor \? " is-closing" : ""/);
   assert.match(app, /className="artifact-browser-heading"/);
   assert.doesNotMatch(app, /artifact-workbench-location/);
   assert.doesNotMatch(app, /<FolderOpen size=\{13\} \/><strong>Files<\/strong>/);
