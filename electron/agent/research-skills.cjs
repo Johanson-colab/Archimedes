@@ -118,11 +118,19 @@ function prepareResearchSkill({ workspace, backend, thread, requested, emit = ()
     'Follow the selected native permissions. A denied operation is not approval to bypass it. Report blockers and retain run artifacts for an explicit retry. Do not claim the skill was read, scripts executed or stages completed without actual tool results.',
     'IdeaSpark produces an audited research idea and falsification plan; it does not itself execute the proposed experiments or write a complete paper.',
   ].join('\n');
+  const phaseCheckpoints = new Map();
+  for (const event of (previous?.threadId === thread.id && previous.workspace === root && previous.backend === backend ? thread.events || [] : [])) {
+    const payload = event.payload || {};
+    if (!payload.worker_id || !['phase_started', 'phase_finished', 'phase_failed'].includes(event.type)) continue;
+    phaseCheckpoints.set(payload.worker_id, { worker_id: payload.worker_id, state: event.type, output_paths: payload.output_paths || [], missing: payload.missing || [], interrupted: Boolean(payload.interrupted) });
+  }
+  const recentPhases = [...phaseCheckpoints.values()].slice(-5);
   const apiInstructions = [
     'Research mode: use the installed IdeaSpark skill. First call list_skills and read_skill_resource for its SKILL.md.',
     `The skill ID is ${SKILL_DIRS[backend]}/${SKILL_NAME}; the run directory is ${runRelative}.`,
     'Follow the skill navigator scripts/run.py next and its actual outputs. Run commands only through propose_command and obtain approval for writes. Use run_isolated_phase for LLM stages, with the exact prompt, inputs and output paths specified by the navigator.',
     'Do not claim stages completed without checking their real outputs; explain blocked or denied operations. Continue the same run on subsequent turns.',
+    recentPhases.length ? `Recent phase records (inspect the navigator and artifacts before resuming; started without finished means outcome is uncertain): ${JSON.stringify(recentPhases)}` : '',
   ].join(' ');
   return { ...state, skillFile, runDirectory, instructions: backend === 'api' ? apiInstructions : instructions };
 }

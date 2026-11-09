@@ -128,3 +128,13 @@ test('API Research installs and resumes its own IdeaSpark package', t => {
   const resumed = setup(root, { backend: 'api', requested: undefined, thread: { id: 'thread', events: first.records } });
   assert.equal(resumed.skill.runDirectory, first.skill.runDirectory);
 });
+
+test('API resume exposes incomplete phase checkpoints without declaring their outcome', t => {
+  const root = workspace(t);
+  const first = setup(root, { backend: 'api' });
+  const events = [...first.records, { type: 'phase_started', payload: { worker_id: 'worker-1', output_paths: ['phase/file.md'] } }];
+  const resumed = setup(root, { backend: 'api', requested: undefined, thread: { id: 'thread', events } });
+  assert.match(resumed.skill.instructions, /worker-1/);
+  assert.match(resumed.skill.instructions, /outcome is uncertain/);
+  assert.equal(resumed.skill.runDirectory, first.skill.runDirectory);
+});
