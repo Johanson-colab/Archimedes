@@ -150,15 +150,28 @@ test("composer exposes slash commands and an @ context shortcut", () => {
 test("slash menu presents the requested commands and connects all actions", () => {
   const commands = app.match(/const slashCommands = \[([\s\S]*?)\n  \];/)[1];
   assert.deepEqual([...commands.matchAll(/id: "([^"]+)"/g)].map((match) => match[1]), [
-    "research", "experiment", "write", "review", "init", "new", "undo", "compact", "fork", "side", "export", "model",
+    "init", "new", "undo", "compact", "fork", "side", "export", "model",
   ]);
-  assert.equal([...commands.matchAll(/detail: t\(/g)].length, 12);
-  assert.equal([...commands.matchAll(/run: \(\) =>/g)].length, 12);
+  assert.equal([...commands.matchAll(/detail: t\(/g)].length, 8);
+  assert.equal([...commands.matchAll(/run: \(\) =>/g)].length, 8);
   assert.match(app, /anchorRef=\{composerBoxRef\} placement="top-start" width=\{560\}/);
   assert.match(app, /minWidth=\{0\} maxHeight=\{320\} className="composer-slash-menu"/);
   assert.doesNotMatch(app, /slash-command-soon/);
   assert.match(css, /\.composer-slash-menu \.menu-item \{[\s\S]*?min-height: 30px;[\s\S]*?padding: 0 8px;/);
   assert.match(app, /scrollIntoView\(\{ block: "nearest" \}\)/);
+});
+
+test("removed slash words do not select a research mode when typed manually", async () => {
+  const start = app.indexOf("function inferResearchMode(");
+  const end = app.indexOf("\nconst initialPapers", start);
+  const { transformWithOxc } = await import("vite");
+  const { code } = await transformWithOxc(app.slice(start, end), "infer-research-mode.ts");
+  const inferResearchMode = new Function(`${code}\nreturn inferResearchMode;`)();
+  for (const command of ["/research", "/experiment", "/write", "/review", "/paper-reading"]) {
+    assert.equal(inferResearchMode(command, "free-chat"), "free-chat", command);
+  }
+  assert.equal(inferResearchMode("Design an experiment", "free-chat"), "experiment-setup");
+  assert.equal(inferResearchMode("Review the paper", "free-chat"), "paper-review");
 });
 
 test("composer exposes the current file and a clear-all attachment action", () => {

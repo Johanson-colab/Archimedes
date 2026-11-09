@@ -200,7 +200,7 @@ const previewModelCapabilities: ModelCapabilities = {
 
 function inferResearchMode(prompt: string, fallback: ResearchMode): ResearchMode {
   const text = prompt.trim().toLowerCase();
-  if (!text) return fallback;
+  if (!text || /^\/[a-z-]+$/i.test(text)) return fallback;
   if (/(review|reviewer|审稿|评审|批评|rebuttal|claim.?evidence|论文检查)/i.test(text)) return "paper-review";
   if (/(write|writing|draft|latex|abstract|introduction|method section|related work|写论文|写作|撰写|摘要|引言|方法章节)/i.test(text)) return "paper-generation";
   if (/(experiment|benchmark|baseline|ablation|dataset|metric|training|seed|实验|基线|消融|数据集|指标|训练|复现)/i.test(text)) return "experiment-setup";
@@ -3688,10 +3688,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const contextUsagePercent = Math.round(contextUsage * 100);
   const formatContextCharacters = (value: number) => value >= 10_000 ? `${Math.round(value / 1_000)}k` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : String(value);
   const slashCommands = [
-    { id: "research", icon: Lightbulb, label: t("Research"), detail: t("Explore research ideas"), run: () => onResearchMode("idea-spark") },
-    { id: "experiment", icon: FlaskConical, label: t("Experiment"), detail: t("Set up an experiment"), run: () => onResearchMode("experiment-setup") },
-    { id: "write", icon: FilePen, label: t("Write"), detail: t("Draft research writing"), run: () => onResearchMode("paper-generation") },
-    { id: "review", icon: BookOpenCheck, label: t("Paper reading"), detail: t("Read a paper interactively"), run: () => onResearchMode("paper-review") },
     { id: "init", icon: FileCog, label: t("Init"), detail: t("Set up project instructions"), run: () => onCommand("init") },
     { id: "new", icon: Plus, label: t("New"), detail: t("Start a new conversation"), run: () => onCommand("new") },
     { id: "undo", icon: Undo2, label: t("Undo"), detail: t("Undo the last message"), run: () => onCommand("undo") },
