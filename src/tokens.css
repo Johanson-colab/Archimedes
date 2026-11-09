@@ -51,7 +51,7 @@
   --surface-raised: var(--graphite-800);
   --surface-soft: var(--graphite-750);
   --surface-control: #262626;
-  --surface-control-active: #363636;
+  --surface-control-active: #2e2e2e;
   --canvas-paper: #141414;
   --canvas-grid: #252525;
   --canvas-sticky-ink: #2f2a20;
@@ -114,17 +114,17 @@
   --lang-other: #8b949e;
 
   /* --- Layer 3: component tokens (charcoal) ------------------------------- */
-  --mono-canvas: #111;
-  --mono-sidebar: #1b1b1b;
+  --mono-canvas: #161616;
+  --mono-sidebar: #1d1d1d;
   --mono-surface: #181818;
   --mono-surface-raised: #202020;
   --mono-control: #262626;
-  --mono-control-active: #363636;
+  --mono-control-active: #2e2e2e;
   --mono-border: #353535;
   --mono-border-strong: #4a4a4a;
-  --mono-text: #f4f4f4;
-  --mono-text-soft: #c4c4c4;
-  --mono-text-muted: #929292;
+  --mono-text: #f2f2f2;
+  --mono-text-soft: #c9c9c9;
+  --mono-text-muted: #909090;
 
   --rail-row-ink: #a7a8b5;
   --rail-row-ink-strong: #f1f0f6;
@@ -413,7 +413,7 @@ html[data-ui-zoom="css"][data-text-size="larger"] { --ui-scale: 1.2; }
    tokens above, so a future theme pack only needs to override semantics. */
 :root {
   --night-ground: var(--surface-ground);
-  --workbench-ground: var(--surface-canvas);
+  --workbench-ground: var(--mono-canvas);
   --night-sidebar: var(--surface-sidebar);
   --night-panel: var(--surface-panel);
   --night-panel-raised: var(--surface-raised);
@@ -517,16 +517,16 @@ html:not([data-theme="paper"]) .paper-review-workbench {
 }
 
 .conversation-layout.has-welcome {
-  --welcome-ground: #0f0f0f;
-  --welcome-paper: #171716;
-  --welcome-stone: #1d1c1a;
-  --welcome-hover: #1c1b19;
-  --welcome-ink: #f2f0ea;
-  --welcome-muted: #a8a49b;
+  --welcome-ground: #161616;
+  --welcome-paper: #1d1d1d;
+  --welcome-stone: #212121;
+  --welcome-hover: #232323;
+  --welcome-ink: #f2f2f2;
+  --welcome-muted: #a4a4a4;
   --welcome-bronze: #c9a87c;
-  --welcome-line: #2a2926;
-  --welcome-send-ink: #171716;
-  --welcome-hero-scrim: linear-gradient(90deg, rgba(15, 15, 15, .94) 0%, rgba(15, 15, 15, .62) 45%, rgba(15, 15, 15, .12) 100%);
+  --welcome-line: #2e2e2e;
+  --welcome-send-ink: #161616;
+  --welcome-hero-scrim: linear-gradient(90deg, rgba(22, 22, 22, .94) 0%, rgba(22, 22, 22, .62) 45%, rgba(22, 22, 22, .12) 100%);
 }
 
 html[data-theme="paper"] .conversation-layout.has-welcome {
