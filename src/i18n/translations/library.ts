@@ -5,6 +5,11 @@
 // lines instead of fighting over the end of one shared object.
 
 export const library: Record<string, string> = {
+  "Choose a PDF from your computer. Its filename will be used as the title.": "从电脑选择 PDF，文件名将作为论文标题。",
+  "Choose PDF": "选择 PDF",
+  "Import a local PDF": "导入本地 PDF",
+  "Importing PDF…": "正在导入 PDF…",
+  "The PDF could not be imported.": "无法导入 PDF。",
   "Add": "添加",
   "Add to canvas": "添加到画布",
   "All papers": "全部论文",

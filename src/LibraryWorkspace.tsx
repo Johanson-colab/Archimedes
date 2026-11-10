@@ -30,7 +30,7 @@ type Props = {
   renderReader: (props: ReaderProps) => ReactNode;
   renderInspector: (props: { noteDrafts: LibraryNoteDrafts; paper: LibraryPaper; onUpdate: (patch: PaperPatch) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void }) => ReactNode;
   renderEditor: (props: { editor: ResearchLibrary | "new" | null; onClose: () => void; onSave: (input: LibraryInput) => Promise<void> }) => ReactNode;
-  renderImport: (props: { library: ResearchLibrary; open: boolean; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void> }) => ReactNode;
+  renderImport: (props: { library: ResearchLibrary; open: boolean; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void>; onLocalImported: () => Promise<void> }) => ReactNode;
 };
 
 export default function LibraryWorkspace({ bridge, projectId, active, refreshVersion, onLibraryImported, onOpenProject, renderReader, renderInspector, renderEditor, renderImport }: Props) {
@@ -257,6 +257,11 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
     await Promise.all([loadPapers(importLibrary.id, true), loadLibraries()]);
     onLibraryImported?.();
   }
+  async function refreshImportedPaper() {
+    if (!importLibrary) return;
+    await Promise.all([loadPapers(importLibrary.id, true), loadLibraries()]);
+    onLibraryImported?.();
+  }
   async function syncLibraries() {
     if (!projectId || cloudBusy || !bridge.syncProjectLibraries) return;
     setCloudBusy(true); setNotice(""); setError("");
@@ -331,7 +336,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
     </div>
     <MenuSurface open={Boolean(menuLibrary) && active} onClose={() => setMenuLibrary(null)} anchorRef={menuRef} ariaLabel={t("Folder actions")} width={220}><MenuItem icon={<Pencil size={14} />} onClick={() => { setEditor(menuLibrary); setMenuLibrary(null); }}>{t("Edit library")}</MenuItem><MenuItem icon={<Trash size={14} />} danger onClick={() => { const target = menuLibrary; setMenuLibrary(null); if (target) void deleteLibrary(target); }}>{t("Delete library")}</MenuItem></MenuSurface>
     {renderEditor({ editor, onClose: () => setEditor(null), onSave: saveLibrary })}
-    {importLibrary && renderImport({ library: importLibrary, open: active, onClose: () => setImportLibraryId(null), onImport: importPaper })}
+    {importLibrary && renderImport({ library: importLibrary, open: active, onClose: () => setImportLibraryId(null), onImport: importPaper, onLocalImported: refreshImportedPaper })}
     <Dialog open={active && importPicker} onClose={() => setImportPicker(false)} size="compact" ariaLabel={t("Choose a library")} className="library-import-picker"><header><h2>{t("Choose a library")}</h2></header><p>{t("Select the folder where the imported paper should be saved.")}</p><select aria-label={t("Choose a library")} value={importChoice} onChange={(event) => setImportChoice(event.target.value)}>{libraries.map((folder) => <option value={folder.id} key={folder.id}>{folder.name}</option>)}</select><footer><button className="secondary-button" onClick={() => setImportPicker(false)}>{t("Cancel")}</button><button className="primary-button" disabled={!importChoice} onClick={() => { setImportPicker(false); setImportLibraryId(importChoice); }}>{t("Continue")}</button></footer></Dialog>
   </section>;
 }

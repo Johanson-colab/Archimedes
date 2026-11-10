@@ -196,7 +196,7 @@ export default function LibraryView(props: LibraryViewProps) {
     renderReader={(readerProps) => <PaperReadingWorkbench {...readerProps} bridge={bridge} workspace={workspace} projectId={projectId} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} onReproduceOpened={onReproduceOpened} />}
     renderInspector={(inspectorProps) => <PaperInspector {...inspectorProps} />}
     renderEditor={(editorProps) => <LibraryEditor {...editorProps} active={active} />}
-    renderImport={(importProps) => <PaperImportModal {...importProps} bridge={bridge} />}
+    renderImport={(importProps) => <PaperImportModal {...importProps} bridge={bridge} workspace={workspace} />}
   />;
   return <DailyLibraryView key={projectId || "local"} bridge={bridge} projectId={projectId} initialMode={initialDailyMode} refreshVersion={libraryRefreshVersion} onLibraryImported={onLibraryImported} />;
 }
@@ -2439,7 +2439,9 @@ function LibraryEditor({ editor, active = true, onClose, onSave }: { editor: Res
   </Dialog>;
 }
 
-function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: boolean; bridge: ResearchDeskBridge; library: ResearchLibrary; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void> }) {
+function PaperImportModal({ open, bridge, library, workspace, onClose, onImport, onLocalImported }: { open: boolean; bridge: ResearchDeskBridge; library: ResearchLibrary; workspace: string; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void>; onLocalImported: () => Promise<void> }) {
+  const { t } = useUISettings();
+  const [localImporting, setLocalImporting] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AcademicSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -2475,8 +2477,19 @@ function PaperImportModal({ open, bridge, library, onClose, onImport }: { open: 
       setAdding(null);
     }
   }
+  async function importLocal() {
+    setLocalImporting(true);
+    setError("");
+    try {
+      const paper = await bridge.importLocalLibraryPaper(library.id, workspace);
+      if (paper) { await onLocalImported(); onClose(); }
+    } catch (importError) {
+      setError(readableError(importError, t("The PDF could not be imported.")));
+    } finally { setLocalImporting(false); }
+  }
   return <Dialog open={open} onClose={onClose} size="lg" className="workspace-modal paper-import-modal" ariaLabel="Import paper">
     <div className="modal-header"><div><span className="eyebrow">Import into {library.name}</span><h2>Find academic papers</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button></div>
+    <div className="local-paper-import"><div><strong>{t("Import a local PDF")}</strong><small>{t("Choose a PDF from your computer. Its filename will be used as the title.")}</small></div><button type="button" className="secondary-button" disabled={localImporting} onClick={() => void importLocal()}>{localImporting ? <LoaderCircle className="spin" size={14} /> : <FileText size={14} />}{t(localImporting ? "Importing PDF…" : "Choose PDF")}</button></div>
     <p>Search by title, topic, DOI, arXiv URL, or arXiv ID. arXiv links are resolved directly; other queries use Semantic Scholar and OpenAlex.</p>
     <div className="external-search-box"><Search size={16} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void search()} placeholder="e.g. adaptive retrieval or 2401.18059" /><button className="primary-button" disabled={searching || !query.trim()} onClick={() => void search()}>{searching ? <LoaderCircle className="spin" size={14} /> : <Search size={14} />}Search</button></div>
     {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}

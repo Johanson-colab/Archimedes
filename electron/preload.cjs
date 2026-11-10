@@ -167,6 +167,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   deepSearchPapers: (input) => ipcRenderer.invoke("library:deep-search", input),
   getBenchmarkRadarData: () => ipcRenderer.invoke("benchmark-radar:get-data"),
   searchConferencePapers: (input) => ipcRenderer.invoke("library:search-conferences", input),
+  importLocalLibraryPaper: (libraryId, workspace) => ipcRenderer.invoke("library:import-local-pdf", { libraryId, workspace }),
   addLibraryPaper: (libraryId, paper) => ipcRenderer.invoke("library:add-paper", { libraryId, paper }),
   updateLibraryPaper: (paperId, patch) => ipcRenderer.invoke("library:update-paper", { paperId, patch }),
   removeLibraryPaper: (libraryId, paperId) => ipcRenderer.invoke("library:remove-paper", { libraryId, paperId }),

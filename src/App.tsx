@@ -684,6 +684,7 @@ const previewBridge = {
   createLatexDirectory: async (_workspace: string, directoryPath: string) => ({ name: directoryPath.split("/").at(-1) || directoryPath, path: directoryPath, type: "directory" as const }),
   importLatexFolder: async () => { throw new Error("Folder import is available in the Archimedes desktop app."); },
   compileLatexDocument: async (_workspace: string, path: string) => ({ ok: true, engine: "latexmk", source_path: path, pdf_path: ".archimedes/latex-build/preview/main.pdf", duration_ms: 438, diagnostics: [], log: "Browser preview build succeeded." }),
+  importLocalLibraryPaper: async () => { throw new Error("Local PDF import is available in the desktop app."); },
   getResearchTurnImage: async (threadId: string, turnId: string, position: number) => previewThreads.find((thread) => thread.id === threadId)?.messages.find((message) => message.turn_id === turnId && message.role === "user")?.attachments?.find((item) => item.position === position)?.imageData ?? null,
   getResearchThread: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);

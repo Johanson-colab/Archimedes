@@ -69,6 +69,7 @@ const store = require("./store.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
+const { importLocalPaper } = require("./library-local-import.cjs");
 const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");
 const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");
 const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");
@@ -1669,6 +1670,17 @@ app.whenReady().then(async () => {
     }
     if (paper.title.length > 1000 || String(paper.abstract || "").length > 100_000) throw new Error("Paper metadata is too large.");
     return store.addPaper(libraryId, paper);
+  });
+
+  ipcMain.handle("library:import-local-pdf", async (event, { libraryId, workspace } = {}) => {
+    if (typeof libraryId !== "string") throw new Error("Choose a library before importing a paper.");
+    const resolvedWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(workspace);
+    store.openWorkspace(resolvedWorkspace);
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    const options = { title: "Import local paper PDF", properties: ["openFile"], filters: [{ name: "PDF", extensions: ["pdf"] }] };
+    const result = browserWindow ? await dialog.showOpenDialog(browserWindow, options) : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths[0]) return null;
+    return importLocalPaper({ workspace: resolvedWorkspace, libraryId, localPath: result.filePaths[0], store });
   });
 
   ipcMain.handle("library:update-paper", (_event, { paperId, patch }) => {
