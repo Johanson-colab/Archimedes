@@ -14,7 +14,7 @@ function fixture(scenario, overrides = {}) {
   let peer;
   const events = [], records = [], saves = [];
   class Client extends EventEmitter {
-    constructor() { super(); peer = this; this.calls = []; this.replies = []; }
+    constructor(options) { super(); peer = this; this.options = options; this.calls = []; this.replies = []; }
     async start() {}
     async request(method, params) {
       this.calls.push({ method, params });
@@ -370,4 +370,16 @@ test('model catalog lookup closes the native client without starting a chat', as
   assert.deepEqual(result.models[0].efforts, ['high']);
   assert.deepEqual(f.peer().calls.map(call => call.method), ['model/list', 'config/read']);
   assert.equal(f.peer().closed, true);
+});
+
+test('Paper to Slides sends the Codex-specific skill and token only to the child environment', async t => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-slides-codex-'));
+  t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
+  const f = fixture(p => complete(p), { workspace, researchSkill: 'paper-to-slides', mineruToken: 'test-private-token' });
+  await backend.runCodex(f.args);
+  const input = f.peer().calls.find(c => c.method === 'turn/start').params.input.find(i => i.type === 'skill');
+  assert.equal(input.name, 'archimedes-paper2slides');
+  assert.ok(fs.existsSync(path.join(path.dirname(input.path), 'scripts/audit_deck.py')));
+  assert.equal(f.peer().options.env.MINERU_API_TOKEN, 'test-private-token');
+  assert.doesNotMatch(JSON.stringify(f.peer().calls) + JSON.stringify(f.events) + JSON.stringify(f.records), /test-private-token/);
 });

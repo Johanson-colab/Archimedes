@@ -17,6 +17,7 @@ import { misc as miscStrings } from "./i18n/translations/misc";
 import { native as nativeStrings } from "./i18n/translations/native";
 import { news as newsStrings } from "./i18n/translations/news";
 import { paperReview as paperReviewStrings } from "./i18n/translations/paperReview";
+import { paperSlides as paperSlidesStrings } from "./i18n/translations/paperSlides";
 import { dataAnalysis as dataAnalysisStrings } from "./i18n/translations/dataAnalysis";
 import {
   DEFAULT_FILE_TEXT_SHORTCUTS,
@@ -64,6 +65,7 @@ const translations: Record<string, string> = {
   ...newsStrings,
   ...paperReviewStrings,
   ...dataAnalysisStrings,
+  ...paperSlidesStrings,
   ...sessionStrings,
 };
 

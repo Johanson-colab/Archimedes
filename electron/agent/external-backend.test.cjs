@@ -155,3 +155,15 @@ test('native activity updates coalesce and persist only the last bounded snapsho
  const events=o.events.filter(e=>e.type==='native_activity');assert.ok(events.length<=4,`too many activity events: ${events.length}`);
  const snapshots=recorded.filter(e=>e.type==='native_activity');assert.equal(snapshots.length,1);assert.ok(snapshots[0].payload.activity.output.endsWith('99'));assert.ok(snapshots[0].payload.activity.output.length<=32768);
 });
+
+test('Paper to Slides sends the official Claude skill and token through the native launch', async t => {
+ const o=options();o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-slides-claude-'));
+ t.after(()=>fs.rmSync(o.workspace,{recursive:true,force:true}));
+ o.researchSkill='paper-to-slides';o.mineruToken='test-private-token';const records=[];o.recordEvent=e=>records.push(e);
+ assert.equal(await runNative(o),'Hello');
+ const launch=Fixture.last.options;const instructions=launch.args[launch.args.indexOf('--append-system-prompt')+1];
+ assert.match(instructions,/archimedes-paper2slides/);
+ assert.equal(launch.env.MINERU_API_TOKEN,'test-private-token');
+ assert.doesNotMatch(JSON.stringify(launch.args)+JSON.stringify(o.events)+JSON.stringify(records),/test-private-token/);
+ assert.equal(fs.existsSync(path.join(o.workspace,'.claude/skills/archimedes-paper2slides/scripts/audit_deck.py')),false);
+});

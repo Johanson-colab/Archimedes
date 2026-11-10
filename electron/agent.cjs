@@ -981,7 +981,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "idea-spark", researchSkill, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry }) {
+async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "idea-spark", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry }) {
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -1037,7 +1037,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     }
     if (externalBackend) {
       const response = await runNative({
-        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill,
+        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken,
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: async (payload) => {
           if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;

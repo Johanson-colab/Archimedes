@@ -13,10 +13,10 @@ function initialize(t, saved) {
 }
 
 const hiddenByDefault = ["news", "benchmark-radar", "extensions", "paper-review"];
-test("new installations show the seven default Research Apps", (t) => {
+test("new installations show the eight default Research Apps", (t) => {
   const { settings } = initialize(t);
   assert.deepEqual(settings, { version: 4, layout: "flat", disabledCore: hiddenByDefault });
-  assert.deepEqual(sidebarSettings.CORE_MODULE_IDS.filter((id) => !settings.disabledCore.includes(id)), ["library", "daily", "reproduce", "writing", "image-creation", "data-charts", "data-analysis"]);
+  assert.deepEqual(sidebarSettings.CORE_MODULE_IDS.filter((id) => !settings.disabledCore.includes(id)), ["library", "daily", "reproduce", "writing", "image-creation", "data-charts", "data-analysis", "paper-to-slides"]);
 });
 
 test("visibility toggles persist without reapplying defaults", (t) => {

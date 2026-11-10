@@ -17,6 +17,7 @@
     "image-creation": { "category": "analysis", "defaultEnabled": true, "order": 40, "description": "Browse figure references and create images with FigureForge." },
     "data-charts": { "category": "analysis", "defaultEnabled": true, "order": 45, "description": "Explore data charts and tables from research papers." },
     "data-analysis": { "category": "analysis", "defaultEnabled": true, "order": 46, "description": "Explore local datasets, summary statistics and charts." },
+    "paper-to-slides": { "category": "writing", "defaultEnabled": true, "order": 55, "description": "Turn research papers into presentations with Codex or Claude Code." },
     "paper-review": { "category": "writing", "defaultEnabled": false, "order": 90, "description": "Review manuscripts and prioritize revisions." }
   },
   "legacyAppCategories": { "focus-timer": "writing" },
