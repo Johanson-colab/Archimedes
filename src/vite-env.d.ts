@@ -98,6 +98,7 @@ interface ResearchDeskBridge {
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
+    getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     createResearchThread: (input: { projectId?: string; workspacePath?: string; workspaceId?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
     forkResearchThread: (threadId: string, workspace?: string, side?: boolean) => Promise<ResearchThreadDetail>;
@@ -1789,7 +1790,10 @@ interface ModelConnectionResult {
   resolvedModel: string;
 }
 
+interface MessageAttachment { type: ContextAttachmentType; name: string; position: number; threadId?: string; path?: string; detail?: string; size?: number; imageData?: string; }
+
 interface ResearchThreadMessage {
+  attachments?: MessageAttachment[];
   id: string;
   turn_id: string;
   role: "user" | "assistant";

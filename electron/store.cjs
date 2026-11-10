@@ -260,6 +260,14 @@ function schema(db) {
       completed_at TEXT
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS research_turn_attachments (
+      turn_id TEXT NOT NULL REFERENCES research_turns(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      metadata_json TEXT NOT NULL,
+      image_data TEXT,
+      PRIMARY KEY (turn_id, position)
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS research_events (
       id TEXT PRIMARY KEY NOT NULL,
       thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
@@ -2705,6 +2713,16 @@ function getResearchThread(id) {
     ...turn,
     assistant_message: presentStoredAssistantMessage(turn.assistant_message),
   }));
+  const attachmentsByTurn = new Map();
+  const attachmentRows = db.prepare(`SELECT a.turn_id, a.position, a.metadata_json FROM research_turn_attachments a
+    JOIN research_turns t ON t.id = a.turn_id WHERE t.thread_id = ? ORDER BY a.position`).all(id);
+  for (const row of attachmentRows) {
+    try {
+      const items = attachmentsByTurn.get(row.turn_id) || [];
+      items.push({ ...JSON.parse(row.metadata_json), position: row.position, threadId: id });
+      attachmentsByTurn.set(row.turn_id, items);
+    } catch { /* Ignore invalid legacy attachment metadata. */ }
+  }
   const sourcesByTurn = new Map();
   const sourceEvents = db.prepare(`
     SELECT turn_id, type, payload_json FROM research_events
@@ -2800,13 +2818,25 @@ function getResearchThread(id) {
     changeSets,
     events,
     messages: turns.flatMap((turn) => {
-      const items = [{ id: `${turn.id}:user`, turn_id: turn.id, role: "user", text: turn.user_message, created_at: turn.created_at }];
+      const items = [{ id: `${turn.id}:user`, turn_id: turn.id, role: "user", text: turn.user_message, attachments: attachmentsByTurn.get(turn.id) || [], created_at: turn.created_at }];
       if (turn.assistant_message) {
         items.push({ id: `${turn.id}:assistant`, turn_id: turn.id, role: "assistant", text: turn.assistant_message, created_at: turn.completed_at || turn.created_at, sources: sourcesByTurn.get(turn.id) || [] });
       }
       return items;
     }),
   };
+}
+
+function getResearchTurnImage(threadId, turnId, position) {
+  const db = requireDatabase();
+  const thread = db.prepare("SELECT project_id, visibility, owner_id FROM research_threads WHERE id = ?").get(threadId);
+  if (!thread) throw new Error("Research thread not found.");
+  if (thread.project_id && !canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this research thread.");
+  if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
+  if (!Number.isInteger(position) || position < 0) throw new Error("Invalid attachment position.");
+  const row = db.prepare(`SELECT a.image_data FROM research_turn_attachments a
+    JOIN research_turns t ON t.id = a.turn_id WHERE t.thread_id = ? AND t.id = ? AND a.position = ?`).get(threadId, turnId, position);
+  return row?.image_data || null;
 }
 
 function getResearchThreadIdForTask(taskId) {
@@ -2859,6 +2889,8 @@ function copyResearchThread(source, { title, visibility = source.visibility, tur
     turnIds.set(turn.id, id);
     db.prepare(`INSERT INTO research_turns (id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at)
       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)`).run(id, copy.id, turn.mode, turn.user_message, turn.assistant_message, turn.status, turn.created_at, turn.completed_at);
+    db.prepare(`INSERT INTO research_turn_attachments (turn_id, position, metadata_json, image_data)
+      SELECT ?, position, metadata_json, image_data FROM research_turn_attachments WHERE turn_id = ?`).run(id, turn.id);
   }
   for (const event of source.events || []) {
     const turnId = turnIds.get(event.turn_id);
@@ -2911,7 +2943,7 @@ function compactResearchThread(id, summary, expectedTurnId) {
   return getResearchThread(id);
 }
 
-function startResearchTurn({ threadId, taskId, prompt, mode }) {
+function startResearchTurn({ threadId, taskId, prompt, mode, contextItems = [] }) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT id FROM research_threads WHERE id = ?").get(threadId);
   if (!thread) throw new Error("Research thread not found.");
@@ -2930,6 +2962,11 @@ function startResearchTurn({ threadId, taskId, prompt, mode }) {
     INSERT INTO research_turns (id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at)
     VALUES (?, ?, ?, ?, ?, '', 'running', ?, NULL)
   `).run(turn.id, turn.thread_id, turn.task_id, turn.mode, turn.user_message, turn.created_at);
+  const insertAttachment = db.prepare("INSERT INTO research_turn_attachments (turn_id, position, metadata_json, image_data) VALUES (?, ?, ?, ?)");
+  for (const [position, item] of contextItems.entries()) {
+    const metadata = { type: item.type, name: item.name, path: item.path, detail: item.detail, size: item.image?.sizeBytes ?? item.size };
+    insertAttachment.run(turn.id, position, JSON.stringify(metadata), item.type === "image" ? item.image?.dataUrl || null : null);
+  }
   db.prepare("UPDATE research_threads SET mode = ?, status = 'running', updated_at = ? WHERE id = ?")
     .run(mode, turn.created_at, threadId);
   appendResearchEvent({ threadId, turnId: turn.id, type: "user_message", payload: { text: prompt, mode } });
@@ -3518,6 +3555,7 @@ module.exports = {
   getAction,
   getResearchThread,
   getResearchThreadIdForTask,
+  getResearchTurnImage,
   getResearchThreadContext,
   getSnapshot,
   archiveResearchProject,

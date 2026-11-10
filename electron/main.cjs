@@ -1000,6 +1000,13 @@ app.whenReady().then(async () => {
     return store.getResearchThread(input.threadId);
   });
 
+  ipcMain.handle("research-thread:attachment-image", (event, input = {}) => {
+    if (typeof input.threadId !== "string" || typeof input.turnId !== "string") throw new Error("A thread and turn ID are required.");
+    const workspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace);
+    store.openWorkspace(workspace);
+    return store.getResearchTurnImage(input.threadId, input.turnId, input.position);
+  });
+
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),

@@ -993,7 +993,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });
   const turn = transient
     ? { id: randomUUID(), thread_id: thread.id, task_id: task.id, mode, user_message: prompt, assistant_message: "", status: "running", created_at: new Date().toISOString(), completed_at: null }
-    : store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode });
+    : store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode, contextItems });
   const config = externalBackend ? null : getActiveModelConfig();
   const resolvedReasoningEffort = externalBackend ? null : normalizeModelReasoningEffort(config, reasoningEffort);
   const resolvedContextLength = externalBackend ? null : normalizeContextLength(config, contextLength);

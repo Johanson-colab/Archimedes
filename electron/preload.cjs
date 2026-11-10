@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   importLatexFolder: (workspace) => ipcRenderer.invoke("paper:import-folder", { workspace }),
   compileLatexDocument: (workspace, path) => ipcRenderer.invoke("paper:compile", { workspace, path }),
   getResearchThread: (threadId, workspace) => ipcRenderer.invoke("research-thread:get", { threadId, workspace }),
+  getResearchTurnImage: (threadId, turnId, position, workspace) => ipcRenderer.invoke("research-thread:attachment-image", { threadId, turnId, position, workspace }),
   getResearchSnapshot: () => ipcRenderer.invoke("research:snapshot"),
   createResearchThread: (input) => ipcRenderer.invoke("research-thread:create", input),
   forkResearchThread: (threadId, workspace, side = false) => ipcRenderer.invoke("research-thread:fork", { threadId, workspace, side }),

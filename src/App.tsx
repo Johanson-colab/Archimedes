@@ -170,6 +170,7 @@ type Message = {
   role: "user" | "assistant";
   text: string;
   sources?: ResearchSource[];
+  attachments?: MessageAttachment[];
   created_at?: string;
 };
 
@@ -683,6 +684,7 @@ const previewBridge = {
   createLatexDirectory: async (_workspace: string, directoryPath: string) => ({ name: directoryPath.split("/").at(-1) || directoryPath, path: directoryPath, type: "directory" as const }),
   importLatexFolder: async () => { throw new Error("Folder import is available in the Archimedes desktop app."); },
   compileLatexDocument: async (_workspace: string, path: string) => ({ ok: true, engine: "latexmk", source_path: path, pdf_path: ".archimedes/latex-build/preview/main.pdf", duration_ms: 438, diagnostics: [], log: "Browser preview build succeeded." }),
+  getResearchTurnImage: async (threadId: string, turnId: string, position: number) => previewThreads.find((thread) => thread.id === threadId)?.messages.find((message) => message.turn_id === turnId && message.role === "user")?.attachments?.find((item) => item.position === position)?.imageData ?? null,
   getResearchThread: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) throw new Error("Research thread not found.");
@@ -927,7 +929,7 @@ const previewBridge = {
     }
     const turnId = crypto.randomUUID();
     const taskId = crypto.randomUUID();
-    thread.messages.push({ id: `${turnId}:user`, turn_id: turnId, role: "user", text: prompt, created_at: now });
+    thread.messages.push({ id: `${turnId}:user`, turn_id: turnId, role: "user", text: prompt, attachments: (contextItems ?? []).map((item, position) => ({ type: item.type, name: item.name, path: item.path, detail: item.detail, size: item.image?.sizeBytes ?? item.size, position, threadId: thread!.id, imageData: item.image?.dataUrl })), created_at: now });
     thread.events ??= [];
     const appendPreviewEvent = (type: string, payload: unknown) => {
       thread!.events!.push({ id: crypto.randomUUID(), turn_id: turnId, sequence: thread!.events!.length + 1, type, payload, created_at: new Date().toISOString() });
@@ -2752,7 +2754,7 @@ function App() {
     clearPendingAssistantDeltas();
     setAgentBusy(true);
     setInterrupting(false);
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt, created_at: new Date().toISOString() }]);
+    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt, attachments: submittedContext.map((item, position) => ({ type: item.type, name: item.name, path: item.path, detail: item.detail, size: item.image?.sizeBytes ?? item.size, position, imageData: item.image?.dataUrl })), created_at: new Date().toISOString() }]);
     // A new turn must not reuse the previous turn's native activity while the
     // backend is starting (including when switching from Codex back to API).
     setNativeStream({ threadId: activeThreadId || "", events: [{ id: "pending-turn", turn_id: "pending-turn", sequence: 0, type: "user_message", payload: {}, created_at: new Date().toISOString() }] });
@@ -4496,6 +4498,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
   return <article className={`conversation-message ${message.role}`} data-turn-id={message.role === "user" ? message.id : undefined}>
+    <div className="conversation-message-content">
+    {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
@@ -4507,8 +4511,30 @@ const ConversationMessage = memo(function ConversationMessage({ message, streami
         </a>)}
       </div>}
     </div>
+    </div>
   </article>;
 });
+
+function MessageAttachmentView({ attachment, turnId }: { attachment: MessageAttachment; turnId?: string }) {
+  const { t } = useUISettings();
+  const [image, setImage] = useState<string | null>(attachment.imageData ?? null);
+  const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
+  const placeholder = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (attachment.type !== "image" || attachment.imageData || !attachment.threadId || !turnId) return;
+    let cancelled = false;
+    const load = () => { void desktopBridge.getResearchTurnImage(attachment.threadId!, turnId, attachment.position).then((value) => { if (!cancelled) { setImage(value); setFailed(!value); } }).catch(() => { if (!cancelled) setFailed(true); }); };
+    const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) { observer?.disconnect(); load(); } }, { rootMargin: "300px" });
+    if (observer && placeholder.current) observer.observe(placeholder.current); else load();
+    return () => { cancelled = true; observer?.disconnect(); };
+  }, [attachment.type, attachment.imageData, attachment.threadId, attachment.position, turnId]);
+  if (attachment.type !== "image") return <div className="message-attachment-file" title={attachment.detail || attachment.path || attachment.name}><FileText size={16} /><span>{attachment.name}</span></div>;
+  return <div className="message-attachment-image" ref={placeholder}>
+    {image ? <button type="button" onClick={() => setOpen(true)} aria-label={t("Preview image: {name}", { name: attachment.name })}><img src={image} alt={attachment.name} /></button> : <span>{failed ? t("Image unavailable") : t("Loading image…")}</span>}
+    {image && open && <Dialog open onClose={() => setOpen(false)} size="lightbox" className="attached-image-dialog" ariaLabel={t("Preview image: {name}", { name: attachment.name })}><header><strong>{attachment.name}</strong><button type="button" onClick={() => setOpen(false)} aria-label={t("Close")} title={t("Close")}><X size={18} /></button></header><div className="attached-image-dialog-stage"><img src={image} alt={attachment.name} /></div></Dialog>}
+  </div>;
+}
 
 const MarkdownContent = memo(function MarkdownContent({ content }: { content: string }) {
   return <ReactMarkdown
