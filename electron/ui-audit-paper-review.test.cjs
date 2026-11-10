@@ -39,8 +39,8 @@ test("Paper review is registry-hosted with a real bridge and in-page controls", 
 
 test("Library Review tab is renamed Interactive paper and the old workbench reads as reading", () => {
   assert.match(library, /<Tab value="review"[\s\S]{0,120}>\{t\("Interactive paper"\)\}<\/Tab>/);
-  assert.match(workbench, /<Tab value="review">Reading<\/Tab>/);
-  assert.match(workbench, /Run reading/);
+  assert.match(workbench, /<Tab value="reading">\{t\("Reading"\)\}<\/Tab>/);
+  assert.match(workbench, /Generate reading/);
   assert.doesNotMatch(workbench, /Text review/);
   assert.match(presentation, /Use saved reading/);
 });

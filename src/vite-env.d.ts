@@ -242,6 +242,8 @@ interface ResearchDeskBridge {
     requestReconstructionEvidence: (input: { images: string[]; width: number; height: number; task: Record<string, unknown>; model?: string; connection?: FigureForgeConnection }) => Promise<Record<string, unknown>>;
     runProactiveObservation: (input: { context: Record<string, unknown>; screenshot?: { dataUrl: string; width: number; height: number } }) => Promise<ProactiveObservationResult | null>;
     captureProactiveScreenshot: () => Promise<{ dataUrl: string; width: number; height: number; bytes: number } | null>;
+    cancelPaperDeepReading: (clientRunId: string) => Promise<{ cancelled: boolean }>;
+    exportPaperDeepReading: (paperId: string, workspace?: string, projectId?: string | null) => Promise<{ saved: boolean; path: string }>;
     runPaperReview: (input: PaperReviewInput) => Promise<PaperReviewResult>;
     getPaperReview: (paperId: string, workspace?: string, projectId?: string | null) => Promise<StoredPaperReview | null>;
     runPaperPresentation: (input: PaperPresentationInput) => Promise<StoredPaperPresentation>;
@@ -1910,14 +1912,32 @@ interface PaperReviewAgentResult {
 }
 
 interface PaperReviewResult {
+  reading?: PaperDeepReadingReport;
+  readingHtml?: string;
   specialists: PaperReviewAgentResult[];
   supervisor: { verdict: "ready" | "repair"; repairTargets: string[]; reason: string; run: AgentRunResult | null };
-  summary: { response: string; run: AgentRunResult } | null;
+  summary: { response: string; run: AgentRunResult | null } | null;
   error?: string;
   agentRuns: AgentRunResult[];
 }
 
+interface PaperDeepReadingReport {
+  version: 1;
+  skill: { id: "paper-deep-reading"; name: string };
+  title: { zh: string; en: string };
+  subtitle: { zh: string; en: string };
+  pageCount: number;
+  sourceDigest: string;
+  assets: Array<{ id: string; path: string; width: number; height: number; page: number; label: string; alt: { zh: string; en: string }; source: { zh: string; en: string } }>;
+  sections: Array<{ id: string; title: { zh: string; en: string }; blocks: Array<Record<string, unknown>> }>;
+  warnings: Array<{ zh: string; en: string }>;
+}
+
 interface StoredPaperReview {
+  reading?: PaperDeepReadingReport;
+  readingHtml?: string;
+  readingError?: string;
+  readingWarning?: string;
   specialists: Array<Pick<PaperReviewAgentResult, "id" | "title" | "status" | "response" | "error" | "repaired">>;
   audit: string;
   summary: string;
@@ -2018,7 +2038,7 @@ interface PaperPresentationEvent {
 
 interface PaperReviewEvent {
   type: "stage";
-  stage: "specialists" | "specialist_started" | "specialist_complete" | "specialist_failed" | "supervisor" | "repair" | "summary" | "complete";
+  stage: "source" | "plan" | "figures" | "chapter" | "audit" | "specialists" | "specialist_started" | "specialist_complete" | "specialist_failed" | "supervisor" | "repair" | "summary" | "complete";
   reviewerId?: "related" | "method" | "experiments" | "limitations";
   title: string;
   detail: string;

@@ -1299,6 +1299,7 @@ function normalizePaperReview(review) {
     specialists,
     audit: paperReviewText(review.supervisor?.reason, 20_000),
     summary,
+    ...(review.reading ? { reading: require("../shared/paper-deep-reading.cjs").normalizeReport(review.reading) } : {}),
   };
 }
 
@@ -1316,6 +1317,7 @@ function getPaperReview(paperId, projectId = null) {
       const legacy = JSON.parse(row.review_json);
       const normalized = normalizePaperReview({
         specialists: legacy.specialists,
+        reading: legacy.reading,
         supervisor: { reason: legacy.audit ?? legacy.supervisor?.reason },
         summary: { response: typeof legacy.summary === "string" ? legacy.summary : legacy.summary?.response },
       });
@@ -1347,6 +1349,7 @@ function savePaperReview(paperId, review, projectId = null) {
   const now = timestamp();
   const serialized = JSON.stringify({
     specialists: normalized.specialists,
+    ...(normalized.reading ? { reading: normalized.reading } : {}),
     supervisor: { reason: normalized.audit },
     summary: { response: normalized.summary },
   });

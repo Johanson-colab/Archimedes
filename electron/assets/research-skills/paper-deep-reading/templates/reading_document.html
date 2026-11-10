@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@@TITLE@@</title>
+<style>
+:root{--paper:#f5f2eb;--card:#fffefa;--ink:#193842;--muted:#596d72;--accent:#186b64;--line:#dddcd3;--warm:#ad6533}*{box-sizing:border-box}html{scroll-padding-top:90px}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.85 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}a{color:var(--accent);text-underline-offset:3px}button,select,input{font:inherit}button{color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px 13px;min-height:44px;cursor:pointer}button:hover{border-color:var(--accent)}:focus-visible{outline:3px solid var(--warm);outline-offset:3px}.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:66px;padding:10px 30px;background:var(--paper);border-bottom:1px solid var(--line)}.brand{font-size:12px;letter-spacing:.12em;color:var(--muted)}.layout{display:grid;grid-template-columns:238px minmax(0,920px);gap:52px;max-width:1320px;padding:40px 32px 100px;margin:auto}.sidebar{position:sticky;top:95px;height:calc(100vh - 125px);overflow:auto;padding-right:12px;align-self:start}.toc-title{font-size:12px;letter-spacing:.08em;color:var(--muted);margin-bottom:15px}.sidebar a{display:block;text-decoration:none;color:var(--muted);padding:7px 12px;border-left:2px solid var(--line);font-size:14px;line-height:1.6}.sidebar a.active{background:#e6eee8;border-color:var(--accent);color:var(--accent)}.sidebar a.sub{font-size:12px;padding-left:24px}.menu-toggle{display:none}main{min-width:0;background:var(--card);padding:44px clamp(22px,4vw,56px)}.hero{padding-bottom:26px;border-bottom:1px solid var(--line)}h1{font:600 clamp(30px,3.7vw,46px)/1.24 Georgia,"Microsoft YaHei",serif;letter-spacing:-.025em;margin:8px 0 20px}html[lang=zh-CN] h1{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}h2{font-size:26px;line-height:1.35;margin:0 0 23px}h3{font-size:20px;line-height:1.4;margin:32px 0 12px}h4{font-size:17px;margin:8px 0 16px}p{margin:14px 0}.subtitle,.source{color:var(--muted);font-size:13px}.source{line-height:1.6}section[data-section]{padding:40px 0;border-bottom:1px solid var(--line)}.note{padding:12px 16px;border-left:3px solid var(--accent);background:#eef4ef}figure{margin:28px 0}.figure-open{display:block;width:100%;padding:10px;background:white;cursor:zoom-in;border:1px solid var(--line);border-radius:5px}.figure-open img{display:block;width:100%;height:auto;max-height:650px;object-fit:contain}figcaption{font-size:14px;line-height:1.65;margin-top:12px}.table-scroll,.formula{max-width:100%;overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;min-width:85px}th{background:#f3f4ee}details{border-block-start:1px solid var(--line);padding:14px 0}summary{cursor:pointer;min-height:44px;font-weight:600}.comparison,.mechanism{padding:22px;margin:26px 0;background:#f2f6f1;border:1px solid #d6e2d7;border-radius:8px}.bar-row{display:grid;grid-template-columns:minmax(110px,1fr) 1.5fr minmax(80px,auto);gap:12px;align-items:center;margin:12px 0;font-size:13px}.bar-track{height:15px;background:#dce8dd;border-radius:3px;overflow:hidden}.bar-track i{display:block;height:100%;background:var(--accent)}.bar-row b{font-variant-numeric:tabular-nums}.mechanism svg{display:block;width:100%;height:auto;max-height:440px;background:var(--card)}.mechanism-frame{border-bottom:1px solid var(--line);padding-bottom:15px;margin-bottom:16px}.mechanism-controls{display:none;flex-wrap:wrap;gap:7px}.js .mechanism-controls{display:flex}.mechanism-controls input{width:100%;accent-color:var(--accent);min-height:44px}.lightbox{width:min(1200px,96vw);height:auto;max-height:94vh;padding:0;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--card)}.lightbox::backdrop{background:#142522b8}.lightbox header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 15px;border-bottom:1px solid var(--line)}.lightbox img{display:block;max-width:100%;max-height:77vh;object-fit:contain;margin:auto;padding:15px}.lightbox p{padding:0 18px;font-size:13px;color:var(--muted)}[hidden]{display:none!important}.noscript{padding:12px 20px;background:#fff3db}.formula{padding:18px 0}math{font-size:1.1em}.skip{position:absolute;left:-10000px}.skip:focus{left:20px;top:70px;z-index:20;background:white;padding:8px}footer{color:var(--muted);font-size:12px;padding-top:24px}
+@media(max-width:850px){.layout{grid-template-columns:190px minmax(0,1fr);gap:22px;padding-inline:18px}main{padding-inline:24px}.sidebar{padding-right:0}}
+@media(max-width:650px){.layout{display:block;padding:15px 0 40px}.topbar{padding:10px 15px}.brand{font-size:10px}.menu-toggle{display:inline-block}main{padding:25px 22px}.sidebar{position:static;height:auto;margin:0 18px 18px;max-height:45vh;border-bottom:1px solid var(--line)}.js .sidebar:not(.open){display:none}h1{font-size:30px}h2{font-size:23px}.bar-row{grid-template-columns:1fr}.comparison,.mechanism{padding:15px}.mechanism-controls button{padding-inline:9px}section[data-section]{padding-block:30px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+@media print{.topbar,.sidebar,.mechanism-controls{display:none!important}.layout{display:block;padding:0}main{padding:0}.js .mechanism-frame{display:block!important}body{background:white}a{color:inherit}}
+</style>
+</head>
+<body>
+<a class="skip" href="#document">Skip to document</a>
+<header class="topbar"><div class="brand">PAPER / DEEP READING</div><div><button class="menu-toggle" id="toc-toggle" aria-controls="toc" aria-expanded="false"><span lang="zh-CN">目录</span><span lang="en" hidden>Contents</span></button><button id="language" aria-label="Switch to English">English</button></div></header>
+<noscript><p class="noscript">正文、原图与全部机制状态可直接阅读；交互需要 JavaScript。 / Text, figures and all mechanism states remain readable; controls require JavaScript.</p></noscript>
+<div class="layout"><aside class="sidebar" id="toc"><div class="toc-title"><span lang="zh-CN">阅读目录</span><span lang="en" hidden>CONTENTS</span></div><nav aria-label="阅读目录" data-aria-zh="阅读目录" data-aria-en="Contents">@@NAV@@</nav></aside><main id="document"><header class="hero">@@HERO@@</header>@@BODY@@<footer><span lang="zh-CN">原始图表、教学示意与阅读者判断请结合各处来源说明阅读。</span><span lang="en" hidden>Read original evidence, illustrative diagrams and reader assessments with their source notes.</span></footer></main></div>
+<dialog class="lightbox" id="figure-dialog"><header><strong id="figure-title"></strong><button id="figure-close" aria-label="关闭图片" data-aria-zh="关闭图片" data-aria-en="Close image">×</button></header><img id="figure-image" alt=""><p id="figure-caption"></p></dialog>
+<script>
+(() => {
+  'use strict';
+  document.documentElement.classList.add('js');
+  const $ = id => document.getElementById(id);
+  let lang = 'zh';
+  const reduced = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : {matches:false,addEventListener:()=>{}};
+  const players=[];
+  const links=[...document.querySelectorAll('.sidebar nav > a')];
+  document.querySelectorAll('[data-toc="2"]').forEach(heading=>{
+    const section=heading.closest('[data-section]');
+    const parent=links.find(link=>link.hash==='#'+section.id);
+    const link=document.createElement('a');link.href='#'+heading.id;link.className='sub';
+    for(const child of heading.children)link.append(child.cloneNode(true));
+    let last=parent;while(last.nextElementSibling?.classList.contains('sub'))last=last.nextElementSibling;last.after(link);
+  });
+  function setLanguage(next, preservePosition=true){
+    const anchor=preservePosition ? [...document.querySelectorAll('main h2,main h3,main p,main figure')].find(el=>el.getBoundingClientRect().bottom>100) : null;
+    const top=anchor?.getBoundingClientRect().top;
+    lang=next;document.documentElement.lang=lang==='zh'?'zh-CN':'en';
+    document.querySelectorAll('[lang="zh-CN"],[lang="en"]').forEach(el=>{if(el!==document.documentElement)el.hidden=el.lang!==(lang==='zh'?'zh-CN':'en');});
+    document.querySelectorAll('svg [data-zh][data-en]').forEach(el=>el.textContent=el.dataset[lang]);
+    document.querySelectorAll('[data-alt-zh]').forEach(el=>el.alt=lang==='zh'?el.dataset.altZh:el.dataset.altEn);
+    document.querySelectorAll('[data-aria-zh]').forEach(el=>el.setAttribute('aria-label',lang==='zh'?el.dataset.ariaZh:el.dataset.ariaEn));
+    $('language').textContent=lang==='zh'?'English':'中文';$('language').setAttribute('aria-label',lang==='zh'?'Switch to English':'切换到中文');
+    document.title=document.querySelector('h1').dataset[lang];players.forEach(p=>p.draw());
+    if(anchor&&top!==undefined)window.scrollBy({top:anchor.getBoundingClientRect().top-top,behavior:'instant'});
+  }
+  $('language').onclick=()=>setLanguage(lang==='zh'?'en':'zh');
+  $('toc-toggle').onclick=()=>{const open=$('toc').classList.toggle('open');$('toc-toggle').setAttribute('aria-expanded',String(open));};
+  document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',event=>{const target=document.getElementById(a.hash.slice(1));if(!target)return;event.preventDefault();target.scrollIntoView({block:'start',behavior:'instant'});if(location.protocol!=='about:'){try{history.replaceState(null,'',a.hash);}catch(_){}}if(window.innerWidth<=650){$('toc').classList.remove('open');$('toc-toggle').setAttribute('aria-expanded','false');}}));
+  let returnFocus=null;
+  document.querySelectorAll('[data-figure-open]').forEach(button=>button.onclick=()=>{
+    const figure=button.closest('figure'),img=button.querySelector('img');returnFocus=button;
+    $('figure-image').src=img.src;$('figure-image').alt=img.alt;$('figure-title').textContent=img.alt;
+    $('figure-caption').textContent=figure.querySelector('figcaption [lang="'+(lang==='zh'?'zh-CN':'en')+'"]').textContent;
+    $('figure-dialog').showModal();
+  });
+  $('figure-close').onclick=()=>$('figure-dialog').close();
+  $('figure-dialog').addEventListener('click',e=>{if(e.target===$('figure-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
+  $('figure-dialog').addEventListener('close',()=>{returnFocus?.focus();$('figure-image').removeAttribute('src');});
+  document.querySelectorAll('.mechanism').forEach(panel=>{
+    const frames=[...panel.querySelectorAll('[data-frame]')],slider=panel.querySelector('input');let step=0,timer=null,all=false,visible=true;
+    const play=panel.querySelector('[data-action="play"]');
+    function draw(){frames.forEach((frame,i)=>frame.hidden=!all&&i!==step);slider.value=step;play.textContent=timer?(lang==='zh'?'暂停':'Pause'):(lang==='zh'?'播放':'Play');play.setAttribute('aria-pressed',String(!!timer));}
+    function stop(){if(timer)clearInterval(timer);timer=null;draw();}
+    panel.querySelector('[data-action="prev"]').onclick=()=>{stop();all=false;step=Math.max(0,step-1);draw();};
+    panel.querySelector('[data-action="next"]').onclick=()=>{stop();all=false;step=Math.min(frames.length-1,step+1);draw();};
+    panel.querySelector('[data-action="reset"]').onclick=()=>{stop();all=false;step=0;draw();};
+    panel.querySelector('[data-action="static"]').onclick=()=>{stop();all=true;draw();};
+    slider.oninput=()=>{stop();all=false;step=Number(slider.value);draw();};
+    play.onclick=()=>{if(timer){stop();return;}all=false;if(reduced.matches){step=Math.min(frames.length-1,step+1);draw();return;}if(document.hidden||!visible)return;if(step===frames.length-1)step=0;timer=setInterval(()=>{step++;if(step>=frames.length-1)stop();else draw();},1300);draw();};
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+    if('IntersectionObserver' in window)new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(!visible)stop();}).observe(panel);
+    reduced.addEventListener('change',()=>{stop();if(reduced.matches){all=true;draw();}});
+    players.push({draw});draw();
+  });
+  const tocTargets=[...document.querySelectorAll('[data-section],[data-toc="2"]')];
+  function updateTOC(){let active=tocTargets[0];const top=document.querySelector('.topbar').getBoundingClientRect().height+35;for(const target of tocTargets){if(target.getBoundingClientRect().top<=top)active=target;else break;}if(active)document.querySelectorAll('.sidebar a').forEach(a=>a.classList.toggle('active',a.hash==='#'+active.id));}
+  let tocFrame=false;
+  function scheduleTOC(){if(tocFrame)return;tocFrame=true;requestAnimationFrame(()=>{tocFrame=false;updateTOC();});}
+  window.addEventListener('scroll',scheduleTOC,{passive:true});window.addEventListener('resize',scheduleTOC);updateTOC();
+  window.addEventListener('message',e=>{if(e.source===parent&&e.data?.type==='paper-deep-reading:language'&&['zh','en'].includes(e.data.language))setLanguage(e.data.language);});
+  setLanguage('zh',false);
+})();
+</script>
+</body></html>

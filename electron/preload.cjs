@@ -207,6 +207,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   requestReconstructionEvidence: (input) => ipcRenderer.invoke("figure-forge:reconstruction-evidence", input),
   runProactiveObservation: (input) => ipcRenderer.invoke("proactive:observe", input),
   captureProactiveScreenshot: () => ipcRenderer.invoke("proactive:screenshot"),
+  cancelPaperDeepReading: (clientRunId) => ipcRenderer.invoke("paper-deep-reading:cancel", { clientRunId }),
+  exportPaperDeepReading: (paperId, workspace, projectId) => ipcRenderer.invoke("paper-deep-reading:export", { paperId, workspace, projectId }),
   runPaperReview: (input) => ipcRenderer.invoke("paper-review:run", input),
   getPaperReview: (paperId, workspace, projectId) => ipcRenderer.invoke("paper-review:get", { paperId, workspace, projectId }),
   runPaperPresentation: (input) => ipcRenderer.invoke("paper-presentation:run", input),

@@ -8,7 +8,9 @@ const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { registerThreadCommands } = require("./thread-commands.cjs");
-const { runPaperReview } = require("./paper-review-orchestrator.cjs");
+const { generateDeepReading } = require("./paper-deep-reading.cjs");
+const { renderReport: renderDeepReading, markdown: deepReadingMarkdown } = require("./paper-deep-reading-render.cjs");
+const deepReadingRuns = new Map();
 const kimiSlidesSkill = require("./kimi-slides-skill.cjs");
 const runKimiSlidesPlan = kimiSlidesSkill.runKimiSlidesPlan || kimiSlidesSkill.runKimiSlidesPresentation;
 const runPaperPresentationPlan = kimiSlidesSkill.runPaperPresentationPlan || runKimiSlidesPlan;
@@ -1899,44 +1901,62 @@ app.whenReady().then(async () => {
     }) });
   });
 
-  ipcMain.handle("paper-review:run", async (event, input) => {
-    if (!input?.paper || typeof input.paper.id !== "string" || typeof input.paper.title !== "string") {
-      throw new Error("A paper record is required to run an evidence review.");
-    }
-    const workspace = resolveWorkspace(input.workspace);
-    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
+  ipcMain.handle("paper-review:run", async (event, input = {}) => {
+    if (typeof input.paper?.id !== "string") throw new Error("A library paper is required.");
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace);
     store.openWorkspace(dataWorkspace);
-    const config = modelConfig.getActiveModelConfig();
-    const reasoningEffort = normalizeReasoningEffort(config, input.reasoningEffort || "high");
-    const contextLength = normalizeContextLength(config, input.contextLength || "extra-long");
-    const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
-    const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
-    const paper = {
-      id: input.paper.id,
-      title: input.paper.title.slice(0, 1_000),
-      authors: Array.isArray(input.paper.authors) ? input.paper.authors.slice(0, 50).map((author) => String(author).slice(0, 300)) : [],
-      year: Number.isInteger(input.paper.year) ? input.paper.year : null,
-      venue: String(input.paper.venue || "").slice(0, 1_000),
-      abstract: String(input.paper.abstract || "").slice(0, 12_000),
-      url: String(input.paper.url || "").slice(0, 4_000),
-      pdf_url: String(input.paper.pdf_url || "").slice(0, 4_000),
-    };
-    const emit = (payload) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper-review:event", { ...payload, ...(clientRunId ? { clientRunId } : {}) });
-    };
-    const result = await runPaperReview({
-      paper,
-      pageCount: Math.max(0, Math.min(5_000, Number(input.pageCount) || 0)),
-      workspace,
-      projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
-      contextItems,
-      reasoningEffort,
-      contextLength,
-      browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
-      emit,
-    });
-    if (!result.error && result.summary?.response) store.savePaperReview(paper.id, result, input.projectId);
-    return result;
+    const paper = store.getPaper(input.paper.id);
+    if (!paper) throw new Error("Paper not found.");
+    if (input.projectId && !store.canAccessProject(input.projectId, "editor")) throw new Error("You do not have permission to generate a reading in this project.");
+    const reader = store.getPaperReader(paper.id, input.projectId);
+    if (reader.asset?.status !== "ready" || !reader.asset.relative_path) throw new Error("Prepare or attach the original PDF before starting the reading.");
+    const clientRunId = typeof input.clientRunId === "string" ? input.clientRunId.slice(0, 100) : randomUUID();
+    const key = `${event.sender.id}:${paper.id}`;
+    if (deepReadingRuns.has(key)) throw new Error("This paper already has a reading in progress.");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 35 * 60_000);
+    const onDestroyed = () => controller.abort();
+    event.sender.once("destroyed", onDestroyed);
+    deepReadingRuns.set(key, { controller, clientRunId, senderId: event.sender.id });
+    try {
+      const result = await generateDeepReading({ paper, workspace: dataWorkspace,
+        pdfPath: workspaceFiles.workspacePath(dataWorkspace, reader.asset.relative_path),
+        config: modelConfig.getActiveModelConfig(), signal: controller.signal,
+        emit: payload => { if (!event.sender.isDestroyed()) event.sender.send("paper-review:event", { ...payload, clientRunId }); },
+      });
+      if (controller.signal.aborted) throw new Error("The reading was cancelled.");
+      store.openWorkspace(dataWorkspace);
+      store.savePaperReview(paper.id, result, input.projectId);
+      return { ...result, readingHtml: renderDeepReading(result.reading, dataWorkspace, { sourceButtons: true }) };
+    } finally {
+      clearTimeout(timer); event.sender.removeListener("destroyed", onDestroyed); deepReadingRuns.delete(key);
+    }
+  });
+
+  ipcMain.handle("paper-deep-reading:cancel", (event, { clientRunId } = {}) => {
+    for (const run of deepReadingRuns.values()) if (run.senderId === event.sender.id && run.clientRunId === clientRunId) { run.controller.abort(); return { cancelled: true }; }
+    return { cancelled: false };
+  });
+
+  ipcMain.handle("paper-deep-reading:export", async (event, { paperId, workspace, projectId } = {}) => {
+    if (typeof paperId !== "string") throw new Error("A paper is required.");
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(workspace);
+    store.openWorkspace(dataWorkspace);
+    const saved = store.getPaperReview(paperId, projectId);
+    if (!saved?.reading) throw new Error("Generate an illustrated reading before exporting.");
+    const report = saved.reading;
+    const browserWindow = BrowserWindow.fromWebContents(event.sender);
+    const options = { title: "Export illustrated paper reading", properties: ["openDirectory", "createDirectory"] };
+    const picked = browserWindow ? await dialog.showOpenDialog(browserWindow, options) : await dialog.showOpenDialog(options);
+    if (picked.canceled || !picked.filePaths[0]) return { saved: false, path: "" };
+    const directory = path.join(picked.filePaths[0], `paper-deep-reading-${Date.now()}-${randomUUID().slice(0, 6)}`);
+    const html = renderDeepReading(report, dataWorkspace);
+    fs.mkdirSync(path.join(directory, "assets"), { recursive: true });
+    for (const asset of report.assets) fs.copyFileSync(workspaceFiles.workspacePath(dataWorkspace, asset.path), path.join(directory, "assets", path.basename(asset.path)));
+    fs.writeFileSync(path.join(directory, "paper_report.html"), html);
+    for (const lang of ["zh", "en"]) fs.writeFileSync(path.join(directory, `paper_report.${lang}.md`), deepReadingMarkdown(report, lang));
+    fs.writeFileSync(path.join(directory, "report.json"), JSON.stringify(report, null, 2));
+    return { saved: true, path: directory };
   });
 
   ipcMain.handle("project:list-members", (_event, { projectId } = {}) => {
@@ -2090,7 +2110,13 @@ app.whenReady().then(async () => {
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
     store.openWorkspace(dataWorkspace);
-    return store.getPaperReview(paperId, projectId);
+    const saved = store.getPaperReview(paperId, projectId);
+    if (!saved?.reading) return saved;
+    try {
+      const digest = store.getPaperReader(paperId, projectId).asset?.sha256;
+      return { ...saved, ...(digest && digest !== saved.reading.sourceDigest ? { readingWarning: "The original PDF has changed since this reading. Read again to update its evidence." } : {}), readingHtml: renderDeepReading(saved.reading, dataWorkspace, { sourceButtons: true }) };
+    }
+    catch (error) { return { ...saved, readingError: error.message || String(error) }; }
   });
 
   ipcMain.handle("paper-presentation:run", async (event, input) => {

@@ -1153,6 +1153,8 @@ const previewBridge = {
   },
   onPaperReviewEvent: () => () => undefined,
   onPaperPresentationEvent: () => () => undefined,
+  cancelPaperDeepReading: async () => ({ cancelled: true }),
+  exportPaperDeepReading: async () => { throw new Error("Reading export is available in the desktop app."); },
   getPaperReview: async () => null,
   runPaperReview: async () => { throw new Error("Paper review runs in the desktop app."); },
   cleanupPaperReviewRuns: async () => ({ threadIds: [] }),

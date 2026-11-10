@@ -1,0 +1,93 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+const { JSDOM } = require('jsdom');
+const { normalizeReport, normalizeSection, SECTION_IDS } = require('../shared/paper-deep-reading.cjs');
+const { generateDeepReading, ask, inspectPDF } = require('./paper-deep-reading.cjs');
+const { renderReport, markdown } = require('./paper-deep-reading-render.cjs');
+const { report, samplePdf, bi } = require('./test-support/deep-reading.cjs');
+function temp(t) { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-deep-reading-')); t.after(() => fs.rmSync(root, { recursive: true, force: true })); return root; }
+
+test('structured readings preserve bilingual evidence and reject unsafe or incomplete content', t => {
+  const root = temp(t), fixture = report(root), normalized = normalizeReport(fixture);
+  assert.equal(normalized.skill.id, 'paper-deep-reading');
+  const hostile = structuredClone(fixture); hostile.assets[0].path = '../../secret.jpg'; assert.throws(() => normalizeReport(hostile), /figure reference/);
+  const short = structuredClone(fixture); short.sections[1].blocks = [{ type: 'paragraph', text: bi('摘要', 'Summary') }]; assert.throws(() => normalizeReport(short), /core chapter/);
+  const missing = structuredClone(fixture); missing.sections[2].blocks[1].text.en = ''; assert.throws(() => normalizeReport(missing), /text.en/);
+  assert.throws(() => normalizeSection({ id: 'method', title: bi('Method'), blocks: [{ type: 'script', text: bi('bad') }] }, { pageCount: 1 }), /Unsupported/);
+});
+
+test('offline rendering keeps originals, formulas, navigation and language/player state', async t => {
+  const root = temp(t), fixture = report(root);
+  fixture.sections.find(s => s.id === 'experiments').blocks.push({ type: 'table', caption: bi('测试结果', 'Results'), headers: [bi('方法', 'Method'), bi('分数', 'Score')], rows: [[bi('对照', 'Control'), 12]], source: bi('原文第1页。', 'Paper p. 1.'), pages: [1] });
+  const html = renderReport(fixture, root);
+  assert.match(html, /data:image\/jpeg;base64/); assert.match(html, /<math/); assert.doesNotMatch(html, /<script[^>]+src=/);
+  assert.match(markdown(normalizeReport(fixture), 'zh'), /图1：受控流程示例/);
+  const withWarning = normalizeReport({ ...fixture, warnings: [bi('未经独立复现。', 'Not independently reproduced.')] });
+  assert.match(markdown(withWarning, 'zh'), /未经独立复现。/);
+  assert.match(markdown(withWarning, 'en'), /Source PDF pages: 1\./);
+  const { default: ReactMarkdown } = await import('react-markdown');
+  const { default: remarkGfm } = await import('remark-gfm');
+  const renderedMarkdown = require('react-dom/server').renderToStaticMarkup(require('react').createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, markdown(withWarning, 'en')));
+  assert.match(renderedMarkdown, /<table>/);
+  assert.match(renderedMarkdown, /<td>Control<\/td><td>12<\/td>/);
+  const errors = [];
+  const dom = new JSDOM(html, { runScripts: 'dangerously', beforeParse(w) { w.scrollBy = () => {}; w.HTMLElement.prototype.scrollIntoView = function () { w.lastAnchor = this.id; }; w.matchMedia = () => ({ matches: false, addEventListener() {} }); w.HTMLDialogElement.prototype.showModal = function () { this.open = true; }; w.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new w.Event('close')); }; w.addEventListener('error', e => errors.push(e.message)); } });
+  try {
+    const d = dom.window.document, player = d.querySelector('.mechanism');
+    assert.equal(d.querySelector('[data-source-page]'), null);
+    assert.equal(d.querySelector('.reading-source-citation').textContent, 'PDF p. 1');
+    assert.equal(d.querySelectorAll('.sidebar a.sub').length, 7);
+    d.querySelector('.sidebar a[href="#method"]').click(); assert.equal(dom.window.lastAnchor, 'method');
+    player.querySelector('[data-action="next"]').click(); assert.equal(player.querySelector('input').value, '1');
+    d.getElementById('language').click(); assert.equal(d.documentElement.lang, 'en'); assert.equal(player.querySelector('input').value, '1');
+    assert.match(player.querySelector('[data-frame="1"] [lang="en"]').textContent, /Produce output/);
+    player.querySelector('[data-action="static"]').click(); assert.ok([...player.querySelectorAll('[data-frame]')].every(f => !f.hidden));
+    d.querySelector('[data-figure-open]').click(); assert.equal(d.getElementById('figure-dialog').open, true);
+    d.getElementById('figure-close').click(); assert.equal(d.getElementById('figure-dialog').open, false);
+    assert.deepEqual(errors, []);
+  } finally { dom.window.close(); }
+});
+
+test('real PDF parsing and vision crop feed seven sequential model-authored chapters and offline artifacts', async t => {
+  const root = temp(t), input = path.join(root, 'source.pdf'); fs.writeFileSync(input, samplePdf());
+  let active = 0, maximum = 0, calls = 0, selected;
+  const call = async (_config, messages, options) => {
+    active++; maximum = Math.max(maximum, active); calls++;
+    assert.equal(options.allowTools, false); assert.equal(options.requireComplete, true);
+    const user = messages.findLast(m => m.role === 'user').content;
+    let value;
+    if (Array.isArray(user)) {
+      assert.match(user[1].image_url.url, /^data:image\/jpeg;base64,/);
+      value = { crops: [{ id: selected.id, crop: { x: .1, y: .2, width: .8, height: .45 }, alt: bi('原图', 'Original figure') }] };
+    } else if (user.startsWith('Plan a full')) {
+      selected = JSON.parse(user.split('FIGURE CANDIDATES:\n')[1].split('\nPAPER EVIDENCE:')[0])[0];
+      assert.equal(selected.page, 1);
+      value = { title: bi('精读', 'Reading'), subtitle: bi('测试论文', 'Test paper'), sections: SECTION_IDS.map(id => ({ id, pages: [1], focus: 'Explain the actual source.' })), assetReview: [{ id: selected.id, decision: 'use', reason: bi('核心流程', 'Core process') }] };
+    } else if (user.startsWith('Audit the reading')) value = { repairs: [], notes: [] };
+    else {
+      const id = user.match(/^Write the complete ([\w-]+) chapter/)[1];
+      value = { id, title: bi(id), blocks: [ { type: 'paragraph', text: bi('原文给出一个流程。', 'The paper gives a process.'), pages: [1] }, { type: 'paragraph', text: bi('原文报告数值12。', 'The paper reports a value of 12.'), pages: [1] } ] };
+      if (id === 'method') { value.blocks.push({ type: 'figure', assetId: selected.id, caption: bi('原图说明', 'Original figure explanation') }); value.blocks.push(report(root).sections.find(s => s.id === 'method').blocks.find(b => b.type === 'mechanism')); }
+    }
+    active--; return { content: JSON.stringify(value) };
+  };
+  const stages = [];
+  const result = await generateDeepReading({ paper: { title: 'Fixture' }, pdfPath: input, workspace: root, config: { apiKey: 'test' }, call, emit: e => stages.push(e.stage) });
+  assert.equal(result.reading.sections.length, 7); assert.equal(result.reading.assets.length, 1); assert.equal(result.specialists.length, 4);
+  assert.equal(maximum, 1); assert.equal(calls, 10); assert.ok(stages.includes('audit'));
+  const directory = path.dirname(path.dirname(path.join(root, result.reading.assets[0].path)));
+  for (const file of ['paper_report.html', 'paper_report.zh.md', 'paper_report.en.md', 'report.json', 'source-inventory.json']) assert.ok(fs.existsSync(path.join(directory, file)), file);
+});
+
+test('cancellation and invalid model JSON stop with bounded retries', async t => {
+  let calls = 0;
+  await assert.rejects(ask({ apiKey: 'test' }, [], { call: async () => { calls++; return { content: 'not json' }; } }), /JSON/);
+  assert.equal(calls, 2);
+  const root = temp(t), input = path.join(root, 'source.pdf'); fs.writeFileSync(input, samplePdf());
+  const controller = new AbortController();
+  await assert.rejects(generateDeepReading({ paper: { title: 'Fixture' }, pdfPath: input, workspace: root, config: { apiKey: 'test' }, signal: controller.signal, call: async () => { controller.abort(); return { content: '{}' }; } }), /cancel|abort/i);
+  const staged = path.join(root, '.archimedes/paper-deep-reading'); if (fs.existsSync(staged)) assert.equal(fs.readdirSync(staged).length, 0);
+});
