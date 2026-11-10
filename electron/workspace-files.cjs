@@ -79,6 +79,13 @@ function fileChangeForContent(root, relative, nextContent) {
   return { path: normalized, status: "modified", ...lineStats(previous, nextContent) };
 }
 
+function inspectWorkspacePath(root, relative) {
+  const target = workspacePath(root, relative);
+  const stats = fs.statSync(target);
+  if (!stats.isFile() && !stats.isDirectory()) throw new Error("The requested path is not a file or directory.");
+  return { path: relativePath(root, target), type: stats.isDirectory() ? "directory" : "file" };
+}
+
 function listWorkspaceDirectory(root, relative = "") {
   const directory = workspacePath(root, relative);
   if (!fs.statSync(directory).isDirectory()) throw new Error("The requested path is not a directory.");
@@ -209,6 +216,7 @@ module.exports = {
   compareWorkspaceSnapshots,
   fileChangeForContent,
   fileKind,
+  inspectWorkspacePath,
   listWorkspaceDirectory,
   listWorkspaceTree,
   readWorkspaceFile,

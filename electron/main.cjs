@@ -918,6 +918,11 @@ app.whenReady().then(async () => {
     return workspaceFiles.listWorkspaceDirectory(workspace, input.directory);
   });
 
+  ipcMain.handle("workspace:inspect-path", (_event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    return workspaceFiles.inspectWorkspacePath(workspace, input.path);
+  });
+
   ipcMain.handle("workspace:read-file", (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
     const file = workspaceFiles.readWorkspaceFile(workspace, input.path);

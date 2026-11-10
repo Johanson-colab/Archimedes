@@ -327,6 +327,21 @@ function setDirectoryChildren(entries: WorkspaceFileEntry[], directory: string, 
   });
 }
 
+// Explicit links can point into directories normally omitted from the file
+// tree. Add only the requested chain, leaving unrelated ignored entries hidden.
+function ensureDirectoryPath(entries: WorkspaceFileEntry[], directory: string): WorkspaceFileEntry[] {
+  const parts = directory.split("/").filter(Boolean);
+  function visit(current: WorkspaceFileEntry[], index: number): WorkspaceFileEntry[] {
+    if (index >= parts.length) return current;
+    const entryPath = parts.slice(0, index + 1).join("/");
+    const existing = current.find((entry) => entry.path === entryPath && entry.type === "directory");
+    const entry: WorkspaceFileEntry = existing ?? { name: parts[index], path: entryPath, type: "directory" };
+    const updated = index === parts.length - 1 ? entry : { ...entry, children: visit(entry.children ?? [], index + 1) };
+    return existing ? current.map((candidate) => candidate === existing ? updated : candidate) : [...current, updated];
+  }
+  return visit(entries, 0);
+}
+
 const DEFAULT_WORKSPACE = import.meta.env.VITE_DEFAULT_WORKSPACE ?? "";
 const previewListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
 const previewPtyListeners = new Set<(payload: { sessionId: string; data: string }) => void>();
@@ -616,6 +631,9 @@ const previewBridge = {
           : [{ name: "notes", path: "notes", type: "directory" as const }, { name: "paper", path: "paper", type: "directory" as const }, { name: "src", path: "src", type: "directory" as const }];
     return { directory, count: entries.length, truncated: false, entries };
   },
+  inspectWorkspacePath: async (_workspace: string, filePath: string) => ({
+    path: filePath, type: ["notes", "paper", "src"].includes(filePath) ? "directory" as const : "file" as const,
+  }),
   readWorkspaceFile: async (_workspace: string, filePath: string) => {
     const imageUrl = previewArtifactImages[filePath];
     if (imageUrl) return { name: filePath.split("/").at(-1) || filePath, path: filePath, kind: "image" as const, size: 1_200_000, modifiedAt: new Date().toISOString(), previewUrl: imageUrl };
@@ -1411,6 +1429,8 @@ function App() {
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
   const [openFiles, setOpenFiles] = useState<WorkspaceFilePreview[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [directoryRequest, setDirectoryRequest] = useState<{ path: string; workspace: string; id: number } | null>(null);
+  const pathOpenRequestRef = useRef(0);
   const [selectedFile, setSelectedFile] = useState<WorkspaceFilePreview | null>(null);
   const [fileSelection, setFileSelection] = useState<{ file: WorkspaceFilePreview; selection: FileSelection } | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
@@ -1507,6 +1527,8 @@ function App() {
   // and paper writing operate inside the session folder: session snapshot →
   // project folder → primary workspace.
   const executionWorkspace = activeThread?.workspace_path || activeWorkspace?.root || activeProject?.workspace_path || workspace;
+  const executionWorkspaceRef = useRef(executionWorkspace);
+  executionWorkspaceRef.current = executionWorkspace;
   const draftNoteKey = `draft:${workspace || "workspace"}`;
   const noteKey = activeThreadId ?? draftNoteKey;
   const noteValue = noteLoadedKey === noteKey ? noteValues[noteKey] ?? "" : "";
@@ -2809,13 +2831,18 @@ function App() {
   }
 
   async function openFilePane(filePath: string, surface: "workbench" | "page" = "workbench") {
+    const request = ++pathOpenRequestRef.current;
+    const requestWorkspace = executionWorkspace;
+    const isCurrent = () => request === pathOpenRequestRef.current && requestWorkspace === executionWorkspaceRef.current;
+    setDirectoryRequest(null);
     if (surface === "page") setMainSection("files");
     else openWorkbench("files");
     setSelectedFilePath(filePath);
     setFileLoading(true);
     setFileError("");
     try {
-      const file = await desktopBridge.readWorkspaceFile(executionWorkspace, filePath);
+      const file = await desktopBridge.readWorkspaceFile(requestWorkspace, filePath);
+      if (!isCurrent()) return;
       ensureFileDraft(file);
       setSelectedFile(file);
       setOpenFiles((current) => {
@@ -2829,20 +2856,57 @@ function App() {
       setFileConflicts((current) => withoutKey(current, filePath));
       setFileErrors((current) => withoutKey(current, filePath));
     } catch (error) {
+      if (!isCurrent()) return;
       setSelectedFile(null);
       setFileError(error instanceof Error ? error.message : String(error));
     } finally {
-      setFileLoading(false);
+      if (isCurrent()) setFileLoading(false);
     }
   }
 
-  function openChangedFile(filePath: string) {
-    if (/\.(?:tex|bib|bst|cls|sty|cfg)$/i.test(filePath)) {
-      setPaperOpenRequest({ path: filePath, token: Date.now() });
-      setMainSection("writing");
-      return;
+  const clearDirectoryRequest = useCallback((id: number) => {
+    setDirectoryRequest((current) => current?.id === id ? null : current);
+  }, []);
+
+  async function openChangedFile(filePath: string) {
+    const request = ++pathOpenRequestRef.current;
+    const requestWorkspace = executionWorkspace;
+    const isCurrent = () => request === pathOpenRequestRef.current && requestWorkspace === executionWorkspaceRef.current;
+    try {
+      const entry = await desktopBridge.inspectWorkspacePath(requestWorkspace, filePath);
+      if (!isCurrent()) return;
+      if (entry.type === "directory") {
+        let tree = await desktopBridge.listWorkspaceFiles(requestWorkspace);
+        if (!isCurrent()) return;
+        const parts = entry.path.split("/").filter(Boolean);
+        for (let index = 1; index <= parts.length; index += 1) {
+          const directory = parts.slice(0, index).join("/");
+          const listing = await desktopBridge.listWorkspaceFiles(requestWorkspace, directory);
+          if (!isCurrent()) return;
+          tree = { ...tree, entries: setDirectoryChildren(ensureDirectoryPath(tree.entries, directory), directory, listing.entries) };
+        }
+        setFileTree(tree);
+        setFileError("");
+        setFileLoading(false);
+        setDirectoryRequest({ path: entry.path, workspace: requestWorkspace, id: request });
+        openWorkbench("files");
+      } else if (/\.(?:tex|bib|bst|cls|sty|cfg)$/i.test(entry.path)) {
+        setDirectoryRequest(null);
+        setFileLoading(false);
+        setPaperOpenRequest({ path: entry.path, token: Date.now() });
+        setMainSection("writing");
+      } else {
+        void openFilePane(entry.path);
+      }
+    } catch (error) {
+      if (!isCurrent()) return;
+      setDirectoryRequest(null);
+      openWorkbench("files");
+      setSelectedFilePath(filePath);
+      setSelectedFile(null);
+      setFileLoading(false);
+      setFileError(error instanceof Error ? error.message : String(error));
     }
-    void openFilePane(filePath);
   }
 
   function askAIAboutPaper(filePath: string) {
@@ -2854,11 +2918,14 @@ function App() {
   }
 
   function selectOpenFilePane(file: WorkspaceFilePreview, surface: "workbench" | "page" = "workbench") {
+    pathOpenRequestRef.current += 1;
+    setDirectoryRequest(null);
     if (surface === "page") setMainSection("files");
     else openWorkbench("files");
     setSelectedFilePath(file.path);
     setSelectedFile(file);
     setFileError("");
+    setFileLoading(false);
     ensureFileDraft(file);
   }
 
@@ -3391,7 +3458,7 @@ function App() {
             })}
           </Suspense>
           {mainSection === "files" && (
-            <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onCloseOtherFiles={(filePath) => void closeOtherFilePanes(filePath)} onCloseAllFiles={() => void closeAllFilePanes()} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} onFileSelectionChange={(path, selection) => setFileSelection(selection ? { file: selectedFile ?? { name: path.split("/").at(-1) ?? path, path, kind: "text", size: 0, modifiedAt: "" }, selection } : null)}
+            <FilesView workspace={executionWorkspace} tree={fileTree} openFiles={openFiles} selectedPath={selectedFilePath} directoryRequest={directoryRequest} onDirectoryRequestHandled={clearDirectoryRequest} file={selectedFile} loading={fileLoading} error={fileError} loadingDirectories={loadingDirectories} drafts={fileDrafts} dirtyFiles={dirtyFilePaths} savingFiles={fileSaving} conflicts={fileConflicts} saveErrors={fileErrors} onOpenFile={(filePath) => void openFilePane(filePath, "page")} onSelectOpenFile={(file) => selectOpenFilePane(file, "page")} onCloseFile={closeFilePane} onCloseOtherFiles={(filePath) => void closeOtherFilePanes(filePath)} onCloseAllFiles={() => void closeAllFilePanes()} onLoadDirectory={(directory) => void loadWorkspaceDirectory(directory)} onRefresh={() => void refreshWorkspaceFiles()} onNewFile={() => setModal("file")} onDraftChange={updateFileDraft} onSave={(filePath) => void saveFile(filePath)} onReload={(filePath) => void reloadFile(filePath)} onDismissConflict={dismissFileConflict} onAddComment={addFileComment} onFileSelectionChange={(path, selection) => setFileSelection(selection ? { file: selectedFile ?? { name: path.split("/").at(-1) ?? path, path, kind: "text", size: 0, modifiedAt: "" }, selection } : null)}
               onRestore={() => { setMainSection("chat"); openWorkbench("files"); }} />
           )}
         </div>
@@ -3470,6 +3537,8 @@ function App() {
               tree={fileTree}
               openFiles={openFiles}
               selectedPath={selectedFilePath}
+              directoryRequest={directoryRequest}
+              onDirectoryRequestHandled={clearDirectoryRequest}
               file={selectedFile}
               loading={fileLoading}
               error={fileError}
@@ -4660,11 +4729,12 @@ function workspaceFileTone(entry: Pick<WorkspaceFileEntry, "type" | "kind" | "pa
   return "file";
 }
 
-function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirectories, onToggle, onLoadDirectory, onOpenFile }: {
+function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, revealDirectory, loadingDirectories, onToggle, onLoadDirectory, onOpenFile }: {
   entry: WorkspaceFileEntry;
   depth: number;
   expanded: Set<string>;
   selectedPath: string | null;
+  revealDirectory: { path: string; id: number } | null;
   loadingDirectories: Set<string>;
   onToggle: (filePath: string) => void;
   onLoadDirectory: (filePath: string) => void;
@@ -4673,16 +4743,20 @@ function WorkspaceTreeNode({ entry, depth, expanded, selectedPath, loadingDirect
   const isDirectory = entry.type === "directory";
   const isExpanded = isDirectory && expanded.has(entry.path);
   const isLoading = loadingDirectories.has(entry.path);
+  const rowRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (isDirectory && revealDirectory?.path === entry.path) rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [entry.path, isDirectory, revealDirectory?.id, revealDirectory?.path]);
   useEffect(() => {
     if (isExpanded && entry.children === undefined && !isLoading) onLoadDirectory(entry.path);
   }, [entry.children, entry.path, isExpanded, isLoading, onLoadDirectory]);
   return <div className="workspace-tree-node">
-    <button className={`workspace-tree-row${isDirectory ? " is-directory" : ""}${entry.path === selectedPath ? " active" : ""}`} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
+    <button ref={rowRef} className={`workspace-tree-row${isDirectory ? " is-directory" : ""}${entry.path === selectedPath ? " active" : ""}`} style={{ paddingLeft: `${8 + depth * 15}px` }} onClick={() => isDirectory ? onToggle(entry.path) : onOpenFile(entry.path)} title={entry.path}>
       <span className="tree-disclosure">{isLoading ? <RefreshCw className="spin" size={11} /> : isDirectory ? isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}</span>
       <span className={`tree-file-icon tone-${workspaceFileTone(entry)}`}><WorkspaceFileGlyph entry={entry} expanded={isExpanded} /></span>
       <strong>{entry.name}</strong>
     </button>
-    {isExpanded && entry.children?.map((child) => <WorkspaceTreeNode key={child.path} entry={child} depth={depth + 1} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={onToggle} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
+    {isExpanded && entry.children?.map((child) => <WorkspaceTreeNode key={child.path} entry={child} depth={depth + 1} expanded={expanded} selectedPath={selectedPath} revealDirectory={revealDirectory} loadingDirectories={loadingDirectories} onToggle={onToggle} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
   </div>;
 }
 
@@ -4866,11 +4940,13 @@ function readFilesPaneWidth() {
   return Number.isFinite(saved) && saved >= FILES_PANE_MIN_WIDTH ? saved : FILES_PANE_DEFAULT_WIDTH;
 }
 
-function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onCloseOtherFiles, onCloseAllFiles, onLoadDirectory, onRefresh, onNewFile, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, onFileSelectionChange, compact = false, compactWidth = 0, onOpenFull, onRestore }: {
+function FilesView({ workspace, tree, openFiles, selectedPath, directoryRequest, onDirectoryRequestHandled, file, loading, error, loadingDirectories, drafts, dirtyFiles, savingFiles, conflicts, saveErrors, onOpenFile, onSelectOpenFile, onCloseFile, onCloseOtherFiles, onCloseAllFiles, onLoadDirectory, onRefresh, onNewFile, onDraftChange, onSave, onReload, onDismissConflict, onAddComment, onFileSelectionChange, compact = false, compactWidth = 0, onOpenFull, onRestore }: {
   workspace: string;
   tree: WorkspaceFileTree;
   openFiles: WorkspaceFilePreview[];
   selectedPath: string | null;
+  directoryRequest?: { path: string; workspace: string; id: number } | null;
+  onDirectoryRequestHandled?: (id: number) => void;
   file: WorkspaceFilePreview | null;
   loading: boolean;
   error: string;
@@ -4901,6 +4977,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
 }) {
   const { t } = useUISettings();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [revealedDirectory, setRevealedDirectory] = useState<{ path: string; id: number } | null>(null);
   const [compactPane, setCompactPane] = useState<"browse" | "editor">(selectedPath ? "editor" : "browse");
   const [filesPaneWidth, setFilesPaneWidth] = useState(readFilesPaneWidth);
   const [filesListCollapsed, setFilesListCollapsed] = useState(false);
@@ -4979,6 +5056,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
   }, [openFiles.length]);
   const workspaceName = workspace.split("/").filter(Boolean).at(-1) || "Workspace";
   useEffect(() => {
+    setRevealedDirectory(null);
     if (!selectedPath) {
       setCompactPane("browse");
       return;
@@ -4992,6 +5070,19 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
       return next;
     });
   }, [selectedPath]);
+  useEffect(() => {
+    if (!directoryRequest || directoryRequest.workspace !== workspace) return;
+    const parts = directoryRequest.path.split("/").filter(Boolean);
+    setExpanded((current) => {
+      const next = new Set(current);
+      for (let index = 1; index <= parts.length; index += 1) next.add(parts.slice(0, index).join("/"));
+      return next;
+    });
+    setRevealedDirectory({ path: directoryRequest.path, id: directoryRequest.id });
+    setCompactPane("browse");
+    setFilesListCollapsed(false);
+    onDirectoryRequestHandled?.(directoryRequest.id);
+  }, [directoryRequest, workspace, onDirectoryRequestHandled]);
   const toggleDirectory = (filePath: string) => setExpanded((current) => {
     const next = new Set(current);
     if (next.has(filePath)) next.delete(filePath); else next.add(filePath);
@@ -5113,7 +5204,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
         <button onClick={onNewFile} title="New file" aria-label="New file"><Plus size={14} /></button>
       </div>
     </div>}
-    {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={selectedPath} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={onOpenFile} />)}
+    {tree.entries.map((entry) => <WorkspaceTreeNode key={entry.path} entry={entry} depth={0} expanded={expanded} selectedPath={revealedDirectory?.path ?? selectedPath} revealDirectory={revealedDirectory} loadingDirectories={loadingDirectories} onToggle={toggleDirectory} onLoadDirectory={onLoadDirectory} onOpenFile={(path) => { setRevealedDirectory(null); setCompactPane("editor"); setFilesEditorCollapsed(false); onOpenFile(path); }} />)}
     {!tree.entries.length && <p className="artifact-browser-empty">This workspace has no visible files.</p>}
   </aside>;
 
@@ -5124,7 +5215,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, file, loading, er
         key={openFile.path}
         onContextMenu={(event) => { event.preventDefault(); setTabMenu({ file: openFile, x: event.clientX, y: event.clientY }); }}
       >
-        <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => onSelectOpenFile(openFile)} title={openFile.path}>
+        <button className="artifact-tab-main" role="tab" aria-selected={openFile.path === selectedPath} onClick={() => { setRevealedDirectory(null); setCompactPane("editor"); setFilesEditorCollapsed(false); onSelectOpenFile(openFile); }} title={openFile.path}>
           {dirtyFiles.has(openFile.path) && <span className="artifact-dirty-dot" title="Unsaved changes" />}
           <span className={`artifact-file-icon tree-file-icon tone-${workspaceFileTone({ type: "file", kind: openFile.kind, path: openFile.path })}`}><WorkspaceFileGlyph entry={{ type: "file", kind: openFile.kind, path: openFile.path }} /></span><span className="artifact-tab-name">{openFile.name}</span>
         </button>

@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   removeSidebarPlugin: (id) => ipcRenderer.invoke("plugins:remove", { id }),
   openWorkspace: (workspacePath) => ipcRenderer.invoke("workspace:open", workspacePath),
   listWorkspaceFiles: (workspace, directory = "") => ipcRenderer.invoke("workspace:list-files", { workspace, directory }),
+  inspectWorkspacePath: (workspace, filePath) => ipcRenderer.invoke("workspace:inspect-path", { workspace, path: filePath }),
   readWorkspaceFile: (workspace, filePath) => ipcRenderer.invoke("workspace:read-file", { workspace, path: filePath }),
   writeWorkspaceFile: (workspace, filePath, content) => ipcRenderer.invoke("workspace:write-file", { workspace, path: filePath, content }),
   listArtifacts: (threadId) => ipcRenderer.invoke("artifacts:list", { threadId }),

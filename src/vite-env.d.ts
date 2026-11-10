@@ -85,6 +85,7 @@ interface ResearchDeskBridge {
     removeSidebarPlugin: (id: string) => Promise<SidebarPluginRecord[]>;
     openWorkspace: (workspacePath?: string) => Promise<WorkspaceSnapshot>;
     listWorkspaceFiles: (workspace: string, directory?: string) => Promise<WorkspaceFileTree>;
+    inspectWorkspacePath: (workspace: string, filePath: string) => Promise<{ path: string; type: "file" | "directory" }>;
     readWorkspaceFile: (workspace: string, filePath: string) => Promise<WorkspaceFilePreview>;
     listArtifacts: (threadId: string) => Promise<ResearchArtifact[]>;
     markArtifactsSeen: (threadId: string) => Promise<{ marked: number }>;

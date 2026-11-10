@@ -6,6 +6,7 @@ const test = require("node:test");
 const {
   compareWorkspaceSnapshots,
   fileChangeForContent,
+  inspectWorkspacePath,
   listWorkspaceDirectory,
   listWorkspaceTree,
   readWorkspaceFile,
@@ -31,6 +32,25 @@ test("lists complete directories lazily and ignores dependency folders", () => {
   assert.equal(listWorkspaceDirectory(root, "src").entries[0].path, "src/index.js");
   assert.equal(tree.entries.some((entry) => entry.name === "node_modules"), false);
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("inspects files and nested directories without escaping the workspace", (t) => {
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, ".codex", "skills", "idea-spark"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".codex", "skills", "idea-spark", "SKILL.md"), "# Skill\n");
+  fs.mkdirSync(path.join(root, "folder.md"));
+  assert.deepEqual(inspectWorkspacePath(root, ".codex/skills"), { path: ".codex/skills", type: "directory" });
+  assert.deepEqual(inspectWorkspacePath(root, "folder.md"), { path: "folder.md", type: "directory" });
+  assert.deepEqual(inspectWorkspacePath(root, ".codex/skills/idea-spark/SKILL.md"), { path: ".codex/skills/idea-spark/SKILL.md", type: "file" });
+  assert.throws(() => inspectWorkspacePath(root, "missing"), /ENOENT/);
+  assert.throws(() => inspectWorkspacePath(root, "../outside"), /outside/);
+  if (process.platform !== "win32") {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-outside-"));
+    t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
+    fs.symlinkSync(outside, path.join(root, "escape"));
+    assert.throws(() => inspectWorkspacePath(root, "escape"), /outside/);
+  }
 });
 
 test("reads and writes text without allowing workspace escapes", () => {
