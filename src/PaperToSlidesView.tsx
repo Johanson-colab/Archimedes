@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ChevronLeft, ChevronRight, FileText, FolderOpen, Presentation } from "lucide-react";
 import { useUISettings } from "./i18n";
 import cover from "./assets/paper-to-slides/slide-01.webp";
@@ -24,9 +24,19 @@ export default function PaperToSlidesView({ bridge, workspace, busy, onStart }: 
   const [instructions, setInstructions] = useState("");
   const [mineruToken, setMineruToken] = useState("");
   const [selected, setSelected] = useState(0);
+  const filmstripRef = useRef<HTMLDivElement>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const filename = file.split(/[\\/]/).pop() || "";
+  useEffect(() => {
+    const strip = filmstripRef.current;
+    const active = strip?.querySelector<HTMLButtonElement>(".is-active");
+    if (!strip || !active) return;
+    const bounds = strip.getBoundingClientRect();
+    const item = active.getBoundingClientRect();
+    if (item.left < bounds.left) strip.scrollLeft -= bounds.left - item.left;
+    else if (item.right > bounds.right) strip.scrollLeft += item.right - bounds.right;
+  }, [selected]);
   async function choose() {
     try { setError(""); const selectedFile = await bridge.choosePaperReviewPdf(); if (selectedFile) setFile(selectedFile); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -44,7 +54,7 @@ export default function PaperToSlidesView({ bridge, workspace, busy, onStart }: 
       <section className="slides-showcase" aria-label={t("Presentation example")}>
         <div className="slides-showcase-heading"><div><span className="slides-section-index">01 / {t("EXAMPLE")}</span><h2>CoworkOS <span>— {t("from paper to presentation")}</span></h2></div><span className="slides-example-meta">27 {t("slides")} · {t("English")}</span></div>
         <div className="slides-gallery"><button className="slides-gallery-arrow" onClick={() => setSelected((selected + examplesList.length - 1) % examplesList.length)} aria-label={t("Previous slide")}><ChevronLeft size={18} /></button><div className="slides-gallery-frame"><img src={examplesList[selected]} alt={`${t("CoworkOS presentation example")} ${selected + 1}`} /></div><button className="slides-gallery-arrow" onClick={() => setSelected((selected + 1) % examplesList.length)} aria-label={t("Next slide")}><ChevronRight size={18} /></button></div>
-        <div className="slides-filmstrip">{examplesList.map((image, index) => <button key={image} onClick={() => setSelected(index)} className={selected === index ? "is-active" : ""} aria-label={`${t("Show example slide")} ${index + 1}`} aria-pressed={selected === index}><img src={image} alt="" /></button>)}</div>
+        <div className="slides-filmstrip" ref={filmstripRef}>{examplesList.map((image, index) => <button key={image} onClick={() => setSelected(index)} className={selected === index ? "is-active" : ""} aria-label={`${t("Show example slide")} ${index + 1}`} aria-pressed={selected === index}><img src={image} alt="" /></button>)}</div>
         <div className="slides-example-caption"><span>{t("Example deck")}: CoworkOS</span><span>{t("Based on the CoworkOS research paper.")}</span></div>
       </section>
       <section className="slides-create"><div className="slides-create-intro"><span className="slides-section-index">02 / {t("CREATE")}</span><h2>{t("Make your own")}</h2><p>{t("Select a paper and an agent. The task continues in Work, where you can follow its progress and respond to approvals.")}</p></div>
