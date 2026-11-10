@@ -127,6 +127,7 @@ export const app: Record<string, string> = {
   "Proactive agent": "主动助手",
   "Proactive settings": "主动助手设置",
   "Project": "项目",
+  "Preview image: {name}": "预览图片：{name}",
   "Queued messages": "待发送消息",
   "Raw agent events and tool calls.": "原始 Agent 事件与工具调用。",
   "Remove queued message": "移除待发送消息",

@@ -14,6 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { MenuDivider, MenuLabel, MenuSurface } from "./Menu";
+import { Dialog } from "./Dialog";
+import { useUISettings } from "./i18n";
 import type { FileSelection } from "./file-editor";
 
 import { InlineNotice } from "./InlineNotice";
@@ -235,14 +237,28 @@ export default function ContextPicker({ bridge, workspace, projectId, items, onA
 }
 
 export function ContextChips({ items, onRemove, onClear }: { items: ContextAttachment[]; onRemove: (id: string) => void; onClear?: () => void }) {
+  const { t } = useUISettings();
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const preview = items.find((item) => item.id === previewId && item.type === "image" && item.image);
   if (!items.length) return null;
-  return <div className="attached-contexts" aria-label={`Attached context (${items.length})`}>
-    {items.map((item) => {
-      const size = item.image?.sizeBytes ?? item.size;
-      return <span className={item.type === "image" ? "attached-context-chip image" : "attached-context-chip"} key={item.id} title={[item.detail || item.path || item.name, size !== undefined ? formatAttachmentSize(size) : ""].filter(Boolean).join(" · ")}>{item.type === "image" && item.image ? <img src={item.image.dataUrl} alt="" /> : <ContextTypeIcon type={item.type} />}<span>{item.name}</span>{size !== undefined && <small className="attached-context-size">{formatAttachmentSize(size)}</small>}<button onClick={() => onRemove(item.id)} title={`Remove ${item.name}`} aria-label={`Remove ${item.name}`}><X size={12} /></button></span>;
-    })}
-    {onClear && items.length > 1 && <button type="button" className="attached-context-clear" onClick={onClear}>Clear all</button>}
-  </div>;
+  return <>
+    <div className="attached-contexts" aria-label={`Attached context (${items.length})`}>
+      {items.map((item) => {
+        const size = item.image?.sizeBytes ?? item.size;
+        const title = [item.detail || item.path || item.name, size !== undefined ? formatAttachmentSize(size) : ""].filter(Boolean).join(" · ");
+        if (item.type === "image" && item.image) return <div className="attached-image" key={item.id} title={title}>
+          <button type="button" className="attached-image-open" onClick={() => setPreviewId(item.id)} aria-label={t("Preview image: {name}", { name: item.name })}><img src={item.image.dataUrl} alt={item.name} /></button>
+          <button type="button" className="attached-image-remove" onClick={() => onRemove(item.id)} title={t("Remove {name}", { name: item.name })} aria-label={t("Remove {name}", { name: item.name })}><X size={13} /></button>
+        </div>;
+        return <span className="attached-context-chip" key={item.id} title={title}><ContextTypeIcon type={item.type} /><span>{item.name}</span>{size !== undefined && <small className="attached-context-size">{formatAttachmentSize(size)}</small>}<button type="button" onClick={() => onRemove(item.id)} title={`Remove ${item.name}`} aria-label={`Remove ${item.name}`}><X size={12} /></button></span>;
+      })}
+      {onClear && items.length > 1 && <button type="button" className="attached-context-clear" onClick={onClear}>Clear all</button>}
+    </div>
+    {preview?.image && <Dialog open onClose={() => setPreviewId(null)} size="lightbox" className="attached-image-dialog" ariaLabel={t("Preview image: {name}", { name: preview.name })}>
+      <header><strong>{preview.name}</strong><button type="button" onClick={() => setPreviewId(null)} aria-label={t("Close")} title={t("Close")}><X size={18} /></button></header>
+      <div className="attached-image-dialog-stage"><img src={preview.image.dataUrl} alt={preview.name} /></div>
+    </Dialog>}
+  </>;
 }
 
 function PickerAction({ icon, label, detail, onClick }: { icon: React.ReactNode; label: string; detail: string; onClick: () => void }) {
