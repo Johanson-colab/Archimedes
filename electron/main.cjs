@@ -1911,11 +1911,11 @@ app.whenReady().then(async () => {
     const reader = store.getPaperReader(paper.id, input.projectId);
     if (reader.asset?.status !== "ready" || !reader.asset.relative_path) throw new Error("Prepare or attach the original PDF before starting the reading.");
     const clientRunId = typeof input.clientRunId === "string" ? input.clientRunId.slice(0, 100) : randomUUID();
-    const key = `${event.sender.id}:${paper.id}`;
+    const key = JSON.stringify([dataWorkspace, input.projectId || null, paper.id]);
     if (deepReadingRuns.has(key)) throw new Error("This paper already has a reading in progress.");
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 35 * 60_000);
-    const onDestroyed = () => controller.abort();
+    const timer = setTimeout(() => controller.abort(new Error("The reading exceeded its 3-hour time limit. Its saved progress can be resumed.")), 3 * 60 * 60_000);
+    const onDestroyed = () => controller.abort(new Error("The reading window was closed. Saved progress can be resumed."));
     event.sender.once("destroyed", onDestroyed);
     deepReadingRuns.set(key, { controller, clientRunId, senderId: event.sender.id });
     try {
@@ -1933,19 +1933,21 @@ app.whenReady().then(async () => {
       const call = createCodexReadingCall({ workspace: dataWorkspace, pdfPath, config, emit, approve });
       const result = await generateDeepReading({ paper, workspace: dataWorkspace,
         pdfPath,
-        config, call, signal: controller.signal, emit,
+        config, call, projectId: input.projectId, ownerId: localIdentity.localIdentity().userId, deferCheckpointCleanup: true, signal: controller.signal, emit,
       });
-      if (controller.signal.aborted) throw new Error("The reading was cancelled.");
+      if (controller.signal.aborted) throw controller.signal.reason || new Error("The reading was cancelled.");
       store.openWorkspace(dataWorkspace);
       store.savePaperReview(paper.id, result, input.projectId);
-      return { ...result, readingHtml: renderDeepReading(result.reading, dataWorkspace, { sourceButtons: true }) };
+      if (result.checkpointFile) { try { fs.unlinkSync(result.checkpointFile); } catch { /* A stale checkpoint is safe to resume. */ } }
+      const { checkpointFile: ignoredCheckpoint, ...savedResult } = result;
+      return { ...savedResult, readingHtml: renderDeepReading(result.reading, dataWorkspace, { sourceButtons: true }) };
     } finally {
       clearTimeout(timer); event.sender.removeListener("destroyed", onDestroyed); deepReadingRuns.delete(key);
     }
   });
 
   ipcMain.handle("paper-deep-reading:cancel", (event, { clientRunId } = {}) => {
-    for (const run of deepReadingRuns.values()) if (run.senderId === event.sender.id && run.clientRunId === clientRunId) { run.controller.abort(); return { cancelled: true }; }
+    for (const run of deepReadingRuns.values()) if (run.senderId === event.sender.id && run.clientRunId === clientRunId) { run.controller.abort(new Error("The reading was cancelled. Saved progress can be resumed.")); return { cancelled: true }; }
     return { cancelled: false };
   });
 

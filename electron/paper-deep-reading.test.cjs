@@ -129,3 +129,48 @@ test('native execution failures are not replayed, while invalid output can be re
   } });
   assert.equal(value.ok, true); assert.equal(attempts, 2);
 });
+
+test('native reading resumes completed planning, figures and chapters after interruption', async t => {
+  const root = temp(t), input = path.join(root, 'source.pdf'); fs.writeFileSync(input, samplePdf());
+  const paper = { id: 'checkpoint-paper', title: 'Fixture' }, config = { backend: 'codex' };
+  const counts = { plan: 0, crop: 0, chapters: {}, audit: 0 }; let selected, interrupt = true;
+  const call = async (_config, messages) => {
+    const user = messages.findLast(m => m.role === 'user').content; let value;
+    if (Array.isArray(user)) {
+      counts.crop++; value = { crops: [{ id: selected.id, crop: { x: .1, y: .2, width: .8, height: .45 }, alt: bi('原图', 'Original figure') }] };
+    } else if (user.startsWith('Plan a full')) {
+      counts.plan++; selected = JSON.parse(user.split('FIGURE CANDIDATES:\n')[1].split('\nPAPER EVIDENCE:')[0])[0];
+      value = { title: bi('精读', 'Reading'), subtitle: bi('测试论文', 'Test paper'), sections: SECTION_IDS.map(id => ({ id, pages: [1], focus: 'Explain the source.' })), assetReview: [{ id: selected.id, decision: 'use', reason: bi('核心流程', 'Core process') }] };
+    } else if (user.startsWith('Audit the reading')) { counts.audit++; value = { repairs: [], notes: [] }; }
+    else {
+      const id = user.match(/^Write the complete ([\w-]+) chapter/)[1]; counts.chapters[id] = (counts.chapters[id] || 0) + 1;
+      if (id === 'experiments' && interrupt) { interrupt = false; throw new Error('connection lost'); }
+      value = { id, title: bi(id), blocks: [{ type: 'paragraph', text: bi('证据。', 'Evidence.'), pages: [1] }, { type: 'paragraph', text: bi('限制。', 'Limits.'), pages: [1] }] };
+      if (id === 'method') value.blocks.push({ type: 'figure', assetId: selected.id, caption: bi('原图', 'Original') }, report(root).sections.find(s => s.id === 'method').blocks.find(b => b.type === 'mechanism'));
+    }
+    return { content: JSON.stringify(value) };
+  };
+  await assert.rejects(generateDeepReading({ paper, pdfPath: input, workspace: root, projectId: 'project', config, call }), /connection lost/);
+  const directory = path.join(root, '.archimedes/paper-deep-reading/checkpoints');
+  assert.equal(fs.readdirSync(directory).length, 1);
+  await assert.rejects(generateDeepReading({ paper, pdfPath: input, workspace: root, projectId: 'project', ownerId: 'another-user', config, call: async (_config, messages) => {
+    assert.match(messages.findLast(m => m.role === 'user').content, /^Plan a full/);
+    throw new Error('different user starts independently');
+  } }), /different user starts independently/);
+  const result = await generateDeepReading({ paper, pdfPath: input, workspace: root, projectId: 'project', deferCheckpointCleanup: true, config, call });
+  assert.ok(fs.existsSync(result.checkpointFile), 'checkpoint remains until the reading is stored');
+  fs.unlinkSync(result.checkpointFile);
+  assert.equal(result.reading.sections.length, 7);
+  assert.equal(counts.plan, 1); assert.equal(counts.crop, 1);
+  assert.equal(counts.chapters.overview, 1); assert.equal(counts.chapters.method, 1); assert.equal(counts.chapters.experiments, 2);
+  assert.equal(counts.audit, 1); assert.deepEqual(fs.readdirSync(directory), []);
+});
+
+
+test('deadline cancellation reports the actual reason instead of a user cancellation', async t => {
+  const root = temp(t), input = path.join(root, 'source.pdf'); fs.writeFileSync(input, samplePdf());
+  const controller = new AbortController();
+  await assert.rejects(generateDeepReading({ paper: { title: 'Fixture' }, pdfPath: input, workspace: root, config: { backend: 'codex' }, signal: controller.signal, call: async () => {
+    controller.abort(new Error('Reading exceeded its time limit.')); throw new Error('Codex connection closed');
+  } }), /exceeded its time limit/);
+});
