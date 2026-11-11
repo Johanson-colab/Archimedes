@@ -182,11 +182,14 @@ type TimelineEvent = {
 
 type PendingAction = AgentAction & { source: "agent" | "manual" };
 type Modal = "file" | null;
-type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
+type ResearchMode = NewChatMode | "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ReasoningEffort = "low" | "medium" | "high";
 type ContextLength = "standard" | "extra-long";
 
 const researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [
+  { id: "standard", label: "Standard", description: "Ask questions and work with your research context", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },
+  { id: "research", label: "Research", description: "Explore a research question", icon: <Lightbulb size={15} />, placeholder: "Describe a topic, observation, or open question..." },
+  { id: "create", label: "Create", description: "Design a Research App", icon: <FilePen size={15} />, placeholder: "Describe a Research App you want to create." },
   { id: "free-chat", label: "Free chat", description: "Talk with AI without a predefined workflow", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },
   { id: "idea-spark", label: "Idea spark", description: "Find gaps and form testable research ideas", icon: <Lightbulb size={15} />, placeholder: "Describe a topic, observation, or open question..." },
   { id: "experiment-setup", label: "Experiment setup", description: "Design experiments, baselines, and metrics", icon: <FlaskConical size={15} />, placeholder: "Describe the hypothesis or experiment you want to build..." },
@@ -201,14 +204,9 @@ const previewModelCapabilities: ModelCapabilities = {
   contextCharacterLimits: { standard: 300_000, "extra-long": 600_000 },
 };
 
-function inferResearchMode(prompt: string, fallback: ResearchMode): ResearchMode {
-  const text = prompt.trim().toLowerCase();
-  if (!text || /^\/[a-z-]+$/i.test(text)) return fallback;
-  if (/(review|reviewer|审稿|评审|批评|rebuttal|claim.?evidence|论文检查)/i.test(text)) return "paper-review";
-  if (/(write|writing|draft|latex|abstract|introduction|method section|related work|写论文|写作|撰写|摘要|引言|方法章节)/i.test(text)) return "paper-generation";
-  if (/(experiment|benchmark|baseline|ablation|dataset|metric|training|seed|实验|基线|消融|数据集|指标|训练|复现)/i.test(text)) return "experiment-setup";
-  if (/(idea|novel|novelty|research direction|literature|paper search|研究方向|研究问题|创新|查新|文献|论文检索|选题)/i.test(text)) return "idea-spark";
-  return fallback;
+function chatModeFromThread(mode: ResearchMode, events: ResearchEvent[] = []): NewChatMode {
+  if (mode === "standard" || mode === "research" || mode === "create") return mode;
+  return events.some((event) => event.type === "research_skill" && (event.payload as { skill?: string } | null)?.skill === "idea-spark") ? "research" : "standard";
 }
 
 const initialPapers = [
@@ -1399,7 +1397,7 @@ function App() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [interrupting, setInterrupting] = useState(false);
   const [chatViewNonce, setChatViewNonce] = useState(0);
-  const [researchMode, setResearchMode] = useState<ResearchMode>("idea-spark");
+  const [researchMode, setResearchMode] = useState<ResearchMode>("standard");
   const [acceptedStages, setAcceptedStages] = useState<ResearchStageId[]>(() => {
     const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
     return researchStages.slice(0, activeIndex).map((stage) => stage.id);
@@ -2283,7 +2281,7 @@ function App() {
       setBoundHarness(thread.harness ?? null);
       setActiveProjectId(thread.project_id);
       if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
-      setResearchMode(thread.mode);
+      setResearchMode(chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
     } else {
       setMessages(initialMessages);
@@ -2482,7 +2480,7 @@ function App() {
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
       setEvents([]);
-      setResearchMode(thread.mode);
+      setResearchMode(chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
       const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
       setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
@@ -3994,7 +3992,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [prompt]);
 
-  const predictedMode = inferResearchMode(prompt, researchMode);
+  const predictedMode: NewChatMode = showWelcome ? newChatMode : chatModeFromThread(researchMode, trajectoryEvents);
   const messageContextCharacters = useMemo(
     () => {
       const checkpoint = compactedThroughTurnId ? messages.findIndex((message) => message.id === `${compactedThroughTurnId}:assistant`) : -1;
@@ -4290,7 +4288,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     setPrompt("");
     setComposerError("");
     onResearchMode(predictedMode);
-    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext, newChatMode === "research" ? "idea-spark" : undefined);
+    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext, predictedMode === "research" ? "idea-spark" : undefined);
     if (!sent) setPrompt((current) => current.trim() ? current : draft);
     requestAnimationFrame(() => {
       const textarea = composerRef.current;

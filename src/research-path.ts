@@ -47,5 +47,5 @@ export const researchStages: ResearchStage[] = [
 ];
 
 export function stageForMode(mode: ResearchMode): ResearchStage {
-  return researchStages.find((stage) => stage.mode === mode) ?? researchStages[0];
+  return researchStages.find((stage) => stage.mode === (mode === "research" ? "idea-spark" : mode)) ?? researchStages[0];
 }

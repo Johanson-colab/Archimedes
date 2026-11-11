@@ -162,3 +162,26 @@ test('an existing output is not proof that an isolated phase wrote it', async t 
   });
   assert.equal(JSON.parse(result.content).status, 'incomplete');
 });
+
+test('API harness sends the selected mode and only Research initializes IdeaSpark', async t => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-modes-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  store.openWorkspace(root); modelConfig.initializeModelConfig(root);
+  fs.writeFileSync(path.join(root, 'model-config.json'), JSON.stringify({ provider: 'custom', baseUrl: 'https://example.test/v1', model: 'fixture', apiKey: 'test' }));
+  const previous = global.fetch, requests = [];
+  t.after(() => { global.fetch = previous; });
+  global.fetch = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: 'done' } }] }) };
+  };
+  for (const mode of ['standard', 'create', 'research']) {
+    const result = await runAgent({ prompt: 'Design an experiment', workspace: root, origin: 'research', mode, capabilities: { command: 'ask', write: 'ask' } });
+    assert.equal(result.status, 'completed');
+    assert.equal(result.thread.mode, mode);
+    const request = requests.at(-1);
+    assert.match(request.messages[0].content, new RegExp(`Operate in ${mode[0].toUpperCase() + mode.slice(1)} mode`));
+    assert.doesNotMatch(request.messages[0].content, /Operate in Idea spark mode/);
+    assert.equal(request.messages.some(message => String(message.content).includes('Research mode: use the installed IdeaSpark')), mode === 'research');
+    assert.equal(result.thread.events.some(event => event.type === 'research_skill' && event.payload.skill === 'idea-spark'), mode === 'research');
+  }
+});

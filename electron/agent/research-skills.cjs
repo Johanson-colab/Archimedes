@@ -85,6 +85,10 @@ function researchSelection(thread, requested) {
 }
 
 function prepareResearchSkill({ workspace, backend, thread, requested, emit = () => {}, recordEvent = () => {} }) {
+  if (requested == null && ["standard", "create"].includes(thread.mode)) {
+    const lastSkill = [...(thread.events || [])].reverse().find(e => e.type === 'research_skill')?.payload?.skill;
+    if (lastSkill !== 'paper-to-slides') return null;
+  }
   if (requested === 'paper-to-slides' || (requested == null && [...(thread.events || [])].reverse().find(e => e.type === 'research_skill')?.payload?.skill === 'paper-to-slides')) return preparePaperSlidesSkill({ workspace, backend, thread, requested, emit, recordEvent });
   const { enabled, previous } = researchSelection(thread, requested);
   if (!enabled) return null;

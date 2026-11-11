@@ -953,7 +953,7 @@ interface Window {
 }
 
 type ReadingStatus = "unread" | "reading" | "read";
-type ResearchMode = "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
+type ResearchMode = "standard" | "research" | "create" | "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ReasoningEffort = "low" | "medium" | "high";
 type ContextLength = "standard" | "extra-long";
 

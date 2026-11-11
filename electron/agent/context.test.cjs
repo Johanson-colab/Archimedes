@@ -109,3 +109,14 @@ test('restores bounded complete tool groups while excluding worker and orphan re
   assert.equal(result.messages[3].tool_call_id, 'call-1');
   assert.doesNotMatch(JSON.stringify(result.messages), /private worker data|orphan/);
 });
+
+
+test("new chat modes use their own instructions and unknown modes fall back to Standard", () => {
+  const thread = { context_summary: "", turns: [{ id: "one", user_message: "hello" }] };
+  const instruction = mode => prepareConversation({ thread, currentTurnId: "one", mode }).messages[0].content;
+  assert.match(instruction("standard"), /Standard mode/);
+  assert.doesNotMatch(instruction("standard"), /Operate in Idea spark mode/);
+  assert.match(instruction("research"), /Research mode/);
+  assert.match(instruction("create"), /Create mode/);
+  assert.match(instruction("unknown"), /Standard mode/);
+});

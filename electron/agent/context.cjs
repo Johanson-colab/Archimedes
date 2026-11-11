@@ -6,6 +6,9 @@ const MAX_SUMMARY_CHARS = 32_000;
 const MIN_RECENT_TURNS = 4;
 
 const modeInstructions = {
+  "standard": "Operate in Standard mode. Respond naturally to the user's request and use tools only when useful; do not assume an idea-generation workflow.",
+  "research": "Operate in Research mode. Follow the selected research skill when provided, grounding claims in evidence and making uncertainty clear.",
+  "create": "Operate in Create mode. Help the user design or build a Research App as requested, and clearly distinguish proposed designs from completed changes.",
   "free-chat": "Operate in Free chat mode. Respond naturally and directly without forcing the conversation into a research workflow. Do not search literature, inspect the workspace, or propose actions unless the user asks or doing so is clearly necessary to answer the request. You may still use attached context and available tools when genuinely useful.",
   "idea-spark": "Operate in Idea spark mode. Explore the literature and workspace for underexamined gaps, tensions, or combinations. Produce a small set of novel, testable ideas with hypotheses, expected contribution, supporting evidence, and the fastest falsification test. Clearly separate evidence from speculation.",
   "experiment-setup": "Operate in Experiment setup mode. Turn the request into an executable experimental plan covering hypotheses, datasets, baselines, controls, metrics, ablations, compute assumptions, reproducibility, and failure criteria. Inspect existing code and configs before proposing changes.",
@@ -44,7 +47,7 @@ function baseInstructions(mode) {
     "When you create or update a durable research output (figure, PDF, data table, Markdown brief, HTML/SVG page) in the workspace, call add_artifact with its workspace-relative path so it appears in the conversation Artifacts gallery. Do not register routine source edits or temporary files.",
     "Never claim an action completed until its tool result confirms completion.",
     "Keep the final response focused, evidence-aware, and explicit about uncertainty.",
-    modeInstructions[mode] || modeInstructions["idea-spark"],
+    modeInstructions[mode] || modeInstructions["standard"],
   ].join(" ");
 }
 

@@ -138,3 +138,14 @@ test('API resume exposes incomplete phase checkpoints without declaring their ou
   assert.match(resumed.skill.instructions, /outcome is uncertain/);
   assert.equal(resumed.skill.runDirectory, first.skill.runDirectory);
 });
+
+
+test('Standard and Create do not resume an old IdeaSpark skill implicitly', t => {
+  const root = workspace(t), first = setup(root);
+  for (const mode of ['standard', 'create']) {
+    const result = setup(root, { requested: undefined, thread: { id: 'thread', mode, events: first.records } });
+    assert.equal(result.skill, null);
+  }
+  const explicit = setup(root, { requested: 'idea-spark', thread: { id: 'thread', mode: 'research', events: first.records } });
+  assert.equal(explicit.skill.runRelative, first.skill.runRelative);
+});

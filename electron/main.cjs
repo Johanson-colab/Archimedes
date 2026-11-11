@@ -1856,8 +1856,8 @@ app.whenReady().then(async () => {
     if (!input || typeof input.prompt !== "string" || !input.prompt.trim() || input.prompt.length > 20_000) {
       throw new Error("An Agent task requires a prompt of at most 20000 characters.");
     }
-    const researchModes = new Set(["free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review", "deep-research"]);
-    const mode = researchModes.has(input.mode) ? input.mode : "idea-spark";
+    const researchModes = new Set(["standard", "research", "create", "free-chat", "idea-spark", "experiment-setup", "paper-generation", "paper-review", "deep-research"]);
+    const mode = researchModes.has(input.mode) ? input.mode : "standard";
     const workspace = resolveWorkspace(input.workspace);
     // Research data stays in the window's primary workspace, while the Agent
     // operates inside the project/session folder.

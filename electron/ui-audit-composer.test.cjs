@@ -158,17 +158,20 @@ test("slash menu presents the requested commands and connects all actions", () =
   assert.match(app, /scrollIntoView\(\{ block: "nearest" \}\)/);
 });
 
-test("removed slash words do not select a research mode when typed manually", async () => {
-  const start = app.indexOf("function inferResearchMode(");
-  const end = app.indexOf("\nconst initialPapers", start);
+test("chat modes retain explicit choices and map legacy conversations using skill records", async () => {
+  const start = app.indexOf("function chatModeFromThread(");
+  const end = app.indexOf("\n}\n", start) + 2;
   const { transformWithOxc } = await import("vite");
-  const { code } = await transformWithOxc(app.slice(start, end), "infer-research-mode.ts");
-  const inferResearchMode = new Function(`${code}\nreturn inferResearchMode;`)();
-  for (const command of ["/research", "/experiment", "/write", "/review", "/paper-reading"]) {
-    assert.equal(inferResearchMode(command, "free-chat"), "free-chat", command);
-  }
-  assert.equal(inferResearchMode("Design an experiment", "free-chat"), "experiment-setup");
-  assert.equal(inferResearchMode("Review the paper", "free-chat"), "paper-review");
+  const { code } = await transformWithOxc(app.slice(start, end), "chat-mode.ts");
+  const mode = new Function(`${code}\nreturn chatModeFromThread;`)();
+  assert.equal(mode("standard", []), "standard");
+  assert.equal(mode("research", []), "research");
+  assert.equal(mode("create", []), "create");
+  assert.equal(mode("idea-spark", []), "standard");
+  assert.equal(mode("experiment-setup", []), "standard");
+  assert.equal(mode("idea-spark", [{ type: "research_skill", payload: { skill: "idea-spark" } }]), "research");
+  assert.match(app, /showWelcome \? newChatMode : chatModeFromThread\(researchMode, trajectoryEvents\)/);
+  assert.doesNotMatch(app, /inferResearchMode\(prompt/);
 });
 
 test("composer exposes the current file and a clear-all attachment action", () => {
