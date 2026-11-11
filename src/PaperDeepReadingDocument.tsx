@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useUISettings } from "./i18n";
 
-export default function PaperDeepReadingDocument({ html, title, pageCount, onOpenSource }: { html: string; title: string; pageCount: number; onOpenSource?: (page: number) => void }) {
+export default function PaperDeepReadingDocument({ html, title, pageCount, onOpenSource, readingLanguage }: { html: string; title: string; pageCount: number; onOpenSource?: (page: number) => void; readingLanguage?: "zh" | "en" }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const { language } = useUISettings();
+  const effectiveLanguage = readingLanguage || language;
   const sourceHandler = useRef(onOpenSource);
   sourceHandler.current = onOpenSource;
   const sendTheme = useCallback(() => {
@@ -12,7 +13,7 @@ export default function PaperDeepReadingDocument({ html, title, pageCount, onOpe
     const colors = Object.fromEntries(Object.entries(names).map(([name, token]) => [name, style.getPropertyValue(token).trim()]));
     frame.current?.contentWindow?.postMessage({ type: "paper-deep-reading:theme", colors }, "*");
   }, []);
-  const sendLanguage = useCallback(() => frame.current?.contentWindow?.postMessage({ type: "paper-deep-reading:language", language: language === "zh" ? "zh" : "en" }, "*"), [language]);
+  const sendLanguage = useCallback(() => frame.current?.contentWindow?.postMessage({ type: "paper-deep-reading:language", language: effectiveLanguage === "zh" ? "zh" : "en" }, "*"), [effectiveLanguage]);
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return;

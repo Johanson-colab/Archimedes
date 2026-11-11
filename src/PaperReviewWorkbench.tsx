@@ -18,7 +18,9 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; paper: ReviewPaper; pageCount: number; ready: boolean; pdfUrl?: string;
   onOpenSource?: (page: number) => void; onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
 }) {
-  const { t } = useUISettings();
+  const { t, language } = useUISettings();
+  const [readingLanguage, setReadingLanguage] = useState<"zh" | "en">(language);
+  useEffect(() => setReadingLanguage(language), [language]);
   const bridgeReady = typeof bridge.cancelPaperDeepReading === "function" && typeof bridge.exportPaperDeepReading === "function";
   const [view, setView] = useState<"reading" | "presentation">("reading");
   const [saved, setSaved] = useState<StoredPaperReview | null>(null);
@@ -90,6 +92,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
       </Tabs>
       <span className="paper-deep-status" role="status">{running ? stages[stage] || stages.chapter : html ? t("Reading ready") : ""}</span>
       <div className="paper-deep-actions">
+        {html && view === "reading" && <button className="secondary-button" aria-label={readingLanguage === "zh" ? "Switch reading to English" : "切换精读为中文"} onClick={() => setReadingLanguage(current => current === "zh" ? "en" : "zh")}>{readingLanguage === "zh" ? "English" : "中文"}</button>}
         {html && <button className="secondary-button" disabled={exporting || running} onClick={() => void exportReading()}>{exporting ? <LoaderCircle className="spin" size={14} /> : <Download size={14} />}{t("Export reading")}</button>}
         {running ? <button className="secondary-button" onClick={() => { if (runId.current) void bridge.cancelPaperDeepReading(runId.current).catch(cause => setError(errorMessage(cause))); }}><Square size={13} />{t("Stop")}</button> : <button className="primary-button" disabled={!ready || !workspace || restoring || !bridgeReady} onClick={() => void runReading()}>{t(saved ? "Read again" : "Generate reading")}</button>}
       </div>
@@ -97,7 +100,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     {!bridgeReady && <InlineNotice tone="warning" className="paper-deep-notice">{t("Restart Archimedes to enable illustrated paper readings.")}</InlineNotice>}
     {error && <InlineNotice tone="danger" className="paper-deep-notice">{error}</InlineNotice>}
     {notice && <InlineNotice tone="info" className="paper-deep-notice">{notice}</InlineNotice>}
-    {view === "presentation" ? <PaperPresentationDeck bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={pageCount} pdfUrl={pdfUrl} reviewReady={Boolean(saved?.summary)} reviewUpdatedAt={saved?.updated_at || ""} /> : html ? <PaperDeepReadingDocument html={html} title={t("Interactive paper")} pageCount={pageCount} onOpenSource={onOpenSource} /> : <div className="paper-deep-empty">
+    {view === "presentation" ? <PaperPresentationDeck bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={pageCount} pdfUrl={pdfUrl} reviewReady={Boolean(saved?.summary)} reviewUpdatedAt={saved?.updated_at || ""} /> : html ? <PaperDeepReadingDocument html={html} title={t("Interactive paper")} pageCount={pageCount} onOpenSource={onOpenSource} readingLanguage={readingLanguage} /> : <div className="paper-deep-empty">
       <div className="paper-deep-intro">
         <section className="paper-deep-hero">
           <div className="paper-deep-eyebrow"><BookOpenCheck size={16} strokeWidth={1.6} /> {t("INTERACTIVE READING")}</div>
