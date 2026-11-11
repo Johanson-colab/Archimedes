@@ -19,6 +19,7 @@ export const library: Record<string, string> = {
   "Attach a local PDF to open the original paper here.": "附加本地 PDF 以在此打开原始论文。",
   "Attach PDF": "附加 PDF",
   "Bilingual reading": "中英文精读",
+  "Back to reading": "返回精读",
   "Blue": "蓝色",
   "Briefing": "简报",
   "Building your illustrated reading": "正在生成图文精读",

@@ -510,6 +510,8 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const chatResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
   const [readerView, setReaderView] = useState<"paper" | "canvas" | "review" | "project" | "codebase">(session?.readerView === "canvas" || session?.readerView === "review" ? session.readerView : "paper");
+  const [reviewVisited, setReviewVisited] = useState(session?.readerView === "review");
+  const [returnToReading, setReturnToReading] = useState(false);
   const [canvasInsert, setCanvasInsert] = useState<PaperCanvasInsert | null>(null);
   const [canvasFocusHighlight, setCanvasFocusHighlight] = useState<PaperHighlight | null>(null);
   const [readerChromeOpen, setReaderChromeOpen] = useState(session?.readerChromeOpen ?? true);
@@ -1042,7 +1044,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     <header id="paper-reader-bar" className="paper-reader-bar" title={`${library.name} · ${paper.title}`} inert={!readerChromeOpen}>
       <button className="reader-back-button" onClick={onBack} title={`${t("Library")} · ${library.name}`} aria-label={t("Library")}><ChevronLeft size={15} /></button>
       <div className="paper-reader-tabs">
-        <Tabs value={readerView} onChange={(value) => { setReaderView(value as "paper" | "canvas" | "review"); if (value === "review" || value === "canvas") setChatOpen(false); }} label={t("Paper reader views")} className="paper-reader-tablist">
+        <Tabs value={readerView} onChange={(value) => { setReaderView(value as "paper" | "canvas" | "review"); if (value === "review") setReviewVisited(true); if (value !== "paper") setReturnToReading(false); if (value === "review" || value === "canvas") setChatOpen(false); }} label={t("Paper reader views")} className="paper-reader-tablist">
           <Tab value="paper" icon={<FileText size={14} />}>{t("Original paper")}</Tab>
           <Tab value="canvas" icon={<Frame size={14} />}>{t("Canvas")}</Tab>
           <Tab value="review" icon={<BookOpen size={14} />}>{t("Interactive paper")}</Tab>
@@ -1058,7 +1060,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       </div>
     </header>
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
-      {readerView === "review" ? <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} pdfUrl={reader?.asset?.preview_url || ""} onOpenSource={(page) => { setPageNumber(page); setReaderView("paper"); }} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} /> : readerView !== "codebase" && readerView !== "canvas" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
+      {reviewVisited && <div className="paper-review-retained" hidden={readerView !== "review"} aria-hidden={readerView !== "review"} inert={readerView !== "review"}>
+        <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} pdfUrl={reader?.asset?.preview_url || ""} onOpenSource={(page) => { setPageNumber(page); setReturnToReading(true); setReaderView("paper"); }} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} />
+      </div>}
+      {readerView === "paper" && returnToReading && <button type="button" className="paper-return-reading" onClick={() => { setReturnToReading(false); setReaderView("review"); }}><ArrowLeft size={15} />{t("Back to reading")}</button>}
+      {readerView !== "review" && readerView !== "codebase" && readerView !== "canvas" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
         {readerView === "project" && projectUrl ? <LinkedProjectView url={projectUrl} /> : <>
         {ready ? <>
           <div className="paper-reader-toolbar" inert={!readerChromeOpen}>

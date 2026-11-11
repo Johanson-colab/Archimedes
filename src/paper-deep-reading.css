@@ -36,3 +36,8 @@
 .paper-deep-workbench.presentation-active .paper-presentation-deck { flex: 1 1 0; min-height: 0; }
 @media (max-width: 850px) { .paper-deep-intro { grid-template-columns: 1fr; gap: 34px; } .paper-deep-map { max-width: 620px; } }
 @media (max-width: 700px) { .paper-deep-toolbar { padding: 10px 14px; gap: 8px; } .paper-deep-status { flex-basis: 100%; order: 3; } .paper-deep-empty { padding: 30px 22px; } }
+
+.paper-review-retained { min-width: 0; min-height: 0; overflow: hidden; }
+.paper-review-retained[hidden] { display: none; }
+.paper-return-reading { position: absolute; z-index: 12; left: 24px; bottom: 24px; display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-panel); color: var(--text-primary); box-shadow: 0 4px 18px color-mix(in srgb, var(--text-primary) 15%, transparent); font-size: 13px; font-weight: 600; cursor: pointer; }
+.paper-return-reading:hover { border-color: var(--accent); color: var(--accent); }
