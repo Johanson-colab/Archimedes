@@ -116,7 +116,7 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   return { answered: true };
 }
 
-async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, mineruToken, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
+async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
   const root = fs.realpathSync(workspace);
   const policy = nativePolicy(config, root);
   const attachments = nativeContext(contextItems);
@@ -127,7 +127,10 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   if (thread.id && activeNativeRuns.has(thread.id)) throw new Error('This chat already has an active native Codex operation.');
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments);
   if (signal.aborted) throw new Error('Codex turn interrupted before skill setup.');
-  const skill = compaction ? null : prepareResearchSkill({ workspace: root, backend: 'codex', thread, requested: researchSkill, emit, recordEvent });
+  if (nativeSkill && (nativeSkill !== 'paper-deep-reading' || researchSkill)) throw new Error('Unsupported native skill.');
+  const skill = compaction ? null : nativeSkill === 'paper-deep-reading'
+    ? { skillName: 'paper-deep-reading', skillFile: path.join(__dirname, '../assets/research-skills/paper-deep-reading/SKILL.md') }
+    : prepareResearchSkill({ workspace: root, backend: 'codex', thread, requested: researchSkill, emit, recordEvent });
   const client = new Client({ binary: config.binary, ...(mineruToken ? { env: { MINERU_API_TOKEN: mineruToken } } : {}) });
   const events = createNativeEvents({ emit, recordEvent, onError: (error) => {
     try { finish(error); }
@@ -163,6 +166,10 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     if (client.closed || active.resolvedRequests.has(id)) return;
     if (active.settled || signal.aborted || compaction) return client.unsupported(id);
     if (params.threadId !== active.nativeThreadId || !active.nativeTurnId || params.turnId !== active.nativeTurnId) return client.unsupported(id);
+    if (method === 'item/tool/requestUserInput' && nativeSkill === 'paper-deep-reading') {
+      emit({ type: 'status', title: 'Codex question unavailable', detail: 'Questions cannot be answered in this reading; continue with the supplied paper.' });
+      return client.unsupported(id);
+    }
     if (method === 'item/tool/requestUserInput') {
       if (!Array.isArray(params.questions) || !params.questions.length || params.questions.length > 10 || active.questions.size >= 20) return client.unsupported(id);
       if (params.questions.some(q => !q || typeof q.id !== 'string' || !q.id.trim() || q.id.length > 200)) return client.unsupported(id);
@@ -247,7 +254,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     const account = await client.request('account/read', { refreshToken: false });
     if (!account?.account) throw new Error('Codex is not signed in. Run codex login, then retry.');
     await validateNativeChoice(client, config, root);
-    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(skill ? { developerInstructions: skill.instructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : {}) });
+    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(skill?.instructions ? { developerInstructions: skill.instructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : {}) });
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');
     if (resume && active.nativeThreadId !== binding.native_thread_id) throw new Error('Codex returned a different native thread while resuming. No request was replayed.');

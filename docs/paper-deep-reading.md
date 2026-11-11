@@ -10,19 +10,19 @@ Library → Interactive paper now uses the upgraded reading workflow, bundled as
 4. Read the bilingual document, navigate its two-level contents, enlarge original figures, step through mechanisms, or jump to cited PDF pages.
 5. Choose **Export reading** to save a standalone HTML, Chinese/English Markdown, report JSON, and the referenced image assets in a new directory.
 
-Generation currently uses the configured **API model** in Settings → Models. Figure inspection requires image-input support. It does not invoke an installed Codex/Claude/OpenCode CLI. Scanned PDFs need a usable OCR text layer.
+Generation invokes the installed, signed-in **native Codex** backend using its saved model, effort and permission settings under Settings → Harnesses. The bundled `paper-deep-reading` skill is attached to the native turn. Scanned PDFs need a usable OCR text layer.
 
 ## Pipeline and persistence
 
-The desktop runtime parses the cached PDF, inventories figure/table captions, plans seven chapters, visually crops selected originals, writes bilingual chapters, audits evidence, and validates the complete document before replacing its saved reading. Chapters are Overview, Related work, Method, Experiments, Limitations, Discussion, and References.
+The desktop runtime parses the cached PDF and inventories figure/table captions. One native Codex conversation plans seven chapters, inspects page images, writes bilingual sections and audits evidence; the runtime crops originals, validates output and renders the document before replacing its saved reading. Chapters are Overview, Related work, Method, Experiments, Limitations, Discussion, and References.
 
 Models supply typed content rather than executable HTML. Trusted rendering provides formulas, figures, comparison tables and structured mechanism diagrams. Exported documents retain page references and uncertainty notes. Model-generated claims still require scholarly review; structural validation does not establish scientific correctness.
 
-Calls and page rendering run sequentially. Cancellation removes incomplete staging output and preserves the prior report. Generation artifacts live under the current data workspace's `.archimedes/paper-deep-reading/<run-id>/`; explicit exports go to the directory the user chooses. Saved reports reopen without regenerating; changed source PDFs trigger a warning.
+Codex turns and page rendering run sequentially; turns resume the same native context. Native command/file approvals use a desktop dialog and honor the configured permission mode. Native execution failures are not automatically replayed; malformed content can receive one repair turn without repeating tool operations. Cancellation removes incomplete staging output and preserves the prior report. Generation artifacts live under the current data workspace's `.archimedes/paper-deep-reading/<run-id>/`; explicit exports go to the directory the user chooses. Saved reports reopen without regenerating; changed source PDFs trigger a warning.
 
 ## Verification
 
-TypeScript, production build and theme checks pass. The focused reading/presentation suite passes (21 tests); scoped-annotation checks also passed. The full suite records 1,134 passes, four skips and six existing environment failures: three macOS temporary Git-path checks and three Windows-shell checks on macOS. Real PDF extraction/cropping is exercised with controlled provider responses; a live paid-provider generation was not run.
+TypeScript, production build and theme checks pass. The full suite records 1,140 passes, four skips and six existing environment failures: three macOS temporary Git-path checks and three Windows-shell checks on macOS. A real native Codex run completed the full seven-chapter pipeline with a controlled one-page PDF and one original figure; native context resumption and image input also passed live smoke tests. Longer papers and other native model configurations may behave differently.
 
 Browser checks cover the actual workbench, in-document navigation, figure enlargement, bilingual mechanism state, host themes, and a 390px layout without page overflow. Screenshots use public-paper fixture content, not private Library data.
 
@@ -43,3 +43,13 @@ After:
 ![Method in dark theme](assets/paper-deep-reading/after-method-dark.png)
 
 ![Mobile reading](assets/paper-deep-reading/after-mobile.png)
+
+## Native Codex redesign
+
+The empty state identifies the paper and presents the four reading perspectives. Original screenshots below use the same viewport and paper fixture.
+
+![Before](assets/native-paper-reading/before-light.png)
+
+![After](assets/native-paper-reading/after-light.png)
+
+![Dark theme](assets/native-paper-reading/after-dark.png)

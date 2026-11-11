@@ -27,6 +27,8 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   const [restoring, setRestoring] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [stage, setStage] = useState("source");
+  const [activity, setActivity] = useState("");
+  const [stageDetail, setStageDetail] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const runId = useRef<string | null>(null);
@@ -55,7 +57,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     if (runId.current || !ready || !workspace || !bridgeReady) return;
     const clientRunId = crypto.randomUUID(); runId.current = clientRunId;
     const request = ++generation.current;
-    setRunning(true); setError(""); setNotice(""); setStage("source"); setRestoring(false);
+    setRunning(true); setError(""); setNotice(""); setStage("source"); setActivity(""); setStageDetail(""); setRestoring(false);
     try {
       await bridge.runPaperReview({ paper, pageCount, workspace, projectId, clientRunId });
       if (runId.current !== clientRunId || request !== generation.current) return;
@@ -68,7 +70,9 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
   }
 
   useEffect(() => bridge.onPaperReviewEvent(event => {
-    if (event.clientRunId && event.clientRunId === runId.current) setStage(event.stage);
+    if (!event.clientRunId || event.clientRunId !== runId.current) return;
+    if (event.type === "stage" && event.stage) { setStage(event.stage); setStageDetail(event.detail); setActivity(""); }
+    if (event.type === "activity") setActivity(event.detail);
   }), [bridge]);
 
   async function exportReading() {
@@ -94,11 +98,26 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     {error && <InlineNotice tone="danger" className="paper-deep-notice">{error}</InlineNotice>}
     {notice && <InlineNotice tone="info" className="paper-deep-notice">{notice}</InlineNotice>}
     {view === "presentation" ? <PaperPresentationDeck bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={pageCount} pdfUrl={pdfUrl} reviewReady={Boolean(saved?.summary)} reviewUpdatedAt={saved?.updated_at || ""} /> : html ? <PaperDeepReadingDocument html={html} title={t("Interactive paper")} pageCount={pageCount} onOpenSource={onOpenSource} /> : <div className="paper-deep-empty">
-      <BookOpenCheck size={30} strokeWidth={1.4} /><h2>{t(restoring ? "Restoring reading…" : running ? "Building your illustrated reading" : "Read the paper with its evidence")}</h2>
-      <p>{t("Original figures, detailed bilingual explanations, and interactive mechanisms across Related work, Method, Experiments, and Limitations.")}</p>
-      {running && <p className="paper-deep-progress"><LoaderCircle className="spin" size={15} />{stages[stage] || stages.chapter}</p>}
-      {!ready && <InlineNotice tone="warning">{t("Prepare or attach the original PDF first.")}</InlineNotice>}
-      {saved?.summary && !html && <details className="paper-deep-legacy" open><summary>{t("Saved text reading")}</summary><p>{t("Your previous reading is preserved. Read again to create the illustrated bilingual version.")}</p><div className="paper-review-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{saved.summary}</ReactMarkdown></div></details>}
+      <div className="paper-deep-intro">
+        <section className="paper-deep-hero">
+          <div className="paper-deep-eyebrow"><BookOpenCheck size={16} strokeWidth={1.6} /> {t("INTERACTIVE READING")}</div>
+          <h2>{t(restoring ? "Restoring reading…" : running ? "Building your illustrated reading" : "Understand the paper, beyond the abstract.")}</h2>
+          <p>{t("Follow the evidence from the research question to the method, results and open questions.")}</p>
+          <div className="paper-deep-paper">
+            <span className="paper-deep-paper-mark"><BookOpenCheck size={21} strokeWidth={1.5} /></span>
+            <div><span className="paper-deep-paper-label">{t("YOUR PAPER")}</span><strong>{paper.title}</strong><span>{[paper.authors?.slice(0, 2).join(", "), paper.year, paper.venue].filter(Boolean).join(" · ") || t("Original paper")}</span></div>
+          </div>
+          <div className="paper-deep-meta"><span className="paper-deep-dot" />{t("Powered by native Codex")} <span>·</span> {t("Bilingual reading")}</div>
+          {running && <p className="paper-deep-progress" role="status"><LoaderCircle className="spin" size={15} />{stageDetail || stages[stage] || stages.chapter}{activity ? ` · ${activity}` : ""}</p>}
+          {!ready && <InlineNotice tone="warning">{t("Prepare or attach the original PDF first.")}</InlineNotice>}
+        </section>
+        <aside className="paper-deep-map" aria-label={t("Reading map")}>
+          <div className="paper-deep-map-head"><div><span>{t("INSIDE THE READING")}</span><h3>{t("A guide to the evidence")}</h3></div><BookOpenCheck size={20} strokeWidth={1.4} /></div>
+          {[["01", "Related work", "Where the idea fits"], ["02", "Method", "How the approach works"], ["03", "Experiments", "What the results show"], ["04", "Limitations", "What remains uncertain"]].map(([number, title, detail]) => <div className="paper-deep-map-row" key={number}><span>{number}</span><div><strong>{t(title)}</strong><small>{t(detail)}</small></div></div>)}
+          <p>{t("Original figures, source pages and interactive explanations accompany the reading.")}</p>
+        </aside>
+      </div>
+      {saved?.summary && <details className="paper-deep-legacy" open><summary>{t("Saved text reading")}</summary><p>{t("Your previous reading is preserved. Read again to create the illustrated bilingual version.")}</p><div className="paper-review-markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{saved.summary}</ReactMarkdown></div></details>}
     </div>}
   </div>;
 }

@@ -5,7 +5,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { JSDOM } = require('jsdom');
 const { normalizeReport, normalizeSection, SECTION_IDS } = require('../shared/paper-deep-reading.cjs');
-const { generateDeepReading, ask, inspectPDF } = require('./paper-deep-reading.cjs');
+const { generateDeepReading, ask, inspectPDF, createCodexReadingCall } = require('./paper-deep-reading.cjs');
 const { renderReport, markdown } = require('./paper-deep-reading-render.cjs');
 const { report, samplePdf, bi } = require('./test-support/deep-reading.cjs');
 function temp(t) { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arch-deep-reading-')); t.after(() => fs.rmSync(root, { recursive: true, force: true })); return root; }
@@ -88,6 +88,44 @@ test('cancellation and invalid model JSON stop with bounded retries', async t =>
   assert.equal(calls, 2);
   const root = temp(t), input = path.join(root, 'source.pdf'); fs.writeFileSync(input, samplePdf());
   const controller = new AbortController();
-  await assert.rejects(generateDeepReading({ paper: { title: 'Fixture' }, pdfPath: input, workspace: root, config: { apiKey: 'test' }, signal: controller.signal, call: async () => { controller.abort(); return { content: '{}' }; } }), /cancel|abort/i);
+  await assert.rejects(generateDeepReading({ paper: { title: 'Fixture' }, pdfPath: input, workspace: root, config: { apiKey: 'test' }, signal: controller.signal, call: async () => { controller.abort(); throw new Error('Codex connection closed'); } }), /reading was cancelled/i);
   const staged = path.join(root, '.archimedes/paper-deep-reading'); if (fs.existsSync(staged)) assert.equal(fs.readdirSync(staged).length, 0);
+});
+
+
+test('reading stages use one native Codex context and pass the bundled skill and page images', async t => {
+  const root = temp(t), config = { backend: 'codex', model: 'test-native', permissionMode: 'ask' };
+  const runs = [], activity = [];
+  const call = createCodexReadingCall({ workspace: root, pdfPath: path.join(root, 'source.pdf'), config, emit: event => activity.push(event), run: async args => {
+    runs.push(args);
+    assert.equal(args.nativeSkill, 'paper-deep-reading');
+    assert.equal(args.config, config);
+    if (runs.length === 1) assert.equal(args.bindings.get(), null);
+    else assert.equal(args.bindings.get().last_turn_id, runs[0].turn.id);
+    args.bindings.save({ native_thread_id: 'native-thread', workspace: root, model: 'test-native', last_turn_id: args.turn.id });
+    args.emit({ type: 'native_activity', activity: { title: 'Codex · reading source' } });
+    return '{"ok":true}';
+  } });
+  await call(config, [{ role: 'system', content: 'Instructions' }, { role: 'user', content: 'Plan' }]);
+  await call(config, [{ role: 'user', content: [{ type: 'text', text: 'Inspect' }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AA==' } }] }]);
+  assert.equal(runs[0].thread.id, runs[1].thread.id);
+  assert.match(runs[0].turn.user_message, /Original source PDF path/);
+  assert.equal(runs[1].thread.turns[0].id, runs[0].turn.id);
+  assert.equal(runs[1].contextItems[0].image.dataUrl, 'data:image/jpeg;base64,AA==');
+  assert.equal(activity[0].type, 'activity');
+});
+
+
+test('native execution failures are not replayed, while invalid output can be repaired in the same context', async () => {
+  let attempts = 0;
+  await assert.rejects(ask({ backend: 'codex' }, [], { call: async () => { attempts++; throw new Error('native outcome unknown'); } }), /outcome unknown/);
+  assert.equal(attempts, 1);
+  attempts = 0;
+  const value = await ask({ backend: 'codex' }, [], { call: async (_config, messages) => {
+    attempts++;
+    if (attempts === 1) return { content: 'incomplete' };
+    assert.match(messages.at(-1).content, /Do not repeat previous tool operations/);
+    return { content: '{"ok":true}' };
+  } });
+  assert.equal(value.ok, true); assert.equal(attempts, 2);
 });

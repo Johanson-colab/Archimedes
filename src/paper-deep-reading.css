@@ -5,13 +5,34 @@
 .paper-deep-status { min-width: 0; color: var(--text-muted); font-size: 12px; }
 .paper-deep-reading-document { display: block; flex: 1 1 0; width: 100%; min-height: 0; border: 0; background: var(--surface-canvas); }
 .paper-deep-notice { flex: 0 0 auto; margin: 10px 20px; }
-.paper-deep-empty { flex: 1 1 0; min-height: 0; overflow: auto; padding: 60px clamp(24px, 6vw, 90px); }
-.paper-deep-empty > svg { color: var(--accent); }
-.paper-deep-empty h2 { max-width: 780px; margin: 20px 0 14px; font-size: 26px; line-height: 1.35; }
-.paper-deep-empty > p { max-width: 700px; color: var(--text-muted); font-size: 14px; line-height: 1.8; }
+.paper-deep-empty { flex: 1 1 0; min-height: 0; overflow: auto; padding: clamp(30px, 6vw, 78px) clamp(24px, 6vw, 88px); }
+.paper-deep-intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 400px); gap: clamp(32px, 6vw, 90px); max-width: 1260px; margin: 0 auto; align-items: start; }
+.paper-deep-hero { min-width: 0; padding-top: 15px; }
+.paper-deep-eyebrow, .paper-deep-paper-label, .paper-deep-map-head > div > span { display: flex; align-items: center; gap: 9px; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.paper-deep-hero h2 { max-width: 680px; margin: 26px 0 16px; font-size: clamp(28px, 3.4vw, 44px); line-height: 1.15; letter-spacing: -.035em; }
+.paper-deep-hero > p { max-width: 620px; color: var(--text-muted); font-size: 15px; line-height: 1.8; }
+.paper-deep-paper { display: flex; gap: 16px; max-width: 620px; margin-top: 42px; padding: 20px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface-panel); }
+.paper-deep-paper-mark { display: grid; flex: 0 0 48px; height: 58px; place-items: center; color: var(--accent); border: 1px solid var(--border-soft); border-radius: 6px; background: var(--surface-canvas); }
+.paper-deep-paper > div { display: grid; gap: 6px; min-width: 0; }
+.paper-deep-paper-label { font-size: 10px; }
+.paper-deep-paper strong { overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; }
+.paper-deep-paper > div > span:last-child { color: var(--text-muted); font-size: 12px; }
+.paper-deep-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 20px; color: var(--text-muted); font-size: 12px; }
+.paper-deep-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.paper-deep-map { padding: 25px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface-panel); }
+.paper-deep-map-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; padding-bottom: 20px; color: var(--accent); }
+.paper-deep-map-head > div > span { font-size: 10px; }
+.paper-deep-map-head h3 { margin: 9px 0 0; color: var(--text-primary); font-size: 19px; letter-spacing: -.02em; }
+.paper-deep-map-row { display: grid; grid-template-columns: 32px 1fr; align-items: center; gap: 8px; min-height: 69px; border-top: 1px solid var(--border-soft); }
+.paper-deep-map-row > span { color: var(--accent); font-size: 11px; font-weight: 600; }
+.paper-deep-map-row > div { display: grid; gap: 4px; }
+.paper-deep-map-row strong { font-size: 13px; }
+.paper-deep-map-row small, .paper-deep-map > p { color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.paper-deep-map > p { margin: 14px 0 0; padding-top: 16px; border-top: 1px solid var(--border-soft); }
 .paper-deep-progress { display: flex; align-items: center; gap: 9px; }
-.paper-deep-legacy { max-width: 900px; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-soft); }
+.paper-deep-legacy { max-width: 1260px; margin: 46px auto 0; padding-top: 20px; border-top: 1px solid var(--border-soft); }
 .paper-deep-legacy summary { cursor: pointer; font-size: 14px; font-weight: 600; }
 .paper-deep-workbench.presentation-active { overflow: auto; }
 .paper-deep-workbench.presentation-active .paper-presentation-deck { flex: 1 1 0; min-height: 0; }
+@media (max-width: 850px) { .paper-deep-intro { grid-template-columns: 1fr; gap: 34px; } .paper-deep-map { max-width: 620px; } }
 @media (max-width: 700px) { .paper-deep-toolbar { padding: 10px 14px; gap: 8px; } .paper-deep-status { flex-basis: 100%; order: 3; } .paper-deep-empty { padding: 30px 22px; } }

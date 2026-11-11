@@ -383,3 +383,13 @@ test('Paper to Slides sends the Codex-specific skill and token only to the child
   assert.equal(f.peer().options.env.MINERU_API_TOKEN, 'test-private-token');
   assert.doesNotMatch(JSON.stringify(f.peer().calls) + JSON.stringify(f.events) + JSON.stringify(f.records), /test-private-token/);
 });
+
+
+test('paper reading attaches the bundled skill to the native Codex turn', async () => {
+  const f = fixture(p => complete(p), { nativeSkill: 'paper-deep-reading' });
+  await backend.runCodex(f.args);
+  const skill = f.peer().calls.find(c => c.method === 'turn/start').params.input.find(i => i.type === 'skill');
+  assert.equal(skill.name, 'paper-deep-reading');
+  assert.ok(fs.existsSync(skill.path));
+  assert.equal(f.peer().calls.find(c => c.method === 'thread/start').params.sandbox, 'read-only');
+});

@@ -8,7 +8,7 @@ const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
 const { registerThreadCommands } = require("./thread-commands.cjs");
-const { generateDeepReading } = require("./paper-deep-reading.cjs");
+const { generateDeepReading, createCodexReadingCall } = require("./paper-deep-reading.cjs");
 const { renderReport: renderDeepReading, markdown: deepReadingMarkdown } = require("./paper-deep-reading-render.cjs");
 const deepReadingRuns = new Map();
 const kimiSlidesSkill = require("./kimi-slides-skill.cjs");
@@ -1919,10 +1919,21 @@ app.whenReady().then(async () => {
     event.sender.once("destroyed", onDestroyed);
     deepReadingRuns.set(key, { controller, clientRunId, senderId: event.sender.id });
     try {
+      const configuredBackend = agentBackendConfig.get();
+      const config = { ...configuredBackend.profiles.codex, backend: "codex" };
+      const emit = payload => { if (!event.sender.isDestroyed()) event.sender.send("paper-review:event", { ...payload, clientRunId }); };
+      const approve = async ({ command, cwd, reason, signal }) => {
+        if (signal?.aborted || controller.signal.aborted || event.sender.isDestroyed() || command.length > 6000) return false;
+        const owner = BrowserWindow.fromWebContents(event.sender);
+        if (!owner) return false;
+        const result = await dialog.showMessageBox(owner, { type: "question", title: "Codex approval", message: "Allow this Codex operation?", detail: `${reason ? `${reason}\n\n` : ""}Directory: ${cwd}\n\n${command}`, buttons: ["Deny", "Allow once"], defaultId: 0, cancelId: 0, noLink: true });
+        return result.response === 1 && !signal?.aborted && !controller.signal.aborted;
+      };
+      const pdfPath = workspaceFiles.workspacePath(dataWorkspace, reader.asset.relative_path);
+      const call = createCodexReadingCall({ workspace: dataWorkspace, pdfPath, config, emit, approve });
       const result = await generateDeepReading({ paper, workspace: dataWorkspace,
-        pdfPath: workspaceFiles.workspacePath(dataWorkspace, reader.asset.relative_path),
-        config: modelConfig.getActiveModelConfig(), signal: controller.signal,
-        emit: payload => { if (!event.sender.isDestroyed()) event.sender.send("paper-review:event", { ...payload, clientRunId }); },
+        pdfPath,
+        config, call, signal: controller.signal, emit,
       });
       if (controller.signal.aborted) throw new Error("The reading was cancelled.");
       store.openWorkspace(dataWorkspace);

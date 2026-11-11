@@ -2037,10 +2037,10 @@ interface PaperPresentationEvent {
 }
 
 interface PaperReviewEvent {
-  type: "stage";
-  stage: "source" | "plan" | "figures" | "chapter" | "audit" | "specialists" | "specialist_started" | "specialist_complete" | "specialist_failed" | "supervisor" | "repair" | "summary" | "complete";
+  type: "stage" | "activity";
+  stage?: "source" | "plan" | "figures" | "chapter" | "audit" | "specialists" | "specialist_started" | "specialist_complete" | "specialist_failed" | "supervisor" | "repair" | "summary" | "complete";
   reviewerId?: "related" | "method" | "experiments" | "limitations";
-  title: string;
+  title?: string;
   detail: string;
   response?: string;
   clientRunId?: string;

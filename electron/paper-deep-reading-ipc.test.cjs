@@ -14,12 +14,13 @@ function fixture(t) {
   const handlers = new Map(), runs = new Map(); const source = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
   const chunk = source.slice(source.indexOf('  ipcMain.handle("paper-review:run"'), source.indexOf('  ipcMain.handle("project:list-members"'));
   let saved = { reading }, calls = 0, allowed = true, pick = { canceled: true, filePaths: [] };
+  let nativeOptions, approvalDialogs = [], approvalResponse = 0;
   let generate = async () => ({ reading, summary: { response: 'Complete' } });
   const store = { openWorkspace: value => assert.equal(value, root), getPaper: () => ({ id: 'paper', title: 'Canonical title' }), canAccessProject: () => allowed, getPaperReader: () => ({ asset: { status: 'ready', relative_path: 'source.pdf' } }), savePaperReview: (_id, value) => { saved = value; }, getPaperReview: () => saved };
-  const build = new Function('ipcMain', 'workspaceForWindow', 'BrowserWindow', 'resolveWorkspace', 'store', 'modelConfig', 'generateDeepReading', 'renderDeepReading', 'deepReadingMarkdown', 'deepReadingRuns', 'workspaceFiles', 'dialog', 'randomUUID', 'path', 'fs', chunk);
-  build({ handle: (channel, fn) => handlers.set(channel, fn) }, () => root, { fromWebContents: () => ({}) }, () => { throw Error('Should use window workspace'); }, store, { getActiveModelConfig: () => ({ apiKey: 'test' }) }, args => { calls++; return generate(args); }, renderReport, markdown, runs, workspaceFiles, { showOpenDialog: async () => pick }, randomUUID, path, fs);
+  const build = new Function('ipcMain', 'workspaceForWindow', 'BrowserWindow', 'resolveWorkspace', 'store', 'agentBackendConfig', 'createCodexReadingCall', 'generateDeepReading', 'renderDeepReading', 'deepReadingMarkdown', 'deepReadingRuns', 'workspaceFiles', 'dialog', 'randomUUID', 'path', 'fs', chunk);
+  build({ handle: (channel, fn) => handlers.set(channel, fn) }, () => root, { fromWebContents: () => ({}) }, () => { throw Error('Should use window workspace'); }, store, { get: () => ({ profiles: { codex: { binary: 'codex', permissionMode: 'ask' } } }) }, options => { nativeOptions = options; assert.equal(options.config.backend, 'codex'); return () => {}; }, args => { calls++; return generate(args); }, renderReport, markdown, runs, workspaceFiles, { showOpenDialog: async () => pick, showMessageBox: async (_owner, options) => { approvalDialogs.push(options); return { response: approvalResponse }; } }, randomUUID, path, fs);
   const sender = new EventEmitter(); Object.assign(sender, { id: 1, isDestroyed: () => false, send: () => {} });
-  return { root, reading, event: { sender }, handlers, runs, get saved() { return saved; }, get calls() { return calls; }, setGenerate: fn => { generate = fn; }, setAllowed: value => { allowed = value; }, setPick: value => { pick = value; } };
+  return { root, reading, event: { sender }, handlers, runs, get saved() { return saved; }, get calls() { return calls; }, get nativeOptions() { return nativeOptions; }, get approvalDialogs() { return approvalDialogs; }, setApprovalResponse: value => { approvalResponse = value; }, setGenerate: fn => { generate = fn; }, setAllowed: value => { allowed = value; }, setPick: value => { pick = value; } };
 }
 test('generation uses the window workspace and canonical paper, then saves a renderable report', async t => {
   const f = fixture(t); f.setGenerate(async args => { assert.equal(args.workspace, f.root); assert.equal(args.paper.title, 'Canonical title'); return { reading: f.reading, summary: { response: 'Complete' } }; });
@@ -46,4 +47,19 @@ test('export cancellation writes nothing; successful export contains offline HTM
   for (const name of ['paper_report.html', 'paper_report.zh.md', 'paper_report.en.md', 'report.json']) assert.ok(fs.existsSync(path.join(result.path, name)));
   assert.equal(fs.readdirSync(path.join(result.path, 'assets')).length, 1);
   assert.match(fs.readFileSync(path.join(result.path, 'paper_report.html'), 'utf8'), /data:image\/jpeg/);
+});
+
+
+test('native operations require a concrete user decision and cancellation cannot approve them', async t => {
+  const f = fixture(t);
+  await f.handlers.get('paper-review:run')(f.event, { paper: { id: 'paper' }, projectId: 'project' });
+  const approve = f.nativeOptions.approve;
+  assert.equal(await approve({ command: 'cat paper.pdf', cwd: f.root, reason: 'Inspect source' }), false);
+  assert.match(f.approvalDialogs[0].detail, /cat paper.pdf/);
+  f.setApprovalResponse(1);
+  assert.equal(await approve({ command: 'cat paper.pdf', cwd: f.root }), true);
+  assert.equal(await approve({ command: 'x'.repeat(6001), cwd: f.root }), false);
+  const controller = new AbortController(); controller.abort();
+  assert.equal(await approve({ command: 'cat paper.pdf', cwd: f.root, signal: controller.signal }), false);
+  assert.equal(f.approvalDialogs.length, 2);
 });
