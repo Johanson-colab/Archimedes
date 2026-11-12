@@ -4,8 +4,9 @@ import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { workspaceName } from "./workspace-name";
+import WorkspaceMenuActions from "./WorkspaceMenuActions";
 
-export default function ProjectSidebar({ projects, archivedProjects, workspaces, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, filterError }: {
+export default function ProjectSidebar({ projects, archivedProjects, workspaces, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
   projects: ResearchProject[];
   archivedProjects: ResearchProject[];
   workspaces: ProjectWorkspace[];
@@ -13,17 +14,20 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
   activeWorkspaceId: string | null;
   disabled: boolean;
   onNewProject: () => void;
-  onNewWorkspace: (projectId: string) => void;
+  onNewWorkspace: (projectId: string, kind?: ProjectWorkspaceKind) => void;
   onRenameProject: (projectId: string, name: string) => Promise<void>;
   onArchiveProject: (project: ResearchProject, archived: boolean) => void;
   onRemoveProject: (project: ResearchProject) => void;
   onChangeProjectWorkspace: (project: ResearchProject) => void;
   onOpenWorkspace: (workspace: ProjectWorkspace) => void;
+  onRenameWorkspace: (workspace: ProjectWorkspace) => void;
+  onDeleteWorkspace: (workspace: ProjectWorkspace) => void;
   filterError?: string;
 }) {
   const { t } = useUISettings();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [projectMenu, setProjectMenu] = useState<{ project: ResearchProject } | null>(null);
+  const [projectMenu, setProjectMenu] = useState<{ project: ResearchProject; cursor?: { x: number; y: number } } | null>(null);
+  const [workspaceMenu, setWorkspaceMenu] = useState<{ workspace: ProjectWorkspace; cursor: { x: number; y: number } } | null>(null);
   const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [projectNameDraft, setProjectNameDraft] = useState("");
@@ -91,7 +95,11 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
           const isExpanded = expanded.has(project.id);
           const menuOpen = projectMenu?.project.id === project.id;
           return <div className="project-node" key={project.id}>
-            <div className="project-tree-row">
+            <div className="project-tree-row" onContextMenu={(event) => {
+              event.preventDefault();
+              projectAnchorRef.current = null;
+              setProjectMenu({ project, cursor: { x: event.clientX, y: event.clientY } });
+            }}>
               {editingProjectId === project.id
                 ? <span className="project-rename-field"><input autoFocus value={projectNameDraft} aria-label={t("Project name")} maxLength={100} disabled={renaming} onChange={(event) => setProjectNameDraft(event.target.value)} onBlur={() => void finishRename(project)} onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -109,7 +117,8 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
                 <button onClick={() => onNewWorkspace(project.id)} title={t("New workspace")} aria-label={t("New workspace")} disabled={disabled}><Plus size={13} /></button>
                 <button className={menuOpen ? "project-more-button active" : "project-more-button"} onClick={(event) => { projectAnchorRef.current = event.currentTarget; setProjectMenu((current) => current?.project.id === project.id ? null : { project }); }} title={t("More project actions")} aria-label={t("More project actions")} aria-haspopup="menu" aria-expanded={menuOpen} disabled={disabled}><MoreVertical size={14} /></button>
               </span>
-              <MenuSurface open={menuOpen} onClose={() => setProjectMenu(null)} anchorRef={projectAnchorRef} placement="bottom-end" width={300} className="project-more-menu" ariaLabel={t("Project actions")}>
+              <MenuSurface open={menuOpen} onClose={() => setProjectMenu(null)} anchorRef={projectAnchorRef} cursor={projectMenu?.cursor} placement="bottom-end" width={300} className="project-more-menu" ariaLabel={t("Project actions")}>
+                <MenuItem icon={<Plus size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onNewWorkspace(project.id); }} disabled={disabled}>{t("New workspace")}</MenuItem>
                 <MenuItem icon={<FolderOpen size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onChangeProjectWorkspace(project); }} disabled={disabled}>{t("Change project folder")}</MenuItem>
                 <MenuItem icon={<Pencil size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}>{t("Rename")}</MenuItem>
                 <MenuItem icon={<Archive size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}>{t("Archive")}</MenuItem>
@@ -118,11 +127,26 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
               </MenuSurface>
             </div>
             {isExpanded && <div className="project-chat-list">
-              {projectWorkspaces.map((workspace) => <div className={activeWorkspaceId === workspace.id ? "project-chat-row active" : "project-chat-row"} key={workspace.id}>
+              {projectWorkspaces.map((workspace) => <div
+                className={activeWorkspaceId === workspace.id ? "project-chat-row active" : "project-chat-row"}
+                key={workspace.id}
+                onContextMenu={(event) => { event.preventDefault(); setWorkspaceMenu({ workspace, cursor: { x: event.clientX, y: event.clientY } }); }}
+              >
                 <button className="project-chat-open" onClick={() => onOpenWorkspace(workspace)} title={workspace.root}>
                   <span className="project-chat-title">{workspaceName(workspace, t)}</span>
                   {workspace.session_count > 0 && <span className="project-chat-count">{workspace.session_count}</span>}
                 </button>
+                <MenuSurface open={workspaceMenu?.workspace.id === workspace.id} onClose={() => setWorkspaceMenu(null)} cursor={workspaceMenu?.workspace.id === workspace.id ? workspaceMenu.cursor : null} placement="bottom-start" width={220} className="project-more-menu workspace-context-menu" ariaLabel={t("Workspace actions")}>
+                  <MenuItem icon={<FolderOpen size={18} strokeWidth={1.7} />} onClick={() => { setWorkspaceMenu(null); onOpenWorkspace(workspace); }}>{t("Open workspace")}</MenuItem>
+                  <WorkspaceMenuActions
+                    workspace={workspace}
+                    canWorktree={project.git_state === "ready"}
+                    disabled={disabled}
+                    onRename={() => { setWorkspaceMenu(null); onRenameWorkspace(workspace); }}
+                    onDelete={() => { setWorkspaceMenu(null); onDeleteWorkspace(workspace); }}
+                    onCreate={(kind) => { setWorkspaceMenu(null); onNewWorkspace(project.id, kind); }}
+                  />
+                </MenuSurface>
               </div>)}
               {!projectWorkspaces.length && <div className="project-chat-empty">{t("No workspaces yet")}</div>}
             </div>}

@@ -120,7 +120,7 @@ test("section labels match project-row typography and New project is a direct ic
 });
 
 test("only the selected workspace is highlighted, not its parent project", () => {
-  assert.match(sidebar, /<div className="project-tree-row">/);
+  assert.match(sidebar, /<div className="project-tree-row" onContextMenu=/);
   assert.doesNotMatch(sidebar, /isActiveProject|project-tree-row active/);
   assert.match(sidebar, /activeWorkspaceId === workspace\.id \? "project-chat-row active"/);
   assert.doesNotMatch(css, /\.project-tree-row\.active/);
@@ -132,6 +132,21 @@ test("project overflow actions collapse into one vertical menu", () => {
   assert.match(sidebar, /Change project folder/);
   assert.match(sidebar, /<MenuDivider \/>/);
   assert.match(sidebar, /danger icon=\{<Trash/);
+});
+
+test("projects and workspaces expose pointer-positioned context menus", () => {
+  assert.match(sidebar, /project-tree-row" onContextMenu=\{\(event\) => \{[\s\S]*?event\.preventDefault\(\)[\s\S]*?cursor: \{ x: event\.clientX, y: event\.clientY \}/);
+  assert.match(sidebar, /cursor=\{projectMenu\?\.cursor\}/);
+  assert.match(sidebar, /onContextMenu=\{\(event\) => \{ event\.preventDefault\(\); setWorkspaceMenu/);
+  assert.match(sidebar, /cursor=\{workspaceMenu\?\.workspace\.id === workspace\.id \? workspaceMenu\.cursor : null\}/);
+  assert.match(sidebar, /t\("Open workspace"\)/);
+  assert.match(sidebar, /onRenameWorkspace\(workspace\)/);
+  assert.match(sidebar, /<WorkspaceMenuActions[\s\S]*?onDeleteWorkspace\(workspace\)/);
+  assert.match(sidebar, /onNewWorkspace\(project\.id, kind\)/);
+  assert.match(app, /onRenameWorkspace=\{openWorkspaceRename\}/);
+  assert.match(app, /onDeleteWorkspace=\{\(workspaceToDelete\) => void deleteWorkspace\(workspaceToDelete\)\}/);
+  assert.match(i18n, /"Workspace actions": "工作区操作"/);
+  assert.match(i18n, /"Open workspace": "打开工作区"/);
 });
 
 test("Work row typography matches the Knowledge items", () => {

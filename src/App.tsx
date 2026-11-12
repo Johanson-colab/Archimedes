@@ -3324,12 +3324,14 @@ function App() {
           activeWorkspaceId={activeWorkspace?.id ?? null}
           disabled={agentBusy}
           onNewProject={openNewProject}
-          onNewWorkspace={(projectId) => openWorkspaceCreator(projectId)}
+          onNewWorkspace={(projectId, kind) => openWorkspaceCreator(projectId, kind)}
           onRenameProject={(projectId, name) => renameProject(projectId, name)}
           onArchiveProject={(project, archived) => void archiveProject(project, archived)}
           onRemoveProject={setProjectToRemove}
           onChangeProjectWorkspace={(project) => void changeProjectWorkspace(project)}
           onOpenWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
+          onRenameWorkspace={openWorkspaceRename}
+          onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
           filterError={projectFolderError}
         />
 

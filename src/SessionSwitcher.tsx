@@ -6,14 +6,13 @@ import {
   ChevronDown,
   GitBranch,
   Lock,
-  Pencil,
   Pin,
   PinOff,
-  Trash,
 } from "lucide-react";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
 import { workspaceName } from "./workspace-name";
+import WorkspaceMenuActions from "./WorkspaceMenuActions";
 
 type SessionFilter = "all" | "mine" | "shared" | "archived";
 type SessionStatus = "idle" | "running" | "review" | "failed" | "unread";
@@ -256,18 +255,10 @@ export default function SessionSwitcher({
             <span className="workspace-option-count">{entry.session_count}</span>
           </button>
           <span className="workspace-option-actions">
-            <button
-              className="workspace-option-action"
-              onClick={() => { setWorkspaceOpen(false); onRenameWorkspace(entry); }}
-              title={t("Rename workspace")}
-              aria-label={t("Rename workspace")}
-            ><Pencil size={13} /></button>
-            {!entry.is_default && <button
-              className="workspace-option-action danger"
-              onClick={() => { setWorkspaceOpen(false); onDeleteWorkspace(entry); }}
-              title={t("Delete workspace")}
-              aria-label={t("Delete workspace")}
-            ><Trash size={13} /></button>}
+            <WorkspaceMenuActions compact workspace={entry} canWorktree={canWorktree} disabled={creatingWorkspace}
+              onRename={() => { setWorkspaceOpen(false); onRenameWorkspace(entry); }}
+              onDelete={() => { setWorkspaceOpen(false); onDeleteWorkspace(entry); }}
+            />
           </span>
         </div>)}
       </div>
