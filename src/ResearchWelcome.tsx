@@ -13,25 +13,25 @@ const workflows: Array<{
     id: "idea",
     title: "Discover ideas",
     description: "Find a research question in evidence, contradictions, and open gaps.",
-    image: "/welcome/idea-discovery.jpg",
+    image: `${import.meta.env.BASE_URL}welcome/idea-discovery.jpg`,
   },
   {
     id: "literature",
     title: "Research literature",
     description: "Search papers, trace citations, and verify the evidence at the source.",
-    image: "/welcome/literature-research.jpg",
+    image: `${import.meta.env.BASE_URL}welcome/literature-research.jpg`,
   },
   {
     id: "replication",
     title: "Reproduce a paper",
     description: "Set up a faithful baseline.",
-    image: "/welcome/paper-replication.jpg",
+    image: `${import.meta.env.BASE_URL}welcome/paper-replication.jpg`,
   },
   {
     id: "illustration",
     title: "Generate figures",
     description: "Prepare figures with visual rigor.",
-    image: "/welcome/illustration-generation.jpg",
+    image: `${import.meta.env.BASE_URL}welcome/illustration-generation.jpg`,
   },
 ];
 
@@ -39,7 +39,7 @@ export default function ResearchWelcome({ onSelect }: { onSelect: (action: Resea
   const { t } = useUISettings();
   return <section className="research-welcome" aria-label={t("Start a research workflow")}>
     <div className="research-welcome-hero">
-      <img src="/welcome/archimedes-hero.jpg" alt="Archimedes in a classical study surrounded by geometric instruments" />
+      <img src={`${import.meta.env.BASE_URL}welcome/archimedes-hero.jpg`} alt="Archimedes in a classical study surrounded by geometric instruments" />
       <div className="research-welcome-copy">
         <h1>{t("Choose your path")}</h1>
         <blockquote>{t("Turn curiosity into questions worth testing, and evidence into answers worth trusting.")}</blockquote>

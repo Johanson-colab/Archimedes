@@ -102,17 +102,18 @@ function shellLaunch() {
   return resolveTerminalShell({ profile: normalize().shell, customShell: normalize().customShell });
 }
 
-function openExternalTerminal({ cwd, externalTerminal } = {}) {
+function openExternalTerminal({ cwd, externalTerminal } = {}, { spawnImpl = spawn, platform = process.platform } = {}) {
   const current = normalize();
-  const target = getExternalTerminal(process.platform, externalTerminal || current.externalTerminal);
+  const requested = externalTerminal || current.externalTerminal;
+  const target = getExternalTerminal(platform, requested);
   if (!target) return Promise.resolve({ opened: false, app: "None" });
   const targetCwd = cwd || os.homedir();
   let args;
   if (target.app === "Tabby") {
-    args = process.platform === "darwin"
+    args = platform === "darwin"
       ? ["-a", "Tabby", "--args", "open", targetCwd]
       : ["open", targetCwd];
-  } else if (process.platform === "win32") {
+  } else if (platform === "win32") {
     args = target.command === "wezterm.exe" ? ["start", "--cwd", targetCwd] : ["-d", targetCwd];
   } else if (target.app === "Ghostty") {
     args = ["-a", "Ghostty", "--args", `--working-directory=${targetCwd}`];
@@ -124,12 +125,24 @@ function openExternalTerminal({ cwd, externalTerminal } = {}) {
     args = [...(target.args || []), "--cwd", targetCwd];
   }
   return new Promise((resolve) => {
-    const child = spawn(target.command, args, { cwd: cwd || os.homedir(), detached: true, stdio: "ignore" });
-    child.once("error", (error) => resolve({ opened: false, app: target.app, error: error.message }));
-    child.once("spawn", () => {
-      child.unref();
-      resolve({ opened: true, app: target.app });
-    });
+    function launch(command, launchArgs, app, fallback = false) {
+      const child = spawnImpl(command, launchArgs, { cwd: targetCwd, detached: true, stdio: "ignore" });
+      child.once("error", (error) => {
+        if (!fallback && platform === "win32" && requested === "auto" && error.code === "ENOENT") {
+          // Windows Terminal is optional on Windows 10. Open the selected shell
+          // in its own console when the default terminal is not installed.
+          const shell = resolveTerminalShell({ platform, profile: current.shell, customShell: current.customShell });
+          launch(shell.shell, shell.args, path.win32.basename(shell.shell), true);
+        } else {
+          resolve({ opened: false, app, error: error.message });
+        }
+      });
+      child.once("spawn", () => {
+        child.unref();
+        resolve({ opened: true, app });
+      });
+    }
+    launch(target.command, args, target.app);
   });
 }
 

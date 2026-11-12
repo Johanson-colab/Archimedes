@@ -2,6 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { spawn } = require("node:child_process");
+const { stopProcessTree } = require("./process-tree.cjs");
+const { windowsPathCandidates } = require("./windows-path.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexTemplates = require("../shared/latex-templates.json");
 
@@ -163,15 +165,18 @@ function importLatexProject(root, sourceDirectory) {
 }
 
 function findExecutable(names, env = process.env) {
-  const pathEntries = String(env.PATH || "").split(path.delimiter).filter(Boolean);
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path");
+  const pathEntries = String(env[pathKey] || "").split(path.delimiter).filter(Boolean);
   const candidates = [];
   for (const name of names) {
     if (path.isAbsolute(name)) candidates.push(name);
+    else if (process.platform === "win32") candidates.push(...windowsPathCandidates(name, env));
     else for (const directory of pathEntries) candidates.push(path.join(directory, name));
   }
   for (const candidate of candidates) {
     try {
       fs.accessSync(candidate, fs.constants.X_OK);
+      if (!fs.statSync(candidate).isFile()) continue;
       return candidate;
     } catch { /* Continue searching. */ }
   }
@@ -205,14 +210,14 @@ function runCompiler(command, args, options = {}) {
   const timeoutMs = Math.min(180_000, Math.max(10_000, Number(options.timeoutMs) || 90_000));
   const spawnImpl = options.spawnImpl || spawn;
   return new Promise((resolve, reject) => {
-    const child = spawnImpl(command, args, { cwd: options.cwd, env: options.env || process.env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawnImpl(command, args, { cwd: options.cwd, env: options.env || process.env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     let output = "";
     const append = (chunk) => { output = `${output}${String(chunk)}`.slice(-120_000); };
     child.stdout?.on("data", append);
     child.stderr?.on("data", append);
-    child.once("error", reject);
+    child.once("error", (error) => { clearTimeout(timer); reject(error); });
     const timer = setTimeout(() => {
-      child.kill("SIGKILL");
+      stopProcessTree(child, "SIGKILL");
       reject(new Error("LaTeX compilation timed out."));
     }, timeoutMs);
     child.once("close", (code, signal) => {
@@ -240,9 +245,10 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   fs.mkdirSync(buildDirectory, { recursive: true });
 
   const compilerEnv = { ...process.env, ...(options.env || {}), LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
-  const latexmk = options.executable || findExecutable(["latexmk", "latexmk.exe", "/Library/TeX/texbin/latexmk", "/opt/homebrew/bin/latexmk", "/usr/local/bin/latexmk"], compilerEnv);
-  const pdflatex = latexmk ? "" : findExecutable(["pdflatex", "pdflatex.exe", "/Library/TeX/texbin/pdflatex", "/opt/homebrew/bin/pdflatex", "/usr/local/bin/pdflatex"], compilerEnv);
-  const tectonic = latexmk || pdflatex ? "" : findExecutable(["tectonic", "tectonic.exe", "/opt/homebrew/bin/tectonic", "/usr/local/bin/tectonic"], compilerEnv);
+  const windows = process.platform === "win32";
+  const latexmk = options.executable || findExecutable(windows ? ["latexmk.exe"] : ["latexmk", "/Library/TeX/texbin/latexmk", "/opt/homebrew/bin/latexmk", "/usr/local/bin/latexmk"], compilerEnv);
+  const pdflatex = latexmk ? "" : findExecutable(windows ? ["pdflatex.exe"] : ["pdflatex", "/Library/TeX/texbin/pdflatex", "/opt/homebrew/bin/pdflatex", "/usr/local/bin/pdflatex"], compilerEnv);
+  const tectonic = latexmk || pdflatex ? "" : findExecutable(windows ? ["tectonic.exe"] : ["tectonic", "/opt/homebrew/bin/tectonic", "/usr/local/bin/tectonic"], compilerEnv);
   const executable = latexmk || pdflatex || tectonic;
   if (!executable) throw new Error("No LaTeX compiler was found. Install a TeX distribution (latexmk or pdflatex) or Tectonic, then try again.");
   const engineKind = compilerKind(executable);

@@ -16,7 +16,7 @@ function fixture() {
   fs.mkdirSync(arisSource, { recursive: true });
   fs.mkdirSync(arisRoot, { recursive: true });
   fs.writeFileSync(path.join(arisSource, "SKILL.md"), "---\nname: research-lit\ndescription: Search and synthesize research literature.\n---\n\n# Research Lit\n", "utf8");
-  fs.symlinkSync(arisSource, path.join(arisRoot, "research-lit"));
+  fs.symlinkSync(arisSource, path.join(arisRoot, "research-lit"), process.platform === "win32" ? "junction" : "dir");
   return root;
 }
 
