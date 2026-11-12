@@ -44,3 +44,26 @@ test('binary template figures survive download, caching and project creation', a
     assert.deepEqual(fs.readFileSync(path.join(root, 'paper/figure.pdf')), image);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('bundled ACM class and starter create a complete project without network access', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'template-acm-'));
+  try {
+    const file = await createPaperProject(root, 'acm', 'acm-sigconf', { fetchImpl: () => { throw new Error('offline'); } });
+    const source = fs.readFileSync(path.join(root, file.path), 'utf8');
+    assert.match(source, /\\documentclass\[sigconf,review,anonymous\]\{acmart\}/);
+    assert.match(source, /\\bibliography\{references\}/);
+    assert.equal(fs.existsSync(path.join(root, 'acm/acmart.cls')), true);
+    assert.equal(fs.existsSync(path.join(root, 'acm/acmart.dtx')), true);
+    assert.equal(fs.existsSync(path.join(root, 'acm/ACM-Reference-Format.bst')), true);
+    assert.match(fs.readFileSync(path.join(root, 'acm/ARCHIMEDES-SOURCE.txt'), 'utf8'), /Archimedes-authored starter/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+test('bundled assets and starter overlays reject traversal, corruption and source collisions', async () => {
+  const acm = require('../shared/official-latex-templates.json').find((entry) => entry.id === 'acm-sigconf');
+  for (const change of [{ resource: '../escape.cls' }, { path: '../escape.cls' }, { sha256: '0'.repeat(64) }]) {
+    await assert.rejects(loadOfficialTemplate({ ...acm, bundledAssets: [{ ...acm.bundledAssets[0], ...change }] }), /Invalid bundled|checksum/);
+  }
+  for (const starterFiles of [{ '../escape.tex': content }, { 'acmart.cls': content }]) {
+    await assert.rejects(loadOfficialTemplate({ ...acm, starterFiles }), /Invalid or conflicting/);
+  }
+});

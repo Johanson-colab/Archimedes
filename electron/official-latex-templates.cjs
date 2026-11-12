@@ -9,15 +9,24 @@ const { createLatexProject, writeLatexProject } = require('./latex-workspace.cjs
 async function createPaperProject(root, directory, templateId, { cacheDirectory, fetchImpl = fetch } = {}) {
   const template = catalog.find((entry) => entry.id === templateId);
   if (!template) return createLatexProject(root, directory, templateId);
-  if (template.delivery !== 'download') throw new Error('Download this author kit from its official source, then import the folder.');
+  if (!['download', 'bundled'].includes(template.delivery)) throw new Error('Download this author kit from its official source, then import the folder.');
   const files = await loadOfficialTemplate(template, { cacheDirectory, fetchImpl });
   return writeLatexProject(root, directory || 'paper', { id: template.id, files });
 }
 
+function validAssetPath(value) {
+  return typeof value === 'string' && value && !value.split('/').some((part) => !part || part === '..' || part === '.') && !path.isAbsolute(value) && !value.includes('\\');
+}
 async function loadOfficialTemplate(template, { cacheDirectory, fetchImpl = fetch } = {}) {
   const files = {};
+  for (const asset of template.bundledAssets || []) {
+    if (!validAssetPath(asset.path) || !validAssetPath(asset.resource)) throw new Error('Invalid bundled template asset path.');
+    const data = fs.readFileSync(path.join(__dirname, 'assets', 'latex-templates', asset.resource));
+    if (createHash('sha256').update(data).digest('hex') !== asset.sha256) throw new Error(`Bundled template checksum verification failed: ${asset.path}`);
+    files[asset.path] = asset.binary ? data : data.toString('utf8');
+  }
   for (const asset of template.assets) {
-    if (asset.path.split('/').some((part) => !part || part === '..' || part === '.') || path.isAbsolute(asset.path) || asset.path.includes('\\')) throw new Error('Invalid template asset path.');
+    if (!validAssetPath(asset.path)) throw new Error('Invalid template asset path.');
     const url = new URL(asset.url);
     if (url.protocol !== 'https:' || url.hostname !== 'raw.githubusercontent.com') throw new Error('Invalid template asset source.');
     const cached = cacheDirectory && path.join(cacheDirectory, asset.sha256);
@@ -37,8 +46,12 @@ async function loadOfficialTemplate(template, { cacheDirectory, fetchImpl = fetc
     }
     files[asset.path] = asset.binary ? data : data.toString('utf8');
   }
+  for (const [name, content] of Object.entries(template.starterFiles || {})) {
+    if (!validAssetPath(name) || typeof content !== 'string' || Buffer.byteLength(content) > 2_000_000 || Object.hasOwn(files, name)) throw new Error('Invalid or conflicting template starter file.');
+    files[name] = content;
+  }
   if (!files['main.tex']) throw new Error('The official author kit has no main document.');
-  files['ARCHIMEDES-SOURCE.txt'] = `${template.name}\nSource: ${template.sourceUrl}\nRevision: ${template.revision}\nSource type: ${template.sourceKind || "official"}\nVenue instructions: ${template.officialSourceUrl || template.sourceUrl}\nOriginal mirror/upstream files; main document renamed to main.tex.\nFollow the venue author instructions and upstream terms.\n`;
+  files['ARCHIMEDES-SOURCE.txt'] = `${template.name}\nSource: ${template.sourceUrl}\nRevision: ${template.revision}\nSource type: ${template.sourceKind || "official"}\nVenue instructions: ${template.officialSourceUrl || template.sourceUrl}\n${template.starterFiles ? 'Archimedes-authored starter; publisher style files are unchanged.' : 'Original mirror/upstream files; main document renamed to main.tex.'}\nFollow the venue author instructions and upstream terms.\n`;
   return files;
 }
 module.exports = { createPaperProject, loadOfficialTemplate };

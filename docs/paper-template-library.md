@@ -6,7 +6,7 @@ only All templates (which resets search) and Import existing folder; its labels
 use 13px text.
 The existing folder import remains available for Overleaf exports and other kits.
 
-The chooser contains six conference kits. Official author kits and clearly labelled community mirrors are downloaded on first
+The chooser contains six conference kits plus five publisher/journal starters. Official author kits and clearly labelled community mirrors are downloaded on first
 use from raw.githubusercontent.com at pinned upstream commits. Their text assets
 are SHA-256 verified before use and cached under Electron's userData directory
 in `latex-template-cache`. Subsequent project creation can use that cache offline.
@@ -70,3 +70,6 @@ which downloads and caches TeX dependencies automatically.
 Current sidebar screenshots: [before](assets/template-sidebar-simplification/before.png),
 [after](assets/template-sidebar-simplification/after.png), and
 [light theme](assets/template-sidebar-simplification/after-light.png).
+
+For ACM, JMLR, TMLR, Elsevier and IEEE sources and validation, see
+[Publisher and journal starters](publisher-templates.md).

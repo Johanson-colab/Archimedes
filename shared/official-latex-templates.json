@@ -308,5 +308,242 @@
       "NAACL",
       "EACL"
     ]
+  },
+  {
+    "id": "acm-sigconf",
+    "name": "ACM · sigconf",
+    "category": "Conference",
+    "description": "ACM acmart v2.21 sigconf starter. Change class options to match the target venue.",
+    "sourceUrl": "https://github.com/borisveytsman/acmart/tree/v2.21",
+    "revision": "0537b243395b23ad85c5036929f4b1f28429b3a5",
+    "delivery": "bundled",
+    "previewUrl": "paper-templates/acm-sigconf.png",
+    "venues": [
+      "ACM",
+      "KDD",
+      "SIGIR",
+      "CIKM",
+      "ACM MM",
+      "CHI",
+      "UIST"
+    ],
+    "assets": [],
+    "starterFiles": {
+      "main.tex": "% Archimedes starter using the official ACM acmart class.\n% Replace the conference metadata and follow the venue-specific author instructions.\n\\documentclass[sigconf,review,anonymous]{acmart}\n\\title{Untitled Research Paper}\n\\author{Author Name}\n\\affiliation{\\institution{Institution}\\city{City}\\country{Country}}\n\\email{author@example.com}\n\\setcopyright{none}\n\\acmConference[ACRONYM]{Conference Name}{Dates}{Location}\n\\acmYear{2026}\n\\begin{document}\n\\begin{abstract}Summarize the research question, method, and principal findings.\\end{abstract}\n\\maketitle\n\\section{Introduction}\nDescribe the research problem, its motivation, and the main contributions.\nA reference example is provided by \\citet{lamport1994latex}.\n\\section{Related Work}\nDiscuss the most relevant literature and explain the differences.\n\\section{Method}\nPresent the approach with enough detail to reproduce the work.\n\\section{Experiments}\nDescribe the datasets, baselines, evaluation and results.\n\\section{Conclusion}\nSummarize the findings and limitations.\n\\bibliographystyle{ACM-Reference-Format}\n\\bibliography{references}\n\\end{document}\n",
+      "references.bib": "@book{lamport1994latex,\n author={Leslie Lamport},\n title={LaTeX: A Document Preparation System},\n edition={2},\n publisher={Addison-Wesley},\n year={1994}\n}\n"
+    },
+    "bundledAssets": [
+      {
+        "path": "acmart.cls",
+        "resource": "acmart/acmart.cls",
+        "sha256": "cb641fdfe8a6b9bbe171a0794218657c737c4b622c584dab09115a9e269eb296"
+      },
+      {
+        "path": "acmart.dtx",
+        "resource": "acmart/acmart.dtx",
+        "sha256": "60d819ce2c75a0a5fa78e1fbdfd6f967e6635d9c36e8badc6d8193c3d1dc7595"
+      },
+      {
+        "path": "acmart.ins",
+        "resource": "acmart/acmart.ins",
+        "sha256": "fa7daaa9375775ce699f33f909667bdb83c0408fd8d67606926df86c346c4044"
+      },
+      {
+        "path": "ACM-Reference-Format.bst",
+        "resource": "acmart/ACM-Reference-Format.bst",
+        "sha256": "4342d27456645567ef1a027f6474e894715bc31d468f040142fa54540440ad04"
+      },
+      {
+        "path": "README",
+        "resource": "acmart/README",
+        "sha256": "07ed2223a3e8af3612a575d9d8b46a8dee0c639ec035c7caf194c129d78f5975"
+      }
+    ]
+  },
+  {
+    "id": "jmlr",
+    "name": "JMLR",
+    "category": "Journal",
+    "description": "JMLR author style with an editable paper and BibTeX reference example.",
+    "sourceUrl": "https://github.com/JmlrOrg/jmlr-style-file",
+    "revision": "f413f638b407af76074813f8f88a82a7a5a81e9d",
+    "delivery": "download",
+    "previewUrl": "paper-templates/jmlr.png",
+    "venues": [
+      "JMLR",
+      "Journal of Machine Learning Research"
+    ],
+    "assets": [
+      {
+        "path": "jmlr2e.sty",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/jmlr-style-file/f413f638b407af76074813f8f88a82a7a5a81e9d/jmlr2e.sty",
+        "sha256": "a430a875d561235951800e4e21d2631e18ddf0b369646ec276f43ea5080f27c3"
+      },
+      {
+        "path": "upstream-example.tex",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/jmlr-style-file/f413f638b407af76074813f8f88a82a7a5a81e9d/sample.tex",
+        "sha256": "19f563441b9b288333851cc9f63be8d9e8bd6b10bd672271a598b74f6e2903e2"
+      },
+      {
+        "path": "sample.bib",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/jmlr-style-file/f413f638b407af76074813f8f88a82a7a5a81e9d/sample.bib",
+        "sha256": "89e88007d9d80c206c103c1fe8cdaa4e3e56757b310fc28448a0763869036e1c"
+      },
+      {
+        "path": "README.md",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/jmlr-style-file/f413f638b407af76074813f8f88a82a7a5a81e9d/README.md",
+        "sha256": "5f1c31c94a3e33488cd15be1a2423a620487647da3bf21d1c95d6fa66cfd57dc"
+      }
+    ],
+    "starterFiles": {
+      "main.tex": "% Archimedes starter using the JMLR author style.\n% Submission and published-paper metadata must follow JMLR's author guidelines.\n\\documentclass[twoside,11pt]{article}\n\\usepackage{jmlr2e}\n\\ShortHeadings{Untitled Research Paper}{Author}\n\\firstpageno{1}\n\\begin{document}\n\\title{Untitled Research Paper}\n\\author{\\name Author Name \\email author@example.com \\\\\n\\addr Institution, City, Country}\n\\editor{To be assigned}\n\\maketitle\n\\begin{abstract}Summarize the research question, method, and principal findings.\\end{abstract}\n\\begin{keywords}Research, reproducibility\\end{keywords}\n\\section{Introduction}\nDescribe the research problem, its motivation, and the main contributions.\nA reference example is provided by \\citet{lamport1994latex}.\n\\section{Related Work}\nDiscuss the most relevant literature and explain the differences.\n\\section{Method}\nPresent the approach with enough detail to reproduce the work.\n\\section{Experiments}\nDescribe the datasets, baselines, evaluation and results.\n\\section{Conclusion}\nSummarize the findings and limitations.\n\\bibliography{references}\n\\end{document}\n",
+      "references.bib": "@book{lamport1994latex,\n author={Leslie Lamport},\n title={LaTeX: A Document Preparation System},\n edition={2},\n publisher={Addison-Wesley},\n year={1994}\n}\n"
+    }
+  },
+  {
+    "id": "tmlr",
+    "name": "TMLR",
+    "category": "Journal",
+    "description": "TMLR anonymous submission style with an editable paper and BibTeX reference example.",
+    "sourceUrl": "https://github.com/JmlrOrg/tmlr-style-file",
+    "revision": "7bf90efe3a0debbba703c05c43f3ff7e4d4a2992",
+    "delivery": "download",
+    "previewUrl": "paper-templates/tmlr.png",
+    "venues": [
+      "TMLR",
+      "Transactions on Machine Learning Research"
+    ],
+    "assets": [
+      {
+        "path": "tmlr.sty",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/tmlr-style-file/7bf90efe3a0debbba703c05c43f3ff7e4d4a2992/tmlr.sty",
+        "sha256": "816214ff5919aa457b6b443bee52b15d9561421417b7f8a50cc84651519f0002"
+      },
+      {
+        "path": "fancyhdr.sty",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/tmlr-style-file/7bf90efe3a0debbba703c05c43f3ff7e4d4a2992/fancyhdr.sty",
+        "sha256": "3d2922548e0e5f1a6c5676eda6ebb6dc20d7d305b4d8c2be5f1c833fb1084e6d"
+      },
+      {
+        "path": "tmlr.bst",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/tmlr-style-file/7bf90efe3a0debbba703c05c43f3ff7e4d4a2992/tmlr.bst",
+        "sha256": "306fd454cf40771bee01293eeb98d2c1cd5f4e11ed0cd7296b335f354fc45206"
+      },
+      {
+        "path": "upstream-example.tex",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/tmlr-style-file/7bf90efe3a0debbba703c05c43f3ff7e4d4a2992/main.tex",
+        "sha256": "85a994256fae53477e935bbacdf45b7e0e031abff660991485a61bff9bd4704c"
+      },
+      {
+        "path": "main.bib",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/tmlr-style-file/7bf90efe3a0debbba703c05c43f3ff7e4d4a2992/main.bib",
+        "sha256": "cdd86e7d4c31854dcf2145871657c944588a6d44c3b72e160ff4baa8df1a52fb"
+      },
+      {
+        "path": "math_commands.tex",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/tmlr-style-file/7bf90efe3a0debbba703c05c43f3ff7e4d4a2992/math_commands.tex",
+        "sha256": "90473c4d0542070db244cea73ef962d6cddc5b2a746757e6a40ddf5fdfb90ba9"
+      },
+      {
+        "path": "README.md",
+        "url": "https://raw.githubusercontent.com/JmlrOrg/tmlr-style-file/7bf90efe3a0debbba703c05c43f3ff7e4d4a2992/README.md",
+        "sha256": "91310b3f169ecd2d48f6c62ca8b2c9fb3f537d432d8e5d6aa4b6ac88f5c064f9"
+      }
+    ],
+    "starterFiles": {
+      "main.tex": "% Archimedes starter using TMLR's anonymous submission style.\n\\documentclass[10pt]{article}\n\\usepackage{tmlr}\n\\usepackage{hyperref}\n\\title{Untitled Research Paper}\n\\author{\\name Author Name \\email author@example.com \\\\\n\\addr Institution}\n\\begin{document}\n\\maketitle\n\\begin{abstract}Summarize the research question, method, and principal findings.\\end{abstract}\n\\section{Introduction}\nDescribe the research problem, its motivation, and the main contributions.\nA reference example is provided by \\citet{lamport1994latex}.\n\\section{Related Work}\nDiscuss the most relevant literature and explain the differences.\n\\section{Method}\nPresent the approach with enough detail to reproduce the work.\n\\section{Experiments}\nDescribe the datasets, baselines, evaluation and results.\n\\section{Conclusion}\nSummarize the findings and limitations.\n\\bibliographystyle{tmlr}\n\\bibliography{references}\n\\end{document}\n",
+      "references.bib": "@book{lamport1994latex,\n author={Leslie Lamport},\n title={LaTeX: A Document Preparation System},\n edition={2},\n publisher={Addison-Wesley},\n year={1994}\n}\n"
+    }
+  },
+  {
+    "id": "elsevier-elsarticle",
+    "name": "Elsevier · elsarticle",
+    "category": "Journal",
+    "description": "Elsevier elsarticle preprint with numbered references. Check the target journal class requirements.",
+    "sourceUrl": "https://github.com/STM-Document-Engineering/elsarticle",
+    "revision": "04aee43a9049051128c5d58b617dcd05e34df8b4",
+    "delivery": "download",
+    "previewUrl": "paper-templates/elsevier-elsarticle.png",
+    "venues": [
+      "Elsevier",
+      "Pattern Recognition",
+      "Neural Networks",
+      "Information Sciences",
+      "elsarticle"
+    ],
+    "assets": [
+      {
+        "path": "elsarticle.cls",
+        "url": "https://raw.githubusercontent.com/STM-Document-Engineering/elsarticle/04aee43a9049051128c5d58b617dcd05e34df8b4/elsarticle.cls",
+        "sha256": "ba7a1f25626a79fb39b53888dd826c4ae14d20db5429e236abdaaaf2fdf897ab"
+      },
+      {
+        "path": "elsarticle.dtx",
+        "url": "https://raw.githubusercontent.com/STM-Document-Engineering/elsarticle/04aee43a9049051128c5d58b617dcd05e34df8b4/elsarticle.dtx",
+        "sha256": "0b79c0d15cf6492e24390d6e77a3adff0fc90d19ae4809ccce0a1188ff93f208"
+      },
+      {
+        "path": "elsarticle.ins",
+        "url": "https://raw.githubusercontent.com/STM-Document-Engineering/elsarticle/04aee43a9049051128c5d58b617dcd05e34df8b4/elsarticle.ins",
+        "sha256": "864b7ccf8bf2631922b36e11bc705af6538a12cc62d10349c344f042284f615d"
+      },
+      {
+        "path": "elsarticle-num.bst",
+        "url": "https://raw.githubusercontent.com/STM-Document-Engineering/elsarticle/04aee43a9049051128c5d58b617dcd05e34df8b4/elsarticle-num.bst",
+        "sha256": "08d06d24a533fbe0c6e29d5bd5e7134781ab41a3c6640d73ad63112d4851b301"
+      },
+      {
+        "path": "README.md",
+        "url": "https://raw.githubusercontent.com/STM-Document-Engineering/elsarticle/04aee43a9049051128c5d58b617dcd05e34df8b4/README.md",
+        "sha256": "0eb61937f8c08cf60ef12603618fd0493c95463ba03784adde510a65206a67be"
+      },
+      {
+        "path": "LICENSE",
+        "url": "https://raw.githubusercontent.com/STM-Document-Engineering/elsarticle/04aee43a9049051128c5d58b617dcd05e34df8b4/LICENSE",
+        "sha256": "eda29e7f018ce4f0b7bdfba6d6229a46f71ce7ba199c70c0013a77382931266f"
+      },
+      {
+        "path": "upstream-example.tex",
+        "url": "https://raw.githubusercontent.com/STM-Document-Engineering/elsarticle/04aee43a9049051128c5d58b617dcd05e34df8b4/elsarticle-template-num.tex",
+        "sha256": "63fed3f76cd7638d8146e1855266c0820ebb2a2a681a8f6d0e2003ce222472b2"
+      }
+    ],
+    "starterFiles": {
+      "main.tex": "% Archimedes starter using Elsevier's numbered-reference preprint style.\n% Check the target journal's required class options before submission.\n\\documentclass[preprint,12pt]{elsarticle}\n\\usepackage{amsmath,amssymb}\n\\begin{document}\n\\begin{frontmatter}\n\\title{Untitled Research Paper}\n\\author{Author Name}\n\\address{Institution, City, Country}\n\\begin{abstract}Summarize the research question, method, and principal findings.\\end{abstract}\n\\begin{keyword}Research \\sep Reproducibility\\end{keyword}\n\\end{frontmatter}\n\\section{Introduction}\nDescribe the research problem, its motivation, and the main contributions.\nA reference example is provided by \\citet{lamport1994latex}.\n\\section{Related Work}\nDiscuss the most relevant literature and explain the differences.\n\\section{Method}\nPresent the approach with enough detail to reproduce the work.\n\\section{Experiments}\nDescribe the datasets, baselines, evaluation and results.\n\\section{Conclusion}\nSummarize the findings and limitations.\n\\bibliographystyle{elsarticle-num}\n\\bibliography{references}\n\\end{document}\n",
+      "references.bib": "@book{lamport1994latex,\n author={Leslie Lamport},\n title={LaTeX: A Document Preparation System},\n edition={2},\n publisher={Addison-Wesley},\n year={1994}\n}\n"
+    }
+  },
+  {
+    "id": "ieee-journal",
+    "name": "IEEE · journal",
+    "category": "Journal",
+    "description": "IEEEtran v1.8b journal starter. Some journals require compsoc or other options.",
+    "sourceUrl": "https://github.com/AhmedAbouelkher/ieee-paper_skill",
+    "revision": "8b86dea6bd3c058c6598c0bb5eea9e1aac4118c0",
+    "delivery": "download",
+    "previewUrl": "paper-templates/ieee-journal.png",
+    "venues": [
+      "IEEE",
+      "IEEEtran",
+      "TPAMI",
+      "PAMI",
+      "TIP",
+      "TNNLS",
+      "TMI",
+      "TGRS"
+    ],
+    "assets": [
+      {
+        "path": "IEEEtran.cls",
+        "url": "https://raw.githubusercontent.com/AhmedAbouelkher/ieee-paper_skill/8b86dea6bd3c058c6598c0bb5eea9e1aac4118c0/assets/IEEEtran.cls",
+        "sha256": "c972aca108fda004c3514d63658e02816da2e54d9a1451e870b9bd970e003f55"
+      }
+    ],
+    "starterFiles": {
+      "main.tex": "% Archimedes starter using IEEEtran's journal layout.\n% TPAMI and other journals may require additional class options (e.g. compsoc).\n% Follow the target journal's author guidelines before submission.\n\\documentclass[journal]{IEEEtran}\n\\title{Untitled Research Paper}\n\\author{Author Name}\n\\begin{document}\n\\maketitle\n\\begin{abstract}Summarize the research question, method, and principal findings.\\end{abstract}\n\\begin{IEEEkeywords}Research, reproducibility\\end{IEEEkeywords}\n\\section{Introduction}\nDescribe the research problem, its motivation, and the main contributions.\nA reference example is provided by \\cite{lamport1994latex}.\n\\section{Related Work}\nDiscuss the most relevant literature and explain the differences.\n\\section{Method}\nPresent the approach with enough detail to reproduce the work.\n\\section{Experiments}\nDescribe the datasets, baselines, evaluation and results.\n\\section{Conclusion}\nSummarize the findings and limitations.\n% Replace this example with your own references. IEEEtran also supports BibTeX.\n\\begin{thebibliography}{1}\n\\bibitem{lamport1994latex} L. Lamport, \\emph{LaTeX: A Document Preparation System}, 2nd ed. Addison-Wesley, 1994.\n\\end{thebibliography}\n\\end{document}\n",
+      "references.bib": "@book{lamport1994latex,\n author={Leslie Lamport},\n title={LaTeX: A Document Preparation System},\n edition={2},\n publisher={Addison-Wesley},\n year={1994}\n}\n"
+    },
+    "sourceKind": "mirror",
+    "officialSourceUrl": "https://journals.ieeeauthorcenter.ieee.org/create-your-ieee-journal-article/authoring-tools-and-templates/"
   }
 ]
