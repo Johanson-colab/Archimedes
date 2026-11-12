@@ -83,7 +83,7 @@ test("the main toolbar carries a breadcrumb and one session chip instead of tabs
 test("session search, filters, pinning, archiving and status are exposed", () => {
   assert.match(switcher, /placeholder=\{t\("Search sessions"\)\}/);
   assert.match(switcher, /FILTERS: SessionFilter\[\] = \["all", "mine", "shared", "archived"\]/);
-  assert.match(switcher, /pinned\.length > 0 && rest\.length > 0 && <MenuDivider \/>/);
+  assert.match(switcher, /pinned\.length > 0 && rest\.length > 0 && <div className="session-list-label">/);
   assert.match(switcher, /onPinSession\(session, !pinnedNow\)/);
   assert.match(switcher, /onArchiveSession\(session, filter !== "archived"\)/);
   assert.match(switcher, /session-status \$\{status\}/);
@@ -155,6 +155,33 @@ test("the switcher adapts to narrow screens as a full-height sheet", () => {
   assert.match(css, /\.session-chip \{[^}]*border: 0/);
   assert.match(css, /\.session-row\.active \{ background: var\(--menu-selected-bg\); \}/);
   assert.match(css, /\.workspace-option-copy small \{/);
+});
+
+test("workspace selection is explicit and auxiliary action hover does not add button fills", () => {
+  assert.match(switcher, /const isCurrentWorkspace = entry\.id === workspace\?\.id;/);
+  assert.match(switcher, /aria-current=\{isCurrentWorkspace \? "true" : undefined\}/);
+  assert.match(switcher, /aria-current=\{session\.id === activeSessionId \? "true" : undefined\}/);
+  assert.doesNotMatch(switcher, /workspace-option-current|<Check /);
+  assert.match(switcher, /isCurrentWorkspace \? "workspace-option active" : "workspace-option"/);
+  assert.match(switcher, /role="dialog"\s+focus=\{workspaceFocus\}\s+ariaLabel=\{t\("Workspaces"\)\}/);
+  assert.match(switcher, /setWorkspaceFocus\(event\.detail === 0 \? "first" : "none"\)/);
+  assert.match(css, /\.workspace-option\.active\s*\{ background: var\(--menu-selected-bg\)/);
+  assert.doesNotMatch(css, /\.workspace-option:focus-within|\.session-row:focus-within \{/);
+  assert.match(css, /\.workspace-option:has\(:focus-visible\)/);
+  assert.match(css, /\.workspace-option-action:hover \{[^}]*background: transparent;/);
+  assert.match(css, /\.workspace-option-action\.danger:hover \{[^}]*background: transparent;/);
+  assert.match(css, /\.session-row-action\.active \{[^}]*background: transparent;/);
+  assert.match(css, /\.project-row-actions button:hover[^}]*background: transparent/);
+  assert.match(css, /\.work-group \.project-more-button:hover[^}]*background: transparent/);
+});
+
+test("session picker separates context, search, groups, and a single create action", () => {
+  assert.match(switcher, /session-menu-heading/);
+  assert.match(switcher, /<Search size=\{14\}/);
+  assert.match(switcher, /session-list-label.*t\("Pinned"\)/);
+  assert.match(switcher, /onKeyDown=\{navigateRows\}/);
+  assert.match(switcher, /ArrowDown.*ArrowUp.*Home.*End/);
+  assert.equal((switcher.match(/onClick=\{\(\) => \{ setSessionOpen\(false\); onNewSession\(\); \}\}/g) || []).length, 1);
 });
 
 test("workspace and session strings are translated", () => {
