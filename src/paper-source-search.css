@@ -1,0 +1,59 @@
+/* Optional search/log panels leave the remaining height to the source editor. */
+.paper-writing-workspace > .latex-editor-pane { display: flex; flex-direction: column; }
+.latex-editor-pane > .paper-pane-toolbar { flex: 0 0 36px; box-sizing: border-box; }
+.latex-editor-pane > .latex-editor-body,
+.latex-editor-pane > .latex-coedit-pane,
+.latex-editor-pane > .paper-writing-empty { flex: 1 1 0; min-height: 0; }
+.latex-editor-pane > .latex-diagnostics { flex: 0 1 auto; }
+.latex-editor-pane .latex-line-numbers { padding-bottom: 40px; font-size: 12px; line-height: 1.65; }
+.latex-source-search {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 6px 8px;
+  color: var(--mono-text-muted);
+  background: var(--mono-surface);
+  border-bottom: 1px solid var(--mono-border);
+}
+.latex-source-search > svg { flex-shrink: 0; }
+.latex-source-search input {
+  flex: 1 1 70px;
+  min-width: 0;
+  width: 0;
+  height: 28px;
+  padding: 3px 6px;
+  color: var(--mono-text);
+  background: var(--mono-control);
+  border: 1px solid var(--mono-border);
+  border-radius: 4px;
+  font: 12px var(--font-ui);
+}
+.latex-source-search input::placeholder { color: var(--mono-text-muted); }
+.latex-source-search input:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.latex-search-count { flex: 0 0 auto; color: var(--mono-text-muted); font-size: 11px; white-space: nowrap; }
+.latex-source-search button {
+  display: grid;
+  flex: 0 0 24px;
+  place-items: center;
+  width: 24px;
+  height: 26px;
+  padding: 0;
+  color: var(--mono-text-soft);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+.latex-source-search button:hover:not(:disabled) { color: var(--mono-text); background: var(--mono-control-active); }
+.latex-source-search button:disabled { opacity: .4; }
+.latex-source-search button:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.latex-highlight .latex-search-match {
+  padding: 0;
+  color: inherit;
+  background: color-mix(in srgb, var(--state-warning) 32%, transparent);
+}
+.latex-highlight .latex-search-match.active {
+  background: color-mix(in srgb, var(--state-warning) 60%, transparent);
+  outline: 1px solid var(--state-warning);
+}
