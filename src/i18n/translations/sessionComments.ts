@@ -1,0 +1,22 @@
+// Anchored session comments; internal resource identifiers remain compatible.
+export const sessionComments: Record<string, string> = {
+  "Add a comment": "添加批注",
+  "Click anywhere in this session to add a comment. Esc to finish.": "点击会话中的任意位置添加批注，按 Esc 结束。",
+  "Comments are saved locally. Collaboration sync is unavailable.": "批注已保存在本机，协作同步暂不可用。",
+  "Could not save comment.": "无法保存批注。",
+  "Loading comments…": "正在加载批注…",
+  "Open a research session to start a shared run.": "打开研究会话以开始共享运行。",
+  "Reopen": "重新打开",
+  "Research session": "研究会话",
+  "Resolve": "标记为已解决",
+  "Session comments": "会话批注",
+  "Session snapshot created": "已创建会话快照",
+  "Session visibility changed": "已更改会话可见性",
+  "Sessions and comments synced.": "会话和批注已同步。",
+  "Share session snapshot": "分享会话快照",
+  "Show resolved": "显示已解决",
+  "Start a shared run for the current session.": "为当前会话开始共享运行。",
+  "Sync sessions": "同步会话",
+  "The snapshot freezes the session at sequence {sequence}.": "此快照保留会话在序号 {sequence} 时的状态。",
+  "{count} comments at this position": "此位置有 {count} 条批注",
+};

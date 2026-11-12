@@ -117,7 +117,7 @@ export default function SharedRunsPanel({ bridge, projectId, activeThreadId }: S
         className="project-cloud-row"
         title={t("Single driver, co-prompt queue")}
         icon={<Play size={14} />}
-        description={activeThreadId ? t("Start a shared run for the current thread.") : t("Open a research thread to start a shared run.")}
+        description={activeThreadId ? t("Start a shared run for the current session.") : t("Open a research session to start a shared run.")}
       >
         <button className="primary-button" disabled={!activeThreadId || busy} onClick={() => void start()}><Play size={13} />{t("Start run")}</button>
       </SettingsRow>

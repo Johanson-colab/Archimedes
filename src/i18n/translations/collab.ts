@@ -85,7 +85,7 @@ export const collab: Record<string, string> = {
   "Saving…": "正在保存…",
   "Security & data": "安全与数据",
   "Session storage": "会话存储",
-  "Shown on threads and project activity. Stored on this device.": "显示在对话和项目动态中，仅保存在本机。",
+  "Shown on sessions and project activity. Stored on this device.": "显示在会话和项目动态中，仅保存在本机。",
   "Sign in": "登录",
   "Sign in or create account": "登录或创建账户",
   "Sign in to Archimedes": "登录 Archimedes",

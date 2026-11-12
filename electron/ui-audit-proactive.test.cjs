@@ -269,7 +269,7 @@ test("the research path is thread-scoped and can be pinned globally", () => {
   assert.match(app, /openPathThread/);
   assert.match(app, /archimedes-research-path-pin/);
   assert.match(researchPath, /onTogglePin/);
-  assert.match(researchPath, /Open pinned thread/);
+  assert.match(researchPath, /Open pinned session/);
   assert.match(researchPath, /threadInactive/);
 });
 

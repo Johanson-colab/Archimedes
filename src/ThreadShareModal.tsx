@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Copy, Download, Link2, LoaderCircle, Share2, X } from "lucide-react";
 import { Dialog } from "./Dialog";
+import { useUISettings } from "./i18n";
 
 type ThreadShareSnapshot = Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>>;
 
@@ -16,6 +17,7 @@ type ThreadShareModalProps = {
 };
 
 export default function ThreadShareModal({ snapshot, bridge, projectId, threadId, threadTitle, privateThread, onClose, onCopy }: ThreadShareModalProps) {
+  const { t } = useUISettings();
   const [shareLink, setShareLink] = useState<CloudShareLink | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkError, setLinkError] = useState("");
@@ -30,7 +32,7 @@ export default function ThreadShareModal({ snapshot, bridge, projectId, threadId
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${threadTitle.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "thread"}-snapshot.json`;
+    anchor.download = `${threadTitle.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "session"}-snapshot.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -53,7 +55,7 @@ export default function ThreadShareModal({ snapshot, bridge, projectId, threadId
     }
   }
 
-  return <Dialog open onClose={onClose} size="md" className="thread-share-modal" ariaLabel="Share thread snapshot">
+  return <Dialog open onClose={onClose} size="md" className="thread-share-modal" ariaLabel={t("Share session snapshot")}>
       <header className="thread-share-header">
         <div><span className="eyebrow">Asynchronous sharing</span><h2>Share a snapshot</h2><p>{threadTitle}</p></div>
         <button className="settings-close" onClick={onClose} aria-label="Close share dialog"><X size={16} /></button>
@@ -65,7 +67,7 @@ export default function ThreadShareModal({ snapshot, bridge, projectId, threadId
           <div><span>Sources</span><strong>{references}</strong></div>
           <div><span>Visibility</span><strong>{privateThread ? "Private draft" : "Project"}</strong></div>
         </div>
-        <p className="thread-share-note"><Share2 size={13} /><span>The snapshot freezes the thread at sequence <b>{snapshot.sequence}</b>. Cloud share links and guest access arrive with the collaboration service; create a read-only guest link below.</span></p>
+        <p className="thread-share-note"><Share2 size={13} /><span>{t("The snapshot freezes the session at sequence {sequence}.", { sequence: snapshot.sequence })}</span></p>
         {privateThread && <p className="thread-share-warning">This is a private draft. Creating a snapshot does not change its visibility.</p>}
         <div className="thread-share-link">
           {shareLink ? <>

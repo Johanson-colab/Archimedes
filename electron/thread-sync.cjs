@@ -58,9 +58,16 @@ function createThreadSync({ store, api } = {}) {
         }
 
         const remoteComments = await api.listComments(project.cloud_project_id, { resourceType: "thread", resourceId: thread.id });
-        const remoteCommentIds = new Set(remoteComments.map((comment) => comment.id));
+        const remoteCommentById = new Map(remoteComments.map((comment) => [comment.id, comment]));
         for (const comment of store.listProjectComments(projectId, { resourceType: "thread", resourceId: thread.id })) {
-          if (comment.author_id !== localUserId || remoteCommentIds.has(comment.id)) continue;
+          const remote = remoteCommentById.get(comment.id);
+          if (remote) {
+            if (Date.parse(comment.updated_at) > Date.parse(remote.updated_at) && comment.resolved_at !== remote.resolved_at) {
+              await api.updateComment(comment.id, { resolved_at: comment.resolved_at });
+            }
+            continue;
+          }
+          if (comment.author_id !== localUserId) continue;
           await api.saveComment(project.cloud_project_id, {
             id: comment.id,
             resource_type: comment.resource_type,

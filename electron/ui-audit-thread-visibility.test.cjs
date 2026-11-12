@@ -36,11 +36,11 @@ test("thread visibility and snapshot APIs are exposed", () => {
 test("thread snapshots can be inspected and downloaded from a share dialog", () => {
   assert.match(app, /ThreadShareModal/);
   assert.match(app, /openThreadShare/);
-  assert.match(app, /Share thread snapshot/);
+  assert.match(app, /Share session snapshot/);
   assert.match(share, /Share a snapshot/);
   assert.match(share, /Copy JSON/);
   assert.match(share, /Download \.json/);
-  assert.match(share, /Cloud share links and guest access arrive with the collaboration service/);
+  assert.match(share, /The snapshot freezes the session at sequence/);
   assert.match(css, /\.thread-share-modal/);
 });
 

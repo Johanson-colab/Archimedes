@@ -10,8 +10,8 @@ const main = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
 const bridge = read("src/vite-env.d.ts");
 const app = read("src/App.tsx");
-const modal = read("src/ThreadCommentsModal.tsx");
-const css = read("src/styles.css");
+const comments = read("src/SessionComments.tsx");
+const css = read("src/session-comments.css");
 
 test("comments are project-scoped, author-attributed, and auditable", () => {
   assert.match(store, /CREATE TABLE IF NOT EXISTS comments/);
@@ -24,16 +24,20 @@ test("comments are project-scoped, author-attributed, and auditable", () => {
   assert.match(store, /This research thread is a private draft/);
 });
 
-test("comment IPC and the thread discussion modal are wired", () => {
+test("comment IPC and session-position annotations are wired without a modal", () => {
   assert.match(main, /ipcMain\.handle\("comments:list"/);
   assert.match(main, /ipcMain\.handle\("comments:create"/);
   assert.match(main, /ipcMain\.handle\("comments:resolve"/);
   assert.match(preload, /listComments: \(input\)/);
   assert.match(bridge, /interface ResearchComment/);
-  assert.match(app, /ThreadCommentsModal/);
-  assert.match(app, /Thread comments/);
-  assert.match(modal, /Thread discussion/);
-  assert.match(modal, /No comments yet/);
-  assert.match(modal, /Commenter access required/);
-  assert.match(css, /\.thread-comments-modal/);
+  assert.match(app, /SessionComments/);
+  assert.match(app, /Session comments/);
+  assert.doesNotMatch(app, /ThreadCommentsModal/);
+  assert.match(comments, /captureSessionCommentAnchor/);
+  assert.match(comments, /anchor: selection\.anchor/);
+  assert.match(comments, /syncProjectThreads/);
+  assert.match(comments, /ResizeObserver/);
+  assert.match(comments, /if \(!alive\.current\) return/);
+  assert.match(comments, /onRequireHistory\(\)/);
+  assert.match(css, /\.session-comment-pin \{ position: absolute/);
 });

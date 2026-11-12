@@ -1,0 +1,19 @@
+.session-comments-content { position: relative; min-height: 100%; }
+.session-comments-content.is-adding { cursor: crosshair; }
+.session-comments-hint { position: sticky; z-index: 8; bottom: 8px; display: flex; width: fit-content; max-width: calc(100% - 32px); align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px auto; padding: 8px 12px; color: var(--night-muted); background: var(--surface-canvas); border: 1px solid var(--border-soft); border-radius: 8px; font-size: 12px; cursor: default; }
+.session-comments-hint label { display: inline-flex; align-items: center; gap: 5px; }
+.session-comments-hint button, .session-comment-card button:not(.primary-button) { padding: 4px; color: var(--night-ink); background: transparent; font-size: 12px; }
+.session-comments-hint button:hover, .session-comment-card button:not(.primary-button):hover { color: var(--accent); }
+.session-comment-pin { position: absolute; z-index: 5; right: 10px; display: grid; width: 24px; height: 24px; place-items: center; color: var(--accent); background: var(--surface-canvas); border: 1px solid var(--border-soft); border-radius: 50%; font-size: 11px; cursor: pointer; }
+.session-comment-pin:hover { border-color: var(--accent); }
+.menu-surface.session-comment-card { padding: 14px; }
+.session-comment-card article + article { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-soft); }
+.session-comment-card header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.session-comment-card strong { color: var(--night-ink); font-size: 12px; font-weight: 550; }
+.session-comment-card time { color: var(--night-muted); font-size: 10px; }
+.session-comment-card p { margin: 10px 0; color: var(--night-ink); font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.session-comment-card .is-resolved p { color: var(--night-muted); }
+.session-comment-card textarea { display: block; width: 100%; min-height: 100px; padding: 8px; resize: vertical; color: var(--night-ink); background: var(--surface-canvas); border: 1px solid var(--border-soft); border-radius: 5px; font: inherit; font-size: 13px; line-height: 1.6; }
+.session-comment-card footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 12px; }
+.session-comment-card .primary-button { min-height: 28px; font-size: 12px; }
+@media (max-width: 720px) { .session-comment-pin { right: 4px; } }

@@ -26,6 +26,7 @@ import {
   type FileTextShortcuts,
 } from "./file-text-size";
 import { session as sessionStrings } from "./i18n/translations/session";
+import { sessionComments as sessionCommentsStrings } from "./i18n/translations/sessionComments";
 
 export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
@@ -46,6 +47,7 @@ const FILE_TEXT_SHORTCUTS_STORAGE_KEY = "archimedes-file-text-shortcuts";
 export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 0.9, default: 1, large: 1.1, larger: 1.2 };
 
 const translations: Record<string, string> = {
+  ...sessionCommentsStrings,
   ...appStrings,
   ...libraryStrings,
   ...galleryStrings,

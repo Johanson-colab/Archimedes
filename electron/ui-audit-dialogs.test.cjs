@@ -14,7 +14,7 @@ test("all modal surfaces use the shared dialog shell and skin", () => {
     assert.doesNotMatch(source, /aria-modal=/, `${file} should delegate dialog semantics to Dialog`);
     assert.doesNotMatch(source, /DialogPortal/, `${file} should delegate portalling to Dialog`);
   }
-  const components = ["AuthModal.tsx", "SettingsModal.tsx", "ThreadShareModal.tsx", "ThreadCommentsModal.tsx", "CommandPalette.tsx", "ProjectSidebar.tsx", "LibraryView.tsx", "PaperWritingView.tsx", "ArtifactsPanel.tsx", "ExtensionsView.tsx", "TerminalSettingsModal.tsx"];
+  const components = ["AuthModal.tsx", "SettingsModal.tsx", "ThreadShareModal.tsx", "CommandPalette.tsx", "ProjectSidebar.tsx", "LibraryView.tsx", "PaperWritingView.tsx", "ArtifactsPanel.tsx", "ExtensionsView.tsx", "TerminalSettingsModal.tsx"];
   for (const file of components) assert.match(read(`src/${file}`), /<Dialog\b/, `${file} should use the shared Dialog shell`);
   const dialog = read("src/Dialog.tsx");
   assert.match(dialog, /app-dialog/);

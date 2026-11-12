@@ -37,7 +37,6 @@ export const session = {
   "Only the name changes. The folder and its sessions stay where they are.": "只会改变名称，文件夹和其中的会话仍留在原处。",
   "Open workspace": "打开工作区",
   "Pin session": "固定会话",
-  "Pinned": "已固定",
   "Project and workspace": "项目与工作区",
   "Project: {name}": "项目：{name}",
   "Recent": "最近",
