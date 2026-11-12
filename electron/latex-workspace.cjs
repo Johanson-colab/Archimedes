@@ -189,6 +189,16 @@ function findExecutable(names, env = process.env) {
 }
 
 function parseLatexDiagnostics(output) {
+  // A missing TFM is a TeX installation problem, not an error at the line
+  // where the conference style happened to select the font.
+  const text = String(output || "");
+  const missingFont = /Font[^\r\n]*?=\s*([a-z][a-z0-9_-]*)[^\r\n]*not loadable:[\s\S]{0,120}?(?:Metric|TFM)/i.exec(text)?.[1]
+    || /I can't find file [`'"]((?:phv|ptm|pcr|ppl|pag|pbk|pnc)[a-z0-9_-]*)(?:\.tfm)?['"`]/i.exec(text)?.[1];
+  if (missingFont) return [{
+    line: null,
+    message: `Missing TeX font: ${missingFont}.`,
+    help: "Install the recommended TeX fonts, then recompile. TeX Live / MacTeX: tlmgr install collection-fontsrecommended. MiKTeX: install the missing font package in MiKTeX Console.",
+  }];
   const diagnostics = [];
   const seen = new Set();
   const add = (line, message) => {
@@ -262,7 +272,7 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   const args = engineKind === "latexmk"
     ? ["-g", "-pdf", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-outdir=${buildDirectory}`, path.basename(absoluteSource)]
     : engineKind === "tectonic"
-      ? ["--outdir", buildDirectory, "--keep-logs", "--chatter", "minimal", path.basename(absoluteSource)]
+      ? ["--outdir", buildDirectory, "--keep-logs", "--chatter", "minimal", ...(options.managed ? ["--untrusted"] : []), ...(options.bundle ? ["--bundle", options.bundle] : []), path.basename(absoluteSource)]
       : ["-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-output-directory=${buildDirectory}`, path.basename(absoluteSource)];
   const startedAt = Date.now();
   // Tectonic may download its package bundle on the first run, which can take
@@ -287,7 +297,7 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
     ok,
     engine: path.basename(executable),
     source_path: sourcePath,
-    pdf_path: hasPdf ? path.relative(root, absolutePdf).split(path.sep).join("/") : "",
+    pdf_path: ok ? path.relative(root, absolutePdf).split(path.sep).join("/") : "",
     duration_ms: Date.now() - startedAt,
     diagnostics,
     log: String(run.output || log).slice(-12_000),

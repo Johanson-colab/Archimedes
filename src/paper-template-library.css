@@ -29,3 +29,5 @@
 .paper-template-cover:has(img) { padding: 0; overflow: hidden; }
 .paper-template-cover img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
 .paper-template-cover:has(img) strong, .paper-template-cover:has(img) span { display: none; }
+
+.latex-diagnostic-help { display: block; margin-top: 6px; color: var(--mono-text-soft); font-size: 12px; line-height: 1.6; white-space: normal; overflow-wrap: anywhere; }

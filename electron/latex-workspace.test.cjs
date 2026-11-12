@@ -181,3 +181,40 @@ test("built-in templates compile before and after adding a citation", { skip: sp
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a missing TeX font reports an installation fix instead of a source line", () => {
+  const diagnostics = parseLatexDiagnostics("! I can't find file `phvb'.\n! Emergency stop.\nl.32 Coauthor\nmain.tex:32: ==> Fatal error occurred, no output PDF file produced!");
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].line, null);
+  assert.match(diagnostics[0].message, /phvb/);
+  assert.match(diagnostics[0].help, /tlmgr install collection-fontsrecommended/);
+  const tfm = parseLatexDiagnostics("./iclr2027_conference.sty:32: Font \\iclrtenhv=phvb at 8.0pt not loadable: Metri\nc (TFM) file not found.");
+  assert.equal(tfm[0].line, null);
+  assert.match(tfm[0].message, /phvb/);
+});
+
+test("a failed recompile does not expose the PDF left by a previous successful build", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-stale-"));
+  let fail = false;
+  const spawnImpl = (_command, args) => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => {};
+    process.nextTick(() => {
+      const directory = args.find((arg) => arg.startsWith('-outdir=')).slice('-outdir='.length);
+      if (!fail) fs.writeFileSync(path.join(directory, 'main.pdf'), '%PDF-1.4\n');
+      else child.stderr.emit('data', "! I can't find file `phvb'.\n! Emergency stop.\n");
+      child.emit('close', fail ? 1 : 0, null);
+    });
+    return child;
+  };
+  try {
+    createLatexProject(root, "paper");
+    const good = await compileLatexDocument(root, 'paper/main.tex', { executable: '/test/latexmk', spawnImpl });
+    assert.equal(good.ok, true); assert.match(good.pdf_path, /main.pdf$/);
+    fail = true;
+    const failed = await compileLatexDocument(root, 'paper/main.tex', { executable: '/test/latexmk', spawnImpl });
+    assert.equal(failed.ok, false); assert.equal(failed.pdf_path, '');
+    assert.equal(fs.existsSync(path.join(root, good.pdf_path)), true);
+    assert.match(failed.diagnostics[0].help, /collection-fontsrecommended/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});

@@ -4,7 +4,7 @@ Open Paper Writing → Projects to browse the library. Search by name or year,
 filter by category, select a template, enter a project folder, then create it.
 The existing folder import remains available for Overleaf exports and other kits.
 
-Five general layouts are bundled. Official author kits and clearly labelled community mirrors are downloaded on first
+The chooser contains six conference kits. Official author kits and clearly labelled community mirrors are downloaded on first
 use from raw.githubusercontent.com at pinned upstream commits. Their text assets
 are SHA-256 verified before use and cached under Electron's userData directory
 in `latex-template-cache`. Subsequent project creation can use that cache offline.
@@ -42,18 +42,25 @@ does not imply different style files; every venue name is searchable.
 - Real upstream download, checksum and creation checks passed for all six kits.
 - The original ICLR 2026, ICLR 2027, CVPR 2026, NeurIPS 2026 and ICML 2026 sample papers compiled with latexmk.
 - The original ACL sample requires `inconsolata.sty`, absent from this cloud TeX
-  installation. Install that TeX package in your local distribution to compile
-  the complete sample. Its card displays this requirement.
+  installation used for the earlier system-compiler check. The default compiler
+  is now managed Tectonic; see its separate validation limits.
 - Thumbnail previews are locally authored short documents rendered with the
   respective upstream styles, not screenshots of upstream sample paper text.
 - Unit tests exercise cache reuse, corrupt data, unsafe asset paths, failed
   downloads, preservation of a clean workspace on download failure, and binary PDF figure
   preservation. The ICML sample includes a PDF figure that must not be decoded
   as UTF-8.
-- All five bundled layouts compile both with and without a citation.
+- Legacy general-layout templates remain covered by compilation regression tests;
+  they no longer appear in the template chooser.
 - UI screenshots use the real PaperWritingView in a local Vite fixture at
   1440 × 1000. The Electron window was not tested because this cloud session's
   desktop startup remains unavailable. See the before/after evidence below.
 
 ![Before](assets/paper-template-library/before.png)
 ![After](assets/paper-template-library/after.png)
+
+For missing-font setup instructions and current library screenshots, see
+[Conference templates and missing TeX fonts](paper-writing-fonts.md).
+
+Paper Writing now uses the [managed local compiler](managed-latex-engine.md),
+which downloads and caches TeX dependencies automatically.

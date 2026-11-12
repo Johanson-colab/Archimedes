@@ -68,6 +68,11 @@ contextBridge.exposeInMainWorld("researchDesk", {
   createLatexDirectory: (workspace, path) => ipcRenderer.invoke("paper:create-directory", { workspace, path }),
   importLatexFolder: (workspace) => ipcRenderer.invoke("paper:import-folder", { workspace }),
   compileLatexDocument: (workspace, path) => ipcRenderer.invoke("paper:compile", { workspace, path }),
+  onLatexCompileProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("paper:compile-progress", listener);
+    return () => ipcRenderer.removeListener("paper:compile-progress", listener);
+  },
   getResearchThread: (threadId, workspace) => ipcRenderer.invoke("research-thread:get", { threadId, workspace }),
   getResearchTurnImage: (threadId, turnId, position, workspace) => ipcRenderer.invoke("research-thread:attachment-image", { threadId, turnId, position, workspace }),
   getResearchSnapshot: () => ipcRenderer.invoke("research:snapshot"),

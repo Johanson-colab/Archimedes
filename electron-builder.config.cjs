@@ -5,6 +5,7 @@ module.exports = {
   artifactName: "${productName}-${version}-${os}-${arch}.${ext}",
   directories: { output: "release", buildResources: "electron/assets" },
   asar: true,
+  beforePack: "./scripts/prepare-latex-engine.cjs",
   npmRebuild: true,
   files: [
     "dist/**/*", "electron/**/*", "shared/**/*", "server/**/*", "scripts/**/*", "package.json",
@@ -16,6 +17,9 @@ module.exports = {
     from: "electron/assets",
     to: "icons",
     filter: ["app-icon.ico", "app-icon.icns", "app-icon-256.png", "app-icon-1024.png"],
+  }, {
+    from: ".archimedes/latex-package/${os}-${arch}",
+    to: "latex-engine",
   }],
   win: {
     icon: "electron/assets/app-icon.ico",

@@ -1,0 +1,38 @@
+{
+  "name": "Tectonic",
+  "version": "0.17.0",
+  "releaseUrl": "https://github.com/tectonic-typesetting/tectonic/releases/tag/tectonic%400.17.0",
+  "bundleUrl": "https://relay.fullyjustified.net/default_bundle_v33.tar",
+  "platforms": {
+    "darwin-arm64": {
+      "url": "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-aarch64-apple-darwin.tar.gz",
+      "sha256": "a3f1cac7c5678f01661a92212f58480ae3b0634115d880dbc59e2953ded45667",
+      "executableSha256": "b52b5a730e2b0b33087304f7720f649603953f270a6b1c88bb031e1ae01f7f9c",
+      "member": "tectonic"
+    },
+    "linux-arm64": {
+      "url": "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-aarch64-unknown-linux-musl.tar.gz",
+      "sha256": "b10954a95404f3ab2328d2fa59a5ebab8e657f893fab096f98be8db7c0c979b8",
+      "executableSha256": "19a2b763e5875fffefaa193c42e460ceba5983d027b6d50b0094130d26ba4e4a",
+      "member": "tectonic"
+    },
+    "darwin-x64": {
+      "url": "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-apple-darwin.tar.gz",
+      "sha256": "7c90ef5b6ddb1eb1937e4337add5237b79338e4b9676459fa91187d24d6cdf80",
+      "executableSha256": "0d888b4cb5607830f33e4ede37e613c1d0b9251644c209ce78ae807c976637e4",
+      "member": "tectonic"
+    },
+    "win32-x64": {
+      "url": "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-pc-windows-msvc.zip",
+      "sha256": "f61ce51f0b0ade1015b7de7ef368541c5424e9756ecbd0d7af97d6d48030845f",
+      "executableSha256": "99ffcfdbf1ebf8bdda9e791942e3d06aedb12463fddc33f07de6f5211c8bf08d",
+      "member": "tectonic.exe"
+    },
+    "linux-x64": {
+      "url": "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-unknown-linux-musl.tar.gz",
+      "sha256": "8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7",
+      "executableSha256": "a98aa59ad5c1df39a6c9e56cbfc5088f2b11d6c179c0130b97998e4bd46a46da",
+      "member": "tectonic"
+    }
+  }
+}

@@ -302,7 +302,6 @@
       }
     ],
     "previewUrl": "paper-templates/acl-current.png",
-    "requirements": "Requires the inconsolata TeX package.",
     "venues": [
       "ACL",
       "EMNLP",
