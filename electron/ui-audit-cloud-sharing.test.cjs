@@ -46,7 +46,7 @@ test("member panel exposes cloud sharing, invites, import, and local fallback", 
   assert.match(panel, /Collaborator email/);
   assert.match(panel, /Import/);
   assert.match(panel, /Add a local member/);
-  assert.match(panel, /Sync threads/);
+  assert.match(panel, /Sync sessions/);
   assert.match(settings, /onProjectsChanged/);
   assert.match(app, /refreshWorkspaceProjects/);
   assert.match(css, /project-cloud-list/);

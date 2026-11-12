@@ -63,7 +63,7 @@ import TerminalPanel from "./TerminalPanel";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import ThreadShareModal from "./ThreadShareModal";
-import ThreadCommentsModal from "./ThreadCommentsModal";
+import SessionComments, { type SessionCommentsScope } from "./SessionComments";
 import AccountChip from "./AccountChip";
 import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
@@ -700,7 +700,7 @@ const previewBridge = {
   getResearchTurnImage: async (threadId: string, turnId: string, position: number) => previewThreads.find((thread) => thread.id === threadId)?.messages.find((message) => message.turn_id === turnId && message.role === "user")?.attachments?.find((item) => item.position === position)?.imageData ?? null,
   getResearchThread: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
-    if (!thread) throw new Error("Research thread not found.");
+    if (!thread) throw new Error("Research session not found.");
     return structuredClone(thread);
   },
   saveTask: async ({ prompt, response, status = "completed" }: { prompt: string; response: string; status?: string }) => {
@@ -830,13 +830,13 @@ const previewBridge = {
   },
   setResearchThreadVisibility: async (threadId: string, visibility: "project" | "private") => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId) || previewArchivedThreads.find((candidate) => candidate.id === threadId);
-    if (!thread) throw new Error("Research thread not found.");
+    if (!thread) throw new Error("Research session not found.");
     thread.visibility = visibility === "private" ? "private" : "project";
     return { visibility: thread.visibility };
   },
   createResearchThreadSnapshot: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
-    if (!thread) throw new Error("Research thread not found.");
+    if (!thread) throw new Error("Research session not found.");
     const snapshot = { id: crypto.randomUUID(), thread_id: thread.id, project_id: thread.project_id, sequence: thread.events?.length || 0, created_at: new Date().toISOString(), manifest: { version: 1, thread: { id: thread.id, title: thread.title, visibility: thread.visibility }, sequence: thread.events?.length || 0, turns: thread.turns, events: thread.events ?? [], references: [], artifacts: [] } };
     previewThreadSnapshots.unshift(snapshot);
     return structuredClone(snapshot);
@@ -851,7 +851,7 @@ const previewBridge = {
   },
   forkResearchThread: async (threadId: string, _workspace?: string, side = false) => {
     const source = previewThreads.find((thread) => thread.id === threadId);
-    if (!source) throw new Error("Research thread not found.");
+    if (!source) throw new Error("Research session not found.");
     const copy = structuredClone(source);
     const ids = new Map(copy.turns.map((turn) => [turn.id, crypto.randomUUID()]));
     copy.id = crypto.randomUUID();
@@ -887,7 +887,7 @@ const previewBridge = {
   compactResearchThread: async () => { throw new Error("Context compaction requires a configured model in the desktop app."); },
   exportResearchThread: async (threadId: string) => {
     const thread = previewThreads.find((item) => item.id === threadId);
-    if (!thread) throw new Error("Research thread not found.");
+    if (!thread) throw new Error("Research session not found.");
     const url = URL.createObjectURL(new Blob([JSON.stringify(thread, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
@@ -900,7 +900,7 @@ const previewBridge = {
     const source = archived ? previewThreads : previewArchivedThreads;
     const target = archived ? previewArchivedThreads : previewThreads;
     const index = source.findIndex((thread) => thread.id === id);
-    if (index < 0) throw new Error("Research thread not found.");
+    if (index < 0) throw new Error("Research session not found.");
     const [thread] = source.splice(index, 1);
     thread.archived_at = archived ? new Date().toISOString() : null;
     target.unshift(thread);
@@ -1381,6 +1381,7 @@ function App() {
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
   const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  useEffect(() => { setCommentsOpen(false); }, [activeThreadId]);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
@@ -2805,7 +2806,7 @@ function App() {
         setActiveProjectId(result.thread.project_id);
         if (result.thread.workspace_id) setActiveWorkspaceId(result.thread.workspace_id);
         setChangeSets(result.thread.changeSets ?? []);
-        setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research thread", state: "done" } : event));
+        setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research session", state: "done" } : event));
         const proposedAction = result.actions.find((action) => action.status === "pending");
         if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
       }
@@ -3223,6 +3224,10 @@ function App() {
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
   const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
   const conversationScrollKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${activeWorkspace?.id ?? executionWorkspace}`;
+  const sessionCommentsScope = useMemo<SessionCommentsScope | null>(() => activeThreadId && activeProjectId ? {
+    bridge: desktopBridge, workspace, projectId: activeProjectId, sessionId: activeThreadId, shared: Boolean(activeProject?.cloud_project_id),
+  } : null, [activeThreadId, activeProjectId, activeProject?.cloud_project_id, workspace]);
+  const exitSessionComments = useCallback(() => setCommentsOpen(false), []);
   const workspaceDialogProjectId = workspaceDialog
     ? workspaceDialog.mode === "create" ? workspaceDialog.projectId : workspaceDialog.workspace.project_id
     : null;
@@ -3370,8 +3375,8 @@ function App() {
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
             </div>}
-            {activeThreadId && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share thread snapshot")} aria-label={t("Share thread snapshot")}><Share2 size={15} /></button>}
-            {activeThreadId && <button className="quiet-icon-button" onClick={() => setCommentsOpen(true)} title={t("Thread comments")} aria-label={t("Thread comments")}><MessageCircleReply size={15} /></button>}
+            {activeThreadId && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
+            {activeThreadId && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
             <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={() => setResearchPanelOpen((open) => !open)}
@@ -3402,6 +3407,9 @@ function App() {
           {mainSection === "chat" && (
             <ConversationView
               key={activeThreadId ?? `new:${chatViewNonce}`}
+              commentScope={sessionCommentsScope}
+              addingComment={commentsOpen}
+              onExitComments={exitSessionComments}
               messages={messages}
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
@@ -3496,7 +3504,7 @@ function App() {
             agentBusy={agentBusy && Boolean(pathThread) && runningThreadId === pathThread?.id}
             notice={pathThreadIsActive ? journeyNotice : ""}
             projectName={pathProject?.name ?? t("No project")}
-            threadTitle={pathThread?.title ?? t("No active thread")}
+            threadTitle={pathThread?.title ?? t("No active session")}
             pinned={pathIsPinned}
             threadInactive={pathThreadInactive}
             hasThread={Boolean(pathThread)}
@@ -3693,20 +3701,12 @@ function App() {
         disabledCoreModules={disabledCoreModules}
         onCoreModuleEnabled={setCoreModuleEnabled}
       />
-      {commentsOpen && activeThreadId && (activeThread?.project_id || activeProjectId) && <ThreadCommentsModal
-        bridge={desktopBridge}
-        workspace={workspace}
-        projectId={activeThread?.project_id || activeProjectId || ""}
-        threadId={activeThreadId}
-        threadTitle={activeThread?.title ?? t("Research thread")}
-        onClose={() => setCommentsOpen(false)}
-      />}
       <ThreadShareModal
         snapshot={shareSnapshot}
         bridge={desktopBridge}
         projectId={activeThread?.project_id || activeProjectId || ""}
         threadId={activeThreadId || ""}
-        threadTitle={activeThread?.title ?? "Research thread"}
+        threadTitle={activeThread?.title ?? t("Research session")}
         privateThread={threadVisibility === "private"}
         onClose={() => setShareSnapshot(null)}
         onCopy={(text) => desktopBridge.writeClipboardText(text)}
@@ -3741,7 +3741,10 @@ function App() {
   );
 }
 
-const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop }: {
+const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop, commentScope, addingComment, onExitComments }: {
+  commentScope: SessionCommentsScope | null;
+  addingComment: boolean;
+  onExitComments: () => void;
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -3764,6 +3767,10 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   const followOutputRef = useRef(true);
   const [followingOutput, setFollowingOutput] = useState(true);
   const visibleMessages = useMemo(() => messages.slice(historyStart), [messages, historyStart]);
+  const requireCommentHistory = useCallback(() => {
+    historyExpandedRef.current = true;
+    setHistoryStart(0);
+  }, []);
   const lastUserIndex = useMemo(() => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1), [visibleMessages]);
   const nativeEventsByTurn = useMemo(() => {
     const grouped = new Map<string, ResearchEvent[]>();
@@ -3824,9 +3831,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     setHistoryStart((current) => historyExpandedRef.current ? Math.min(current, tailStart) : tailStart);
   }, [messages.length]);
 
-  return <div className="conversation-scroll-area">
-    <div className="conversation-scroll" ref={scrollRef} onScroll={handleScroll}>
-      {welcomeVisible ? <ResearchWelcome onSelect={onWelcomeAction} /> : <div className="conversation-thread">
+  const historyContent = welcomeVisible ? <ResearchWelcome onSelect={onWelcomeAction} /> : <div className="conversation-thread">
         {historyStart > 0 && <button className="conversation-load-history" onClick={() => {
           historyExpandedRef.current = true;
           setHistoryStart((current) => Math.max(0, current - HISTORY_MESSAGE_PAGE_SIZE));
@@ -3858,7 +3863,10 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
             </div>
           </div>
         </section>}
-      </div>}
+      </div>;
+  return <div className="conversation-scroll-area">
+    <div className="conversation-scroll" ref={scrollRef} onScroll={handleScroll}>
+      {commentScope ? <SessionComments key={`${commentScope.workspace}:${commentScope.projectId}:${commentScope.sessionId}`} scope={commentScope} adding={addingComment} onExit={onExitComments} onRequireHistory={requireCommentHistory} historyComplete={historyStart === 0} scrollRef={scrollRef}>{historyContent}</SessionComments> : historyContent}
     </div>
     <TurnRail messages={visibleMessages} scrollRef={scrollRef} />
     {!followingOutput && <button className="conversation-jump-latest" onClick={() => {
@@ -3869,7 +3877,10 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, onExitComments }: {
+  commentScope: SessionCommentsScope | null;
+  addingComment: boolean;
+  onExitComments: () => void;
   messages: Message[];
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
@@ -4338,7 +4349,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
     <WorkspaceMarkdownProvider workspace={workspace} onOpenFile={openHistoryFile}>
-      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} />
+      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} commentScope={commentScope} addingComment={addingComment} onExitComments={onExitComments} />
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
@@ -4512,7 +4523,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 }
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
-  return <article className={`conversation-message ${message.role}`} data-turn-id={message.role === "user" ? message.id : undefined}>
+  return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">

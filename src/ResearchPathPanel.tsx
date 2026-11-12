@@ -71,8 +71,8 @@ export default function ResearchPathPanel({
         <button
           className={pinned ? "agent-path-icon on" : "agent-path-icon"}
           onClick={onTogglePin}
-          title={pinned ? t("Unpin this thread") : t("Pin this thread")}
-          aria-label={pinned ? t("Unpin this thread") : t("Pin this thread")}
+          title={pinned ? t("Unpin this session") : t("Pin this session")}
+          aria-label={pinned ? t("Unpin this session") : t("Pin this session")}
           aria-pressed={pinned}
           disabled={!hasThread && !pinned}
         >
@@ -81,8 +81,8 @@ export default function ResearchPathPanel({
         <button
           className="agent-path-icon"
           onClick={onOpenThread}
-          title={t("Open thread")}
-          aria-label={t("Open thread")}
+          title={t("Open session")}
+          aria-label={t("Open session")}
           disabled={!hasThread}
         >
           <ArrowUpRight size={12} />
@@ -130,7 +130,7 @@ export default function ResearchPathPanel({
         </>}
         {shownIsActive && !canAct && <button onClick={onOpenThread} disabled={!hasThread}>
           <ArrowUpRight size={11} />
-          {threadInactive ? t("Open pinned thread") : hasThread ? t("Open thread") : t("Start a research thread")}
+          {threadInactive ? t("Open pinned session") : hasThread ? t("Open session") : t("Start a research session")}
         </button>}
         {!shownIsActive && !threadInactive && <button onClick={() => onReturn(shownStage)}><RefreshCw size={11} />{t("Return here")}</button>}
       </div>

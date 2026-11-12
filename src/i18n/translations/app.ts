@@ -111,7 +111,7 @@ export const app: Record<string, string> = {
   "New conversation notes": "新对话笔记",
   "New research": "新建研究",
   "New research task": "新建研究任务",
-  "No active thread": "没有活跃线程",
+  "No active session": "没有活跃会话",
   "No project": "无项目",
   "No workspace": "未选择工作区",
   "Notes": "笔记",

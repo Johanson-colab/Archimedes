@@ -417,7 +417,7 @@ function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence:
   const { steps, chapters, evidence, openChapters } = data;
   if (!steps) return t("No research activity yet. Start a task and the journey will take shape here.");
   const hasResearch = evidence.sources + evidence.files + evidence.artifacts > 0;
-  const facts = t("This thread has {steps} across {chapters}, with {sources} and {files} touched.", {
+  const facts = t("This session has {steps} across {chapters}, with {sources} and {files} touched.", {
     steps: plural(steps, t("step")),
     chapters: plural(chapters.length, t("chapter")),
     sources: plural(evidence.sources, t("source")),
@@ -926,7 +926,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     try {
       const next = await bridge.summarizeJourney({
         threadId,
-        threadTitle: thread?.title || "Research thread",
+        threadTitle: thread?.title || t("Research session"),
         brief: ruleBrief,
         coversTo: lastOrdinal,
         force,
@@ -1237,7 +1237,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
         <div className="journey-chapters">{visibleChapters.map((chapter) => renderChapter(chapter, chapters.indexOf(chapter)))}</div>
       </section>
       {settings.evidenceLedger && <section className="journey-section">
-        <div className="journey-section-head"><h2>{t("Evidence")}</h2><span>{t("from this thread")}</span></div>
+        <div className="journey-section-head"><h2>{t("Evidence")}</h2><span>{t("from this session")}</span></div>
         {evidence.sources + evidence.files + evidence.artifacts + evidence.open === 0
           ? <p className="journey-evidence-empty">{hasToolActivity ? t("No sources or artifacts were recorded for this run.") : t("No sources or artifacts yet. Ask a research question or attach a paper.")}</p>
           : <dl className="journey-evidence">

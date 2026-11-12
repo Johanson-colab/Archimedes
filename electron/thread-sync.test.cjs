@@ -50,6 +50,12 @@ function fakeApi() {
       comments.push(row);
       return row;
     },
+    async updateComment(id, patch) {
+      const row = comments.find((comment) => comment.id === id);
+      if (!row) throw new Error("Comment not found");
+      Object.assign(row, patch, { updated_at: new Date().toISOString() });
+      return row;
+    },
     seedRemoteThread(threadId, title) {
       const now = new Date().toISOString();
       threads.set(threadId, {
@@ -69,7 +75,8 @@ test("thread sync pushes local threads, turns, events, comments and pulls shared
     const turn = store.startResearchTurn({ threadId: thread.id, taskId: null, prompt: "Local question", mode: "free-chat" });
     store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "tool_result", payload: { name: "test" } });
     store.finishResearchTurn(turn.id, { response: "Local answer" });
-    store.createComment({ projectId: project.id, resourceType: "thread", resourceId: thread.id, body: "Local comment" });
+    const anchor = { type: "session-position", version: 1, y: 640, messageId: "message-1", offset: 40 };
+    store.createComment({ projectId: project.id, resourceType: "thread", resourceId: thread.id, body: "Local comment", anchor });
 
     const api = fakeApi();
     api.seedRemoteThread("remote-thread", "Remote shared thread");
@@ -80,6 +87,13 @@ test("thread sync pushes local threads, turns, events, comments and pulls shared
     assert.equal(api.threads.get(thread.id).turns.length, 1);
     assert.equal(api.threads.get(thread.id).events.length, 3);
     assert.ok(api.comments.some((comment) => comment.id && comment.body === "Local comment"));
+    assert.deepEqual(api.comments.find((comment) => comment.body === "Local comment").anchor, anchor);
+    const localComment = store.listComments({ projectId: project.id, resourceType: "thread", resourceId: thread.id })[0];
+    const remoteComment = api.comments.find((comment) => comment.id === localComment.id);
+    remoteComment.updated_at = "2000-01-01T00:00:00.000Z";
+    store.setCommentResolved(localComment.id, true);
+    await sync.syncProjectThreads(project.id, { currentCloudUserId: "cloud-user", localUserId: "usr_local_owner" });
+    assert.ok(api.comments.find((comment) => comment.id === localComment.id).resolved_at);
 
     const imported = store.getResearchThread("remote-thread");
     assert.equal(imported.title, "Remote shared thread");

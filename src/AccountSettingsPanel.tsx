@@ -51,7 +51,7 @@ export default function AccountSettingsPanel({ identity, onSave, authState, onOp
         <SettingsRow
           title={t("Display name")}
           icon={<UserRound size={14} />}
-          description={t("Shown on threads and project activity. Stored on this device.")}
+          description={t("Shown on sessions and project activity. Stored on this device.")}
           controlClassName="account-name-control"
         >
           <input

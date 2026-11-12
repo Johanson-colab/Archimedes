@@ -2698,10 +2698,11 @@ function applyCloudComment(projectId, comment, { currentCloudUserId = "", localU
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET anchor_json = excluded.anchor_json, body = excluded.body,
       resolved_at = excluded.resolved_at, updated_at = excluded.updated_at
+      WHERE excluded.updated_at >= comments.updated_at
   `).run(
     comment.id, projectId, String(comment.resource_type || "thread"), String(comment.resource_id || ""),
     comment.parent_id || null,
-    typeof comment.anchor_json === "string" ? comment.anchor_json : JSON.stringify(comment.anchor_json || {}),
+    typeof comment.anchor_json === "string" ? comment.anchor_json : JSON.stringify(comment.anchor_json || comment.anchor || {}),
     String(comment.body || ""), authorId, comment.resolved_at || null,
     String(comment.created_at || now), String(comment.updated_at || now),
   );

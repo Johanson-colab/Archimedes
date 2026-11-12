@@ -27,8 +27,8 @@ const ACTION_LABELS: Record<string, string> = {
   "project.member_role_changed": "Role changed",
   "project.member_removed": "Member removed",
   "project.cloud_linked": "Project shared",
-  "thread.visibility_changed": "Thread visibility changed",
-  "thread.snapshot_created": "Thread snapshot created",
+  "thread.visibility_changed": "Session visibility changed",
+  "thread.snapshot_created": "Session snapshot created",
   "library.created": "Library created",
   "library.updated": "Library updated",
   "library.deleted": "Library deleted",
@@ -189,7 +189,7 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
     setThreadBusy(true); setCloudError(""); setCloudNotice("");
     try {
       const result = await bridge.syncProjectThreads(project.id);
-      setCloudNotice(result.warnings?.length ? result.warnings.join(" ") : t("Threads and comments synced."));
+      setCloudNotice(result.warnings?.length ? result.warnings.join(" ") : t("Sessions and comments synced."));
       await onProjectsChanged?.();
     } catch (cause) {
       setCloudError(cause instanceof Error ? cause.message : String(cause));
@@ -237,7 +237,7 @@ export default function ProjectMembersPanel({ bridge, project, activeThreadId, o
               description={<code>{cloudProjectId.slice(0, 18)}…</code>}
             >
               <button className="secondary-button" disabled={cloudBusy} onClick={() => void sync()}><RefreshCw size={13} />{t("Sync members")}</button>
-              <button className="secondary-button" disabled={threadBusy} onClick={() => void syncThreads()}><RefreshCw size={13} />{t("Sync threads")}</button>
+              <button className="secondary-button" disabled={threadBusy} onClick={() => void syncThreads()}><RefreshCw size={13} />{t("Sync sessions")}</button>
               <button className="secondary-button" disabled={exportBusy} onClick={() => void exportProject()}><Download size={13} />{exportBusy ? t("Exporting…") : t("Export")}</button>
             </SettingsRow>
             <SettingsRow className="project-member-add" leading={<span className="project-member-avatar add"><UserPlus size={14} /></span>}>
