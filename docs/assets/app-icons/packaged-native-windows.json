@@ -1,0 +1,7 @@
+{
+  "platform": "win32",
+  "electron": "43.4.1",
+  "packagedExecutable": "Archimedes.exe",
+  "packagedPtySpawnPassed": true,
+  "nativeRebuildSkippedForLocalIconAudit": true
+}

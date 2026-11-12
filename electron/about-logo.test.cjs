@@ -17,7 +17,7 @@ test("About logo preserves the seven Paper blocks without an opaque background",
 });
 
 test("About logo is decorative next to the existing accessible product name", () => {
-  assert.match(read("src/SettingsModal.tsx"), /section === "about"[\s\S]*?<span className="settings-about-logo" aria-hidden="true" \/>\s*<strong>Archimedes<\/strong>/);
+  assert.match(read("src/SettingsModal.tsx"), /section === "about"[\s\S]*?<ArchimedesMark className="settings-about-logo" size=\{88\} decorative \/>\s*<strong>Archimedes<\/strong>/);
 });
 
 test("About logo uses the active theme foreground rather than an opaque themed tile", () => {
@@ -25,7 +25,8 @@ test("About logo uses the active theme foreground rather than an opaque themed t
   const rule = css.match(/\.settings-about-logo \{([^}]+)\}/)?.[1];
   assert.ok(rule);
   assert.match(rule, /color: var\(--night-ink\)/);
-  assert.match(rule, /background-color: currentColor/);
-  assert.match(rule, /mask: url\("\.\/assets\/archimedes-logo-mark.svg"\) center \/ contain no-repeat/);
+  assert.doesNotMatch(rule, /background|mask/);
+  assert.match(read("src/brand/ArchimedesMark.tsx"), /fill="currentColor"/);
+  assert.match(read("src/brand/ArchimedesMark.tsx"), /<feDropShadow/);
   assert.match(read("src/tokens.css"), /--night-ink: var\(--text-primary\)/);
 });

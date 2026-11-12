@@ -22,7 +22,7 @@ changed into a white glow.
 
 Source: https://app.paper.design/file/01M70B4DMNVNJZJEN4AM1RFDEP/01K4GP58P8JRM8PGBP0586VKYV/1LM-0
 
-These standalone exports preserve the original backgrounds. Settings About uses
-a separate tightly cropped transparent mask at `src/assets/archimedes-logo-mark.svg`
-so it inherits the active theme's primary text color. Other application branding
-is unchanged.
+These standalone exports preserve the original backgrounds. In-app branding now
+uses the shared shadowed `src/brand/ArchimedesMark.tsx` component, with the original
+geometry in `shared/brand-logo.json` and a theme-adaptive foreground. See
+`docs/app-icons.md` for desktop/web formats and packaging limitations.

@@ -1,0 +1,50 @@
+[
+  {
+    "surface": "web-sidebar",
+    "theme": "paper",
+    "rectangles": 7,
+    "shadow": true,
+    "color": "rgb(98, 95, 89)",
+    "visible": true
+  },
+  {
+    "surface": "composer",
+    "theme": "paper",
+    "rectangles": 7,
+    "shadow": true,
+    "color": "rgb(111, 106, 99)"
+  },
+  {
+    "surface": "about",
+    "theme": "paper",
+    "rectangles": 7,
+    "shadow": true,
+    "color": "rgb(44, 40, 38)",
+    "decorative": "true",
+    "uniqueIds": true
+  },
+  {
+    "surface": "web-sidebar",
+    "theme": "charcoal",
+    "rectangles": 7,
+    "shadow": true,
+    "color": "rgb(201, 196, 192)",
+    "visible": true
+  },
+  {
+    "surface": "composer",
+    "theme": "charcoal",
+    "rectangles": 7,
+    "shadow": true,
+    "color": "rgb(164, 164, 164)"
+  },
+  {
+    "surface": "about",
+    "theme": "charcoal",
+    "rectangles": 7,
+    "shadow": true,
+    "color": "rgb(234, 232, 230)",
+    "decorative": "true",
+    "uniqueIds": true
+  }
+]

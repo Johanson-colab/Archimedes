@@ -17,6 +17,7 @@ import { ACCENT_DEFAULT, CONTROL_RADIUS_DEFAULT, CONTROL_RADIUS_MAX, CONTROL_RAD
 import { Dialog } from "./Dialog";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection as SettingsSectionView } from "./SettingsPrimitives";
 import ShortcutRecorder from "./ShortcutRecorder";
+import ArchimedesMark from "./brand/ArchimedesMark";
 import type { FileTextSizeAction } from "./file-text-size";
 
 export type SettingsSection = "general" | "journey" | "proactive" | "appearance" | "workbench" | "plugins" | "models" | "web" | "terminal" | "ssh" | "workspace" | "about" | "account" | "members";
@@ -726,7 +727,7 @@ export default function SettingsModal({
             </div>}
 
             {section === "about" && <div className="settings-about">
-              <span className="settings-about-logo" aria-hidden="true" />
+              <ArchimedesMark className="settings-about-logo" size={88} decorative />
               <strong>Archimedes</strong>
               <p>{t("Local-first AI for research.")}</p>
               <dl><dt>{t("Version")}</dt><dd>0.1.0</dd></dl>

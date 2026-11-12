@@ -1,0 +1,19 @@
+{
+    "appId":  "",
+    "taskbarIconResource":  "",
+    "relaunchDisplayName":  "",
+    "icons":  [
+                  {
+                      "kind":  0,
+                      "explicitIconPresent":  true,
+                      "bitmapDecodeError":  "Exception calling \"ToBitmap\" with \"0\" argument(s): \"Requested range extends past the end of the array.\""
+                  },
+                  {
+                      "kind":  1,
+                      "explicitIconPresent":  true,
+                      "bitmapDecodeError":  "Exception calling \"ToBitmap\" with \"0\" argument(s): \"Requested range extends past the end of the array.\""
+                  }
+              ],
+    "hasRelaunchCommand":  false,
+    "relaunchUsesExecutableAndAppPath":  false
+}

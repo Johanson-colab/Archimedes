@@ -4206,7 +4206,7 @@ html[data-titlebar="inset"] .right-workbench .workbench-header button { -webkit-
 .settings-path { min-width: 0; flex: 1; padding: 8px 10px; overflow: hidden; color: var(--night-ink-soft); background: var(--night-ground); border: 1px solid var(--night-line-soft); border-radius: 7px; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
 .settings-empty { display: grid; flex: 1; place-items: center; color: var(--night-muted); font-size: 12px; }
 .settings-about { display: flex; max-width: 520px; margin: 48px auto 0; flex-direction: column; align-items: center; gap: 12px; color: var(--night-muted); text-align: center; }
-.settings-about-logo { display: block; flex: 0 0 auto; width: 80px; height: 65px; margin-bottom: 4px; color: var(--night-ink); background-color: currentColor; mask: url("./assets/archimedes-logo-mark.svg") center / contain no-repeat; }
+.settings-about-logo { display: block; flex: 0 0 auto; width: 88px; height: 72px; margin-bottom: 4px; color: var(--night-ink); }
 .settings-about strong { color: var(--night-ink); font-size: 18px; font-weight: 600; }
 .settings-about p { margin: 0; font-size: 12px; line-height: 1.5; }
 .settings-about dl { display: flex; width: 100%; max-width: 320px; align-items: center; justify-content: space-between; margin: 14px 0 0; padding-top: 18px; border-top: 1px solid var(--night-line-soft); font-size: 11px; }

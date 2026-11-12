@@ -4,6 +4,7 @@ const { randomUUID } = require("node:crypto");
 const os = require("node:os");
 const fs = require("node:fs");
 const path = require("node:path");
+const { windowIconPath, configureAppIcon, configureWindowIcon } = require("./app-icons.cjs");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
@@ -245,6 +246,7 @@ function createWindow(workspace) {
   const overlay = process.platform === "win32";
   const initialTheme = nativeTheme.shouldUseDarkColors ? "charcoal" : "paper";
   const browserWindow = new BrowserWindow({
+    show: !overlay,
     width: 1560,
     height: 980,
     minWidth: 1100,
@@ -253,7 +255,7 @@ function createWindow(workspace) {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : overlay ? "hidden" : undefined,
     titleBarOverlay: overlay ? titleBarOverlay(initialTheme) : undefined,
     autoHideMenuBar: process.platform !== "darwin",
-    icon: path.join(__dirname, "assets", "app-icon-256.png"),
+    icon: windowIconPath(process.platform, app.isPackaged ? process.resourcesPath : undefined),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -264,6 +266,8 @@ function createWindow(workspace) {
     },
   });
 
+  configureWindowIcon(app, browserWindow);
+  if (overlay) browserWindow.show();
   if (process.platform !== "darwin") browserWindow.setMenuBarVisibility(false);
 
   const senderId = browserWindow.webContents.id;
@@ -619,6 +623,7 @@ let authFlow = null;
 let dailyFigureCache = null;
 
 app.whenReady().then(async () => {
+  configureAppIcon(app);
   loadLocalAgentEnvironment();
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
   modelConfig.initializeModelConfig(app.getPath("userData"));
