@@ -1,0 +1,10 @@
+{
+  "platform": "win32",
+  "electron": "43.4.1",
+  "icon": "app-icon.ico",
+  "decodedSize": {
+    "width": 256,
+    "height": 256
+  },
+  "windowCreated": true
+}

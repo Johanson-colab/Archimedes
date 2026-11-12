@@ -4,6 +4,7 @@ const { randomUUID } = require("node:crypto");
 const os = require("node:os");
 const fs = require("node:fs");
 const path = require("node:path");
+const { windowIconPath, configureAppIcon } = require("./app-icons.cjs");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
@@ -253,7 +254,7 @@ function createWindow(workspace) {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : overlay ? "hidden" : undefined,
     titleBarOverlay: overlay ? titleBarOverlay(initialTheme) : undefined,
     autoHideMenuBar: process.platform !== "darwin",
-    icon: path.join(__dirname, "assets", "app-icon-256.png"),
+    icon: windowIconPath(),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -619,6 +620,7 @@ let authFlow = null;
 let dailyFigureCache = null;
 
 app.whenReady().then(async () => {
+  configureAppIcon(app);
   loadLocalAgentEnvironment();
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
   modelConfig.initializeModelConfig(app.getPath("userData"));
