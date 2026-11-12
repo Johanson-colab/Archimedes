@@ -4786,18 +4786,8 @@ html:not([data-theme="paper"]) .paper-review-notice span { color: #b9a48b; }
 .work-group { display: flex; min-height: 0; flex: 1; flex-direction: column; padding-top: 10px; }
 .work-heading { display: flex; height: 30px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; color: var(--sb-muted); font-size: 14px; font-weight: 400; }
 .work-heading-actions { position: relative; display: flex; align-items: center; gap: 1px; }
-.work-filter-button { display: inline-flex; height: 23px; align-items: center; gap: 4px; padding: 0 5px; color: var(--sb-muted); background: transparent; border-radius: 4px; font-size: 9px; }
-.work-filter-button:hover { color: var(--night-ink); background: var(--sb-hover); }
-.work-filter-button.active { color: var(--accent); }
-.work-new-project { display: grid; width: 23px; height: 23px; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border-radius: 4px; }
+.work-new-project { display: grid; width: 25px; height: 25px; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border-radius: 5px; }
 .work-new-project:hover { color: var(--night-ink); background: var(--sb-hover); }
-.work-filter-menu { position: absolute; z-index: 30; top: 27px; right: 2px; display: grid; width: 196px; gap: 0; padding: 3px; background: var(--sb-panel); border: 1px solid var(--night-line); border-radius: 7px; box-shadow: 0 13px 32px rgba(0, 0, 0, .34); }
-.work-filter-option { display: flex; height: 32px; align-items: center; gap: 6px; padding: 0 9px; color: var(--sb-ink); background: transparent; border-radius: 5px; font-size: 12px; font-weight: 500; text-align: left; }
-.work-filter-option:hover:not(:disabled) { color: var(--night-ink); background: var(--sb-hover); }
-.work-filter-option.active { color: var(--night-ink); background: var(--sb-active); }
-.work-filter-option:disabled { cursor: default; opacity: .48; }
-.work-filter-option small { margin-left: auto; color: var(--sb-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
-.work-filter-check { display: grid; width: 13px; height: 13px; flex: 0 0 auto; place-items: center; color: var(--accent); }
 .work-tree { flex: 1; min-height: 0; overflow: auto; padding-bottom: 6px; }
 .work-group .project-tree-row { position: relative; height: 30px; border-radius: 5px; }
 .work-group .project-tree-row:hover { color: var(--night-ink); background: var(--sb-hover); }
