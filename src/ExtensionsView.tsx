@@ -15,6 +15,7 @@ import {
 import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
+import { isWorkspacePath } from "./workspace-path";
 
 export type ExtensionsTab = "installed" | "available" | "updates";
 
@@ -85,12 +86,6 @@ function formatBytes(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} MB`;
   if (value >= 1_000) return `${Math.round(value / 1_000)} KB`;
   return `${value} B`;
-}
-
-function isWorkspacePath(workspace: string, target: string) {
-  if (!workspace || !target) return false;
-  const root = workspace.replace(/\/+$/, "");
-  return target === root || target.startsWith(`${root}/`);
 }
 
 function installedSkillRow(skill: ContextAttachment, workspace: string): ExtensionRowModel {

@@ -33,6 +33,7 @@ test('a clicked directory link expands nested Files entries and can still open a
   const { transformWithOxc } = await import('vite');
   const markdown = await import('react-markdown');
   const helpers = await import('../src/workspace-links.ts');
+  const { workspacePathName } = await import('../src/workspace-path.ts');
   const linkSource = fs.readFileSync(path.join(__dirname, '../src/WorkspaceMarkdownLink.tsx'), 'utf8');
   const { code: linkCode } = await transformWithOxc(linkSource.replace(/^import .*;$/gm, '').replace(/^export /gm, ''), 'link.tsx', { jsx: { runtime: 'classic' } });
   const links = new Function('React', 'createContext', 'useContext', 'useMemo', 'defaultUrlTransform', 'workspaceFileLink', `${linkCode}\nreturn { WorkspaceMarkdownProvider, WorkspaceMarkdownLink, workspaceMarkdownUrlTransform };`)(React, React.createContext, React.useContext, React.useMemo, markdown.defaultUrlTransform, helpers.workspaceFileLink);
@@ -47,7 +48,7 @@ test('a clicked directory link expands nested Files entries and can still open a
   const FilePreview = ({ file, error }) => React.createElement('div', { 'data-testid': 'file-preview' }, error || file?.content || 'no file');
   const names = ['React','useState','useEffect','useRef','useCallback','useUISettings','WorkspaceFileGlyph','workspaceFileTone','FilePreview','FolderOpen','RefreshCw','Plus','ChevronDown','ChevronRight','ChevronLeft','ChevronsLeft','ChevronsRight','Maximize2','Minimize2','X','MenuSurface','MenuItem','MenuDivider'];
   const values = [React,React.useState,React.useEffect,React.useRef,React.useCallback,() => ({ t: value => value }),icon,() => 'file',FilePreview,...Array(names.length - 9).fill(icon)];
-  const { FilesView, setDirectoryChildren, ensureDirectoryPath } = new Function(...names, `${code}\nreturn { FilesView, setDirectoryChildren, ensureDirectoryPath };`)(...values);
+  const { FilesView, setDirectoryChildren, ensureDirectoryPath } = new Function(...names, 'workspacePathName', `${code}\nreturn { FilesView, setDirectoryChildren, ensureDirectoryPath };`)(...values, workspacePathName);
   const { code: openerCode } = await transformWithOxc(section(app, '  async function openChangedFile(', '\n  function askAIAboutPaper('), 'path-opener.tsx');
   const openerFactory = new Function('pathOpenRequestRef','executionWorkspace','executionWorkspaceRef','desktopBridge','setFileTree','setFileError','setDirectoryRequest','openWorkbench','setPaperOpenRequest','setMainSection','openFilePane','setSelectedFilePath','setSelectedFile','setFileLoading','setDirectoryChildren','ensureDirectoryPath', `${openerCode}\nreturn openChangedFile;`);
   const noOp = () => {};

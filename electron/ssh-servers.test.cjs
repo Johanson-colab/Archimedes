@@ -76,6 +76,12 @@ test("an identity file must be an absolute path or start at ~", () => {
   });
 });
 
+test("named-user home paths are rejected instead of pointing to the current user's home", () => {
+  withSettings(() => {
+    assert.throws(() => ssh.saveServer({ host: "h", user: "u", identityFile: "~other/.ssh/id_ed25519" }), /~user paths are not supported/);
+  });
+});
+
 test("saving an existing id replaces it instead of adding a second copy", () => {
   withSettings(() => {
     const first = ssh.saveServer({ host: "h", user: "u", name: "before" });
@@ -148,6 +154,6 @@ test("an identity path starting with ~ is expanded before ssh sees it", () => {
   const args = ssh.connectionArgs({ user: "u", host: "h", port: 22, identityFile: "~/.ssh/id_ed25519" }, "printf ok");
   const key = args[args.indexOf("-i") + 1];
   assert.ok(path.isAbsolute(key), "ssh has no shell to expand it");
-  assert.ok(key.endsWith("/.ssh/id_ed25519"));
+  assert.equal(key, path.join(os.homedir(), ".ssh", "id_ed25519"));
   assert.equal(key.includes("~"), false);
 });
