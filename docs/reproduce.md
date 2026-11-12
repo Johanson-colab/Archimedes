@@ -221,6 +221,23 @@ When the server cannot reach GitHub, the local checkout is copied with
 `tar`-over-ssh instead of cloning. A run that stops leaves the directory in
 place: the next run starts from what was already built.
 
+SSH preparation and execution share the run's cancellation signal. Stop applies
+while probing, cloning, uploading the checkout, or executing a command; a stopped
+preparation is recorded as cancelled rather than as a failed environment setup.
+Completed commands release their timeout and abort listener. Uploads have a
+bounded timeout and succeed only after both local tar and SSH exit successfully.
+Failure, cancellation, or backend disposal stops the owned local processes and
+closes their pipes; Windows uses bounded process-tree cleanup.
+
+The checkout, logs, and outputs remain on the server. A secret file that may have
+been written is removed on a best-effort, separately bounded cleanup connection.
+Cancelling before that write does not start a connection solely for cleanup.
+Stopping local SSH does not guarantee termination of a detached remote workload.
+Durable remote-job control/reconnection is separate from this transport cleanup.
+
+See [SSH lifecycle verification](assets/reproduce-ssh-lifecycle/verification.md)
+for regression coverage and the remaining validation limits.
+
 ## Milestones
 
 | Milestone | Scope | State |

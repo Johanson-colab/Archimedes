@@ -20,6 +20,7 @@ const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { isOutputPath } = require("./paths.cjs");
 const { envFileContent, envPrelude } = require("./env-file.cjs");
+const { runSshTransport } = require("./ssh-transport.cjs");
 
 const { authFor, connectionArgs } = require("../ssh-servers.cjs");
 
@@ -114,14 +115,25 @@ function probeCommand() {
   ].join("; ");
 }
 
-function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {}, secrets = {} }) {
+function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {}, secrets = {}, signal, spawnImpl = spawn }) {
   const { target, password, env } = authFor(server);
   const root = remoteRoot(target.workspace || workspace, repoUrl, branch);
   const repo = `${root}/repo`;
   const envPath = Object.keys(secrets || {}).length
     ? `/tmp/archimedes/${Math.random().toString(36).slice(2, 10)}/env`
     : "";
-  let prepared = false;
+  let envFileTouched = false;
+  const lifetime = new AbortController();
+  const active = new Set();
+  let disposing;
+
+  const transport = (options, cleanup = false) => {
+    const signals = [options.signal, ...(cleanup ? [] : [signal, lifetime.signal])].filter(Boolean);
+    const operation = runSshTransport({ ...options, spawnImpl, signal: signals.length ? AbortSignal.any(signals) : undefined });
+    active.add(operation);
+    operation.then(() => active.delete(operation), () => active.delete(operation));
+    return operation;
+  };
 
   /** Keeps a command's full output where the agent can grep it later. */
   const writeFile = async (absolutePath, content) => {
@@ -137,48 +149,18 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     return absolutePath;
   };
 
-  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true, stdin } = {}) => new Promise((resolve) => {
+  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal: commandSignal, login = true, stdin, cleanup = false } = {}) => {
     const args = connectionArgs(target, login ? loginCommand(command) : command, { allowPassword: Boolean(password) });
-    const child = spawn("ssh", args, { windowsHide: true, env: { ...process.env, ...env } });
-    const out = [];
-    if (stdin !== undefined) {
-      // ssh forwards stdin over the channel; a command that exits early closes it.
-      child.stdin.on("error", () => {});
-      child.stdin.end(String(stdin));
-    }
-    let settled = false;
-    const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
-    child.stdout.on("data", (chunk) => { out.push(chunk); onData?.(chunk.toString()); });
-    child.stderr.on("data", (chunk) => { out.push(chunk); onData?.(chunk.toString()); });
-    child.once("error", (error) => finish({ code: null, output: out.join(""), error: error?.message || "ssh failed" }));
-    child.once("close", (code) => finish({ code, output: out.join("") }));
-    const timer = setTimeout(() => { child.kill("SIGKILL"); finish({ code: null, output: out.join(""), timedOut: true }); }, Math.max(1_000, timeoutMs));
-    if (timer.unref) timer.unref();
-    if (signal) {
-      if (signal.aborted) child.kill("SIGKILL");
-      else signal.addEventListener("abort", () => child.kill("SIGKILL"), { once: true });
-    }
-  });
+    return transport({ args, env, timeoutMs, onData, signal: commandSignal, stdin }, cleanup);
+  };
 
   /** Ships a checkout that already exists here instead of cloning it there. */
-  const copyLocalCheckout = (localDir) => new Promise((resolve, reject) => {
+  const copyLocalCheckout = (localDir, options = {}) => {
     emit({ type: "preparing", detail: `Copying the checkout to ${target.host}…` });
     const remoteCommand = `mkdir -p ${quoteRemotePath(repo)} && tar -xzf - -C ${quoteRemotePath(repo)}`;
     const sshArgs = connectionArgs(target, remoteCommand, { allowPassword: Boolean(password) });
-    const pack = spawn("tar", ["-czf", "-", "-C", localDir, "."]);
-    const pipe = spawn("ssh", sshArgs, { windowsHide: true, env: { ...process.env, ...env } });
-    let stderr = "";
-    let sent = 0;
-    pack.stdout.on("data", (chunk) => { sent += chunk.length; });
-    pack.stdout.pipe(pipe.stdin);
-    pack.once("error", reject);
-    pipe.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    pipe.once("error", reject);
-    pipe.once("close", (code) => {
-      if (code === 0) resolve({ bytes: sent });
-      else reject(new Error(stderr.trim().slice(0, 300) || `tar exited with ${code}`));
-    });
-  });
+    return transport({ ...options, args: sshArgs, env, copyFrom: localDir }).then(({ bytes }) => ({ bytes }));
+  };
 
   return {
     kind: "ssh",
@@ -226,10 +208,14 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
       }
 
       const rev = await run(`git -C ${quoteRemotePath(repo)} rev-parse HEAD`, { timeoutMs: 60_000 });
+      if (rev.code !== 0) throw new Error(`Could not read the checkout commit: ${rev.output.trim().slice(0, 300)}`);
       const commit = rev.output.trim().slice(0, 40);
-      await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${quoteRemotePath(`${root}/${MARKER_FILE}`)}`, { timeoutMs: 60_000 });
-      prepared = true;
-      if (envPath) await writeFile(envPath, envFileContent(secrets));
+      const marker = await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${quoteRemotePath(`${root}/${MARKER_FILE}`)}`, { timeoutMs: 60_000 });
+      if (marker.code !== 0) throw new Error(`Could not save the run marker: ${marker.output.trim().slice(0, 300)}`);
+      if (envPath) {
+        envFileTouched = true; // A cancelled write may have left a partial file.
+        await writeFile(envPath, envFileContent(secrets));
+      }
       emit({ type: "started", detail: `${target.user}@${target.host} · ${commit.slice(0, 7)}` });
       return { root, repo, commit, branch, host: target.host, user: target.user };
     },
@@ -281,9 +267,13 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     },
 
     async dispose() {
-      // The checkout and its logs are the point; the key file is not.
-      if (envPath) await run(`rm -f ${quoteRemotePath(envPath)}`, { timeoutMs: 30_000 }).catch(() => {});
-      prepared = false;
+      if (!disposing) disposing = (async () => {
+        lifetime.abort();
+        await Promise.allSettled([...active]);
+        // Cleanup has its own bounded lifetime; the run's signal is already aborted.
+        if (envFileTouched) await run(`rm -f ${quoteRemotePath(envPath)}`, { timeoutMs: 30_000, cleanup: true }).catch(() => {});
+      })();
+      return disposing;
     },
   };
 }

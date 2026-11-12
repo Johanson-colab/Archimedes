@@ -1381,7 +1381,7 @@ app.whenReady().then(async () => {
   const executeRun = async (session) => {
     const { record, send, run } = session;
     if (!session.backend) throw new Error("The environment is no longer running.");
-    session.controller = new AbortController();
+    session.controller ||= new AbortController();
     send({ type: "attempt", attempt: 1 });
     send({ type: "started", detail: session.backend.describe?.() || "" });
 
@@ -1433,7 +1433,7 @@ app.whenReady().then(async () => {
       outcome = { ...outcome, status: "failed", summary: error instanceof Error ? error.message : "The run failed." };
     }
 
-    const runStatus = outcome.status || "failed";
+    const runStatus = session.controller.signal.aborted ? "stopped" : outcome.status || "failed";
     const contract = {
       ...session.contract,
       steps: outcome.runbook?.length ? outcome.runbook : session.contract.steps,
@@ -1504,7 +1504,7 @@ app.whenReady().then(async () => {
       workspace: dataWorkspace,
       repoName: repoNameFromUrl(repoUrl),
       backend: null,
-      controller: null,
+      controller: new AbortController(),
       send: (payload) => {
         if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
       },
@@ -1526,7 +1526,7 @@ app.whenReady().then(async () => {
           if (local) {
             copyFrom = (await resolveAuditPath(dataWorkspace, repoUrl, "", branch).catch(() => ({ root: "" }))).root;
           }
-          const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send, secrets });
+          const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send, secrets, signal: session.controller.signal });
           session.backend = backend;
           store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });
           session.send({ type: "preparing", detail: `Checking ${server.host}…` });
@@ -1561,10 +1561,12 @@ app.whenReady().then(async () => {
         session.send({ type: "started", detail: backend.describe() });
         await executeRun(session);
       } catch (error) {
+        const stopped = session.controller.signal.aborted;
         const message = error instanceof Error ? error.message : "The run could not start.";
         await stopSession(record.id);
-        store.updateReproductionRun(run.id, { status: "failed", error: message, finishedAt: new Date().toISOString() });
-        store.updateReproduction(record.id, { status: "blocked", error: message });
+        store.updateReproductionRun(run.id, { status: stopped ? "stopped" : "failed", error: message, finishedAt: new Date().toISOString() });
+        store.updateReproduction(record.id, { status: stopped ? "cancelled" : "blocked", error: message });
+        if (stopped) { session.send({ type: "finished", status: "stopped", summary: "Stopped by the user." }); return; }
         session.send({ type: "error", detail: message });
         session.send({ type: "finished", status: "failed", summary: message });
         notifyRunFinished(record, message);
