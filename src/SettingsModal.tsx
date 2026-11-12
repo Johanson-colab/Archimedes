@@ -726,6 +726,7 @@ export default function SettingsModal({
             </div>}
 
             {section === "about" && <div className="settings-about">
+              <span className="settings-about-logo" aria-hidden="true" />
               <strong>Archimedes</strong>
               <p>{t("Local-first AI for research.")}</p>
               <dl><dt>{t("Version")}</dt><dd>0.1.0</dd></dl>

@@ -22,5 +22,7 @@ changed into a white glow.
 
 Source: https://app.paper.design/file/01M70B4DMNVNJZJEN4AM1RFDEP/01K4GP58P8JRM8PGBP0586VKYV/1LM-0
 
-These exports add design assets only and do not replace existing application or
-website branding.
+These standalone exports preserve the original backgrounds. Settings About uses
+a separate tightly cropped transparent mask at `src/assets/archimedes-logo-mark.svg`
+so it inherits the active theme's primary text color. Other application branding
+is unchanged.
