@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleDot, Cloud, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, X } from "lucide-react";
+import { useUISettings } from "./i18n";
 import SharedNoteEditor from "./SharedNoteEditor";
-import latexTemplateCatalog from "../shared/latex-templates.json";
+import PaperTemplateLibrary from "./PaperTemplateLibrary";
 import { Dialog } from "./Dialog";
 import { StateView } from "./StateView";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 
-const latexTemplates: LatexTemplateSummary[] = latexTemplateCatalog;
 
 const EDITABLE = new Set(["tex", "bib", "bst", "cls", "sty", "cfg"]);
 const ASSETS = new Set([...EDITABLE, "pdf", "png", "jpg", "jpeg", "webp"]);
@@ -109,6 +109,7 @@ export type PaperOpenRequest = { path: string; token: number } | null;
 export default function PaperWritingView({ bridge, workspace, projectId, openRequest, onRefresh, onAskAI, active = true }: {
   bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; openRequest: PaperOpenRequest; onRefresh: () => Promise<void> | void; onAskAI: (path: string) => void; active?: boolean;
 }) {
+  const { t } = useUISettings();
   // Project discovery deliberately stays out of the entry dialog: selecting a
   // project should always mean creating one or importing an explicit folder.
   const projects: LatexProjectSummary[] = [];
@@ -130,7 +131,8 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
   const [coedit, setCoedit] = useState(false);
   const [chooserOpen, setChooserOpen] = useState(true);
   const [projectName, setProjectName] = useState("paper");
-  const [templateId, setTemplateId] = useState(latexTemplates[0]?.id ?? "archimedes");
+  const [creating, setCreating] = useState(false);
+  const [templateId, setTemplateId] = useState("archimedes");
   const [browserWidth, setBrowserWidth] = useState(() => readStoredNumber("archimedes-paper-browser-width", BROWSER_DEFAULT_WIDTH, BROWSER_MIN_WIDTH, BROWSER_MAX_WIDTH));
   const [previewSplit, setPreviewSplit] = useState(() => readStoredNumber("archimedes-paper-split", PREVIEW_SPLIT_DEFAULT, PREVIEW_SPLIT_MIN, PREVIEW_SPLIT_MAX));
   const [browserCollapsed, setBrowserCollapsed] = useState(() => readStoredFlag("archimedes-paper-browser-collapsed"));
@@ -264,10 +266,12 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
   }, [autoCompile, bridge, compile, draft, file, mainPath, savedDraft, workspace]);
 
   async function createProject() {
+    if (creating) return;
+    setCreating(true); setError("");
     try {
       const created = await bridge.createLatexProject(workspace, projectName.trim() || "paper", templateId);
       await onRefresh(); await activateProject(created.path); void compile(created.path);
-    } catch (nextError) { setError(nextError instanceof Error ? nextError.message : String(nextError)); }
+    } catch (nextError) { setError(nextError instanceof Error ? nextError.message : String(nextError)); } finally { setCreating(false); }
   }
   async function importFolder() {
     setImporting(true); setError("");
@@ -360,7 +364,6 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
   const lines = useMemo(() => draft.split("\n"), [draft]);
   const problemLines = useMemo(() => new Set(compileResult?.diagnostics.flatMap((item) => item.line ? [item.line] : []) ?? []), [compileResult]);
   const projectLabel = activeProject.split("/").at(-1) || "New project";
-  const activeTemplate = latexTemplates.find((template) => template.id === templateId) ?? latexTemplates[0];
   const browserTrack = browserCollapsed ? 0 : Math.min(browserWidth, browserTrackFor(paneWidth));
   const availableTrack = Math.max(1, paneWidth - browserTrack);
   const minPreviewSplit = paneWidth ? Math.min(PREVIEW_SPLIT_MAX, PREVIEW_MIN_WIDTH / availableTrack) : PREVIEW_SPLIT_MIN;
@@ -378,24 +381,11 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
       <section className="latex-editor-pane"><div className="paper-pane-toolbar"><button className="paper-browser-toggle" onClick={() => setBrowserCollapsed((collapsed) => !collapsed)} title={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-label={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-pressed={!browserCollapsed}>{browserCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><span className={`paper-save-state ${saveState}`}>{saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span><button className={coedit ? "paper-pane-action active" : "paper-pane-action"} disabled={!file || !projectId} onClick={() => setCoedit((value) => !value)} title="Co-edit this source with project members"><Cloud size={13} /><span>{coedit ? "Co-editing" : "Co-edit"}</span></button></div>{file ? <>{coedit && projectId && <div className="latex-coedit-pane"><SharedNoteEditor bridge={bridge} projectId={projectId} docKey={`latex:${file.path}`} initialText={draft} title={`Co-editing ${file.name}`} onTextChange={(text) => { draftRef.current = text; setDraft(text); }} /></div>}<div className={coedit ? "latex-editor-body coediting" : "latex-editor-body"}><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} onChange={(event) => { draftRef.current = event.target.value; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; draftRef.current = next; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div></> : <StateView className="paper-writing-empty" icon={<FileText size={25} />} title="No LaTeX project open" description="Choose a template or import a complete folder to start writing." action={<button className="primary-button" onClick={() => setChooserOpen(true)}><FolderOpen size={14} />Open project</button>} />}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{error}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{diagnostic.message}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
       <section className="paper-pdf-pane"><div className="paper-pane-toolbar"><FileText size={14} /><strong>PDF preview</strong><label className="paper-auto-compile"><input type="checkbox" checked={autoCompile} onChange={(event) => setAutoCompile(event.target.checked)} />Auto compile</label><span className={`paper-compile-state ${compileState}`}>{compileState === "compiling" ? <LoaderCircle className="spin" size={11} /> : compileState === "success" ? <Check size={11} /> : compileState === "error" ? <AlertTriangle size={11} /> : null}{compileState === "success" ? `${compileResult?.duration_ms ?? 0} ms` : compileState === "error" ? "Build failed" : compileState === "compiling" ? "Building" : "Not built"}</span><div className="paper-pane-actions">{file && <button className="paper-pane-action" onClick={() => onAskAI(file.path)} title="Ask AI about this file"><MessageCircle size={13} /><span>Ask AI</span></button>}<button className="paper-pane-action icon" onClick={() => setChooserOpen(true)} title="Projects" aria-label="Projects"><FolderOpen size={13} /></button>{activeProject && <><button className="paper-pane-action icon" disabled={importing} onClick={() => void importFolder()} title="Import folder" aria-label="Import folder">{importing ? <LoaderCircle className="spin" size={13} /> : <FolderUp size={13} />}</button><button className="paper-pane-action primary" disabled={!mainPath || compileState === "compiling"} onClick={() => void compile()} title="Recompile">{compileState === "compiling" ? <LoaderCircle className="spin" size={13} /> : <Play size={13} />}<span>{compileState === "compiling" ? "Compiling…" : "Recompile"}</span></button></>}</div></div>{compileResult?.preview_url ? <iframe key={compileResult.preview_url} src={compileResult.preview_url} title="Compiled paper PDF" /> : <StateView className="paper-writing-empty" icon={<FileText size={27} />} title="Compile to preview" description="The generated PDF appears here. Any build problem is listed beside the source with its line number." action={mainPath ? <button className="primary-button" disabled={compileState === "compiling"} onClick={() => void compile()}><Play size={14} />Compile paper</button> : undefined} />}</section>
     </div>
-    <Dialog open={dialogOpen} onClose={() => setChooserOpen(false)} size="lg" className="paper-project-dialog" overlayClassName="paper-create-backdrop app-dialog-overlay" ariaLabelledBy="paper-project-title">
-        <header className="app-dialog-header"><div><h2 id="paper-project-title">New project</h2><p>Each paper owns its own folder, source files, figures, bibliography, and build output.</p></div><button className="app-dialog-close" onClick={() => setChooserOpen(false)} aria-label="Close project chooser"><X size={16} /></button></header>
+    <Dialog open={dialogOpen} onClose={() => setChooserOpen(false)} size="gallery" className="paper-project-dialog" overlayClassName="paper-create-backdrop app-dialog-overlay" ariaLabelledBy="paper-project-title">
+        <header className="app-dialog-header"><div><h2 id="paper-project-title">{t("Template library")}</h2><p>Each paper owns its own folder, source files, figures, bibliography, and build output.</p></div><button className="app-dialog-close" onClick={() => setChooserOpen(false)} aria-label="Close project chooser"><X size={16} /></button></header>
         <div className="app-dialog-body paper-project-body">
-          <div className="paper-project-options">
-            <form onSubmit={(event) => { event.preventDefault(); void createProject(); }}>
-              <FilePlus2 size={19} />
-              <div><strong>From template</strong><span>Start from a template that already compiles.</span></div>
-              <label>Project folder<input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="paper" /></label>
-              <label>Template<select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>{latexTemplates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.category}</option>)}</select></label>
-              <p className="paper-template-hint">{activeTemplate?.description}</p>
-              <button className="primary-button" type="submit" disabled={!projectName.trim()}>Create project</button>
-            </form>
-            <div className="paper-project-import">
-              <FolderUp size={19} />
-              <div><strong>Import existing folder</strong><span>Copy an Overleaf or local LaTeX project, including figures, bibliography, styles, and other assets.</span></div>
-              <button className="secondary-button" disabled={importing} onClick={() => void importFolder()}>{importing ? <LoaderCircle className="spin" size={14} /> : <FolderUp size={14} />}{importing ? "Importing…" : "Choose folder"}</button>
-            </div>
-          </div>
+          <PaperTemplateLibrary selected={templateId} onSelect={setTemplateId} projectName={projectName} onNameChange={setProjectName} creating={creating} importing={importing} error={error}
+            onCreate={() => void createProject()} onImport={() => void importFolder()} onSource={(url) => void bridge.openExternalUrl(url)} />
           {projects.some((project) => project.main && projectRoot(project.path)) && <div className="paper-existing-projects"><h3>Open an existing project</h3>{projects.filter((project) => project.main && projectRoot(project.path)).map((project) => <button key={project.path} onClick={() => void activateProject(project.path)}><FileCode2 size={14} /><span><strong>{project.title}</strong><small>{projectRoot(project.path)}</small></span><ChevronRight size={15} /></button>)}</div>}
         </div>
     </Dialog>

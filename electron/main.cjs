@@ -958,9 +958,12 @@ app.whenReady().then(async () => {
     return latexWorkspace.listLatexProjects(resolveWorkspace(input.workspace));
   });
 
-  ipcMain.handle("paper:create-project", (event, input = {}) => {
+  ipcMain.handle("paper:create-project", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
-    const file = latexWorkspace.createLatexProject(workspace, input.directory, input.template);
+    const file = await require("./official-latex-templates.cjs").createPaperProject(workspace, input.directory, input.template, {
+      cacheDirectory: require("node:path").join(app.getPath("userData"), "latex-template-cache"),
+      fetchImpl: (...args) => net.fetch(...args),
+    });
     if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
     return file;
   });

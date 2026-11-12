@@ -759,6 +759,14 @@ interface LatexProjectSummary {
 }
 
 interface LatexTemplateSummary {
+  sourceKind?: string;
+  officialSourceUrl?: string;
+  venues?: string[];
+  previewUrl?: string;
+  requirements?: string;
+  sourceUrl?: string;
+  year?: string;
+  delivery?: string;
   id: string;
   name: string;
   category: string;

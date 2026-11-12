@@ -62,12 +62,22 @@ function findLatexTemplate(templateId = DEFAULT_TEMPLATE_ID) {
 
 function createLatexProject(root, requestedDirectory = "paper", templateId = DEFAULT_TEMPLATE_ID) {
   const template = findLatexTemplate(templateId);
+  return writeLatexProject(root, requestedDirectory, template);
+}
+
+function writeLatexProject(root, requestedDirectory, template) {
   const base = String(requestedDirectory || "paper").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "").replace(/[^\p{L}\p{N}._/-]+/gu, "-") || "paper";
   let directory = base;
   let index = 2;
   while (fs.existsSync(workspaceFiles.workspacePath(root, directory, { mustExist: false }))) directory = `${base}-${index++}`;
   let mainFile = null;
   for (const [name, content] of Object.entries(template.files)) {
+    if (Buffer.isBuffer(content)) {
+      const target = workspaceFiles.workspacePath(root, `${directory}/${name}`, { mustExist: false });
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, content);
+      continue;
+    }
     const file = workspaceFiles.writeWorkspaceTextFile(root, `${directory}/${name}`, content);
     if (name === "main.tex") mainFile = file;
   }
@@ -285,6 +295,7 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
 }
 
 module.exports = {
+  writeLatexProject,
   DEFAULT_TEMPLATE_ID,
   PAPER_EXTENSIONS,
   compileLatexDocument,

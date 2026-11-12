@@ -1,0 +1,313 @@
+[
+  {
+    "id": "neurips-2026",
+    "name": "NeurIPS 2026",
+    "category": "Conference",
+    "description": "2026 author kit from a pinned GitHub community mirror. Check current venue instructions before submission.",
+    "year": "2026",
+    "sourceUrl": "https://github.com/WuizaKaseiyo/paper-templates",
+    "delivery": "download",
+    "sourceKind": "mirror",
+    "officialSourceUrl": "https://neurips.cc/Conferences/2026/PaperInformation/StyleFiles",
+    "revision": "92f04364e028736d9f2988c9a2cac6f094961241",
+    "assets": [
+      {
+        "path": "main.tex",
+        "url": "https://raw.githubusercontent.com/WuizaKaseiyo/paper-templates/92f04364e028736d9f2988c9a2cac6f094961241/neurips2026/official_template.tex",
+        "sha256": "2880f23a3bf697e53e6860b7616f5e96615680a3950b1ea75b6b6b020c0c6e6b"
+      },
+      {
+        "path": "neurips_2026.sty",
+        "url": "https://raw.githubusercontent.com/WuizaKaseiyo/paper-templates/92f04364e028736d9f2988c9a2cac6f094961241/neurips2026/neurips_2026.sty",
+        "sha256": "0c1ad36961fcd9198dcc2558cf2793e1df39973bde8264fd701f5e7970672757"
+      },
+      {
+        "path": "checklist.tex",
+        "url": "https://raw.githubusercontent.com/WuizaKaseiyo/paper-templates/92f04364e028736d9f2988c9a2cac6f094961241/neurips2026/checklist.tex",
+        "sha256": "780ba13c480f652dcc42e69ed61a752ce0ea270f15d332d4a45b059dabad84f6"
+      },
+      {
+        "path": "README.md",
+        "url": "https://raw.githubusercontent.com/WuizaKaseiyo/paper-templates/92f04364e028736d9f2988c9a2cac6f094961241/neurips2026/README.md",
+        "sha256": "b78501303340db135713a30c87ebf780b38885e7fd733515153aa5b8a7a51afd"
+      }
+    ],
+    "previewUrl": "paper-templates/neurips-2026.png",
+    "venues": [
+      "NeurIPS"
+    ]
+  },
+  {
+    "id": "iclr-2027",
+    "name": "ICLR 2027",
+    "category": "Conference",
+    "description": "Official author kit with original style files and sample paper.",
+    "year": "2027",
+    "sourceUrl": "https://github.com/ICLR/Master-Template",
+    "revision": "46ed6f4c6cef5b175dde23639e77d44c3463b230",
+    "delivery": "download",
+    "assets": [
+      {
+        "path": "fancyhdr.sty",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2027/fancyhdr.sty",
+        "sha256": "b56ec4434b9f4607529a4b23dc68ad8d4b94f1f631c8cddaf7da78140d53a5ea"
+      },
+      {
+        "path": "iclr2027_conference.bib",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2027/iclr2027_conference.bib",
+        "sha256": "cdd86e7d4c31854dcf2145871657c944588a6d44c3b72e160ff4baa8df1a52fb"
+      },
+      {
+        "path": "iclr2027_conference.bst",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2027/iclr2027_conference.bst",
+        "sha256": "2d67552db7ed38ccfccb5957b52f95656e25c249724761d3cf5f7922ad1844c5"
+      },
+      {
+        "path": "iclr2027_conference.sty",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2027/iclr2027_conference.sty",
+        "sha256": "797deef41724e93761426ac0cbcca46279a91cc650dd1f0ce76a4f08d2098ea6"
+      },
+      {
+        "path": "main.tex",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2027/iclr2027_conference.tex",
+        "sha256": "03e556d6e5593e498fd39f262ec2d184ebfe8693cbf47fb7cea3402d8d5166ac"
+      },
+      {
+        "path": "math_commands.tex",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2027/math_commands.tex",
+        "sha256": "90473c4d0542070db244cea73ef962d6cddc5b2a746757e6a40ddf5fdfb90ba9"
+      },
+      {
+        "path": "natbib.sty",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2027/natbib.sty",
+        "sha256": "88bc70c0e48461934cab5b2accef06b74a8b3ac45ad03ccd3f2a6b7e0d6d530d"
+      }
+    ],
+    "previewUrl": "paper-templates/iclr-2027.png"
+  },
+  {
+    "id": "icml-2026",
+    "name": "ICML 2026",
+    "category": "Conference",
+    "description": "2026 author kit from a pinned GitHub community mirror. Check current venue instructions before submission.",
+    "year": "2026",
+    "sourceUrl": "https://github.com/lunatila/icml-paper-skill",
+    "delivery": "download",
+    "sourceKind": "mirror",
+    "officialSourceUrl": "https://icml.cc/Conferences/2026/StyleAuthorInstructions",
+    "revision": "eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb",
+    "assets": [
+      {
+        "path": "algorithm.sty",
+        "url": "https://raw.githubusercontent.com/lunatila/icml-paper-skill/eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb/template/icml2026/algorithm.sty",
+        "sha256": "93fd0eb31c112eb405833db8f1d7f5d238c7e691b1c05680d7276e68f36d564a"
+      },
+      {
+        "path": "algorithmic.sty",
+        "url": "https://raw.githubusercontent.com/lunatila/icml-paper-skill/eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb/template/icml2026/algorithmic.sty",
+        "sha256": "48d18794a5d97c0479a588cc2eac0917992feb9da83acc4631b8f55757d80f9b"
+      },
+      {
+        "path": "icml2026.sty",
+        "url": "https://raw.githubusercontent.com/lunatila/icml-paper-skill/eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb/template/icml2026/icml2026.sty",
+        "sha256": "7cdcf90f6a59c5219e7f15c88f7ed09fcaf598dad91e6cdddc4dc3cb0e397a95"
+      },
+      {
+        "path": "fancyhdr.sty",
+        "url": "https://raw.githubusercontent.com/lunatila/icml-paper-skill/eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb/template/icml2026/fancyhdr.sty",
+        "sha256": "9130c52f91087abc6d223164ffa587e207e3257fcbcd069ef09ecb5391043f14"
+      },
+      {
+        "path": "main.tex",
+        "url": "https://raw.githubusercontent.com/lunatila/icml-paper-skill/eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb/template/icml2026/example_paper.tex",
+        "sha256": "c2ca8140bf255d1ff77d1278eb3eefed4018b4b1e71065b8e1ccbc68b74c8acf"
+      },
+      {
+        "path": "example_paper.bib",
+        "url": "https://raw.githubusercontent.com/lunatila/icml-paper-skill/eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb/template/icml2026/example_paper.bib",
+        "sha256": "df950103d38f9cfc81b1f40d84c9be2a3525d046d2991a6973a4446922c06bd1"
+      },
+      {
+        "path": "icml2026.bst",
+        "url": "https://raw.githubusercontent.com/lunatila/icml-paper-skill/eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb/template/icml2026/icml2026.bst",
+        "sha256": "0ec3d5eb9b02efb7e0b44a32f3775882f42a743d0bdc618f34e6936309b98764"
+      },
+      {
+        "path": "icml_numpapers.pdf",
+        "url": "https://raw.githubusercontent.com/lunatila/icml-paper-skill/eefd3a60f9bf89fadda1e2b87351ac30e85ef9bb/template/icml2026/icml_numpapers.pdf",
+        "sha256": "d34e8da982296363627996e6e18850c11fbd616e6946061237051e7a8f7080bb",
+        "binary": true
+      }
+    ],
+    "previewUrl": "paper-templates/icml-2026.png",
+    "venues": [
+      "ICML"
+    ]
+  },
+  {
+    "id": "cvpr-2026",
+    "name": "CVPR 2026",
+    "category": "Conference",
+    "description": "Official author kit with original style files and sample paper.",
+    "year": "2026",
+    "sourceUrl": "https://github.com/cvpr-org/author-kit",
+    "revision": "12909ae437f6dbc7435069cfdb4ca44c18e6a02f",
+    "delivery": "download",
+    "assets": [
+      {
+        "path": "cvpr.sty",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/cvpr.sty",
+        "sha256": "2602473285d1a7df2a445ac89b76e1afa0acab78e056f0369d19770245190153"
+      },
+      {
+        "path": "ieeenat_fullname.bst",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/ieeenat_fullname.bst",
+        "sha256": "e38e6166bd7b1e6d23a1b79dcdb55c656e4fcdbe91bdf6b50d827e6b5d1aacfc"
+      },
+      {
+        "path": "main.bib",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/main.bib",
+        "sha256": "1d6d78b4c02eae2607a40e15376f6ac96ef491e311241acd6c8a8a970ac3c1b2"
+      },
+      {
+        "path": "main.tex",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/main.tex",
+        "sha256": "251329b8a7ea25f1ba0f5a769f652235e13bc1f43b3e8b1d892e16a005b361f0"
+      },
+      {
+        "path": "preamble.tex",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/preamble.tex",
+        "sha256": "f666a85903f49929395951e7afb620e96d4e208334623f23135298b4d7f06228"
+      },
+      {
+        "path": "rebuttal.tex",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/rebuttal.tex",
+        "sha256": "29e36ddeb5f9eebe5e62c9df74a24f9f49b587ccfb3710209a22f02239b53ebb"
+      },
+      {
+        "path": "sec/0_abstract.tex",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/sec/0_abstract.tex",
+        "sha256": "ac059e9cb8595bab8f7795d088d71e321ee46e8397d5cfb56957107d43c868ed"
+      },
+      {
+        "path": "sec/1_intro.tex",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/sec/1_intro.tex",
+        "sha256": "55dc0cd862ccfd3c54b63367323669ff1e23d07f76291b35949c7b914c92fbec"
+      },
+      {
+        "path": "sec/2_formatting.tex",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/sec/2_formatting.tex",
+        "sha256": "bd4233b307bfe3ad791c433e021b00ed4e4017db7adde8ee8e475c267fc7191d"
+      },
+      {
+        "path": "sec/3_finalcopy.tex",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/sec/3_finalcopy.tex",
+        "sha256": "ae261b3daaff50cf609bb3ca7dfd030bb1e835fd85aa4fda45cdaf53cc35cc1a"
+      },
+      {
+        "path": "sec/X_suppl.tex",
+        "url": "https://raw.githubusercontent.com/cvpr-org/author-kit/12909ae437f6dbc7435069cfdb4ca44c18e6a02f/sec/X_suppl.tex",
+        "sha256": "594291f94cf3b925908dc127a93f3525c1998e96abf37a14f69d6077a7e58bd7"
+      }
+    ],
+    "previewUrl": "paper-templates/cvpr-2026.png"
+  },
+  {
+    "id": "iclr-2026",
+    "name": "ICLR 2026",
+    "category": "Conference",
+    "description": "Official author kit with original style files and sample paper.",
+    "year": "2026",
+    "sourceUrl": "https://github.com/ICLR/Master-Template",
+    "revision": "46ed6f4c6cef5b175dde23639e77d44c3463b230",
+    "delivery": "download",
+    "assets": [
+      {
+        "path": "fancyhdr.sty",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2026/fancyhdr.sty",
+        "sha256": "b56ec4434b9f4607529a4b23dc68ad8d4b94f1f631c8cddaf7da78140d53a5ea"
+      },
+      {
+        "path": "iclr2026_conference.bib",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2026/iclr2026_conference.bib",
+        "sha256": "cdd86e7d4c31854dcf2145871657c944588a6d44c3b72e160ff4baa8df1a52fb"
+      },
+      {
+        "path": "iclr2026_conference.bst",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2026/iclr2026_conference.bst",
+        "sha256": "2d67552db7ed38ccfccb5957b52f95656e25c249724761d3cf5f7922ad1844c5"
+      },
+      {
+        "path": "iclr2026_conference.sty",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2026/iclr2026_conference.sty",
+        "sha256": "a4852f68e080d6c5245057ca2039100b409e31727898aa93c03d78ddb84374a3"
+      },
+      {
+        "path": "main.tex",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2026/iclr2026_conference.tex",
+        "sha256": "941b58de6e52f5538de0ebfe2d20425a79e1768cb271d453b7436904b5159859"
+      },
+      {
+        "path": "math_commands.tex",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2026/math_commands.tex",
+        "sha256": "90473c4d0542070db244cea73ef962d6cddc5b2a746757e6a40ddf5fdfb90ba9"
+      },
+      {
+        "path": "natbib.sty",
+        "url": "https://raw.githubusercontent.com/ICLR/Master-Template/46ed6f4c6cef5b175dde23639e77d44c3463b230/iclr2026/natbib.sty",
+        "sha256": "88bc70c0e48461934cab5b2accef06b74a8b3ac45ad03ccd3f2a6b7e0d6d530d"
+      }
+    ],
+    "previewUrl": "paper-templates/iclr-2026.png"
+  },
+  {
+    "id": "acl-current",
+    "name": "ACL / EMNLP / NAACL / EACL",
+    "category": "Conference",
+    "description": "Shared *ACL author kit for ACL, EMNLP, NAACL and EACL. Check the target conference rules.",
+    "year": "Current",
+    "sourceUrl": "https://github.com/acl-org/acl-style-files",
+    "revision": "d5adc823ff0f80f98c80405ca0ab66c68e684409",
+    "delivery": "download",
+    "assets": [
+      {
+        "path": "acl.sty",
+        "url": "https://raw.githubusercontent.com/acl-org/acl-style-files/d5adc823ff0f80f98c80405ca0ab66c68e684409/acl.sty",
+        "sha256": "19dfeddc2c0e448f3926a0bef048a9db3f3611b46265b760caabd7ada4f361de"
+      },
+      {
+        "path": "main.tex",
+        "url": "https://raw.githubusercontent.com/acl-org/acl-style-files/d5adc823ff0f80f98c80405ca0ab66c68e684409/acl_latex.tex",
+        "sha256": "339c9ee9705c1767d44ef24b85365c0bb8619ecc3fcf66172bf1356292389614"
+      },
+      {
+        "path": "acl_lualatex.tex",
+        "url": "https://raw.githubusercontent.com/acl-org/acl-style-files/d5adc823ff0f80f98c80405ca0ab66c68e684409/acl_lualatex.tex",
+        "sha256": "0d9987ba833331a996f9abcd1a03eebba7d7ae331145793e7ddb6b5ae8db27b3"
+      },
+      {
+        "path": "acl_natbib.bst",
+        "url": "https://raw.githubusercontent.com/acl-org/acl-style-files/d5adc823ff0f80f98c80405ca0ab66c68e684409/acl_natbib.bst",
+        "sha256": "6fbb306202290f4b68e74ac1460a8b27398500cb6dfeb4492e74c457eae7cd1e"
+      },
+      {
+        "path": "custom.bib",
+        "url": "https://raw.githubusercontent.com/acl-org/acl-style-files/d5adc823ff0f80f98c80405ca0ab66c68e684409/custom.bib",
+        "sha256": "d76ccb30ddceb70c9e1ad0be3f43dfe301ad5765aab2c960fc830ef67bf8232a"
+      },
+      {
+        "path": "anthology.bib",
+        "url": "https://raw.githubusercontent.com/acl-org/acl-style-files/d5adc823ff0f80f98c80405ca0ab66c68e684409/anthology.bib.txt",
+        "sha256": "2b78d2d9aeda62e14c4e46099e8225b5fc116387d8e0a54aad776485e249ceff"
+      }
+    ],
+    "previewUrl": "paper-templates/acl-current.png",
+    "requirements": "Requires the inconsolata TeX package.",
+    "venues": [
+      "ACL",
+      "EMNLP",
+      "NAACL",
+      "EACL"
+    ]
+  }
+]
