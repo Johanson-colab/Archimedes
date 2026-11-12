@@ -3304,12 +3304,9 @@ function App() {
         <ProjectSidebar
           projects={projects}
           archivedProjects={archivedProjects}
-          threads={threads}
-          archivedThreads={archivedThreads}
           workspaces={workspaces}
           activeProjectId={activeProjectId}
           activeWorkspaceId={activeWorkspace?.id ?? null}
-          runningThreadId={runningThreadId}
           disabled={agentBusy}
           onNewProject={openNewProject}
           onNewWorkspace={(projectId) => openWorkspaceCreator(projectId)}

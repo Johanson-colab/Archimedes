@@ -79,7 +79,7 @@ test("Files and Artifacts leave the sidebar but stay command reachable", () => {
   assert.match(app, /id: "terminal", group: t\("Panels"\)/);
 });
 
-test("Projects list workspaces under each project with a folded filter", () => {
+test("Projects lists workspaces and exposes New project directly without filters", () => {
   assert.doesNotMatch(sidebar, /project-toggle/);
   assert.doesNotMatch(sidebar, /<Folder size=\{14\}/);
   assert.match(sidebar, /<span className="project-name">\{project\.name\}<\/span>/);
@@ -91,14 +91,11 @@ test("Projects list workspaces under each project with a folded filter", () => {
   assert.match(sidebar, /workspaceName\(workspace, t\)/);
   assert.doesNotMatch(sidebar, /projectThreads\.map/);
   assert.doesNotMatch(sidebar, /onOpenThread|onArchiveThread|onRemoveThread/);
-  assert.match(sidebar, /work-more-button/);
-  assert.match(sidebar, /<MenuLabel>\{t\("Filter"\)\}<\/MenuLabel>/);
-  assert.match(sidebar, /t\("All work"\)/);
-  assert.match(sidebar, /t\("Running"\)/);
-  assert.match(sidebar, /t\("Needs review"\)/);
-  assert.match(sidebar, /t\("Automations"\)/);
-  assert.match(sidebar, /t\("Archived"\)/);
-  assert.match(sidebar, /thread\.status === "error"\) return "failed"/);
+  assert.match(sidebar, /className="work-new-project" onClick=\{onNewProject\} title=\{t\("New project"\)\}/);
+  assert.doesNotMatch(sidebar, /work-more-button|filterOpen|filterOptions|WorkFilter/);
+  assert.match(sidebar, /t\("Archived projects"\)/);
+  assert.match(sidebar, /onArchiveProject\(project, false\)/);
+  assert.match(sidebar, /aria-expanded=\{showArchivedProjects\}/);
 });
 
 test("Research Apps settings groups apps into categories without a layout selector", () => {
@@ -112,13 +109,14 @@ test("Research Apps settings groups apps into categories without a layout select
   assert.match(main, /sidebar:set-layout/);
 });
 
-test("section labels match project-row typography and Filter lives in More", () => {
+test("section labels match project-row typography and New project is a direct icon action", () => {
   assert.match(css, /\.sidebar-section-label \{[^}]*font-size: 14px; font-weight: 400/);
   assert.match(css, /\.work-heading \{[^}]*font-size: 14px; font-weight: 400/);
-  assert.match(css, /\.work-more-button/);
+  assert.match(css, /\.work-new-project/);
+  assert.doesNotMatch(css, /\.work-filter-menu|\.work-filter-option/);
   assert.doesNotMatch(css, /\.work-heading \{[^}]*font-size: 10px/);
-  assert.match(sidebar, /<MenuLabel>\{t\("Filter"\)\}<\/MenuLabel>/);
-  assert.match(sidebar, /onNewProject\(\)/);
+  assert.doesNotMatch(sidebar, /More work actions|t\("Filter"\)/);
+  assert.match(sidebar, /onClick=\{onNewProject\}/);
 });
 
 test("the project stays highlighted while its active workspace is selected", () => {
