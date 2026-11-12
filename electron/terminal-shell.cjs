@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { windowsEnvironmentValue, windowsPathCandidates } = require("./windows-path.cjs");
 
 function firstExisting(candidates, exists) {
   return candidates.find((candidate) => candidate && (candidate === "cmd.exe" || exists(candidate))) || "";
@@ -20,16 +21,19 @@ function resolveTerminalShell(options = {}) {
 
   const profile = options.profile || "auto";
   if (platform === "win32") {
-    const programFiles = env.ProgramFiles || env.ProgramW6432 || "C:\\Program Files";
-    const localAppData = env.LOCALAPPDATA || "";
-    const systemRoot = env.SystemRoot || "C:\\Windows";
-    const pwsh = [path.join(programFiles, "PowerShell", "7", "pwsh.exe"), localAppData && path.join(localAppData, "Microsoft", "WindowsApps", "pwsh.exe")];
-    const powershell = [path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")];
-    const cmd = [env.COMSPEC, "cmd.exe"];
+    const programFiles = windowsEnvironmentValue(env, "ProgramW6432") || windowsEnvironmentValue(env, "ProgramFiles") || "C:\\Program Files";
+    const localAppData = windowsEnvironmentValue(env, "LOCALAPPDATA");
+    const systemRoot = windowsEnvironmentValue(env, "SystemRoot") || "C:\\Windows";
+    const pwsh = [path.win32.join(programFiles, "PowerShell", "7", "pwsh.exe"), ...windowsPathCandidates("pwsh.exe", env), localAppData && path.win32.join(localAppData, "Microsoft", "WindowsApps", "pwsh.exe")];
+    const powershell = [path.win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")];
+    const cmd = [windowsEnvironmentValue(env, "COMSPEC"), path.win32.join(systemRoot, "System32", "cmd.exe"), "cmd.exe"];
+    const custom = String(options.customShell || "").trim().replace(/^"(.*)"$/, "$1");
+    const customCandidates = path.win32.isAbsolute(custom) ? [custom]
+      : custom && path.win32.basename(custom) === custom ? windowsPathCandidates(custom, env) : [];
     const candidates = profile === "pwsh" ? pwsh
       : profile === "powershell" ? powershell
       : profile === "cmd" ? cmd
-      : profile === "custom" ? [options.customShell]
+      : profile === "custom" ? customCandidates
       : [...pwsh, ...powershell, ...cmd];
     const shell = firstExisting(candidates, exists) || firstExisting([...pwsh, ...powershell, ...cmd], exists) || "cmd.exe";
     return { shell, args: [] };

@@ -92,3 +92,23 @@ test("missing POSIX shells fall back to /bin/sh", () => {
   });
   assert.equal(result.shell, "/bin/sh");
 });
+
+test("Windows finds portable PowerShell on a quoted, case-insensitive PATH", () => {
+  const portable = "D:\\中文 Tools\\pwsh.exe";
+  const result = resolveTerminalShell({
+    platform: "win32",
+    env: { pAtH: '"D:\\中文 Tools";C:\\Windows\\System32', systemroot: "C:\\Windows" },
+    exists: (candidate) => candidate === portable,
+    userShell: "",
+  });
+  assert.equal(result.shell, portable);
+});
+
+test("Windows custom shell executable names resolve on PATH", () => {
+  const custom = "D:\\Tools\\nu.exe";
+  const result = resolveTerminalShell({
+    platform: "win32", profile: "custom", customShell: "nu.exe",
+    env: { Path: "D:\\Tools" }, exists: (candidate) => candidate === custom, userShell: "",
+  });
+  assert.equal(result.shell, custom);
+});

@@ -9,7 +9,7 @@ const TEXT_EXTENSIONS = new Set([
   ".ini", ".java", ".js", ".json", ".jsonl", ".jsx", ".kt", ".latex", ".log", ".lua", ".m",
   ".md", ".mdx", ".mjs", ".php", ".pl", ".properties", ".py", ".r", ".rb", ".rs", ".rst",
   ".bib", ".bst", ".cfg", ".cls", ".scss", ".sh", ".sql", ".sty", ".swift", ".tex", ".toml", ".ts", ".tsx", ".txt", ".vue", ".xml",
-  ".yaml", ".yml",
+  ".yaml", ".yml", ".ps1", ".psm1", ".psd1", ".cmd", ".bat",
 ]);
 const IMAGE_EXTENSIONS = new Set([".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"]);
 const MAX_SNAPSHOT_ENTRIES = 5_000;
@@ -20,16 +20,40 @@ function normalizeRelative(value = "") {
   return String(value || "").replaceAll("\\", "/").replace(/^\/+/, "");
 }
 
+function withinWorkspace(root, target) {
+  const relative = path.relative(root, target);
+  return relative === "" || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`));
+}
+
 function workspacePath(root, requested = "", { mustExist = true } = {}) {
   const workspace = path.resolve(root);
   const target = path.resolve(workspace, normalizeRelative(requested));
-  if (target !== workspace && !target.startsWith(`${workspace}${path.sep}`)) {
+  if (!withinWorkspace(workspace, target)) {
     throw new Error("The requested path is outside the active workspace.");
   }
-  if (!mustExist) return target;
   const realWorkspace = fs.realpathSync(workspace);
+  if (!mustExist) {
+    // New files do not have a realpath yet. Check their nearest existing ancestor
+    // before mkdir/write, including Windows junctions and dangling links.
+    let ancestor = target;
+    while (true) {
+      try {
+        fs.lstatSync(ancestor);
+        break;
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        const parent = path.dirname(ancestor);
+        if (parent === ancestor) throw error;
+        ancestor = parent;
+      }
+    }
+    if (!withinWorkspace(realWorkspace, fs.realpathSync(ancestor))) {
+      throw new Error("The requested path resolves outside the active workspace.");
+    }
+    return target;
+  }
   const realTarget = fs.realpathSync(target);
-  if (realTarget !== realWorkspace && !realTarget.startsWith(`${realWorkspace}${path.sep}`)) {
+  if (!withinWorkspace(realWorkspace, realTarget)) {
     throw new Error("The requested path resolves outside the active workspace.");
   }
   return realTarget;

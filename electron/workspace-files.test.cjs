@@ -63,3 +63,38 @@ test("computes line changes for direct writes and command snapshots", () => {
   assert.deepEqual(changes.map((item) => [item.path, item.status]), [["src/index.js", "modified"], ["src/new.js", "created"]]);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test("Windows scripts remain editable and appear in change summaries", (t) => {
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const before = snapshotWorkspace(root);
+  for (const name of ["setup.ps1", "profile.psm1", "config.psd1", "start.cmd", "build.bat"]) {
+    const content = "echo hello\r\n";
+    const file = writeWorkspaceTextFile(root, name, content);
+    assert.equal(file.kind, "text", name);
+    assert.equal(file.content, content);
+  }
+  const changes = compareWorkspaceSnapshots(before, snapshotWorkspace(root));
+  assert.equal(changes.length, 5);
+  assert.ok(changes.every((change) => change.additions > 0));
+});
+
+test("writes and previews reject escaping directory links before changing files", (t) => {
+  const root = fixture();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-outside-"));
+  t.after(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  });
+  fs.writeFileSync(path.join(outside, "existing.txt"), "keep me");
+  fs.symlinkSync(outside, path.join(root, "link"), process.platform === "win32" ? "junction" : "dir");
+  for (const name of ["link/existing.txt", "link/nested/new.txt"]) {
+    assert.throws(() => fileChangeForContent(root, name, "changed"), /outside/);
+    assert.throws(() => writeWorkspaceTextFile(root, name, "changed"), /outside/);
+  }
+  assert.equal(fs.readFileSync(path.join(outside, "existing.txt"), "utf8"), "keep me");
+  assert.equal(fs.existsSync(path.join(outside, "nested")), false);
+  // A workspace selected via a junction and links within it still work.
+  fs.symlinkSync(path.join(root, "src"), path.join(root, "internal"), process.platform === "win32" ? "junction" : "dir");
+  assert.equal(writeWorkspaceTextFile(root, "internal/new.txt", "inside").content, "inside");
+});
