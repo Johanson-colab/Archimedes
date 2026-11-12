@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="264" height="234" viewBox="0 0 264 234" fill="none">
+  <title>Archimedes logo on black with shadow</title>
+  <defs>
+    <!-- Preserve the original black shadow; it blends into a pure black background. -->
+    <filter id="block-shadow" x="-20%" y="-30%" width="150%" height="170%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="4" dy="4" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.2" />
+    </filter>
+  </defs>
+  <rect width="264" height="234" fill="#000000" />
+  <g fill="#FFFFFF">
+    <rect x="156" y="121" width="80" height="80" rx="3" filter="url(#block-shadow)" />
+    <rect x="28" y="141" width="60" height="60" rx="3" filter="url(#block-shadow)" />
+    <rect x="28" y="77" width="60" height="60" rx="3" filter="url(#block-shadow)" />
+    <rect x="92" y="121" width="60" height="40" rx="3" filter="url(#block-shadow)" />
+    <rect x="136" y="77" width="60" height="40" rx="3" filter="url(#block-shadow)" />
+    <rect x="176" y="33" width="60" height="40" rx="3" filter="url(#block-shadow)" />
+    <rect x="37" y="33" width="115" height="40" rx="3" filter="url(#block-shadow)" />
+  </g>
+</svg>
