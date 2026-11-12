@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { spawn } = require("node:child_process");
+const { StringDecoder } = require("node:string_decoder");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexTemplates = require("../shared/latex-templates.json");
 
@@ -202,7 +203,14 @@ function parseLatexDiagnostics(output) {
   const diagnostics = [];
   const seen = new Set();
   const add = (line, message) => {
-    const normalized = String(message || "").replace(/\s+/g, " ").trim().slice(0, 500);
+    let normalized = String(message || "").replace(/\s+/g, " ").trim().slice(0, 500);
+    // XeTeX's warning text can itself contain replacement bytes for a Unicode
+    // glyph, while its quoted hexadecimal character code is still intact.
+    normalized = normalized.replace(/(Missing character: There is no ).*?( \(\"([0-9a-f]{1,6})\) in font)/i, (whole, prefix, suffix, hex) => {
+      const code = parseInt(hex, 16);
+      if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return whole;
+      return `${prefix}${String.fromCodePoint(code)}${suffix}`;
+    });
     const lineNumber = Number(line) || null;
     const key = `${lineNumber}:${normalized}`;
     if (!normalized || seen.has(key) || diagnostics.length >= 30) return;
@@ -239,12 +247,21 @@ function runCompiler(command, args, options = {}) {
       output = `${output}${text}`.slice(-120_000);
       resetIdle(); options.onOutput?.(text);
     };
-    child.stdout?.on("data", append);
-    child.stderr?.on("data", append);
+    const stdoutDecoder = new StringDecoder("utf8");
+    const stderrDecoder = new StringDecoder("utf8");
+    const decode = (decoder, chunk) => {
+      const text = typeof chunk === "string" ? chunk : decoder.write(chunk);
+      if (text) append(text);
+    };
+    child.stdout?.on("data", (chunk) => decode(stdoutDecoder, chunk));
+    child.stderr?.on("data", (chunk) => decode(stderrDecoder, chunk));
     const timer = setTimeout(() => stop("total"), timeoutMs);
     resetIdle();
     child.once("error", (error) => { clearTimeout(timer); clearTimeout(idleTimer); reject(error); });
     child.once("close", (code, signal) => {
+      const stdoutTail = stdoutDecoder.end(), stderrTail = stderrDecoder.end();
+      if (stdoutTail) append(stdoutTail);
+      if (stderrTail) append(stderrTail);
       clearTimeout(timer); clearTimeout(idleTimer);
       if (timedOut) output += `\nLaTeX compilation timed out (${timeoutReason === "idle" ? "no compiler output" : "total time limit"}).`;
       resolve({ code: timedOut ? 1 : Number.isInteger(code) ? code : 1, signal: signal || null, output, timedOut, timeoutReason });

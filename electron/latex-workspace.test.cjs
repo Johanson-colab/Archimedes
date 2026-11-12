@@ -254,3 +254,32 @@ test("an active first build keeps its longer budget but still reaches the total 
   const result = await pending;
   assert.equal(killed, true); assert.equal(result.timeoutReason, 'total'); assert.match(result.output, /more dependencies/);
 });
+
+test("compiler logs preserve UTF-8 symbols split across stdout and stderr chunks", async () => {
+  const { runCompiler } = require('./latex-workspace.cjs');
+  let child; const streamed = [];
+  const pending = runCompiler('/test/tectonic', [], { onOutput: (text) => streamed.push(text), spawnImpl: () => {
+    child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => {}; return child;
+  } });
+  const stdout = Buffer.from('† — ’ – 中文\n'), stderr = Buffer.from('warning: main.tex:156: Missing character: There is no † ("2020) in font ptmr8t!\n');
+  // Interleave streams and split inside multibyte code points.
+  for (let i = 0; i < Math.max(stdout.length, stderr.length); i++) {
+    if (i < stdout.length) child.stdout.emit('data', stdout.subarray(i, i + 1));
+    if (i < stderr.length) child.stderr.emit('data', stderr.subarray(i, i + 1));
+  }
+  child.emit('close', 0, null);
+  const result = await pending;
+  assert.equal(result.code, 0); assert.equal(result.output.includes('\uFFFD'), false);
+  assert.equal(streamed.join(''), result.output);
+  assert.ok(result.output.includes('†'));
+  assert.ok(result.output.includes('中'));
+});
+
+test("missing-glyph diagnostics recover the symbol from XeTeX's code point and deduplicate damaged text", () => {
+  const diagnostics = parseLatexDiagnostics('warning: main.tex:156: Missing character: There is no ��� ("2020) in font ptmr8t!\nwarning: main.tex:156: Missing character: There is no † ("2020) in font ptmr8t!\nwarning: main.tex:680: Missing character: There is no ��� ("2013) in font ptmr8t!');
+  assert.deepEqual(diagnostics, [
+    { line: 156, message: 'Missing character: There is no † ("2020) in font ptmr8t!' },
+    { line: 680, message: 'Missing character: There is no – ("2013) in font ptmr8t!' },
+  ]);
+  assert.doesNotThrow(() => parseLatexDiagnostics('warning: main.tex:1: Missing character: There is no ? ("FFFFFF) in font test!'));
+});
