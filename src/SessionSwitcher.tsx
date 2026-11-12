@@ -3,12 +3,13 @@ import {
   Archive,
   ArchiveRestore,
   Box,
-  Check,
   ChevronDown,
   GitBranch,
   Lock,
   Pin,
   PinOff,
+  Plus,
+  Search,
 } from "lucide-react";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
@@ -120,6 +121,7 @@ export default function SessionSwitcher({
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspaceFocus, setWorkspaceFocus] = useState<"first" | "none">("none");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SessionFilter>("all");
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
@@ -157,6 +159,18 @@ export default function SessionSwitcher({
   function chooseSession(session: ResearchThread) {
     setSessionOpen(false);
     onOpenSession(session);
+  }
+
+  function navigateRows(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const target = event.target as HTMLElement;
+    if (!target.matches(".session-row-open, .workspace-option-main")) return;
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(".session-row-open, .workspace-option-main")];
+    const index = rows.indexOf(target as HTMLButtonElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? rows.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
+    event.preventDefault();
+    rows[next]?.focus();
   }
 
   function renderSessionRow(session: ResearchThread) {
@@ -207,7 +221,7 @@ export default function SessionSwitcher({
         <button
           ref={workspaceButtonRef}
           className={workspaceOpen ? "toolbar-workspace open" : "toolbar-workspace"}
-          onClick={() => { setSessionOpen(false); setWorkspaceOpen((open) => !open); }}
+          onClick={(event) => { setSessionOpen(false); setWorkspaceFocus(event.detail === 0 ? "first" : "none"); setWorkspaceOpen((open) => !open); }}
           title={`${workspace?.root || ""} · ${gitState}`}
           aria-haspopup="dialog"
           aria-expanded={workspaceOpen}
@@ -240,13 +254,14 @@ export default function SessionSwitcher({
       minWidth={300}
       maxHeight={520}
       role="dialog"
+      focus={workspaceFocus}
       ariaLabel={t("Workspaces")}
       className="workspace-switcher-popover"
     >
-      <div className="workspace-list">
+      <div className="workspace-list" onKeyDown={navigateRows}>
         {workspaces.map((entry) => {
           const isCurrentWorkspace = entry.id === workspace?.id;
-          return <div className="workspace-option" key={entry.id}>
+          return <div className={isCurrentWorkspace ? "workspace-option active" : "workspace-option"} key={entry.id}>
           <button
             className="workspace-option-main"
             onClick={() => { setWorkspaceOpen(false); onSelectWorkspace(entry); }}
@@ -258,7 +273,6 @@ export default function SessionSwitcher({
               <small>{entry.root}</small>
             </span>
             <span className="workspace-option-count">{entry.session_count}</span>
-            <span className="workspace-option-current" aria-hidden="true">{isCurrentWorkspace && <Check size={13} />}</span>
           </button>
           <span className="workspace-option-actions">
             <WorkspaceMenuActions compact workspace={entry} canWorktree={canWorktree} disabled={creatingWorkspace}
@@ -294,7 +308,12 @@ export default function SessionSwitcher({
       ariaLabel={t("Sessions")}
       className="session-switcher-popover"
     >
+      <div className="session-menu-heading">
+        <div><strong>{t("Sessions")}</strong><span title={workspace?.root}>{workspaceName(workspace, t)}</span></div>
+        <small>{filtered.length}</small>
+      </div>
       <label className="session-search">
+        <Search size={14} aria-hidden="true" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -316,18 +335,19 @@ export default function SessionSwitcher({
           aria-pressed={filter === id}
         >{id === "all" ? t("All") : id === "mine" ? t("Mine") : id === "shared" ? t("Shared") : t("Archived")}</button>)}
       </div>
-      <div className="session-list">
+      <div className="session-list" onKeyDown={navigateRows}>
+        {pinned.length > 0 && <div className="session-list-label">{t("Pinned")}</div>}
         {pinned.map(renderSessionRow)}
-        {pinned.length > 0 && rest.length > 0 && <MenuDivider />}
+        {pinned.length > 0 && rest.length > 0 && <div className="session-list-label">{t("Recent")}</div>}
         {rest.map(renderSessionRow)}
         {!filtered.length && <div className="session-empty">
           <strong>{filter === "archived" ? t("No archived sessions") : query ? t("No sessions match") : t("No sessions here yet")}</strong>
           <span>{t("Sessions stay inside their workspace, so switching does not move files.")}</span>
-          {filter !== "archived" && !query && <button className="secondary-button" onClick={() => { setSessionOpen(false); onNewSession(); }}>{t("New session")}</button>}
         </div>}
       </div>
       <div className="session-switcher-foot">
-        <button className="session-new-link" onClick={() => { setSessionOpen(false); onNewSession(); }}>{t("New session")}</button>
+        <span>{t("Alt+↑/↓ switches sessions")}</span>
+        <button className="session-new-link" onClick={() => { setSessionOpen(false); onNewSession(); }}><Plus size={13} />{t("New session")}</button>
       </div>
     </MenuSurface>
   </>;

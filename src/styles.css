@@ -9995,6 +9995,12 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 .session-status.unread { background: var(--accent); }
 
 .menu-surface.session-switcher-popover { padding: 0; overflow: hidden; }
+.session-menu-heading { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px 0; }
+.session-menu-heading > div { display: grid; min-width: 0; gap: 3px; }
+.session-menu-heading strong { color: var(--menu-ink); font-size: 13px; font-weight: 600; }
+.session-menu-heading span { overflow: hidden; color: var(--menu-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.session-menu-heading small { color: var(--menu-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.session-list-label { padding: 9px 10px 5px; color: var(--menu-muted); font-size: 11px; font-weight: 500; }
 .session-search {
   display: flex;
   align-items: center;
@@ -10050,7 +10056,7 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   border-radius: 7px;
 }
 .session-row:hover,
-.session-row:focus-within { background: var(--menu-hover-bg); }
+.session-row:has(:focus-visible) { background: var(--menu-hover-bg); }
 .session-row.active { background: var(--menu-selected-bg); }
 .session-row-open {
   display: flex;
@@ -10072,7 +10078,7 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   gap: 4px;
   overflow: hidden;
   color: var(--menu-ink);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 560;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -10084,7 +10090,7 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   align-items: center;
   gap: 6px;
   color: var(--menu-muted);
-  font-size: 9.5px;
+  font-size: 11px;
 }
 .session-row-actions {
   display: flex;
@@ -10121,23 +10127,28 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 .session-switcher-foot {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: 7px 12px;
   border-top: 1px solid var(--menu-divider);
 }
+.session-switcher-foot > span { color: var(--menu-muted); font-size: 10px; }
 .session-new-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 2px 4px;
   color: var(--menu-muted);
   background: transparent;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .session-new-link:hover { color: var(--menu-hover-ink); background: var(--menu-hover-bg); }
 
 .workspace-list { display: grid; gap: 2px; padding: 4px 6px 8px; }
 .workspace-option { display: flex; align-items: stretch; border-radius: 7px; }
 .workspace-option:hover,
-.workspace-option:focus-within { background: var(--menu-hover-bg); }
+.workspace-option:has(:focus-visible) { background: var(--menu-hover-bg); }
+.workspace-option.active { background: var(--menu-selected-bg); }
 .workspace-option-main {
   display: flex;
   min-width: 0;
@@ -10153,7 +10164,6 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 .workspace-option-copy > span { overflow: hidden; color: var(--menu-ink); font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-option-copy small { overflow: hidden; color: var(--menu-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-option-count { color: var(--menu-muted); font-size: 9px; }
-.workspace-option-current { display: grid; width: 16px; flex: 0 0 auto; place-items: center; color: var(--accent); }
 .workspace-option-actions { display: flex; flex: 0 0 auto; align-items: center; }
 .workspace-option-action {
   display: grid;
