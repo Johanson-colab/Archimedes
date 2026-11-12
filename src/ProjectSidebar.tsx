@@ -1,33 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, FolderOpen, MoreHorizontal, MoreVertical, Pencil, Plus, Trash, X } from "lucide-react";
+import { Archive, ArchiveRestore, FolderOpen, MoreVertical, Pencil, Plus, Trash, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
-import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";
+import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { workspaceName } from "./workspace-name";
 
-export type WorkFilter = "all" | "running" | "review" | "automations" | "archived";
-
-function threadWorkState(thread: ResearchThread, runningThreadId?: string | null): "running" | "review" | "failed" | null {
-  if (thread.id === runningThreadId || thread.status === "running") return "running";
-  if (thread.status === "error") return "failed";
-  if ((thread.pending_actions ?? 0) > 0) return "review";
-  return null;
-}
-
-function needsAttention(thread: ResearchThread, runningThreadId?: string | null) {
-  const state = threadWorkState(thread, runningThreadId);
-  return state === "review" || state === "failed";
-}
-
-export default function ProjectSidebar({ projects, archivedProjects, threads, archivedThreads, workspaces, activeProjectId, activeWorkspaceId, runningThreadId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, filterError }: {
+export default function ProjectSidebar({ projects, archivedProjects, workspaces, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, filterError }: {
   projects: ResearchProject[];
   archivedProjects: ResearchProject[];
-  threads: ResearchThread[];
-  archivedThreads: ResearchThread[];
   workspaces: ProjectWorkspace[];
   activeProjectId: string | null;
   activeWorkspaceId: string | null;
-  runningThreadId?: string | null;
   disabled: boolean;
   onNewProject: () => void;
   onNewWorkspace: (projectId: string) => void;
@@ -40,15 +23,12 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
 }) {
   const { t } = useUISettings();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [filter, setFilter] = useState<WorkFilter>("all");
-  const [filterOpen, setFilterOpen] = useState(false);
   const [projectMenu, setProjectMenu] = useState<{ project: ResearchProject } | null>(null);
-  const [showArchivedProjects, setShowArchivedProjects] = useState(true);
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState("");
-  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
   const projectAnchorRef = useRef<HTMLElement | null>(null);
   const renameInFlightRef = useRef(false);
 
@@ -95,70 +75,20 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
     }
   }
 
-  const runningCount = threads.filter((thread) => threadWorkState(thread, runningThreadId) === "running").length;
-  const reviewCount = threads.filter((thread) => needsAttention(thread, runningThreadId)).length;
-  const automationCount = 0;
-  const filterOptions: Array<{ id: WorkFilter; label: string; count?: number }> = [
-    { id: "all", label: t("All work"), count: threads.length },
-    { id: "running", label: t("Running"), count: runningCount },
-    { id: "review", label: t("Needs review"), count: reviewCount },
-    { id: "automations", label: t("Automations"), count: automationCount },
-    { id: "archived", label: t("Archived"), count: archivedThreads.length + archivedProjects.length },
-  ];
-  const visibleThreads = filter === "all"
-    ? threads
-    : filter === "running"
-      ? threads.filter((thread) => threadWorkState(thread, runningThreadId) === "running")
-      : filter === "review"
-        ? threads.filter((thread) => needsAttention(thread, runningThreadId))
-        : [];
-  const visibleProjectIds = new Set(visibleThreads.map((thread) => thread.project_id));
-  const visibleProjects = filter === "all"
-    ? projects
-    : projects.filter((project) => visibleProjectIds.has(project.id));
-  const emptyCopy = filter === "all"
-    ? t("No projects yet")
-    : filter === "running"
-      ? t("Nothing is running")
-      : filter === "review"
-        ? t("Nothing needs review")
-        : filter === "automations"
-          ? t("No automated runs yet")
-          : t("No archived work");
-
   return <section className="sidebar-group projects-group work-group">
     <div className="work-heading">
       <span>{t("Projects")}</span>
       <div className="work-heading-actions">
-        <button ref={filterButtonRef} className="work-more-button" onClick={() => setFilterOpen((open) => !open)} title={t("More work actions")} aria-label={t("More work actions")} aria-haspopup="menu" aria-expanded={filterOpen} disabled={disabled}>
-          <MoreHorizontal size={15} />
+        <button className="work-new-project" onClick={onNewProject} title={t("New project")} aria-label={t("New project")} disabled={disabled}>
+          <Plus size={15} />
         </button>
-        <MenuSurface open={filterOpen} onClose={() => setFilterOpen(false)} anchorRef={filterButtonRef} placement="bottom-end" width={280} className="work-filter-menu" ariaLabel={t("Work actions")}>
-          <MenuLabel>{t("Filter")}</MenuLabel>
-          {filterOptions.map((option) => <MenuItem key={option.id} checked={filter === option.id} hint={typeof option.count === "number" ? option.count : undefined} onClick={() => { setFilter(option.id); setFilterOpen(false); }}>{option.label}</MenuItem>)}
-          <MenuDivider />
-          <MenuItem icon={<Plus size={14} />} disabled={disabled} onClick={() => { setFilterOpen(false); onNewProject(); }}>{t("New project")}</MenuItem>
-        </MenuSurface>
       </div>
     </div>
 
     <div className="project-tree work-tree">
-      {filter === "archived" ? <>
-        {archivedProjects.length > 0 && <>
-          <button className={showArchivedProjects ? "archived-toggle active" : "archived-toggle"} onClick={() => setShowArchivedProjects((visible) => !visible)}><Archive size={13} /><span>{t("Archived projects")}</span><small>{archivedProjects.length}</small></button>
-          {showArchivedProjects && <div className="archived-project-list">
-            {archivedProjects.map((project) => <div className="archived-project-row" key={project.id}>
-              <span title={project.workspace_path || project.name}><strong>{project.name}</strong>{project.chat_count > 0 && <small>{project.chat_count}</small>}</span>
-              <div><button onClick={() => onArchiveProject(project, false)} title={t("Restore {name}", { name: project.name })} disabled={disabled}><ArchiveRestore size={12} /></button><button onClick={() => onRemoveProject(project)} title={t("Remove {name}", { name: project.name })} disabled={disabled}><Trash size={12} /></button></div>
-            </div>)}
-          </div>}
-        </>}
-        {archivedThreads.length > 0 && <div className="work-empty">{t("{count} archived sessions", { count: archivedThreads.length })}</div>}
-        {!archivedProjects.length && !archivedThreads.length && <div className="work-empty">{emptyCopy}</div>}
-      </> : <>
-        {visibleProjects.map((project) => {
+      {projects.map((project) => {
           const projectWorkspaces = workspaces.filter((workspace) => workspace.project_id === project.id);
-          const isExpanded = expanded.has(project.id) || filter !== "all";
+          const isExpanded = expanded.has(project.id);
           const isActiveProject = activeProjectId === project.id;
           const menuOpen = projectMenu?.project.id === project.id;
           return <div className="project-node" key={project.id}>
@@ -195,11 +125,21 @@ export default function ProjectSidebar({ projects, archivedProjects, threads, ar
                   {workspace.session_count > 0 && <span className="project-chat-count">{workspace.session_count}</span>}
                 </button>
               </div>)}
-              {!projectWorkspaces.length && filter === "all" && <div className="project-chat-empty">{t("No workspaces yet")}</div>}
+              {!projectWorkspaces.length && <div className="project-chat-empty">{t("No workspaces yet")}</div>}
             </div>}
           </div>;
-        })}
-        {!visibleProjects.length && <div className="work-empty">{emptyCopy}</div>}
+      })}
+      {!projects.length && <div className="work-empty">{t("No projects yet")}</div>}
+      {archivedProjects.length > 0 && <>
+        <button className={showArchivedProjects ? "archived-toggle active" : "archived-toggle"} onClick={() => setShowArchivedProjects((visible) => !visible)} aria-expanded={showArchivedProjects}>
+          <Archive size={13} /><span>{t("Archived projects")}</span><small>{archivedProjects.length}</small>
+        </button>
+        {showArchivedProjects && <div className="archived-project-list">
+          {archivedProjects.map((project) => <div className="archived-project-row" key={project.id}>
+            <span title={project.workspace_path || project.name}><strong>{project.name}</strong>{project.chat_count > 0 && <small>{project.chat_count}</small>}</span>
+            <div><button onClick={() => onArchiveProject(project, false)} title={t("Restore {name}", { name: project.name })} aria-label={t("Restore {name}", { name: project.name })} disabled={disabled}><ArchiveRestore size={12} /></button><button onClick={() => onRemoveProject(project)} title={t("Remove {name}", { name: project.name })} aria-label={t("Remove {name}", { name: project.name })} disabled={disabled}><Trash size={12} /></button></div>
+          </div>)}
+        </div>}
       </>}
     </div>
     {filterError && <div className="project-rename-error" role="alert">{filterError}</div>}

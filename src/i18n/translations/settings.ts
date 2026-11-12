@@ -155,7 +155,6 @@ export const settings: Record<string, string> = {
   "Minimal": "极简",
   "Models": "模型",
   "Monochrome": "单色",
-  "More work actions": "更多 Work 操作",
   "Motion": "动效",
   "New server": "新建服务器",
   "No contrast issues found.": "未发现对比度问题。",
