@@ -3330,6 +3330,8 @@ function App() {
           onRemoveProject={setProjectToRemove}
           onChangeProjectWorkspace={(project) => void changeProjectWorkspace(project)}
           onOpenWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
+          onRenameWorkspace={openWorkspaceRename}
+          onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
           filterError={projectFolderError}
         />
 
