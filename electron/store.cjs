@@ -1,7 +1,7 @@
 const { createHash, randomUUID } = require("node:crypto");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
 const { detectGitState, gitBranch } = require("./git-state.cjs");
-const { normalizeWorkspaceName, suggestWorkspaceName, workspaceNameAvailable } = require("./workspace-names.cjs");
+const { normalizeWorkspaceName, suggestWorkspaceName, suggestRandomWorkspaceName, workspaceNameAvailable } = require("./workspace-names.cjs");
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -1899,13 +1899,18 @@ function ensureProjectSharedWorkspace(db, project) {
       db.prepare("UPDATE project_workspaces SET root = ?, updated_at = ? WHERE id = ?").run(root, now, existing.id);
       existing.root = root;
     }
+    if (!existing.name) {
+      const name = suggestRandomWorkspaceName(db);
+      db.prepare("UPDATE project_workspaces SET name = ?, updated_at = ? WHERE id = ?").run(name, now, existing.id);
+      existing.name = name;
+    }
     return existing;
   }
   const id = randomUUID();
   db.prepare(`
-    INSERT INTO project_workspaces (id, project_id, kind, root, base_ref, last_session_id, created_at, updated_at)
-    VALUES (?, ?, 'shared', ?, NULL, NULL, ?, ?)
-  `).run(id, project.id, root, now, now);
+    INSERT INTO project_workspaces (id, project_id, kind, name, root, base_ref, last_session_id, created_at, updated_at)
+    VALUES (?, ?, 'shared', ?, ?, NULL, NULL, ?, ?)
+  `).run(id, project.id, suggestRandomWorkspaceName(db), root, now, now);
   return db.prepare("SELECT * FROM project_workspaces WHERE id = ?").get(id);
 }
 

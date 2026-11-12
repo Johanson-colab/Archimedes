@@ -45,6 +45,7 @@ import NotesView from "./NotesView";
 import VoiceInputButton from "./VoiceInputButton";
 import SideConversation from "./SideConversation";
 import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";
+import workspaceNameLibrary from "../shared/workspace-names.json";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
@@ -421,6 +422,19 @@ function ensurePreviewArtifacts(threadId: string) {
 const previewTasks: SavedTask[] = [];
 const previewProjects: ResearchProject[] = [{ id: "preview-general", name: "General", description: "Default research project", workspace_path: DEFAULT_WORKSPACE || null, chat_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, last_chat_at: null }];
 const previewArchivedProjects: ResearchProject[] = [];
+const previewWorkspaceNames = new Map<string, string>();
+
+function previewDefaultWorkspaceName(projectId: string) {
+  const existing = previewWorkspaceNames.get(projectId);
+  if (existing) return existing;
+  const used = new Set([...previewWorkspaceNames.values()].map((name) => name.toLowerCase()));
+  const available = workspaceNameLibrary.filter((entry) => !used.has(entry.name.toLowerCase()));
+  const name = available.length
+    ? available[Math.floor(Math.random() * available.length)].name
+    : `Workspace ${crypto.randomUUID().slice(0, 8)}`;
+  previewWorkspaceNames.set(projectId, name);
+  return name;
+}
 const previewThreads: ResearchThreadDetail[] = [];
 const previewThreadSnapshots: Array<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }> = [];
 const previewComments: ResearchComment[] = [];
@@ -461,7 +475,7 @@ function previewSnapshot(): WorkspaceSnapshot {
       id: `preview-workspace-${project.id}`,
       project_id: project.id,
       kind: "shared",
-      name: "",
+      name: previewDefaultWorkspaceName(project.id),
       root: project.workspace_path || DEFAULT_WORKSPACE,
       base_ref: null,
       last_session_id: null,
@@ -697,6 +711,7 @@ const previewBridge = {
   createResearchProject: async ({ name, description = "", workspacePath = "" }: { name: string; description?: string; workspacePath?: string }) => {
     const now = new Date().toISOString();
     const project = { id: crypto.randomUUID(), name, description, workspace_path: workspacePath || previewWorkspace, chat_count: 0, created_at: now, updated_at: now, archived_at: null, last_chat_at: null };
+    previewDefaultWorkspaceName(project.id);
     previewProjects.unshift(project);
     return structuredClone(project);
   },

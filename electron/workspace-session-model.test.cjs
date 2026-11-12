@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { DatabaseSync } = require("node:sqlite");
 const { spawnSync } = require("node:child_process");
 const store = require("./store.cjs");
 const nameLibrary = require("../shared/workspace-names.json");
@@ -44,17 +45,28 @@ test("opening an existing database attaches projects and sessions to a shared wo
     const shared = store.defaultProjectWorkspace(project.id);
     assert.ok(shared);
     assert.equal(shared.kind, "shared");
-    assert.equal(shared.name, "");
+    assert.ok(nameLibrary.some((entry) => entry.name === shared.name));
     assert.equal(shared.root, path.resolve(projectFolder));
     assert.equal(shared.is_default, true);
     assert.equal(store.getResearchThread(thread.id).workspace_id, shared.id);
 
-    // Reopening runs the migration again; it must not duplicate the workspace
-    // or detach the session.
+    // Simulate a pre-naming database, then verify reopening backfills only the
+    // blank default name without detaching sessions or duplicating the row.
+    const idle = path.join(root, "idle");
+    fs.mkdirSync(idle);
+    store.openWorkspace(idle);
+    const legacyDb = new DatabaseSync(path.join(primary, ".archimedes", "archimedes.db"));
+    legacyDb.prepare("UPDATE project_workspaces SET name = '' WHERE id = ?").run(shared.id);
+    legacyDb.close();
+    store.openWorkspace(primary);
+    const renamedShared = store.defaultProjectWorkspace(project.id);
+    assert.ok(nameLibrary.some((entry) => entry.name === renamedShared.name));
+    assert.equal(store.getResearchThread(thread.id).workspace_id, shared.id);
     store.openWorkspace(root);
     store.openWorkspace(primary);
     const workspaces = store.listProjectWorkspaces(project.id);
     assert.equal(workspaces.filter((item) => item.kind === "shared").length, 1);
+    assert.equal(store.defaultProjectWorkspace(project.id).name, renamedShared.name);
     assert.equal(store.getResearchThread(thread.id).workspace_id, shared.id);
   } finally {
     closeStore();
@@ -67,12 +79,15 @@ test("sessions are filtered by workspace and can be pinned and marked viewed", (
   try {
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Workspace filter", workspacePath: projectFolder });
-    const sandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
-    assert.equal(sandbox.name, nameLibrary[0].name);
-    const secondSandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
-    assert.equal(secondSandbox.name, nameLibrary[1].name);
-    store.deleteProjectWorkspace(secondSandbox.id);
     const shared = store.defaultProjectWorkspace(project.id);
+    assert.ok(nameLibrary.some((entry) => entry.name === shared.name));
+    const sandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
+    assert.ok(nameLibrary.some((entry) => entry.name === sandbox.name));
+    assert.notEqual(sandbox.name, shared.name);
+    const secondSandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
+    assert.ok(nameLibrary.some((entry) => entry.name === secondSandbox.name));
+    assert.notEqual(secondSandbox.name, sandbox.name);
+    store.deleteProjectWorkspace(secondSandbox.id);
     const sharedThread = store.createResearchThread({ prompt: "Shared work", mode: "free-chat", projectId: project.id });
     const sandboxThread = store.createResearchThread({
       prompt: "Sandbox work",

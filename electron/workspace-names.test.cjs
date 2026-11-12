@@ -39,6 +39,15 @@ test("suggestions walk the library and skip names already in use", () => {
   assert.notEqual(second, first);
 });
 
+test("random suggestions use an unused library name", () => {
+  const db = database();
+  const used = library[0].name;
+  db.prepare("INSERT INTO project_workspaces (id, project_id, name) VALUES (?, ?, ?)").run("used", "project-1", used);
+  const suggestion = names.suggestRandomWorkspaceName(db);
+  assert.ok(library.some((entry) => entry.name === suggestion));
+  assert.notEqual(suggestion.toLowerCase(), used.toLowerCase());
+});
+
 test("once the library is exhausted, fallback names are still unique building names", () => {
   const db = database();
   const insert = db.prepare("INSERT INTO project_workspaces (id, project_id, name) VALUES (?, ?, ?)");

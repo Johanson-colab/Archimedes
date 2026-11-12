@@ -54,6 +54,13 @@ function suggestWorkspaceName(db) {
   return randomBuildingName(used);
 }
 
+function suggestRandomWorkspaceName(db) {
+  const used = workspaceNamesInUse(db);
+  const available = library.filter((entry) => !used.has(entry.name.toLowerCase()));
+  if (available.length) return available[randomInt(available.length)].name;
+  return randomBuildingName(used);
+}
+
 function workspaceNameAvailable(db, projectId, name, ignoreId = null) {
   const row = db.prepare(`
     SELECT id FROM project_workspaces
@@ -68,5 +75,6 @@ module.exports = {
   WORKSPACE_NAME_LIBRARY: library,
   normalizeWorkspaceName,
   suggestWorkspaceName,
+  suggestRandomWorkspaceName,
   workspaceNameAvailable,
 };

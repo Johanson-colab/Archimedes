@@ -11,6 +11,7 @@ const main = fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8");
 const agent = fs.readFileSync(path.join(root, "electron", "agent.cjs"), "utf8");
 const preload = fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8");
 const types = fs.readFileSync(path.join(root, "src", "vite-env.d.ts"), "utf8");
+const workspaceNames = fs.readFileSync(path.join(root, "electron", "workspace-names.cjs"), "utf8");
 
 test("projects persist a bound folder and sessions snapshot their inherited folder", () => {
   assert.match(store, /CREATE TABLE IF NOT EXISTS research_projects[\s\S]*workspace_path TEXT/);
@@ -54,6 +55,15 @@ test("new projects choose a folder and existing projects can rebind it", () => {
   assert.match(app, /newProjectWorkspace/);
   assert.match(app, /createResearchProject\(\{ name, workspacePath: newProjectWorkspace \|\| workspace \}\)/);
   assert.match(app, /setResearchProjectWorkspace\(project\.id, selected\)/);
+});
+
+test("default project workspaces receive stable random library names", () => {
+  assert.match(workspaceNames, /function suggestRandomWorkspaceName\(db\)/);
+  assert.match(workspaceNames, /available\[randomInt\(available\.length\)\]\.name/);
+  assert.match(store, /if \(!existing\.name\)\s*\{[\s\S]*?suggestRandomWorkspaceName\(db\)/);
+  assert.match(store, /kind, name, root, base_ref, last_session_id, created_at, updated_at/);
+  assert.match(app, /const previewWorkspaceNames = new Map<string, string>\(\)/);
+  assert.match(app, /name: previewDefaultWorkspaceName\(project\.id\)/);
 });
 
 test("the composer surfaces the effective working folder", () => {
