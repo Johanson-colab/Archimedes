@@ -55,7 +55,48 @@ taskbar/Dock. Actual favicon/native resources are therefore covered by the
 resource preview, independent format decoding, and the native Windows smoke log,
 not represented as browser-tab or Dock screenshots.
 
-There is no existing installer/bundler configuration in this repository. Native
-format assets and runtime icon paths are updated, but **Windows executable/installer
-resources and macOS bundle `CFBundleIconFile` are not configured by this PR**.
-See `docs/app-icons.md` before adding a packaging pipeline or making release claims.
+The original asset-only implementation did not embed installer or bundle icons.
+The approved packaging follow-up below replaces that limitation; the earlier
+test figures above describe the first icon-only implementation stage.
+
+## Packaging follow-up
+
+Expanded approval: https://github.com/Johanson-colab/Archimedes/issues/300#issuecomment-6820240564
+
+`electron-builder` 26.18.0 now explicitly embeds the approved ICO into Windows
+EXE/NSIS installer/uninstaller resources and the ICNS into macOS bundle/DMG icon
+configuration. Runtime Dock/window PNG/ICO files are copied outside ASAR. Relative
+Vite asset URLs and server/shared files support packaged `file://` launch paths.
+
+Actual local Windows icon-audit outputs:
+
+- `release/win-unpacked/Archimedes.exe`.
+- `release/Archimedes-0.1.0-win-x64.exe` (NSIS, unsigned, 278557811 bytes).
+- Shell-extracted embedded icons for **both files match all 32 × 32 visible
+  pixels** of the approved ICO: `windows-file-icons.json`.
+- ASAR runtime-file presence, absence of `.env` files, relative renderer URLs,
+  and outside-ASAR icon byte equality: `packaged-windows.json`.
+- The packaged executable successfully loads its packaged native PTY module and
+  runs an isolated echo command: `packaged-native-windows.json`.
+
+The standard native rebuild step could not run because Visual Studio C++ Build
+Tools are absent. The local icon-audit build explicitly skipped that step and
+used the installed prebuilt native binaries; the committed configuration **keeps
+`npmRebuild: true`**. These unsigned local outputs were not published, installed,
+or presented as accepted production releases. macOS bundle/DMG output and real
+Finder/Dock behavior remain untested on a Mac. Signing/notarization is not set up.
+
+Follow-up checks: lint/build/theme pass; focused tests **21 pass**. Full-suite
+results using the same freshly installed dependency tree for both worktrees:
+
+| Run | Total | Pass | Fail | Skipped |
+| --- | --- | --- | --- | --- |
+| Unchanged `83f8191` baseline | 1163 | 1059 | 87 | 17 |
+| Implementation | 1174 | 1070 | 87 | 17 |
+
+86 failing names are common. The implementation additionally hit the known
+timing-sensitive app-switch test; baseline additionally hit the known wide-chat
+layout test. Both failures were also present in the earlier unchanged-baseline
+run above. No new stable failure was introduced and no failure was weakened.
+Existing top-level production dependency versions are unchanged by the new
+development dependency. See `docs/app-icons.md` for real packaging/inspection commands.

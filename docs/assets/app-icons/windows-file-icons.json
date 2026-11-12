@@ -1,0 +1,16 @@
+[
+    {
+        "file":  "Archimedes.exe",
+        "width":  32,
+        "height":  32,
+        "differentPixels":  0,
+        "matchesNewLogo":  true
+    },
+    {
+        "file":  "Archimedes-0.1.0-win-x64.exe",
+        "width":  32,
+        "height":  32,
+        "differentPixels":  0,
+        "matchesNewLogo":  true
+    }
+]

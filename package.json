@@ -13,6 +13,9 @@
     "dev:electron": "wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "package:desktop": "npm run build && electron-builder --config electron-builder.config.cjs --dir --publish never",
+    "dist:win": "npm run build && electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never",
+    "dist:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac dmg --publish never",
     "lint": "tsc -b --pretty false",
     "audit:theme": "node scripts/theme-audit.mjs",
     "radar:sync": "node scripts/sync-benchmark-radar-index.mjs",
@@ -69,6 +72,7 @@
     "concurrently": "latest",
     "cross-env": "latest",
     "electron": "latest",
+    "electron-builder": "26.18.0",
     "postcss": "^8.5.26",
     "typescript": "latest",
     "wait-on": "latest"

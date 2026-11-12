@@ -115,7 +115,7 @@ test("native selection uses Windows ICO and high-resolution macOS Dock PNG only 
   assert.ok(fs.existsSync(calls[0]));
   assert.doesNotThrow(() => configureAppIcon({}, "darwin"));
   const main = read("electron/main.cjs").toString();
-  assert.match(main, /icon: windowIconPath\(\)/);
+  assert.match(main, /icon: windowIconPath\(process.platform, app.isPackaged \? process.resourcesPath : undefined\)/);
   assert.match(main, /app.whenReady\(\).then\(async \(\) => \{\s*configureAppIcon\(app\)/);
   assert.match(main, /app.setAppUserModelId\("com.archimedes.research"\)/);
 });

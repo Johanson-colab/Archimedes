@@ -254,7 +254,7 @@ function createWindow(workspace) {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : overlay ? "hidden" : undefined,
     titleBarOverlay: overlay ? titleBarOverlay(initialTheme) : undefined,
     autoHideMenuBar: process.platform !== "darwin",
-    icon: windowIconPath(),
+    icon: windowIconPath(process.platform, app.isPackaged ? process.resourcesPath : undefined),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

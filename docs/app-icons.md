@@ -13,10 +13,10 @@ standalone logo exports in `docs/assets/logo/` are preserved.
 
 | File | Consumer |
 | --- | --- |
-| `electron/assets/app-icon.ico` | Windows BrowserWindow; future Windows package/shortcut icon |
+| `electron/assets/app-icon.ico` | Windows window, EXE, NSIS installer/uninstaller and shortcuts |
 | `electron/assets/app-icon-256.png` | Linux/other BrowserWindow icon |
 | `electron/assets/app-icon-1024.png` | macOS Dock via `app.dock.setIcon`, after app readiness |
-| `electron/assets/app-icon.icns` | Resource for future macOS `.app` bundle icon |
+| `electron/assets/app-icon.icns` | macOS `.app` bundle/Finder and DMG volume icon |
 | `electron/assets/app-icon.svg` | Editable native/web icon master |
 | `public/favicon.svg` | Web favicon with shadow |
 | `public/favicon.ico` | Web fallback icon |
@@ -54,17 +54,59 @@ npx --no-install electron scripts/check-native-icons.cjs
 This checks native image decoding and BrowserWindow creation on the host OS, and
 sets the Dock icon on macOS. It uses an isolated temporary profile.
 
-## Packaging boundary
+## Desktop packaging and file icons
 
-This repository does not currently define an installer/packager or a macOS bundle
-configuration. This change does not add one. A future packaging configuration must
-explicitly use `app-icon.ico` for Windows and `app-icon.icns` for macOS; simply
-setting `BrowserWindow.icon` does not rewrite executable or Finder icons.
+After core-team approval, `electron-builder.config.cjs` now wires the same artwork
+into the actual downloaded application/installer, not just `BrowserWindow.icon`:
 
-Before release, verify installed Windows executable/shortcut icons and signed
-macOS `.app`/Finder/Dock icons on those platforms. A Windows smoke test and ICNS
-format checks are not a substitute for an actual macOS packaged-app test. macOS
-may also cache old bundle icons until the application is restarted/reinstalled.
+- `win.icon`: embedded Windows application EXE resources.
+- `nsis.installerIcon`, `uninstallerIcon`, `installerHeaderIcon`: NSIS executable
+  and installer UI; desktop/Start-menu shortcuts target the branded application.
+- `mac.icon`: the `.app` bundle icon and `CFBundleIconFile`, used by Finder and
+  the Dock before launch. Runtime `app.dock.setIcon` uses the matching PNG.
+- `dmg.icon`: the DMG volume icon.
+- Runtime icons are also copied to `resources/icons` (macOS `Contents/Resources/icons`)
+  outside ASAR, so native window/Dock APIs do not depend on reading an archive.
+- Vite uses relative asset URLs for packaged `file://` loading. Package files
+  include the server/shared runtime modules and exclude `.env` files.
+
+```sh
+npm ci
+npm run package:desktop  # host-platform unpacked app
+npm run dist:win         # Windows x64 NSIS installer; build on Windows
+npm run dist:mac         # host-architecture .app + DMG; build on macOS
+```
+
+Outputs go to ignored `release/`. Publishing is disabled in these commands.
+Native rebuilding stays enabled: Windows requires Visual Studio C++ Build Tools;
+macOS requires Xcode command-line tools. Signing/notarization credentials and
+publishing are not configured or invoked by this change. Do not redistribute the
+local unsigned icon-audit build as a production release.
+
+Verify actual Windows embedded file icons rather than trusting the source ICO:
+
+```powershell
+node scripts/check-packaged-icons.cjs release/win-unpacked
+.\scripts\check-windows-file-icons.ps1 -Files @('release/win-unpacked/Archimedes.exe', 'release/Archimedes-0.1.0-win-x64.exe')
+```
+
+The PowerShell check extracts each executable's shell icon and compares every
+visible pixel with the approved ICO. On macOS, inspect the real bundle:
+
+```sh
+node scripts/check-packaged-icons.cjs release/mac-arm64/Archimedes.app
+```
+
+Use `release/mac/Archimedes.app` on Intel. This reads `CFBundleIconFile` with
+`plutil` and compares the referenced bundled ICNS with the source. Mount the DMG
+and verify the volume icon, then test Finder/Dock on a real Mac. Those native
+macOS checks remain unrun here. ZIP/archive files retain the OS archive icon;
+this change does not modify global file associations.
+
+Already-downloaded/installed old bundles do not change automatically: merge the
+PR, rebuild, and replace the old application. macOS may also cache old bundle
+icons until the application is restarted/reinstalled or its Dock entry is re-added.
 
 Tracking: [Issue #300](https://github.com/Johanson-colab/Archimedes/issues/300).
 Approval: [core-team scope confirmation](https://github.com/Johanson-colab/Archimedes/issues/300#issuecomment-6819581275).
+Extended packaging approval: [explicit superseding approval](https://github.com/Johanson-colab/Archimedes/issues/300#issuecomment-6820240564).
