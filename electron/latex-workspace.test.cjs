@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -156,4 +157,27 @@ test("extracts line-oriented LaTeX diagnostics", () => {
     { line: 17, message: "Undefined control sequence." },
     { line: 23, message: "Missing $ inserted." },
   ]);
+});
+
+test("built-in templates compile before and after adding a citation", { skip: spawnSync("latexmk", ["-v"]).error ? "latexmk is not installed" : false }, async () => {
+  const templates = require("../shared/latex-templates.json");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-compile-"));
+  try {
+    for (const template of templates) {
+      const file = createLatexProject(root, template.id, template.id);
+      const first = await compileLatexDocument(root, file.path);
+      assert.equal(first.ok, true, `${template.id}: ${first.log}`);
+      const sourcePath = path.join(root, file.path);
+      const source = fs.readFileSync(sourcePath, "utf8")
+        .replace("% \\bibliographystyle{plain}", "\\bibliographystyle{plain}")
+        .replace("% \\bibliography{references}", "\\bibliography{references}")
+        .replace("\\end{document}", "Example citation \\cite{example}.\n\\end{document}");
+      fs.writeFileSync(sourcePath, source);
+      fs.writeFileSync(path.join(root, template.id, "references.bib"), "@article{example, author={Jane Doe}, title={Example}, journal={Journal}, year={2026}}\n");
+      const cited = await compileLatexDocument(root, file.path);
+      assert.equal(cited.ok, true, `${template.id} with citation: ${cited.log}`);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
