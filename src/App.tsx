@@ -1380,6 +1380,7 @@ function App() {
   const [sessionSwitcherSignal, setSessionSwitcherSignal] = useState(0);
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
   const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
+  useEffect(() => { setShareSnapshot(null); }, [activeThreadId]);
   const [commentsOpen, setCommentsOpen] = useState(false);
   useEffect(() => { setCommentsOpen(false); }, [activeThreadId]);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
@@ -2382,8 +2383,10 @@ function App() {
 
   async function openThreadShare() {
     if (!activeThreadId) return;
+    const sessionId = activeThreadId;
     try {
-      setShareSnapshot(await desktopBridge.createResearchThreadSnapshot(activeThreadId));
+      const snapshot = await desktopBridge.createResearchThreadSnapshot(sessionId);
+      if (activeThreadIdRef.current === sessionId) setShareSnapshot(snapshot);
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not create a snapshot: ${String(error)}` }]);
     }
@@ -3702,6 +3705,8 @@ function App() {
         onCoreModuleEnabled={setCoreModuleEnabled}
       />
       <ThreadShareModal
+        signedIn={Boolean(authState?.user)}
+        key={`${shareSnapshot?.id ?? "none"}:${authState?.user?.id ?? "signed-out"}`}
         snapshot={shareSnapshot}
         bridge={desktopBridge}
         projectId={activeThread?.project_id || activeProjectId || ""}

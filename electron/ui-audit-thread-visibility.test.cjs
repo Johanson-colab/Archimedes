@@ -37,11 +37,11 @@ test("thread snapshots can be inspected and downloaded from a share dialog", () 
   assert.match(app, /ThreadShareModal/);
   assert.match(app, /openThreadShare/);
   assert.match(app, /Share session snapshot/);
-  assert.match(share, /Share a snapshot/);
+  assert.match(share, /Share session snapshot/);
   assert.match(share, /Copy JSON/);
-  assert.match(share, /Download \.json/);
-  assert.match(share, /The snapshot freezes the session at sequence/);
-  assert.match(css, /\.thread-share-modal/);
+  assert.match(share, /snapshotImagePages/);
+  assert.match(share, /Snapshot range/);
+  assert.match(share, /className="session-snapshot-dialog"/);
 });
 
 test("the composer no longer duplicates the thread visibility toggle", () => {
