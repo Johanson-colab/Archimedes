@@ -4,7 +4,7 @@ const { randomUUID } = require("node:crypto");
 const os = require("node:os");
 const fs = require("node:fs");
 const path = require("node:path");
-const { windowIconPath, configureAppIcon } = require("./app-icons.cjs");
+const { windowIconPath, configureAppIcon, configureWindowIcon } = require("./app-icons.cjs");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
 const agent = require("./agent.cjs");
@@ -246,6 +246,7 @@ function createWindow(workspace) {
   const overlay = process.platform === "win32";
   const initialTheme = nativeTheme.shouldUseDarkColors ? "charcoal" : "paper";
   const browserWindow = new BrowserWindow({
+    show: !overlay,
     width: 1560,
     height: 980,
     minWidth: 1100,
@@ -265,6 +266,8 @@ function createWindow(workspace) {
     },
   });
 
+  configureWindowIcon(app, browserWindow);
+  if (overlay) browserWindow.show();
   if (process.platform !== "darwin") browserWindow.setMenuBarVisibility(false);
 
   const senderId = browserWindow.webContents.id;

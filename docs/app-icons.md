@@ -67,6 +67,12 @@ into the actual downloaded application/installer, not just `BrowserWindow.icon`:
 - `dmg.icon`: the DMG volume icon.
 - Runtime icons are also copied to `resources/icons` (macOS `Contents/Resources/icons`)
   outside ASAR, so native window/Dock APIs do not depend on reading an archive.
+- On Windows, every application window calls `setIcon` and `setAppDetails` before
+  its first show. The existing `com.archimedes.research` identity is retained;
+  the taskbar gets the new ICO plus complete relaunch command/display-name
+  properties. Development relaunch metadata includes the absolute app directory,
+  preventing a generic `electron.exe` taskbar group/icon. Packaged metadata uses
+  only the application executable.
 - Vite uses relative asset URLs for packaged `file://` loading. Package files
   include the server/shared runtime modules and exclude `.env` files.
 
@@ -106,6 +112,18 @@ this change does not modify global file associations.
 Already-downloaded/installed old bundles do not change automatically: merge the
 PR, rebuild, and replace the old application. macOS may also cache old bundle
 icons until the application is restarted/reinstalled or its Dock entry is re-added.
+Likewise, restarting an unchanged old development checkout cannot load the new
+icons. Update the code first. A previously pinned generic Electron shortcut may
+need to be unpinned and the updated running Archimedes window pinned again; this
+change does not rewrite the user's pinned shortcuts or clear global icon caches.
+
+For native Windows running-window checks, `check-native-icons.cjs` now probes
+the real HWND's small/large HICON and AppUserModel relaunch icon properties through
+`scripts/check-windows-window-icons.ps1`. It uses an isolated hidden window,
+not the user's active application. Optional `ARCHIMEDES_WINDOW_ICON_AUDIT_OUTPUT`
+and `ARCHIMEDES_WINDOW_ICON_PREVIEW_PREFIX` save redacted metadata and raw HICON
+previews. `ARCHIMEDES_ICON_BASELINE` accepts an old PNG for diagnostic comparison;
+strict post-change validation always requires matching icon pixels and metadata.
 
 Tracking: [Issue #300](https://github.com/Johanson-colab/Archimedes/issues/300).
 Approval: [core-team scope confirmation](https://github.com/Johanson-colab/Archimedes/issues/300#issuecomment-6819581275).

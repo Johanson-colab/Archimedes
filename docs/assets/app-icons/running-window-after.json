@@ -1,0 +1,25 @@
+{
+    "appId":  "com.archimedes.research",
+    "taskbarIconResource":  "app-icon.ico,0",
+    "relaunchDisplayName":  "Archimedes",
+    "icons":  [
+                  {
+                      "kind":  "small-preview",
+                      "width":  16,
+                      "height":  16,
+                      "differentPixels":  0,
+                      "meanChannelError":  0,
+                      "matchesNewLogo":  true
+                  },
+                  {
+                      "kind":  "large-window",
+                      "width":  32,
+                      "height":  32,
+                      "differentPixels":  0,
+                      "meanChannelError":  0,
+                      "matchesNewLogo":  true
+                  }
+              ],
+    "hasRelaunchCommand":  true,
+    "relaunchUsesExecutableAndAppPath":  true
+}

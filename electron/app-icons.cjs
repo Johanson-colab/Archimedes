@@ -13,4 +13,23 @@ function configureAppIcon(app, platform = process.platform, resourcesPath = app.
   }
 }
 
-module.exports = { windowIconPath, configureAppIcon };
+function quoteWindowsArgument(value) {
+  return `"${String(value).replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
+}
+
+function configureWindowIcon(app, window, platform = process.platform, executable = process.execPath) {
+  if (platform !== "win32") return;
+  const icon = windowIconPath(platform, app.isPackaged ? process.resourcesPath : undefined);
+  // WM_SETICON covers both the preview/title icon and a running window. The
+  // relaunch metadata separately overrides electron.exe's generic group icon.
+  window.setIcon(icon);
+  window.setAppDetails({
+    appId: "com.archimedes.research",
+    appIconPath: icon,
+    appIconIndex: 0,
+    relaunchCommand: app.isPackaged ? quoteWindowsArgument(executable) : `${quoteWindowsArgument(executable)} ${quoteWindowsArgument(app.getAppPath())}`,
+    relaunchDisplayName: "Archimedes",
+  });
+}
+
+module.exports = { windowIconPath, configureAppIcon, configureWindowIcon };

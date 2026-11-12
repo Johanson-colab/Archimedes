@@ -100,3 +100,34 @@ layout test. Both failures were also present in the earlier unchanged-baseline
 run above. No new stable failure was introduced and no failure was weakened.
 Existing top-level production dependency versions are unchanged by the new
 development dependency. See `docs/app-icons.md` for real packaging/inspection commands.
+
+## Running Windows taskbar / thumbnail follow-up
+
+The user's screenshot specifically identified the running taskbar button and
+thumbnail-header icon. Source inspection also found the original local checkout
+still at `0a0e5b3`, without this unmerged PR. Updating installed-file resources alone
+does not ensure development-mode taskbar relaunch properties are set.
+
+The fix explicitly assigns both window HICONs and complete per-window taskbar
+metadata before the first show, keeping the existing AppUserModelID unchanged.
+An isolated Electron 43.4.1 hidden window was probed with actual Win32 APIs:
+
+- `running-window-before.json`: old PNG constructor behavior has no per-window
+  taskbar relaunch icon/command/display name. Legacy HICON decoding limitations
+  are preserved as diagnostics, not reported as successful comparisons.
+- `running-window-after.json`: taskbar icon resource is `app-icon.ico,0`,
+  AppUserModelID is `com.archimedes.research`, relaunch metadata is complete.
+- The post-change **16px small HICON and 32px large HICON both match the new ICO
+  with zero different pixels**.
+- `window-before/after-small.png` and `window-before/after-large.png` render the
+  actual HWND-owned HICONs via Win32 `DrawIconEx`, on identical 64px neutral
+  swatches. These are native icon extractions, not screenshots of Explorer's
+  taskbar, and no user desktop content was captured.
+- No active user window was closed, modified, or injected into. Old pinned
+  Electron shortcuts and global shell caches were not changed.
+
+Latest validation: lint/build/theme pass, **24 focused tests pass**. Full suite:
+1177 total, **1074 pass, 86 fail, 17 skipped**; every failure name was present in
+unchanged-baseline runs already recorded above. New unit cases cover development
+and packaged relaunch arguments and assignment before first show. No preview
+server or debug browser is required by the native HWND audit.
