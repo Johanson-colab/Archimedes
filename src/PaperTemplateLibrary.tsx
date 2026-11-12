@@ -7,7 +7,6 @@ import "./paper-template-library.css";
 export const paperTemplates: LatexTemplateSummary[] = [
   ...official,
 ];
-const categories = ["All templates", "Official templates", "Community mirrors", "Conference"];
 
 export default function PaperTemplateLibrary({ selected, onSelect, onCreate, onImport, onSource, projectName, onNameChange, creating, importing, error }: {
   selected: string; onSelect: (id: string) => void; onCreate: () => void; onImport: () => void;
@@ -16,13 +15,11 @@ export default function PaperTemplateLibrary({ selected, onSelect, onCreate, onI
 }) {
   const { t } = useUISettings();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All templates");
-  const matchesCategory = (template: LatexTemplateSummary, value: string) => value === "All templates" || (value === "Official templates" ? Boolean(template.sourceUrl) && template.sourceKind !== "mirror" : value === "Community mirrors" ? template.sourceKind === "mirror" : template.category === value);
-  const filtered = paperTemplates.filter((template) => matchesCategory(template, category) && `${template.name} ${template.category} ${template.description} ${template.year || ""} ${(template.venues || []).join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = paperTemplates.filter((template) => `${template.name} ${template.category} ${template.description} ${template.year || ""} ${(template.venues || []).join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()));
   const active = paperTemplates.find((template) => template.id === selected);
   return <div className="paper-template-library">
     <aside className="paper-template-categories" aria-label={t("Template categories")}>
-      {categories.map((value) => <button key={value} aria-pressed={category === value} onClick={() => setCategory(value)}>{t(value)}<span>{paperTemplates.filter((template) => matchesCategory(template, value)).length}</span></button>)}
+      <button aria-pressed="true" onClick={() => setQuery("")}>{t("All templates")}<span>{paperTemplates.length}</span></button>
       <button disabled={importing || creating} onClick={onImport}><FolderUp size={15} />{t(importing ? "Importing…" : "Import existing folder")}</button>
     </aside>
     <section className="paper-template-content">

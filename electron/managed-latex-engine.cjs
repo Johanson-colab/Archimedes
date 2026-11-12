@@ -65,6 +65,32 @@ async function downloadEngineArchive(asset, fetchImpl = fetch) {
   verifyEngineArchive(archive, asset);
   return archive;
 }
+async function compilerProxyEnvironment(bundle, resolveProxy, env = process.env) {
+  if (!resolveProxy || ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'].some((name) => env[name])) return {};
+  const url = new URL(bundle);
+  if (!['http:', 'https:'].includes(url.protocol) || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) return {};
+  let timer, rules;
+  try {
+    rules = await Promise.race([
+      resolveProxy(bundle),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("System proxy resolution timed out. Check the proxy app and retry.")), 30_000); }),
+    ]);
+  } finally { clearTimeout(timer); }
+  const http = /(?:^|;)\s*(PROXY|HTTPS)\s+([^;\s]+)/i.exec(rules);
+  if (http) {
+    const proxy = `${http[1].toUpperCase() === 'HTTPS' ? 'https' : 'http'}://${http[2]}`;
+    return { HTTPS_PROXY: proxy, https_proxy: proxy, HTTP_PROXY: proxy, http_proxy: proxy };
+  }
+  if (/SOCKS/i.test(rules)) throw new Error('The system proxy only offers SOCKS. Enable an HTTP proxy in your proxy app and retry LaTeX compilation.');
+  return {};
+}
+function outputStage(text) {
+  for (const line of text.split(/\r?\n/).reverse()) {
+    if (/Running (?:TeX|BibTeX|xdvipdfmx)|Rerunning TeX/i.test(line)) return 'Compiling paper';
+    if (/generating format/i.test(line)) return 'Initializing LaTeX';
+    if (/download|fetch/i.test(line)) return 'Downloading fonts and packages';
+  }
+}
 function createManagedCompiler(options) {
   let tail = Promise.resolve();
   const pending = new Map();
@@ -75,17 +101,22 @@ function createManagedCompiler(options) {
       return pending.get(key).task;
     }
     const listeners = new Set([onProgress]);
-    const progress = (stage) => { for (const listener of listeners) listener(stage); };
+    const progress = (stage, log) => { for (const listener of listeners) listener(stage, log); };
     const task = tail.then(async () => {
       pending.delete(key);
       progress('Preparing compiler');
       const executable = await ensureManagedEngine({ ...options, onProgress: progress });
       const cache = path.join(options.runtimeRoot, 'tex-cache');
       fs.mkdirSync(cache, { recursive: true });
-      progress('Compiling and preparing dependencies');
+      const bundle = options.bundle || manifest.bundleUrl;
+      const proxyEnv = await compilerProxyEnvironment(bundle, options.resolveProxy);
+      let stage = 'Compiling and preparing dependencies';
+      progress(stage, `Managed Tectonic ${manifest.version}\n${Object.keys(proxyEnv).length ? 'Using system HTTP proxy.' : 'Using existing network/proxy configuration.'}\n`);
       const result = await require('./latex-workspace.cjs').compileLatexDocument(workspace, sourcePath, {
-        executable, managed: true, bundle: options.bundle || manifest.bundleUrl,
-        timeoutMs: 180_000, env: { TECTONIC_CACHE_DIR: cache, XDG_CACHE_HOME: path.join(options.runtimeRoot, "xdg-cache") },
+        executable, managed: true, bundle,
+        timeoutMs: options.timeoutMs || 600_000, idleTimeoutMs: options.idleTimeoutMs || 120_000,
+        onOutput: (log) => { stage = outputStage(log) || stage; progress(stage, log); },
+        env: { ...proxyEnv, TECTONIC_CACHE_DIR: cache, XDG_CACHE_HOME: path.join(options.runtimeRoot, "xdg-cache") },
       });
       for (const diagnostic of result.diagnostics) {
         if (diagnostic.help?.includes("tlmgr")) diagnostic.help = "Archimedes manages TeX dependencies automatically. Connect to the Internet and retry. If the problem persists, include the full build log when reporting it.";
@@ -100,4 +131,4 @@ function createManagedCompiler(options) {
     return task;
   };
 }
-module.exports = { ensureManagedEngine, createManagedCompiler, readDownload, downloadEngineArchive, verifyEngineArchive };
+module.exports = { ensureManagedEngine, createManagedCompiler, readDownload, downloadEngineArchive, verifyEngineArchive, compilerProxyEnvironment, outputStage };

@@ -60,3 +60,20 @@ test('unsupported platforms and oversized downloads fail explicitly', async (t) 
   await assert.rejects(ensureManagedEngine({ runtimeRoot: temporary(t), platform: 'win32', arch: 'arm64' }), /does not support/);
   await assert.rejects(readDownload(new Response('12345'), 4), /size limit/);
 });
+
+test('native compiler inherits Electron HTTP proxy and preserves explicit proxy environment', async () => {
+  const { compilerProxyEnvironment } = require('./managed-latex-engine.cjs');
+  const url = 'https://relay.fullyjustified.net/default_bundle_v33.tar';
+  const proxy = await compilerProxyEnvironment(url, async () => 'PROXY 127.0.0.1:7890; DIRECT', {});
+  assert.equal(proxy.HTTPS_PROXY, 'http://127.0.0.1:7890'); assert.equal(proxy.http_proxy, proxy.HTTPS_PROXY);
+  assert.deepEqual(await compilerProxyEnvironment(url, () => { throw new Error('explicit proxy must win'); }, { https_proxy: 'http://configured:8080' }), {});
+  assert.deepEqual(await compilerProxyEnvironment('http://127.0.0.1:9999/bundle.tar', () => { throw new Error('local fixture must stay local'); }, {}), {});
+  assert.deepEqual(await compilerProxyEnvironment(url, async () => 'DIRECT', {}), {});
+  await assert.rejects(compilerProxyEnvironment(url, async () => 'SOCKS5 127.0.0.1:7891', {}), /Enable an HTTP proxy/);
+});
+test('compiler log stages distinguish downloading, initialization and typesetting', () => {
+  const { outputStage } = require('./managed-latex-engine.cjs');
+  assert.equal(outputStage('note: downloading phvb.tfm'), 'Downloading fonts and packages');
+  assert.equal(outputStage('note: generating format "latex"'), 'Initializing LaTeX');
+  assert.equal(outputStage('downloading cmr.tfm\nnote: Running TeX ...'), 'Compiling paper');
+});

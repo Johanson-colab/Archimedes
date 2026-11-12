@@ -79,3 +79,6 @@ current public bundle remain unverified until that access is saved and retested.
 ![Library](assets/managed-latex-engine/library.png)
 ![Compiler download](assets/managed-latex-engine/downloading.png)
 ![Dependency preparation](assets/managed-latex-engine/dependencies.png)
+
+For current first-use time limits, system proxy handling and live output, see
+[Download diagnostics](latex-download-diagnostics.md).

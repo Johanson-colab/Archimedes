@@ -222,22 +222,32 @@ function parseLatexDiagnostics(output) {
 }
 
 function runCompiler(command, args, options = {}) {
-  const timeoutMs = Math.min(180_000, Math.max(10_000, Number(options.timeoutMs) || 90_000));
+  const timeoutMs = Math.min(options.managed ? 600_000 : 180_000, Math.max(10_000, Number(options.timeoutMs) || 90_000));
   const spawnImpl = options.spawnImpl || spawn;
   return new Promise((resolve, reject) => {
     const child = spawnImpl(command, args, { cwd: options.cwd, env: options.env || process.env, stdio: ["ignore", "pipe", "pipe"] });
-    let output = "";
-    const append = (chunk) => { output = `${output}${String(chunk)}`.slice(-120_000); };
+    let output = "", timedOut = false, timeoutReason = "";
+    let idleTimer;
+    const idleMs = Number(options.idleTimeoutMs) || 0;
+    const stop = (reason) => { if (timedOut) return; timedOut = true; timeoutReason = reason; child.kill("SIGKILL"); };
+    const resetIdle = () => {
+      clearTimeout(idleTimer);
+      if (idleMs > 0) idleTimer = setTimeout(() => stop("idle"), idleMs);
+    };
+    const append = (chunk) => {
+      const text = String(chunk);
+      output = `${output}${text}`.slice(-120_000);
+      resetIdle(); options.onOutput?.(text);
+    };
     child.stdout?.on("data", append);
     child.stderr?.on("data", append);
-    child.once("error", reject);
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new Error("LaTeX compilation timed out."));
-    }, timeoutMs);
+    const timer = setTimeout(() => stop("total"), timeoutMs);
+    resetIdle();
+    child.once("error", (error) => { clearTimeout(timer); clearTimeout(idleTimer); reject(error); });
     child.once("close", (code, signal) => {
-      clearTimeout(timer);
-      resolve({ code: Number.isInteger(code) ? code : 1, signal: signal || null, output });
+      clearTimeout(timer); clearTimeout(idleTimer);
+      if (timedOut) output += `\nLaTeX compilation timed out (${timeoutReason === "idle" ? "no compiler output" : "total time limit"}).`;
+      resolve({ code: timedOut ? 1 : Number.isInteger(code) ? code : 1, signal: signal || null, output, timedOut, timeoutReason });
     });
   });
 }
@@ -272,7 +282,7 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   const args = engineKind === "latexmk"
     ? ["-g", "-pdf", "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-outdir=${buildDirectory}`, path.basename(absoluteSource)]
     : engineKind === "tectonic"
-      ? ["--outdir", buildDirectory, "--keep-logs", "--chatter", "minimal", ...(options.managed ? ["--untrusted"] : []), ...(options.bundle ? ["--bundle", options.bundle] : []), path.basename(absoluteSource)]
+      ? ["--outdir", buildDirectory, "--keep-logs", "--chatter", options.managed ? "default" : "minimal", ...(options.managed ? ["--untrusted", "--print", "--color", "never"] : []), ...(options.bundle ? ["--bundle", options.bundle] : []), path.basename(absoluteSource)]
       : ["-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", `-output-directory=${buildDirectory}`, path.basename(absoluteSource)];
   const startedAt = Date.now();
   // Tectonic may download its package bundle on the first run, which can take
@@ -286,15 +296,23 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   const absolutePdf = path.join(buildDirectory, `${documentName}.pdf`);
   const hasPdf = fs.existsSync(absolutePdf) && fs.statSync(absolutePdf).isFile();
   const logPath = path.join(buildDirectory, `${documentName}.log`);
-  const log = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8").slice(-80_000) : run.output;
+  const log = !run.timedOut && fs.existsSync(logPath) && fs.statSync(logPath).mtimeMs >= startedAt
+    ? fs.readFileSync(logPath, "utf8").slice(-80_000) : run.output;
   const ok = run.code === 0 && hasPdf;
   const diagnostics = parseLatexDiagnostics(`${run.output}\n${log}`);
+  if (run.timedOut) diagnostics.unshift({
+    line: null, message: "LaTeX compilation timed out.",
+    help: run.timeoutReason === "idle"
+      ? "The compiler stopped producing output. Check Internet access and the system HTTP proxy, then retry. Downloaded dependencies are retained; see the build log below."
+      : "The first build exceeded its preparation time limit. Downloaded dependencies are retained. Retry to continue using the cache; see the build log below.",
+  });
   if (!ok && !diagnostics.length) {
     const summary = String(run.output || log).split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(-4).join(" ").slice(0, 500);
     diagnostics.push({ line: null, message: summary || `LaTeX exited with code ${run.code}.` });
   }
   return {
     ok,
+    timed_out: Boolean(run.timedOut),
     engine: path.basename(executable),
     source_path: sourcePath,
     pdf_path: ok ? path.relative(root, absolutePdf).split(path.sep).join("/") : "",

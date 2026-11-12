@@ -98,7 +98,7 @@ interface ResearchDeskBridge {
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
-    onLatexCompileProgress?: (callback: (input: { path: string; stage: string }) => void) => () => void;
+    onLatexCompileProgress?: (callback: (input: { path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     createResearchThread: (input: { projectId?: string; workspacePath?: string; workspaceId?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
@@ -796,6 +796,7 @@ interface LatexCompileDiagnostic {
 }
 
 interface LatexCompileResult {
+  timed_out?: boolean;
   ok: boolean;
   engine: string;
   source_path: string;

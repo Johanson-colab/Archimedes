@@ -218,3 +218,39 @@ test("a failed recompile does not expose the PDF left by a previous successful b
     assert.match(failed.diagnostics[0].help, /collection-fontsrecommended/);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test("a stalled compiler returns its partial log and a dependency timeout diagnostic", async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'latex-timeout-'));
+  let child, killed = false;
+  try {
+    createLatexProject(root, 'paper');
+    const pending = compileLatexDocument(root, 'paper/main.tex', {
+      executable: '/test/tectonic', managed: true, timeoutMs: 600_000, idleTimeoutMs: 120_000,
+      spawnImpl: () => { child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => { killed = true; child.emit('close', null, 'SIGKILL'); }; return child; },
+    });
+    child.stderr.emit('data', 'note: downloading phvb.tfm\n');
+    t.mock.timers.tick(119_000); assert.equal(killed, false);
+    child.stderr.emit('data', 'note: downloading article.cls\n');
+    t.mock.timers.tick(119_000); assert.equal(killed, false);
+    t.mock.timers.tick(1000);
+    const result = await pending;
+    assert.equal(killed, true); assert.equal(result.ok, false); assert.equal(result.timed_out, true);
+    assert.match(result.log, /downloading phvb.tfm/); assert.match(result.log, /no compiler output/);
+    assert.equal(result.pdf_path, ''); assert.match(result.diagnostics[0].help, /system HTTP proxy/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("an active first build keeps its longer budget but still reaches the total deadline", async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { runCompiler } = require('./latex-workspace.cjs');
+  let child, killed = false;
+  const pending = runCompiler('/test/tectonic', [], { managed: true, timeoutMs: 600_000,
+    spawnImpl: () => { child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => { killed = true; child.emit('close', null, 'SIGKILL'); }; return child; },
+  });
+  t.mock.timers.tick(180_000); assert.equal(killed, false);
+  child.stderr.emit('data', 'note: downloading more dependencies\n');
+  t.mock.timers.tick(420_000);
+  const result = await pending;
+  assert.equal(killed, true); assert.equal(result.timeoutReason, 'total'); assert.match(result.output, /more dependencies/);
+});

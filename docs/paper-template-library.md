@@ -1,7 +1,9 @@
 # Paper Writing template library
 
 Open Paper Writing → Projects to browse the library. Search by name or year,
-filter by category, select a template, enter a project folder, then create it.
+select a template, enter a project folder, then create it. The sidebar contains
+only All templates (which resets search) and Import existing folder; its labels
+use 13px text.
 The existing folder import remains available for Overleaf exports and other kits.
 
 The chooser contains six conference kits. Official author kits and clearly labelled community mirrors are downloaded on first
@@ -64,3 +66,7 @@ For missing-font setup instructions and current library screenshots, see
 
 Paper Writing now uses the [managed local compiler](managed-latex-engine.md),
 which downloads and caches TeX dependencies automatically.
+
+Current sidebar screenshots: [before](assets/template-sidebar-simplification/before.png),
+[after](assets/template-sidebar-simplification/after.png), and
+[light theme](assets/template-sidebar-simplification/after-light.png).

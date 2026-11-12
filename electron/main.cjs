@@ -997,14 +997,15 @@ app.whenReady().then(async () => {
 
   const managedPaperCompiler = require("./managed-latex-engine.cjs").createManagedCompiler({
     runtimeRoot: require("node:path").join(app.getPath("userData"), "latex-runtime"),
+    resolveProxy: (url) => session.defaultSession.resolveProxy(url),
     resourcesPath: app.isPackaged ? process.resourcesPath : undefined,
     fetchImpl: (...args) => net.fetch(...args),
   });
 
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
-    const result = await managedPaperCompiler(workspace, input.path, (stage) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { path: input.path, stage });
+    const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
+      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { path: input.path, stage, log });
     });
     if (!result.ok || !result.pdf_path) return result;
     const token = createPreviewToken(event.sender.id, workspace);
