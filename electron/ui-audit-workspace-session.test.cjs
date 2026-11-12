@@ -157,6 +157,20 @@ test("the switcher adapts to narrow screens as a full-height sheet", () => {
   assert.match(css, /\.workspace-option-copy small \{/);
 });
 
+test("workspace selection is explicit and auxiliary action hover does not add button fills", () => {
+  assert.match(switcher, /const isCurrentWorkspace = entry\.id === workspace\?\.id;/);
+  assert.match(switcher, /aria-current=\{isCurrentWorkspace \? "true" : undefined\}/);
+  assert.match(switcher, /aria-current=\{session\.id === activeSessionId \? "true" : undefined\}/);
+  assert.match(switcher, /workspace-option-current/);
+  assert.doesNotMatch(switcher, /workspace-option\$\{entry\.id === workspace\?\.id \? " active"/);
+  assert.doesNotMatch(css, /\.workspace-option\.active\s*\{/);
+  assert.match(css, /\.workspace-option-action:hover \{[^}]*background: transparent;/);
+  assert.match(css, /\.workspace-option-action\.danger:hover \{[^}]*background: transparent;/);
+  assert.match(css, /\.session-row-action\.active \{[^}]*background: transparent;/);
+  assert.match(css, /\.project-row-actions button:hover[^}]*background: transparent/);
+  assert.match(css, /\.work-group \.project-more-button:hover[^}]*background: transparent/);
+});
+
 test("workspace and session strings are translated", () => {
   for (const key of [
     "Search sessions",

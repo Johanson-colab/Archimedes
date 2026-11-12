@@ -3,6 +3,7 @@ import {
   Archive,
   ArchiveRestore,
   Box,
+  Check,
   ChevronDown,
   GitBranch,
   Lock,
@@ -166,6 +167,7 @@ export default function SessionSwitcher({
       <button
         className="session-row-open"
         onClick={() => chooseSession(session)}
+        aria-current={session.id === activeSessionId ? "true" : undefined}
         title={`${session.title} · ${statusLabel(status, t)}`}
       >
         <span className={`session-status ${status}`} aria-label={statusLabel(status, t)} />
@@ -243,10 +245,13 @@ export default function SessionSwitcher({
       className="workspace-switcher-popover"
     >
       <div className="workspace-list">
-        {workspaces.map((entry) => <div className={`workspace-option${entry.id === workspace?.id ? " active" : ""}`} key={entry.id}>
+        {workspaces.map((entry) => {
+          const isCurrentWorkspace = entry.id === workspace?.id;
+          return <div className="workspace-option" key={entry.id}>
           <button
             className="workspace-option-main"
             onClick={() => { setWorkspaceOpen(false); onSelectWorkspace(entry); }}
+            aria-current={isCurrentWorkspace ? "true" : undefined}
             title={entry.root}
           >
             <span className="workspace-option-copy">
@@ -254,6 +259,7 @@ export default function SessionSwitcher({
               <small>{entry.root}</small>
             </span>
             <span className="workspace-option-count">{entry.session_count}</span>
+            <span className="workspace-option-current" aria-hidden="true">{isCurrentWorkspace && <Check size={13} />}</span>
           </button>
           <span className="workspace-option-actions">
             <button
@@ -269,7 +275,8 @@ export default function SessionSwitcher({
               aria-label={t("Delete workspace")}
             ><Trash size={13} /></button>}
           </span>
-        </div>)}
+        </div>;
+        })}
       </div>
       <MenuDivider />
       {canWorktree && <MenuItem
