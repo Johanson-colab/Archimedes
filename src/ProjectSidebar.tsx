@@ -89,10 +89,9 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
       {projects.map((project) => {
           const projectWorkspaces = workspaces.filter((workspace) => workspace.project_id === project.id);
           const isExpanded = expanded.has(project.id);
-          const isActiveProject = activeProjectId === project.id;
           const menuOpen = projectMenu?.project.id === project.id;
           return <div className="project-node" key={project.id}>
-            <div className={isActiveProject ? "project-tree-row active" : "project-tree-row"}>
+            <div className="project-tree-row">
               {editingProjectId === project.id
                 ? <span className="project-rename-field"><input autoFocus value={projectNameDraft} aria-label={t("Project name")} maxLength={100} disabled={renaming} onChange={(event) => setProjectNameDraft(event.target.value)} onBlur={() => void finishRename(project)} onKeyDown={(event) => {
                   if (event.key === "Enter") {

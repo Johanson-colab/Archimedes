@@ -501,12 +501,11 @@ html:not([data-theme="paper"]) .settings-card { background: #211e1c; border-colo
 .paper-reader-evidence,
 .paper-search-control button { font-size: 11px; }
 
-/* Sidebar project and chat titles follow the library row scale: 13px, regular
-   weight. Selection is expressed with color/background, not bold text. */
+/* Sidebar project and workspace titles follow the library row scale: 13px,
+   regular weight. Workspace selection is expressed with color/background. */
 .project-select,
 .project-select span,
 .project-chat-open,
-.project-tree-row.active .project-select span,
 .project-chat-row.active .project-chat-open {
   font-size: 13px;
   font-weight: 400;

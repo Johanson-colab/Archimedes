@@ -119,10 +119,11 @@ test("section labels match project-row typography and New project is a direct ic
   assert.match(sidebar, /onClick=\{onNewProject\}/);
 });
 
-test("the project stays highlighted while its active workspace is selected", () => {
-  assert.match(sidebar, /const isActiveProject = activeProjectId === project\.id;/);
-  assert.match(sidebar, /className=\{isActiveProject \? "project-tree-row active" : "project-tree-row"\}/);
+test("only the selected workspace is highlighted, not its parent project", () => {
+  assert.match(sidebar, /<div className="project-tree-row">/);
+  assert.doesNotMatch(sidebar, /isActiveProject|project-tree-row active/);
   assert.match(sidebar, /activeWorkspaceId === workspace\.id \? "project-chat-row active"/);
+  assert.doesNotMatch(css, /\.project-tree-row\.active/);
 });
 
 test("project overflow actions collapse into one vertical menu", () => {
