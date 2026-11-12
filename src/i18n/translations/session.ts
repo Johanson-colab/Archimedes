@@ -50,6 +50,7 @@ export const session = {
   "Sessions stay inside their workspace, so switching does not move files.": "会话保留在所属工作区内，切换不会移动文件。",
   "Shared": "共享",
   "Switch session": "切换会话",
+  "The project workspace cannot be deleted.": "项目的默认工作区不可删除。",
   "Unpin session": "取消固定",
   "Use the next studio name": "使用下一个工作室名称",
   "Workspace actions": "工作区操作",

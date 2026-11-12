@@ -4,6 +4,7 @@ import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { workspaceName } from "./workspace-name";
+import WorkspaceMenuActions from "./WorkspaceMenuActions";
 
 export default function ProjectSidebar({ projects, archivedProjects, workspaces, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
   projects: ResearchProject[];
@@ -13,7 +14,7 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
   activeWorkspaceId: string | null;
   disabled: boolean;
   onNewProject: () => void;
-  onNewWorkspace: (projectId: string) => void;
+  onNewWorkspace: (projectId: string, kind?: ProjectWorkspaceKind) => void;
   onRenameProject: (projectId: string, name: string) => Promise<void>;
   onArchiveProject: (project: ResearchProject, archived: boolean) => void;
   onRemoveProject: (project: ResearchProject) => void;
@@ -137,8 +138,14 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
                 </button>
                 <MenuSurface open={workspaceMenu?.workspace.id === workspace.id} onClose={() => setWorkspaceMenu(null)} cursor={workspaceMenu?.workspace.id === workspace.id ? workspaceMenu.cursor : null} placement="bottom-start" width={220} className="project-more-menu workspace-context-menu" ariaLabel={t("Workspace actions")}>
                   <MenuItem icon={<FolderOpen size={18} strokeWidth={1.7} />} onClick={() => { setWorkspaceMenu(null); onOpenWorkspace(workspace); }}>{t("Open workspace")}</MenuItem>
-                  <MenuItem icon={<Pencil size={18} strokeWidth={1.7} />} onClick={() => { setWorkspaceMenu(null); onRenameWorkspace(workspace); }} disabled={disabled}>{t("Rename workspace")}</MenuItem>
-                  {!workspace.is_default && <MenuItem danger icon={<Trash size={18} strokeWidth={1.7} />} onClick={() => { setWorkspaceMenu(null); onDeleteWorkspace(workspace); }} disabled={disabled}>{t("Delete workspace")}</MenuItem>}
+                  <WorkspaceMenuActions
+                    workspace={workspace}
+                    canWorktree={project.git_state === "ready"}
+                    disabled={disabled}
+                    onRename={() => { setWorkspaceMenu(null); onRenameWorkspace(workspace); }}
+                    onDelete={() => { setWorkspaceMenu(null); onDeleteWorkspace(workspace); }}
+                    onCreate={(kind) => { setWorkspaceMenu(null); onNewWorkspace(project.id, kind); }}
+                  />
                 </MenuSurface>
               </div>)}
               {!projectWorkspaces.length && <div className="project-chat-empty">{t("No workspaces yet")}</div>}

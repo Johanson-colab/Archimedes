@@ -115,7 +115,7 @@ test("workspace switching and isolated workspace creation are wired in the rende
   assert.match(app, /createResearchWorkspace\(workspaceDialog\.projectId, kind, name\)/);
   assert.match(app, /renameResearchWorkspace\(workspaceDialog\.workspace\.id, name\)/);
   assert.match(app, /suggestResearchWorkspaceName\?\.\(\)/);
-  assert.match(app, /onNewWorkspace=\{\(projectId\) => openWorkspaceCreator\(projectId\)\}/);
+  assert.match(app, /onNewWorkspace=\{\(projectId, kind\) => openWorkspaceCreator\(projectId, kind\)\}/);
   assert.match(app, /<WorkspaceDialog/);
   assert.match(app, /deleteResearchWorkspace\(workspaceToDelete\.id\)/);
   assert.match(switcher, /onCreateWorkspace\("worktree"\)/);

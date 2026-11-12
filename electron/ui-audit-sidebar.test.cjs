@@ -141,7 +141,8 @@ test("projects and workspaces expose pointer-positioned context menus", () => {
   assert.match(sidebar, /cursor=\{workspaceMenu\?\.workspace\.id === workspace\.id \? workspaceMenu\.cursor : null\}/);
   assert.match(sidebar, /t\("Open workspace"\)/);
   assert.match(sidebar, /onRenameWorkspace\(workspace\)/);
-  assert.match(sidebar, /!workspace\.is_default && <MenuItem danger[\s\S]*?onDeleteWorkspace\(workspace\)/);
+  assert.match(sidebar, /<WorkspaceMenuActions[\s\S]*?onDeleteWorkspace\(workspace\)/);
+  assert.match(sidebar, /onNewWorkspace\(project\.id, kind\)/);
   assert.match(app, /onRenameWorkspace=\{openWorkspaceRename\}/);
   assert.match(app, /onDeleteWorkspace=\{\(workspaceToDelete\) => void deleteWorkspace\(workspaceToDelete\)\}/);
   assert.match(i18n, /"Workspace actions": "工作区操作"/);
