@@ -47,6 +47,7 @@ import SideConversation from "./SideConversation";
 import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";
 import workspaceNameLibrary from "../shared/workspace-names.json";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
+import { useQueuedPromptDelivery } from "./useQueuedPromptDelivery";
 import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
@@ -3933,7 +3934,13 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
-  const previousBusyRef = useRef(agentBusy);
+  const queuedDelivery = useQueuedPromptDelivery({
+    items: queuedPrompts,
+    setItems: setQueuedPrompts,
+    busy: agentBusy,
+    submit: (next) => onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems),
+    onFailure: () => setComposerError(t("A queued message could not be sent. It and its attachments remain in the queue. Retry or remove it to continue.")),
+  });
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
@@ -4313,19 +4320,6 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     });
   }
 
-  useEffect(() => {
-    const wasBusy = previousBusyRef.current;
-    previousBusyRef.current = agentBusy;
-    if (!wasBusy || agentBusy || !queuedPrompts.length) return;
-    const [next, ...rest] = queuedPrompts;
-    setQueuedPrompts(rest);
-    void onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems).then((sent) => {
-      if (sent) return;
-      setComposerError("A queued follow-up could not be sent. It was restored below.");
-      setPrompt((current) => current.trim() ? current : next.draft);
-    });
-  }, [agentBusy, queuedPrompts, onSubmit]);
-
   const selectWelcomeWorkflow = useCallback((action: ResearchWelcomeAction) => {
     historyHandlersRef.current.onWelcomeAction(action);
     if (action === "idea") {
@@ -4378,9 +4372,10 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
           {queuedPrompts.map((item, index) => <div className="composer-queue-item" key={item.id}>
             <span className="composer-queue-index">{index + 1}</span>
             <span>{item.draft || t("Image attachment")}</span>
-            <button type="button" onClick={() => setQueuedPrompts((current) => current.filter((queued) => queued.id !== item.id))} aria-label={`${t("Remove queued message")} ${index + 1}`}><X size={12} /></button>
+            {queuedDelivery.failedId === item.id && <button type="button" disabled={agentBusy || Boolean(queuedDelivery.sendingId)} onClick={() => { setComposerError(""); queuedDelivery.retry(); }} title={t("Retry queued message")} aria-label={t("Retry queued message")}><RefreshCw size={12} /></button>}
+            <button type="button" onClick={() => { if (queuedDelivery.failedId === item.id) setComposerError(""); setQueuedPrompts((current) => current.filter((queued) => queued.id !== item.id)); }} aria-label={`${t("Remove queued message")} ${index + 1}`}><X size={12} /></button>
           </div>)}
-          {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
+          {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => { if (queuedDelivery.failedId) setComposerError(""); setQueuedPrompts([]); }}>{t("Clear queue")}</button>}
         </div>}
         <textarea ref={composerRef} className={newChatMode === "research" && prompt === RESEARCH_EXAMPLE ? "research-example" : undefined} value={prompt} disabled={commandRunning} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;
