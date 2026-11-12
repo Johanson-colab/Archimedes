@@ -1,0 +1,110 @@
+[
+  {
+    "page": "index.html",
+    "theme": "light",
+    "count": 2,
+    "color": "rgb(20, 18, 15)",
+    "maskLoaded": true,
+    "width": 28,
+    "overflow": false
+  },
+  {
+    "page": "docs.html",
+    "theme": "light",
+    "count": 2,
+    "color": "rgb(20, 18, 15)",
+    "maskLoaded": true,
+    "width": 28,
+    "overflow": false
+  },
+  {
+    "page": "changelog.html",
+    "theme": "light",
+    "count": 2,
+    "color": "rgb(20, 18, 15)",
+    "maskLoaded": true,
+    "width": 28,
+    "overflow": false
+  },
+  {
+    "page": "extensions.html",
+    "theme": "light",
+    "count": 2,
+    "color": "rgb(20, 18, 15)",
+    "maskLoaded": true,
+    "width": 28,
+    "overflow": false
+  },
+  {
+    "theme": "light",
+    "width": 390,
+    "overflow": false,
+    "markWidth": 28
+  },
+  {
+    "page": "index.html",
+    "theme": "dark",
+    "count": 2,
+    "color": "rgb(247, 248, 248)",
+    "maskLoaded": true,
+    "width": 28,
+    "overflow": false
+  },
+  {
+    "page": "docs.html",
+    "theme": "dark",
+    "count": 2,
+    "color": "rgb(247, 248, 248)",
+    "maskLoaded": true,
+    "width": 28,
+    "overflow": false
+  },
+  {
+    "page": "changelog.html",
+    "theme": "dark",
+    "count": 2,
+    "color": "rgb(247, 248, 248)",
+    "maskLoaded": true,
+    "width": 28,
+    "overflow": false
+  },
+  {
+    "page": "extensions.html",
+    "theme": "dark",
+    "count": 2,
+    "color": "rgb(247, 248, 248)",
+    "maskLoaded": true,
+    "width": 28,
+    "overflow": false
+  },
+  {
+    "theme": "dark",
+    "width": 390,
+    "overflow": false,
+    "markWidth": 28
+  },
+  {
+    "themeToggle": {
+      "before": "rgb(20, 18, 15)",
+      "after": "rgb(247, 248, 248)"
+    }
+  },
+  {
+    "appTheme": "paper",
+    "color": "rgb(44, 40, 38)",
+    "maskLoaded": true,
+    "width": 80,
+    "height": 65,
+    "decorative": "true",
+    "name": "Archimedes"
+  },
+  {
+    "appTheme": "charcoal",
+    "color": "rgb(234, 232, 230)",
+    "maskLoaded": true,
+    "width": 80,
+    "height": 65,
+    "decorative": "true",
+    "name": "Archimedes"
+  }
+]
