@@ -3,8 +3,18 @@
 The toolbar action toggles placement mode. Click non-interactive conversation
 content or whitespace to place a note; links, buttons, selections, editors, and
 approval controls keep their original behavior. Escape exits placement mode.
-Notes remain discoverable as numbered edge markers outside placement mode.
-Nearby notes share one marker. Clicking opens a compact non-modal card.
+Notes remain discoverable as opening-text summaries outside placement mode.
+Nearby notes share one summary with a small extra-note count. Hovering or
+keyboard focus opens a read-only preview without moving focus; clicking opens
+a persistent compact card with actions.
+
+The input opens next to the clicked point (both x and y), shifting or flipping
+only to fit the conversation viewport. Its height is measured so a growing
+input or preview stays inside the pane. A preview never covers its summary
+button. The summary rail follows the actual conversation-pane width (22%,
+bounded at 64–220px), reserving space instead of covering the transcript. CSS
+ellipsis fits the opening text using real glyph widths, so narrower panes show
+fewer characters without splitting Unicode graphemes in stored content.
 
 ## Position contract
 
@@ -55,3 +65,9 @@ Resolve, and reflow (marker y 178 → 303 as width/font changed). Pure helper
 tests cover paginated and deleted messages, legacy data, whitespace and invalid
 coordinates. Store/sync tests cover reopening, peer access, cloud anchors and
 resolution updates. No live multi-account cloud deployment was used for this PR.
+
+Follow-up evidence: `input-near-click-before/after.png` shows the old right-edge
+composer versus click-local placement; `summary-before/after.png` replaces the
+numeric marker. `summary-hover-preview.png` and `summary-narrow-after.png`
+verify hover preview and responsive text truncation. These use the same real
+components in a Paper-theme controlled fixture at 1560×900 (narrow: 550×700).

@@ -41,3 +41,15 @@ test("comment IPC and session-position annotations are wired without a modal", (
   assert.match(comments, /onRequireHistory\(\)/);
   assert.match(css, /\.session-comment-pin \{ position: absolute/);
 });
+
+test("comment input is click-anchored and saved markers expose responsive text previews", () => {
+  assert.match(comments, /xFraction: \(event\.clientX - rect\.left\)/);
+  assert.match(comments, /sessionCommentPopoverPoint\(point, rect/);
+  assert.match(comments, /sessionCommentSummaryWidth\(scroll\.clientWidth\)/);
+  assert.match(comments, /className="session-comment-summary">\{summary\}/);
+  assert.doesNotMatch(comments, />\{group\.ids\.length\}<\/button>/);
+  assert.match(comments, /onPointerEnter=/);
+  assert.match(comments, /onFocus=/);
+  assert.match(comments, /focus=\{selection\?\.preview \? "none" : "first"\}/);
+  assert.match(css, /text-overflow: ellipsis/);
+});
