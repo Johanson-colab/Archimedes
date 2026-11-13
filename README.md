@@ -75,26 +75,25 @@ The app opens without a model key, but chat and agent actions will not run. Web 
 
 ## What It Does
 
-- **Research chat** — persistent, project-scoped conversations with streamed answers, visible tool activity, resumable threads, and research modes for free chat, idea generation, experiment setup, paper writing, and paper review.
-- **Evidence-aware context** — attach files, folders, papers, repositories, skills, plugins, and images. The composer supports drag-and-drop, prompt history, follow-up queues, slash commands, and a visible context-usage breakdown.
-- **Discovery** — Daily papers with latest/trending views, date ranges, topic filters, keyword search, and official conference catalog search for ICML, ICLR, NeurIPS, CVPR, ICCV, ECCV, ACL, EMNLP, and AAAI.
-- **Literature workspace** — project-scoped libraries, paper import, reading state, notes, highlights, full-paper PDF reading, page search, translation, and source-grounded discussion.
-- **Paper plus code** — linked GitHub repositories and project sites open beside the paper so claims can be checked against visible implementation and data assets.
-- **Extensions** — a multi-source marketplace for skills, plugins, MCP servers, and custom indexes. Skill packages can install into workspace or global `.agents/skills`; other types are discoverable and link to their source.
-- **Writing and execution** — LaTeX paper projects with templates, compilation, PDF preview, an interactive terminal, auditable tool calls, and approval gates before writes or commands.
-- **Research radar** — Benchmark Radar for emerging benchmarks, plus a conference figure gallery for visual inspiration and evidence gathering.
-- **Paper presentations** — macOS-only: generate a 15-page lab-meeting deck after a saved review. Requires Kimi Desktop, LibreOffice, and a configured model provider.
+- **Research Apps** — bring focused tools into a shared workspace for literature discovery, paper reading, reproduction, data analysis, and writing. The vision is to let researchers customize these workflows by combining Skills, MCP tools, models, and agent backends.
+- **Literature discovery and reading** — explore Daily papers and conference catalogs, organize papers in project libraries, and read PDFs with search, notes, highlights, translation, and source-grounded discussion.
+- **Paper and implementation** — open linked repositories and project sites alongside papers, and use reproduction workflows to investigate how research connects to code and data.
+- **Analysis and writing** — work with research data, prepare LaTeX projects, compile and preview papers, and use the integrated terminal and workspace tools.
+- **Extensions and backends** — discover Skills, plugins, and MCP servers through the marketplace, install supported Skill packages, and configure models and agent backends for research tasks. Support and attachment behavior vary by backend.
+- **Research context and provenance** — preserve project conversations, papers, and source references so researchers can return to the context behind their work. Experiment lineage and broader evidence provenance are in development.
+- **Research memory and collaboration** — long-term experience retention and shared research projects are areas of ongoing exploration.
 
-Image generation is not wired up yet. The Image creation page is currently a conference-figure gallery and a scaffolded compose dock.
+Research App customization and automatic composition of Skills, MCP tools, models, and backends are part of the product direction; not every combination is supported today. Image generation is not wired up yet: Image creation currently provides a conference-figure gallery and a scaffolded compose dock.
 
 ## The Research Loop
 
-1. **Discover** — arXiv, official conference catalogs, the web, libraries, and paper figures.
-2. **Read and ground** — open PDFs, search text, inspect pages and figures, highlight evidence, and keep page references.
-3. **Connect paper and implementation** — open the linked repository or project page next to the paper.
-4. **Think with context** — ask the agent in a project-scoped conversation using selected papers, files, folders, images, skills, and code.
-5. **Build and validate** — use the workspace, LaTeX projects, and terminal for plans, experiments, drafts, and controlled actions.
-6. **Organize and return** — save papers into libraries, preserve thread history, and revisit the evidence behind conclusions.
+1. **Define** — start with a research question and gather context in a project.
+2. **Discover and read** — find related work, inspect papers and figures, and keep notes and source references.
+3. **Connect and reproduce** — examine linked code and data, then prepare a reproduction or experiment in the workspace.
+4. **Analyze and write** — investigate results and develop a paper using the analysis and writing tools.
+5. **Review and revisit** — discuss findings, review drafts, and return to saved papers and conversations.
+
+The longer-term goal is to connect questions, code, data, experiments, results, and conclusions through experiment lineage and evidence provenance, while retaining research experience and supporting collaboration across a shared project.
 
 ### Principles
 
