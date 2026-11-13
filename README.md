@@ -104,22 +104,6 @@ Image generation is not wired up yet. The Image creation page is currently a con
 - **Human approval for consequential actions.** Agent-proposed file writes and shell commands pause for approval.
 - **No fake completeness.** Missing proceedings, restricted sources, and unavailable metadata are surfaced rather than invented.
 
-## Architecture
-
-```text
-React + Vite renderer
-        |
-Electron preload boundary
-        |
-Electron main process
-  |        |        |
-SQLite   Agent     Workspace / terminal / PDF / repository adapters
-```
-
-- Renderer: chat, library, paper reader, Daily papers, gallery, and project views.
-- Main process: provider credentials, agent calls, filesystem and terminal control, and approval boundaries.
-- Workspace database: `.archimedes/archimedes.db` for projects, threads, turns, libraries, approvals, and command history.
-- Source adapters retain provenance for papers, conference catalogs, repository snapshots, and web evidence.
 
 ## Configuration and Privacy
 
