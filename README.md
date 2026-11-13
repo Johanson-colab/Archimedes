@@ -140,7 +140,7 @@ The aim is not research theater. It is a reliable research companion that makes 
 
 Feel free to join Archimedes wechat group for more information.
 
-<img src="docs/assets/Archimedes-wechat-group.jpg" alt="Archimedes-wechat-group" width="280" />
+<img src="docs/assets/Archimedes-wechat-group.png" alt="Archimedes WeChat group QR code" width="280" />
 
 ## Welcome to cite
 
