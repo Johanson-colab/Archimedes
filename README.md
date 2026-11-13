@@ -155,6 +155,12 @@ Archimedes already covers the core research loop, but it is not finished. Next l
 
 The aim is not research theater. It is a reliable research companion that makes the chain from question to evidence to implementation easier to inspect, challenge, and extend.
 
+## Community / 交流社区
+
+欢迎加入 Archimedes 开源交流群，交流使用体验、反馈问题和参与贡献。
+
+<img src="docs/assets/Archimedes核心成员.jpg" alt="Archimedes 微信交流群" width="280" />
+
 ## Welcome to cite
 
 If Archimedes supports your research, please cite it:
