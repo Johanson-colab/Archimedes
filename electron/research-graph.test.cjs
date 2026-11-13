@@ -100,9 +100,52 @@ test("revisions are append-only and a no-op revision is not written", () => {
   });
 });
 
+test("allows an experiment to test multiple ideas and a result to aggregate experiments", () => {
+  withWorkspace(({ project }) => {
+    const a = graph.createNode({ projectId: project.id, kind: "idea", title: "Idea A", content: { hypothesis: "A" } });
+    const b = graph.createNode({ projectId: project.id, kind: "idea", title: "Idea B", content: { hypothesis: "B" } });
+    const experiment = graph.createNode({
+      projectId: project.id,
+      kind: "experiment",
+      title: "Joint test",
+      content: { plan: "Test both ideas." },
+      parents: [{ nodeId: a.id }, { nodeId: b.id }],
+    });
+    const listed = graph.listGraph({ projectId: project.id });
+    assert.equal(listed.edges.filter((edge) => edge.to_node === experiment.id && edge.kind === "tests").length, 2);
+    const second = graph.createNode({
+      projectId: project.id,
+      kind: "experiment",
+      title: "Replication",
+      content: { plan: "Repeat the test." },
+      parents: [{ nodeId: b.id }],
+    });
+    const result = graph.createNode({
+      projectId: project.id,
+      kind: "result",
+      title: "Aggregated result",
+      content: { evidence: {}, interpretation: { verdict: "mixed" } },
+      parents: [{ nodeId: experiment.id }, { nodeId: second.id }],
+    });
+    assert.equal(graph.listGraph({ projectId: project.id }).edges.filter((edge) => edge.to_node === result.id && edge.kind === "produces").length, 2);
+  });
+});
+
 test("rejects invalid parent edges and duplicate links", () => {
   withWorkspace(({ project }) => {
     const { question, experiment, idea, result } = createChain(project.id);
+    const otherProject = store.createResearchProject({ name: "Other graph project" });
+    const foreign = graph.createNode({ projectId: otherProject.id, kind: "question", title: "Foreign question", content: {} });
+    assert.throws(
+      () => graph.createNode({
+        projectId: project.id,
+        kind: "idea",
+        title: "Foreign parent",
+        content: {},
+        parents: [{ nodeId: foreign.id }],
+      }),
+      /same project/,
+    );
     assert.throws(
       () => graph.createNode({ projectId: project.id, kind: "experiment", title: "Orphan" }),
       /requires at least one parent/,
@@ -155,7 +198,7 @@ test("creates a merge node with two parents and reports incomplete merges", () =
       kind: "idea",
       title: "Merged idea",
       content: { hypothesis: "A and B" },
-      parents: [{ nodeId: a.id }, { nodeId: b.id }],
+      parents: [{ nodeId: a.id, kind: "merges" }, { nodeId: b.id, kind: "merges" }],
     });
     const listed = graph.listGraph({ projectId: project.id });
     assert.equal(listed.edges.filter((edge) => edge.to_node === merged.id && edge.kind === "merges").length, 2);

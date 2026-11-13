@@ -52,7 +52,7 @@ function normalizeSummary(summary) {
   return String(summary || "").trim().slice(0, MAX_SUMMARY_CHARS);
 }
 
-function normalizeParents(parents, nodeKind) {
+function normalizeParents(parents, nodeKind, projectId) {
   if (parents == null) return [];
   if (!Array.isArray(parents)) throw new Error("Research node parents must be an array.");
   if (parents.length > 8) throw new Error("A research node accepts at most eight parents.");
@@ -63,11 +63,9 @@ function normalizeParents(parents, nodeKind) {
     const parentNode = store.getResearchNode(parent.nodeId);
     if (!parentNode) throw new Error(`Parent research node not found: ${parent.nodeId}`);
     if (parentNode.archived) throw new Error("An archived node cannot be a parent.");
+    if (parentNode.project_id !== projectId) throw new Error("Parents must belong to the same project as the new node.");
     let kind = parent.kind;
-    if (kind == null) {
-      kind = defaultEdgeKind(parentNode.kind, nodeKind);
-      if (parents.length > 1 && parentNode.kind === nodeKind) kind = "merges";
-    }
+    if (kind == null) kind = defaultEdgeKind(parentNode.kind, nodeKind);
     if (!isEdgeKind(kind)) throw new Error(`An explicit parent edge kind is required from ${parentNode.kind} to ${nodeKind}.`);
     if (!edgeAllowed(kind, parentNode.kind, nodeKind)) {
       throw new Error(`A ${kind} edge cannot connect ${parentNode.kind} to ${nodeKind}.`);
@@ -86,14 +84,10 @@ function assertParentsComplete(kind, parents) {
   if (["experiment", "result"].includes(kind) && parents.length === 0) {
     throw new Error(`A ${kind} node requires at least one parent.`);
   }
-  if (parents.some((parent) => parent.kind === "merges") && parents.length < 2) {
-    throw new Error("A merge requires at least two parents.");
-  }
-  if (parents.length > 1) {
-    const kinds = new Set(parents.map((parent) => parent.kind));
-    if (kinds.size !== 1 || !kinds.has("merges")) {
-      throw new Error("Multiple parents require merge edges.");
-    }
+  const mergeParents = parents.filter((parent) => parent.kind === "merges");
+  if (mergeParents.length) {
+    if (mergeParents.length !== parents.length) throw new Error("A merge node cannot mix merge edges with other parent edges.");
+    if (parents.length < 2) throw new Error("A merge requires at least two parents.");
   }
 }
 
@@ -136,7 +130,7 @@ function createNode({
   if (!isNodeKind(kind)) throw new Error(`Unknown research node kind: ${kind}`);
   if (!isNodeStatus(status)) throw new Error(`Unknown research node status: ${status}`);
   const contentJson = serializeContent(content);
-  const normalizedParents = normalizeParents(parents, kind);
+  const normalizedParents = normalizeParents(parents, kind, projectId);
   assertParentsComplete(kind, normalizedParents);
   const node = store.createResearchNode({
     projectId,
