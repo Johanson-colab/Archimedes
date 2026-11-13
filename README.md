@@ -62,7 +62,7 @@ Fill `.env.local` with an OpenAI-compatible endpoint before starting, or configu
 ```bash
 ARCHIMEDES_LLM_API_KEY=your-api-key
 ARCHIMEDES_LLM_BASE_URL=https://api.openai.com/v1
-ARCHIMEDES_LLM_MODEL=gpt-4.1-mini
+ARCHIMEDES_LLM_MODEL=gpt-6.1 Terra
 ```
 
 The app opens without a model key, but chat and agent actions will not run. Web search is optional and uses a separate key.
