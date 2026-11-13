@@ -46,6 +46,7 @@ import VoiceInputButton from "./VoiceInputButton";
 import SideConversation from "./SideConversation";
 import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";
 import workspaceNameLibrary from "../shared/workspace-names.json";
+import { workspacePathName } from "./workspace-path";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
@@ -4464,7 +4465,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
             title={workspace ? `${t("Workspace")}: ${workspace}` : t("Open workspace settings")}
             aria-label={workspace ? `${t("Workspace")}: ${workspace}. ${t("Open workspace settings")}` : t("Open workspace settings")}
           >
-            <Folder size={13} aria-hidden="true" /><span>{workspace ? workspace.split("/").filter(Boolean).at(-1) : t("No workspace")}</span>
+            <Folder size={13} aria-hidden="true" /><span>{workspacePathName(workspace, t("No workspace"))}</span>
           </button>
           {nativeBackend ? <NativeContextUsage usage={reportedNativeUsage} /> : <div className="context-usage-control">
             <button
@@ -5111,7 +5112,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, directoryRequest,
     element.addEventListener("wheel", handleWheel, { passive: false });
     return () => element.removeEventListener("wheel", handleWheel);
   }, [openFiles.length]);
-  const workspaceName = workspace.split("/").filter(Boolean).at(-1) || "Workspace";
+  const workspaceName = workspacePathName(workspace);
   useEffect(() => {
     setRevealedDirectory(null);
     if (!selectedPath) {

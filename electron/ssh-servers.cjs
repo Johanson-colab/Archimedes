@@ -13,6 +13,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
+const { expandHomePath } = require("./local-paths.cjs");
 
 const FILE_NAME = "ssh-servers.json";
 const ASKPASS_FILE = "ssh-askpass.sh";
@@ -79,7 +80,7 @@ function normalizeServer(input = {}) {
   if (!/^[A-Za-z0-9_.-]+$/.test(user)) throw new Error("That user name is not valid.");
   if (!Number.isFinite(port) || port < 1 || port > 65_535) throw new Error("The port must be between 1 and 65535.");
   const identityFile = text(input.identityFile, 400);
-  if (identityFile && !path.isAbsolute(identityFile) && !identityFile.startsWith("~")) {
+  if (identityFile && !path.isAbsolute(expandHomePath(identityFile))) {
     throw new Error("The identity file must be an absolute path or start with ~.");
   }
   return {
@@ -152,15 +153,9 @@ function connectionArgs(server, remoteCommand, { allowPassword = false } = {}) {
   ];
   // spawn has no shell, so "~" would never be expanded and ssh would look for a
   // file literally named "~".
-  if (server.identityFile) args.push("-i", expandHome(server.identityFile));
+  if (server.identityFile) args.push("-i", expandHomePath(server.identityFile));
   args.push(`${server.user}@${server.host}`, remoteCommand);
   return args;
-}
-
-function expandHome(value) {
-  const text = String(value || "");
-  if (!text.startsWith("~")) return text;
-  return path.join(process.env.HOME || "", text.slice(1));
 }
 
 /** A tiny askpass helper so a saved password can be used without a terminal. */
