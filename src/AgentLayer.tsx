@@ -10,7 +10,7 @@ const MIN_WIDTH = 340;
 const MIN_HEIGHT = 220;
 const EDGE = 12;
 const DEFAULT_PROACTIVE = { w: 440, h: 300 };
-const DEFAULT_RESEARCH = { w: 560, h: 220 };
+const DEFAULT_RESEARCH = { w: 760, h: 520 };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));

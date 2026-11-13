@@ -58,6 +58,25 @@ attached to a node revision without changing their current ownership:
 A SQLite trigger rejects updates to revision content, content hashes, node ids,
 and parent revision ids.
 
+## UI slice
+
+Research mode now renders `ResearchGraphPanel` instead of the linear
+`ResearchPathPanel`; Standard and Create keep the existing stepper.
+
+- Nodes are laid out by `src/research-graph/graphLayout.ts`: time downward,
+  branches in lanes, feedback edges dashed.
+- Clicking a node opens the inspector and shows its current revision content.
+- A selected node exposes its allowed child kinds. Creating a child writes the
+  node and its typed edge; creating writing from a result creates the writing
+  node and then links `cites`.
+- Empty projects start with a question form.
+- The panel header expands the graph into a full-window view with the inspector
+  beside it; Escape or the minimize button returns to the dock.
+
+| Before | After (dock) | After (expanded) |
+| --- | --- | --- |
+| ![Linear stage stepper](./assets/research-graph/before-research-path.png) | ![Research graph panel](./assets/research-graph/after-research-graph.png) | ![Expanded research graph](./assets/research-graph/after-research-graph-expanded.png) |
+
 ## Service API
 
 `electron/research-graph/service.cjs` exposes:
@@ -102,6 +121,7 @@ and `research-graph:validate`.
 
 ```sh
 node --test electron/research-graph.test.cjs
+node --test electron/research-graph-layout.test.cjs
 node --test electron/store-schema-order.test.cjs
 npm run lint
 npm run build

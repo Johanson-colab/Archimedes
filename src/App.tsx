@@ -74,6 +74,7 @@ import { shortcutMatches } from "./file-text-size";
 import { previewLibraryBridge } from "./library-preview";
 import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
+import ResearchGraphPanel from "./research-graph/ResearchGraphPanel";
 import ProactiveAgentPanel from "./ProactiveAgentPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
@@ -1568,6 +1569,8 @@ function App() {
   const pathProject = projects.find((project) => project.id === (pathThread?.project_id ?? activeProjectId)) ?? null;
   const pathIsPinned = Boolean(pinnedPathThreadId);
   const pathThreadInactive = Boolean(pinnedPathThreadId && !pathThreadIsActive);
+  const pathMode = pathThreadIsActive ? researchMode : (pathThread?.mode ?? researchMode);
+  const showResearchGraph = pathMode === "research";
   const proactive = useProactiveAgent({
     messages,
     thread: activeThread ? { id: activeThread.id, title: activeThread.title, status: activeThread.status } : null,
@@ -3499,7 +3502,14 @@ function App() {
             onOpenSettings={() => { setSettingsSection("proactive"); setSettingsOpen(true); }}
             onCollapse={() => proactive.setOpen(false)}
           />}
-          research={<ResearchPathPanel
+          research={showResearchGraph ? <ResearchGraphPanel
+            projectId={pathProject?.id ?? activeProjectId ?? null}
+            projectName={pathProject?.name ?? t("No project")}
+            threadTitle={pathThread?.title ?? t("No active session")}
+            hasThread={Boolean(pathThread)}
+            onOpenThread={openPathThread}
+            onCollapse={() => setResearchPanelOpen(false)}
+          /> : <ResearchPathPanel
             stages={researchStages}
             activeStage={pathStage}
             acceptedStages={pathAcceptedStages}
