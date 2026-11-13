@@ -1,8 +1,6 @@
 # Archimedes
 
 > A local-first research-agent suite for discovering evidence, reading papers, inspecting code, running research work, and writing with traceability.
->
-> 面向研究全流程的科研智能体工作台：把找论文、读论文、看项目代码、组织证据、开展实验和写作放回同一个可追溯的桌面应用中。
 
 <p align="center">
   <img src="docs/assets/readme/archimedes-hero-1.webp" alt="Archimedes research chat, original paper reader, Daily papers, and Canvas">
@@ -138,11 +136,11 @@ Archimedes already covers the core research loop, but it is not finished. Next l
 
 The aim is not research theater. It is a reliable research companion that makes the chain from question to evidence to implementation easier to inspect, challenge, and extend.
 
-## Community / 交流社区
+## Community 
 
-欢迎加入 Archimedes 开源交流群，交流使用体验、反馈问题和参与贡献。
+Feel free to join Archimedes wechat group for more information.
 
-<img src="docs/assets/Archimedes核心成员.jpg" alt="Archimedes 微信交流群" width="280" />
+<img src="docs/assets/Archimedes-wechat-group.jpg" alt="Archimedes-wechat-group" width="280" />
 
 ## Welcome to cite
 
@@ -151,7 +149,7 @@ If Archimedes supports your research, please cite it:
 ```bibtex
 @software{archimedes2026,
   title   = {Archimedes: A Local-First Research-Agent Suite},
-  author  = {Weijiang Lv and Jiayu Wang and {Archimedes Contributors}},
+  author  = {Weijiang Lv and Jiayu Wang and Archimedes Contributors},
   year    = {2026},
   url     = {https://github.com/Johanson-colab/Archimedes}
 }
