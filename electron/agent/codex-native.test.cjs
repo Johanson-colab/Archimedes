@@ -63,6 +63,21 @@ test('native setup omits API instructions and resumes native history without rei
   assert.equal(resumed.peer().calls.find(x => x.method === 'turn/start').params.input[0].text, 'Current request');
 });
 
+test('ordinary Codex turns disable IdeaSpark skills discovered from the workspace', async t => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-codex-local-skill-'));
+  t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
+  const localSkill = path.join(workspace, '.codex', 'skills', 'idea-spark');
+  fs.mkdirSync(localSkill, { recursive: true });
+  fs.writeFileSync(path.join(localSkill, 'SKILL.md'), '---\nname: idea-spark\ndescription: local copy\n---\n');
+  const f = fixture(p => complete(p), { workspace });
+  await backend.runCodex(f.args);
+  const controls = f.peer().options.appServerArgs;
+  const disabled = controls[controls.indexOf('-c') + 1];
+  assert.match(disabled, /name="idea-spark"/);
+  assert.match(disabled, /name="archimedes-idea-spark"/);
+  assert.match(f.peer().calls.find(c => c.method === 'thread/start').params.developerInstructions, /IdeaSpark is opt-in/);
+});
+
 test('Research uses a native Codex skill input and restores its run on the next native turn', async t => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-codex-research-'));
   t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));

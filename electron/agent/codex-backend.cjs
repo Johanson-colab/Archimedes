@@ -33,7 +33,9 @@ function nativePolicy(config, root) {
 }
 // Codex discovers skills from project and user config directories. Keep the
 // user's own idea-spark unavailable unless Archimedes explicitly selected its
-// bundled archimedes-idea-spark workflow for this turn.
+// bundled archimedes-idea-spark workflow for this turn. Older Codex builds may
+// ignore unknown config keys, so the developer instruction is the portable
+// fallback that does not depend on a machine-specific skill path.
 function ideaSparkControls(researchSkill) {
   const disabled = researchSkill === 'idea-spark' ? ['idea-spark'] : ['idea-spark', SKILL_NAME];
   const config = `skills.config=[${disabled.map(name => `{name=${JSON.stringify(name)},enabled=false}`).join(',')}]`;

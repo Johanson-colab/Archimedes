@@ -38,6 +38,13 @@ requests it. A developer instruction on normal turns also tells Codex not to
 resume or read either skill, so a previous IdeaSpark native thread does not
 carry the workflow into an ordinary Research message.
 
+The disable rule is name-based, not path-based. It applies whether the user's
+copy lives in a project `.codex/skills`, the user-level `~/.codex/skills`, or
+another Codex discovery root, and it is a harmless no-op when no such skill
+exists. Explicit `/idea spark` always installs and uses the bundled
+`archimedes-idea-spark` package in the current workspace, so other machines do
+not need ResearchStudio, a personal `idea-spark` folder, or any local symlink.
+
 ## State, permissions and execution
 
 - A `research_skill` event records the chat, backend, workspace and unique run
