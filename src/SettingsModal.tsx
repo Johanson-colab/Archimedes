@@ -12,7 +12,7 @@ import type { SessionToolPreferences } from "./session-tools";
 import type { ProactiveSettings } from "./proactive-types";
 import { useUISettings } from "./i18n";
 import AppearanceSettingsPanel from "./settings/AppearanceSettingsPanel";
-import AssistantSettingsHub from "./settings/AssistantSettingsHub";
+import ResearchAidsSettingsHub from "./settings/ResearchAidsSettingsHub";
 import GeneralSettingsPanel from "./settings/GeneralSettingsPanel";
 import SettingsSubnav from "./settings/SettingsSubnav";
 import WorkbenchSettingsHub from "./settings/WorkbenchSettingsHub";
@@ -190,7 +190,7 @@ export default function SettingsModal({
             onResetJourneySettings={onResetJourneySettings}
             onOpenModels={onOpenModels}
           />}
-          {location.section === "assistant" && <AssistantSettingsHub
+          {location.section === "research-aids" && <ResearchAidsSettingsHub
             view={subview}
             proactiveSettings={proactiveSettings}
             onChangeProactiveSettings={onChangeProactiveSettings}

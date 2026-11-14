@@ -3,7 +3,7 @@ import type { ProactiveSettings } from "../proactive-types";
 import type { SessionToolPreferences } from "../session-tools";
 import { CommentsSettingsPanel, SnapshotSettingsPanel } from "./SessionToolsSettingsPanel";
 
-type AssistantSettingsHubProps = {
+type ResearchAidsSettingsHubProps = {
   view: string;
   proactiveSettings: ProactiveSettings;
   onChangeProactiveSettings: (patch: Partial<ProactiveSettings>) => void;
@@ -15,7 +15,7 @@ type AssistantSettingsHubProps = {
   onSessionToolsChange: (patch: Partial<SessionToolPreferences>) => void;
 };
 
-export default function AssistantSettingsHub({
+export default function ResearchAidsSettingsHub({
   view,
   proactiveSettings,
   onChangeProactiveSettings,
@@ -25,7 +25,7 @@ export default function AssistantSettingsHub({
   bridge,
   sessionTools,
   onSessionToolsChange,
-}: AssistantSettingsHubProps) {
+}: ResearchAidsSettingsHubProps) {
   return <div className="settings-sections">
     <div className="settings-hub-panel" role="tabpanel" hidden={view !== "proactive"}>
       <ProactiveSettingsPanel

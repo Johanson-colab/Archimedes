@@ -111,8 +111,8 @@ function capture({ temporary, output, stage }) {
       { name: "research-path", section: stage === "before" ? "journey" : "journey" },
       { name: "proactive", section: "proactive" },
       { name: "terminal", section: "terminal" },
-      { name: "comments", section: "assistant", click: "Comments" },
-      { name: "snapshots", section: "assistant", click: "Snapshots" },
+      { name: "comments", section: "research-aids", click: "Comments" },
+      { name: "snapshots", section: "research-aids", click: "Snapshots" },
     ];
     for (const theme of ["paper", "charcoal"]) {
       for (const item of cases) {

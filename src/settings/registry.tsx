@@ -6,7 +6,7 @@ export type SettingsSectionId =
   | "appearance"
   | "account"
   | "workbench"
-  | "assistant"
+  | "research-aids"
   | "models"
   | "plugins"
   | "workspace"
@@ -76,8 +76,8 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     ],
   },
   {
-    id: "assistant",
-    label: "Assistant",
+    id: "research-aids",
+    label: "Research aids",
     description: "Proactive suggestions and conversation tools",
     group: "research",
     icon: <Sparkle size={15} />,
@@ -133,7 +133,7 @@ const SECTION_IDS = new Set<string>(SETTINGS_SECTIONS.map((section) => section.i
 const ALIASES: Record<SettingsSectionAlias, { section: SettingsSectionId; subview?: string }> = {
   journey: { section: "workbench", subview: "research-path" },
   terminal: { section: "workbench", subview: "terminal" },
-  proactive: { section: "assistant", subview: "proactive" },
+  proactive: { section: "research-aids", subview: "proactive" },
   members: { section: "workspace", subview: "members" },
   about: { section: "general" },
 };

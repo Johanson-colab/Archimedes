@@ -7,7 +7,7 @@ Verified on Windows against `main` commit `bc12ac0` with the real Electron 43.4.
 The flat 14-item list becomes 10 durable modules in three groups:
 
 - **Personal**: General (includes About), Appearance, Account
-- **Research**: Workbench, Assistant, Models, Research Apps, Workspace
+- **Research**: Workbench, Research aids, Models, Research Apps, Workspace
 - **Connections**: Web search, SSH servers
 
 Journey, Terminal, and project Members no longer occupy top-level entries. Existing deep links still work through aliases:
@@ -16,11 +16,11 @@ Journey, Terminal, and project Members no longer occupy top-level entries. Exist
 | --- | --- |
 | `journey` | Workbench → Research path |
 | `terminal` | Workbench → Terminal |
-| `proactive` | Assistant → Proactive agent |
+| `proactive` | Research aids → Proactive agent |
 | `members` | Workspace → Members |
 | `about` | General → About |
 
-Workbench now owns **Layout**, **Terminal**, and **Research path**. Assistant owns **Proactive agent**, **Comments**, and **Snapshots**. Workspace owns **Folder** and **Members**.
+Workbench now owns **Layout**, **Terminal**, and **Research path**. Research aids owns **Proactive agent**, **Comments**, and **Snapshots**. Workspace owns **Folder** and **Members**.
 
 ## Conversation tools
 
@@ -50,7 +50,7 @@ Measured navigation: **14 → 10** items, **0 → 3** group labels, no horizonta
 
 The after view exposes an in-page tab strip (`Layout / Terminal / Research path`) while the embedded terminal keeps its save actions and the Journey panel keeps every existing control.
 
-## Assistant
+## Research aids
 
 Proactive remains the first tab; Comments and Snapshots are no longer standalone top-level pages.
 

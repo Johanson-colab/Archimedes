@@ -9,7 +9,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const registry = read("src", "settings", "registry.tsx");
 const modal = read("src", "SettingsModal.tsx");
 const workbench = read("src", "settings", "WorkbenchSettingsHub.tsx");
-const assistant = read("src", "settings", "AssistantSettingsHub.tsx");
+const researchAids = read("src", "settings", "ResearchAidsSettingsHub.tsx");
 const workspace = read("src", "settings", "WorkspaceSettingsHub.tsx");
 const sessionToolsPanel = read("src", "settings", "SessionToolsSettingsPanel.tsx");
 const app = read("src", "App.tsx");
@@ -34,7 +34,7 @@ test("Settings navigation is grouped and keeps only durable modules", () => {
   for (const group of ["Personal", "Research", "Connections"]) assert.match(registry, new RegExp(`label: "${group}"`));
   assert.match(registry, /\{ id: "personal", label: "Personal" \}/);
   assert.match(registry, /id: "workbench"[\s\S]*?subviews: \[/);
-  assert.match(registry, /id: "assistant"[\s\S]*?subviews: \[/);
+  assert.match(registry, /id: "research-aids"[\s\S]*?subviews: \[/);
   assert.match(registry, /id: "workspace"[\s\S]*?subviews: \[/);
   for (const retired of ["journey", "proactive", "terminal", "about"]) {
     assert.doesNotMatch(registry, new RegExp(`\\n    id: "${retired}",\\n`));
@@ -44,7 +44,7 @@ test("Settings navigation is grouped and keeps only durable modules", () => {
 test("legacy settings entry points resolve to their new module and subview", () => {
   assert.match(registry, /journey: \{ section: "workbench", subview: "research-path" \}/);
   assert.match(registry, /terminal: \{ section: "workbench", subview: "terminal" \}/);
-  assert.match(registry, /proactive: \{ section: "assistant", subview: "proactive" \}/);
+  assert.match(registry, /proactive: \{ section: "research-aids", subview: "proactive" \}/);
   assert.match(registry, /members: \{ section: "workspace", subview: "members" \}/);
   assert.match(registry, /export function resolveSettingsLocation/);
   assert.match(modal, /const location = resolveSettingsLocation\(section\);/);
@@ -62,11 +62,11 @@ test("Workbench owns layout, terminal, and research path settings", () => {
   assert.match(workbench, /journeySettings/);
 });
 
-test("Assistant groups Proactive with comments and snapshots", () => {
-  assert.match(assistant, /<ProactiveSettingsPanel/);
-  assert.match(assistant, /<CommentsSettingsPanel/);
-  assert.match(assistant, /<SnapshotSettingsPanel/);
-  for (const view of ["proactive", "comments", "snapshots"]) assert.match(assistant, new RegExp(`view !== "${view}"`));
+test("Research aids groups Proactive with comments and snapshots", () => {
+  assert.match(researchAids, /<ProactiveSettingsPanel/);
+  assert.match(researchAids, /<CommentsSettingsPanel/);
+  assert.match(researchAids, /<SnapshotSettingsPanel/);
+  for (const view of ["proactive", "comments", "snapshots"]) assert.match(researchAids, new RegExp(`view !== "${view}"`));
   assert.match(sessionToolsPanel, /Show comments button/);
   assert.match(sessionToolsPanel, /Show resolved comments by default/);
   assert.match(sessionToolsPanel, /Show snapshot button/);
