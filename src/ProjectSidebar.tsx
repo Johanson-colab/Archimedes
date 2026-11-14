@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, FolderOpen, MoreVertical, Pencil, Plus, Trash, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { workspaceName } from "./workspace-name";
 import WorkspaceMenuActions from "./WorkspaceMenuActions";
+import { orderSidebarIds, type SidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
 
-export default function ProjectSidebar({ projects, archivedProjects, workspaces, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
+export default function ProjectSidebar({ projects, archivedProjects, workspaces, order, onReorder, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
   projects: ResearchProject[];
   archivedProjects: ResearchProject[];
   workspaces: ProjectWorkspace[];
+  order: SidebarOrder;
+  onReorder: (group: SidebarOrderGroup, sourceId: string, targetId: string, after: boolean, parentId?: string) => void;
   activeProjectId: string | null;
   activeWorkspaceId: string | null;
   disabled: boolean;
@@ -35,6 +38,53 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
   const [renameError, setRenameError] = useState("");
   const projectAnchorRef = useRef<HTMLElement | null>(null);
   const renameInFlightRef = useRef(false);
+  const dragRef = useRef<{ group: SidebarOrderGroup; id: string; parentId?: string } | null>(null);
+  const suppressClickUntil = useRef(0);
+  const [draggingItem, setDraggingItem] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [reorderAnnouncement, setReorderAnnouncement] = useState("");
+  const orderedProjects = useMemo(() => orderSidebarIds(projects, order.projects), [projects, order.projects]);
+  const orderedArchivedProjects = useMemo(() => orderSidebarIds(archivedProjects, order.archivedProjects), [archivedProjects, order.archivedProjects]);
+
+  function startDrag(event: React.DragEvent<HTMLElement>, group: SidebarOrderGroup, id: string, parentId?: string) {
+    dragRef.current = { group, id, parentId };
+    setDraggingItem(group === "workspaces" ? `${group}:${parentId}:${id}` : `${group}:${id}`);
+    suppressClickUntil.current = Date.now() + 500;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", JSON.stringify({ group, id, parentId }));
+  }
+
+  function overDropTarget(event: React.DragEvent<HTMLElement>, id: string, group: SidebarOrderGroup, parentId?: string) {
+    const drag = dragRef.current;
+    if (!drag || drag.group !== group || drag.parentId !== parentId || drag.id === id) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropTarget(group === "workspaces" ? `${group}:${parentId}:${id}` : `${group}:${id}`);
+  }
+
+  function dropOn(event: React.DragEvent<HTMLElement>, id: string, group: SidebarOrderGroup, parentId?: string) {
+    const drag = dragRef.current;
+    if (!drag || drag.group !== group || drag.parentId !== parentId || drag.id === id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    onReorder(group, drag.id, id, event.clientY >= rect.top + rect.height / 2, parentId);
+    dragRef.current = null;
+    setDropTarget(null);
+    suppressClickUntil.current = Date.now() + 500;
+  }
+
+  function finishDrag() { dragRef.current = null; setDraggingItem(null); setDropTarget(null); }
+
+  function moveWithKeyboard(event: React.KeyboardEvent<HTMLElement>, ids: string[], id: string, group: SidebarOrderGroup, parentId?: string) {
+    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+    const index = ids.indexOf(id);
+    const target = ids[index + (event.key === "ArrowUp" ? -1 : 1)];
+    if (!target) return;
+    event.preventDefault();
+    onReorder(group, id, target, event.key === "ArrowDown", parentId);
+    setReorderAnnouncement(t("Moved to position {position} of {count}.", { position: index + (event.key === "ArrowUp" ? 0 : 2), count: ids.length }));
+  }
 
   useEffect(() => {
     if (!projects.length) return;
@@ -90,8 +140,9 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
     </div>
 
     <div className="project-tree work-tree">
-      {projects.map((project) => {
-          const projectWorkspaces = workspaces.filter((workspace) => workspace.project_id === project.id);
+      {orderedProjects.map((project) => {
+          const projectWorkspaces = orderSidebarIds(workspaces.filter((workspace) => workspace.project_id === project.id), order.workspaces[project.id]);
+          const projectIds = orderedProjects.map((item) => item.id);
           const isExpanded = expanded.has(project.id);
           const menuOpen = projectMenu?.project.id === project.id;
           return <div className="project-node" key={project.id}>
@@ -112,7 +163,7 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
                     setEditingProjectId(null);
                   }
                 }} /></span>
-                : <button className="project-select" onClick={() => toggleProject(project.id)} title={`${project.name}${project.workspace_path ? ` · ${project.workspace_path}` : ""}`} aria-expanded={isExpanded}><span className="project-name">{project.name}</span>{projectWorkspaces.length > 0 && <small>{projectWorkspaces.length}</small>}</button>}
+                : <button className={`project-select${draggingItem === `projects:${project.id}` ? " sidebar-dragging" : ""}${dropTarget === `projects:${project.id}` ? " sidebar-drop-target" : ""}`} draggable onDragStart={(event) => startDrag(event, "projects", project.id)} onDragEnd={finishDrag} onDragOver={(event) => overDropTarget(event, project.id, "projects")} onDrop={(event) => dropOn(event, project.id, "projects")} onKeyDown={(event) => moveWithKeyboard(event, projectIds, project.id, "projects")} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" onClick={() => { if (Date.now() >= suppressClickUntil.current) toggleProject(project.id); }} title={`${project.name}${project.workspace_path ? ` · ${project.workspace_path}` : ""} · ${t("Drag to reorder. Use Alt+ArrowUp or Alt+ArrowDown.")}`} aria-expanded={isExpanded}><span className="project-name">{project.name}</span>{projectWorkspaces.length > 0 && <small>{projectWorkspaces.length}</small>}</button>}
               <span className="project-row-actions">
                 <button onClick={() => onNewWorkspace(project.id)} title={t("New workspace")} aria-label={t("New workspace")} disabled={disabled}><Plus size={13} /></button>
                 <button className={menuOpen ? "project-more-button active" : "project-more-button"} onClick={(event) => { projectAnchorRef.current = event.currentTarget; setProjectMenu((current) => current?.project.id === project.id ? null : { project }); }} title={t("More project actions")} aria-label={t("More project actions")} aria-haspopup="menu" aria-expanded={menuOpen} disabled={disabled}><MoreVertical size={14} /></button>
@@ -128,11 +179,13 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
             </div>
             {isExpanded && <div className="project-chat-list">
               {projectWorkspaces.map((workspace) => <div
-                className={activeWorkspaceId === workspace.id ? "project-chat-row active" : "project-chat-row"}
+                className={`${activeWorkspaceId === workspace.id ? "project-chat-row active" : "project-chat-row"}${dropTarget === `workspaces:${project.id}:${workspace.id}` ? " sidebar-drop-target" : ""}`}
                 key={workspace.id}
                 onContextMenu={(event) => { event.preventDefault(); setWorkspaceMenu({ workspace, cursor: { x: event.clientX, y: event.clientY } }); }}
+                onDragOver={(event) => overDropTarget(event, workspace.id, "workspaces", project.id)}
+                onDrop={(event) => dropOn(event, workspace.id, "workspaces", project.id)}
               >
-                <button className="project-chat-open" onClick={() => onOpenWorkspace(workspace)} title={workspace.root}>
+                <button className={`project-chat-open${draggingItem === `workspaces:${project.id}:${workspace.id}` ? " sidebar-dragging" : ""}${dropTarget === `workspaces:${project.id}:${workspace.id}` ? " sidebar-drop-target" : ""}`} draggable onDragStart={(event) => startDrag(event, "workspaces", workspace.id, project.id)} onDragEnd={finishDrag} onDragOver={(event) => overDropTarget(event, workspace.id, "workspaces", project.id)} onDrop={(event) => dropOn(event, workspace.id, "workspaces", project.id)} onKeyDown={(event) => moveWithKeyboard(event, projectWorkspaces.map((item) => item.id), workspace.id, "workspaces", project.id)} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" onClick={() => { if (Date.now() >= suppressClickUntil.current) onOpenWorkspace(workspace); }} title={`${workspace.root} · ${t("Drag to reorder. Use Alt+ArrowUp or Alt+ArrowDown.")}`}>
                   <span className="project-chat-title">{workspaceName(workspace, t)}</span>
                   {workspace.session_count > 0 && <span className="project-chat-count">{workspace.session_count}</span>}
                 </button>
@@ -158,8 +211,8 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
           <Archive size={13} /><span>{t("Archived projects")}</span><small>{archivedProjects.length}</small>
         </button>
         {showArchivedProjects && <div className="archived-project-list">
-          {archivedProjects.map((project) => <div className="archived-project-row" key={project.id}>
-            <span title={project.workspace_path || project.name}><strong>{project.name}</strong>{project.chat_count > 0 && <small>{project.chat_count}</small>}</span>
+          {orderedArchivedProjects.map((project) => <div className={`archived-project-row${dropTarget === `archivedProjects:${project.id}` ? " sidebar-drop-target" : ""}`} key={project.id} onDragOver={(event) => overDropTarget(event, project.id, "archivedProjects")} onDrop={(event) => dropOn(event, project.id, "archivedProjects")}>
+            <span className={draggingItem === `archivedProjects:${project.id}` ? "sidebar-dragging" : ""} draggable tabIndex={0} onDragStart={(event) => startDrag(event, "archivedProjects", project.id)} onDragEnd={finishDrag} onDragOver={(event) => overDropTarget(event, project.id, "archivedProjects")} onDrop={(event) => dropOn(event, project.id, "archivedProjects")} onKeyDown={(event) => moveWithKeyboard(event, orderedArchivedProjects.map((item) => item.id), project.id, "archivedProjects")} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" title={`${project.workspace_path || project.name} · ${t("Drag to reorder. Use Alt+ArrowUp or Alt+ArrowDown.")}`}><strong>{project.name}</strong>{project.chat_count > 0 && <small>{project.chat_count}</small>}</span>
             <div><button onClick={() => onArchiveProject(project, false)} title={t("Restore {name}", { name: project.name })} aria-label={t("Restore {name}", { name: project.name })} disabled={disabled}><ArchiveRestore size={12} /></button><button onClick={() => onRemoveProject(project)} title={t("Remove {name}", { name: project.name })} aria-label={t("Remove {name}", { name: project.name })} disabled={disabled}><Trash size={12} /></button></div>
           </div>)}
         </div>}
@@ -167,6 +220,7 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
     </div>
     {filterError && <div className="project-rename-error" role="alert">{filterError}</div>}
     {renameError && <div className="project-rename-error" role="alert">{renameError}</div>}
+    <span className="sidebar-order-live" aria-live="polite">{reorderAnnouncement}</span>
   </section>;
 }
 
