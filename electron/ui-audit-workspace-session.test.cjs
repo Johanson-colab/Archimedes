@@ -86,6 +86,9 @@ test("session search, filters, pinning, archiving and status are exposed", () =>
   assert.match(switcher, /pinned\.length > 0 && rest\.length > 0 && <div className="session-list-label">/);
   assert.match(switcher, /onPinSession\(session, !pinnedNow\)/);
   assert.match(switcher, /onArchiveSession\(session, filter !== "archived"\)/);
+  assert.match(switcher, /filter === "archived" && <button/);
+  assert.match(switcher, /onDeleteSession\(session\)/);
+  assert.match(app, /onDeleteSession=\{\(session\) => void deleteThread\(session\)\}/);
   assert.match(switcher, /session-status \$\{status\}/);
   assert.match(switcher, /sessionStatus\(session, runningThreadId\)/);
   assert.match(switcher, /pending_actions/);

@@ -2747,6 +2747,28 @@ function App() {
     }
   }
 
+  async function deleteThread(thread: ResearchThread) {
+    if (agentBusy) return;
+    if (!(await confirm({
+      title: t("Delete this session?"),
+      description: t("Deleting an archived session permanently removes its transcript. This cannot be undone."),
+      confirmLabel: t("Delete session"),
+      destructive: true,
+    }))) return;
+    await desktopBridge.deleteResearchThread(thread.id);
+    const snapshot = await desktopBridge.openWorkspace(workspace);
+    setProjects(snapshot.projects);
+    setArchivedProjects(snapshot.archivedProjects ?? []);
+    setThreads(snapshot.threads);
+    setArchivedThreads(snapshot.archivedThreads ?? []);
+    setWorkspaces(snapshot.workspaces ?? []);
+    if (activeThreadId === thread.id) {
+      const next = snapshot.threads.find((candidate) => candidate.workspace_id === thread.workspace_id)
+        ?? snapshot.threads.find((candidate) => candidate.project_id === thread.project_id);
+      if (next) await openResearchThread(next); else startNewTask(thread.project_id, thread.workspace_id);
+    }
+  }
+
   async function archiveProject(project: ResearchProject, archived: boolean) {
     if (agentBusy) return;
     await desktopBridge.archiveResearchProject(project.id, archived);
@@ -3456,6 +3478,7 @@ function App() {
             onNewSession={() => startNewTask()}
             onPinSession={(session, pinned) => void pinSession(session, pinned)}
             onArchiveSession={(session, archived) => void archiveThread(session, archived)}
+            onDeleteSession={(session) => void deleteThread(session)}
             onSelectWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
             onCreateWorkspace={(kind) => void createWorkspace(kind)}
             onRenameWorkspace={openWorkspaceRename}

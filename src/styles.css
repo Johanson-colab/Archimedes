@@ -10188,6 +10188,7 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 }
 .session-row-action:hover,
 .session-row-action.active { color: var(--menu-hover-ink); background: transparent; }
+.session-row-action.danger:hover { color: var(--state-danger); }
 .session-empty {
   display: grid;
   justify-items: start;

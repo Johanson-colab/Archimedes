@@ -10,6 +10,7 @@ import {
   PinOff,
   Plus,
   Search,
+  Trash2,
 } from "lucide-react";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
@@ -33,6 +34,7 @@ type SessionSwitcherProps = {
   onNewSession: () => void;
   onPinSession: (session: ResearchThread, pinned: boolean) => void;
   onArchiveSession: (session: ResearchThread, archived: boolean) => void;
+  onDeleteSession: (session: ResearchThread) => void;
   onSelectWorkspace: (workspace: ProjectWorkspace) => void;
   onCreateWorkspace: (kind: ProjectWorkspaceKind) => void;
   onRenameWorkspace: (workspace: ProjectWorkspace) => void;
@@ -110,6 +112,7 @@ export default function SessionSwitcher({
   onNewSession,
   onPinSession,
   onArchiveSession,
+  onDeleteSession,
   onSelectWorkspace,
   onCreateWorkspace,
   onRenameWorkspace,
@@ -209,6 +212,12 @@ export default function SessionSwitcher({
           title={filter === "archived" ? t("Restore session") : t("Archive session")}
           aria-label={filter === "archived" ? t("Restore session") : t("Archive session")}
         >{filter === "archived" ? <ArchiveRestore size={13} /> : <Archive size={13} />}</button>
+        {filter === "archived" && <button
+          className="session-row-action danger"
+          onClick={() => onDeleteSession(session)}
+          title={t("Delete session")}
+          aria-label={t("Delete session")}
+        ><Trash2 size={13} /></button>}
       </span>
     </div>;
   }
