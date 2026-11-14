@@ -19,6 +19,13 @@ test("Settings leaves the main nav and lives in the sidebar footer as an icon ac
   assert.match(app, /aria-label=\{t\("Settings"\)\}/);
   assert.match(css, /\.sidebar-footer-settings \{ display: grid; width: 30px/);
   assert.match(app, /<AccountChip compact authState=\{authState\}/);
+  const accountAt = app.indexOf("<AccountChip compact authState={authState}");
+  const updateAt = app.indexOf('className="sidebar-footer-update"');
+  const versionAt = app.indexOf('className="sidebar-footer-version"');
+  const settingsAt = app.indexOf('className="sidebar-footer-settings"');
+  assert.ok(accountAt < updateAt && updateAt < versionAt && versionAt < settingsAt, "footer order: account, update, version, settings");
+  assert.match(css, /\.sidebar-footer-settings \{[^}]*margin-left: auto/);
+  assert.match(css, /\.sidebar-runtime \.account-chip-wrap\.compact \{[^}]*margin-right: auto/);
 });
 
 test("footer shows package version and only conditionally shows an update action", () => {

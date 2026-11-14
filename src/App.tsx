@@ -3360,10 +3360,7 @@ function App() {
         />
 
         <div className="sidebar-runtime">
-          <button className="sidebar-footer-settings" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
-            <Settings size={16} strokeWidth={1.7} aria-hidden="true" />
-          </button>
-          <span className="sidebar-footer-version" title={t("Application version {version}", { version: packageMetadata.version })}>v{packageMetadata.version}</span>
+          <AccountChip compact authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
           {availableAppUpdate && <button className="sidebar-footer-update" onClick={() => {
             const requested = availableAppUpdate.url;
             let url = "https://github.com/Johanson-colab/Archimedes/releases/latest";
@@ -3377,7 +3374,10 @@ function App() {
           }} title={t("Update available: {version}", { version: availableAppUpdate.version })} aria-label={t("Update available: {version}", { version: availableAppUpdate.version })}>
             <Download size={13} aria-hidden="true" /><span>{t("Update")}</span>
           </button>}
-          <AccountChip compact authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
+          <span className="sidebar-footer-version" title={t("Application version {version}", { version: packageMetadata.version })}>v{packageMetadata.version}</span>
+          <button className="sidebar-footer-settings" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
+            <Settings size={16} strokeWidth={1.7} aria-hidden="true" />
+          </button>
         </div>
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>
