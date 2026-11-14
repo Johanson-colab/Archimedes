@@ -4738,7 +4738,9 @@ html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4;
 .chat-activity-footer.failed { color: var(--night-danger); }
 .chat-activity-footer.failed strong { color: var(--night-danger); }
 .chat-activity-footer-sep { color: var(--night-faint); }
-.chat-activity-low-summary { display: flex; align-items: center; gap: 6px; color: var(--night-muted); font-family: var(--font-mono); font-size: 11px; }
+.chat-activity-low-summary { display: flex; align-items: center; gap: 6px; padding: 0; color: var(--night-muted); background: transparent; border: 0; font-family: var(--font-mono); font-size: 11px; text-align: left; cursor: pointer; }
+.chat-activity-low-summary:hover { color: var(--night-ink-soft); }
+.chat-activity-low-steps { margin-top: 7px; }
 .chat-activity-low-plus { color: var(--accent); }
 @media (max-width: 620px) {
   .chat-activity-steps { grid-template-columns: 18px minmax(0, 45%) minmax(0, 1fr) auto; }

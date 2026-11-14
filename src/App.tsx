@@ -3839,9 +3839,9 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
       return;
     }
     const started = Date.now();
-    setAutoRunIn(5);
+    setAutoRunIn(10);
     const timer = window.setInterval(() => {
-      const remaining = Math.max(0, 5 - Math.floor((Date.now() - started) / 1000));
+      const remaining = Math.max(0, 10 - Math.floor((Date.now() - started) / 1000));
       setAutoRunIn(remaining);
       if (remaining <= 0) {
         window.clearInterval(timer);

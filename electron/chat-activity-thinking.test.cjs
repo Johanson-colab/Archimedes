@@ -4,7 +4,7 @@ const path = require("node:path");
 const { test, before, after } = require("node:test");
 const { JSDOM } = require("jsdom");
 
-let dom, React, createRoot, Timeline;
+let dom, React, createRoot, Timeline, settings;
 
 before(async () => {
   dom = new JSDOM('<div id="root"></div>', { url: "http://localhost" });
@@ -17,6 +17,7 @@ before(async () => {
     .replace(/export /g, "");
   const { code } = await transformWithOxc(source, "ChatActivityTimeline.tsx", { jsx: { runtime: "classic" } });
   const icons = require("lucide-react");
+  settings = { chatVerbosity: "medium", t: (key) => key };
   const scope = {
     React,
     useMemo: React.useMemo,
@@ -28,7 +29,7 @@ before(async () => {
     SquareTerminal: icons.SquareTerminal,
     Wrench: icons.Wrench,
     eventFailedAnswer: () => false,
-    useUISettings: () => ({ chatVerbosity: "medium", t: (key) => key }),
+    useUISettings: () => settings,
   };
   Timeline = new Function(...Object.keys(scope), `${code}\nreturn ChatActivityTimeline;`)(...Object.values(scope));
 });
@@ -46,4 +47,29 @@ test("an empty busy turn shows Thinking immediately", async () => {
   assert.match(document.body.textContent, /Thinking…/);
   assert.doesNotMatch(document.body.textContent, /Working/);
   await React.act(async () => root.unmount());
+});
+
+test("low verbosity plus expands and collapses activity steps", async () => {
+  settings.chatVerbosity = "low";
+  const root = createRoot(document.getElementById("root"));
+  try {
+    await React.act(async () => root.render(React.createElement(Timeline, {
+      events: [{ title: "search academic papers", detail: "long-term memory", state: "done" }],
+      rawEvents: [],
+      busy: false,
+      interrupting: false,
+    })));
+    const toggle = document.querySelector(".chat-activity-low-summary");
+    assert.ok(toggle, "low verbosity summary is a button");
+    assert.equal(toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(document.querySelector(".chat-activity-low-steps"), null);
+    await React.act(async () => toggle.click());
+    assert.equal(toggle.getAttribute("aria-expanded"), "true");
+    assert.match(document.querySelector(".chat-activity-low-steps").textContent, /Search academic papers/);
+    await React.act(async () => toggle.click());
+    assert.equal(document.querySelector(".chat-activity-low-steps"), null);
+  } finally {
+    await React.act(async () => root.unmount());
+    settings.chatVerbosity = "medium";
+  }
 });
