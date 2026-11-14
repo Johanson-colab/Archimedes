@@ -3778,6 +3778,17 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     setHistoryStart(0);
   }, []);
   const lastUserIndex = useMemo(() => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1), [visibleMessages]);
+  const nativeEvents = useMemo(() => nativeTurnEvents(trajectoryEvents), [trajectoryEvents]);
+  const hasStreamingText = messages.some((message) => message.role === "assistant" && message.id.endsWith(":stream") && Boolean(message.text.trim()));
+  const lastNativeActivity = [...nativeEvents].reverse()
+    .map((event) => (event.payload as { activity?: NativeAgentActivity } | null)?.activity)
+    .find(Boolean);
+  const hasRunningNativeTool = nativeEvents.some((event) => {
+    const activity = (event.payload as { activity?: NativeAgentActivity } | null)?.activity;
+    return activity?.status === "running";
+  });
+  const hasCommentaryAtTail = lastNativeActivity?.kind === "commentary" && Boolean(lastNativeActivity.output || lastNativeActivity.detail);
+  const thinking = agentBusy && !hasStreamingText && !hasRunningNativeTool && !hasCommentaryAtTail && !pendingAction;
   const nativeEventsByTurn = useMemo(() => {
     const grouped = new Map<string, ResearchEvent[]>();
     for (const event of trajectoryEvents) {
@@ -3848,7 +3859,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
           <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
         </div>)}
-        {lastUserIndex >= 0 && (nativeTurnEvents(trajectoryEvents).length ? <NativeAgentPanel events={trajectoryEvents} busy={agentBusy} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
+        {lastUserIndex >= 0 && (nativeEvents.length ? <NativeAgentPanel events={trajectoryEvents} busy={agentBusy} thinking={thinking} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
         {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
         {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         {pendingAction && <section className="conversation-approval">

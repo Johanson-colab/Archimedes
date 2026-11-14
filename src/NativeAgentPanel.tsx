@@ -4,7 +4,7 @@ import { useUISettings } from "./i18n";
 import { nativeTurnEvents } from "./native-agent-state";
 import "./native-agent.css";
 
-export default function NativeAgentPanel({ events, busy }: { events: ResearchEvent[]; busy: boolean }) {
+export default function NativeAgentPanel({ events, busy, thinking = false }: { events: ResearchEvent[]; busy: boolean; thinking?: boolean }) {
   const { t } = useUISettings();
   const snapshots = nativeTurnEvents(events);
   const activities = new Map<string, NativeAgentActivity>();
@@ -16,15 +16,22 @@ export default function NativeAgentPanel({ events, busy }: { events: ResearchEve
     if (payload.plan) plan = payload.plan;
     if (typeof payload.diff === "string") diff = payload.diff;
   }
-  if (!activities.size && !plan && !diff) return null;
+  const commentary = [...activities.values()].filter((activity) => activity.kind === "commentary" && (activity.output || activity.detail).trim());
+  const tools = new Map([...activities].filter(([, activity]) => activity.kind !== "commentary"));
+  if (!commentary.length && !tools.size && !plan && !diff && !thinking) return null;
   return <section className="native-agent-panel" aria-label={t("Native activity")}>
-    <details open className="native-activity-card">
-      <summary><Wrench size={13} /><strong>{t("Native activity")}</strong><span>{activities.size} {t("steps")}</span><ChevronDown size={13} /></summary>
-      <div className="native-activity-list">{[...activities.values()].map((activity) => <details key={activity.id} className={`native-activity-item ${activity.status}`}>
+    {commentary.map((activity) => <div className="native-commentary" key={activity.id}>{activity.output || activity.detail}</div>)}
+    {thinking && <div className="chat-activity-status native-thinking" aria-live="polite">
+      <span className="chat-activity-dot" aria-hidden="true" />
+      <strong>{t("Thinking…")}</strong>
+    </div>}
+    {tools.size > 0 && <details open className="native-activity-card">
+      <summary><Wrench size={13} /><strong>{t("Native activity")}</strong><span>{tools.size} {t("steps")}</span><ChevronDown size={13} /></summary>
+      <div className="native-activity-list">{[...tools.values()].map((activity) => <details key={activity.id} className={`native-activity-item ${activity.status}`}>
         <summary><Terminal size={13} /><span className="native-activity-title">{activity.title}</span><span className="native-activity-detail">{activity.detail}</span><small>{t(activity.status === "running" && !busy ? "Interrupted" : activity.status === "running" ? "Running" : activity.status === "failed" ? "Failed" : activity.status === "interrupted" ? "Interrupted" : "Completed")}</small></summary>
         <pre>{activity.output || activity.detail}</pre>
       </details>)}</div>
-    </details>
+    </details>}
     {plan && <details className="native-activity-card" open><summary><strong>{t("Native plan")}</strong></summary><p>{plan.explanation}</p><ol>{plan.steps.map((step, index) => <li key={index}><span>{step.step}</span><small>{t(step.status === "completed" ? "Completed" : step.status === "inProgress" || step.status === "in_progress" ? "Running" : "Pending")}</small></li>)}</ol></details>}
     {diff && <details className="native-activity-card"><summary><strong>{t("Native changes")}</strong></summary><pre>{diff}</pre></details>}
   </section>;

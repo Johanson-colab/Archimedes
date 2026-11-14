@@ -36,11 +36,22 @@ test("native context reports unknown and displays last-request tokens without AP
   await cleanup();
 });
 test("same-title native tools remain distinct with expandable output and correct stopped state", async () => {
-  const events = ["a", "b"].map((id) => ({ id, type: "native_activity", turn_id: "t", payload: { activity: { id, kind: "commandExecution", title: "Codex command", detail: "pwd", output: `/workspace/${id}`, status: id === "a" ? "completed" : "running" } } }));
+  const events = [
+    { id: "comment", type: "native_activity", turn_id: "t", payload: { activity: { id: "comment", kind: "commentary", title: "Codex · commentary", detail: "I will inspect the project first.", output: "I will inspect the project first.", status: "completed" } } },
+    ...["a", "b"].map((id) => ({ id, type: "native_activity", turn_id: "t", payload: { activity: { id, kind: "commandExecution", title: "Codex command", detail: "pwd", output: `/workspace/${id}`, status: id === "a" ? "completed" : "running" } } })),
+  ];
   const cleanup = await mount(Panel, { events, busy: false });
   assert.equal(document.querySelectorAll(".native-activity-item").length, 2);
+  assert.match(document.querySelector(".native-commentary").textContent, /inspect the project/);
+  assert.doesNotMatch(document.querySelector(".native-activity-list").textContent, /inspect the project/);
   assert.match(document.body.textContent, /Interrupted/);
   assert.match(document.querySelectorAll("pre")[1].textContent, /workspace\/b/);
+  await cleanup();
+});
+
+test("native turn shows Thinking before the first tool or answer", async () => {
+  const cleanup = await mount(Panel, { events: [], busy: true, thinking: true });
+  assert.match(document.body.textContent, /Thinking…/);
   await cleanup();
 });
 test("native question options send the selected answer once and blank answers stay disabled", async () => {

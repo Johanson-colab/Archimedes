@@ -178,7 +178,7 @@ export default function ChatActivityTimeline({
 
   const status = busy && <div className="chat-activity-status" aria-live="polite">
     <span className="chat-activity-dot" aria-hidden="true" />
-    <strong>{interrupting ? t("Stopping task") : t("Working")}</strong>
+    <strong>{interrupting ? t("Stopping task") : latest ? t("Working") : t("Thinking…")}</strong>
     {latest && <span className="chat-activity-status-detail">{latest.label}{latest.detail ? ` · ${latest.detail}` : ""}</span>}
   </div>;
 
