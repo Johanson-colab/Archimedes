@@ -10,13 +10,13 @@ test("workbench settings normalize unknown and duplicate tabs", () => {
   const normalized = settings.normalize({ order: ["notes", "notes", "unknown"], hidden: ["all"] });
   assert.deepEqual(normalized.order.slice(0, 2), ["notes", "journey"]);
   assert.equal(new Set(normalized.order).size, 8);
-  assert.deepEqual(normalized.hidden, ["artifacts", "browser"]);
+  assert.deepEqual(normalized.hidden, ["journey", "artifacts", "browser"]);
 });
 
 test("workbench settings hide optional tabs by default and keep explicit choices", () => {
   const migrated = settings.normalize({ version: 1, order: ["journey", "terminal"], hidden: [] });
   assert.equal(migrated.version, settings.PREFERENCES_VERSION);
-  assert.deepEqual(migrated.hidden, ["artifacts", "browser"]);
+  assert.deepEqual(migrated.hidden, ["journey", "artifacts", "browser"]);
 
   const enabled = settings.normalize({ version: settings.PREFERENCES_VERSION, order: ["journey", "browser", "artifacts"], hidden: [] });
   assert.deepEqual(enabled.hidden, []);
@@ -29,6 +29,21 @@ test("workbench settings hide optional tabs by default and keep explicit choices
   assert.deepEqual(v3ArtifactsEnabled.hidden, []);
 });
 
+test("workbench defaults hide Journey while existing preferences keep it", () => {
+  const fresh = settings.defaults();
+  assert.ok(fresh.hidden.includes("journey"));
+  assert.ok(!fresh.layout.panes[0].tabs.includes("journey"));
+  assert.equal(fresh.layout.panes[0].active, "trajectory");
+
+  const existing = settings.normalize({
+    version: 4,
+    order: ["journey", "trajectory", "files", "changes", "artifacts", "notes", "terminal", "browser"],
+    hidden: ["artifacts", "browser"],
+  });
+  assert.ok(!existing.hidden.includes("journey"));
+  assert.ok(existing.layout.panes[0].tabs.includes("journey"));
+});
+
 test("workbench settings always keep one tab visible", () => {
   const normalized = settings.normalize({ hidden: ["journey", "trajectory", "files", "changes", "artifacts", "notes", "terminal", "browser"] });
   assert.equal(normalized.hidden.length, 7);
@@ -37,13 +52,14 @@ test("workbench settings always keep one tab visible", () => {
 
 test("workbench settings default to one full-width pane", () => {
   const normalized = settings.normalize({});
-  assert.equal(normalized.version, 4);
+  assert.equal(normalized.version, 5);
   assert.equal(normalized.layout.orientation, "row");
   assert.equal(normalized.layout.panes.length, 1);
   assert.equal(normalized.layout.focused, normalized.layout.panes[0].id);
   assert.equal(normalized.layout.panes[0].size, 100);
   assert.deepEqual(normalized.layout.panes[0].tabs, normalized.order.filter((id) => !normalized.hidden.includes(id)));
   assert.equal(normalized.layout.panes[0].active, "trajectory");
+  assert.ok(!normalized.layout.panes[0].tabs.includes("journey"));
 });
 
 test("workbench settings keep split panes stable and readable", () => {
@@ -108,7 +124,7 @@ test("workbench settings persist and reset", () => {
 
     const reset = settings.resetWorkbenchSettings();
     assert.equal(reset.order[0], "journey");
-    assert.deepEqual(reset.hidden, ["artifacts", "browser"]);
+    assert.deepEqual(reset.hidden, ["journey", "artifacts", "browser"]);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

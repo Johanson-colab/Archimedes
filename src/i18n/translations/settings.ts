@@ -33,6 +33,7 @@ export const settings: Record<string, string> = {
   "Auto · login shell": "自动 · 登录 shell",
   "Auto · recommended": "自动 · 推荐",
   "Available models": "可用模型",
+  "Beta": "测试版",
   "Browse figure references and create images with FigureForge.": "浏览参考图，使用 FigureForge 创作图像。",
   "Build information": "版本信息",
   "Built-in research app": "内置科研应用",
