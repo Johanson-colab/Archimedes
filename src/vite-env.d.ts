@@ -1,5 +1,14 @@
 /// <reference types="vite/client" />
 
+type ResearchGraphNode = import("./research-graph/types").ResearchNode;
+type ResearchGraphEdge = import("./research-graph/types").ResearchEdge;
+type ResearchGraph = import("./research-graph/types").ResearchGraph;
+type ResearchGraphIssue = import("./research-graph/types").ResearchGraphIssue;
+type ResearchGraphNodeKind = import("./research-graph/types").ResearchNodeKind;
+type ResearchGraphEdgeKind = import("./research-graph/types").ResearchEdgeKind;
+type ResearchGraphStatus = import("./research-graph/types").ResearchNodeStatus;
+type ResearchGraphParent = { nodeId: string; revisionId?: string; kind?: ResearchGraphEdgeKind; metadata?: Record<string, unknown> };
+
 type FigureForgeConnection = { provider: string; baseUrl?: string; apiKey?: string; model?: string };
 type WorkbenchLayoutSnapshot = {
   orientation: "row" | "column";
@@ -107,6 +116,14 @@ interface ResearchDeskBridge {
     compactResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     exportResearchThread: (threadId: string, workspace?: string) => Promise<{ canceled: boolean; path?: string }>;
     getResearchSnapshot: () => Promise<WorkspaceSnapshot>;
+    createResearchNode: (input: { projectId: string; kind: ResearchGraphNodeKind; status?: ResearchGraphStatus; title: string; summary?: string; content?: Record<string, unknown>; parents?: ResearchGraphParent[]; author?: string }) => Promise<ResearchGraphNode>;
+    reviseResearchNode: (input: { nodeId: string; title?: string; summary?: string; content: Record<string, unknown>; sourceTurnId?: string | null; sourceEventId?: string | null; gitCommit?: string | null; author?: string }) => Promise<ResearchGraphNode>;
+    linkResearchNodes: (input: { fromNodeId: string; toNodeId: string; kind: ResearchGraphEdgeKind; fromRevisionId?: string | null; toRevisionId?: string | null; metadata?: Record<string, unknown>; author?: string }) => Promise<ResearchGraphEdge>;
+    listResearchGraph: (input: { projectId: string; includeArchived?: boolean }) => Promise<ResearchGraph>;
+    getResearchNodeHistory: (nodeId: string) => Promise<import("./research-graph/types").ResearchRevision[]>;
+    archiveResearchNode: (nodeId: string, reason?: string) => Promise<ResearchGraphNode>;
+    restoreResearchNode: (nodeId: string) => Promise<ResearchGraphNode>;
+    validateResearchGraph: (projectId: string) => Promise<{ projectId: string; ok: boolean; issues: ResearchGraphIssue[] }>;
     createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     setResearchProjectWorkspace: (id: string, workspacePath: string) => Promise<ResearchProject>;

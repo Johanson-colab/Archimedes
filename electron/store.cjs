@@ -10,6 +10,7 @@ const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
 const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles.cjs");
 const { applyApprovedWrite } = require("./agent/workspace-tools.cjs");
+const researchGraphConstants = require("./research-graph/constants.cjs");
 
 const OUTPUT_LIMIT = 200_000;
 const GIT_STATES = new Set(["none", "empty", "ready", "nested", "suspicious"]);
@@ -496,6 +497,68 @@ function schema(db) {
       UNIQUE (thread_id, path)
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS research_nodes (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL DEFAULT '',
+      current_revision_id TEXT,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      archived_at TEXT,
+      archived_by TEXT,
+      archive_reason TEXT NOT NULL DEFAULT '',
+      CHECK (kind IN ('question', 'idea', 'experiment', 'result', 'writing')),
+      CHECK (status IN ('draft', 'active', 'retracted'))
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS research_node_revisions (
+      id TEXT PRIMARY KEY NOT NULL,
+      node_id TEXT NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
+      parent_revision_id TEXT REFERENCES research_node_revisions(id) ON DELETE SET NULL,
+      content_json TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      source_turn_id TEXT REFERENCES research_turns(id) ON DELETE SET NULL,
+      source_event_id TEXT REFERENCES research_events(id) ON DELETE SET NULL,
+      git_commit TEXT,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS research_edges (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      from_node TEXT NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
+      from_revision TEXT NOT NULL REFERENCES research_node_revisions(id) ON DELETE CASCADE,
+      to_node TEXT NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
+      to_revision TEXT NOT NULL REFERENCES research_node_revisions(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      CHECK (kind IN (
+        'generates', 'tests', 'produces', 'supports', 'contradicts',
+        'inconclusive', 'informs', 'decides', 'refines', 'merges',
+        'extends', 'replicates', 'cites'
+      ))
+    ) STRICT;
+
+    CREATE TRIGGER IF NOT EXISTS research_node_revisions_immutable
+    BEFORE UPDATE OF content_json, content_hash, node_id, parent_revision_id
+    ON research_node_revisions
+    BEGIN
+      SELECT RAISE(ABORT, 'research node revisions are immutable');
+    END;
+
+    CREATE INDEX IF NOT EXISTS idx_research_nodes_project ON research_nodes(project_id, archived_at, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_research_node_revisions_node ON research_node_revisions(node_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_research_edges_project ON research_edges(project_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_research_edges_from ON research_edges(from_node);
+    CREATE INDEX IF NOT EXISTS idx_research_edges_to ON research_edges(to_node);
+
     CREATE INDEX IF NOT EXISTS idx_library_papers_library ON library_papers(library_id, added_at DESC);
     CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title);
     CREATE INDEX IF NOT EXISTS idx_paper_reader_pages_paper ON paper_reader_pages(paper_id, page_number);
@@ -558,6 +621,12 @@ function schema(db) {
   ensureColumn(db, "research_artifacts", "project_id", "TEXT");
   ensureColumn(db, "research_artifacts", "storage", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "research_artifacts", "sha256", "TEXT NOT NULL DEFAULT ''");
+  // Research graph links: a conversation and an artifact can be attached to a
+  // node revision without changing the existing thread/artifact ownership.
+  ensureColumn(db, "research_threads", "node_id", "TEXT");
+  ensureColumn(db, "research_threads", "node_revision_id", "TEXT");
+  ensureColumn(db, "research_artifacts", "node_id", "TEXT");
+  ensureColumn(db, "research_artifacts", "revision_id", "TEXT");
   ensureColumn(db, "project_workspaces", "name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
@@ -575,6 +644,8 @@ function schema(db) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_research_projects_cloud ON research_projects(cloud_project_id) WHERE cloud_project_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_workspace ON research_threads(workspace_id, archived_at, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_research_threads_node ON research_threads(node_id);
+    CREATE INDEX IF NOT EXISTS idx_research_artifacts_node ON research_artifacts(node_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_project_environments_project ON project_environments(project_id);
     CREATE INDEX IF NOT EXISTS idx_project_workspaces_project ON project_workspaces(project_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_project ON research_artifacts(project_id, updated_at DESC);
@@ -2447,6 +2518,358 @@ function createResearchThread({
   return { ...thread, turn_count: 0, last_turn_at: now };
 }
 
+function hydrateResearchRevision(row) {
+  if (!row) return null;
+  let content = {};
+  try {
+    content = JSON.parse(row.content_json || "{}");
+  } catch {
+    content = {};
+  }
+  return {
+    id: row.id,
+    node_id: row.node_id,
+    parent_revision_id: row.parent_revision_id || null,
+    content,
+    content_hash: row.content_hash,
+    source_turn_id: row.source_turn_id || null,
+    source_event_id: row.source_event_id || null,
+    git_commit: row.git_commit || null,
+    created_by: row.created_by,
+    created_at: row.created_at,
+  };
+}
+
+function hydrateResearchNode(row) {
+  if (!row) return null;
+  let currentRevision = null;
+  if (row.current_revision_id) {
+    currentRevision = hydrateResearchRevision({
+      id: row.current_revision_id,
+      node_id: row.id,
+      parent_revision_id: row.revision_parent_revision_id,
+      content_json: row.content_json,
+      content_hash: row.content_hash,
+      source_turn_id: row.source_turn_id,
+      source_event_id: row.source_event_id,
+      git_commit: row.git_commit,
+      created_by: row.revision_created_by,
+      created_at: row.revision_created_at,
+    });
+  }
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    kind: row.kind,
+    status: row.status,
+    title: row.title,
+    summary: row.summary || "",
+    current_revision_id: row.current_revision_id || null,
+    current_revision: currentRevision,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at || null,
+    archived_by: row.archived_by || null,
+    archive_reason: row.archive_reason || "",
+    archived: Boolean(row.archived_at),
+  };
+}
+
+function hydrateResearchEdge(row) {
+  if (!row) return null;
+  let metadata = {};
+  try {
+    metadata = JSON.parse(row.metadata_json || "{}");
+  } catch {
+    metadata = {};
+  }
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    from_node: row.from_node,
+    from_revision: row.from_revision,
+    to_node: row.to_node,
+    to_revision: row.to_revision,
+    kind: row.kind,
+    metadata,
+    created_by: row.created_by,
+    created_at: row.created_at,
+  };
+}
+
+function getResearchNode(id) {
+  const db = requireDatabase();
+  const row = db.prepare(`
+    SELECT n.*,
+      r.parent_revision_id AS revision_parent_revision_id,
+      r.content_json,
+      r.content_hash,
+      r.source_turn_id,
+      r.source_event_id,
+      r.git_commit,
+      r.created_by AS revision_created_by,
+      r.created_at AS revision_created_at
+    FROM research_nodes n
+    LEFT JOIN research_node_revisions r ON r.id = n.current_revision_id
+    WHERE n.id = ?
+  `).get(id);
+  if (!row) return null;
+  if (!canAccessProject(row.project_id, "viewer")) throw new Error("You do not have access to this research node.");
+  return hydrateResearchNode(row);
+}
+
+function listResearchGraph({ projectId, includeArchived = false } = {}) {
+  if (!projectId) throw new Error("A project is required to list the research graph.");
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  const db = requireDatabase();
+  const nodes = db.prepare(`
+    SELECT n.*,
+      r.parent_revision_id AS revision_parent_revision_id,
+      r.content_json,
+      r.content_hash,
+      r.source_turn_id,
+      r.source_event_id,
+      r.git_commit,
+      r.created_by AS revision_created_by,
+      r.created_at AS revision_created_at
+    FROM research_nodes n
+    LEFT JOIN research_node_revisions r ON r.id = n.current_revision_id
+    WHERE n.project_id = ?
+      AND (? = 1 OR n.archived_at IS NULL)
+    ORDER BY n.created_at ASC, n.rowid ASC
+  `).all(projectId, includeArchived ? 1 : 0).map(hydrateResearchNode);
+  const edges = db.prepare(`
+    SELECT e.*
+    FROM research_edges e
+    JOIN research_nodes source ON source.id = e.from_node
+    JOIN research_nodes target ON target.id = e.to_node
+    WHERE e.project_id = ?
+      AND (? = 1 OR (source.archived_at IS NULL AND target.archived_at IS NULL))
+    ORDER BY e.created_at ASC, e.rowid ASC
+  `).all(projectId, includeArchived ? 1 : 0).map(hydrateResearchEdge);
+  return { projectId, nodes, edges };
+}
+
+function listResearchEdges({ projectId } = {}) {
+  if (!projectId) throw new Error("A project is required to list research edges.");
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  const db = requireDatabase();
+  return db.prepare("SELECT * FROM research_edges WHERE project_id = ? ORDER BY created_at ASC, rowid ASC")
+    .all(projectId)
+    .map(hydrateResearchEdge);
+}
+
+function findResearchEdge({ fromNodeId, toNodeId, kind } = {}) {
+  const db = requireDatabase();
+  const row = db.prepare("SELECT * FROM research_edges WHERE from_node = ? AND to_node = ? AND kind = ? LIMIT 1")
+    .get(fromNodeId, toNodeId, kind);
+  return hydrateResearchEdge(row);
+}
+
+function getResearchNodeHistory(nodeId) {
+  const node = getResearchNode(nodeId);
+  if (!node) throw new Error("Research node not found.");
+  const db = requireDatabase();
+  return db.prepare("SELECT * FROM research_node_revisions WHERE node_id = ? ORDER BY created_at ASC, rowid ASC")
+    .all(nodeId)
+    .map(hydrateResearchRevision);
+}
+
+function createResearchNode({
+  projectId,
+  kind,
+  status = "draft",
+  title,
+  summary = "",
+  contentJson,
+  contentHash,
+  parents = [],
+  createdBy = localIdentity.userId,
+} = {}) {
+  if (!projectId) throw new Error("A project is required to create a research node.");
+  if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to create a research node in this project.");
+  if (!researchGraphConstants.isNodeKind(kind)) throw new Error(`Unknown research node kind: ${kind}`);
+  if (!researchGraphConstants.isNodeStatus(status)) throw new Error(`Unknown research node status: ${status}`);
+  const normalizedTitle = String(title || "").trim();
+  if (!normalizedTitle || normalizedTitle.length > 200) throw new Error("A research node title of at most 200 characters is required.");
+  if (typeof contentJson !== "string" || typeof contentHash !== "string") throw new Error("A research node requires serialized content and a content hash.");
+  if (!Array.isArray(parents) || parents.length > 8) throw new Error("A research node accepts at most eight parents.");
+  if (["experiment", "result"].includes(kind) && parents.length === 0) {
+    throw new Error(`A ${kind} node requires a parent.`);
+  }
+  const db = requireDatabase();
+  const project = db.prepare("SELECT id FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId);
+  if (!project) throw new Error("Project not found.");
+  const now = timestamp();
+  const nodeId = randomUUID();
+  const revisionId = randomUUID();
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      INSERT INTO research_nodes (id, project_id, kind, status, title, summary, current_revision_id, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+    `).run(nodeId, projectId, kind, status, normalizedTitle, String(summary || "").slice(0, 500), createdBy, now, now);
+    db.prepare(`
+      INSERT INTO research_node_revisions (id, node_id, parent_revision_id, content_json, content_hash, source_turn_id, source_event_id, git_commit, created_by, created_at)
+      VALUES (?, ?, NULL, ?, ?, NULL, NULL, NULL, ?, ?)
+    `).run(revisionId, nodeId, contentJson, contentHash, createdBy, now);
+    db.prepare("UPDATE research_nodes SET current_revision_id = ? WHERE id = ?").run(revisionId, nodeId);
+    for (const parent of parents) {
+      if (!parent || typeof parent.nodeId !== "string" || !parent.nodeId) throw new Error("Each parent requires a node id.");
+      const fromRevision = parent.revisionId || db.prepare("SELECT current_revision_id FROM research_nodes WHERE id = ? AND project_id = ?").get(parent.nodeId, projectId)?.current_revision_id;
+      if (!fromRevision) throw new Error("A parent research node has no current revision.");
+      db.prepare(`
+        INSERT INTO research_edges (id, project_id, from_node, from_revision, to_node, to_revision, kind, metadata_json, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(randomUUID(), projectId, parent.nodeId, fromRevision, nodeId, revisionId, parent.kind, JSON.stringify(parent.metadata || {}), createdBy, now);
+    }
+    db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, projectId);
+    recordAuditEvent(db, {
+      projectId,
+      action: "research.node_created",
+      targetType: "research_node",
+      targetId: nodeId,
+      metadata: { kind, parentCount: parents.length },
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getResearchNode(nodeId);
+}
+
+function reviseResearchNode({
+  nodeId,
+  title,
+  summary,
+  contentJson,
+  contentHash,
+  sourceTurnId = null,
+  sourceEventId = null,
+  gitCommit = null,
+  createdBy = localIdentity.userId,
+} = {}) {
+  const node = getResearchNode(nodeId);
+  if (!node) throw new Error("Research node not found.");
+  if (!canAccessProject(node.project_id, "editor")) throw new Error("You do not have permission to revise this research node.");
+  if (node.archived) throw new Error("Restore this research node before revising it.");
+  if (typeof contentJson !== "string" || typeof contentHash !== "string") throw new Error("A revision requires serialized content and a content hash.");
+  const db = requireDatabase();
+  const now = timestamp();
+  const revisionId = randomUUID();
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      INSERT INTO research_node_revisions (id, node_id, parent_revision_id, content_json, content_hash, source_turn_id, source_event_id, git_commit, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(revisionId, nodeId, node.current_revision_id, contentJson, contentHash, sourceTurnId, sourceEventId, gitCommit, createdBy, now);
+    db.prepare(`
+      UPDATE research_nodes
+      SET current_revision_id = ?, title = COALESCE(?, title), summary = COALESCE(?, summary), updated_at = ?
+      WHERE id = ?
+    `).run(revisionId, typeof title === "string" && title.trim() ? title.trim().slice(0, 200) : null, typeof summary === "string" ? summary.slice(0, 500) : null, now, nodeId);
+    db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, node.project_id);
+    recordAuditEvent(db, {
+      projectId: node.project_id,
+      action: "research.node_revised",
+      targetType: "research_node",
+      targetId: nodeId,
+      metadata: { revisionId, parentRevisionId: node.current_revision_id },
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getResearchNode(nodeId);
+}
+
+function linkResearchNodes({
+  fromNodeId,
+  toNodeId,
+  kind,
+  fromRevisionId = null,
+  toRevisionId = null,
+  metadataJson = "{}",
+  createdBy = localIdentity.userId,
+} = {}) {
+  if (!researchGraphConstants.isEdgeKind(kind)) throw new Error(`Unknown research edge kind: ${kind}`);
+  const from = getResearchNode(fromNodeId);
+  const to = getResearchNode(toNodeId);
+  if (!from || !to) throw new Error("Both research nodes must exist.");
+  if (from.project_id !== to.project_id) throw new Error("Research edges must connect nodes in the same project.");
+  if (from.archived || to.archived) throw new Error("Restore archived nodes before linking them.");
+  if (!canAccessProject(from.project_id, "editor")) throw new Error("You do not have permission to link research nodes.");
+  const db = requireDatabase();
+  const resolvedFromRevision = fromRevisionId || from.current_revision_id;
+  const resolvedToRevision = toRevisionId || to.current_revision_id;
+  const fromRevision = db.prepare("SELECT node_id FROM research_node_revisions WHERE id = ?").get(resolvedFromRevision);
+  const toRevision = db.prepare("SELECT node_id FROM research_node_revisions WHERE id = ?").get(resolvedToRevision);
+  if (!fromRevision || fromRevision.node_id !== fromNodeId) throw new Error("The source revision does not belong to the source node.");
+  if (!toRevision || toRevision.node_id !== toNodeId) throw new Error("The target revision does not belong to the target node.");
+  if (findResearchEdge({ fromNodeId, toNodeId, kind })) throw new Error("This research edge already exists.");
+  const now = timestamp();
+  const edgeId = randomUUID();
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      INSERT INTO research_edges (id, project_id, from_node, from_revision, to_node, to_revision, kind, metadata_json, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(edgeId, from.project_id, fromNodeId, resolvedFromRevision, toNodeId, resolvedToRevision, kind, metadataJson, createdBy, now);
+    db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, from.project_id);
+    recordAuditEvent(db, {
+      projectId: from.project_id,
+      action: "research.edge_created",
+      targetType: "research_edge",
+      targetId: edgeId,
+      metadata: { from: fromNodeId, to: toNodeId, kind },
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return hydrateResearchEdge(db.prepare("SELECT * FROM research_edges WHERE id = ?").get(edgeId));
+}
+
+function archiveResearchNode({ nodeId, reason = "", createdBy = localIdentity.userId } = {}) {
+  const node = getResearchNode(nodeId);
+  if (!node) throw new Error("Research node not found.");
+  if (!canAccessProject(node.project_id, "editor")) throw new Error("You do not have permission to archive this research node.");
+  const db = requireDatabase();
+  const now = timestamp();
+  db.prepare("UPDATE research_nodes SET archived_at = ?, archived_by = ?, archive_reason = ?, updated_at = ? WHERE id = ?")
+    .run(now, createdBy, String(reason || "").slice(0, 500), now, nodeId);
+  recordAuditEvent(db, {
+    projectId: node.project_id,
+    action: "research.node_archived",
+    targetType: "research_node",
+    targetId: nodeId,
+    metadata: { reason: String(reason || "").slice(0, 500) },
+  });
+  return getResearchNode(nodeId);
+}
+
+function restoreResearchNode({ nodeId, createdBy = localIdentity.userId } = {}) {
+  const node = getResearchNode(nodeId);
+  if (!node) throw new Error("Research node not found.");
+  if (!canAccessProject(node.project_id, "editor")) throw new Error("You do not have permission to restore this research node.");
+  const db = requireDatabase();
+  const now = timestamp();
+  db.prepare("UPDATE research_nodes SET archived_at = NULL, archived_by = NULL, archive_reason = '', updated_at = ? WHERE id = ?")
+    .run(now, nodeId);
+  recordAuditEvent(db, {
+    projectId: node.project_id,
+    action: "research.node_restored",
+    targetType: "research_node",
+    targetId: nodeId,
+    metadata: { by: createdBy },
+  });
+  return getResearchNode(nodeId);
+}
+
 function bindResearchThreadHarness(id, harness) {
   if (!["api", "codex", "claude", "opencode"].includes(harness)) throw new Error("Unknown Agent backend.");
   const db = requireDatabase();
@@ -3470,6 +3893,16 @@ function listReproductionAttempts(runId) {
 
 module.exports = {
   nativeAgentBindings,
+  createResearchNode,
+  getResearchNode,
+  listResearchGraph,
+  listResearchEdges,
+  findResearchEdge,
+  getResearchNodeHistory,
+  reviseResearchNode,
+  linkResearchNodes,
+  archiveResearchNode,
+  restoreResearchNode,
   bindResearchThreadHarness,
   compactResearchThread,
   forkResearchThread,

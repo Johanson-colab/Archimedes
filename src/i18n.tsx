@@ -29,6 +29,7 @@ import { session as sessionStrings } from "./i18n/translations/session";
 import { sidebarFooter as sidebarFooterStrings } from "./i18n/translations/sidebarFooter";
 import { sessionComments as sessionCommentsStrings } from "./i18n/translations/sessionComments";
 import { sessionSnapshot as sessionSnapshotStrings } from "./i18n/translations/sessionSnapshot";
+import { researchGraph as researchGraphStrings } from "./i18n/translations/researchGraph";
 
 export type Language = "en" | "zh";
 export type TextSize = "smaller" | "small" | "default" | "large" | "larger";
@@ -51,6 +52,7 @@ export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 
 const translations: Record<string, string> = {
   ...sessionCommentsStrings,
   ...sessionSnapshotStrings,
+  ...researchGraphStrings,
   ...appStrings,
   ...libraryStrings,
   ...galleryStrings,
