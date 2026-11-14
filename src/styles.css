@@ -1229,8 +1229,8 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .message-markdown pre { margin: 1em 0; overflow: auto; background: #f4f4f1; border: 1px solid #e0e0db; border-radius: 7px; }
 .message-markdown pre > code { display: block; min-width: max-content; padding: 13px 15px; white-space: pre; }
 .message-markdown pre > div { overflow: auto; }
-.message-markdown a { color: var(--amber-400); background: color-mix(in srgb, var(--amber-400) 12%, transparent); border-radius: 3px; font-weight: 600; text-decoration: underline; text-decoration-color: currentColor; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-.message-markdown a:hover { color: var(--amber-400); background: color-mix(in srgb, var(--amber-400) 22%, transparent); }
+.message-markdown a { color: var(--amber-400); font-weight: 600; text-decoration: underline; text-decoration-color: currentColor; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.message-markdown a:hover { color: var(--amber-400); }
 .message-markdown a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .message-markdown a > code { color: inherit; background: transparent; }
 .message-markdown table { display: block; width: 100%; margin: 1em 0; overflow-x: auto; border-collapse: collapse; }
@@ -3355,8 +3355,8 @@ html[data-theme="paper"] .paper-create-backdrop {
 .theme-paper .message-markdown blockquote { color: #69645d; border-color: #cbc5bd; }
 .theme-paper .message-markdown :not(pre) > code { color: #49453f; background: #f0eeea; }
 .theme-paper .message-markdown pre { color: #3a3732; background: #f5f3ef; border-color: var(--mono-border); }
-.theme-paper .message-markdown a { color: var(--amber-700); background: color-mix(in srgb, var(--amber-700) 10%, transparent); }
-.theme-paper .message-markdown a:hover { color: var(--amber-800); background: color-mix(in srgb, var(--amber-700) 18%, transparent); }
+.theme-paper .message-markdown a { color: var(--amber-700); }
+.theme-paper .message-markdown a:hover { color: var(--amber-800); }
 .theme-paper .message-markdown a > code { color: inherit; background: transparent; }
 .theme-paper .conversation-sources a { color: #4f4a43; text-decoration-color: #aaa39a; }
 .theme-paper .conversation-sources a { background: #f3f1ed; border-color: var(--mono-border); }
