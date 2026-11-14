@@ -4611,9 +4611,9 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
           {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
         </div>}
         {pendingResearchSkill === "idea-spark" && <div className="composer-skill">
-          <span className="composer-skill-icon"><Lightbulb size={14} strokeWidth={1.9} aria-hidden="true" /></span>
-          <span className="composer-skill-text"><strong>{t("Idea Spark")}</strong><small>{t("Full workflow · usually 10–20 minutes")}</small></span>
-          <button type="button" onClick={() => { setPendingResearchSkill(null); setCommandNotice(""); }} aria-label={t("Remove Idea Spark")} title={t("Remove Idea Spark")}><X size={12} /></button>
+          <Lightbulb size={13} strokeWidth={1.9} aria-hidden="true" />
+          <strong>{t("Idea Spark")}</strong>
+          <button type="button" onClick={() => { setPendingResearchSkill(null); setCommandNotice(""); }} aria-label={t("Remove Idea Spark")} title={t("Remove Idea Spark")}><X size={11} /></button>
         </div>}
         <textarea ref={composerRef} className={newChatMode === "research" && prompt === RESEARCH_EXAMPLE ? "research-example" : undefined} value={prompt} disabled={commandRunning} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;

@@ -7828,22 +7828,23 @@ html[data-menu-style="glass"] .menu-surface {
 .composer-queue-clear { padding: 3px 6px; color: var(--night-faint); background: transparent; border: 0; border-radius: 4px; font: inherit; font-size: 9px; }
 .composer-queue-clear:hover { color: var(--night-ink); background: var(--night-panel-raised); }
 .composer-skill {
-  display: flex;
-  min-width: 0;
+  display: inline-flex;
+  width: fit-content;
+  max-width: calc(100% - 20px);
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 8px 10px 0;
-  padding: 6px 6px 6px 9px;
+  padding: 4px 5px 4px 9px;
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, var(--night-panel));
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--night-line-soft));
-  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--night-panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--night-line-soft));
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
 }
-.composer-skill-icon { display: grid; flex: 0 0 auto; place-items: center; }
-.composer-skill-text { display: flex; min-width: 0; flex: 1; align-items: baseline; gap: 8px; }
-.composer-skill-text strong { font-size: 11px; font-weight: 650; white-space: nowrap; }
-.composer-skill-text small { overflow: hidden; color: var(--night-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.composer-skill > button { display: grid; width: 19px; height: 19px; flex: 0 0 auto; place-items: center; color: var(--night-faint); background: transparent; border-radius: 3px; }
+.composer-skill strong { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.composer-skill > svg { flex: 0 0 auto; }
+.composer-skill > button { display: grid; width: 18px; height: 18px; flex: 0 0 auto; place-items: center; color: var(--night-faint); background: transparent; border-radius: 50%; }
 .composer-skill > button:hover { color: var(--night-ink); background: var(--night-panel-raised); }
 .composer-slash-menu .menu-item.active { color: var(--night-ink); background: var(--night-panel-raised); }
 .composer-slash-menu .menu-item { min-height: 32px; padding: 0 10px; font-size: 12px; }

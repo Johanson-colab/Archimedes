@@ -9,7 +9,6 @@ export const composer: Record<string, string> = {
   "Agent activity": "Agent 活动",
   "Back": "后退",
   "Describe the research direction for Idea Spark...": "描述要交给 Idea Spark 的研究方向……",
-  "Full workflow · usually 10–20 minutes": "完整流程 · 通常 10–20 分钟",
   "Idea Spark": "Idea Spark",
   "Plugins": "插件",
   "Reading research context": "正在读取研究上下文",
