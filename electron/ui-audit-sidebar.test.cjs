@@ -203,11 +203,12 @@ test("Extensions uses Installed, Available, and Updates with Workbench tabs", ()
 });
 
 test("account chip is global and the composer drops duplicate runtime controls", () => {
-  const settings = app.indexOf('className="codex-nav-item sidebar-settings-entry"');
-  assert.ok(settings > app.indexOf('className="new-task-button"') && settings < app.indexOf('<nav className="sidebar-nav sidebar-modules"'), "Settings is above Research Apps and Projects");
-  assert.ok(!app.slice(app.indexOf('<div className="sidebar-runtime"'), app.indexOf('<div className="sidebar-resizer"')).includes('aria-label={t("Settings")}'), "footer contains account access only");
+  const settings = app.indexOf('className="sidebar-footer-settings"');
+  assert.ok(settings > app.indexOf('<ProjectSidebar') && settings < app.indexOf('<div className="sidebar-resizer"'), "Settings is in the bottom footer after Projects");
+  assert.doesNotMatch(app, /codex-nav-item sidebar-settings-entry/);
+  assert.match(app, /sidebar-footer-version/);
   assert.match(app, /className="sidebar-runtime"/);
-  assert.match(app, /<AccountChip authState=\{authState\}/);
+  assert.match(app, /<AccountChip compact authState=\{authState\}/);
   assert.doesNotMatch(app, /composer-runtime-switch|composer-runtime-local|composer-runtime-cloud|cloud-gate/);
   assert.doesNotMatch(app, /thread-visibility-trigger/);
   assert.match(css, /\.account-chip \{ display: flex;/);

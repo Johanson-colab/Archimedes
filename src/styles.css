@@ -7192,9 +7192,34 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 .auth-footer > span button { color: var(--night-muted); background: transparent; font-size: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 .account-cloud-identity { gap: 10px; }
+.sidebar-runtime { align-items: center; gap: 6px; padding: 8px 3px 0; }
+.sidebar-footer-settings { display: grid; width: 30px; height: 30px; flex: 0 0 30px; margin-left: auto; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 6px; }
+.sidebar-footer-settings:hover { color: var(--night-ink); background: var(--sb-hover); }
+.sidebar-footer-settings:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.sidebar-footer-version { min-width: 0; flex: 0 1 auto; overflow: hidden; color: var(--sb-faint); font-size: 10px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-footer-update { display: inline-flex; height: 24px; flex: 0 0 auto; align-items: center; padding: 0 1px; color: var(--accent); background: transparent; border: 0; border-radius: 3px; font-size: 10.5px; font-weight: 500; white-space: nowrap; }
+.sidebar-footer-update:hover { color: var(--accent-strong); background: transparent; text-decoration: underline; text-underline-offset: 2px; }
+.sidebar-runtime .account-chip-wrap.compact { min-width: 0; flex: 0 0 auto; margin-right: auto; }
+.account-chip.compact { display: flex; width: auto; min-width: 30px; height: 30px; min-height: 30px; align-items: center; justify-content: center; padding: 0 8px; border-color: transparent; }
+.account-chip.compact.guest .account-chip-copy { display: block; }
+.account-chip.compact.guest .account-chip-copy small,
+.account-chip.compact .account-chevron { display: none; }
+.account-chip.compact.signed-in { width: 30px; padding: 0; }
+.account-chip.compact .account-avatar { width: 26px; height: 26px; }
+.account-chip.compact:hover { background: var(--sb-hover); border-color: transparent; }
+.sidebar-runtime .account-chip.compact.guest { min-width: 0; }
+.sidebar-runtime .account-chip.compact .account-chip-copy strong { font-size: 11px; font-weight: 500; }
+.sidebar-runtime .account-chip.compact .account-avatar { flex: 0 0 26px; }
+.sidebar-footer-update:focus-visible, .sidebar-runtime .account-chip.compact:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 @media (max-width: 860px) {
-  .sidebar-runtime { flex-direction: row; }
+  .sidebar-runtime { flex-direction: column; align-items: center; gap: 4px; }
   .account-chip-copy { display: none; }
+  .sidebar-footer-version { display: none; }
+  .sidebar-footer-update { height: 24px; min-height: 24px; padding: 0; font-size: 10px; }
+  .sidebar-runtime .account-chip-wrap.compact { margin-right: 0; }
+  .sidebar-footer-settings { margin-left: 0; }
+  .sidebar-runtime .account-chip.compact.guest { min-width: 0; width: 100%; padding-inline: 2px; }
+  .sidebar-runtime .account-chip.compact.guest .account-chip-copy { display: block; }
 }
 
 @media (max-width: 980px) {

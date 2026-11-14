@@ -26,6 +26,7 @@ import {
   type FileTextShortcuts,
 } from "./file-text-size";
 import { session as sessionStrings } from "./i18n/translations/session";
+import { sidebarFooter as sidebarFooterStrings } from "./i18n/translations/sidebarFooter";
 import { sessionComments as sessionCommentsStrings } from "./i18n/translations/sessionComments";
 import { sessionSnapshot as sessionSnapshotStrings } from "./i18n/translations/sessionSnapshot";
 
@@ -71,6 +72,7 @@ const translations: Record<string, string> = {
   ...dataAnalysisStrings,
   ...paperSlidesStrings,
   ...sessionStrings,
+  ...sidebarFooterStrings,
 };
 
 type UISettings = {
