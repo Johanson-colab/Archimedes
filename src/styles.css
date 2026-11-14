@@ -10037,7 +10037,11 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 .session-status.failed { background: var(--state-danger); }
 .session-status.unread { background: var(--accent); }
 
-.menu-surface.session-switcher-popover { padding: 0; overflow: hidden; }
+.menu-surface.session-switcher-popover { display: flex; min-height: 0; flex-direction: column; padding: 0; overflow: hidden; }
+.session-switcher-popover .session-menu-heading,
+.session-switcher-popover .session-search,
+.session-switcher-popover .session-filters,
+.session-switcher-popover .session-switcher-foot { flex: 0 0 auto; }
 .session-menu-heading { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px 0; }
 .session-menu-heading > div { display: grid; min-width: 0; gap: 3px; }
 .session-menu-heading strong { color: var(--menu-ink); font-size: 13px; font-weight: 600; }
@@ -10088,8 +10092,10 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
   border-color: var(--menu-border);
 }
 .session-list {
-  min-height: 120px;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 6px 6px;
   scrollbar-width: thin;
 }
