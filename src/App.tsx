@@ -3372,7 +3372,7 @@ function App() {
             }
             void desktopBridge.openExternalUrl(url).catch(() => undefined);
           }} title={t("Update available: {version}", { version: availableAppUpdate.version })} aria-label={t("Update available: {version}", { version: availableAppUpdate.version })}>
-            <Download size={13} aria-hidden="true" /><span>{t("Update")}</span>
+            <span>{t("Update")}</span>
           </button>}
           <span className="sidebar-footer-version" title={t("Application version {version}", { version: packageMetadata.version })}>v{packageMetadata.version}</span>
           <button className="sidebar-footer-settings" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
