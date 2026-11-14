@@ -22,10 +22,10 @@ test("Browser is an optional workbench tab that starts hidden", () => {
   assert.match(tabs, /optional: true/);
   assert.match(tabs, /OPTIONAL_WORKBENCH_TAB_IDS/);
   assert.match(tabs, /hidden: \[\.\.\.OPTIONAL_WORKBENCH_TAB_IDS\]/);
-  assert.match(tabs, /WORKBENCH_PREFERENCES_VERSION = 4/);
+  assert.match(tabs, /WORKBENCH_PREFERENCES_VERSION = 5/);
   assert.match(tabs, /if \(version < WORKBENCH_PREFERENCES_VERSION\)/);
-  assert.match(workbenchSettings, /OPTIONAL_TAB_IDS = \["artifacts", "browser"\]/);
-  assert.match(workbenchSettings, /PREFERENCES_VERSION = 4/);
+  assert.match(workbenchSettings, /OPTIONAL_TAB_IDS = \["journey", "artifacts", "browser"\]/);
+  assert.match(workbenchSettings, /PREFERENCES_VERSION = 5/);
   assert.doesNotMatch(settingsPanel, /workbench-settings-tag/);
   assert.doesNotMatch(settingsPanel, /Optional/);
   assert.match(read("src/RightWorkbench.tsx"), /preferences\.order\.filter\(\(id\) => preferences\.hidden\.includes\(id\)\)/);

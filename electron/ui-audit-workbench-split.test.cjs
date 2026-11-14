@@ -15,7 +15,7 @@ const settingsPanel = read("src/WorkbenchSettingsPanel.tsx");
 const i18n = readLocale();
 
 test("workbench layout model stores split panes with a bounded orientation", () => {
-  assert.match(tabs, /WORKBENCH_PREFERENCES_VERSION = 4/);
+  assert.match(tabs, /WORKBENCH_PREFERENCES_VERSION = 5/);
   assert.match(tabs, /MAX_WORKBENCH_PANES = 2/);
   assert.match(tabs, /MIN_WORKBENCH_PANE_PERCENT = 25/);
   assert.match(tabs, /export type WorkbenchPaneOrientation = "row" \| "column"/);
@@ -73,7 +73,7 @@ test("workbench panels are partitioned so a tab never mounts twice", () => {
 });
 
 test("split layout persists through the workbench settings bridge", () => {
-  assert.match(settings, /PREFERENCES_VERSION = 4/);
+  assert.match(settings, /PREFERENCES_VERSION = 5/);
   assert.match(settings, /MAX_PANES = 2/);
   assert.match(settings, /MIN_PANE_PERCENT = 25/);
   assert.match(settings, /function normalizeLayout/);

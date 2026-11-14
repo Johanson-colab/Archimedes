@@ -5737,7 +5737,9 @@ html[data-file-icons="monochrome"] .tree-file-icon { color: var(--rail-row-muted
 .workbench-settings-grip:active { cursor: grabbing; }
 .workbench-settings-icon { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; color: var(--night-muted); background: var(--night-panel-soft); border-radius: 6px; }
 .workbench-settings-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.workbench-settings-title { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .workbench-settings-copy strong { color: var(--night-ink); font-size: 13px; font-weight: 530; }
+.workbench-settings-beta { flex: 0 0 auto; padding: 1px 5px; color: var(--accent); background: transparent; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--night-line); font-size: 9px; font-weight: 650; letter-spacing: .06em; line-height: 1.5; text-transform: uppercase; }
 .workbench-settings-copy p { margin: 0; color: var(--night-muted); font-size: 12px; line-height: 1.45; }
 .workbench-visibility { display: flex; width: 34px; height: 20px; flex: 0 0 auto; align-items: center; padding: 2px; background: var(--night-panel-soft); border: 1px solid var(--night-line); border-radius: 10px; }
 .workbench-visibility span { display: block; width: 14px; height: 14px; background: var(--night-faint); border-radius: 50%; transition: transform .15s ease, background-color .15s ease; }

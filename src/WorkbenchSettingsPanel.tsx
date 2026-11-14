@@ -54,7 +54,10 @@ export default function WorkbenchSettingsPanel({ preferences, onChange, onReset 
           ><GripVertical size={14} /></span>
           <span className="workbench-settings-icon">{tab.icon}</span>
           <div className="workbench-settings-copy">
-            <strong>{t(tab.labelKey)}</strong>
+            <div className="workbench-settings-title">
+              <strong>{t(tab.labelKey)}</strong>
+              {tab.beta && <span className="workbench-settings-beta">{t("Beta")}</span>}
+            </div>
             <p>{t(tab.descriptionKey)}</p>
           </div>
           <button
