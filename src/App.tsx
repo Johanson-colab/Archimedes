@@ -68,6 +68,7 @@ import SessionComments, { type SessionCommentsScope } from "./SessionComments";
 import AccountChip from "./AccountChip";
 import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
+import { moveSidebarOrder, orderSidebarIds, readSidebarOrder, reconcileSidebarOrder, writeSidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
 import { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, formatFileComment, isDraftDirty, isEditableFile, markDraftSaved, mergeRefreshedFiles, prepareFileContent, toEditorText, type FileComment, type FileDraft, type FileSelection } from "./file-editor";
 import { shortcutMatches } from "./file-text-size";
@@ -1342,6 +1343,12 @@ function App() {
   const themePreference = appearance.preset;
   const setThemePreference = (preset: ThemePreset) => setAppearance((current) => ({ ...current, preset }));
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
+  const [sidebarOrder, setSidebarOrder] = useState(readSidebarOrder);
+  const [sidebarOrderAnnouncement, setSidebarOrderAnnouncement] = useState("");
+  const sidebarItemDragRef = useRef<{ group: "apps"; id: string } | null>(null);
+  const suppressSidebarAppClickUntil = useRef(0);
+  const [sidebarAppDragging, setSidebarAppDragging] = useState<string | null>(null);
+  const [sidebarAppDropTarget, setSidebarAppDropTarget] = useState<string | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
@@ -3237,7 +3244,27 @@ function App() {
     : null;
   const workspaceDialogProject = projects.find((project) => project.id === workspaceDialogProjectId) ?? null;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
-  const flatModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
+  const registeredSidebarEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled), [pluginEntries]);
+  const availableModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
+  const flatModuleEntries = useMemo(() => orderSidebarIds(availableModuleEntries, sidebarOrder.apps), [availableModuleEntries, sidebarOrder.apps]);
+  const availableSidebarWorkspaces = useMemo(() => Object.fromEntries([...projects, ...archivedProjects].map((project) => {
+    const current = workspaces.filter((entry) => entry.project_id === project.id).map((entry) => entry.id);
+    // An archived project may not contribute workspaces to the active snapshot.
+    // Preserve their local order until that project is restored and refreshed.
+    return [project.id, archivedProjects.some((archived) => archived.id === project.id) && !current.length ? sidebarOrder.workspaces[project.id] ?? [] : current];
+  })), [projects, archivedProjects, workspaces, sidebarOrder.workspaces]);
+  const availableSidebarOrder = useMemo(() => ({ apps: registeredSidebarEntries.map((entry) => entry.id), projects: projects.map((entry) => entry.id), archivedProjects: archivedProjects.map((entry) => entry.id), workspaces: availableSidebarWorkspaces }), [registeredSidebarEntries, projects, archivedProjects, availableSidebarWorkspaces]);
+  useEffect(() => { writeSidebarOrder(sidebarOrder); }, [sidebarOrder]);
+  useEffect(() => {
+    if (!workspaceReady) return;
+    setSidebarOrder((current) => {
+      const next = reconcileSidebarOrder(current, { ...availableSidebarOrder, workspaces: { ...availableSidebarWorkspaces } });
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next;
+    });
+  }, [workspaceReady, availableSidebarOrder, availableSidebarWorkspaces]);
+  const reorderSidebar = useCallback((group: SidebarOrderGroup, sourceId: string, targetId: string, after: boolean, parentId?: string) => {
+    setSidebarOrder((current) => moveSidebarOrder(reconcileSidebarOrder(current, { ...availableSidebarOrder, workspaces: { ...availableSidebarWorkspaces } }), group, sourceId, targetId, after, parentId));
+  }, [availableSidebarOrder, availableSidebarWorkspaces]);
   const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
     id: entry.commandId,
     group: t("Research Apps"),
@@ -3245,9 +3272,30 @@ function App() {
     icon: <entry.icon size={15} />,
     run: () => activateSidebarEntry(entry),
   }));
-  const moduleButton = (entry: SidebarEntry) => <button className={mainSection === entry.destination.section ? "codex-nav-item active" : "codex-nav-item"} key={entry.id} onClick={() => activateSidebarEntry(entry)} title={t(entry.labelKey)} disabled={entry.disabled}>
-    <entry.icon size={15} /><span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
-  </button>;
+  const moduleButton = (entry: SidebarEntry) => {
+    const ids = flatModuleEntries.map((item) => item.id);
+    const reorderByKeyboard = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+      const index = ids.indexOf(entry.id);
+      const target = ids[index + (event.key === "ArrowUp" ? -1 : 1)];
+      if (!target) return;
+      event.preventDefault();
+      reorderSidebar("apps", entry.id, target, event.key === "ArrowDown");
+      setSidebarOrderAnnouncement(t("Moved {name} to position {position} of {count}.", { name: t(entry.labelKey), position: index + (event.key === "ArrowUp" ? 0 : 2), count: ids.length }));
+    };
+    return <button className={`codex-nav-item${mainSection === entry.destination.section ? " active" : ""}${sidebarAppDragging === entry.id ? " sidebar-dragging" : ""}${sidebarAppDropTarget === entry.id ? " sidebar-drop-target" : ""}`} key={entry.id}
+      draggable
+      aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+      onKeyDown={reorderByKeyboard}
+      onDragStart={(event) => { sidebarItemDragRef.current = { group: "apps", id: entry.id }; setSidebarAppDragging(entry.id); suppressSidebarAppClickUntil.current = Date.now() + 500; event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", entry.id); }}
+      onDragOver={(event) => { const drag = sidebarItemDragRef.current; if (!drag || drag.group !== "apps" || drag.id === entry.id) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; setSidebarAppDropTarget(entry.id); }}
+      onDrop={(event) => { const drag = sidebarItemDragRef.current; if (!drag || drag.group !== "apps" || drag.id === entry.id) return; event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); reorderSidebar("apps", drag.id, entry.id, event.clientY >= rect.top + rect.height / 2); sidebarItemDragRef.current = null; setSidebarAppDragging(null); suppressSidebarAppClickUntil.current = Date.now() + 500; setSidebarAppDropTarget(null); }}
+      onDragEnd={() => { sidebarItemDragRef.current = null; setSidebarAppDragging(null); setSidebarAppDropTarget(null); suppressSidebarAppClickUntil.current = Date.now() + 500; }}
+      onClick={() => { if (Date.now() >= suppressSidebarAppClickUntil.current) activateSidebarEntry(entry); }}
+      title={`${t(entry.labelKey)} · ${t("Drag to reorder. Use Alt+ArrowUp or Alt+ArrowDown.")}`} disabled={entry.disabled}>
+      <entry.icon size={15} /><span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
+    </button>;
+  };
   const paletteCommands: PaletteCommand[] = [
     { id: "new-research", group: t("Work"), label: t("New research task"), detail: t("Start a chat in the current project"), shortcut: "Ctrl N", icon: <Plus size={15} />, run: () => startNewTask() },
     { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
@@ -3329,6 +3377,8 @@ function App() {
           projects={projects}
           archivedProjects={archivedProjects}
           workspaces={workspaces}
+          order={sidebarOrder}
+          onReorder={reorderSidebar}
           activeProjectId={activeProjectId}
           activeWorkspaceId={activeWorkspace?.id ?? null}
           disabled={agentBusy}
@@ -3343,6 +3393,7 @@ function App() {
           onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
           filterError={projectFolderError}
         />
+        <span className="sidebar-order-live" aria-live="polite">{sidebarOrderAnnouncement}</span>
 
         <div className="sidebar-runtime">
           <AccountChip authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />

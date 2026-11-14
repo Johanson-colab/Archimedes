@@ -8582,6 +8582,19 @@ html[data-menu-style="glass"] .menu-surface {
 .sidebar-nav.sidebar-modules { padding-top: 0; padding-bottom: 0; }
 .sidebar-section-label { display: flex; height: 30px; align-items: center; margin-top: 4px; padding: 0 8px; color: var(--sb-muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
 .sidebar-module-list { display: grid; gap: 2px; }
+.sidebar-module-list .codex-nav-item[draggable="true"],
+.project-select[draggable="true"],
+.project-chat-open[draggable="true"],
+.archived-project-row > span[draggable="true"] { cursor: grab; }
+.sidebar-module-list .codex-nav-item.sidebar-dragging,
+.project-select.sidebar-dragging,
+.project-chat-open.sidebar-dragging,
+.archived-project-row > span.sidebar-dragging { opacity: .48; cursor: grabbing; }
+.sidebar-module-list .codex-nav-item.sidebar-drop-target,
+.project-select.sidebar-drop-target,
+.project-chat-open.sidebar-drop-target,
+.archived-project-row.sidebar-drop-target { box-shadow: inset 0 2px var(--accent); }
+.sidebar-order-live { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .sidebar-settings-entry { flex: 0 0 auto; }
 .sidebar-settings-entry > .sidebar-settings-icon { width: 24px; height: 24px; margin-left: auto; padding: 4.5px; box-sizing: border-box; color: var(--sb-muted); }
 .sidebar-apps-manage { display: grid; width: 24px; height: 24px; margin-left: auto; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
