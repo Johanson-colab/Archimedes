@@ -5,13 +5,15 @@ import { useUISettings } from "../i18n";
 import { layoutGraph } from "./graphLayout";
 import NodeInspector, { type ChildOption } from "./NodeInspector";
 import ResearchGraphView from "./ResearchGraphView";
-import type { ResearchGraph, ResearchNodeKind } from "./types";
+import type { ResearchGraph, ResearchGraphUpdate, ResearchNodeKind } from "./types";
 
 type Props = {
   projectId: string | null;
   projectName: string;
   threadTitle: string;
   hasThread: boolean;
+  version?: number;
+  update?: ResearchGraphUpdate | null;
   onOpenThread: () => void;
   onCollapse: () => void;
 };
@@ -35,6 +37,8 @@ export default function ResearchGraphPanel({
   projectName,
   threadTitle,
   hasThread,
+  version = 0,
+  update = null,
   onOpenThread,
   onCollapse,
 }: Props) {
@@ -47,6 +51,8 @@ export default function ResearchGraphPanel({
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
+  const [undoing, setUndoing] = useState(false);
 
   useEffect(() => {
     if (!projectId) {
@@ -63,7 +69,7 @@ export default function ResearchGraphPanel({
       setLoading(false);
       return;
     }
-    window.researchDesk.listResearchGraph({ projectId, includeArchived: true })
+    window.researchDesk.listResearchGraph({ projectId, includeArchived: false })
       .then((next) => {
         if (cancelled) return;
         setGraph(next);
@@ -78,7 +84,7 @@ export default function ResearchGraphPanel({
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [projectId, refreshKey, t]);
+  }, [projectId, refreshKey, version, t]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -94,6 +100,24 @@ export default function ResearchGraphPanel({
   const childOptions = selectedNode ? CHILD_OPTIONS[selectedNode.kind] : [];
 
   const refresh = () => setRefreshKey((key) => key + 1);
+
+  const undoUpdate = async () => {
+    if (!update || undoing || !window.researchDesk?.archiveResearchNode) return;
+    setUndoing(true);
+    setError("");
+    try {
+      for (const nodeId of update.createdNodeIds) {
+        await window.researchDesk.archiveResearchNode(nodeId, "Undo automatic research graph update");
+      }
+      setSelectedId(null);
+      setDismissedUpdate(update.turnId);
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("Could not undo the research graph update."));
+    } finally {
+      setUndoing(false);
+    }
+  };
 
   const createQuestion = async () => {
     const title = question.trim();
@@ -187,6 +211,13 @@ export default function ResearchGraphPanel({
   </>;
 
   const content = <div className={expanded ? "research-graph-content expanded" : "research-graph-content"}>
+    {update && update.projectId === projectId && update.nodeCount + update.edgeCount > 0 && dismissedUpdate !== update.turnId && (
+      <div className="research-graph-update" role="status" aria-live="polite">
+        <span>{t("Research graph updated")} · +{update.nodeCount} {t("nodes")} · +{update.edgeCount} {t("edges")}</span>
+        {update.createdNodeIds.length > 0 && <button type="button" disabled={undoing} onClick={() => void undoUpdate()}>{t(undoing ? "Undoing…" : "Undo")}</button>}
+        <button type="button" className="research-graph-update-dismiss" onClick={() => setDismissedUpdate(update.turnId)} aria-label={t("Dismiss")} title={t("Dismiss")}><X size={11} /></button>
+      </div>
+    )}
     {!projectId ? <div className="research-graph-empty">{t("No project selected")}</div> : graph && graph.nodes.length === 0 ? (
       <div className="research-graph-empty">
         <strong>{t("No research graph yet")}</strong>

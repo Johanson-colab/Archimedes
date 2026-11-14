@@ -6236,6 +6236,13 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
   overflow: auto;
   padding: 10px 12px 14px;
 }
+.research-graph-update { display: flex; align-items: center; gap: 8px; padding: 6px 10px; color: var(--text-muted); background: color-mix(in srgb, var(--accent) 7%, var(--surface-panel)); border-bottom: 1px solid var(--border-soft); font-size: 10px; }
+.research-graph-update > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.research-graph-update > button { padding: 2px 6px; color: var(--accent); background: transparent; border: 0; border-radius: 4px; font: inherit; font-size: 10px; }
+.research-graph-update > button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.research-graph-update > button:disabled { opacity: .45; }
+.research-graph-update > .research-graph-update-dismiss { display: grid; width: 18px; height: 18px; place-items: center; padding: 0; color: var(--text-faint); }
+.research-graph-update > .research-graph-update-dismiss:hover { color: var(--text-primary); }
 .research-graph-canvas { position: relative; min-width: 100%; min-height: 100%; }
 .research-graph-edges { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .research-graph-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.25; opacity: .85; }

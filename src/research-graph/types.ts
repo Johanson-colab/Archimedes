@@ -88,6 +88,18 @@ export interface ResearchGraph {
   edges: ResearchEdge[];
 }
 
+export interface ResearchGraphUpdate {
+  projectId: string;
+  threadId: string;
+  turnId: string;
+  createdNodeIds: string[];
+  createdEdgeIds: string[];
+  nodeCount: number;
+  edgeCount: number;
+  skippedNodeCount?: number;
+  reason?: string;
+}
+
 export interface ResearchGraphIssue {
   code: string;
   message: string;

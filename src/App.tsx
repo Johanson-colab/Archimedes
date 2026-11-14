@@ -1446,6 +1446,8 @@ function App() {
   const [branchCount, setBranchCount] = useState(1);
   const [journeyNotice, setJourneyNotice] = useState("");
   const [researchPanelOpen, setResearchPanelOpen] = useState(readResearchPanelOpen);
+  const [graphVersion, setGraphVersion] = useState(0);
+  const [graphUpdate, setGraphUpdate] = useState<ResearchGraphUpdate | null>(null);
   const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
   const [proactiveNotice, setProactiveNotice] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
@@ -2177,7 +2179,8 @@ function App() {
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
       if (event.clientRunId?.startsWith("side-chat:") || event.clientRunId?.startsWith("paper-chat:")) return;
-      if (event.threadId) {
+      const isGraphEvent = event.type === "graph_update" || event.type === "graph_update_pending";
+      if (event.threadId && !isGraphEvent) {
         setRunningThreadId(event.threadId);
         if (!activeThreadIdRef.current) {
           activeThreadIdRef.current = event.threadId;
@@ -2202,6 +2205,16 @@ function App() {
         }
       }
       if (event.type === "artifact") setArtifactsVersion((current) => current + 1);
+      if (event.type === "graph_update") {
+        setGraphVersion((current) => current + 1);
+        if (event.graph) setGraphUpdate(event.graph);
+        if (!event.graph || event.graph.nodeCount + event.graph.edgeCount === 0) {
+          if (!event.threadId || activeThreadIdRef.current === event.threadId) {
+            setEvents((current) => current.filter((item) => item.title !== event.title));
+          }
+          return;
+        }
+      }
       if (event.type === "workspace_change" && event.changeSet) {
         if (!event.threadId || activeThreadIdRef.current === event.threadId) setChangeSets((current) => upsertChangeSet(current, event.changeSet!));
         return;
@@ -2227,7 +2240,8 @@ function App() {
         setPendingAction({ ...event.action, source: "agent" });
         if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
-      const state = event.type === "complete" || event.type === "artifact" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
+      if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
+      const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
       setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
     });
     return unsubscribe;
@@ -3629,6 +3643,8 @@ function App() {
             projectName={pathProject?.name ?? t("No project")}
             threadTitle={pathThread?.title ?? t("No active session")}
             hasThread={Boolean(pathThread)}
+            version={graphVersion}
+            update={graphUpdate}
             onOpenThread={openPathThread}
             onCollapse={() => setResearchPanelOpen(false)}
           /> : <ResearchPathPanel

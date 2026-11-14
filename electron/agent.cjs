@@ -25,6 +25,7 @@ const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
 const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
+const graphAutoBuild = require("./research-graph/auto-build.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -981,7 +982,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry }) {
+async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true }) {
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -1027,6 +1028,26 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     }
     return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: transient ? { ...thread, status: "idle" } : store.getResearchThread(thread.id) };
   };
+  const scheduleGraphAutoBuild = (response) => {
+    if (!autoBuildGraph || transient || origin !== "research" || mode !== "research" || !thread.project_id) return;
+    void graphAutoBuild.maybeAutoBuild({
+      projectId: thread.project_id,
+      threadId: thread.id,
+      turnId: turn.id,
+      mode,
+      origin,
+      transient,
+      backend: externalBackend ? externalBackend.backend : "api",
+      config: externalBackend || config,
+      workspace,
+      userPrompt: prompt,
+      assistantResponse: response,
+      emit: emitTurn,
+      recordEvent,
+      complete,
+      runNative,
+    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error)));
+  };
 
   try {
     if (controller.signal.aborted) throw new Error("Research turn interrupted before startup.");
@@ -1057,7 +1078,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       });
       recordEvent({ type: "assistant_step", payload: { content: response, backend: externalBackend.backend } });
       emitTurn({ type: "complete", title: "Native turn complete", detail: "Native execution finished" });
-      return finish(response, "completed");
+      const completed = finish(response, "completed");
+      scheduleGraphAutoBuild(response);
+      return completed;
     }
     const researchRun = !transient && origin === "research" ? prepareResearchSkill({ workspace, backend: "api", thread: store.getResearchThread(thread.id), requested: researchSkill, emit: emitTurn, recordEvent }) : null;
     const context = prepareConversation({
@@ -1113,7 +1136,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       if (!message.tool_calls.length) {
         const response = message.content || "The research turn completed without a final text response.";
         emitTurn({ type: "complete", title: "Research turn complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
-        return finish(response, "completed");
+        const completed = finish(response, "completed");
+        scheduleGraphAutoBuild(response);
+        return completed;
       }
 
       for (const call of message.tool_calls) {
@@ -1157,7 +1182,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     });
     const response = finalMessage.content || "The tool budget was reached before enough evidence was collected. Continue in this chat with a narrower research question.";
     emitTurn({ type: "complete", title: "Research turn complete", detail: "Answer synthesized at the tool budget" });
-    return finish(response, "completed");
+    const completed = finish(response, "completed");
+    scheduleGraphAutoBuild(response);
+    return completed;
   } catch (error) {
     if (controller.signal.aborted || error?.name === "AbortError") {
       emitTurn({ type: "interrupted", title: "Research turn interrupted", detail: "Conversation history was preserved" });

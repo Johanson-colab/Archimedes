@@ -4,6 +4,7 @@ type ResearchGraphNode = import("./research-graph/types").ResearchNode;
 type ResearchGraphEdge = import("./research-graph/types").ResearchEdge;
 type ResearchGraph = import("./research-graph/types").ResearchGraph;
 type ResearchGraphIssue = import("./research-graph/types").ResearchGraphIssue;
+type ResearchGraphUpdate = import("./research-graph/types").ResearchGraphUpdate;
 type ResearchGraphNodeKind = import("./research-graph/types").ResearchNodeKind;
 type ResearchGraphEdgeKind = import("./research-graph/types").ResearchEdgeKind;
 type ResearchGraphStatus = import("./research-graph/types").ResearchNodeStatus;
@@ -1900,7 +1901,7 @@ interface AgentRunResult {
 }
 
 interface AgentEvent {
-  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer" | "graph_update" | "graph_update_pending";
   title: string;
   detail: string;
   threadId?: string;
@@ -1916,6 +1917,7 @@ interface AgentEvent {
   diff?: string;
   question?: NativeAgentQuestion;
   questionId?: string;
+  graph?: ResearchGraphUpdate;
 }
 
 interface PaperReviewInput {

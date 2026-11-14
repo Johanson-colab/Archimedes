@@ -2685,6 +2685,8 @@ function createResearchNode({
   contentJson,
   contentHash,
   parents = [],
+  sourceTurnId = null,
+  sourceEventId = null,
   createdBy = localIdentity.userId,
 } = {}) {
   if (!projectId) throw new Error("A project is required to create a research node.");
@@ -2712,8 +2714,8 @@ function createResearchNode({
     `).run(nodeId, projectId, kind, status, normalizedTitle, String(summary || "").slice(0, 500), createdBy, now, now);
     db.prepare(`
       INSERT INTO research_node_revisions (id, node_id, parent_revision_id, content_json, content_hash, source_turn_id, source_event_id, git_commit, created_by, created_at)
-      VALUES (?, ?, NULL, ?, ?, NULL, NULL, NULL, ?, ?)
-    `).run(revisionId, nodeId, contentJson, contentHash, createdBy, now);
+      VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?)
+    `).run(revisionId, nodeId, contentJson, contentHash, sourceTurnId, sourceEventId, createdBy, now);
     db.prepare("UPDATE research_nodes SET current_revision_id = ? WHERE id = ?").run(revisionId, nodeId);
     for (const parent of parents) {
       if (!parent || typeof parent.nodeId !== "string" || !parent.nodeId) throw new Error("Each parent requires a node id.");

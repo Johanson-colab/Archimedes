@@ -77,14 +77,42 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
 | --- | --- | --- |
 | ![Linear stage stepper](./assets/research-graph/before-research-path.png) | ![Research graph panel](./assets/research-graph/after-research-graph.png) | ![Expanded research graph](./assets/research-graph/after-research-graph-expanded.png) |
 
+## Automatic graph building
+
+Every successful Research-mode turn now schedules a background graph build. The
+turn itself is not blocked; the answer and composer are released first.
+
+- **API harness:** the extractor reuses the active Agent model with a JSON-only
+  prompt. It never exposes tools and is capped at a short output.
+- **Native harnesses:** Codex, Claude Code, and OpenCode run one transient
+  extraction turn with no conversation history. The call uses read-only (Codex)
+  or plan (Claude Code) permissions and a no-op approval handler; the main chat
+  thread and its native binding are untouched.
+- The extractor receives the user prompt, the assistant answer, and a bounded
+  summary of the existing project graph. It returns a patch of at most six new
+  nodes and eight new edges.
+- `applyPatch` validates node kinds, edge pairs, duplicate edges, parent rules,
+  cycles, and ownership before writing. Nodes that match an existing node by
+  kind and normalized title are reused instead of duplicated.
+- New nodes and edges are applied automatically. Each new revision records the
+  source `turn_id`; the thread receives a `graph_applied` event (or
+  `graph_checked` when nothing was added).
+- The graph panel listens for `graph_update` events, refreshes in place, and
+  shows a compact "Research graph updated" bar with an Undo action. Undo
+  archives only the nodes created by that patch, so user-created nodes and
+  earlier graph history remain intact.
+- If extraction fails, times out, or returns no research object, the graph is
+  unchanged and the failure is not treated as a turn failure.
+
 ## Service API
 
 `electron/research-graph/service.cjs` exposes:
 
 ```text
-createNode({ projectId, kind, status, title, summary, content, parents, author })
+createNode({ projectId, kind, status, title, summary, content, parents, sourceTurnId, sourceEventId, author })
 reviseNode({ nodeId, content, title, summary, sourceTurnId, sourceEventId, gitCommit, author })
 linkNodes({ fromNodeId, toNodeId, kind, fromRevisionId, toRevisionId, metadata, author })
+applyPatch({ projectId, threadId, turnId, patch, author })
 listGraph({ projectId, includeArchived })
 getNodeHistory(nodeId)
 archiveNode({ nodeId, reason, author })
@@ -100,7 +128,7 @@ and `research-graph:validate`.
 ## Invariants enforced now
 
 - Only the five node kinds and thirteen edge kinds are accepted.
-- An experiment or result must have a parent.
+- An experiment must test a question or idea; a result must be produced by an experiment.
 - Edges must connect allowed node kinds in the same project.
 - Structural edges cannot create a cycle.
 - A merge node needs at least two parent edges.
@@ -110,7 +138,6 @@ and `research-graph:validate`.
 
 ## Intentionally out of scope
 
-- Graph rendering and the Node Inspector.
 - Node Chat and context packs.
 - Git worktrees and experiment branches.
 - Run submission and detached supervisors.
@@ -122,6 +149,8 @@ and `research-graph:validate`.
 ```sh
 node --test electron/research-graph.test.cjs
 node --test electron/research-graph-layout.test.cjs
+node --test electron/research-graph-auto-build.test.cjs
+node --test electron/ui-audit-research-graph-auto.test.cjs
 node --test electron/store-schema-order.test.cjs
 npm run lint
 npm run build

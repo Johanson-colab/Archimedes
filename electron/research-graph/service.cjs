@@ -14,6 +14,8 @@ const {
 const MAX_CONTENT_BYTES = 1_000_000;
 const MAX_TITLE_CHARS = 200;
 const MAX_SUMMARY_CHARS = 500;
+const MAX_PATCH_NODES = 6;
+const MAX_PATCH_EDGES = 8;
 
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
@@ -125,6 +127,8 @@ function createNode({
   summary = "",
   content = {},
   parents = [],
+  sourceTurnId = null,
+  sourceEventId = null,
   author,
 } = {}) {
   if (!isNodeKind(kind)) throw new Error(`Unknown research node kind: ${kind}`);
@@ -141,6 +145,8 @@ function createNode({
     contentJson,
     contentHash: contentHash(contentJson),
     parents: normalizedParents.map(({ node, ...parent }) => parent),
+    sourceTurnId,
+    sourceEventId,
     createdBy: author || undefined,
   });
   return node;
@@ -219,6 +225,227 @@ function linkNodes({
     metadataJson: JSON.stringify(metadata && typeof metadata === "object" ? metadata : {}),
     createdBy: author || undefined,
   });
+}
+
+function normalizePatch(patch) {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("A graph patch must be an object.");
+  const inputNodes = patch.nodes == null ? [] : patch.nodes;
+  const inputEdges = patch.edges == null ? [] : patch.edges;
+  if (!Array.isArray(inputNodes) || !Array.isArray(inputEdges)) throw new Error("Graph patch nodes and edges must be arrays.");
+  if (inputNodes.length > MAX_PATCH_NODES) throw new Error(`A graph patch can add at most ${MAX_PATCH_NODES} nodes.`);
+  if (inputEdges.length > MAX_PATCH_EDGES) throw new Error(`A graph patch can add at most ${MAX_PATCH_EDGES} edges.`);
+  const ids = new Set();
+  const nodes = inputNodes.map((node, index) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) throw new Error(`Graph patch node ${index + 1} must be an object.`);
+    const tempId = String(node.tempId ?? node.id ?? "").trim();
+    if (!tempId || tempId.length > 80) throw new Error("Every new graph node needs a short temporary id.");
+    if (ids.has(tempId)) throw new Error(`Duplicate graph patch node id: ${tempId}`);
+    ids.add(tempId);
+    if (!isNodeKind(node.kind)) throw new Error(`Unknown research node kind: ${node.kind}`);
+    const status = node.status || "draft";
+    if (!isNodeStatus(status)) throw new Error(`Unknown research node status: ${status}`);
+    const content = node.content && typeof node.content === "object" && !Array.isArray(node.content) ? node.content : {};
+    serializeContent(content);
+    return {
+      tempId,
+      kind: node.kind,
+      status,
+      title: normalizeTitle(node.title),
+      summary: normalizeSummary(node.summary),
+      content,
+    };
+  });
+  const edgeKeys = new Set();
+  const edges = inputEdges.map((edge, index) => {
+    if (!edge || typeof edge !== "object" || Array.isArray(edge)) throw new Error(`Graph patch edge ${index + 1} must be an object.`);
+    const from = String(edge.from ?? edge.source ?? edge.fromNodeId ?? "").trim();
+    const to = String(edge.to ?? edge.target ?? edge.toNodeId ?? "").trim();
+    if (!from || !to) throw new Error("Every graph patch edge needs from and to.");
+    if (from === to) throw new Error("A graph patch edge cannot connect a node to itself.");
+    if (!isEdgeKind(edge.kind)) throw new Error(`Unknown research edge kind: ${edge.kind}`);
+    const key = `${from}->${to}:${edge.kind}`;
+    if (edgeKeys.has(key)) throw new Error("A graph patch cannot contain duplicate edges.");
+    edgeKeys.add(key);
+    return { from, to, kind: edge.kind, metadata: edge.metadata && typeof edge.metadata === "object" ? edge.metadata : {} };
+  });
+  return { nodes, edges, reason: String(patch.reason || "").trim().slice(0, 1000) };
+}
+
+function titleKey(kind, title) {
+  return `${kind}|${String(title || "").normalize("NFKC").toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, " ").trim()}`;
+}
+
+function edgeEndpoint(edge, key) {
+  return edge[key] ?? edge[key === "from" ? "from_node" : "to_node"];
+}
+
+function assertPatchAcyclic(nodeIds, existingEdges, patchEdges) {
+  const adjacency = new Map(nodeIds.map((id) => [id, []]));
+  const add = (from, to, kind) => {
+    if (!isStructuralEdge(kind)) return;
+    if (!adjacency.has(from)) adjacency.set(from, []);
+    adjacency.get(from).push(to);
+  };
+  for (const edge of existingEdges) add(edgeEndpoint(edge, "from"), edgeEndpoint(edge, "to"), edge.kind);
+  for (const edge of patchEdges) add(edge.from, edge.to, edge.kind);
+  const visiting = new Set();
+  const visited = new Set();
+  const visit = (nodeId) => {
+    if (visiting.has(nodeId)) throw new Error("This graph patch would create a cycle in the research graph.");
+    if (visited.has(nodeId)) return;
+    visiting.add(nodeId);
+    for (const next of adjacency.get(nodeId) || []) visit(next);
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+  };
+  for (const nodeId of adjacency.keys()) visit(nodeId);
+}
+
+// Apply a bounded extractor patch in one logical operation. The whole patch is
+// validated before writing; a failed write archives any nodes it already made.
+function applyPatch({ projectId, threadId = null, turnId = null, patch, author } = {}) {
+  if (!projectId) throw new Error("A project is required to apply a graph patch.");
+  const normalized = normalizePatch(patch);
+  const existing = store.listResearchGraph({ projectId });
+  const existingEdges = store.listResearchEdges({ projectId });
+  const existingEdgeIds = new Set(existingEdges.map((edge) => edge.id));
+  const existingById = new Map(existing.nodes.map((node) => [node.id, node]));
+  const existingKeys = new Map();
+  for (const node of existing.nodes) existingKeys.set(titleKey(node.kind, node.title), node.id);
+
+  const resolved = new Map();
+  const newNodes = [];
+  const skippedNodes = [];
+  for (const node of normalized.nodes) {
+    const duplicateId = existingKeys.get(titleKey(node.kind, node.title));
+    if (duplicateId) {
+      resolved.set(node.tempId, duplicateId);
+      skippedNodes.push({ tempId: node.tempId, nodeId: duplicateId, reason: "duplicate" });
+      continue;
+    }
+    resolved.set(node.tempId, null);
+    newNodes.push(node);
+  }
+
+  const kindById = new Map(existing.nodes.map((node) => [node.id, node.kind]));
+  for (const node of normalized.nodes) kindById.set(node.tempId, node.kind);
+  const edges = [];
+  const skippedEdges = [];
+  for (const edge of normalized.edges) {
+    const fromKind = kindById.get(edge.from);
+    const toKind = kindById.get(edge.to);
+    if (!fromKind) throw new Error(`Graph patch edge source not found: ${edge.from}`);
+    if (!toKind) throw new Error(`Graph patch edge target not found: ${edge.to}`);
+    if (!edgeAllowed(edge.kind, fromKind, toKind)) throw new Error(`A ${edge.kind} edge cannot connect ${fromKind} to ${toKind}.`);
+    const fromId = resolved.get(edge.from);
+    const toId = resolved.get(edge.to);
+    if (fromId && toId && fromId === toId) {
+      skippedEdges.push({ ...edge, reason: "duplicate-node" });
+      continue;
+    }
+    if (fromId && toId && store.findResearchEdge({ fromNodeId: fromId, toNodeId: toId, kind: edge.kind })) {
+      skippedEdges.push({ ...edge, reason: "duplicate-edge" });
+      continue;
+    }
+    edges.push(edge);
+  }
+
+  const newIds = new Set(newNodes.map((node) => node.tempId));
+  const inDegree = new Map(newNodes.map((node) => [node.tempId, 0]));
+  const outgoing = new Map(newNodes.map((node) => [node.tempId, []]));
+  const incoming = new Map(newNodes.map((node) => [node.tempId, []]));
+  for (const edge of edges) {
+    if (incoming.has(edge.to)) incoming.get(edge.to).push(edge);
+    if (newIds.has(edge.from) && newIds.has(edge.to)) {
+      outgoing.get(edge.from).push(edge.to);
+      inDegree.set(edge.to, inDegree.get(edge.to) + 1);
+    }
+  }
+  const queue = newNodes.filter((node) => inDegree.get(node.tempId) === 0).map((node) => node.tempId);
+  const order = [];
+  while (queue.length) {
+    const tempId = queue.shift();
+    order.push(tempId);
+    for (const next of outgoing.get(tempId) || []) {
+      inDegree.set(next, inDegree.get(next) - 1);
+      if (inDegree.get(next) === 0) queue.push(next);
+    }
+  }
+  if (order.length !== newNodes.length) throw new Error("The graph patch contains a structural cycle.");
+  for (const node of newNodes) {
+    const parents = incoming.get(node.tempId) || [];
+    if (parents.length > 8) throw new Error("A research node accepts at most eight parents.");
+    if (node.kind === "experiment" && !parents.some((edge) => edge.kind === "tests")) {
+      throw new Error("An experiment must test a question or idea.");
+    }
+    if (node.kind === "result" && !parents.some((edge) => edge.kind === "produces")) {
+      throw new Error("A result must be produced by an experiment.");
+    }
+    if (node.kind === "writing" && node.status !== "draft" && !edges.some((edge) => edge.from === node.tempId && edge.kind === "cites")) {
+      throw new Error("A non-draft writing node must cite a result.");
+    }
+    const merges = parents.filter((edge) => edge.kind === "merges");
+    if (merges.length && merges.length !== parents.length) throw new Error("A merge node cannot mix merge edges with other parent edges.");
+    if (merges.length && parents.length < 2) throw new Error("A merge requires at least two parents.");
+  }
+  assertPatchAcyclic(
+    [...existing.nodes.map((node) => node.id), ...newNodes.map((node) => node.tempId)],
+    existingEdges,
+    edges,
+  );
+
+  const createdNodes = [];
+  const appliedEdges = new Set();
+  try {
+    for (const tempId of order) {
+      const node = newNodes.find((candidate) => candidate.tempId === tempId);
+      const parents = (incoming.get(tempId) || []).map((edge) => {
+        const fromId = resolved.get(edge.from) || (existingById.has(edge.from) ? edge.from : null);
+        if (!fromId) throw new Error(`Parent research node has not been created: ${edge.from}`);
+        return { nodeId: fromId, kind: edge.kind, metadata: edge.metadata };
+      });
+      const created = createNode({
+        projectId,
+        kind: node.kind,
+        status: node.status,
+        title: node.title,
+        summary: node.summary,
+        content: node.content,
+        parents,
+        sourceTurnId: turnId,
+        sourceEventId: null,
+        author,
+      });
+      resolved.set(tempId, created.id);
+      createdNodes.push(created);
+      for (const edge of incoming.get(tempId) || []) appliedEdges.add(edge);
+    }
+    for (const edge of edges) {
+      if (appliedEdges.has(edge)) continue;
+      const fromId = resolved.get(edge.from) || (existingById.has(edge.from) ? edge.from : null);
+      const toId = resolved.get(edge.to) || (existingById.has(edge.to) ? edge.to : null);
+      if (!fromId || !toId) throw new Error("Graph patch edge references an unknown node.");
+      if (fromId === toId) { skippedEdges.push({ ...edge, reason: "duplicate-node" }); continue; }
+      if (store.findResearchEdge({ fromNodeId: fromId, toNodeId: toId, kind: edge.kind })) {
+        skippedEdges.push({ ...edge, reason: "duplicate-edge" });
+        continue;
+      }
+      linkNodes({
+        fromNodeId: fromId,
+        toNodeId: toId,
+        kind: edge.kind,
+        metadata: { ...edge.metadata, sourceTurnId: turnId },
+        author,
+      });
+    }
+    const createdEdges = store.listResearchEdges({ projectId }).filter((edge) => !existingEdgeIds.has(edge.id));
+    return { projectId, threadId, turnId, createdNodes, createdEdges, skippedNodes, skippedEdges, reason: normalized.reason };
+  } catch (error) {
+    for (const node of createdNodes) {
+      try { store.archiveResearchNode({ nodeId: node.id, reason: "Automatic graph patch rollback", createdBy: author || undefined }); } catch { /* best effort */ }
+    }
+    throw error;
+  }
 }
 
 function listGraph({ projectId, includeArchived = false } = {}) {
@@ -306,6 +533,7 @@ module.exports = {
   createNode,
   reviseNode,
   linkNodes,
+  applyPatch,
   listGraph,
   getNodeHistory,
   archiveNode,

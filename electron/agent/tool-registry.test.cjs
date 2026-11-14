@@ -175,7 +175,7 @@ test('API harness initializes IdeaSpark only when the user explicitly selects it
     return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: 'done' } }] }) };
   };
   for (const mode of ['standard', 'create', 'research']) {
-    const result = await runAgent({ prompt: 'Design an experiment', workspace: root, origin: 'research', mode, capabilities: { command: 'ask', write: 'ask' } });
+    const result = await runAgent({ prompt: 'Design an experiment', workspace: root, origin: 'research', mode, capabilities: { command: 'ask', write: 'ask' }, autoBuildGraph: false });
     assert.equal(result.status, 'completed');
     assert.equal(result.thread.mode, mode);
     const request = requests.at(-1);
@@ -184,7 +184,7 @@ test('API harness initializes IdeaSpark only when the user explicitly selects it
     assert.equal(request.messages.some(message => String(message.content).includes('Research mode: use the installed IdeaSpark')), false);
     assert.equal(result.thread.events.some(event => event.type === 'research_skill' && event.payload.skill === 'idea-spark'), false);
   }
-  const explicit = await runAgent({ prompt: 'Find a testable idea', workspace: root, origin: 'research', mode: 'research', researchSkill: 'idea-spark', capabilities: { command: 'ask', write: 'ask' } });
+  const explicit = await runAgent({ prompt: 'Find a testable idea', workspace: root, origin: 'research', mode: 'research', researchSkill: 'idea-spark', capabilities: { command: 'ask', write: 'ask' }, autoBuildGraph: false });
   assert.equal(explicit.status, 'completed');
   assert.ok(requests.at(-1).messages.some(message => String(message.content).includes('Research mode: use the installed IdeaSpark')));
   assert.equal(explicit.thread.events.some(event => event.type === 'research_skill' && event.payload.skill === 'idea-spark'), true);
