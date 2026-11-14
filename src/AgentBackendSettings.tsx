@@ -6,6 +6,8 @@ import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { useUISettings } from "./i18n";
 
+const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+
 export default function AgentBackendSettings({ bridge, onBackendChange }: { bridge: ResearchDeskBridge; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void }) {
   const { t } = useUISettings();
   const id = useId();
@@ -160,6 +162,21 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
             <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} list={`${id}-models`} value={config.model} spellCheck={false} onChange={(event) => edit("model", event.target.value)} onBlur={() => { if (selected === "codex" && !config.model && !effectiveModelId) void loadCodexCatalog(config); }} />
             <datalist id={`${id}-models`}>{models.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</datalist>
           </SettingsRow>
+          {selected === "claude" && <SettingsRow stacked title={<label htmlFor={`${id}-claude-effort`}>{t("Claude Code thinking effort")}</label>} description={t("Choose from Claude Code's native effort levels.")}>
+            <select id={`${id}-claude-effort`} className="settings-select" disabled={disabled} value={config.effort || ""} onChange={(event) => setConfig((current) => ({ ...current, effort: event.target.value }))}>
+              <option value="">{t("Claude default")}</option>
+              {CLAUDE_EFFORTS.map((effort) => <option key={effort} value={effort}>{effortLabel(effort)}</option>)}
+            </select>
+          </SettingsRow>}
+          {selected === "claude" && <SettingsRow stacked title={<label htmlFor={`${id}-claude-permissions`}>{t("Claude Code permissions")}</label>} description={t("Uses Claude Code's native permission mode for this session.")}>
+            <select id={`${id}-claude-permissions`} className="settings-select" disabled={disabled} value={config.permissionMode || "ask"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
+              <option value="ask">{t("Manual")}</option>
+              <option value="accept-edits">{t("Accept edits")}</option>
+              <option value="plan">{t("Plan")}</option>
+              <option value="auto">{t("Auto")}</option>
+              <option value="full-access">{t("Bypass permissions")}</option>
+            </select>
+          </SettingsRow>}
           {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-effort`}>{t("Codex thinking effort")}</label>} description={t("Choose from the selected Codex model's native reasoning efforts.")}>
             <select id={`${id}-effort`} className="settings-select" disabled={disabled || catalogLoading} value={config.effort || ""} onFocus={() => {
               if (!models.length || (!config.model && !effectiveModelId)) void loadCodexCatalog(config);
@@ -178,9 +195,9 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
             </select>
           </SettingsRow>}
         </div>
-        {selected !== "codex" && <div className="agent-backend-permissions">
+        {selected === "opencode" && <div className="agent-backend-permissions">
           <strong>{t("Permissions")}</strong>
-          <p>{t(selected === "claude" ? "Uses your Claude Code permission settings. When Claude Code requests approval, you can respond in the conversation." : "Uses your OpenCode permission settings. When OpenCode requests approval, you can respond in the conversation.")}</p>
+          <p>{t("Uses your OpenCode permission settings. When OpenCode requests approval, you can respond in the conversation.")}</p>
         </div>}
         <div className="agent-backend-actions">
           <button type="button" className="secondary-button" disabled={disabled || (selected === "codex" && catalogLoading) || !config.binary.trim()} onClick={() => void apply("check")}>{busy === "check" ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(`Check ${name}`)}</button>
