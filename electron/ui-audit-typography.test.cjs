@@ -130,7 +130,7 @@ test("remaining knowledge surfaces keep an 11px floor", () => {
 });
 
 test("Geist Sans and Geist Mono are bundled locally", () => {
-  const settings = fs.readFileSync(path.join(root, "src", "SettingsModal.tsx"), "utf8");
+  const settings = fs.readFileSync(path.join(root, "src", "settings", "AppearanceSettingsPanel.tsx"), "utf8");
   const i18n = readLocale();
   const i18nSource = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");

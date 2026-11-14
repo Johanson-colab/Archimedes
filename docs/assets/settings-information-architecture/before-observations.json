@@ -1,0 +1,510 @@
+[
+  {
+    "theme": "paper",
+    "case": "general",
+    "heading": "General",
+    "navLabels": [
+      "General",
+      "Account",
+      "Members",
+      "Journey",
+      "Proactive agent",
+      "Appearance",
+      "Workbench",
+      "Research Apps",
+      "Models",
+      "Web search",
+      "Terminal",
+      "SSH servers",
+      "Workspace",
+      "About"
+    ],
+    "groupLabels": [],
+    "subnav": [],
+    "overflow": false,
+    "customIcon": false,
+    "icons": []
+  },
+  {
+    "theme": "paper",
+    "case": "research-path",
+    "heading": "Journey",
+    "navLabels": [
+      "General",
+      "Account",
+      "Members",
+      "Journey",
+      "Proactive agent",
+      "Appearance",
+      "Workbench",
+      "Research Apps",
+      "Models",
+      "Web search",
+      "Terminal",
+      "SSH servers",
+      "Workspace",
+      "About"
+    ],
+    "groupLabels": [],
+    "subnav": [],
+    "overflow": false,
+    "customIcon": false,
+    "icons": []
+  },
+  {
+    "theme": "paper",
+    "case": "proactive",
+    "heading": "Proactive agent",
+    "navLabels": [
+      "General",
+      "Account",
+      "Members",
+      "Journey",
+      "Proactive agent",
+      "Appearance",
+      "Workbench",
+      "Research Apps",
+      "Models",
+      "Web search",
+      "Terminal",
+      "SSH servers",
+      "Workspace",
+      "About"
+    ],
+    "groupLabels": [],
+    "subnav": [],
+    "overflow": false,
+    "customIcon": false,
+    "icons": []
+  },
+  {
+    "theme": "paper",
+    "case": "terminal",
+    "heading": "Terminal",
+    "navLabels": [
+      "General",
+      "Account",
+      "Members",
+      "Journey",
+      "Proactive agent",
+      "Appearance",
+      "Workbench",
+      "Research Apps",
+      "Models",
+      "Web search",
+      "Terminal",
+      "SSH servers",
+      "Workspace",
+      "About"
+    ],
+    "groupLabels": [],
+    "subnav": [],
+    "overflow": false,
+    "customIcon": false,
+    "icons": []
+  },
+  {
+    "theme": "paper",
+    "case": "models-custom",
+    "heading": "Models",
+    "providerIcons": [
+      {
+        "text": "OpenAIGPT and reasoning ",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "AnthropicClaude · native",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "Google GeminiGemini Open",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "Z.AI / GLMGLM chat, reas",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "MiniMaxMiniMax OpenAI-co",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "DeepSeekChat and reasoni",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "QwenDashScope compatible",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "MoonshotKimi OpenAI-comp",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "OpenRouterModels from mu",
+        "background": "rgb(231, 233, 230)",
+        "border": "1px"
+      },
+      {
+        "text": "CustomAny OpenAI-compati",
+        "background": "rgb(229, 240, 234)",
+        "border": "1px"
+      }
+    ],
+    "harnessIcons": [
+      {
+        "text": "CodexLocal CLI · uses yo",
+        "background": "rgb(232, 240, 235)",
+        "width": 0
+      },
+      {
+        "text": "Claude CodeLocal CLI · u",
+        "background": "rgb(232, 240, 235)",
+        "width": 0
+      },
+      {
+        "text": "OpenCodeLocal CLI · uses",
+        "background": "rgb(232, 240, 235)",
+        "width": 0
+      }
+    ],
+    "customHasIcon": true
+  },
+  {
+    "theme": "paper",
+    "case": "models-harnesses",
+    "heading": "Models",
+    "providerIcons": [
+      {
+        "text": "OpenAIgpt-5.6-sol",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "AnthropicClaude · native",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "Google GeminiGemini Open",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "Z.AI / GLMGLM chat, reas",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "MiniMaxMiniMax OpenAI-co",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "DeepSeekChat and reasoni",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "QwenDashScope compatible",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "MoonshotKimi OpenAI-comp",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "OpenRouterModels from mu",
+        "background": "rgb(231, 233, 230)",
+        "border": "1px"
+      },
+      {
+        "text": "CustomAny OpenAI-compati",
+        "background": "rgb(231, 233, 230)",
+        "border": "1px"
+      }
+    ],
+    "harnessIcons": [
+      {
+        "text": "CodexLocal CLI · uses yo",
+        "background": "rgb(232, 240, 235)",
+        "width": 38
+      },
+      {
+        "text": "Claude CodeLocal CLI · u",
+        "background": "rgb(232, 240, 235)",
+        "width": 38
+      },
+      {
+        "text": "OpenCodeLocal CLI · uses",
+        "background": "rgb(232, 240, 235)",
+        "width": 38
+      }
+    ],
+    "customHasIcon": true
+  },
+  {
+    "theme": "charcoal",
+    "case": "general",
+    "heading": "General",
+    "navLabels": [
+      "General",
+      "Account",
+      "Members",
+      "Journey",
+      "Proactive agent",
+      "Appearance",
+      "Workbench",
+      "Research Apps",
+      "Models",
+      "Web search",
+      "Terminal",
+      "SSH servers",
+      "Workspace",
+      "About"
+    ],
+    "groupLabels": [],
+    "subnav": [],
+    "overflow": false,
+    "customIcon": false,
+    "icons": []
+  },
+  {
+    "theme": "charcoal",
+    "case": "research-path",
+    "heading": "Journey",
+    "navLabels": [
+      "General",
+      "Account",
+      "Members",
+      "Journey",
+      "Proactive agent",
+      "Appearance",
+      "Workbench",
+      "Research Apps",
+      "Models",
+      "Web search",
+      "Terminal",
+      "SSH servers",
+      "Workspace",
+      "About"
+    ],
+    "groupLabels": [],
+    "subnav": [],
+    "overflow": false,
+    "customIcon": false,
+    "icons": []
+  },
+  {
+    "theme": "charcoal",
+    "case": "proactive",
+    "heading": "Proactive agent",
+    "navLabels": [
+      "General",
+      "Account",
+      "Members",
+      "Journey",
+      "Proactive agent",
+      "Appearance",
+      "Workbench",
+      "Research Apps",
+      "Models",
+      "Web search",
+      "Terminal",
+      "SSH servers",
+      "Workspace",
+      "About"
+    ],
+    "groupLabels": [],
+    "subnav": [],
+    "overflow": false,
+    "customIcon": false,
+    "icons": []
+  },
+  {
+    "theme": "charcoal",
+    "case": "terminal",
+    "heading": "Terminal",
+    "navLabels": [
+      "General",
+      "Account",
+      "Members",
+      "Journey",
+      "Proactive agent",
+      "Appearance",
+      "Workbench",
+      "Research Apps",
+      "Models",
+      "Web search",
+      "Terminal",
+      "SSH servers",
+      "Workspace",
+      "About"
+    ],
+    "groupLabels": [],
+    "subnav": [],
+    "overflow": false,
+    "customIcon": false,
+    "icons": []
+  },
+  {
+    "theme": "charcoal",
+    "case": "models-custom",
+    "heading": "Models",
+    "providerIcons": [
+      {
+        "text": "OpenAIGPT and reasoning ",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "AnthropicClaude · native",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "Google GeminiGemini Open",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "Z.AI / GLMGLM chat, reas",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "MiniMaxMiniMax OpenAI-co",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "DeepSeekChat and reasoni",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "QwenDashScope compatible",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "MoonshotKimi OpenAI-comp",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "OpenRouterModels from mu",
+        "background": "rgb(231, 233, 230)",
+        "border": "1px"
+      },
+      {
+        "text": "CustomAny OpenAI-compati",
+        "background": "rgb(229, 240, 234)",
+        "border": "1px"
+      }
+    ],
+    "harnessIcons": [
+      {
+        "text": "CodexLocal CLI · uses yo",
+        "background": "rgb(232, 240, 235)",
+        "width": 0
+      },
+      {
+        "text": "Claude CodeLocal CLI · u",
+        "background": "rgb(232, 240, 235)",
+        "width": 0
+      },
+      {
+        "text": "OpenCodeLocal CLI · uses",
+        "background": "rgb(232, 240, 235)",
+        "width": 0
+      }
+    ],
+    "customHasIcon": true
+  },
+  {
+    "theme": "charcoal",
+    "case": "models-harnesses",
+    "heading": "Models",
+    "providerIcons": [
+      {
+        "text": "OpenAIgpt-5.6-sol",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "AnthropicClaude · native",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "Google GeminiGemini Open",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "Z.AI / GLMGLM chat, reas",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "MiniMaxMiniMax OpenAI-co",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "DeepSeekChat and reasoni",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "QwenDashScope compatible",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "MoonshotKimi OpenAI-comp",
+        "background": "rgb(255, 255, 255)",
+        "border": "1px"
+      },
+      {
+        "text": "OpenRouterModels from mu",
+        "background": "rgb(231, 233, 230)",
+        "border": "1px"
+      },
+      {
+        "text": "CustomAny OpenAI-compati",
+        "background": "rgb(231, 233, 230)",
+        "border": "1px"
+      }
+    ],
+    "harnessIcons": [
+      {
+        "text": "CodexLocal CLI · uses yo",
+        "background": "rgb(232, 240, 235)",
+        "width": 38
+      },
+      {
+        "text": "Claude CodeLocal CLI · u",
+        "background": "rgb(232, 240, 235)",
+        "width": 38
+      },
+      {
+        "text": "OpenCodeLocal CLI · uses",
+        "background": "rgb(232, 240, 235)",
+        "width": 38
+      }
+    ],
+    "customHasIcon": true
+  }
+]

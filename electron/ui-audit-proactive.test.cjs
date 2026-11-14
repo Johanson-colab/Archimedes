@@ -13,6 +13,8 @@ const researchPath = read("src", "ResearchPathPanel.tsx");
 const proactive = read("src", "ProactiveAgentPanel.tsx");
 const settingsPanel = read("src", "ProactiveSettingsPanel.tsx");
 const settingsModal = read("src", "SettingsModal.tsx");
+const registry = read("src", "settings", "registry.tsx");
+const assistantHub = read("src", "settings", "AssistantSettingsHub.tsx");
 const types = read("src", "proactive-types.ts");
 const engine = read("src", "proactive-engine.ts");
 const model = read("electron", "model-config.cjs");
@@ -143,8 +145,10 @@ test("toolbar opens the floating panels without stealing focus", () => {
 });
 
 test("proactive settings expose mode, budget, quiet hours, and L0 sources", () => {
-  assert.match(settingsModal, /type SettingsSection = "general" \| "journey" \| "proactive"/);
-  assert.match(settingsModal, /<ProactiveSettingsPanel/);
+  assert.match(registry, /id: "assistant"/);
+  assert.match(registry, /\{ id: "proactive", label: "Proactive agent" \}/);
+  assert.match(registry, /proactive: \{ section: "assistant", subview: "proactive" \}/);
+  assert.match(assistantHub, /<ProactiveSettingsPanel/);
   assert.match(settingsPanel, /Off/);
   assert.match(settingsPanel, /Manual/);
   assert.match(settingsPanel, /Auto/);

@@ -8,9 +8,10 @@ import "./session-comments.css";
 
 export type SessionCommentsScope = { bridge: ResearchDeskBridge; workspace: string; projectId: string; sessionId: string; shared: boolean };
 
-export default function SessionComments({ scope, adding, onExit, onRequireHistory, historyComplete, scrollRef, children }: {
+export default function SessionComments({ scope, adding, showResolvedByDefault = false, onExit, onRequireHistory, historyComplete, scrollRef, children }: {
   scope: SessionCommentsScope;
   adding: boolean;
+  showResolvedByDefault?: boolean;
   onExit: () => void;
   onRequireHistory: () => void;
   historyComplete: boolean;
@@ -27,7 +28,7 @@ export default function SessionComments({ scope, adding, onExit, onRequireHistor
   const [syncError, setSyncError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [resolved, setResolved] = useState(false);
+  const [resolved, setResolved] = useState(showResolvedByDefault);
   const [draft, setDraft] = useState("");
   const [selection, setSelection] = useState<{ anchor: SessionCommentAnchor; ids: string[]; composing: boolean; xFraction: number; preview?: boolean } | null>(null);
   const [positions, setPositions] = useState<Array<{ id: string; y: number }>>([]);
