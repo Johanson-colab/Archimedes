@@ -10,7 +10,7 @@ import {
   PinOff,
   Plus,
   Search,
-  Trash2,
+  Trash,
 } from "lucide-react";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
@@ -217,7 +217,7 @@ export default function SessionSwitcher({
           onClick={() => onDeleteSession(session)}
           title={t("Delete session")}
           aria-label={t("Delete session")}
-        ><Trash2 size={13} /></button>}
+        ><Trash size={13} /></button>}
       </span>
     </div>;
   }
