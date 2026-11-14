@@ -7167,10 +7167,10 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 .sidebar-footer-settings { display: grid; width: 30px; height: 30px; flex: 0 0 30px; margin-left: auto; place-items: center; padding: 0; color: var(--sb-muted); background: transparent; border: 0; border-radius: 6px; }
 .sidebar-footer-settings:hover { color: var(--night-ink); background: var(--sb-hover); }
 .sidebar-footer-settings:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
-.sidebar-footer-version { flex: 0 0 auto; color: var(--sb-faint); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.sidebar-footer-update { display: inline-flex; min-height: 27px; flex: 0 0 auto; align-items: center; gap: 5px; padding: 0 8px; color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-.sidebar-footer-update:hover { filter: brightness(.96); }
-.sidebar-footer-update svg { width: 13px; height: 13px; }
+.sidebar-footer-version { min-width: 0; flex: 0 1 auto; overflow: hidden; color: var(--sb-faint); font-size: 10px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-footer-update { display: inline-flex; height: 24px; flex: 0 0 auto; align-items: center; gap: 4px; padding: 0 2px; color: var(--accent); background: transparent; border: 0; border-radius: 3px; font-size: 10.5px; font-weight: 500; white-space: nowrap; }
+.sidebar-footer-update:hover { color: var(--accent-strong); background: transparent; text-decoration: underline; text-underline-offset: 2px; }
+.sidebar-footer-update svg { width: 12px; height: 12px; }
 .sidebar-runtime .account-chip-wrap.compact { min-width: 0; flex: 0 0 auto; margin-right: auto; }
 .account-chip.compact { display: flex; width: auto; min-width: 30px; height: 30px; min-height: 30px; align-items: center; justify-content: center; padding: 0 8px; border-color: transparent; }
 .account-chip.compact.guest .account-chip-copy { display: block; }
@@ -7187,7 +7187,7 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
   .sidebar-runtime { flex-direction: column; align-items: center; gap: 4px; }
   .account-chip-copy { display: none; }
   .sidebar-footer-version { display: none; }
-  .sidebar-footer-update { width: 30px; height: 30px; min-height: 30px; justify-content: center; padding: 0; }
+  .sidebar-footer-update { width: 24px; height: 30px; min-height: 30px; justify-content: center; padding: 0; }
   .sidebar-footer-update span { display: none; }
   .sidebar-runtime .account-chip-wrap.compact { margin-right: 0; }
   .sidebar-footer-settings { margin-left: 0; }

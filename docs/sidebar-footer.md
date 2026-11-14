@@ -4,6 +4,7 @@ The lower utility row reads left to right: account action, optional Update,
 app package version, Settings. Settings is a single icon-only action at the far
 right. Signed out, the account action is a single **Sign in** label; signed in,
 it becomes the user's avatar. Both continue to open the existing account menu.
+Update is a minimal text-and-icon action with no filled background and no border.
 
 This app currently has no application updater/detector. The optional Update
 button is hidden unless a future updater publishes

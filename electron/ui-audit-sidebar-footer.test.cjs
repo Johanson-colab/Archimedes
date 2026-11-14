@@ -38,6 +38,9 @@ test("footer shows package version and only conditionally shows an update action
   assert.match(app, /packageMetadata\.version/);
   assert.match(locale, /"Application version \{version\}"/);
   assert.match(locale, /"Update available: \{version\}"/);
+  assert.match(css, /\.sidebar-footer-update \{[^}]*background: transparent/);
+  assert.doesNotMatch(css, /\.sidebar-footer-update \{[^}]*background: var\(--accent\)/);
+  assert.match(css, /\.sidebar-footer-version \{[^}]*min-width: 0;[^}]*text-overflow: ellipsis/);
   assert.match(css, /@media \(max-width: 860px\)[\s\S]*?\.sidebar-footer-version \{ display: none; \}/);
   assert.match(css, /\.sidebar-footer-update span \{ display: none; \}/);
 });
