@@ -9,7 +9,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const app = read("src/App.tsx");
 const right = read("src/RightWorkbench.tsx");
 const tabs = read("src/workbench-tabs.tsx");
-const settings = read("src/SettingsModal.tsx");
+const settings = read("src/settings/WorkbenchSettingsHub.tsx");
 const settingsPanel = read("src/WorkbenchSettingsPanel.tsx");
 const changes = read("src/ChangesView.tsx");
 const notes = read("src/NotesView.tsx");
@@ -32,7 +32,7 @@ test("workbench tabs are registry-driven, reorderable, and configurable", () => 
   assert.match(right, /Move right/);
   assert.match(css, /\.workbench-tab\.drop-target::before/);
   assert.match(css, /\.workbench-menu/);
-  assert.match(settings, /section === "workbench"/);
+  assert.match(settings, /view !== "layout"/);
   assert.match(settings, /WorkbenchSettingsPanel/);
   assert.match(settingsPanel, /role="switch"/);
   assert.match(settingsPanel, /draggable/);

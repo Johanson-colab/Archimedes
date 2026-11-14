@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, LoaderCircle, Network, Save } from "lucide-react";
-import openaiLogo from "./assets/providers/openai.png";
+import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
 import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
@@ -142,7 +142,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
         if (selected === item) setExpanded(opening); else setExpanded(true);
         if (item === "codex" && opening && (!catalogs.codex?.length || (!draft.model && !effectiveModelId))) void loadCodexCatalog(draft);
       }}>
-        <span className="provider-icon large"><img className="provider-brand-logo" src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : opencodeLogo} alt="" /></span>
+        <span className="provider-icon large"><img className={`provider-brand-logo${item === "claude" ? "" : " provider-brand-mono"}`} src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : opencodeLogo} alt="" /></span>
         <span className="agent-backend-card-copy"><strong>{labels[item]}</strong><small>{item === "codex" ? t("Local CLI · uses your existing Codex login") : t("Local CLI · uses its existing login and configuration")}</small></span>
         <span className="agent-backend-card-status">
           <span className={`agent-connection-status ${connections[item] || "unchecked"}`} aria-live="polite">{busy === "check" && selected === item && <LoaderCircle className="spin" size={13} />}{connectionLabel(item)}</span>

@@ -6,6 +6,8 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const settingsModal = fs.readFileSync(path.join(root, "src", "SettingsModal.tsx"), "utf8");
+const registry = fs.readFileSync(path.join(root, "src", "settings", "registry.tsx"), "utf8");
+const workbenchHub = fs.readFileSync(path.join(root, "src", "settings", "WorkbenchSettingsHub.tsx"), "utf8");
 const panel = fs.readFileSync(path.join(root, "src", "JourneySettingsPanel.tsx"), "utf8");
 const journey = fs.readFileSync(path.join(root, "src", "JourneyView.tsx"), "utf8");
 const rendererDefaults = fs.readFileSync(path.join(root, "src", "journeySettings.ts"), "utf8");
@@ -19,10 +21,11 @@ const snapshots = fs.readFileSync(path.join(root, "electron", "journey-snapshots
 const eventState = fs.readFileSync(path.join(root, "src", "journeyEventState.ts"), "utf8");
 const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
 
-test("journey has a dedicated settings section with all controls", () => {
-  assert.match(settingsModal, /type SettingsSection = "general" \| "journey"/);
-  assert.match(settingsModal, /\{ id: "journey", label: "Journey"/);
-  assert.match(settingsModal, /<JourneySettingsPanel/);
+test("journey lives in Workbench > Research path with all controls", () => {
+  assert.match(registry, /id: "workbench"/);
+  assert.match(registry, /\{ id: "research-path", label: "Research path" \}/);
+  assert.match(registry, /journey: \{ section: "workbench", subview: "research-path" \}/);
+  assert.match(workbenchHub, /<JourneySettingsPanel/);
   assert.match(settingsModal, /journeySettings: JourneySettings/);
   assert.match(app, /journeySettings=\{journeySettings\}/);
   assert.match(panel, /Default view/);

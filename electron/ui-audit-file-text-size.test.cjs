@@ -9,7 +9,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const app = read("src/App.tsx");
 const css = read("src/styles.css");
 const i18nSource = read("src/i18n.tsx");
-const settings = read("src/SettingsModal.tsx");
+const settings = read("src/settings/AppearanceSettingsPanel.tsx");
 const shortcuts = read("src/file-text-size.ts");
 const recorder = read("src/ShortcutRecorder.tsx");
 const editor = read("src/FileCodeEditor.tsx");
@@ -55,7 +55,7 @@ test("file previews listen for the bindings and drive one CSS size token", () =>
 });
 
 test("Settings records three customizable shortcuts and can restore defaults", () => {
-  assert.match(settings, /import ShortcutRecorder from "\.\/ShortcutRecorder"/);
+  assert.match(settings, /import ShortcutRecorder from "\.\.\/ShortcutRecorder"/);
   assert.match(settings, /fileTextShortcuts/);
   assert.match(settings, /setFileTextShortcut/);
   assert.match(settings, /resetFileTextShortcuts/);

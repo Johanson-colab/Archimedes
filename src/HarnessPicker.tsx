@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import openaiLogo from "./assets/providers/openai.png";
+import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
 import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
 import ArchimedesMark from "./brand/ArchimedesMark";
@@ -22,7 +22,7 @@ export default function HarnessPicker({ backend, bound, busy, onChange, onSettin
   const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (busy) setOpen(false); }, [busy]);
   const label = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", api: "Archimedes" }[backend];
-  const brand = (id: string) => id === "api" ? <ArchimedesMark size={16} variant="small" /> : <img className="provider-brand-logo" src={id === "codex" ? openaiLogo : id === "claude" ? claudeLogo : opencodeLogo} alt="" />;
+  const brand = (id: string) => id === "api" ? <ArchimedesMark size={16} variant="small" /> : <img className={`provider-brand-logo${id === "claude" ? "" : " provider-brand-mono"}`} src={id === "codex" ? openaiLogo : id === "claude" ? claudeLogo : opencodeLogo} alt="" />;
   async function choose(next: AgentBackendConfig["backend"]) {
     if (saving || busy) return;
     setSaving(true); setError("");

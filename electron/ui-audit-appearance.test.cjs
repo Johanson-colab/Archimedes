@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
 const app = read("src", "App.tsx");
-const settings = read("src", "SettingsModal.tsx");
+const settings = read("src", "settings", "AppearanceSettingsPanel.tsx");
 const appearance = read("src", "appearance.ts");
 const library = read("src", "LibraryView.tsx");
 const writing = read("src", "PaperWritingView.tsx");

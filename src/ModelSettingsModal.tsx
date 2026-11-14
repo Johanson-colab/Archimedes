@@ -14,14 +14,14 @@ import {
   Workflow,
   X,
 } from "lucide-react";
-import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg";
+import anthropicLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import geminiLogo from "@lobehub/icons-static-svg/icons/gemini-color.svg";
 import minimaxLogo from "@lobehub/icons-static-svg/icons/minimax-color.svg";
 import zaiLogo from "@lobehub/icons-static-svg/icons/zai.svg";
-import deepseekLogo from "./assets/providers/deepseek.png";
-import moonshotLogo from "./assets/providers/moonshot.jpg";
-import openaiLogo from "./assets/providers/openai.png";
-import qwenLogo from "./assets/providers/qwen.png";
+import deepseekLogo from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
+import moonshotLogo from "@lobehub/icons-static-svg/icons/kimi-color.svg";
+import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
+import qwenLogo from "@lobehub/icons-static-svg/icons/qwen-color.svg";
 import { useUISettings } from "./i18n";
 import { MenuSurface } from "./Menu";
 import AgentBackendSettings from "./AgentBackendSettings";
@@ -36,9 +36,8 @@ export type ModelExecutionPreferences = {
   onContextLength: (value: ContextLength) => void;
 };
 
-function brandIcon(src: string, variant = "") {
-  const logo = <img className="provider-brand-logo" src={src} alt="" aria-hidden="true" draggable={false} />;
-  return variant ? <span className={`provider-brand-tile ${variant}`}>{logo}</span> : logo;
+function brandIcon(src: string, monochrome = false) {
+  return <img className={`provider-brand-logo${monochrome ? " provider-brand-mono" : ""}`} src={src} alt="" aria-hidden="true" draggable={false} />;
 }
 
 const providers: Array<{
@@ -47,18 +46,18 @@ const providers: Array<{
   caption: string;
   baseUrl: string;
   models: string[];
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
 }> = [
-  { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5-codex", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3", "o4-mini", "o3-deep-research", "o4-mini-deep-research"], icon: brandIcon(openaiLogo) },
+  { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5-codex", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3", "o4-mini", "o3-deep-research", "o4-mini-deep-research"], icon: brandIcon(openaiLogo, true) },
   { id: "anthropic", name: "Anthropic", caption: "Claude · native Messages API", baseUrl: "https://api.anthropic.com/v1", models: ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5-20251101", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"], icon: brandIcon(anthropicLogo) },
   { id: "gemini", name: "Google Gemini", caption: "Gemini OpenAI-compatible API", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", models: ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemma-4-31b-it", "gemma-4-26b-a4b-it"], icon: brandIcon(geminiLogo) },
-  { id: "glm", name: "Z.AI / GLM", caption: "GLM chat, reasoning, and vision models", baseUrl: "https://api.z.ai/api/paas/v4", models: ["glm-5.3", "glm-5.3-flashx", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flashx", "glm-4.7-flash", "glm-4.6", "glm-4.6v", "glm-4.6v-flashx", "glm-4.6v-flash", "glm-4.5", "glm-4.5-x", "glm-4.5-air", "glm-4.5-airx", "glm-4.5-flash", "glm-4.5v", "glm-4-32b-0414-128k"], icon: brandIcon(zaiLogo, "zai") },
+  { id: "glm", name: "Z.AI / GLM", caption: "GLM chat, reasoning, and vision models", baseUrl: "https://api.z.ai/api/paas/v4", models: ["glm-5.3", "glm-5.3-flashx", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flashx", "glm-4.7-flash", "glm-4.6", "glm-4.6v", "glm-4.6v-flashx", "glm-4.6v-flash", "glm-4.5", "glm-4.5-x", "glm-4.5-air", "glm-4.5-airx", "glm-4.5-flash", "glm-4.5v", "glm-4-32b-0414-128k"], icon: brandIcon(zaiLogo, true) },
   { id: "minimax", name: "MiniMax", caption: "MiniMax OpenAI-compatible API", baseUrl: "https://api.minimax.io/v1", models: ["MiniMax-M3.1-Flash-Preview", "MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"], icon: brandIcon(minimaxLogo) },
   { id: "deepseek", name: "DeepSeek", caption: "Chat and reasoning models", baseUrl: "https://api.deepseek.com", models: ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp", "deepseek-chat", "deepseek-reasoner"], icon: brandIcon(deepseekLogo) },
   { id: "qwen", name: "Qwen", caption: "DashScope compatible API", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", models: ["qwen3.8-max", "qwen3.7-max", "qwen3.7-plus", "qwen3.7-flash", "qwen3-max", "qwen-max", "qwen-plus", "qwen-flash", "qwen-turbo", "qwen3-coder-next", "qwen3-coder-plus", "qwen3-coder-flash", "qwen-coder-plus", "qwen-coder-turbo", "qwq-plus", "qwen-long", "qwen-math-plus", "qwen-math-turbo"], icon: brandIcon(qwenLogo) },
   { id: "moonshot", name: "Moonshot", caption: "Kimi OpenAI-compatible API", baseUrl: "https://api.moonshot.cn/v1", models: ["kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-turbo", "kimi-k2.6", "kimi-k2.5", "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"], icon: brandIcon(moonshotLogo) },
   { id: "openrouter", name: "OpenRouter", caption: "Models from multiple providers", baseUrl: "https://openrouter.ai/api/v1", models: ["openrouter/auto", "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna", "deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-flash-0731", "qwen/qwen3.8-max", "moonshotai/kimi-k3"], icon: <Route size={17} /> },
-  { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [], icon: <Network size={17} /> },
+  { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [] },
 ];
 
 export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent", executionPreferences }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole; executionPreferences?: ModelExecutionPreferences }) {
@@ -255,8 +254,8 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       {!proactiveRole && <p className="model-connection-description">{t("Connect model providers with an API key. Archimedes manages the tools and research workflow.")}</p>}
       <div className="model-settings-body">
         <nav className="provider-list" aria-label="Model providers">
-          {providers.map((item) => <button key={item.id} className={item.id === provider ? "provider-option active" : "provider-option"} onClick={() => chooseProvider(item)}>
-            <span className="provider-icon">{item.icon}</span>
+          {providers.map((item) => <button key={item.id} className={`${item.id === provider ? "provider-option active" : "provider-option"}${item.icon ? "" : " no-icon"}`} onClick={() => chooseProvider(item)}>
+            {item.icon && <span className="provider-icon">{item.icon}</span>}
             <span><strong>{item.name}</strong><small>{item.id === provider && model ? model : item.caption}</small></span>
             {item.id === provider && <Check size={14} />}
           </button>)}
@@ -265,7 +264,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         <div className="provider-config">
           {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />{t("Loading configuration")}</div> : <>
             {proactiveRole && savedConfig?.inheritedFromAgent && <div className="model-inherited-note"><Sparkle size={13} /><span>{t("Currently inheriting the main Agent model. Save below to give Proactive agent its own model.")}</span></div>}
-            <div className="provider-config-title"><span className="provider-icon large">{selected.icon}</span><div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>
+            <div className="provider-config-title">{selected.icon && <span className="provider-icon large">{selected.icon}</span>}<div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>
             <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
             <label><span><Key size={14} />{t("API key")}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} /></label>
             <label><span><Brain size={14} />{t("Model")}</span><div className="model-combobox" ref={modelAnchorRef}>

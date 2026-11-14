@@ -11,7 +11,7 @@ const css = read("src/styles.css");
 const editor = read("src/FileCodeEditor.tsx");
 const i18n = readLocale();
 const i18nSource = read("src/i18n.tsx");
-const settings = read("src/SettingsModal.tsx");
+const settings = read("src/settings/AppearanceSettingsPanel.tsx");
 
 test("workbench and full editor share the tabbed file shell", () => {
   assert.match(app, /className=\{compact \? "artifact-editor-pane compact" : "artifact-editor-pane"\}/);

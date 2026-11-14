@@ -47,6 +47,7 @@ import SideConversation from "./SideConversation";
 import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";
 import workspaceNameLibrary from "../shared/workspace-names.json";
 import { workspacePathName } from "./workspace-path";
+import { readSessionToolPreferences, writeSessionToolPreferences, type SessionToolPreferences } from "./session-tools";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
@@ -1334,6 +1335,7 @@ function App() {
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  const [sessionTools, setSessionTools] = useState<SessionToolPreferences>(readSessionToolPreferences);
   const [localIdentity, setLocalIdentity] = useState<LocalIdentity | null>(null);
   const [authState, setAuthState] = useState<AuthState | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -1621,6 +1623,10 @@ function App() {
   useEffect(() => {
     writeAppearance(appearance);
   }, [appearance]);
+
+  useEffect(() => {
+    writeSessionToolPreferences(sessionTools);
+  }, [sessionTools]);
 
   useEffect(() => {
     if (!workspace || !activeProjectId) return;
@@ -3430,8 +3436,8 @@ function App() {
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
             </div>}
-            {activeThreadId && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
-            {activeThreadId && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
+            {activeThreadId && sessionTools.showSnapshots && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
+            {activeThreadId && sessionTools.showComments && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
             <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={() => setResearchPanelOpen((open) => !open)}
@@ -3464,6 +3470,7 @@ function App() {
               key={activeThreadId ?? `new:${chatViewNonce}`}
               commentScope={sessionCommentsScope}
               addingComment={commentsOpen}
+              commentsShowResolved={sessionTools.commentsShowResolved}
               onExitComments={exitSessionComments}
               messages={messages}
               events={events}
@@ -3742,6 +3749,8 @@ function App() {
         onResetProactiveHistory={proactive.resetHistory}
         proactiveHistoryCount={proactive.state.suggestions.length}
         onObserveProactive={proactive.observeOnce}
+        sessionTools={sessionTools}
+        onSessionToolsChange={(patch) => setSessionTools((current) => ({ ...current, ...patch }))}
         identity={localIdentity}
         onSaveIdentity={saveLocalIdentity}
         activeProject={activeProject}
@@ -3765,6 +3774,7 @@ function App() {
         threadId={activeThreadId || ""}
         threadTitle={activeThread?.title ?? t("Research session")}
         privateThread={threadVisibility === "private"}
+        defaults={{ format: sessionTools.snapshotFormat, sources: sessionTools.snapshotSources, diagnostics: sessionTools.snapshotDiagnostics }}
         onClose={() => setShareSnapshot(null)}
         onCopy={(text) => desktopBridge.writeClipboardText(text)}
       />
@@ -3798,9 +3808,10 @@ function App() {
   );
 }
 
-const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop, commentScope, addingComment, onExitComments }: {
+const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
+  commentsShowResolved: boolean;
   onExitComments: () => void;
   messages: Message[];
   events: TimelineEvent[];
@@ -3934,7 +3945,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
       </div>;
   return <div className="conversation-scroll-area">
     <div className="conversation-scroll" ref={scrollRef} onScroll={handleScroll}>
-      {commentScope ? <SessionComments key={`${commentScope.workspace}:${commentScope.projectId}:${commentScope.sessionId}`} scope={commentScope} adding={addingComment} onExit={onExitComments} onRequireHistory={requireCommentHistory} historyComplete={historyStart === 0} scrollRef={scrollRef}>{historyContent}</SessionComments> : historyContent}
+      {commentScope ? <SessionComments key={`${commentScope.workspace}:${commentScope.projectId}:${commentScope.sessionId}`} scope={commentScope} adding={addingComment} showResolvedByDefault={commentsShowResolved} onExit={onExitComments} onRequireHistory={requireCommentHistory} historyComplete={historyStart === 0} scrollRef={scrollRef}>{historyContent}</SessionComments> : historyContent}
     </div>
     <TurnRail messages={visibleMessages} scrollRef={scrollRef} />
     {!followingOutput && <button className="conversation-jump-latest" onClick={() => {
@@ -3945,9 +3956,10 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
+  commentsShowResolved: boolean;
   onExitComments: () => void;
   messages: Message[];
   events: TimelineEvent[];
@@ -4417,7 +4429,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
     <WorkspaceMarkdownProvider workspace={workspace} onOpenFile={openHistoryFile}>
-      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} commentScope={commentScope} addingComment={addingComment} onExitComments={onExitComments} />
+      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} commentScope={commentScope} addingComment={addingComment} commentsShowResolved={commentsShowResolved} onExitComments={onExitComments} />
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
