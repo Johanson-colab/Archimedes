@@ -211,6 +211,7 @@ const previewModelCapabilities: ModelCapabilities = {
 
 function chatModeFromThread(mode: ResearchMode, events: ResearchEvent[] = []): NewChatMode {
   if (mode === "standard" || mode === "research" || mode === "create") return mode;
+  if (mode === "idea-spark") return "research";
   return events.some((event) => event.type === "research_skill" && (event.payload as { skill?: string } | null)?.skill === "idea-spark") ? "research" : "standard";
 }
 
@@ -242,7 +243,15 @@ const COMPOSER_HISTORY_STORAGE_KEY = "archimedes-composer-history";
 const COMPOSER_HISTORY_LIMIT = 30;
 
 type ComposerDraft = { text: string; selectionStart: number; selectionEnd: number; newChatMode?: NewChatMode };
-type QueuedPrompt = { id: string; draft: string; mode: ResearchMode; reasoningEffort: ReasoningEffort; contextLength: ContextLength; contextItems: ContextAttachment[] };
+type QueuedPrompt = { id: string; draft: string; mode: ResearchMode; reasoningEffort: ReasoningEffort; contextLength: ContextLength; contextItems: ContextAttachment[]; researchSkill?: "idea-spark" };
+type ComposerSlashCommand = {
+  id: string;
+  aliases?: string[];
+  icon: typeof Lightbulb;
+  label: string;
+  detail: string;
+  run: () => void | Promise<ConversationCommandResult>;
+};
 
 function readComposerDraft(key: string): ComposerDraft | null {
   try {
@@ -4124,6 +4133,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [pendingResearchSkill, setPendingResearchSkill] = useState<"idea-spark" | null>(null);
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
   const previousBusyRef = useRef(agentBusy);
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
@@ -4158,6 +4168,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     storedDraftRef.current = stored;
     setNewChatMode(stored?.newChatMode ?? "standard");
     setPrompt(stored?.text ?? "");
+    setPendingResearchSkill(null);
+    setCommandNotice("");
     setHistoryIndex(-1);
     if (!stored) return;
     const frame = requestAnimationFrame(() => {
@@ -4199,6 +4211,12 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   }, [prompt]);
 
   const predictedMode: NewChatMode = showWelcome ? newChatMode : chatModeFromThread(researchMode, trajectoryEvents);
+  useEffect(() => {
+    if (showWelcome) setPendingResearchSkill(null);
+  }, [showWelcome]);
+  useEffect(() => {
+    if (predictedMode !== "research") setPendingResearchSkill(null);
+  }, [predictedMode]);
   const messageContextCharacters = useMemo(
     () => {
       const checkpoint = compactedThroughTurnId ? messages.findIndex((message) => message.id === `${compactedThroughTurnId}:assistant`) : -1;
@@ -4221,7 +4239,15 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
   const contextUsagePercent = Math.round(contextUsage * 100);
   const formatContextCharacters = (value: number) => value >= 10_000 ? `${Math.round(value / 1_000)}k` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : String(value);
-  const slashCommands = [
+  const slashCommands: ComposerSlashCommand[] = [
+    ...(predictedMode === "research" ? [{
+      id: "idea-spark",
+      aliases: ["idea", "ideaspark"],
+      icon: Lightbulb,
+      label: t("Idea Spark"),
+      detail: t("Run the full workflow: literature, bottleneck, candidates, audit, and idea cards."),
+      run: () => { setPendingResearchSkill("idea-spark"); },
+    }] : []),
     { id: "init", icon: FileCog, label: t("Init"), detail: t("Set up project instructions"), run: () => onCommand("init") },
     { id: "new", icon: Plus, label: t("New"), detail: t("Start a new conversation"), run: () => onCommand("new") },
     { id: "undo", icon: Undo2, label: t("Undo"), detail: t("Undo the last message"), run: () => onCommand("undo") },
@@ -4375,12 +4401,13 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     setSlashIndex(0);
   }
 
-  async function runSlashCommand(command: { id: string; run: () => void | Promise<ConversationCommandResult> }) {
+  async function runSlashCommand(command: ComposerSlashCommand) {
     if (slashRunningRef.current) return;
     if (queuedPrompts.length) { setComposerError(t("Send or clear queued messages before using a command.")); return; }
     slashRunningRef.current = true;
     setCommandRunning(true);
     setComposerError("");
+    if (command.id !== "idea-spark") { setPendingResearchSkill(null); setCommandNotice(""); }
     setCommandNotice(t("Running command…"));
     const textarea = composerRef.current;
     const caret = textarea?.selectionStart ?? prompt.length;
@@ -4461,22 +4488,29 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
       reasoningEffort,
       contextLength,
       contextItems,
+      researchSkill: pendingResearchSkill ?? undefined,
     }]);
     rememberPrompt(draft);
     setPrompt("");
+    setPendingResearchSkill(null);
     setHistoryIndex(-1);
     setComposerError("");
   }
 
   async function submitCurrentPrompt() {
     if (slashRunningRef.current) return;
-    const exactCommand = /^\/([a-z]+)$/i.exec(prompt.trim());
-    const command = exactCommand && slashCommands.find((item) => item.id === exactCommand[1].toLowerCase());
+    const typedCommandText = prompt.trim();
+    const typedCommandName = typedCommandText.replace(/^\/+/, "").toLowerCase().replace(/\s+/g, "-");
+    const command = /^\/[a-z][a-z\s-]*$/i.test(typedCommandText)
+      ? slashCommands.find((item) => item.id === typedCommandName || (item.aliases ?? []).includes(typedCommandName))
+      : undefined;
     if (command) { await runSlashCommand(command); return; }
+    if (pendingResearchSkill && !prompt.trim()) { setComposerError(t("Add a research direction for Idea Spark.")); return; }
     if (!prompt.trim() && !contextItems.some((item) => item.type === "image")) return;
     if (agentBusy) {
       if (nativeBackend) {
         if (nativeBackend.backend !== "codex") { setComposerError(t("Stop the running turn before sending another native request.")); return; }
+        if (pendingResearchSkill) { setComposerError(t("Stop the running turn before starting Idea Spark.")); return; }
         if (steering) return;
         if (contextItems.length) { setComposerError(t("Send attachments after the current native turn finishes.")); return; }
         setSteering(true); setComposerError("");
@@ -4490,11 +4524,13 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     }
     const draft = prompt;
     const submittedContext = contextItems;
+    const submittedMode: ResearchMode = pendingResearchSkill ? "research" : predictedMode;
     rememberPrompt(draft);
     setPrompt("");
     setComposerError("");
-    onResearchMode(predictedMode);
-    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext, predictedMode === "research" ? "idea-spark" : undefined);
+    onResearchMode(submittedMode);
+    const sent = await onSubmit(draft, submittedMode, reasoningEffort, contextLength, submittedContext, pendingResearchSkill ?? undefined);
+    if (sent) setPendingResearchSkill(null);
     if (!sent) setPrompt((current) => current.trim() ? current : draft);
     requestAnimationFrame(() => {
       const textarea = composerRef.current;
@@ -4511,7 +4547,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     if (!wasBusy || agentBusy || !queuedPrompts.length) return;
     const [next, ...rest] = queuedPrompts;
     setQueuedPrompts(rest);
-    void onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems).then((sent) => {
+    void onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems, next.researchSkill).then((sent) => {
       if (sent) return;
       setComposerError("A queued follow-up could not be sent. It was restored below.");
       setPrompt((current) => current.trim() ? current : next.draft);
@@ -4574,6 +4610,11 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
           </div>)}
           {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
         </div>}
+        {pendingResearchSkill === "idea-spark" && <div className="composer-skill">
+          <span className="composer-skill-icon"><Lightbulb size={14} strokeWidth={1.9} aria-hidden="true" /></span>
+          <span className="composer-skill-text"><strong>{t("Idea Spark")}</strong><small>{t("Full workflow · usually 10–20 minutes")}</small></span>
+          <button type="button" onClick={() => { setPendingResearchSkill(null); setCommandNotice(""); }} aria-label={t("Remove Idea Spark")} title={t("Remove Idea Spark")}><X size={12} /></button>
+        </div>}
         <textarea ref={composerRef} className={newChatMode === "research" && prompt === RESEARCH_EXAMPLE ? "research-example" : undefined} value={prompt} disabled={commandRunning} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;
           const textarea = event.currentTarget;
@@ -4618,7 +4659,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
             event.preventDefault();
             void submitCurrentPrompt();
           }
-        }} placeholder={showWelcome && newChatMode === "create" ? t("Describe a Research App you want to create.") : activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
+        }} placeholder={pendingResearchSkill ? t("Describe the research direction for Idea Spark...") : showWelcome && newChatMode === "create" ? t("Describe a Research App you want to create.") : activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
         <MenuSurface open={slashOpen} onClose={() => setSlashQuery(null)} anchorRef={composerBoxRef} placement="top-start" width={560} minWidth={0} maxHeight={320} className="composer-slash-menu" ariaLabel={t("Composer commands")} focus="none">
           {filteredSlashCommands.map((command, index) => <MenuItem key={command.id} icon={<command.icon size={16} strokeWidth={1.7} />} className={index === slashIndex ? "active" : ""} onMouseEnter={() => setSlashIndex(index)} onMouseDown={(event) => event.preventDefault()} onClick={() => void runSlashCommand(command)}><span className="slash-command-label">{command.label}</span><span className="slash-command-detail">{command.detail}</span></MenuItem>)}
         </MenuSurface>

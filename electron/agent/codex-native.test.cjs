@@ -79,7 +79,11 @@ test('Research uses a native Codex skill input and restores its run on the next 
   assert.equal(turn.sandboxPolicy.type, 'readOnly');
   assert.ok(f.records.some(e => e.type === 'native_activity' && e.payload.activity.kind === 'skill'));
   const originalState = f.records.find(e => e.type === 'research_skill');
-  const resumed = fixture(p => complete(p), { workspace });
+  const normal = fixture(p => complete(p), { workspace });
+  normal.args.thread.events = [originalState];
+  await backend.runCodex(normal.args);
+  assert.equal(normal.records.some(e => e.type === 'research_skill'), false);
+  const resumed = fixture(p => complete(p), { workspace, researchSkill: 'idea-spark' });
   resumed.args.thread.events = [originalState];
   await backend.runCodex(resumed.args);
   assert.equal(resumed.records.find(e => e.type === 'research_skill').payload.runRelative, originalState.payload.runRelative);

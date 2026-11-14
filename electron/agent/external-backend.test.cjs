@@ -83,8 +83,12 @@ test('OpenCode Research installs its skills and explicitly requests the workflow
  const state=records.find(e=>e.type==='research_skill');
  const run=path.join(o.workspace,state.payload.runRelative);
  assert.equal(fs.statSync(run).isDirectory(),true);
- // Fresh process and an omitted renderer selection must still resume Research.
+ // Fresh process and an omitted renderer selection must not resume Research.
  o.thread.events=[state];o.researchSkill=undefined;
+ assert.equal(await runNative(o),'ACP answer');
+ assert.equal(records.filter(e=>e.type==='research_skill').length,1);
+ // Selecting IdeaSpark again is what resumes the existing run.
+ o.researchSkill='idea-spark';
  assert.equal(await runNative(o),'ACP answer');
  assert.equal(records.filter(e=>e.type==='research_skill').at(-1).payload.runRelative,state.payload.runRelative);
 });

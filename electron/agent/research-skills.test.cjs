@@ -17,9 +17,10 @@ function setup(root, extra = {}) {
   return { skill, records, events };
 }
 
-test('Standard turns do not install skills or allocate a run; API research is explicit', t => {
+test('Research alone never installs IdeaSpark; only an explicit request does', t => {
   const root = workspace(t);
   assert.equal(setup(root, { requested: undefined }).skill, null);
+  assert.equal(setup(root, { requested: undefined, thread: { id: 'thread', mode: 'research', events: [] } }).skill, null);
   assert.deepEqual(fs.readdirSync(root), []);
   assert.throws(() => setup(root, { backend: 'unknown' }), /Unsupported/);
   assert.deepEqual(fs.readdirSync(root), []);
@@ -46,24 +47,25 @@ test('all native harnesses receive the complete relocatable package without cred
   }
 });
 
-test('Research resumes its original run after a restart and never overwrites phase output', t => {
+test('Explicit IdeaSpark resumes its original run after a restart and never overwrites phase output', t => {
   const root = workspace(t);
   const original = setup(root);
   fs.mkdirSync(path.join(original.skill.runDirectory, 'phase0'));
   fs.writeFileSync(path.join(original.skill.runDirectory, 'phase0/lit_table.md'), 'preserve');
   const skillStat = fs.statSync(original.skill.skillFile);
-  const resumed = setup(root, { requested: undefined, thread: { id: 'thread', events: original.records } });
+  assert.equal(setup(root, { requested: undefined, thread: { id: 'thread', mode: 'research', events: original.records } }).skill, null);
+  const resumed = setup(root, { requested: 'idea-spark', thread: { id: 'thread', events: original.records } });
   assert.equal(resumed.skill.runDirectory, original.skill.runDirectory);
   assert.equal(fs.readFileSync(path.join(resumed.skill.runDirectory, 'phase0/lit_table.md'), 'utf8'), 'preserve');
   assert.equal(fs.statSync(resumed.skill.skillFile).mtimeMs, skillStat.mtimeMs);
-  const fork = setup(root, { requested: undefined, thread: { id: 'fork', events: original.records } });
+  const fork = setup(root, { requested: 'idea-spark', thread: { id: 'fork', events: original.records } });
   assert.notEqual(fork.skill.runDirectory, original.skill.runDirectory);
 });
 
 test('workspace changes allocate a new run and tampered persisted paths fail before traversal', t => {
   const root = workspace(t), other = workspace(t);
   const first = setup(root);
-  const moved = setup(other, { requested: undefined, thread: { id: 'thread', events: first.records } });
+  const moved = setup(other, { requested: 'idea-spark', thread: { id: 'thread', events: first.records } });
   assert.ok(moved.skill.runDirectory.startsWith(other + path.sep));
   const events = structuredClone(first.records);
   events[0].payload.runRelative = 'ideaspark_run/../../outside';
@@ -93,7 +95,7 @@ test('linked skill roots and linked run directories are rejected', { skip: proce
   const first = setup(other);
   fs.rmdirSync(first.skill.runDirectory);
   fs.symlinkSync(outside, first.skill.runDirectory);
-  assert.throws(() => setup(other, { thread: { id: 'thread', events: first.records } }), /real directory/);
+  assert.throws(() => setup(other, { requested: 'idea-spark', thread: { id: 'thread', events: first.records } }), /real directory/);
 });
 
 test('read labels require a native read of the installed skill rather than just mentioning it', () => {
@@ -125,7 +127,7 @@ test('API Research installs and resumes its own IdeaSpark package', t => {
   const first = setup(root, { backend: 'api' });
   assert.match(first.skill.instructions, /run_isolated_phase/);
   assert.ok(first.skill.skillFile.startsWith(path.join(root, '.archimedes/skills')));
-  const resumed = setup(root, { backend: 'api', requested: undefined, thread: { id: 'thread', events: first.records } });
+  const resumed = setup(root, { backend: 'api', requested: 'idea-spark', thread: { id: 'thread', events: first.records } });
   assert.equal(resumed.skill.runDirectory, first.skill.runDirectory);
 });
 
@@ -133,16 +135,16 @@ test('API resume exposes incomplete phase checkpoints without declaring their ou
   const root = workspace(t);
   const first = setup(root, { backend: 'api' });
   const events = [...first.records, { type: 'phase_started', payload: { worker_id: 'worker-1', output_paths: ['phase/file.md'] } }];
-  const resumed = setup(root, { backend: 'api', requested: undefined, thread: { id: 'thread', events } });
+  const resumed = setup(root, { backend: 'api', requested: 'idea-spark', thread: { id: 'thread', events } });
   assert.match(resumed.skill.instructions, /worker-1/);
   assert.match(resumed.skill.instructions, /outcome is uncertain/);
   assert.equal(resumed.skill.runDirectory, first.skill.runDirectory);
 });
 
 
-test('Standard and Create do not resume an old IdeaSpark skill implicitly', t => {
+test('No mode resumes an old IdeaSpark skill without an explicit request', t => {
   const root = workspace(t), first = setup(root);
-  for (const mode of ['standard', 'create']) {
+  for (const mode of ['standard', 'create', 'research']) {
     const result = setup(root, { requested: undefined, thread: { id: 'thread', mode, events: first.records } });
     assert.equal(result.skill, null);
   }

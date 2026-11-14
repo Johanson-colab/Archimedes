@@ -81,7 +81,9 @@ function installSkill(root, backend) {
 function researchSelection(thread, requested) {
   if (requested != null && requested !== 'idea-spark') throw new Error('Unknown Research skill.');
   const previous = [...(thread.events || [])].reverse().find(e => e.type === 'research_skill' && e.payload?.skill === 'idea-spark')?.payload;
-  return { enabled: requested === 'idea-spark' || Boolean(previous), previous };
+  // IdeaSpark is opt-in on every turn. Prior run events only let an explicit
+  // selection resume the same artifact directory; they never activate the skill.
+  return { enabled: requested === 'idea-spark', previous };
 }
 
 function prepareResearchSkill({ workspace, backend, thread, requested, emit = () => {}, recordEvent = () => {} }) {

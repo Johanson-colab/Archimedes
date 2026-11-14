@@ -163,7 +163,7 @@ test('an existing output is not proof that an isolated phase wrote it', async t 
   assert.equal(JSON.parse(result.content).status, 'incomplete');
 });
 
-test('API harness sends the selected mode and only Research initializes IdeaSpark', async t => {
+test('API harness initializes IdeaSpark only when the user explicitly selects it', async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-modes-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   store.openWorkspace(root); modelConfig.initializeModelConfig(root);
@@ -181,7 +181,11 @@ test('API harness sends the selected mode and only Research initializes IdeaSpar
     const request = requests.at(-1);
     assert.match(request.messages[0].content, new RegExp(`Operate in ${mode[0].toUpperCase() + mode.slice(1)} mode`));
     assert.doesNotMatch(request.messages[0].content, /Operate in Idea spark mode/);
-    assert.equal(request.messages.some(message => String(message.content).includes('Research mode: use the installed IdeaSpark')), mode === 'research');
-    assert.equal(result.thread.events.some(event => event.type === 'research_skill' && event.payload.skill === 'idea-spark'), mode === 'research');
+    assert.equal(request.messages.some(message => String(message.content).includes('Research mode: use the installed IdeaSpark')), false);
+    assert.equal(result.thread.events.some(event => event.type === 'research_skill' && event.payload.skill === 'idea-spark'), false);
   }
+  const explicit = await runAgent({ prompt: 'Find a testable idea', workspace: root, origin: 'research', mode: 'research', researchSkill: 'idea-spark', capabilities: { command: 'ask', write: 'ask' } });
+  assert.equal(explicit.status, 'completed');
+  assert.ok(requests.at(-1).messages.some(message => String(message.content).includes('Research mode: use the installed IdeaSpark')));
+  assert.equal(explicit.thread.events.some(event => event.type === 'research_skill' && event.payload.skill === 'idea-spark'), true);
 });

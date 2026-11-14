@@ -1,9 +1,13 @@
-# Research mode: native IdeaSpark skills
+# Research mode: opt-in IdeaSpark skills
 
-Start a new Work chat, select **Research**, choose **Codex**, **Claude Code**, or
-**OpenCode**, and send a research question. Archimedes prepares the complete
-IdeaSpark package and asks the selected native agent to follow its workflow.
-Users do not need to install IdeaSpark globally or attach it to each message.
+Start a new Work chat and select **Research**. Research is a normal conversation
+with literature and workspace tools; it does not start IdeaSpark automatically.
+Type `/` in the composer and choose **Idea Spark** (or type `/idea spark`) when
+you want the full workflow. The selected skill is shown as a removable chip
+above the message and runs only when that message is sent. Choose Codex,
+Claude Code, or OpenCode to have Archimedes prepare the complete IdeaSpark
+package for the selected native harness. Users do not need to install IdeaSpark
+globally or attach it to each message.
 
 ## Integration
 
@@ -29,15 +33,14 @@ the proposed experiment or write a full paper.
 ## State, permissions and execution
 
 - A `research_skill` event records the chat, backend, workspace and unique run
-  directory under `ideaspark_run/`. Follow-ups and restarted processes recover
-  the same directory, and `next` inspects the saved upstream artifacts. A fork or
-  changed workspace/backend gets a new run. This is artifact-based recovery, not
-  automatic replay of interrupted commands.
-- Standard/Create do not activate the built-in skill. The new-chat mode is saved
-  with its composer draft. Choosing Research while using the self-developed API
-  harness still follows the existing API behavior; its IdeaSpark integration is
-  deferred. Arbitrary Archimedes plugin/skill attachments remain unsupported by
-  native backends; this integration supplies a known, built-in package directly.
+  directory under `ideaspark_run/`. Selecting IdeaSpark again in the same chat
+  and workspace recovers the same directory, and `next` inspects the saved
+  upstream artifacts. A fork or changed workspace/backend gets a new run. This
+  is artifact-based recovery, not automatic replay of interrupted commands.
+- The skill is opt-in on every turn. Prior `research_skill` events never activate
+  IdeaSpark; a normal Research follow-up is an ordinary conversation. Resuming a
+  run requires selecting IdeaSpark again in the composer. Standard/Create do not
+  expose the command. The new-chat mode is saved with its composer draft.
 - Native permissions and one-time approvals remain in effect. Skill preparation
   does not grant write/network access or turn on unattended execution. A denied
   operation or unavailable provider must be surfaced, not silently routed to API.
@@ -94,10 +97,12 @@ On the development machine (2026-11-09): Codex CLI 0.161.0 and Claude Code
 `provider.free-limit`; real OpenCode skill execution remains unverified until a
 usable native provider/model is configured. Protocol tests cover all three.
 
-The full suite reported 1,039 passes, four skips and six failures: three
-Benchmark Radar tests discover this machine's local checkout instead of their
-expected fallback; three Windows shell assertions fail on macOS. The failing
-modules/tests are unchanged by this work. Lint, build, focused integration tests
-and theme checks pass. This change adds workflow routing and native activity
-labels without changing page layout; execution logs/tests provide the evidence
-instead of before/after layout screenshots.
+The full suite reports 1,243 passes, five skips and 11 failures on this macOS
+development machine. The failures are pre-existing environment and fixture
+checks: three Benchmark Radar tests discover this machine's local checkout
+instead of their expected fallback, two Windows shell assertions fail on macOS,
+and the remaining Git/worktree, template, shell-profile and translation-order
+audits depend on local state. They are unchanged by this work. Lint, build,
+focused integration tests and theme checks pass. This change adds the explicit
+Research composer command without changing page layout; focused execution tests
+provide the evidence instead of before/after layout screenshots.
