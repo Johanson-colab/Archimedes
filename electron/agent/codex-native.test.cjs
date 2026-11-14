@@ -49,8 +49,11 @@ test('native setup omits API instructions and resumes native history without rei
   f.args.thread.turns.unshift({ id: 'prior', user_message: 'Visible user', assistant_message: 'Visible assistant' });
   await backend.runCodex(f.args);
   let setup = f.peer().calls.find(x => x.method === 'thread/start').params;
-  assert.equal(setup.developerInstructions, undefined);
+  assert.match(setup.developerInstructions, /IdeaSpark is opt-in/);
   assert.equal(setup.baseInstructions, undefined);
+  const disabled = f.peer().options.appServerArgs[f.peer().options.appServerArgs.indexOf('-c') + 1];
+  assert.match(disabled, /name="idea-spark"/);
+  assert.match(disabled, /name="archimedes-idea-spark"/);
   let input = f.peer().calls.find(x => x.method === 'turn/start').params.input[0].text;
   assert.match(input, /Visible user/); assert.match(input, /Visible assistant/); assert.match(input, /Current request/); assert.doesNotMatch(input, /DO NOT SEND/);
   const resumed = fixture(p => complete(p));
@@ -71,6 +74,9 @@ test('Research uses a native Codex skill input and restores its run on the next 
   await backend.runCodex(f.args);
   const setup = f.peer().calls.find(c => c.method === 'thread/start').params;
   assert.match(setup.developerInstructions, /IdeaSpark/);
+  const disabled = f.peer().options.appServerArgs[f.peer().options.appServerArgs.indexOf('-c') + 1];
+  assert.match(disabled, /name="idea-spark"/);
+  assert.doesNotMatch(disabled, /archimedes-idea-spark/);
   assert.equal(setup.sandbox, 'read-only');
   const turn = f.peer().calls.find(c => c.method === 'turn/start').params;
   const input = turn.input.find(i => i.type === 'skill');
@@ -83,6 +89,9 @@ test('Research uses a native Codex skill input and restores its run on the next 
   normal.args.thread.events = [originalState];
   await backend.runCodex(normal.args);
   assert.equal(normal.records.some(e => e.type === 'research_skill'), false);
+  assert.match(normal.peer().calls.find(c => c.method === 'thread/start').params.developerInstructions, /IdeaSpark is opt-in/);
+  const normalDisabled = normal.peer().options.appServerArgs[normal.peer().options.appServerArgs.indexOf('-c') + 1];
+  assert.match(normalDisabled, /name="archimedes-idea-spark"/);
   const resumed = fixture(p => complete(p), { workspace, researchSkill: 'idea-spark' });
   resumed.args.thread.events = [originalState];
   await backend.runCodex(resumed.args);

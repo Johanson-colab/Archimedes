@@ -30,6 +30,14 @@ honor all terminal branches, including `do_not_generate` and `phase_3_failed`.
 IdeaSpark produces a research idea and test plan; it does not automatically run
 the proposed experiment or write a full paper.
 
+Codex also discovers project and user skills on its own. To keep IdeaSpark
+opt-in, Archimedes starts Codex with `skills.config` disabling the user's
+`idea-spark` skill on every turn, and disabling the bundled
+`archimedes-idea-spark` skill as well unless the composer selection explicitly
+requests it. A developer instruction on normal turns also tells Codex not to
+resume or read either skill, so a previous IdeaSpark native thread does not
+carry the workflow into an ordinary Research message.
+
 ## State, permissions and execution
 
 - A `research_skill` event records the chat, backend, workspace and unique run

@@ -31,6 +31,17 @@ function nativePolicy(config, root) {
       ? { type: 'workspaceWrite', writableRoots: [root], networkAccess: false, excludeSlashTmp: true, excludeTmpdirEnvVar: true }
       : { type: 'readOnly', networkAccess: false }, ...(config.effort ? { effort: config.effort } : {}) } };
 }
+// Codex discovers skills from project and user config directories. Keep the
+// user's own idea-spark unavailable unless Archimedes explicitly selected its
+// bundled archimedes-idea-spark workflow for this turn.
+function ideaSparkControls(researchSkill) {
+  const disabled = researchSkill === 'idea-spark' ? ['idea-spark'] : ['idea-spark', SKILL_NAME];
+  const config = `skills.config=[${disabled.map(name => `{name=${JSON.stringify(name)},enabled=false}`).join(',')}]`;
+  return {
+    appServerArgs: ['-c', config],
+    developerInstructions: 'IdeaSpark is opt-in. Do not invoke, continue, or read the idea-spark or archimedes-idea-spark skill unless this turn explicitly selects it in the Research composer.',
+  };
+}
 // Retain a bounded display snapshot, never the full native patch object.
 // An incomplete snapshot cannot authorize the original operation.
 function approvalSnapshot(item) {
@@ -131,7 +142,9 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   const skill = compaction ? null : nativeSkill === 'paper-deep-reading'
     ? { skillName: 'paper-deep-reading', skillFile: path.join(__dirname, '../assets/research-skills/paper-deep-reading/SKILL.md') }
     : prepareResearchSkill({ workspace: root, backend: 'codex', thread, requested: researchSkill, emit, recordEvent });
-  const client = new Client({ binary: config.binary, ...(mineruToken ? { env: { MINERU_API_TOKEN: mineruToken } } : {}) });
+  const ideaSpark = ideaSparkControls(researchSkill);
+  const developerInstructions = skill?.instructions || ideaSpark.developerInstructions;
+  const client = new Client({ binary: config.binary, appServerArgs: ideaSpark.appServerArgs, ...(mineruToken ? { env: { MINERU_API_TOKEN: mineruToken } } : {}) });
   const events = createNativeEvents({ emit, recordEvent, onError: (error) => {
     try { finish(error); }
     finally { client.close(); }
@@ -254,7 +267,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     const account = await client.request('account/read', { refreshToken: false });
     if (!account?.account) throw new Error('Codex is not signed in. Run codex login, then retry.');
     await validateNativeChoice(client, config, root);
-    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(skill?.instructions ? { developerInstructions: skill.instructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : {}) });
+    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : {}) });
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');
     if (resume && active.nativeThreadId !== binding.native_thread_id) throw new Error('Codex returned a different native thread while resuming. No request was replayed.');

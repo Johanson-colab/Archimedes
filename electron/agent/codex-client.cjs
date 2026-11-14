@@ -17,12 +17,14 @@ function executableCandidates(binary = "codex") {
 }
 
 class CodexClient extends EventEmitter {
-  constructor({ binary = "codex", spawnImpl = spawn, requestTimeout = 20_000, env = {} } = {}) {
+  constructor({ binary = "codex", spawnImpl = spawn, requestTimeout = 20_000, env = {}, appServerArgs = [] } = {}) {
     super();
+    if (!Array.isArray(appServerArgs) || appServerArgs.some((arg) => typeof arg !== "string")) throw new Error("Invalid Codex app-server arguments.");
     this.binary = binary;
     this.env = env;
     this.spawnImpl = spawnImpl;
     this.requestTimeout = requestTimeout;
+    this.appServerArgs = appServerArgs;
     this.pending = new Map();
     this.nextId = 0;
     this.closed = false;
@@ -36,7 +38,7 @@ class CodexClient extends EventEmitter {
     if (process.platform === "win32" && binary.endsWith(".cmd")) throw new Error("Select the native codex.exe executable; Windows .cmd launchers are not supported yet.");
     const env = { ...process.env, ...this.env };
     delete env.CODEX_THREAD_ID;
-    this.child = this.spawnImpl(binary, ["app-server", "--listen", "stdio://"], { stdio: ["pipe", "pipe", "pipe"], env, windowsHide: true, detached: process.platform !== "win32" });
+    this.child = this.spawnImpl(binary, [...this.appServerArgs, "app-server", "--listen", "stdio://"], { stdio: ["pipe", "pipe", "pipe"], env, windowsHide: true, detached: process.platform !== "win32" });
     clients.add(this);
     this.child.stdout.setEncoding("utf8");
     this.child.stdout.on("data", (chunk) => this.read(chunk));

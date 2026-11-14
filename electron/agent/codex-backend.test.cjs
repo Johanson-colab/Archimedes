@@ -35,6 +35,17 @@ test("stdio protocol correlates replies and refuses unknown requests without she
   assert.equal(client.pending.size, 0);
 });
 
+test("explicit app-server arguments are placed before the app-server subcommand", async () => {
+  let argsSeen;
+  const client = new CodexClient({ appServerArgs: ["-c", 'skills.config=[]'], spawnImpl: (_bin, args) => {
+    argsSeen = args;
+    return fixture((message, send) => { if (message.method === "initialize") send({ id: message.id, result: {} }); });
+  } });
+  await client.start();
+  assert.deepEqual(argsSeen, ["-c", "skills.config=[]", "app-server", "--listen", "stdio://"]);
+  client.close();
+});
+
 test("RPC timeouts do not replay and process exit rejects pending requests", async () => {
   const calls = [];
   let child;
