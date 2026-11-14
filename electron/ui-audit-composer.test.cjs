@@ -91,6 +91,8 @@ test("context usage exposes a readable breakdown without runtime chrome", () => 
   assert.match(app, /aria-valuenow=\{contextUsagePercent\}/);
   assert.match(app, /className="context-usage-breakdown"/);
   assert.match(app, /t\("Instructions"\)/);
+  assert.match(app, /reportedNativeUsage\?\.modelContextWindow/);
+  assert.match(app, /standard: 500_000, "extra-long": 1_000_000/);
   assert.match(app, /onClick=\{onOpenWorkspaceSettings\}/);
   assert.match(app, /selectionStart/);
   assert.match(app, /selectionEnd/);

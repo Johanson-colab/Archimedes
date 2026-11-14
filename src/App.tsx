@@ -203,7 +203,7 @@ const previewModelCapabilities: ModelCapabilities = {
   thinkingEfforts: ["low", "medium", "high"],
   contextLengths: ["standard", "extra-long"],
   nativeThinking: true,
-  contextCharacterLimits: { standard: 300_000, "extra-long": 600_000 },
+  contextCharacterLimits: { standard: 500_000, "extra-long": 1_000_000 },
 };
 
 function chatModeFromThread(mode: ResearchMode, events: ResearchEvent[] = []): NewChatMode {
@@ -4046,7 +4046,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     () => contextItems.reduce((total, item) => total + estimateAttachmentContextCharacters(item), 0),
     [contextItems],
   );
-  const contextCharacterLimit = modelCapabilities.contextCharacterLimits[contextLength] || 300_000;
+  const contextCharacterLimit = modelCapabilities.contextCharacterLimits[contextLength] || 500_000;
   const estimatedContextCharacters = Math.min(
     contextCharacterLimit,
     CONTEXT_INSTRUCTION_OVERHEAD_CHARS + messageContextCharacters + attachedContextCharacters + prompt.length,
@@ -4478,7 +4478,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
           >
             <Folder size={13} aria-hidden="true" /><span>{workspacePathName(workspace, t("No workspace"))}</span>
           </button>
-          {nativeBackend ? <NativeContextUsage usage={reportedNativeUsage} /> : <div className="context-usage-control">
+          {nativeBackend ? (reportedNativeUsage?.modelContextWindow ? <NativeContextUsage usage={reportedNativeUsage} /> : null) : <div className="context-usage-control">
             <button
               ref={contextUsageTriggerRef}
               type="button"

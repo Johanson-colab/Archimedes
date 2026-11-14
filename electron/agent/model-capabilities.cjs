@@ -1,7 +1,7 @@
 const THINKING_EFFORTS = ["low", "medium", "high"];
 const CONTEXT_LENGTHS = ["standard", "extra-long"];
-const STANDARD_CONTEXT_CHARS = 300_000;
-const EXTRA_LONG_CONTEXT_CHARS = 600_000;
+const STANDARD_CONTEXT_CHARS = 500_000;
+const EXTRA_LONG_CONTEXT_CHARS = 1_000_000;
 
 function normalizedConfig(config = {}) {
   return {
