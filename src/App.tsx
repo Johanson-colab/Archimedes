@@ -3829,6 +3829,27 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   onScrollTop: (top: number) => void;
 }) {
   const { t } = useUISettings();
+  const [autoRunIn, setAutoRunIn] = useState<number | null>(null);
+  const approveRef = useRef(onApprove);
+  useEffect(() => { approveRef.current = onApprove; }, [onApprove]);
+  const autoRunId = pendingAction?.kind === "command" && pendingAction.payload.managedByAgent ? pendingAction.id : null;
+  useEffect(() => {
+    if (!autoRunId) {
+      setAutoRunIn(null);
+      return;
+    }
+    const started = Date.now();
+    setAutoRunIn(5);
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, 5 - Math.floor((Date.now() - started) / 1000));
+      setAutoRunIn(remaining);
+      if (remaining <= 0) {
+        window.clearInterval(timer);
+        approveRef.current();
+      }
+    }, 200);
+    return () => window.clearInterval(timer);
+  }, [autoRunId]);
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyExpandedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -3860,6 +3881,23 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     }
     return grouped;
   }, [trajectoryEvents]);
+  const changeSetsByTurn = useMemo(() => {
+    const grouped = new Map<string, WorkspaceChangeSet[]>();
+    for (const changeSet of changeSets) {
+      if (!changeSet.turnId) continue;
+      const turn = grouped.get(changeSet.turnId) ?? [];
+      turn.push(changeSet); grouped.set(changeSet.turnId, turn);
+    }
+    return grouped;
+  }, [changeSets]);
+  const lastTurnMessageIndex = useMemo(() => {
+    const last = new Map<string, number>();
+    visibleMessages.forEach((message, index) => {
+      if (message.turn_id) last.set(message.turn_id, index);
+    });
+    return last;
+  }, [visibleMessages]);
+  const currentTurnId = visibleMessages[lastUserIndex]?.turn_id;
 
   const scrollToLatest = useCallback(() => {
     const container = scrollRef.current;
@@ -3920,10 +3958,17 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
           <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
+          {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         </div>)}
         {lastUserIndex >= 0 && (nativeEvents.length ? <NativeAgentPanel events={trajectoryEvents} busy={agentBusy} thinking={thinking} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
-        {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
-        {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
+        {visibleMessages.slice(lastUserIndex + 1).map((message, offset) => {
+          const index = lastUserIndex + 1 + offset;
+          return <div key={message.id}>
+            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+            {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
+          </div>;
+        })}
+        {changeSets.filter((changeSet) => !changeSet.turnId || changeSet.turnId === currentTurnId).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         {pendingAction && <section className="conversation-approval">
           <div className="approval-content">
             <div className="approval-head">
@@ -3937,6 +3982,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
               <strong>{t("After")}</strong><pre>{pendingAction.payload.editPreview.after}</pre>
             </details>}
             <div className="approval-actions">
+              {autoRunIn !== null && <span className="approval-countdown">{t("Auto-run in {seconds}s", { seconds: autoRunIn })}</span>}
               <button className="approval-dismiss" onClick={onReject}>Dismiss</button>
               <button className="approval-apply" onClick={onApprove}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
             </div>

@@ -14,6 +14,7 @@ export const agent: Record<string, string> = {
   "App screenshots": "应用截图",
   "Auto": "自动",
   "Auto suggestions created per day. Manual reviews are not counted.": "每天自动创建的建议数量；手动审阅不计入。",
+  "Auto-run in {seconds}s": "将在 {seconds} 秒后自动运行",
   "Back to latest": "返回最新",
   "Back to suggestions": "返回建议",
   "Base URL": "Base URL",

@@ -93,6 +93,10 @@ test("context usage exposes a readable breakdown without runtime chrome", () => 
   assert.match(app, /t\("Instructions"\)/);
   assert.match(app, /reportedNativeUsage\?\.modelContextWindow/);
   assert.match(app, /standard: 500_000, "extra-long": 1_000_000/);
+  assert.match(app, /Auto-run in \{seconds\}s/);
+  assert.match(app, /pendingAction\.payload\.managedByAgent/);
+  assert.match(app, /const changeSetsByTurn = useMemo/);
+  assert.match(app, /changeSet\.turnId === currentTurnId/);
   assert.match(app, /onClick=\{onOpenWorkspaceSettings\}/);
   assert.match(app, /selectionStart/);
   assert.match(app, /selectionEnd/);
