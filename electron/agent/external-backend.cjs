@@ -15,7 +15,9 @@ function canResumeExternal(binding, { backend, workspace, model, previousTurnId 
 }
 function assertPolicy(config) {
   if (!['claude', 'opencode'].includes(config.backend)) throw new Error('Unsupported native backend.');
-  if ((config.permissionMode || 'ask') !== 'ask') throw new Error(`${config.backend} does not support the requested permission mode. Use native approvals; this adapter does not provide a filesystem sandbox.`);
+  const mode = config.permissionMode || 'ask';
+  const allowed = config.backend === 'claude' ? ['ask', 'accept-edits', 'plan', 'auto', 'full-access'] : ['ask'];
+  if (!allowed.includes(mode)) throw new Error(`${config.backend} does not support the requested permission mode. Use native approvals; this adapter does not provide a filesystem sandbox.`);
 }
 function boundedText(value, max) {
   if (typeof value === 'string') return value.slice(-max);

@@ -1,4 +1,6 @@
 .native-agent-panel { min-width: 0; margin: 12px 0; font-size: 12px; }
+.native-commentary { margin: 10px 0; color: var(--text-primary); font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; }
+.native-thinking { margin: 8px 0 2px; }
 .native-activity-card, .native-question-card { border: 1px solid var(--border-default); border-radius: 10px; background: var(--surface-panel); margin: 8px 0; }
 .native-activity-card > summary, .native-activity-item > summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; list-style: none; }
 .native-activity-card > summary > span { margin-left: auto; color: var(--text-muted); }

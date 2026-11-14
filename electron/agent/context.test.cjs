@@ -89,7 +89,7 @@ test("accepts the selected extra-long context budget when preserving history", (
     },
     currentTurnId: "turn-9",
     mode: "free-chat",
-    contextCharacterLimit: 600_000,
+    contextCharacterLimit: 1_000_000,
   });
 
   assert.equal(conversation.compacted, false);

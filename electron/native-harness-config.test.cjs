@@ -35,5 +35,8 @@ test('legacy Codex settings migrate without inheriting another agents executable
     assert.equal(config.save({ backend: 'codex' }).binary, '/bin/codex');
     assert.throws(() => config.normalize({ backend: 'claude', binary: 'sh' }), /absolute/i);
     assert.throws(() => config.normalize({ backend: 'opencode', permissionMode: 'danger-full-access' }), /permission/i);
+    assert.equal(config.normalize({ backend: 'claude', permissionMode: 'accept-edits', effort: 'high' }).permissionMode, 'accept-edits');
+    assert.equal(config.normalize({ backend: 'claude', permissionMode: 'auto' }).permissionMode, 'auto');
+    assert.throws(() => config.normalize({ backend: 'claude', permissionMode: 'danger-full-access' }), /permission/i);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

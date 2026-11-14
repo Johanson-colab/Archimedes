@@ -91,6 +91,12 @@ test("context usage exposes a readable breakdown without runtime chrome", () => 
   assert.match(app, /aria-valuenow=\{contextUsagePercent\}/);
   assert.match(app, /className="context-usage-breakdown"/);
   assert.match(app, /t\("Instructions"\)/);
+  assert.match(app, /reportedNativeUsage\?\.modelContextWindow/);
+  assert.match(app, /standard: 500_000, "extra-long": 1_000_000/);
+  assert.match(app, /Auto-run in \{seconds\}s/);
+  assert.match(app, /pendingAction\.payload\.managedByAgent/);
+  assert.match(app, /const changeSetsByTurn = useMemo/);
+  assert.match(app, /changeSet\.turnId === currentTurnId/);
   assert.match(app, /onClick=\{onOpenWorkspaceSettings\}/);
   assert.match(app, /selectionStart/);
   assert.match(app, /selectionEnd/);
@@ -132,11 +138,11 @@ test("composer queues follow-ups while the agent is busy", () => {
   assert.match(app, /if \(agentBusy\) \{[\s\S]*?if \(nativeBackend\) \{[\s\S]*?await onNativeSteer\(prompt\)[\s\S]*?queueCurrentPrompt\(\);/);
   assert.match(app, /up to five follow-ups can be queued at a time/i);
   assert.match(app, /className="composer-queue"/);
-  assert.match(app, /onSubmit\(next\.draft, next\.mode, next\.reasoningEffort, next\.contextLength, next\.contextItems\)/);
+  assert.match(app, /onSubmit\(next\.draft, next\.mode, next\.reasoningEffort, next\.contextLength, next\.contextItems, next\.researchSkill\)/);
 });
 
 test("composer exposes slash commands and an @ context shortcut", () => {
-  assert.match(app, /const slashCommands = \[/);
+  assert.match(app, /const slashCommands(?:: ComposerSlashCommand\[\])? = \[/);
   assert.match(app, /setSlashQuery/);
   assert.match(app, /ariaLabel=\{t\("Composer commands"\)\}/);
   assert.match(app, /if \(event\.key === "@"/);
@@ -145,17 +151,29 @@ test("composer exposes slash commands and an @ context shortcut", () => {
 });
 
 test("slash menu presents the requested commands and connects all actions", () => {
-  const commands = app.match(/const slashCommands = \[([\s\S]*?)\n  \];/)[1];
+  const commands = app.match(/const slashCommands(?:: ComposerSlashCommand\[\])? = \[([\s\S]*?)\n  \];/)[1];
   assert.deepEqual([...commands.matchAll(/id: "([^"]+)"/g)].map((match) => match[1]), [
-    "init", "new", "undo", "compact", "fork", "side", "export", "model",
+    "idea-spark", "init", "new", "undo", "compact", "fork", "side", "export", "model",
   ]);
-  assert.equal([...commands.matchAll(/detail: t\(/g)].length, 8);
-  assert.equal([...commands.matchAll(/run: \(\) =>/g)].length, 8);
+  assert.equal([...commands.matchAll(/detail: t\(/g)].length, 9);
+  assert.equal([...commands.matchAll(/run: \(\) =>/g)].length, 9);
   assert.match(app, /anchorRef=\{composerBoxRef\} placement="top-start" width=\{560\}/);
   assert.match(app, /minWidth=\{0\} maxHeight=\{320\} className="composer-slash-menu"/);
   assert.doesNotMatch(app, /slash-command-soon/);
   assert.match(css, /\.composer-slash-menu \.menu-item \{[\s\S]*?min-height: 30px;[\s\S]*?padding: 0 8px;/);
   assert.match(app, /scrollIntoView\(\{ block: "nearest" \}\)/);
+});
+
+test("IdeaSpark is opt-in from the Research slash menu and never auto-runs", () => {
+  assert.match(app, /const \[pendingResearchSkill, setPendingResearchSkill\] = useState<"idea-spark" \| null>\(null\)/);
+  assert.match(app, /predictedMode === "research" \? \[\{[\s\S]*?id: "idea-spark"[\s\S]*?setPendingResearchSkill\("idea-spark"\)/);
+  assert.match(app, /add research direction for IdeaSpark|Add a research direction for Idea Spark/);
+  assert.match(app, /onSubmit\(draft, submittedMode, reasoningEffort, contextLength, submittedContext, pendingResearchSkill \?\? undefined\)/);
+  assert.match(app, /if \(sent\) setPendingResearchSkill\(null\)/);
+  assert.match(app, /className="composer-skill"/);
+  assert.match(css, /\.composer-skill \{/);
+  assert.doesNotMatch(app, /predictedMode === "research" \? "idea-spark" : undefined/);
+  assert.doesNotMatch(read("electron", "agent.cjs"), /if \(!researchSkill && mode === "research"/);
 });
 
 test("chat modes retain explicit choices and map legacy conversations using skill records", async () => {
@@ -167,7 +185,7 @@ test("chat modes retain explicit choices and map legacy conversations using skil
   assert.equal(mode("standard", []), "standard");
   assert.equal(mode("research", []), "research");
   assert.equal(mode("create", []), "create");
-  assert.equal(mode("idea-spark", []), "standard");
+  assert.equal(mode("idea-spark", []), "research");
   assert.equal(mode("experiment-setup", []), "standard");
   assert.equal(mode("idea-spark", [{ type: "research_skill", payload: { skill: "idea-spark" } }]), "research");
   assert.match(app, /showWelcome \? newChatMode : chatModeFromThread\(researchMode, trajectoryEvents\)/);

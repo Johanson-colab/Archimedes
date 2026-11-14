@@ -162,6 +162,7 @@ export default function ChatActivityTimeline({
 }) {
   const { chatVerbosity, t } = useUISettings();
   const [open, setOpen] = useState(true);
+  const [lowOpen, setLowOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const live = useMemo(() => liveSteps(events, busy), [busy, events]);
   const raw = useMemo(() => rawSteps(rawEvents, busy), [busy, rawEvents]);
@@ -178,17 +179,37 @@ export default function ChatActivityTimeline({
 
   const status = busy && <div className="chat-activity-status" aria-live="polite">
     <span className="chat-activity-dot" aria-hidden="true" />
-    <strong>{interrupting ? t("Stopping task") : t("Working")}</strong>
+    <strong>{interrupting ? t("Stopping task") : latest ? t("Working") : t("Thinking…")}</strong>
     {latest && <span className="chat-activity-status-detail">{latest.label}{latest.detail ? ` · ${latest.detail}` : ""}</span>}
   </div>;
+
+  const stepRows = (list: ChatStep[]) => list.map((step) => {
+    const Icon = KIND_ICON[step.kind];
+    return <div className={`chat-activity-step ${step.status}`} key={step.id}>
+      <span className="chat-activity-step-icon"><Icon size={13} /></span>
+      <span className="chat-activity-step-label">{step.label}</span>
+      <span className="chat-activity-step-detail" title={step.full || step.detail}>{step.detail || step.full || "—"}</span>
+      <span className="chat-activity-step-state" aria-label={step.status}>
+        {step.status === "running" ? <span className="chat-activity-pulse" /> : step.status === "waiting" ? <span className="chat-activity-wait" /> : step.status === "error" ? <span className="chat-activity-error">!</span> : null}
+      </span>
+      {chatVerbosity === "high" && step.full && <span className="chat-activity-step-full">{step.full}</span>}
+    </div>;
+  });
 
   if (chatVerbosity === "low") {
     return <section className="chat-activity chat-activity-low">
       {status}
-      {(summary || !busy) && <div className="chat-activity-low-summary">
-        <span className="chat-activity-low-plus">+</span>
+      {(summary || !busy) && <button
+        type="button"
+        className="chat-activity-low-summary"
+        onClick={() => setLowOpen((current) => !current)}
+        aria-expanded={lowOpen}
+        aria-label={t("Agent activity")}
+      >
+        <span className="chat-activity-low-plus" aria-hidden="true">{lowOpen ? "−" : "+"}</span>
         {summary || t("Reading research context")}
-      </div>}
+      </button>}
+      {lowOpen && steps.length > 0 && <div className="chat-activity-steps chat-activity-low-steps">{stepRows(steps)}</div>}
     </section>;
   }
 
@@ -201,18 +222,7 @@ export default function ChatActivityTimeline({
         <ChevronDown className="chat-activity-chevron" size={14} />
       </button>
       {open && <div className="chat-activity-steps">
-        {visible.map((step) => {
-          const Icon = KIND_ICON[step.kind];
-          return <div className={`chat-activity-step ${step.status}`} key={step.id}>
-            <span className="chat-activity-step-icon"><Icon size={13} /></span>
-            <span className="chat-activity-step-label">{step.label}</span>
-            <span className="chat-activity-step-detail" title={step.full || step.detail}>{step.detail || step.full || "—"}</span>
-            <span className="chat-activity-step-state" aria-label={step.status}>
-              {step.status === "running" ? <span className="chat-activity-pulse" /> : step.status === "waiting" ? <span className="chat-activity-wait" /> : step.status === "error" ? <span className="chat-activity-error">!</span> : null}
-            </span>
-            {chatVerbosity === "high" && step.full && <span className="chat-activity-step-full">{step.full}</span>}
-          </div>;
-        })}
+        {stepRows(visible)}
         {chatVerbosity === "medium" && steps.length > 4 && <button className="chat-activity-more" onClick={() => setShowAll((current) => !current)}>
           {showAll ? t("Show less") : t("Show {count} more", { count: steps.length - 4 })}
         </button>}

@@ -390,7 +390,7 @@ test("Claude and OpenCode settings use independent drafts and explicit native ac
   } finally { await cleanup(); }
 });
 
-test("Harnesses are three expandable cards and native permission guidance is readable static copy", async () => {
+test("Harnesses are three expandable cards and OpenCode keeps readable static permission copy", async () => {
   const cleanup = await mount(bridge());
   try {
     await click("Harnesses");
@@ -398,18 +398,46 @@ test("Harnesses are three expandable cards and native permission guidance is rea
     assert.equal(cards.length, 3);
     assert.deepEqual(cards.map(card => card.getAttribute('aria-label')), ['Codex', 'Claude Code', 'OpenCode']);
     assert.ok(cards.every(card => card.querySelector('.agent-backend-panel').hidden));
-    for (const name of ['Claude Code', 'OpenCode']) {
-      await click(name);
-      const card = document.querySelector(`.agent-backend-card[aria-label="${name}"]`);
-      assert.equal(card.querySelector('.agent-backend-card-toggle').getAttribute('aria-expanded'), 'true');
-      assert.ok(card.querySelector('.agent-backend-permissions'));
-      assert.match(card.querySelector('.agent-backend-permissions').textContent, new RegExp(name));
-      assert.doesNotMatch(card.textContent, /Native permissions|Ask for approval/);
-      assert.ok(!card.querySelector('.agent-backend-permissions .settings-row-control'));
-      if (name === 'Claude Code') assert.doesNotMatch(card.querySelector('.agent-backend-fields').textContent, /provider\/model/);
-    }
+    await click("Claude Code");
+    const claudeCard = document.querySelector('.agent-backend-card[aria-label="Claude Code"]');
+    assert.equal(claudeCard.querySelector('.agent-backend-card-toggle').getAttribute('aria-expanded'), 'true');
+    assert.ok(!claudeCard.querySelector('.agent-backend-permissions'));
+    const claudeField = (label) => document.getElementById([...document.querySelectorAll("label")].find((node) => node.textContent === label)?.htmlFor);
+    assert.equal(claudeField("Claude Code thinking effort").tagName, "SELECT");
+    assert.equal(claudeField("Claude Code permissions").tagName, "SELECT");
+    await click("OpenCode");
+    const card = document.querySelector('.agent-backend-card[aria-label="OpenCode"]');
+    assert.equal(card.querySelector('.agent-backend-card-toggle').getAttribute('aria-expanded'), 'true');
+    assert.ok(card.querySelector('.agent-backend-permissions'));
+    assert.match(card.querySelector('.agent-backend-permissions').textContent, /OpenCode/);
+    assert.doesNotMatch(card.textContent, /Native permissions|Ask for approval/);
+    assert.ok(!card.querySelector('.agent-backend-permissions .settings-row-control'));
+    assert.doesNotMatch(card.querySelector('.agent-backend-fields').textContent, /Claude Code thinking effort|Claude Code permissions/);
     assert.deepEqual(calls.savedBackends, []);
     assert.deepEqual(calls.checkedBackends, []);
+  } finally { await cleanup(); }
+});
+
+test("Claude Code exposes native effort and permission modes", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click("Harnesses");
+    await click("Claude Code");
+    const field = (label) => document.getElementById([...document.querySelectorAll("label")].find((node) => node.textContent === label)?.htmlFor);
+    const effort = field("Claude Code thinking effort");
+    const permissions = field("Claude Code permissions");
+    assert.deepEqual([...effort.options].map((option) => option.value), ["", "low", "medium", "high", "xhigh", "max"]);
+    assert.deepEqual([...permissions.options].map((option) => option.value), ["ask", "accept-edits", "plan", "auto", "full-access"]);
+    await React.act(async () => {
+      effort.value = "high";
+      effort.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      permissions.value = "auto";
+      permissions.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    });
+    await click("Use Claude Code");
+    assert.equal(calls.savedBackends.at(-1).backend, "claude");
+    assert.equal(calls.savedBackends.at(-1).effort, "high");
+    assert.equal(calls.savedBackends.at(-1).permissionMode, "auto");
   } finally { await cleanup(); }
 });
 

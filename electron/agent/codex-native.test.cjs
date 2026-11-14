@@ -49,8 +49,11 @@ test('native setup omits API instructions and resumes native history without rei
   f.args.thread.turns.unshift({ id: 'prior', user_message: 'Visible user', assistant_message: 'Visible assistant' });
   await backend.runCodex(f.args);
   let setup = f.peer().calls.find(x => x.method === 'thread/start').params;
-  assert.equal(setup.developerInstructions, undefined);
+  assert.match(setup.developerInstructions, /IdeaSpark is opt-in/);
   assert.equal(setup.baseInstructions, undefined);
+  const disabled = f.peer().options.appServerArgs[f.peer().options.appServerArgs.indexOf('-c') + 1];
+  assert.match(disabled, /name="idea-spark"/);
+  assert.match(disabled, /name="archimedes-idea-spark"/);
   let input = f.peer().calls.find(x => x.method === 'turn/start').params.input[0].text;
   assert.match(input, /Visible user/); assert.match(input, /Visible assistant/); assert.match(input, /Current request/); assert.doesNotMatch(input, /DO NOT SEND/);
   const resumed = fixture(p => complete(p));
@@ -58,6 +61,21 @@ test('native setup omits API instructions and resumes native history without rei
   resumed.args.bindings.get = () => ({ native_thread_id: 'native-thread', workspace: fs.realpathSync(os.tmpdir()), model: '', last_turn_id: 'prior' });
   await backend.runCodex(resumed.args);
   assert.equal(resumed.peer().calls.find(x => x.method === 'turn/start').params.input[0].text, 'Current request');
+});
+
+test('ordinary Codex turns disable IdeaSpark skills discovered from the workspace', async t => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-codex-local-skill-'));
+  t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
+  const localSkill = path.join(workspace, '.codex', 'skills', 'idea-spark');
+  fs.mkdirSync(localSkill, { recursive: true });
+  fs.writeFileSync(path.join(localSkill, 'SKILL.md'), '---\nname: idea-spark\ndescription: local copy\n---\n');
+  const f = fixture(p => complete(p), { workspace });
+  await backend.runCodex(f.args);
+  const controls = f.peer().options.appServerArgs;
+  const disabled = controls[controls.indexOf('-c') + 1];
+  assert.match(disabled, /name="idea-spark"/);
+  assert.match(disabled, /name="archimedes-idea-spark"/);
+  assert.match(f.peer().calls.find(c => c.method === 'thread/start').params.developerInstructions, /IdeaSpark is opt-in/);
 });
 
 test('Research uses a native Codex skill input and restores its run on the next native turn', async t => {
@@ -71,6 +89,9 @@ test('Research uses a native Codex skill input and restores its run on the next 
   await backend.runCodex(f.args);
   const setup = f.peer().calls.find(c => c.method === 'thread/start').params;
   assert.match(setup.developerInstructions, /IdeaSpark/);
+  const disabled = f.peer().options.appServerArgs[f.peer().options.appServerArgs.indexOf('-c') + 1];
+  assert.match(disabled, /name="idea-spark"/);
+  assert.doesNotMatch(disabled, /archimedes-idea-spark/);
   assert.equal(setup.sandbox, 'read-only');
   const turn = f.peer().calls.find(c => c.method === 'turn/start').params;
   const input = turn.input.find(i => i.type === 'skill');
@@ -79,7 +100,14 @@ test('Research uses a native Codex skill input and restores its run on the next 
   assert.equal(turn.sandboxPolicy.type, 'readOnly');
   assert.ok(f.records.some(e => e.type === 'native_activity' && e.payload.activity.kind === 'skill'));
   const originalState = f.records.find(e => e.type === 'research_skill');
-  const resumed = fixture(p => complete(p), { workspace });
+  const normal = fixture(p => complete(p), { workspace });
+  normal.args.thread.events = [originalState];
+  await backend.runCodex(normal.args);
+  assert.equal(normal.records.some(e => e.type === 'research_skill'), false);
+  assert.match(normal.peer().calls.find(c => c.method === 'thread/start').params.developerInstructions, /IdeaSpark is opt-in/);
+  const normalDisabled = normal.peer().options.appServerArgs[normal.peer().options.appServerArgs.indexOf('-c') + 1];
+  assert.match(normalDisabled, /name="archimedes-idea-spark"/);
+  const resumed = fixture(p => complete(p), { workspace, researchSkill: 'idea-spark' });
   resumed.args.thread.events = [originalState];
   await backend.runCodex(resumed.args);
   assert.equal(resumed.records.find(e => e.type === 'research_skill').payload.runRelative, originalState.payload.runRelative);

@@ -1876,7 +1876,7 @@ interface AgentBackendProfile {
   binary: string;
   model: string;
   effort?: string;
-  permissionMode?: "read-only" | "workspace-write" | "ask" | "auto-review" | "full-access";
+  permissionMode?: "read-only" | "workspace-write" | "ask" | "auto-review" | "full-access" | "accept-edits" | "plan" | "auto";
 }
 interface AgentBackendConfig extends AgentBackendProfile {
   backend: "api" | "codex" | "claude" | "opencode";

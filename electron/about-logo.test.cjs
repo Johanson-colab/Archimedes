@@ -17,15 +17,15 @@ test("About logo preserves the seven Paper blocks without an opaque background",
 });
 
 test("About logo is decorative next to the existing accessible product name", () => {
-  assert.match(read("src/SettingsModal.tsx"), /section === "about"[\s\S]*?<ArchimedesMark className="settings-about-logo" size=\{88\} decorative \/>\s*<strong>Archimedes<\/strong>/);
+  assert.match(read("src/settings/GeneralSettingsPanel.tsx"), /<ArchimedesMark className="settings-about-logo" size=\{88\} decorative \/>\s*<strong>Archimedes<\/strong>/);
 });
 
 test("About logo uses the active theme foreground rather than an opaque themed tile", () => {
   const css = read("src/styles.css");
-  const rule = css.match(/\.settings-about-logo \{([^}]+)\}/)?.[1];
-  assert.ok(rule);
-  assert.match(rule, /color: var\(--night-ink\)/);
-  assert.doesNotMatch(rule, /background|mask/);
+  const rules = [...css.matchAll(/\.settings-about-logo \{([^}]+)\}/g)].map((match) => match[1]);
+  assert.ok(rules.length);
+  assert.ok(rules.some((rule) => /color: var\(--night-ink\)/.test(rule)), "the logo keeps the theme foreground");
+  for (const rule of rules) assert.doesNotMatch(rule, /background|mask/);
   assert.match(read("src/brand/ArchimedesMark.tsx"), /fill="currentColor"/);
   assert.match(read("src/brand/ArchimedesMark.tsx"), /<feDropShadow/);
   assert.match(read("src/tokens.css"), /--night-ink: var\(--text-primary\)/);

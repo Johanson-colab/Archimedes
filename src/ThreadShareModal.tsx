@@ -8,20 +8,21 @@ import { downloadSnapshotBlob, snapshotImagePages } from "./session-snapshot-ima
 import "./session-snapshot.css";
 
 type Snapshot = Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>>;
-type Props = { snapshot: Snapshot | null; bridge: ResearchDeskBridge; projectId: string; threadId: string; threadTitle: string; privateThread: boolean; signedIn: boolean; onClose: () => void; onCopy: (text: string) => Promise<void> };
+type SnapshotDefaults = { format?: "md" | "json" | "png"; sources?: boolean; diagnostics?: boolean };
+type Props = { snapshot: Snapshot | null; bridge: ResearchDeskBridge; projectId: string; threadId: string; threadTitle: string; privateThread: boolean; signedIn: boolean; defaults?: SnapshotDefaults; onClose: () => void; onCopy: (text: string) => Promise<void> };
 
 export default function ThreadShareModal(props: Props) {
   return props.snapshot ? <SnapshotDialog key={props.snapshot.id} {...props} snapshot={props.snapshot} /> : null;
 }
 
-function SnapshotDialog({ snapshot, bridge, projectId, threadId, threadTitle, privateThread, signedIn, onClose, onCopy }: Props & { snapshot: Snapshot }) {
+function SnapshotDialog({ snapshot, bridge, projectId, threadId, threadTitle, privateThread, signedIn, defaults, onClose, onCopy }: Props & { snapshot: Snapshot }) {
   const { t, language } = useUISettings();
   const turns = useMemo(() => snapshotTurns(snapshot.manifest), [snapshot]);
   const [scope, setScope] = useState<"all" | "latest" | "custom">("all");
   const [selected, setSelected] = useState(() => turns.map((turn) => turn.id));
-  const [sources, setSources] = useState(true);
-  const [diagnostics, setDiagnostics] = useState(false);
-  const [format, setFormat] = useState<"md" | "json" | "png">("md");
+  const [sources, setSources] = useState(defaults?.sources ?? true);
+  const [diagnostics, setDiagnostics] = useState(defaults?.diagnostics ?? false);
+  const [format, setFormat] = useState<"md" | "json" | "png">(defaults?.format ?? "md");
   const [imageWidth, setImageWidth] = useState(900);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

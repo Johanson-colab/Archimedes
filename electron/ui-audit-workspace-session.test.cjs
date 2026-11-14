@@ -86,6 +86,9 @@ test("session search, filters, pinning, archiving and status are exposed", () =>
   assert.match(switcher, /pinned\.length > 0 && rest\.length > 0 && <div className="session-list-label">/);
   assert.match(switcher, /onPinSession\(session, !pinnedNow\)/);
   assert.match(switcher, /onArchiveSession\(session, filter !== "archived"\)/);
+  assert.match(switcher, /filter === "archived" && <button/);
+  assert.match(switcher, /onDeleteSession\(session\)/);
+  assert.match(app, /onDeleteSession=\{\(session\) => void deleteThread\(session\)\}/);
   assert.match(switcher, /session-status \$\{status\}/);
   assert.match(switcher, /sessionStatus\(session, runningThreadId\)/);
   assert.match(switcher, /pending_actions/);
@@ -148,7 +151,7 @@ test("the naming library is exposed through the store and suggestions skip used 
 });
 
 test("the switcher adapts to narrow screens as a full-height sheet", () => {
-  assert.match(css, /\.menu-surface\.session-switcher-popover \{ padding: 0; overflow: hidden; \}/);
+  assert.match(css, /\.menu-surface\.session-switcher-popover \{ display: flex; min-height: 0; flex-direction: column; padding: 0; overflow: hidden; \}/);
   assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*?\.menu-surface\.session-switcher-popover/);
   assert.match(css, /\.session-status \{\s*width: 2px;\s*height: 12px;[^}]*border-radius: 1px/);
   assert.match(css, /\.session-status\.running \{ background: var\(--accent\); animation: sidebar-running-sheen/);

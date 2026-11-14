@@ -3,7 +3,7 @@ import { Compass, Files, GalleryVerticalEnd, GitCompareArrows, ListTree, Milesto
 
 export type WorkbenchTabId = "journey" | "trajectory" | "files" | "changes" | "artifacts" | "notes" | "terminal" | "browser";
 
-export const WORKBENCH_PREFERENCES_VERSION = 4;
+export const WORKBENCH_PREFERENCES_VERSION = 5;
 
 /** Phase 1 keeps the workbench to two panes so every pane stays readable. */
 export const MAX_WORKBENCH_PANES = 2;
@@ -43,10 +43,12 @@ export type WorkbenchTabDefinition = {
   icon: ReactNode;
   /** Optional tabs stay hidden until the user enables them in Settings. */
   optional?: boolean;
+  /** Beta tabs are labeled in Settings while their behavior is still evolving. */
+  beta?: boolean;
 };
 
 export const WORKBENCH_TAB_DEFINITIONS: WorkbenchTabDefinition[] = [
-  { id: "journey", labelKey: "Journey", descriptionKey: "Research narrative, evidence, and progress.", icon: <Milestone size={13} /> },
+  { id: "journey", labelKey: "Journey", descriptionKey: "Research narrative, evidence, and progress.", icon: <Milestone size={13} />, optional: true, beta: true },
   { id: "trajectory", labelKey: "Trajectory", descriptionKey: "Raw agent events and tool calls.", icon: <ListTree size={13} /> },
   { id: "files", labelKey: "Files", descriptionKey: "Browse, preview, and edit workspace files.", icon: <Files size={13} /> },
   { id: "changes", labelKey: "Changes", descriptionKey: "Files changed by the agent in this conversation.", icon: <GitCompareArrows size={13} /> },
@@ -190,9 +192,10 @@ export function normalizeWorkbenchPreferences(input: unknown): WorkbenchTabPrefe
     hidden.push(value);
   }
   if (version < WORKBENCH_PREFERENCES_VERSION) {
-    // v2 added Browser; v3 added Artifacts; v4 only adds the split layout.
-    // Migration should hide only newly introduced tabs, never re-hide a tab
-    // the user explicitly enabled.
+    // v2 added Browser; v3 added Artifacts; v4 added the split layout; v5 makes
+    // Journey opt-in for new installs. Migration should hide only newly
+    // introduced or newly optional tabs, never re-hide a tab an existing user
+    // already has visible.
     const newlyHidden = version < 2 ? OPTIONAL_WORKBENCH_TAB_IDS : version < 3 ? (["artifacts"] as WorkbenchTabId[]) : [];
     for (const id of newlyHidden) {
       if (order.includes(id) && !hidden.includes(id)) hidden.push(id);

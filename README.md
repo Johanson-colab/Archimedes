@@ -1,8 +1,6 @@
 # Archimedes
 
 > A local-first research-agent suite for discovering evidence, reading papers, inspecting code, running research work, and writing with traceability.
->
-> 面向研究全流程的科研智能体工作台：把找论文、读论文、看项目代码、组织证据、开展实验和写作放回同一个可追溯的桌面应用中。
 
 <p align="center">
   <img src="docs/assets/readme/archimedes-hero-1.webp" alt="Archimedes research chat, original paper reader, Daily papers, and Canvas">
@@ -62,7 +60,7 @@ Fill `.env.local` with an OpenAI-compatible endpoint before starting, or configu
 ```bash
 ARCHIMEDES_LLM_API_KEY=your-api-key
 ARCHIMEDES_LLM_BASE_URL=https://api.openai.com/v1
-ARCHIMEDES_LLM_MODEL=gpt-4.1-mini
+ARCHIMEDES_LLM_MODEL=gpt-6.1 Terra
 ```
 
 The app opens without a model key, but chat and agent actions will not run. Web search is optional and uses a separate key.
@@ -75,26 +73,25 @@ The app opens without a model key, but chat and agent actions will not run. Web 
 
 ## What It Does
 
-- **Research chat** — persistent, project-scoped conversations with streamed answers, visible tool activity, resumable threads, and research modes for free chat, idea generation, experiment setup, paper writing, and paper review.
-- **Evidence-aware context** — attach files, folders, papers, repositories, skills, plugins, and images. The composer supports drag-and-drop, prompt history, follow-up queues, slash commands, and a visible context-usage breakdown.
-- **Discovery** — Daily papers with latest/trending views, date ranges, topic filters, keyword search, and official conference catalog search for ICML, ICLR, NeurIPS, CVPR, ICCV, ECCV, ACL, EMNLP, and AAAI.
-- **Literature workspace** — project-scoped libraries, paper import, reading state, notes, highlights, full-paper PDF reading, page search, translation, and source-grounded discussion.
-- **Paper plus code** — linked GitHub repositories and project sites open beside the paper so claims can be checked against visible implementation and data assets.
-- **Extensions** — a multi-source marketplace for skills, plugins, MCP servers, and custom indexes. Skill packages can install into workspace or global `.agents/skills`; other types are discoverable and link to their source.
-- **Writing and execution** — LaTeX paper projects with templates, compilation, PDF preview, an interactive terminal, auditable tool calls, and approval gates before writes or commands.
-- **Research radar** — Benchmark Radar for emerging benchmarks, plus a conference figure gallery for visual inspiration and evidence gathering.
-- **Paper presentations** — macOS-only: generate a 15-page lab-meeting deck after a saved review. Requires Kimi Desktop, LibreOffice, and a configured model provider.
+- **Research Apps** — bring focused tools into a shared workspace for literature discovery, paper reading, reproduction, data analysis, and writing. The vision is to let researchers customize these workflows by combining Skills, MCP tools, models, and agent backends.
+- **Literature discovery and reading** — explore Daily papers and conference catalogs, organize papers in project libraries, and read PDFs with search, notes, highlights, translation, and source-grounded discussion.
+- **Paper and implementation** — open linked repositories and project sites alongside papers, and use reproduction workflows to investigate how research connects to code and data.
+- **Analysis and writing** — work with research data, prepare LaTeX projects, compile and preview papers, and use the integrated terminal and workspace tools.
+- **Extensions and backends** — discover Skills, plugins, and MCP servers through the marketplace, install supported Skill packages, and configure models and agent backends for research tasks. Support and attachment behavior vary by backend.
+- **Research context and provenance** — preserve project conversations, papers, and source references so researchers can return to the context behind their work. Experiment lineage and broader evidence provenance are in development.
+- **Research memory and collaboration** — long-term experience retention and shared research projects are areas of ongoing exploration.
 
-Image generation is not wired up yet. The Image creation page is currently a conference-figure gallery and a scaffolded compose dock.
+Research App customization and automatic composition of Skills, MCP tools, models, and backends are part of the product direction; not every combination is supported today. Image generation is not wired up yet: Image creation currently provides a conference-figure gallery and a scaffolded compose dock.
 
 ## The Research Loop
 
-1. **Discover** — arXiv, official conference catalogs, the web, libraries, and paper figures.
-2. **Read and ground** — open PDFs, search text, inspect pages and figures, highlight evidence, and keep page references.
-3. **Connect paper and implementation** — open the linked repository or project page next to the paper.
-4. **Think with context** — ask the agent in a project-scoped conversation using selected papers, files, folders, images, skills, and code.
-5. **Build and validate** — use the workspace, LaTeX projects, and terminal for plans, experiments, drafts, and controlled actions.
-6. **Organize and return** — save papers into libraries, preserve thread history, and revisit the evidence behind conclusions.
+1. **Define** — start with a research question and gather context in a project.
+2. **Discover and read** — find related work, inspect papers and figures, and keep notes and source references.
+3. **Connect and reproduce** — examine linked code and data, then prepare a reproduction or experiment in the workspace.
+4. **Analyze and write** — investigate results and develop a paper using the analysis and writing tools.
+5. **Review and revisit** — discuss findings, review drafts, and return to saved papers and conversations.
+
+The longer-term goal is to connect questions, code, data, experiments, results, and conclusions through experiment lineage and evidence provenance, while retaining research experience and supporting collaboration across a shared project.
 
 ### Principles
 
@@ -104,22 +101,6 @@ Image generation is not wired up yet. The Image creation page is currently a con
 - **Human approval for consequential actions.** Agent-proposed file writes and shell commands pause for approval.
 - **No fake completeness.** Missing proceedings, restricted sources, and unavailable metadata are surfaced rather than invented.
 
-## Architecture
-
-```text
-React + Vite renderer
-        |
-Electron preload boundary
-        |
-Electron main process
-  |        |        |
-SQLite   Agent     Workspace / terminal / PDF / repository adapters
-```
-
-- Renderer: chat, library, paper reader, Daily papers, gallery, and project views.
-- Main process: provider credentials, agent calls, filesystem and terminal control, and approval boundaries.
-- Workspace database: `.archimedes/archimedes.db` for projects, threads, turns, libraries, approvals, and command history.
-- Source adapters retain provenance for papers, conference catalogs, repository snapshots, and web evidence.
 
 ## Configuration and Privacy
 
@@ -155,6 +136,12 @@ Archimedes already covers the core research loop, but it is not finished. Next l
 
 The aim is not research theater. It is a reliable research companion that makes the chain from question to evidence to implementation easier to inspect, challenge, and extend.
 
+## Community 
+
+Feel free to join Archimedes wechat group for more information.
+
+<img src="docs/assets/Archimedes-wechat-group.png" alt="Archimedes WeChat group QR code" width="280" />
+
 ## Welcome to cite
 
 If Archimedes supports your research, please cite it:
@@ -162,7 +149,7 @@ If Archimedes supports your research, please cite it:
 ```bibtex
 @software{archimedes2026,
   title   = {Archimedes: A Local-First Research-Agent Suite},
-  author  = {Weijiang Lv and Jiayu Wang and {Archimedes Contributors}},
+  author  = {Weijiang Lv and Jiayu Wang and Archimedes Contributors},
   year    = {2026},
   url     = {https://github.com/Johanson-colab/Archimedes}
 }

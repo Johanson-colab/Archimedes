@@ -11,7 +11,12 @@ function profile(input = {}, backend = "codex") {
   const model = String(input.model || "").trim();
   const effort = String(input.effort || "").trim();
   const permissionMode = input.permissionMode || "ask";
-  if (!(backend === "codex" ? ["ask", "auto-review", "full-access", "read-only", "workspace-write"] : ["ask"]).includes(permissionMode)) throw new Error("Unsupported native permission mode.");
+  const permissionModes = backend === "codex"
+    ? ["ask", "auto-review", "full-access", "read-only", "workspace-write"]
+    : backend === "claude"
+      ? ["ask", "accept-edits", "plan", "auto", "full-access"]
+      : ["ask"];
+  if (!permissionModes.includes(permissionMode)) throw new Error("Unsupported native permission mode.");
   if (binary !== backend && !path.isAbsolute(binary)) throw new Error("Native executable path must be absolute.");
   if (binary.length > 2000 || model.length > 160 || effort.length > 100 || /[\r\n\0]/.test(binary + model + effort)) throw new Error("Invalid native configuration.");
   return { binary, model, effort, permissionMode };

@@ -1,6 +1,6 @@
 // Keep model protocol call/result groups intact when bounding a long active turn.
 function boundActiveContext(messages, characterLimit) {
-  const limit = Math.max(32_000, Number(characterLimit) || 300_000);
+  const limit = Math.max(32_000, Number(characterLimit) || 500_000);
   const size = () => messages.reduce((total, message) => total + JSON.stringify(message).length, 0);
   let used = size(), removed = 0, clipped = 0;
   if (used <= limit) return { removed, clipped };

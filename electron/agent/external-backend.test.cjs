@@ -9,7 +9,7 @@ class Fixture extends EventEmitter {
   constructor(o) { super(); this.options=o; this.closed=false; this.sent=[]; Fixture.last=this; }
   start(){ return this; } close(){this.closed=true;this.emit('closed',new Error('closed'));}
   send(m){this.sent.push(m);if(m.type==='user')queueMicrotask(()=>{this.emit('message',{type:'assistant',message:{content:[{type:'thinking',thinking:'PRIVATE'},{type:'text',text:'Hello'}]}});this.emit('message',{type:'result',subtype:'success',result:'Hello',session_id:this.options.sessionId});});}
-  request(method,params){this.sent.push({method,params});if(method==='initialize')return Promise.resolve({models:[{value:'sonnet',displayName:'Sonnet'}]});return Promise.resolve({});}
+  request(method,params){this.sent.push({method,params});if(method==='initialize')return Promise.resolve({models:[{value:'sonnet',displayName:'Sonnet',supportedEffortLevels:['low','medium','high']}]});return Promise.resolve({});}
 }
 function options(backend='claude') { const saves=[],events=[];return {config:{backend,binary:process.execPath,permissionMode:'ask'},workspace:process.cwd(),thread:{id:'local',turns:[]},turn:{id:'turn',user_message:'hi'},emit:e=>events.push(e),bindings:{get:()=>null,save:b=>saves.push(b)},Client:Fixture,saves,events}; }
 test('external resume requires backend workspace model and completed local turn',()=>{
@@ -49,6 +49,13 @@ class ACPFixture extends Fixture {
     return Promise.resolve({});
   }
 }
+test('Claude maps native effort and permission selections onto its CLI flags', async () => {
+ const o=options();o.config.model='sonnet';o.config.effort='high';o.config.permissionMode='accept-edits';
+ assert.equal(await runNative(o),'Hello');
+ const args=Fixture.last.options.args;
+ assert.equal(args[args.indexOf('--effort')+1],'high');
+ assert.equal(args[args.indexOf('--permission-mode')+1],'acceptEdits');
+});
 test('Claude Research installs native skills and appends its workflow without changing permissions', async t => {
  const o=options();o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-claude-research-'));
  t.after(()=>fs.rmSync(o.workspace,{recursive:true,force:true}));
@@ -76,8 +83,12 @@ test('OpenCode Research installs its skills and explicitly requests the workflow
  const state=records.find(e=>e.type==='research_skill');
  const run=path.join(o.workspace,state.payload.runRelative);
  assert.equal(fs.statSync(run).isDirectory(),true);
- // Fresh process and an omitted renderer selection must still resume Research.
+ // Fresh process and an omitted renderer selection must not resume Research.
  o.thread.events=[state];o.researchSkill=undefined;
+ assert.equal(await runNative(o),'ACP answer');
+ assert.equal(records.filter(e=>e.type==='research_skill').length,1);
+ // Selecting IdeaSpark again is what resumes the existing run.
+ o.researchSkill='idea-spark';
  assert.equal(await runNative(o),'ACP answer');
  assert.equal(records.filter(e=>e.type==='research_skill').at(-1).payload.runRelative,state.payload.runRelative);
 });

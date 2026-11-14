@@ -16,7 +16,10 @@ test("settings surfaces share the settings primitives", () => {
   assert.match(primitive, /role="switch"/);
 
   for (const file of [
-    "src/SettingsModal.tsx",
+    "src/settings/GeneralSettingsPanel.tsx",
+    "src/settings/AppearanceSettingsPanel.tsx",
+    "src/settings/SessionToolsSettingsPanel.tsx",
+    "src/settings/WorkspaceSettingsHub.tsx",
     "src/AccountSettingsPanel.tsx",
     "src/ProjectMembersPanel.tsx",
     "src/SharedRunsPanel.tsx",

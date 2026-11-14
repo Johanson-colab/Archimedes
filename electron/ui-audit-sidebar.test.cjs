@@ -24,6 +24,11 @@ test("sidebar is one Research Apps list above Work with a management entry", () 
   assert.ok(app.includes('t("Research Apps")'));
   assert.ok(app.includes('aria-label={t("Manage Research Apps")}'));
   assert.ok(app.includes('{flatModuleEntries.map(moduleButton)}'));
+  assert.match(app, /orderedModuleEntries|flatModuleEntries/);
+  assert.match(app, /draggable/);
+  assert.match(app, /onDragStart/);
+  assert.match(app, /onDrop/);
+  assert.match(app, /Alt\+ArrowUp Alt\+ArrowDown/);
   assert.ok(!app.includes("sidebarLayout"), "obsolete layout preferences cannot change navigation");
   for (const id of ["library", "extensions", "writing", "image-creation"]) {
     assert.ok(registry.includes(`id: "${id}"`), `${id} remains registered`);
@@ -149,6 +154,27 @@ test("projects and workspaces expose pointer-positioned context menus", () => {
   assert.match(i18n, /"Open workspace": "打开工作区"/);
 });
 
+test("projects, archived projects, and workspaces can be reordered locally", () => {
+  assert.match(app, /readSidebarOrder/);
+  assert.match(app, /writeSidebarOrder\(sidebarOrder\)/);
+  assert.match(app, /moveSidebarOrder\(reconcileSidebarOrder\(current/);
+  assert.match(sidebar, /orderSidebarIds\(projects, order\.projects\)/);
+  assert.match(sidebar, /orderSidebarIds\(archivedProjects, order\.archivedProjects\)/);
+  assert.match(sidebar, /orderSidebarIds\(workspaces\.filter\(\(workspace\) => workspace\.project_id === project\.id\), order\.workspaces\[project\.id\]\)/);
+  assert.match(sidebar, /onDragStart/);
+  assert.match(sidebar, /onDragOver/);
+  assert.match(sidebar, /onDrop/);
+  assert.match(sidebar, /moveWithKeyboard/);
+  assert.match(sidebar, /event\.key === "ArrowDown", parentId/);
+  assert.match(app, /reorderSidebar\("apps", entry\.id, target, event\.key === "ArrowDown"\)/);
+  assert.match(sidebar, /drag\.parentId !== parentId/);
+  assert.match(app, /registeredSidebarEntries/);
+  assert.match(app, /suppressSidebarAppClickUntil/);
+  assert.match(app, /aria-live="polite"/);
+  assert.match(css, /\.sidebar-drop-target/);
+  assert.match(css, /\.sidebar-order-live/);
+});
+
 test("Work row typography matches the Knowledge items", () => {
   assert.match(css, /\.work-group \.project-select \.project-name \{ font-size: 14px; font-weight: 400/);
   assert.match(css, /\.work-group \.project-chat-open \{[^}]*font-size: 14px; font-weight: 400/);
@@ -177,11 +203,12 @@ test("Extensions uses Installed, Available, and Updates with Workbench tabs", ()
 });
 
 test("account chip is global and the composer drops duplicate runtime controls", () => {
-  const settings = app.indexOf('className="codex-nav-item sidebar-settings-entry"');
-  assert.ok(settings > app.indexOf('className="new-task-button"') && settings < app.indexOf('<nav className="sidebar-nav sidebar-modules"'), "Settings is above Research Apps and Projects");
-  assert.ok(!app.slice(app.indexOf('<div className="sidebar-runtime"'), app.indexOf('<div className="sidebar-resizer"')).includes('aria-label={t("Settings")}'), "footer contains account access only");
+  const settings = app.indexOf('className="sidebar-footer-settings"');
+  assert.ok(settings > app.indexOf('<ProjectSidebar') && settings < app.indexOf('<div className="sidebar-resizer"'), "Settings is in the bottom footer after Projects");
+  assert.doesNotMatch(app, /codex-nav-item sidebar-settings-entry/);
+  assert.match(app, /sidebar-footer-version/);
   assert.match(app, /className="sidebar-runtime"/);
-  assert.match(app, /<AccountChip authState=\{authState\}/);
+  assert.match(app, /<AccountChip compact authState=\{authState\}/);
   assert.doesNotMatch(app, /composer-runtime-switch|composer-runtime-local|composer-runtime-cloud|cloud-gate/);
   assert.doesNotMatch(app, /thread-visibility-trigger/);
   assert.match(css, /\.account-chip \{ display: flex;/);

@@ -47,6 +47,7 @@ import SideConversation from "./SideConversation";
 import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";
 import workspaceNameLibrary from "../shared/workspace-names.json";
 import { workspacePathName } from "./workspace-path";
+import { readSessionToolPreferences, writeSessionToolPreferences, type SessionToolPreferences } from "./session-tools";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
@@ -66,8 +67,10 @@ import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import ThreadShareModal from "./ThreadShareModal";
 import SessionComments, { type SessionCommentsScope } from "./SessionComments";
 import AccountChip from "./AccountChip";
+import packageMetadata from "../package.json";
 import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
+import { moveSidebarOrder, orderSidebarIds, readSidebarOrder, reconcileSidebarOrder, writeSidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
 import { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, formatFileComment, isDraftDirty, isEditableFile, markDraftSaved, mergeRefreshedFiles, prepareFileContent, toEditorText, type FileComment, type FileDraft, type FileSelection } from "./file-editor";
 import { shortcutMatches } from "./file-text-size";
@@ -204,11 +207,12 @@ const previewModelCapabilities: ModelCapabilities = {
   thinkingEfforts: ["low", "medium", "high"],
   contextLengths: ["standard", "extra-long"],
   nativeThinking: true,
-  contextCharacterLimits: { standard: 300_000, "extra-long": 600_000 },
+  contextCharacterLimits: { standard: 500_000, "extra-long": 1_000_000 },
 };
 
 function chatModeFromThread(mode: ResearchMode, events: ResearchEvent[] = []): NewChatMode {
   if (mode === "standard" || mode === "research" || mode === "create") return mode;
+  if (mode === "idea-spark") return "research";
   return events.some((event) => event.type === "research_skill" && (event.payload as { skill?: string } | null)?.skill === "idea-spark") ? "research" : "standard";
 }
 
@@ -240,7 +244,15 @@ const COMPOSER_HISTORY_STORAGE_KEY = "archimedes-composer-history";
 const COMPOSER_HISTORY_LIMIT = 30;
 
 type ComposerDraft = { text: string; selectionStart: number; selectionEnd: number; newChatMode?: NewChatMode };
-type QueuedPrompt = { id: string; draft: string; mode: ResearchMode; reasoningEffort: ReasoningEffort; contextLength: ContextLength; contextItems: ContextAttachment[] };
+type QueuedPrompt = { id: string; draft: string; mode: ResearchMode; reasoningEffort: ReasoningEffort; contextLength: ContextLength; contextItems: ContextAttachment[]; researchSkill?: "idea-spark" };
+type ComposerSlashCommand = {
+  id: string;
+  aliases?: string[];
+  icon: typeof Lightbulb;
+  label: string;
+  detail: string;
+  run: () => void | Promise<ConversationCommandResult>;
+};
 
 function readComposerDraft(key: string): ComposerDraft | null {
   try {
@@ -1334,8 +1346,10 @@ function App() {
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  const [sessionTools, setSessionTools] = useState<SessionToolPreferences>(readSessionToolPreferences);
   const [localIdentity, setLocalIdentity] = useState<LocalIdentity | null>(null);
   const [authState, setAuthState] = useState<AuthState | null>(null);
+  const [availableAppUpdate, setAvailableAppUpdate] = useState<{ version: string; url?: string } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"choice" | "password" | "signup" | "reset" | "recovery">("choice");
   const [presenceMembers, setPresenceMembers] = useState<PresenceMember[]>([]);
@@ -1343,6 +1357,12 @@ function App() {
   const themePreference = appearance.preset;
   const setThemePreference = (preset: ThemePreset) => setAppearance((current) => ({ ...current, preset }));
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
+  const [sidebarOrder, setSidebarOrder] = useState(readSidebarOrder);
+  const [sidebarOrderAnnouncement, setSidebarOrderAnnouncement] = useState("");
+  const sidebarItemDragRef = useRef<{ group: "apps"; id: string } | null>(null);
+  const suppressSidebarAppClickUntil = useRef(0);
+  const [sidebarAppDragging, setSidebarAppDragging] = useState<string | null>(null);
+  const [sidebarAppDropTarget, setSidebarAppDropTarget] = useState<string | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
@@ -1615,8 +1635,29 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // The current application does not bundle an updater. A future updater can
+    // publish a detected release on this event; until then the action stays hidden.
+    const onUpdateAvailable = (event: Event) => {
+      const detail = (event as CustomEvent<{ version?: unknown; url?: unknown }>).detail;
+      if (typeof detail?.version !== "string" || !detail.version.trim()) return;
+      setAvailableAppUpdate({ version: detail.version.trim(), url: typeof detail.url === "string" ? detail.url : undefined });
+    };
+    const onUpdateCleared = () => setAvailableAppUpdate(null);
+    window.addEventListener("archimedes:update-available", onUpdateAvailable);
+    window.addEventListener("archimedes:update-cleared", onUpdateCleared);
+    return () => {
+      window.removeEventListener("archimedes:update-available", onUpdateAvailable);
+      window.removeEventListener("archimedes:update-cleared", onUpdateCleared);
+    };
+  }, []);
+
+  useEffect(() => {
     writeAppearance(appearance);
   }, [appearance]);
+
+  useEffect(() => {
+    writeSessionToolPreferences(sessionTools);
+  }, [sessionTools]);
 
   useEffect(() => {
     if (!workspace || !activeProjectId) return;
@@ -2718,6 +2759,28 @@ function App() {
     }
   }
 
+  async function deleteThread(thread: ResearchThread) {
+    if (agentBusy) return;
+    if (!(await confirm({
+      title: t("Delete this session?"),
+      description: t("Deleting an archived session permanently removes its transcript. This cannot be undone."),
+      confirmLabel: t("Delete session"),
+      destructive: true,
+    }))) return;
+    await desktopBridge.deleteResearchThread(thread.id);
+    const snapshot = await desktopBridge.openWorkspace(workspace);
+    setProjects(snapshot.projects);
+    setArchivedProjects(snapshot.archivedProjects ?? []);
+    setThreads(snapshot.threads);
+    setArchivedThreads(snapshot.archivedThreads ?? []);
+    setWorkspaces(snapshot.workspaces ?? []);
+    if (activeThreadId === thread.id) {
+      const next = snapshot.threads.find((candidate) => candidate.workspace_id === thread.workspace_id)
+        ?? snapshot.threads.find((candidate) => candidate.project_id === thread.project_id);
+      if (next) await openResearchThread(next); else startNewTask(thread.project_id, thread.workspace_id);
+    }
+  }
+
   async function archiveProject(project: ResearchProject, archived: boolean) {
     if (agentBusy) return;
     await desktopBridge.archiveResearchProject(project.id, archived);
@@ -3240,7 +3303,27 @@ function App() {
     : null;
   const workspaceDialogProject = projects.find((project) => project.id === workspaceDialogProjectId) ?? null;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
-  const flatModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
+  const registeredSidebarEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled), [pluginEntries]);
+  const availableModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
+  const flatModuleEntries = useMemo(() => orderSidebarIds(availableModuleEntries, sidebarOrder.apps), [availableModuleEntries, sidebarOrder.apps]);
+  const availableSidebarWorkspaces = useMemo(() => Object.fromEntries([...projects, ...archivedProjects].map((project) => {
+    const current = workspaces.filter((entry) => entry.project_id === project.id).map((entry) => entry.id);
+    // An archived project may not contribute workspaces to the active snapshot.
+    // Preserve their local order until that project is restored and refreshed.
+    return [project.id, archivedProjects.some((archived) => archived.id === project.id) && !current.length ? sidebarOrder.workspaces[project.id] ?? [] : current];
+  })), [projects, archivedProjects, workspaces, sidebarOrder.workspaces]);
+  const availableSidebarOrder = useMemo(() => ({ apps: registeredSidebarEntries.map((entry) => entry.id), projects: projects.map((entry) => entry.id), archivedProjects: archivedProjects.map((entry) => entry.id), workspaces: availableSidebarWorkspaces }), [registeredSidebarEntries, projects, archivedProjects, availableSidebarWorkspaces]);
+  useEffect(() => { writeSidebarOrder(sidebarOrder); }, [sidebarOrder]);
+  useEffect(() => {
+    if (!workspaceReady) return;
+    setSidebarOrder((current) => {
+      const next = reconcileSidebarOrder(current, { ...availableSidebarOrder, workspaces: { ...availableSidebarWorkspaces } });
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next;
+    });
+  }, [workspaceReady, availableSidebarOrder, availableSidebarWorkspaces]);
+  const reorderSidebar = useCallback((group: SidebarOrderGroup, sourceId: string, targetId: string, after: boolean, parentId?: string) => {
+    setSidebarOrder((current) => moveSidebarOrder(reconcileSidebarOrder(current, { ...availableSidebarOrder, workspaces: { ...availableSidebarWorkspaces } }), group, sourceId, targetId, after, parentId));
+  }, [availableSidebarOrder, availableSidebarWorkspaces]);
   const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
     id: entry.commandId,
     group: t("Research Apps"),
@@ -3248,9 +3331,30 @@ function App() {
     icon: <entry.icon size={15} />,
     run: () => activateSidebarEntry(entry),
   }));
-  const moduleButton = (entry: SidebarEntry) => <button className={mainSection === entry.destination.section ? "codex-nav-item active" : "codex-nav-item"} key={entry.id} onClick={() => activateSidebarEntry(entry)} title={t(entry.labelKey)} disabled={entry.disabled}>
-    <entry.icon size={15} /><span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
-  </button>;
+  const moduleButton = (entry: SidebarEntry) => {
+    const ids = flatModuleEntries.map((item) => item.id);
+    const reorderByKeyboard = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+      const index = ids.indexOf(entry.id);
+      const target = ids[index + (event.key === "ArrowUp" ? -1 : 1)];
+      if (!target) return;
+      event.preventDefault();
+      reorderSidebar("apps", entry.id, target, event.key === "ArrowDown");
+      setSidebarOrderAnnouncement(t("Moved {name} to position {position} of {count}.", { name: t(entry.labelKey), position: index + (event.key === "ArrowUp" ? 0 : 2), count: ids.length }));
+    };
+    return <button className={`codex-nav-item${mainSection === entry.destination.section ? " active" : ""}${sidebarAppDragging === entry.id ? " sidebar-dragging" : ""}${sidebarAppDropTarget === entry.id ? " sidebar-drop-target" : ""}`} key={entry.id}
+      draggable
+      aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+      onKeyDown={reorderByKeyboard}
+      onDragStart={(event) => { sidebarItemDragRef.current = { group: "apps", id: entry.id }; setSidebarAppDragging(entry.id); suppressSidebarAppClickUntil.current = Date.now() + 500; event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", entry.id); }}
+      onDragOver={(event) => { const drag = sidebarItemDragRef.current; if (!drag || drag.group !== "apps" || drag.id === entry.id) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; setSidebarAppDropTarget(entry.id); }}
+      onDrop={(event) => { const drag = sidebarItemDragRef.current; if (!drag || drag.group !== "apps" || drag.id === entry.id) return; event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); reorderSidebar("apps", drag.id, entry.id, event.clientY >= rect.top + rect.height / 2); sidebarItemDragRef.current = null; setSidebarAppDragging(null); suppressSidebarAppClickUntil.current = Date.now() + 500; setSidebarAppDropTarget(null); }}
+      onDragEnd={() => { sidebarItemDragRef.current = null; setSidebarAppDragging(null); setSidebarAppDropTarget(null); suppressSidebarAppClickUntil.current = Date.now() + 500; }}
+      onClick={() => { if (Date.now() >= suppressSidebarAppClickUntil.current) activateSidebarEntry(entry); }}
+      title={`${t(entry.labelKey)} · ${t("Drag to reorder. Use Alt+ArrowUp or Alt+ArrowDown.")}`} disabled={entry.disabled}>
+      <entry.icon size={15} /><span>{t(entry.labelKey)}</span>{entry.badge && <span className="nav-tail">{t(entry.badge)}</span>}
+    </button>;
+  };
   const paletteCommands: PaletteCommand[] = [
     { id: "new-research", group: t("Work"), label: t("New research task"), detail: t("Start a chat in the current project"), shortcut: "Ctrl N", icon: <Plus size={15} />, run: () => startNewTask() },
     { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
@@ -3316,10 +3420,6 @@ function App() {
           <span>{t("New research")}</span>
         </button>
 
-        <button className="codex-nav-item sidebar-settings-entry" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
-          <span>{t("Settings")}</span><Settings className="sidebar-settings-icon" size={15} strokeWidth={1.7} aria-hidden="true" />
-        </button>
-
         <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
           <div className="sidebar-section-label">
             <span>{t("Research Apps")}</span>
@@ -3332,6 +3432,8 @@ function App() {
           projects={projects}
           archivedProjects={archivedProjects}
           workspaces={workspaces}
+          order={sidebarOrder}
+          onReorder={reorderSidebar}
           activeProjectId={activeProjectId}
           activeWorkspaceId={activeWorkspace?.id ?? null}
           disabled={agentBusy}
@@ -3346,9 +3448,27 @@ function App() {
           onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
           filterError={projectFolderError}
         />
+        <span className="sidebar-order-live" aria-live="polite">{sidebarOrderAnnouncement}</span>
 
         <div className="sidebar-runtime">
-          <AccountChip authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
+          <AccountChip compact authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
+          {availableAppUpdate && <button className="sidebar-footer-update" onClick={() => {
+            const requested = availableAppUpdate.url;
+            let url = "https://github.com/Johanson-colab/Archimedes/releases/latest";
+            if (requested) {
+              try {
+                const parsed = new URL(requested);
+                if (parsed.protocol === "https:" && parsed.hostname === "github.com" && parsed.pathname.startsWith("/Johanson-colab/Archimedes/releases")) url = parsed.toString();
+              } catch { /* Use the canonical releases page. */ }
+            }
+            void desktopBridge.openExternalUrl(url).catch(() => undefined);
+          }} title={t("Update available: {version}", { version: availableAppUpdate.version })} aria-label={t("Update available: {version}", { version: availableAppUpdate.version })}>
+            <span>{t("Update")}</span>
+          </button>}
+          <span className="sidebar-footer-version" title={t("Application version {version}", { version: packageMetadata.version })}>v{packageMetadata.version}</span>
+          <button className="sidebar-footer-settings" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
+            <Settings size={16} strokeWidth={1.7} aria-hidden="true" />
+          </button>
         </div>
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>
@@ -3370,6 +3490,7 @@ function App() {
             onNewSession={() => startNewTask()}
             onPinSession={(session, pinned) => void pinSession(session, pinned)}
             onArchiveSession={(session, archived) => void archiveThread(session, archived)}
+            onDeleteSession={(session) => void deleteThread(session)}
             onSelectWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
             onCreateWorkspace={(kind) => void createWorkspace(kind)}
             onRenameWorkspace={openWorkspaceRename}
@@ -3382,8 +3503,8 @@ function App() {
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
             </div>}
-            {activeThreadId && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
-            {activeThreadId && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
+            {activeThreadId && sessionTools.showSnapshots && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
+            {activeThreadId && sessionTools.showComments && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
             <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={() => setResearchPanelOpen((open) => !open)}
@@ -3416,6 +3537,7 @@ function App() {
               key={activeThreadId ?? `new:${chatViewNonce}`}
               commentScope={sessionCommentsScope}
               addingComment={commentsOpen}
+              commentsShowResolved={sessionTools.commentsShowResolved}
               onExitComments={exitSessionComments}
               messages={messages}
               events={events}
@@ -3701,6 +3823,8 @@ function App() {
         onResetProactiveHistory={proactive.resetHistory}
         proactiveHistoryCount={proactive.state.suggestions.length}
         onObserveProactive={proactive.observeOnce}
+        sessionTools={sessionTools}
+        onSessionToolsChange={(patch) => setSessionTools((current) => ({ ...current, ...patch }))}
         identity={localIdentity}
         onSaveIdentity={saveLocalIdentity}
         activeProject={activeProject}
@@ -3724,6 +3848,7 @@ function App() {
         threadId={activeThreadId || ""}
         threadTitle={activeThread?.title ?? t("Research session")}
         privateThread={threadVisibility === "private"}
+        defaults={{ format: sessionTools.snapshotFormat, sources: sessionTools.snapshotSources, diagnostics: sessionTools.snapshotDiagnostics }}
         onClose={() => setShareSnapshot(null)}
         onCopy={(text) => desktopBridge.writeClipboardText(text)}
       />
@@ -3757,9 +3882,10 @@ function App() {
   );
 }
 
-const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop, commentScope, addingComment, onExitComments }: {
+const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
+  commentsShowResolved: boolean;
   onExitComments: () => void;
   messages: Message[];
   events: TimelineEvent[];
@@ -3777,6 +3903,27 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   onScrollTop: (top: number) => void;
 }) {
   const { t } = useUISettings();
+  const [autoRunIn, setAutoRunIn] = useState<number | null>(null);
+  const approveRef = useRef(onApprove);
+  useEffect(() => { approveRef.current = onApprove; }, [onApprove]);
+  const autoRunId = pendingAction?.kind === "command" && pendingAction.payload.managedByAgent ? pendingAction.id : null;
+  useEffect(() => {
+    if (!autoRunId) {
+      setAutoRunIn(null);
+      return;
+    }
+    const started = Date.now();
+    setAutoRunIn(10);
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, 10 - Math.floor((Date.now() - started) / 1000));
+      setAutoRunIn(remaining);
+      if (remaining <= 0) {
+        window.clearInterval(timer);
+        approveRef.current();
+      }
+    }, 200);
+    return () => window.clearInterval(timer);
+  }, [autoRunId]);
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyExpandedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -3788,6 +3935,17 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     setHistoryStart(0);
   }, []);
   const lastUserIndex = useMemo(() => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1), [visibleMessages]);
+  const nativeEvents = useMemo(() => nativeTurnEvents(trajectoryEvents), [trajectoryEvents]);
+  const hasStreamingText = messages.some((message) => message.role === "assistant" && message.id.endsWith(":stream") && Boolean(message.text.trim()));
+  const lastNativeActivity = [...nativeEvents].reverse()
+    .map((event) => (event.payload as { activity?: NativeAgentActivity } | null)?.activity)
+    .find(Boolean);
+  const hasRunningNativeTool = nativeEvents.some((event) => {
+    const activity = (event.payload as { activity?: NativeAgentActivity } | null)?.activity;
+    return activity?.status === "running";
+  });
+  const hasCommentaryAtTail = lastNativeActivity?.kind === "commentary" && Boolean(lastNativeActivity.output || lastNativeActivity.detail);
+  const thinking = agentBusy && !hasStreamingText && !hasRunningNativeTool && !hasCommentaryAtTail && !pendingAction;
   const nativeEventsByTurn = useMemo(() => {
     const grouped = new Map<string, ResearchEvent[]>();
     for (const event of trajectoryEvents) {
@@ -3797,6 +3955,23 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     }
     return grouped;
   }, [trajectoryEvents]);
+  const changeSetsByTurn = useMemo(() => {
+    const grouped = new Map<string, WorkspaceChangeSet[]>();
+    for (const changeSet of changeSets) {
+      if (!changeSet.turnId) continue;
+      const turn = grouped.get(changeSet.turnId) ?? [];
+      turn.push(changeSet); grouped.set(changeSet.turnId, turn);
+    }
+    return grouped;
+  }, [changeSets]);
+  const lastTurnMessageIndex = useMemo(() => {
+    const last = new Map<string, number>();
+    visibleMessages.forEach((message, index) => {
+      if (message.turn_id) last.set(message.turn_id, index);
+    });
+    return last;
+  }, [visibleMessages]);
+  const currentTurnId = visibleMessages[lastUserIndex]?.turn_id;
 
   const scrollToLatest = useCallback(() => {
     const container = scrollRef.current;
@@ -3857,10 +4032,17 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
           <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
+          {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         </div>)}
-        {lastUserIndex >= 0 && (nativeTurnEvents(trajectoryEvents).length ? <NativeAgentPanel events={trajectoryEvents} busy={agentBusy} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
-        {visibleMessages.slice(lastUserIndex + 1).map((message) => <ConversationMessage key={message.id} message={message} streaming={agentBusy && message.id.endsWith(":stream")} />)}
-        {changeSets.map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
+        {lastUserIndex >= 0 && (nativeEvents.length ? <NativeAgentPanel events={trajectoryEvents} busy={agentBusy} thinking={thinking} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
+        {visibleMessages.slice(lastUserIndex + 1).map((message, offset) => {
+          const index = lastUserIndex + 1 + offset;
+          return <div key={message.id}>
+            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+            {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
+          </div>;
+        })}
+        {changeSets.filter((changeSet) => !changeSet.turnId || changeSet.turnId === currentTurnId).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         {pendingAction && <section className="conversation-approval">
           <div className="approval-content">
             <div className="approval-head">
@@ -3874,6 +4056,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
               <strong>{t("After")}</strong><pre>{pendingAction.payload.editPreview.after}</pre>
             </details>}
             <div className="approval-actions">
+              {autoRunIn !== null && <span className="approval-countdown">{t("Auto-run in {seconds}s", { seconds: autoRunIn })}</span>}
               <button className="approval-dismiss" onClick={onReject}>Dismiss</button>
               <button className="approval-apply" onClick={onApprove}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
             </div>
@@ -3882,7 +4065,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
       </div>;
   return <div className="conversation-scroll-area">
     <div className="conversation-scroll" ref={scrollRef} onScroll={handleScroll}>
-      {commentScope ? <SessionComments key={`${commentScope.workspace}:${commentScope.projectId}:${commentScope.sessionId}`} scope={commentScope} adding={addingComment} onExit={onExitComments} onRequireHistory={requireCommentHistory} historyComplete={historyStart === 0} scrollRef={scrollRef}>{historyContent}</SessionComments> : historyContent}
+      {commentScope ? <SessionComments key={`${commentScope.workspace}:${commentScope.projectId}:${commentScope.sessionId}`} scope={commentScope} adding={addingComment} showResolvedByDefault={commentsShowResolved} onExit={onExitComments} onRequireHistory={requireCommentHistory} historyComplete={historyStart === 0} scrollRef={scrollRef}>{historyContent}</SessionComments> : historyContent}
     </div>
     <TurnRail messages={visibleMessages} scrollRef={scrollRef} />
     {!followingOutput && <button className="conversation-jump-latest" onClick={() => {
@@ -3893,9 +4076,10 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
+  commentsShowResolved: boolean;
   onExitComments: () => void;
   messages: Message[];
   events: TimelineEvent[];
@@ -3959,6 +4143,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [pendingResearchSkill, setPendingResearchSkill] = useState<"idea-spark" | null>(null);
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
   const previousBusyRef = useRef(agentBusy);
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
@@ -3993,6 +4178,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     storedDraftRef.current = stored;
     setNewChatMode(stored?.newChatMode ?? "standard");
     setPrompt(stored?.text ?? "");
+    setPendingResearchSkill(null);
+    setCommandNotice("");
     setHistoryIndex(-1);
     if (!stored) return;
     const frame = requestAnimationFrame(() => {
@@ -4034,6 +4221,12 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   }, [prompt]);
 
   const predictedMode: NewChatMode = showWelcome ? newChatMode : chatModeFromThread(researchMode, trajectoryEvents);
+  useEffect(() => {
+    if (showWelcome) setPendingResearchSkill(null);
+  }, [showWelcome]);
+  useEffect(() => {
+    if (predictedMode !== "research") setPendingResearchSkill(null);
+  }, [predictedMode]);
   const messageContextCharacters = useMemo(
     () => {
       const checkpoint = compactedThroughTurnId ? messages.findIndex((message) => message.id === `${compactedThroughTurnId}:assistant`) : -1;
@@ -4045,7 +4238,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     () => contextItems.reduce((total, item) => total + estimateAttachmentContextCharacters(item), 0),
     [contextItems],
   );
-  const contextCharacterLimit = modelCapabilities.contextCharacterLimits[contextLength] || 300_000;
+  const contextCharacterLimit = modelCapabilities.contextCharacterLimits[contextLength] || 500_000;
   const estimatedContextCharacters = Math.min(
     contextCharacterLimit,
     CONTEXT_INSTRUCTION_OVERHEAD_CHARS + messageContextCharacters + attachedContextCharacters + prompt.length,
@@ -4056,7 +4249,15 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
   const contextUsagePercent = Math.round(contextUsage * 100);
   const formatContextCharacters = (value: number) => value >= 10_000 ? `${Math.round(value / 1_000)}k` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : String(value);
-  const slashCommands = [
+  const slashCommands: ComposerSlashCommand[] = [
+    ...(predictedMode === "research" ? [{
+      id: "idea-spark",
+      aliases: ["idea", "ideaspark"],
+      icon: Lightbulb,
+      label: t("Idea Spark"),
+      detail: t("Run the full workflow: literature, bottleneck, candidates, audit, and idea cards."),
+      run: () => { setPendingResearchSkill("idea-spark"); },
+    }] : []),
     { id: "init", icon: FileCog, label: t("Init"), detail: t("Set up project instructions"), run: () => onCommand("init") },
     { id: "new", icon: Plus, label: t("New"), detail: t("Start a new conversation"), run: () => onCommand("new") },
     { id: "undo", icon: Undo2, label: t("Undo"), detail: t("Undo the last message"), run: () => onCommand("undo") },
@@ -4210,12 +4411,13 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     setSlashIndex(0);
   }
 
-  async function runSlashCommand(command: { id: string; run: () => void | Promise<ConversationCommandResult> }) {
+  async function runSlashCommand(command: ComposerSlashCommand) {
     if (slashRunningRef.current) return;
     if (queuedPrompts.length) { setComposerError(t("Send or clear queued messages before using a command.")); return; }
     slashRunningRef.current = true;
     setCommandRunning(true);
     setComposerError("");
+    if (command.id !== "idea-spark") { setPendingResearchSkill(null); setCommandNotice(""); }
     setCommandNotice(t("Running command…"));
     const textarea = composerRef.current;
     const caret = textarea?.selectionStart ?? prompt.length;
@@ -4296,22 +4498,29 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
       reasoningEffort,
       contextLength,
       contextItems,
+      researchSkill: pendingResearchSkill ?? undefined,
     }]);
     rememberPrompt(draft);
     setPrompt("");
+    setPendingResearchSkill(null);
     setHistoryIndex(-1);
     setComposerError("");
   }
 
   async function submitCurrentPrompt() {
     if (slashRunningRef.current) return;
-    const exactCommand = /^\/([a-z]+)$/i.exec(prompt.trim());
-    const command = exactCommand && slashCommands.find((item) => item.id === exactCommand[1].toLowerCase());
+    const typedCommandText = prompt.trim();
+    const typedCommandName = typedCommandText.replace(/^\/+/, "").toLowerCase().replace(/\s+/g, "-");
+    const command = /^\/[a-z][a-z\s-]*$/i.test(typedCommandText)
+      ? slashCommands.find((item) => item.id === typedCommandName || (item.aliases ?? []).includes(typedCommandName))
+      : undefined;
     if (command) { await runSlashCommand(command); return; }
+    if (pendingResearchSkill && !prompt.trim()) { setComposerError(t("Add a research direction for Idea Spark.")); return; }
     if (!prompt.trim() && !contextItems.some((item) => item.type === "image")) return;
     if (agentBusy) {
       if (nativeBackend) {
         if (nativeBackend.backend !== "codex") { setComposerError(t("Stop the running turn before sending another native request.")); return; }
+        if (pendingResearchSkill) { setComposerError(t("Stop the running turn before starting Idea Spark.")); return; }
         if (steering) return;
         if (contextItems.length) { setComposerError(t("Send attachments after the current native turn finishes.")); return; }
         setSteering(true); setComposerError("");
@@ -4325,11 +4534,13 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     }
     const draft = prompt;
     const submittedContext = contextItems;
+    const submittedMode: ResearchMode = pendingResearchSkill ? "research" : predictedMode;
     rememberPrompt(draft);
     setPrompt("");
     setComposerError("");
-    onResearchMode(predictedMode);
-    const sent = await onSubmit(draft, predictedMode, reasoningEffort, contextLength, submittedContext, predictedMode === "research" ? "idea-spark" : undefined);
+    onResearchMode(submittedMode);
+    const sent = await onSubmit(draft, submittedMode, reasoningEffort, contextLength, submittedContext, pendingResearchSkill ?? undefined);
+    if (sent) setPendingResearchSkill(null);
     if (!sent) setPrompt((current) => current.trim() ? current : draft);
     requestAnimationFrame(() => {
       const textarea = composerRef.current;
@@ -4346,7 +4557,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     if (!wasBusy || agentBusy || !queuedPrompts.length) return;
     const [next, ...rest] = queuedPrompts;
     setQueuedPrompts(rest);
-    void onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems).then((sent) => {
+    void onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems, next.researchSkill).then((sent) => {
       if (sent) return;
       setComposerError("A queued follow-up could not be sent. It was restored below.");
       setPrompt((current) => current.trim() ? current : next.draft);
@@ -4365,7 +4576,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
     <WorkspaceMarkdownProvider workspace={workspace} onOpenFile={openHistoryFile}>
-      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} commentScope={commentScope} addingComment={addingComment} onExitComments={onExitComments} />
+      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} commentScope={commentScope} addingComment={addingComment} commentsShowResolved={commentsShowResolved} onExitComments={onExitComments} />
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
@@ -4408,6 +4619,11 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
             <button type="button" onClick={() => setQueuedPrompts((current) => current.filter((queued) => queued.id !== item.id))} aria-label={`${t("Remove queued message")} ${index + 1}`}><X size={12} /></button>
           </div>)}
           {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
+        </div>}
+        {pendingResearchSkill === "idea-spark" && <div className="composer-skill">
+          <Lightbulb size={13} strokeWidth={1.9} aria-hidden="true" />
+          <strong>{t("Idea Spark")}</strong>
+          <button type="button" onClick={() => { setPendingResearchSkill(null); setCommandNotice(""); }} aria-label={t("Remove Idea Spark")} title={t("Remove Idea Spark")}><X size={11} /></button>
         </div>}
         <textarea ref={composerRef} className={newChatMode === "research" && prompt === RESEARCH_EXAMPLE ? "research-example" : undefined} value={prompt} disabled={commandRunning} onChange={(event) => { setPrompt(event.target.value); setHistoryIndex(-1); updateSlashQuery(event.target.value, event.target.selectionStart); }} onPaste={handleComposerPaste} onContextMenu={(event) => { event.preventDefault(); setComposerMenu({ x: event.clientX, y: event.clientY }); }} onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -4453,7 +4669,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
             event.preventDefault();
             void submitCurrentPrompt();
           }
-        }} placeholder={showWelcome && newChatMode === "create" ? t("Describe a Research App you want to create.") : activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
+        }} placeholder={pendingResearchSkill ? t("Describe the research direction for Idea Spark...") : showWelcome && newChatMode === "create" ? t("Describe a Research App you want to create.") : activeMode.placeholder} rows={3} aria-label={t("Message Archimedes")} aria-keyshortcuts="Control+L Meta+L" aria-describedby={composerError ? "composer-error" : undefined} />
         <MenuSurface open={slashOpen} onClose={() => setSlashQuery(null)} anchorRef={composerBoxRef} placement="top-start" width={560} minWidth={0} maxHeight={320} className="composer-slash-menu" ariaLabel={t("Composer commands")} focus="none">
           {filteredSlashCommands.map((command, index) => <MenuItem key={command.id} icon={<command.icon size={16} strokeWidth={1.7} />} className={index === slashIndex ? "active" : ""} onMouseEnter={() => setSlashIndex(index)} onMouseDown={(event) => event.preventDefault()} onClick={() => void runSlashCommand(command)}><span className="slash-command-label">{command.label}</span><span className="slash-command-detail">{command.detail}</span></MenuItem>)}
         </MenuSurface>
@@ -4477,7 +4693,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
           >
             <Folder size={13} aria-hidden="true" /><span>{workspacePathName(workspace, t("No workspace"))}</span>
           </button>
-          {nativeBackend ? <NativeContextUsage usage={reportedNativeUsage} /> : <div className="context-usage-control">
+          {nativeBackend ? (reportedNativeUsage?.modelContextWindow ? <NativeContextUsage usage={reportedNativeUsage} /> : null) : <div className="context-usage-control">
             <button
               ref={contextUsageTriggerRef}
               type="button"
