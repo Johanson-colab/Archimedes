@@ -66,6 +66,7 @@ import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import ThreadShareModal from "./ThreadShareModal";
 import SessionComments, { type SessionCommentsScope } from "./SessionComments";
 import AccountChip from "./AccountChip";
+import packageMetadata from "../package.json";
 import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
 import { type PaperOpenRequest } from "./PaperWritingView";
@@ -1335,6 +1336,7 @@ function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const [localIdentity, setLocalIdentity] = useState<LocalIdentity | null>(null);
   const [authState, setAuthState] = useState<AuthState | null>(null);
+  const [availableAppUpdate, setAvailableAppUpdate] = useState<{ version: string; url?: string } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"choice" | "password" | "signup" | "reset" | "recovery">("choice");
   const [presenceMembers, setPresenceMembers] = useState<PresenceMember[]>([]);
@@ -1609,6 +1611,23 @@ function App() {
     const platform = desktopBridge.platform ?? "web";
     document.documentElement.dataset.platform = platform;
     document.documentElement.dataset.titlebar = platform === "win32" ? "overlay" : platform === "darwin" ? "inset" : "default";
+  }, []);
+
+  useEffect(() => {
+    // The current application does not bundle an updater. A future updater can
+    // publish a detected release on this event; until then the action stays hidden.
+    const onUpdateAvailable = (event: Event) => {
+      const detail = (event as CustomEvent<{ version?: unknown; url?: unknown }>).detail;
+      if (typeof detail?.version !== "string" || !detail.version.trim()) return;
+      setAvailableAppUpdate({ version: detail.version.trim(), url: typeof detail.url === "string" ? detail.url : undefined });
+    };
+    const onUpdateCleared = () => setAvailableAppUpdate(null);
+    window.addEventListener("archimedes:update-available", onUpdateAvailable);
+    window.addEventListener("archimedes:update-cleared", onUpdateCleared);
+    return () => {
+      window.removeEventListener("archimedes:update-available", onUpdateAvailable);
+      window.removeEventListener("archimedes:update-cleared", onUpdateCleared);
+    };
   }, []);
 
   useEffect(() => {
@@ -3313,10 +3332,6 @@ function App() {
           <span>{t("New research")}</span>
         </button>
 
-        <button className="codex-nav-item sidebar-settings-entry" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
-          <span>{t("Settings")}</span><Settings className="sidebar-settings-icon" size={15} strokeWidth={1.7} aria-hidden="true" />
-        </button>
-
         <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
           <div className="sidebar-section-label">
             <span>{t("Research Apps")}</span>
@@ -3345,7 +3360,24 @@ function App() {
         />
 
         <div className="sidebar-runtime">
-          <AccountChip authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
+          <button className="sidebar-footer-settings" onClick={() => { setSettingsSection("general"); setSettingsOpen(true); }} title={t("Settings")} aria-label={t("Settings")}>
+            <Settings size={16} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+          <span className="sidebar-footer-version" title={t("Application version {version}", { version: packageMetadata.version })}>v{packageMetadata.version}</span>
+          {availableAppUpdate && <button className="sidebar-footer-update" onClick={() => {
+            const requested = availableAppUpdate.url;
+            let url = "https://github.com/Johanson-colab/Archimedes/releases/latest";
+            if (requested) {
+              try {
+                const parsed = new URL(requested);
+                if (parsed.protocol === "https:" && parsed.hostname === "github.com" && parsed.pathname.startsWith("/Johanson-colab/Archimedes/releases")) url = parsed.toString();
+              } catch { /* Use the canonical releases page. */ }
+            }
+            void desktopBridge.openExternalUrl(url).catch(() => undefined);
+          }} title={t("Update available: {version}", { version: availableAppUpdate.version })} aria-label={t("Update available: {version}", { version: availableAppUpdate.version })}>
+            <Download size={13} aria-hidden="true" /><span>{t("Update")}</span>
+          </button>}
+          <AccountChip compact authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
         </div>
         <div className="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={beginSidebarResize} onPointerMove={moveSidebarResize} onPointerUp={endSidebarResize} onPointerCancel={endSidebarResize} onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={handleSidebarResizeKey} />
       </aside>

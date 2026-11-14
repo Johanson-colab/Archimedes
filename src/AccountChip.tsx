@@ -9,9 +9,10 @@ type AccountChipProps = {
   onOpenAuth: () => void;
   onOpenAccountSettings: () => void;
   onSignOut: () => Promise<unknown>;
+  compact?: boolean;
 };
 
-export default function AccountChip({ authState, onOpenAuth, onOpenAccountSettings, onSignOut }: AccountChipProps) {
+export default function AccountChip({ authState, onOpenAuth, onOpenAccountSettings, onSignOut, compact = false }: AccountChipProps) {
   const { t } = useUISettings();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -40,10 +41,10 @@ export default function AccountChip({ authState, onOpenAuth, onOpenAccountSettin
         <p className="account-menu-note" role="none">{t("Local projects, papers, and agent runs stay available.")}</p>
       </>}
     </MenuSurface>
-    <button ref={triggerRef} className={user ? "account-chip signed-in" : "account-chip guest"} onClick={() => setOpen((current) => !current)} aria-haspopup="menu" aria-expanded={open} title={t("Account")}>
+    <button ref={triggerRef} className={`account-chip${user ? " signed-in" : " guest"}${compact ? " compact" : ""}`} onClick={() => setOpen((current) => !current)} aria-haspopup="menu" aria-expanded={open} title={t("Account")}>
       {user && <span className="account-avatar">{(user.displayName || user.email).slice(0, 1).toUpperCase()}</span>}
-      <span className="account-chip-copy"><strong>{user ? user.displayName || user.email : t("Sign in")}</strong><small>{user ? `${t("Cloud")} · ${t("Free plan")}` : t("Cloud agents & sync")}</small></span>
-      {user && <ChevronUp size={13} className={open ? "account-chevron open" : "account-chevron"} />}
+      {(!compact || !user) && <span className="account-chip-copy"><strong>{user ? user.displayName || user.email : t("Sign in")}</strong>{(!compact || user) && <small>{user ? `${t("Cloud")} · ${t("Free plan")}` : t("Cloud agents & sync")}</small>}</span>}
+      {user && !compact && <ChevronUp size={13} className={open ? "account-chevron open" : "account-chevron"} />}
     </button>
   </div>;
 }
