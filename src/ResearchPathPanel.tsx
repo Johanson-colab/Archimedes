@@ -1,4 +1,4 @@
-import { ArrowUpRight, Blocks, Check, Pin, RefreshCw, X } from "lucide-react";
+import { ArrowUpRight, Check, Pin, RefreshCw, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import type { ResearchStage, ResearchStageId } from "./research-path";
 
@@ -18,7 +18,6 @@ type ResearchPathPanelProps = {
   onSelectStage: (stage: ResearchStageId | null) => void;
   onAccept: () => void;
   onRequestChanges: () => void;
-  onBranch: () => void;
   onReturn: (stage: ResearchStage) => void;
   onTogglePin: () => void;
   onOpenThread: () => void;
@@ -46,7 +45,6 @@ export default function ResearchPathPanel({
   onSelectStage,
   onAccept,
   onRequestChanges,
-  onBranch,
   onReturn,
   onTogglePin,
   onOpenThread,
@@ -126,7 +124,6 @@ export default function ResearchPathPanel({
         {canAct && <>
           <button className="agent-path-primary" onClick={onAccept}><Check size={11} />{t("Accept & advance")}</button>
           <button onClick={onRequestChanges}><RefreshCw size={11} />{t("Request changes")}</button>
-          <button onClick={onBranch}><Blocks size={11} />{t("Branch")}</button>
         </>}
         {shownIsActive && !canAct && <button onClick={onOpenThread} disabled={!hasThread}>
           <ArrowUpRight size={11} />

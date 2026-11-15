@@ -1442,7 +1442,6 @@ function App() {
   });
   const [staleStages, setStaleStages] = useState<ResearchStageId[]>([]);
   const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
-  const [branchCount, setBranchCount] = useState(1);
   const [journeyNotice, setJourneyNotice] = useState("");
   const [researchPanelOpen, setResearchPanelOpen] = useState(readResearchPanelOpen);
   const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
@@ -1612,7 +1611,6 @@ function App() {
     setStaleStages([]);
     setSelectedStage(null);
     setJourneyNotice("");
-    setBranchCount(1);
     // A thread owns its research path. The UI state resets when the thread
     // changes, matching the previous conversation-local behavior.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3256,13 +3254,6 @@ function App() {
     setSelectedStage(null);
   }
 
-  function branchFromCheckpoint() {
-    const nextBranch = branchCount + 1;
-    setBranchCount(nextBranch);
-    setJourneyNotice(`Created branch B${nextBranch} from ${activeStage.label}. The accepted branch remains available.`);
-    setSelectedStage(null);
-  }
-
   function returnToStage(stage: ResearchStage) {
     const targetIndex = researchStages.findIndex((candidate) => candidate.id === stage.id);
     const downstream = researchStages.slice(targetIndex + 1).map((candidate) => candidate.id);
@@ -3637,7 +3628,6 @@ function App() {
             onSelectStage={setSelectedStage}
             onAccept={acceptCurrentCheckpoint}
             onRequestChanges={requestCheckpointChanges}
-            onBranch={branchFromCheckpoint}
             onReturn={returnToStage}
             onTogglePin={togglePathPin}
             onOpenThread={openPathThread}
