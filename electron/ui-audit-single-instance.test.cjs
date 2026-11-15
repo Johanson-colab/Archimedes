@@ -15,5 +15,5 @@ test("a second launch focuses the existing window instead of starting a second p
 });
 
 test("the ready handler does not initialise services without the lock", () => {
-  assert.match(main, /app\.whenReady\(\)\.then\(async \(\) => \{\s*if \(!singleInstanceLock\) return;/);
+  assert.match(main, /app\.whenReady\(\)\.then\(async \(\) => \{\s*configureAppIcon\(app\);\s*if \(!singleInstanceLock\) return;/);
 });
