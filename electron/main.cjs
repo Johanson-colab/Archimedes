@@ -622,7 +622,23 @@ let presence = null;
 let authFlow = null;
 let dailyFigureCache = null;
 
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+} else {
+  // A second launch must not open a second process: both would write the same
+  // workspace SQLite database and last-workspace file. Focus the first window.
+  app.on("second-instance", () => {
+    const [existing] = BrowserWindow.getAllWindows();
+    if (!existing) return;
+    if (existing.isMinimized()) existing.restore();
+    existing.show();
+    existing.focus();
+  });
+}
+
 app.whenReady().then(async () => {
+  if (!singleInstanceLock) return;
   configureAppIcon(app);
   loadLocalAgentEnvironment();
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
