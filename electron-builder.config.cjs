@@ -8,7 +8,7 @@ module.exports = {
   beforePack: "./scripts/prepare-latex-engine.cjs",
   npmRebuild: true,
   files: [
-    "dist/**/*", "electron/**/*", "shared/**/*", "server/**/*", "scripts/**/*", "package.json",
+    "dist/**/*", "electron/**/*", "shared/**/*", "server/**/*", "scripts/**/*", "package.json", "LICENSE",
     "!electron/**/*.test.cjs", "!electron/figure-forge-upstream-*.mjs", "!server/**/*.test.cjs",
     "!**/.env", "!**/.env.*", "!**/*.log",
   ],
