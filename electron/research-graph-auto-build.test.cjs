@@ -265,6 +265,76 @@ test("maybeAutoBuild ignores non-research, greeting and trivial turns", async ()
   });
 });
 
+test("maybeAutoBuild retries one invalid API patch with a smaller request", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const { thread, turn } = threadFor(project.id);
+    const prompts = [];
+    const events = [];
+    const result = await auto.maybeAutoBuild({
+      projectId: project.id,
+      threadId: thread.id,
+      turnId: turn.id,
+      mode: "research",
+      origin: "research",
+      backend: "api",
+      config: { apiKey: "test", model: "fixture" },
+      workspace: root,
+      userPrompt: "Does calibration track accuracy under shift?",
+      assistantResponse: "The answer proposes a severity sweep.",
+      emit: (event) => events.push(event),
+      recordEvent: () => {},
+      complete: async (_config, messages) => {
+        prompts.push(messages[1].content);
+        return {
+          content: prompts.length === 1
+            ? "not a graph patch"
+            : JSON.stringify({
+              nodes: [
+                { id: "n1", kind: "question", title: "Does calibration track accuracy?", content: { question: "Does calibration track accuracy?" } },
+                { id: "n2", kind: "idea", title: "Severity is the driver", content: { hypothesis: "Severity drives it." } },
+              ],
+              edges: [{ from: "n1", to: "n2", kind: "generates" }],
+              reason: "retry",
+            }),
+        };
+      },
+    });
+    assert.equal(prompts.length, 2);
+    assert.match(prompts[1], /previous graph patch could not be applied/i);
+    assert.match(prompts[1], /at most 3 new nodes/i);
+    assert.equal(result.createdNodes.length, 2);
+    assert.equal(result.createdEdges.length, 1);
+    assert.ok(events.some((event) => event.type === "graph_update" && event.graph.nodeCount === 2));
+  });
+});
+
+test("maybeAutoBuild records a failure event when both API attempts fail", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const { thread, turn } = threadFor(project.id);
+    const records = [];
+    const events = [];
+    const result = await auto.maybeAutoBuild({
+      projectId: project.id,
+      threadId: thread.id,
+      turnId: turn.id,
+      mode: "research",
+      origin: "research",
+      backend: "api",
+      config: { apiKey: "test", model: "fixture" },
+      workspace: root,
+      userPrompt: "Does calibration track accuracy under shift?",
+      assistantResponse: "The answer proposes a severity sweep.",
+      emit: (event) => events.push(event),
+      recordEvent: (event) => records.push(event),
+      complete: async () => ({ content: "still not json" }),
+    });
+    assert.equal(result, null);
+    assert.ok(records.some((event) => event.type === "graph_failed"));
+    assert.ok(events.some((event) => event.type === "graph_update" && event.graph.nodeCount === 0));
+    assert.equal(store.listResearchGraph({ projectId: project.id }).nodes.length, 0);
+  });
+});
+
 test("a completed API Research turn schedules a background graph build", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
     modelConfig.initializeModelConfig(root);

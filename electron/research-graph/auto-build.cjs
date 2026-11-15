@@ -137,9 +137,10 @@ async function extractWithApi({ complete, config, prompt, signal }) {
   ], {
     signal,
     allowTools: false,
-    maxOutputTokens: 2_400,
+    maxOutputTokens: 6_000,
     reasoningEffort: "low",
     requireComplete: true,
+    responseFormat: { type: "json_object" },
   });
   return message?.content || "";
 }
@@ -239,12 +240,21 @@ async function maybeAutoBuild({
   const timer = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT_MS);
   emit({ type: "graph_update_pending", title: "Research graph", detail: "Extracting research objects from this turn" });
   try {
-    const text = backend === "api"
-      ? await extractWithApi({ complete, config, prompt, signal: controller.signal })
-      : await extractWithNative({ runNative, config, workspace, prompt, signal: controller.signal });
-    if (controller.signal.aborted) throw new Error("Graph extraction timed out.");
-    const patch = parseGraphPatch(text);
-    const applied = graph.applyPatch({ projectId, threadId, turnId, patch });
+    const runExtraction = async (nextPrompt) => {
+      const text = backend === "api"
+        ? await extractWithApi({ complete, config, prompt: nextPrompt, signal: controller.signal })
+        : await extractWithNative({ runNative, config, workspace, prompt: nextPrompt, signal: controller.signal });
+      if (controller.signal.aborted) throw new Error("Graph extraction timed out.");
+      return graph.applyPatch({ projectId, threadId, turnId, patch: parseGraphPatch(text) });
+    };
+    let applied;
+    try {
+      applied = await runExtraction(prompt);
+    } catch (firstError) {
+      if (backend !== "api" || controller.signal.aborted || /No API model|unavailable/i.test(firstError?.message || "")) throw firstError;
+      const retryPrompt = `${prompt}\n\nYour previous graph patch could not be applied: ${firstError?.message || String(firstError)}\nReturn ONLY a valid JSON object with at most 3 new nodes and 4 new edges. Do not include Markdown or commentary. Do not create experiment or result nodes unless the answer reports a concrete experiment plan or measured result.`;
+      applied = await runExtraction(retryPrompt);
+    }
     const createdNodeIds = applied.createdNodes.map((node) => node.id);
     const createdEdgeIds = applied.createdEdges.map((edge) => edge.id);
     const nodeCount = createdNodeIds.length;
@@ -291,6 +301,9 @@ async function maybeAutoBuild({
     return { ...applied, createdNodeIds, createdEdgeIds };
   } catch (error) {
     console.warn("[research-graph] auto-build skipped:", error?.message || String(error));
+    try {
+      recordEvent({ type: "graph_failed", payload: { projectId, reason: String(error?.message || error).slice(0, 1000) } });
+    } catch { /* keep the completed turn */ }
     emit({
       type: "graph_update",
       title: "Research graph",

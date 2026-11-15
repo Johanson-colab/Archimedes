@@ -83,7 +83,10 @@ Every successful Research-mode turn now schedules a background graph build. The
 turn itself is not blocked; the answer and composer are released first.
 
 - **API harness:** the extractor reuses the active Agent model with a JSON-only
-  prompt. It never exposes tools and is capped at a short output.
+  prompt and JSON response mode. It never exposes tools and is capped at a short
+  output. A parse or validation failure retries once with a smaller-patch
+  prompt; a terminal failure is recorded as `graph_failed` and never fails the
+  Research turn.
 - **Native harnesses:** Codex, Claude Code, and OpenCode run one transient
   extraction turn with no conversation history. The call uses read-only (Codex)
   or plan (Claude Code) permissions and a no-op approval handler; the main chat
