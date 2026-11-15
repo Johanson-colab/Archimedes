@@ -1034,7 +1034,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: transient ? { ...thread, status: "idle" } : store.getResearchThread(thread.id) };
   };
   const scheduleGraphAutoBuild = (response) => {
-    if (!autoBuildGraph || transient || origin !== "research" || mode !== "research" || !thread.project_id) return;
+    if (!autoBuildGraph || transient || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !thread.project_id) return;
     void graphAutoBuild.maybeAutoBuild({
       projectId: thread.project_id,
       threadId: thread.id,

@@ -8,11 +8,11 @@ import type { ResearchEdge, ResearchGraph, ResearchNode } from "./types";
  * Feedback edges are drawn but never affect the structural layout.
  */
 
-export const GRAPH_PAD = 24;
-export const GRAPH_NODE_WIDTH = 176;
-export const GRAPH_NODE_HEIGHT = 52;
-export const GRAPH_LANE_WIDTH = 212;
-export const GRAPH_ROW_HEIGHT = 88;
+export const GRAPH_PAD = 14;
+export const GRAPH_NODE_WIDTH = 150;
+export const GRAPH_NODE_HEIGHT = 40;
+export const GRAPH_LANE_WIDTH = 170;
+export const GRAPH_ROW_HEIGHT = 60;
 
 const STRUCTURAL_EDGE_KINDS = new Set([
   "generates",
@@ -67,10 +67,10 @@ function edgePath(from: GraphLayoutNode, to: GraphLayoutNode): string {
   const y1 = from.y + GRAPH_NODE_HEIGHT;
   const x2 = to.x + GRAPH_NODE_WIDTH / 2;
   const y2 = to.y;
-  if (Math.abs(x2 - x1) < 2) return `M ${x1} ${y1} L ${x2} ${y2 - 6}`;
+  if (Math.abs(x2 - x1) < 2) return `M ${x1} ${y1} L ${x2} ${y2 - 4}`;
   const direction = y2 >= y1 ? 1 : -1;
-  const bend = Math.max(24, Math.abs(y2 - y1) * 0.35);
-  return `M ${x1} ${y1} C ${x1} ${y1 + direction * bend}, ${x2} ${y2 - direction * bend}, ${x2} ${y2 - 6}`;
+  const bend = Math.max(16, Math.abs(y2 - y1) * 0.28);
+  return `M ${x1} ${y1} C ${x1} ${y1 + direction * bend}, ${x2} ${y2 - direction * bend}, ${x2} ${y2 - 4}`;
 }
 
 export function layoutGraph(graph: LayoutInput): GraphLayout {

@@ -34,7 +34,6 @@ const EDGE_KINDS = Object.freeze([
 const EDGE_RULES = Object.freeze({
   generates: Object.freeze([["question", "idea"]]),
   tests: Object.freeze([
-    ["question", "experiment"],
     ["idea", "experiment"],
   ]),
   produces: Object.freeze([["experiment", "result"]]),
@@ -75,7 +74,6 @@ const STRUCTURAL_EDGE_KINDS = Object.freeze([
 
 const DEFAULT_EDGE_BY_PAIR = Object.freeze({
   "question->idea": "generates",
-  "question->experiment": "tests",
   "idea->experiment": "tests",
   "experiment->result": "produces",
   "result->idea": "informs",

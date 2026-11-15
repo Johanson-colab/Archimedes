@@ -85,8 +85,11 @@ function normalizeParents(parents, nodeKind, projectId, threadId = null) {
 }
 
 function assertParentsComplete(kind, parents) {
-  if (["experiment", "result"].includes(kind) && parents.length === 0) {
-    throw new Error(`A ${kind} node requires at least one parent.`);
+  if (kind === "experiment" && !parents.some((parent) => parent.kind === "tests" && parent.node?.kind === "idea")) {
+    throw new Error("An experiment must test at least one idea.");
+  }
+  if (kind === "result" && !parents.some((parent) => parent.kind === "produces" && parent.node?.kind === "experiment")) {
+    throw new Error("A result must be produced by an experiment.");
   }
   const mergeParents = parents.filter((parent) => parent.kind === "merges");
   if (mergeParents.length) {
@@ -400,10 +403,10 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author }
   for (const node of newNodes) {
     const parents = incoming.get(node.tempId) || [];
     if (parents.length > 8) throw new Error("A research node accepts at most eight parents.");
-    if (node.kind === "experiment" && !parents.some((edge) => edge.kind === "tests")) {
-      throw new Error("An experiment must test a question or idea.");
+    if (node.kind === "experiment" && !parents.some((edge) => edge.kind === "tests" && kindById.get(edge.from) === "idea")) {
+      throw new Error("An experiment must test at least one idea.");
     }
-    if (node.kind === "result" && !parents.some((edge) => edge.kind === "produces")) {
+    if (node.kind === "result" && !parents.some((edge) => edge.kind === "produces" && kindById.get(edge.from) === "experiment")) {
       throw new Error("A result must be produced by an experiment.");
     }
     if (node.kind === "writing" && node.status !== "draft" && !edges.some((edge) => edge.from === node.tempId && edge.kind === "cites")) {
@@ -552,10 +555,10 @@ function validateGraph({ projectId, threadId = null } = {}) {
     }
     const inbound = incoming.get(node.id) || [];
     const outbound = outgoing.get(node.id) || [];
-    if (node.kind === "experiment" && !inbound.some((edge) => edge.kind === "tests")) {
+    if (node.kind === "experiment" && !inbound.some((edge) => edge.kind === "tests" && nodes.get(edge.from_node)?.kind === "idea")) {
       push("experiment_without_idea", "An experiment must test a question or idea.", { nodeId: node.id });
     }
-    if (node.kind === "result" && !inbound.some((edge) => edge.kind === "produces")) {
+    if (node.kind === "result" && !inbound.some((edge) => edge.kind === "produces" && nodes.get(edge.from_node)?.kind === "experiment")) {
       push("result_without_experiment", "A result must be produced by an experiment.", { nodeId: node.id });
     }
     if (node.kind === "writing" && node.status !== "draft" && !outbound.some((edge) => edge.kind === "cites")) {

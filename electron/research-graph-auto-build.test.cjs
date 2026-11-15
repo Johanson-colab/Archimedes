@@ -519,6 +519,20 @@ test("graphs are isolated per session and reject cross-session edges", () => {
   });
 });
 
+test("extraction prompts separate idea discussion from experiment setup", () => {
+  const empty = { nodes: [], edges: [] };
+  const ideaPrompt = auto.buildExtractionPrompt({ userPrompt: "prompt", assistantResponse: "answer", graph: empty, stage: "research" });
+  assert.match(ideaPrompt, /idea discussion stage/i);
+  assert.match(ideaPrompt, /Do not create experiment, result, or writing nodes/i);
+  assert.doesNotMatch(ideaPrompt, /experiment: \{ plan \}/);
+  assert.match(ideaPrompt, /Allowed edges are only generates and refines/i);
+  const experimentPrompt = auto.buildExtractionPrompt({ userPrompt: "prompt", assistantResponse: "answer", graph: empty, stage: "experiment-setup" });
+  assert.match(experimentPrompt, /Experiment setup stage/i);
+  assert.match(experimentPrompt, /Every experiment must have at least one tests edge from an idea/i);
+  assert.match(experimentPrompt, /One idea may have multiple experiments/i);
+  assert.match(experimentPrompt, /experiment: \{ plan \}/);
+});
+
 test("a completed API Research turn schedules a background graph build", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
     modelConfig.initializeModelConfig(root);

@@ -13,13 +13,22 @@ type Props = {
   projectName: string;
   threadTitle: string;
   hasThread: boolean;
+  mode: string;
   version?: number;
   update?: ResearchGraphUpdate | null;
   onOpenThread: () => void;
   onCollapse: () => void;
 };
 
-const CHILD_OPTIONS: Record<ResearchNodeKind, ChildOption[]> = {
+const IDEA_STAGE_CHILD_OPTIONS: Record<ResearchNodeKind, ChildOption[]> = {
+  question: [{ kind: "idea", edge: "generates", label: "Idea" }],
+  idea: [{ kind: "idea", edge: "refines", label: "Idea" }],
+  experiment: [],
+  result: [],
+  writing: [],
+};
+
+const EXPERIMENT_STAGE_CHILD_OPTIONS: Record<ResearchNodeKind, ChildOption[]> = {
   question: [{ kind: "idea", edge: "generates", label: "Idea" }],
   idea: [
     { kind: "experiment", edge: "tests", label: "Experiment" },
@@ -33,12 +42,16 @@ const CHILD_OPTIONS: Record<ResearchNodeKind, ChildOption[]> = {
   writing: [],
 };
 
+const IDEA_STAGE_EDGES = new Set(["generates", "refines"]);
+const EXPERIMENT_STAGE_EDGES = new Set(["generates", "refines", "tests"]);
+
 export default function ResearchGraphPanel({
   projectId,
   threadId,
   projectName,
   threadTitle,
   hasThread,
+  mode,
   version = 0,
   update = null,
   onOpenThread,
@@ -56,6 +69,15 @@ export default function ResearchGraphPanel({
   const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [viewStage, setViewStage] = useState<"ideas" | "experiments">(mode === "experiment-setup" ? "experiments" : "ideas");
+
+  useEffect(() => {
+    setViewStage(mode === "experiment-setup" ? "experiments" : "ideas");
+  }, [mode]);
+
+  const ideaStage = viewStage === "ideas";
+  const allowedEdgeKinds = ideaStage ? IDEA_STAGE_EDGES : EXPERIMENT_STAGE_EDGES;
+  const childOptionsByKind = ideaStage ? IDEA_STAGE_CHILD_OPTIONS : EXPERIMENT_STAGE_CHILD_OPTIONS;
 
   useEffect(() => {
     if (!projectId || !threadId) {
@@ -101,16 +123,28 @@ export default function ResearchGraphPanel({
     return () => window.removeEventListener("keydown", close);
   }, [expanded]);
 
+  const stageNodes = useMemo(
+    () => graph ? graph.nodes.filter((node) => !ideaStage || node.kind === "question" || node.kind === "idea") : [],
+    [graph, ideaStage],
+  );
   const layout = useMemo(() => {
     if (!graph) return null;
-    const nodes = showHistory ? graph.nodes : graph.nodes.filter((node) => node.status !== "retracted");
+    const nodes = showHistory ? stageNodes : stageNodes.filter((node) => node.status !== "retracted");
     const visibleIds = new Set(nodes.map((node) => node.id));
-    return layoutGraph({ ...graph, nodes, edges: graph.edges.filter((edge) => visibleIds.has(edge.from_node) && visibleIds.has(edge.to_node)) });
-  }, [graph, showHistory]);
-  const selectedNode = graph?.nodes.find((node) => node.id === selectedId && (showHistory || node.status !== "retracted")) ?? null;
-  const retractedCount = graph?.nodes.filter((node) => node.status === "retracted").length ?? 0;
-  const visibleNodeCount = graph ? (showHistory ? graph.nodes.length : graph.nodes.length - retractedCount) : 0;
-  const childOptions = selectedNode && selectedNode.status !== "retracted" ? CHILD_OPTIONS[selectedNode.kind] : [];
+    return layoutGraph({
+      ...graph,
+      nodes,
+      edges: graph.edges.filter((edge) =>
+        allowedEdgeKinds.has(edge.kind)
+        && visibleIds.has(edge.from_node)
+        && visibleIds.has(edge.to_node)),
+    });
+  }, [graph, stageNodes, showHistory, allowedEdgeKinds]);
+  const selectedNode = stageNodes.find((node) => node.id === selectedId && (showHistory || node.status !== "retracted")) ?? null;
+  const retractedCount = stageNodes.filter((node) => node.status === "retracted").length;
+  const visibleNodeCount = showHistory ? stageNodes.length : stageNodes.length - retractedCount;
+  const hasExperiments = graph?.nodes.some((node) => node.kind === "experiment") ?? false;
+  const childOptions = selectedNode && selectedNode.status !== "retracted" ? childOptionsByKind[selectedNode.kind] : [];
 
   const refresh = () => setRefreshKey((key) => key + 1);
 
@@ -198,6 +232,10 @@ export default function ResearchGraphPanel({
   };
 
   const actions = <>
+    {(hasExperiments || mode === "experiment-setup") && <div className="research-graph-stage-switch" role="group" aria-label={t("Research graph stage")}>
+      <button type="button" className={viewStage === "ideas" ? "active" : ""} aria-pressed={viewStage === "ideas"} onClick={() => setViewStage("ideas")}>{t("Ideas")}</button>
+      <button type="button" className={viewStage === "experiments" ? "active" : ""} aria-pressed={viewStage === "experiments"} onClick={() => setViewStage("experiments")}>{t("Experiments")}</button>
+    </div>}
     {retractedCount > 0 && <button
       className={showHistory ? "agent-path-icon on" : "agent-path-icon"}
       onClick={() => setShowHistory((value) => !value)}

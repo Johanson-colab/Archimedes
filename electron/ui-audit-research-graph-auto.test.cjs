@@ -16,6 +16,14 @@ test("Research mode refreshes the graph from automatic graph-update events", () 
   assert.match(app, /version=\{graphVersion\}/);
   assert.match(app, /update=\{graphUpdate\}/);
   assert.match(app, /threadId=\{pathThread\?\.id \?\? null\}/);
+  assert.match(app, /mode=\{pathMode\}/);
+  assert.match(panel, /const \[viewStage, setViewStage\] = useState<"ideas" \| "experiments">/);
+  assert.match(panel, /const ideaStage = viewStage === "ideas"/);
+  assert.match(panel, /className="research-graph-stage-switch"/);
+  assert.match(panel, /setViewStage\("experiments"\)/);
+  assert.match(panel, /const IDEA_STAGE_EDGES = new Set\(\["generates", "refines"\]\)/);
+  assert.match(panel, /const IDEA_STAGE_CHILD_OPTIONS[\s\S]*?idea: \[\{ kind: "idea", edge: "refines", label: "Idea" \}\]/);
+  assert.match(panel, /const EXPERIMENT_STAGE_EDGES = new Set\(\["generates", "refines", "tests"\]\)/);
   assert.match(panel, /includeArchived: false/);
   assert.match(panel, /listResearchGraph\(\{ projectId, threadId, includeArchived: false \}\)/);
   assert.match(panel, /update\.threadId === threadId/);

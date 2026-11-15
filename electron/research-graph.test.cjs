@@ -148,11 +148,15 @@ test("rejects invalid parent edges and duplicate links", () => {
     );
     assert.throws(
       () => graph.createNode({ projectId: project.id, kind: "experiment", title: "Orphan" }),
-      /requires at least one parent/,
+      /must test at least one idea/,
     );
     assert.throws(
       () => graph.linkNodes({ fromNodeId: experiment.id, toNodeId: question.id, kind: "tests" }),
       /cannot connect experiment to question/,
+    );
+    assert.throws(
+      () => graph.linkNodes({ fromNodeId: question.id, toNodeId: experiment.id, kind: "tests" }),
+      /cannot connect question to experiment/,
     );
     assert.throws(
       () => graph.linkNodes({ fromNodeId: result.id, toNodeId: question.id, kind: "supports" }),

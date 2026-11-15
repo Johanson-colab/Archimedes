@@ -8,10 +8,6 @@ const MAX_PROMPT_GRAPH_EDGES = 120;
 const MAX_RESPONSE_CHARS = 24_000;
 const EXTRACTION_TIMEOUT_MS = 120_000;
 
-const EDGE_RULES_TEXT = Object.entries(EDGE_RULES)
-  .map(([kind, rules]) => `${kind}: ${rules.map(([from, to]) => `${from}->${to}`).join(", ")}`)
-  .join("\n");
-
 function clip(value, max) {
   const text = String(value || "");
   if (text.length <= max) return text;
@@ -34,12 +30,65 @@ function compactGraph(listed) {
   };
 }
 
-function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGraph }) {
+function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGraph, stage = "research" }) {
+  const experimentStage = stage === "experiment-setup";
+  const allowedKinds = experimentStage
+    ? [
+      "- question: the research question this session is trying to answer.",
+      "- idea: a testable hypothesis.",
+      "- experiment: a concrete plan that tests one or more ideas.",
+    ]
+    : [
+      "- question: the research question this session is trying to answer.",
+      "- idea: a testable hypothesis. Use status draft unless the answer clearly establishes it.",
+    ];
+  const allowedEdgeKinds = experimentStage
+    ? ["generates", "refines", "tests"]
+    : ["generates", "refines"];
+  const edgeRules = allowedEdgeKinds
+    .map((kind) => `${kind}: ${EDGE_RULES[kind].map(([from, to]) => `${from}->${to}`).join(", ")}`)
+    .join("\n");
+  const stageRules = experimentStage
+    ? [
+      "This is the Experiment setup stage. Create experiment nodes only when the answer contains a concrete experiment plan.",
+      "Every experiment must have at least one tests edge from an idea. Never link an experiment directly to a question.",
+      "One idea may have multiple experiments. Attach each experiment to every idea it actually tests.",
+      "Do not create result or writing nodes in this stage.",
+      "Allowed edges are only generates, refines, and tests. Do not create extends, replicates, feedback, produces, merges, or cites edges.",
+    ]
+    : [
+      "This is the idea discussion stage. Create only question and idea nodes.",
+      "Do not create experiment, result, or writing nodes. Put proposed validation, falsification, and experiment ideas inside the idea content (for example prediction or falsification) instead of creating an experiment node.",
+      "Allowed edges are only generates and refines. Do not create tests, produces, feedback, merges, or cites edges.",
+    ];
+  const shape = experimentStage
+    ? {
+      nodes: [
+        { id: "n1", kind: "question", title: "...", summary: "...", content: { question: "..." } },
+        { id: "n2", kind: "idea", title: "...", summary: "...", content: { hypothesis: "...", prediction: "..." } },
+        { id: "n3", kind: "experiment", title: "...", summary: "...", content: { plan: "..." } },
+      ],
+      edges: [
+        { from: "n1", to: "n2", kind: "generates" },
+        { from: "n2", to: "n3", kind: "tests" },
+      ],
+      supersede: [{ nodeId: "existing-idea-id", reason: "Superseded by the new idea round" }],
+      reason: "short explanation",
+    }
+    : {
+      nodes: [
+        { id: "n1", kind: "question", title: "...", summary: "...", content: { question: "..." } },
+        { id: "n2", kind: "idea", title: "...", summary: "...", content: { hypothesis: "...", prediction: "..." } },
+      ],
+      edges: [{ from: "n1", to: "n2", kind: "generates" }],
+      supersede: [{ nodeId: "existing-idea-id", reason: "Superseded by the new idea round" }],
+      reason: "short explanation",
+    };
   return [
     "You extract research objects from one Research conversation turn into a graph patch.",
     "Return ONLY one JSON object. Do not use tools, run commands, invoke any skill (including idea-spark), or wrap the JSON in Markdown.",
     "",
-    "Existing project graph (use these node ids for links; do not duplicate existing nodes):",
+    "Existing session graph (use these node ids for links; do not duplicate existing nodes):",
     JSON.stringify(compactGraph(listedGraph)),
     "",
     "User request:",
@@ -48,46 +97,31 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
     "Assistant answer:",
     clip(assistantResponse, MAX_RESPONSE_CHARS),
     "",
-    "Node kinds:",
-    "- question: the research question the project is trying to answer.",
-    "- idea: a testable hypothesis. Use status draft unless the answer clearly establishes it.",
-    "- experiment: a concrete plan that tests a question or idea.",
-    "- result: a measured outcome plus interpretation.",
-    "- writing: a paper section or claim-bearing draft.",
+    "Allowed node kinds:",
+    ...allowedKinds,
     "",
     "Allowed edges:",
-    EDGE_RULES_TEXT,
+    edgeRules,
     "",
     "Rules:",
     "- Add at most 6 nodes and 8 edges. Prefer 0-4 nodes for a short answer.",
+    ...stageRules,
     "- Only create a node when the answer clearly supports it. Do not invent papers, numbers, runs, or claims.",
     "- New nodes must use temp ids n1, n2, ... . Existing nodes must use their real id.",
     "- Link new nodes to existing nodes when the answer clearly continues an existing thread.",
     "- If the request is a follow-up to an existing question, link new objects to that existing question instead of creating another question node.",
     "- Do not duplicate an existing node with the same kind and title.",
     "- A new idea round supersedes the previous one. When this turn presents a new set of idea alternatives for the same question, list the previous idea nodes under that question in `supersede`. The app also retires previous direct idea children automatically when the patch adds at least two new ideas, so use `supersede` mainly to provide a specific reason or to retire an additional idea.",
-    "- Only idea nodes can be superseded. Never supersede question, experiment, result, or writing nodes.",
-    "- Every experiment or result must have at least one incoming edge (tests or produces).",
-    "- A merge needs at least two incoming merges edges.",
+    "- Only idea nodes can be superseded. Never supersede question or experiment nodes.",
     "- Use the user's language for titles and summaries. Titles <= 120 characters; summaries <= 240 characters.",
     "- content must be a compact JSON object. Suggested fields:",
     "  question: { question }",
     "  idea: { hypothesis, prediction }",
-    "  experiment: { plan }",
-    "  result: { evidence, interpretation: { verdict, reasoning } }",
-    "  writing: { section, claims }",
+    ...(experimentStage ? ["  experiment: { plan }"] : []),
     "- If the answer contains no new research object, return {\"nodes\":[],\"edges\":[],\"reason\":\"no_new_objects\"}.",
     "",
     "Required JSON shape:",
-    JSON.stringify({
-      nodes: [
-        { id: "n1", kind: "question", title: "...", summary: "...", content: { question: "..." } },
-        { id: "n2", kind: "idea", title: "...", summary: "...", content: { hypothesis: "...", prediction: "..." } },
-      ],
-      edges: [{ from: "n1", to: "n2", kind: "generates" }],
-      supersede: [{ nodeId: "existing-idea-id", reason: "Superseded by the new idea round" }],
-      reason: "short explanation",
-    }),
+    JSON.stringify(shape),
   ].join("\n");
 }
 
@@ -228,14 +262,14 @@ async function maybeAutoBuild({
   runNative,
   signal,
 } = {}) {
-  if (transient || origin !== "research" || mode !== "research" || !projectId || !threadId || !turnId) return null;
+  if (transient || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !projectId || !threadId || !turnId) return null;
   if (!assistantResponse || String(assistantResponse).trim().length < 20) return null;
   const trimmedPrompt = String(userPrompt || "").trim();
   if (trimmedPrompt.length <= 12 && /^(你好|您好|hi|hello|hey|嗨|在吗|早上好|晚上好|谢谢|thanks|thank you)[!！。.\s]*$/i.test(trimmedPrompt)) return null;
   if (alreadyApplied(threadId, turnId)) return null;
 
   const listedGraph = graph.listGraph({ projectId, threadId });
-  const prompt = buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGraph });
+  const prompt = buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGraph, stage: mode });
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   if (signal?.aborted) controller.abort();

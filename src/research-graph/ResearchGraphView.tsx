@@ -68,7 +68,7 @@ export default function ResearchGraphView({ layout, selectedId, onSelect }: Prop
         aria-pressed={selected}
         title={node.title}
       >
-        <span className="research-graph-node-icon"><Icon size={13} aria-hidden="true" /></span>
+        <span className="research-graph-node-icon"><Icon size={12} aria-hidden="true" /></span>
         <span className="research-graph-node-copy">
           <span className="research-graph-node-kind">{t(KIND_LABELS[node.kind])}</span>
           <span className="research-graph-node-title">{node.title}</span>

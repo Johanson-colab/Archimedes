@@ -22,6 +22,7 @@ export const researchGraph: Record<string, string> = {
   "Question": "问题",
   "Refresh graph": "刷新研究图",
   "Research graph": "研究图",
+  "Research graph stage": "研究图阶段",
   "Research graph updated": "研究图已更新",
   "Result": "结果",
   "Retracted": "已撤回",

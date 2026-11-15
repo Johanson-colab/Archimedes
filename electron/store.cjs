@@ -990,6 +990,21 @@ function backfillResearchGraphThreads(db) {
       SELECT nodes.thread_id FROM research_nodes nodes WHERE nodes.id = research_edges.to_node
     )
   `).run();
+  // Experiments now attach to ideas, never directly to the question. Remove
+  // legacy question->experiment tests edges when the experiment already has an
+  // idea parent; experiments without one are left for validateGraph to report.
+  db.prepare(`
+    DELETE FROM research_edges
+    WHERE kind = 'tests'
+      AND from_node IN (SELECT id FROM research_nodes WHERE kind = 'question')
+      AND to_node IN (SELECT id FROM research_nodes WHERE kind = 'experiment')
+      AND EXISTS (
+        SELECT 1 FROM research_edges idea_edge
+        JOIN research_nodes idea ON idea.id = idea_edge.from_node
+        WHERE idea_edge.to_node = research_edges.to_node
+          AND idea_edge.kind = 'tests' AND idea.kind = 'idea'
+      )
+  `).run();
 }
 
 function backfillPaperRepositories(db) {

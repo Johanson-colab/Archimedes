@@ -15,7 +15,7 @@ The graph has five node kinds:
 | --- | --- |
 | `question` | The question this session is trying to answer. |
 | `idea` | A testable hypothesis. An "idea spark" is an `idea` with `status = draft`; it is not a separate node kind. |
-| `experiment` | A plan that tests an idea or question. Runs are attempts inside the experiment, not graph nodes. |
+| `experiment` | A plan that tests one or more ideas. Runs are attempts inside the experiment, not graph nodes. |
 | `result` | What was measured plus what it means. Evidence and interpretation live in two content blocks on one node. |
 | `writing` | A paper section or claim-bearing draft. |
 
@@ -29,7 +29,7 @@ change history.
 | Edge | From → to |
 | --- | --- |
 | `generates` | question → idea |
-| `tests` | question or idea → experiment |
+| `tests` | idea → experiment |
 | `produces` | experiment → result |
 | `supports`, `contradicts`, `inconclusive` | result → idea |
 | `informs` | result → idea (a new hypothesis inspired by a result) |
@@ -82,6 +82,10 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
   node and then links `cites`.
 - The panel shows the active session's graph. Switching sessions switches the
   canvas; nodes from other sessions in the same project are never displayed.
+- The idea discussion stage shows only question and idea nodes. Experiment
+  nodes are hidden until the session enters Experiment setup, where they appear
+  under the ideas they test. The panel header also exposes an Ideas /
+  Experiments view switch for inspecting experiment plans without running them.
 - Empty sessions start with a question form. A new chat with no session yet
   shows a prompt to start a Research conversation.
 - The panel defaults to the current idea round. A History toggle reveals
@@ -98,7 +102,17 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
 
 Every successful Research-mode turn now schedules a background graph build for
 the active session. The turn itself is not blocked; the answer and composer are
-released first.
+released first. Extraction is stage-aware:
+
+- **Idea discussion:** only question and idea nodes, with `generates` and
+  `refines` edges. Proposed validation and experiment ideas stay inside the
+  idea content; no experiment nodes are created.
+- **Experiment setup:** experiment nodes are allowed, but every experiment must
+  have at least one `tests` edge from an idea. Experiments never attach directly
+  to a question, and one idea may have multiple experiments. Automatic
+  extraction uses only `generates`, `refines`, and `tests`; extension and
+  feedback edges remain available in the data model but are not drawn in this
+  stage.
 
 - **API harness:** the extractor reuses the active Agent model with a JSON-only
   prompt and JSON response mode. It never exposes tools and is capped at a short
@@ -156,8 +170,9 @@ and `research-graph:validate`.
 ## Invariants enforced now
 
 - Only the five node kinds and thirteen edge kinds are accepted.
-- An experiment must test a question or idea; a result must be produced by an experiment.
-- Edges must connect allowed node kinds in the same project.
+- An experiment must test at least one idea. Experiments never attach directly to a question; one idea may have multiple experiments.
+- A result must be produced by an experiment.
+- Edges must connect allowed node kinds in the same project and session.
 - Structural edges cannot create a cycle.
 - A merge node needs at least two parent edges.
 - Revisions are append-only.

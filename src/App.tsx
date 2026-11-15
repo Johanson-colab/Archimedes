@@ -1592,7 +1592,7 @@ function App() {
   const pathIsPinned = Boolean(pinnedPathThreadId);
   const pathThreadInactive = Boolean(pinnedPathThreadId && !pathThreadIsActive);
   const pathMode = pathThreadIsActive ? researchMode : (pathThread?.mode ?? researchMode);
-  const showResearchGraph = pathMode === "research";
+  const showResearchGraph = pathMode === "research" || pathMode === "idea-spark" || pathMode === "experiment-setup";
   const proactive = useProactiveAgent({
     messages,
     thread: activeThread ? { id: activeThread.id, title: activeThread.title, status: activeThread.status } : null,
@@ -3644,6 +3644,7 @@ function App() {
             projectName={pathProject?.name ?? t("No project")}
             threadTitle={pathThread?.title ?? t("No active session")}
             hasThread={Boolean(pathThread)}
+            mode={pathMode}
             version={graphVersion}
             update={graphUpdate}
             onOpenThread={openPathThread}
