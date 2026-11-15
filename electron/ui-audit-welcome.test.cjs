@@ -24,3 +24,11 @@ test("welcome entrance motion is shortened and no longer loops", () => {
   assert.doesNotMatch(css, /welcome-drift/);
   assert.doesNotMatch(css, /18s 1\.05s ease-in-out infinite/);
 });
+
+test("the welcome replication card opens the reproduce module", () => {
+  const app = fs.readFileSync(path.resolve(__dirname, "..", "src", "App.tsx"), "utf8");
+  const welcome = fs.readFileSync(path.resolve(__dirname, "..", "src", "ResearchWelcome.tsx"), "utf8");
+  assert.match(welcome, /id: "replication"/);
+  assert.match(welcome, /title: "Reproduce a paper"/);
+  assert.match(app, /action === "replication"\)\s*\{\s*setMainSection\("reproduce"\)/);
+});

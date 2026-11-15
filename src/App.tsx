@@ -3196,7 +3196,7 @@ function App() {
       return;
     }
     if (action === "replication") {
-      setMainSection("writing");
+      setMainSection("reproduce");
       return;
     }
     if (action === "literature") {
