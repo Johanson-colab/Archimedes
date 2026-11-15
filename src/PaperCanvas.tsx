@@ -30,6 +30,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { MenuItem, MenuDivider, MenuSurface } from "./Menu";
+import { CLOUD_FEATURES_ENABLED } from "./cloud-features";
 import { useUISettings } from "./i18n";
 
 export type PaperCanvasVisibility = "private" | "project";
@@ -178,7 +179,7 @@ function normalizeDocument(value: unknown, fallbackTitle: string): PaperCanvasDo
   return {
     version: CANVAS_VERSION,
     title: typeof candidate.title === "string" ? candidate.title : `${fallbackTitle} map`,
-    visibility: candidate.visibility === "project" ? "project" : "private",
+    visibility: CLOUD_FEATURES_ENABLED && candidate.visibility === "project" ? "project" : "private",
     elements,
     viewport,
     updatedAt: Number.isFinite(candidate.updatedAt) ? Number(candidate.updatedAt) : Date.now(),
@@ -305,7 +306,7 @@ export default function PaperCanvas({ bridge, workspace, projectId, paperId, pap
   const sharedKey = projectDocumentKey(paperId);
   const selectedElement = doc.elements.find((element) => element.id === selectedId) ?? null;
   const visibility = doc.visibility;
-  const canShareProject = Boolean(projectId) && typeof bridge.getSharedDocument === "function" && typeof bridge.applySharedDocumentUpdate === "function";
+  const canShareProject = CLOUD_FEATURES_ENABLED && Boolean(projectId) && typeof bridge.getSharedDocument === "function" && typeof bridge.applySharedDocumentUpdate === "function";
   const sortedElements = useMemo(() => [...doc.elements].sort((left, right) => left.z - right.z), [doc.elements]);
 
   useEffect(() => { docRef.current = doc; }, [doc]);
@@ -1192,7 +1193,7 @@ export default function PaperCanvas({ bridge, workspace, projectId, paperId, pap
 
     <MenuSurface open={visibilityOpen} onClose={() => setVisibilityOpen(false)} anchorRef={visibilityButtonRef} placement="bottom-end" width={250} ariaLabel={t("Canvas visibility")}>
       <MenuItem className="menu-item-rich" checked={visibility === "private"} icon={<Lock size={15} />} onClick={() => void changeVisibility("private")}>{t("Private")}<small className="paper-canvas-menu-hint">{t("Only you can open this canvas")}</small></MenuItem>
-      <MenuItem className="menu-item-rich" checked={visibility === "project"} icon={<Users size={15} />} disabled={!canShareProject} onClick={() => void changeVisibility("project")}>{t("Project")}<small className="paper-canvas-menu-hint">{canShareProject ? t("Project members can open and edit") : t("Sign in and publish the project to share")}</small></MenuItem>
+      {CLOUD_FEATURES_ENABLED && <MenuItem className="menu-item-rich" checked={visibility === "project"} icon={<Users size={15} />} disabled={!canShareProject} onClick={() => void changeVisibility("project")}>{t("Project")}<small className="paper-canvas-menu-hint">{canShareProject ? t("Project members can open and edit") : t("Sign in and publish the project to share")}</small></MenuItem>}
     </MenuSurface>
 
     <MenuSurface open={moreOpen} onClose={() => setMoreOpen(false)} anchorRef={moreButtonRef} placement="bottom-end" width={224} ariaLabel={t("More canvas actions")}>
