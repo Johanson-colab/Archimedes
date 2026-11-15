@@ -6,6 +6,7 @@
   "type": "module",
   "description": "A local-first AI-for-Research agent for evidence, experiments, and scientific writing.",
   "license": "MIT",
+  "author": "Weijiang Lv, Jiayu Wang and Archimedes Contributors",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
