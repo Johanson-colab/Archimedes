@@ -26,10 +26,15 @@ function encodeState(value: Uint8Array) {
 
 export default function SharedNoteEditor({ bridge, projectId, docKey = "project-notes", initialText = "", onTextChange, title }: SharedNoteEditorProps) {
   const { t } = useUISettings();
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialText);
   const [status, setStatus] = useState<"loading" | "ready" | "saving" | "error">("loading");
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
+  // Until the shared document has been fetched once, this pane has no
+  // authoritative content. Reporting edits from an unloaded pane would let a
+  // caller overwrite the file with an empty or partial draft.
+  const [loaded, setLoaded] = useState(false);
+  const loadedRef = useRef(false);
   const docRef = useRef<Y.Doc | null>(null);
   const textRef = useRef<Y.Text | null>(null);
   const applyingRemote = useRef(false);
@@ -37,6 +42,9 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
   const initialTextRef = useRef(initialText);
   const onTextChangeRef = useRef(onTextChange);
   onTextChangeRef.current = onTextChange;
+  // Paper writing changes `initialText` when the user switches files; keep the
+  // fallback in sync so a reload never seeds a stale document.
+  initialTextRef.current = initialText;
 
   useEffect(() => {
     let cancelled = false;
@@ -44,10 +52,14 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
     const text = doc.getText("text");
     docRef.current = doc;
     textRef.current = text;
+    loadedRef.current = false;
+    setLoaded(false);
+    setValue(initialTextRef.current);
+    setStatus("loading");
     let debounce: number | null = null;
     const observer = () => {
       if (cancelled) return;
-      onTextChangeRef.current?.(text.toString());
+      if (loadedRef.current) onTextChangeRef.current?.(text.toString());
       if (applyingRemote.current) return;
       setValue(text.toString());
       if (debounce) window.clearTimeout(debounce);
@@ -86,7 +98,7 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
           setValue(text.toString());
           onTextChangeRef.current?.(text.toString());
           applyingRemote.current = false;
-        } else if (!document && initialTextRef.current) {
+        } else if (!document && text.length === 0 && initialTextRef.current) {
           applyingRemote.current = true;
           text.insert(0, initialTextRef.current);
           applyingRemote.current = false;
@@ -100,6 +112,8 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
         }
         setStatus("ready");
         setError("");
+        loadedRef.current = true;
+        setLoaded(true);
       } catch (cause) {
         if (cancelled) return;
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -132,7 +146,7 @@ export default function SharedNoteEditor({ bridge, projectId, docKey = "project-
   return <section className="settings-section shared-note">
     <h3 className="settings-section-title"><NotebookPen size={15} />{title || t("Shared project note")}</h3>
     <div className="settings-group">
-      <textarea className="shared-note-editor" value={value} onChange={(event) => update(event.target.value)} placeholder={t("Write a note together. Edits merge as you type.")} rows={7} aria-label={t("Shared project note")} />
+      <textarea className="shared-note-editor" value={value} disabled={!loaded} onChange={(event) => update(event.target.value)} placeholder={t("Write a note together. Edits merge as you type.")} rows={7} aria-label={t("Shared project note")} />
       <div className="shared-note-footer">
         <span>{t("CRDT document · version {version}", { version })}</span>
         {status === "loading" && <span><LoaderCircle className="spin" size={12} />{t("Loading…")}</span>}
