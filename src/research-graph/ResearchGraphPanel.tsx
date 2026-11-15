@@ -9,6 +9,7 @@ import type { ResearchGraph, ResearchGraphUpdate, ResearchNodeKind } from "./typ
 
 type Props = {
   projectId: string | null;
+  threadId: string | null;
   projectName: string;
   threadTitle: string;
   hasThread: boolean;
@@ -34,6 +35,7 @@ const CHILD_OPTIONS: Record<ResearchNodeKind, ChildOption[]> = {
 
 export default function ResearchGraphPanel({
   projectId,
+  threadId,
   projectName,
   threadTitle,
   hasThread,
@@ -56,21 +58,22 @@ export default function ResearchGraphPanel({
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
-    if (!projectId) {
+    if (!projectId || !threadId) {
       setGraph(null);
       setSelectedId(null);
       setError("");
+      setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setError("");
     if (!window.researchDesk?.listResearchGraph) {
-      setGraph({ projectId, nodes: [], edges: [] });
+      setGraph({ projectId, threadId, nodes: [], edges: [] });
       setLoading(false);
       return;
     }
-    window.researchDesk.listResearchGraph({ projectId, includeArchived: false })
+    window.researchDesk.listResearchGraph({ projectId, threadId, includeArchived: false })
       .then((next) => {
         if (cancelled) return;
         setGraph(next);
@@ -87,7 +90,7 @@ export default function ResearchGraphPanel({
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [projectId, refreshKey, version, t]);
+  }, [projectId, threadId, refreshKey, version, t]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -134,12 +137,13 @@ export default function ResearchGraphPanel({
 
   const createQuestion = async () => {
     const title = question.trim();
-    if (!projectId || !title || busy || !window.researchDesk?.createResearchNode) return;
+    if (!projectId || !threadId || !title || busy || !window.researchDesk?.createResearchNode) return;
     setBusy(true);
     setError("");
     try {
       const node = await window.researchDesk.createResearchNode({
         projectId,
+        threadId,
         kind: "question",
         status: "active",
         title,
@@ -156,7 +160,7 @@ export default function ResearchGraphPanel({
   };
 
   const createChild = async (option: ChildOption, title: string) => {
-    if (!projectId || !selectedNode || busy || !window.researchDesk?.createResearchNode) return;
+    if (!projectId || !threadId || !selectedNode || busy || !window.researchDesk?.createResearchNode) return;
     setBusy(true);
     setError("");
     try {
@@ -164,6 +168,7 @@ export default function ResearchGraphPanel({
       if (option.edge === "cite-after-create") {
         child = await window.researchDesk.createResearchNode({
           projectId,
+          threadId,
           kind: option.kind,
           title,
           content: {},
@@ -176,6 +181,7 @@ export default function ResearchGraphPanel({
       } else {
         child = await window.researchDesk.createResearchNode({
           projectId,
+          threadId,
           kind: option.kind,
           title,
           content: {},
@@ -233,14 +239,19 @@ export default function ResearchGraphPanel({
   </>;
 
   const content = <div className={expanded ? "research-graph-content expanded" : "research-graph-content"}>
-    {update && update.projectId === projectId && update.nodeCount + update.edgeCount > 0 && dismissedUpdate !== update.turnId && (
+    {update && update.projectId === projectId && update.threadId === threadId && update.nodeCount + update.edgeCount + (update.superseded?.length ?? 0) > 0 && dismissedUpdate !== update.turnId && (
       <div className="research-graph-update" role="status" aria-live="polite">
         <span>{t("Research graph updated")} · +{update.nodeCount} {t("nodes")} · +{update.edgeCount} {t("edges")}{update.superseded?.length ? ` · ${update.superseded.length} ${t("previous ideas moved to history")}` : ""}</span>
         {(update.createdNodeIds.length > 0 || (update.superseded?.length ?? 0) > 0) && <button type="button" disabled={undoing} onClick={() => void undoUpdate()}>{t(undoing ? "Undoing…" : "Undo")}</button>}
         <button type="button" className="research-graph-update-dismiss" onClick={() => setDismissedUpdate(update.turnId)} aria-label={t("Dismiss")} title={t("Dismiss")}><X size={11} /></button>
       </div>
     )}
-    {!projectId ? <div className="research-graph-empty">{t("No project selected")}</div> : graph && graph.nodes.length === 0 ? (
+    {!projectId ? <div className="research-graph-empty">{t("No project selected")}</div> : !threadId ? (
+      <div className="research-graph-empty">
+        <strong>{t("No active session")}</strong>
+        <p>{t("Start a research conversation to build its graph.")}</p>
+      </div>
+    ) : graph && graph.nodes.length === 0 ? (
       <div className="research-graph-empty">
         <strong>{t("No research graph yet")}</strong>
         <p>{t("Start with a question")}</p>

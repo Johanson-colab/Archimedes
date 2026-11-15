@@ -26,6 +26,7 @@ export const researchGraph: Record<string, string> = {
   "Result": "结果",
   "Retracted": "已撤回",
   "Show history": "显示历史",
+  "Start a research conversation to build its graph.": "开始一个研究对话后，会为这个会话建立独立的研究图。",
   "Start with a question": "从一个问题开始",
   "Undoing…": "正在撤销……",
 };

@@ -54,6 +54,7 @@ export interface ResearchRevision {
 export interface ResearchNode {
   id: string;
   project_id: string;
+  thread_id?: string | null;
   kind: ResearchNodeKind;
   status: ResearchNodeStatus;
   title: string;
@@ -72,6 +73,7 @@ export interface ResearchNode {
 export interface ResearchEdge {
   id: string;
   project_id: string;
+  thread_id?: string | null;
   from_node: string;
   from_revision: string;
   to_node: string;
@@ -84,6 +86,7 @@ export interface ResearchEdge {
 
 export interface ResearchGraph {
   projectId: string;
+  threadId?: string | null;
   nodes: ResearchNode[];
   edges: ResearchEdge[];
 }

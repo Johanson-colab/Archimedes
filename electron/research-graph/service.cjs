@@ -55,7 +55,7 @@ function normalizeSummary(summary) {
   return String(summary || "").trim().slice(0, MAX_SUMMARY_CHARS);
 }
 
-function normalizeParents(parents, nodeKind, projectId) {
+function normalizeParents(parents, nodeKind, projectId, threadId = null) {
   if (parents == null) return [];
   if (!Array.isArray(parents)) throw new Error("Research node parents must be an array.");
   if (parents.length > 8) throw new Error("A research node accepts at most eight parents.");
@@ -67,6 +67,7 @@ function normalizeParents(parents, nodeKind, projectId) {
     if (!parentNode) throw new Error(`Parent research node not found: ${parent.nodeId}`);
     if (parentNode.archived) throw new Error("An archived node cannot be a parent.");
     if (parentNode.project_id !== projectId) throw new Error("Parents must belong to the same project as the new node.");
+    if (threadId && parentNode.thread_id !== threadId) throw new Error("Parents must belong to the same research session as the new node.");
     let kind = parent.kind;
     if (kind == null) kind = defaultEdgeKind(parentNode.kind, nodeKind);
     if (!isEdgeKind(kind)) throw new Error(`An explicit parent edge kind is required from ${parentNode.kind} to ${nodeKind}.`);
@@ -104,8 +105,8 @@ function structuralAdjacency(edges) {
   return adjacency;
 }
 
-function assertAcyclic(projectId, proposedEdges = []) {
-  const edges = store.listResearchEdges({ projectId }).concat(proposedEdges);
+function assertAcyclic(projectId, proposedEdges = [], threadId = null) {
+  const edges = store.listResearchEdges({ projectId, threadId }).concat(proposedEdges);
   const adjacency = structuralAdjacency(edges);
   const visiting = new Set();
   const visited = new Set();
@@ -122,6 +123,7 @@ function assertAcyclic(projectId, proposedEdges = []) {
 
 function createNode({
   projectId,
+  threadId = null,
   kind,
   status = "draft",
   title,
@@ -135,10 +137,11 @@ function createNode({
   if (!isNodeKind(kind)) throw new Error(`Unknown research node kind: ${kind}`);
   if (!isNodeStatus(status)) throw new Error(`Unknown research node status: ${status}`);
   const contentJson = serializeContent(content);
-  const normalizedParents = normalizeParents(parents, kind, projectId);
+  const normalizedParents = normalizeParents(parents, kind, projectId, threadId);
   assertParentsComplete(kind, normalizedParents);
   const node = store.createResearchNode({
     projectId,
+    threadId,
     kind,
     status,
     title: normalizeTitle(title),
@@ -215,7 +218,7 @@ function linkNodes({
     throw new Error("This research edge already exists.");
   }
   if (isStructuralEdge(kind)) {
-    assertAcyclic(from.project_id, [{ from_node: fromNodeId, to_node: toNodeId, kind }]);
+    assertAcyclic(from.project_id, [{ from_node: fromNodeId, to_node: toNodeId, kind }], from.thread_id);
   }
   return store.linkResearchNodes({
     fromNodeId,
@@ -323,8 +326,8 @@ function setNodeStatus({ nodeId, status, reason = "", author } = {}) {
 function applyPatch({ projectId, threadId = null, turnId = null, patch, author } = {}) {
   if (!projectId) throw new Error("A project is required to apply a graph patch.");
   const normalized = normalizePatch(patch);
-  const existing = store.listResearchGraph({ projectId });
-  const existingEdges = store.listResearchEdges({ projectId });
+  const existing = store.listResearchGraph({ projectId, threadId });
+  const existingEdges = store.listResearchEdges({ projectId, threadId });
   const existingEdgeIds = new Set(existingEdges.map((edge) => edge.id));
   const existingById = new Map(existing.nodes.map((node) => [node.id, node]));
   const existingKeys = new Map();
@@ -452,6 +455,7 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author }
       });
       const created = createNode({
         projectId,
+        threadId,
         kind: node.kind,
         status: node.status,
         title: node.title,
@@ -484,7 +488,7 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author }
         author,
       });
     }
-    const createdEdges = store.listResearchEdges({ projectId }).filter((edge) => !existingEdgeIds.has(edge.id));
+    const createdEdges = store.listResearchEdges({ projectId, threadId }).filter((edge) => !existingEdgeIds.has(edge.id));
     const supersededNodes = [];
     try {
       for (const entry of supersede) {
@@ -508,8 +512,8 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author }
   }
 }
 
-function listGraph({ projectId, includeArchived = false } = {}) {
-  return store.listResearchGraph({ projectId, includeArchived });
+function listGraph({ projectId, threadId = null, includeArchived = false } = {}) {
+  return store.listResearchGraph({ projectId, threadId, includeArchived });
 }
 
 function getNodeHistory(nodeId) {
@@ -524,9 +528,9 @@ function restoreNode({ nodeId, author } = {}) {
   return store.restoreResearchNode({ nodeId, createdBy: author || undefined });
 }
 
-function validateGraph({ projectId } = {}) {
+function validateGraph({ projectId, threadId = null } = {}) {
   if (!projectId) throw new Error("A project is required to validate the research graph.");
-  const graph = store.listResearchGraph({ projectId, includeArchived: true });
+  const graph = store.listResearchGraph({ projectId, threadId, includeArchived: true });
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
   const issues = [];
   const push = (code, message, extra = {}) => issues.push({ code, message, ...extra });
@@ -580,7 +584,7 @@ function validateGraph({ projectId } = {}) {
     }
   }
   try {
-    assertAcyclic(projectId);
+    assertAcyclic(projectId, [], threadId);
   } catch (error) {
     push("graph_cycle", error.message);
   }

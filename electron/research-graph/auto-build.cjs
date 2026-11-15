@@ -234,7 +234,7 @@ async function maybeAutoBuild({
   if (trimmedPrompt.length <= 12 && /^(你好|您好|hi|hello|hey|嗨|在吗|早上好|晚上好|谢谢|thanks|thank you)[!！。.\s]*$/i.test(trimmedPrompt)) return null;
   if (alreadyApplied(threadId, turnId)) return null;
 
-  const listedGraph = graph.listGraph({ projectId });
+  const listedGraph = graph.listGraph({ projectId, threadId });
   const prompt = buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGraph });
   const controller = new AbortController();
   const onAbort = () => controller.abort();

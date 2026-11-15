@@ -500,6 +500,7 @@ function schema(db) {
     CREATE TABLE IF NOT EXISTS research_nodes (
       id TEXT PRIMARY KEY NOT NULL,
       project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
       kind TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'draft',
       title TEXT NOT NULL,
@@ -531,6 +532,7 @@ function schema(db) {
     CREATE TABLE IF NOT EXISTS research_edges (
       id TEXT PRIMARY KEY NOT NULL,
       project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
       from_node TEXT NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
       from_revision TEXT NOT NULL REFERENCES research_node_revisions(id) ON DELETE CASCADE,
       to_node TEXT NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
@@ -627,6 +629,9 @@ function schema(db) {
   ensureColumn(db, "research_threads", "node_revision_id", "TEXT");
   ensureColumn(db, "research_artifacts", "node_id", "TEXT");
   ensureColumn(db, "research_artifacts", "revision_id", "TEXT");
+  // Research graph nodes and edges are scoped to one conversation/session.
+  ensureColumn(db, "research_nodes", "thread_id", "TEXT");
+  ensureColumn(db, "research_edges", "thread_id", "TEXT");
   ensureColumn(db, "project_workspaces", "name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
@@ -645,6 +650,8 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_threads_project ON research_threads(project_id, archived_at, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_workspace ON research_threads(workspace_id, archived_at, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_node ON research_threads(node_id);
+    CREATE INDEX IF NOT EXISTS idx_research_nodes_thread ON research_nodes(thread_id, archived_at, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_research_edges_thread ON research_edges(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_node ON research_artifacts(node_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_project_environments_project ON project_environments(project_id);
     CREATE INDEX IF NOT EXISTS idx_project_workspaces_project ON project_workspaces(project_id, created_at ASC);
@@ -661,6 +668,7 @@ function schema(db) {
   db.prepare("UPDATE research_threads SET visibility = 'project' WHERE visibility IS NULL OR visibility NOT IN ('project', 'private')").run();
   db.prepare("UPDATE libraries SET project_id = ? WHERE project_id IS NULL").run(projectId);
   migrateProjectScopedPaperData(db, projectId);
+  backfillResearchGraphThreads(db);
 }
 
 function tableColumns(db, table) {
@@ -931,6 +939,59 @@ function normalizeWorkspacePath(value) {
  * even though their abstract names the code. Fill those in once per open: it is
  * a regex over a few hundred characters, and it writes only when it finds a link.
  */
+/**
+ * Research graph data was originally project-scoped. Assign existing nodes to
+ * the conversation that produced them so each session gets an independent graph.
+ * Node revisions carry the source turn; explicit thread links and the oldest
+ * research session in the project are compatibility fallbacks.
+ */
+function backfillResearchGraphThreads(db) {
+  db.prepare(`
+    UPDATE research_nodes
+    SET thread_id = (
+      SELECT turns.thread_id
+      FROM research_node_revisions revisions
+      JOIN research_turns turns ON turns.id = revisions.source_turn_id
+      WHERE revisions.node_id = research_nodes.id AND revisions.source_turn_id IS NOT NULL
+      ORDER BY revisions.created_at ASC
+      LIMIT 1
+    )
+    WHERE thread_id IS NULL
+  `).run();
+  db.prepare(`
+    UPDATE research_nodes
+    SET thread_id = (
+      SELECT threads.id FROM research_threads threads
+      WHERE threads.node_id = research_nodes.id
+      ORDER BY threads.created_at ASC LIMIT 1
+    )
+    WHERE thread_id IS NULL
+  `).run();
+  db.prepare(`
+    UPDATE research_nodes
+    SET thread_id = (
+      SELECT threads.id FROM research_threads threads
+      WHERE threads.project_id = research_nodes.project_id AND threads.kind = 'research'
+      ORDER BY threads.created_at ASC LIMIT 1
+    )
+    WHERE thread_id IS NULL
+  `).run();
+  db.prepare(`
+    UPDATE research_edges
+    SET thread_id = (
+      SELECT nodes.thread_id FROM research_nodes nodes WHERE nodes.id = research_edges.from_node
+    )
+    WHERE thread_id IS NULL
+  `).run();
+  db.prepare(`
+    UPDATE research_edges
+    SET thread_id = NULL
+    WHERE thread_id IS NOT NULL AND thread_id != (
+      SELECT nodes.thread_id FROM research_nodes nodes WHERE nodes.id = research_edges.to_node
+    )
+  `).run();
+}
+
 function backfillPaperRepositories(db) {
   const rows = db.prepare("SELECT id, title, abstract FROM papers WHERE github_url = '' AND abstract <> ''").all();
   if (!rows.length) return 0;
@@ -2560,6 +2621,7 @@ function hydrateResearchNode(row) {
   return {
     id: row.id,
     project_id: row.project_id,
+    thread_id: row.thread_id || null,
     kind: row.kind,
     status: row.status,
     title: row.title,
@@ -2587,6 +2649,7 @@ function hydrateResearchEdge(row) {
   return {
     id: row.id,
     project_id: row.project_id,
+    thread_id: row.thread_id || null,
     from_node: row.from_node,
     from_revision: row.from_revision,
     to_node: row.to_node,
@@ -2619,10 +2682,16 @@ function getResearchNode(id) {
   return hydrateResearchNode(row);
 }
 
-function listResearchGraph({ projectId, includeArchived = false } = {}) {
+function listResearchGraph({ projectId, threadId = null, includeArchived = false } = {}) {
   if (!projectId) throw new Error("A project is required to list the research graph.");
   if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
   const db = requireDatabase();
+  if (threadId) {
+    const thread = db.prepare("SELECT project_id FROM research_threads WHERE id = ?").get(threadId);
+    if (!thread || thread.project_id !== projectId) throw new Error("The research session does not belong to this project.");
+  }
+  const nodeFilter = threadId ? "AND n.thread_id = ?" : "";
+  const nodeParams = threadId ? [projectId, threadId, includeArchived ? 1 : 0] : [projectId, includeArchived ? 1 : 0];
   const nodes = db.prepare(`
     SELECT n.*,
       r.parent_revision_id AS revision_parent_revision_id,
@@ -2636,25 +2705,34 @@ function listResearchGraph({ projectId, includeArchived = false } = {}) {
     FROM research_nodes n
     LEFT JOIN research_node_revisions r ON r.id = n.current_revision_id
     WHERE n.project_id = ?
+      ${nodeFilter}
       AND (? = 1 OR n.archived_at IS NULL)
     ORDER BY n.created_at ASC, n.rowid ASC
-  `).all(projectId, includeArchived ? 1 : 0).map(hydrateResearchNode);
+  `).all(...nodeParams).map(hydrateResearchNode);
+  const edgeFilter = threadId ? "AND e.thread_id = ?" : "";
+  const edgeParams = threadId ? [projectId, threadId, includeArchived ? 1 : 0] : [projectId, includeArchived ? 1 : 0];
   const edges = db.prepare(`
     SELECT e.*
     FROM research_edges e
     JOIN research_nodes source ON source.id = e.from_node
     JOIN research_nodes target ON target.id = e.to_node
     WHERE e.project_id = ?
+      ${edgeFilter}
       AND (? = 1 OR (source.archived_at IS NULL AND target.archived_at IS NULL))
     ORDER BY e.created_at ASC, e.rowid ASC
-  `).all(projectId, includeArchived ? 1 : 0).map(hydrateResearchEdge);
-  return { projectId, nodes, edges };
+  `).all(...edgeParams).map(hydrateResearchEdge);
+  return { projectId, threadId, nodes, edges };
 }
 
-function listResearchEdges({ projectId } = {}) {
+function listResearchEdges({ projectId, threadId = null } = {}) {
   if (!projectId) throw new Error("A project is required to list research edges.");
   if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
   const db = requireDatabase();
+  if (threadId) {
+    return db.prepare("SELECT * FROM research_edges WHERE project_id = ? AND thread_id = ? ORDER BY created_at ASC, rowid ASC")
+      .all(projectId, threadId)
+      .map(hydrateResearchEdge);
+  }
   return db.prepare("SELECT * FROM research_edges WHERE project_id = ? ORDER BY created_at ASC, rowid ASC")
     .all(projectId)
     .map(hydrateResearchEdge);
@@ -2678,6 +2756,7 @@ function getResearchNodeHistory(nodeId) {
 
 function createResearchNode({
   projectId,
+  threadId = null,
   kind,
   status = "draft",
   title,
@@ -2703,15 +2782,19 @@ function createResearchNode({
   const db = requireDatabase();
   const project = db.prepare("SELECT id FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId);
   if (!project) throw new Error("Project not found.");
+  if (threadId) {
+    const thread = db.prepare("SELECT project_id FROM research_threads WHERE id = ?").get(threadId);
+    if (!thread || thread.project_id !== projectId) throw new Error("The research session does not belong to this project.");
+  }
   const now = timestamp();
   const nodeId = randomUUID();
   const revisionId = randomUUID();
   db.exec("BEGIN");
   try {
     db.prepare(`
-      INSERT INTO research_nodes (id, project_id, kind, status, title, summary, current_revision_id, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
-    `).run(nodeId, projectId, kind, status, normalizedTitle, String(summary || "").slice(0, 500), createdBy, now, now);
+      INSERT INTO research_nodes (id, project_id, thread_id, kind, status, title, summary, current_revision_id, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+    `).run(nodeId, projectId, threadId, kind, status, normalizedTitle, String(summary || "").slice(0, 500), createdBy, now, now);
     db.prepare(`
       INSERT INTO research_node_revisions (id, node_id, parent_revision_id, content_json, content_hash, source_turn_id, source_event_id, git_commit, created_by, created_at)
       VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?)
@@ -2719,12 +2802,14 @@ function createResearchNode({
     db.prepare("UPDATE research_nodes SET current_revision_id = ? WHERE id = ?").run(revisionId, nodeId);
     for (const parent of parents) {
       if (!parent || typeof parent.nodeId !== "string" || !parent.nodeId) throw new Error("Each parent requires a node id.");
-      const fromRevision = parent.revisionId || db.prepare("SELECT current_revision_id FROM research_nodes WHERE id = ? AND project_id = ?").get(parent.nodeId, projectId)?.current_revision_id;
+      const parentNode = db.prepare("SELECT current_revision_id, thread_id FROM research_nodes WHERE id = ? AND project_id = ?").get(parent.nodeId, projectId);
+      const fromRevision = parent.revisionId || parentNode?.current_revision_id;
       if (!fromRevision) throw new Error("A parent research node has no current revision.");
+      if (threadId && parentNode.thread_id !== threadId) throw new Error("Parents must belong to the same research session.");
       db.prepare(`
-        INSERT INTO research_edges (id, project_id, from_node, from_revision, to_node, to_revision, kind, metadata_json, created_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(randomUUID(), projectId, parent.nodeId, fromRevision, nodeId, revisionId, parent.kind, JSON.stringify(parent.metadata || {}), createdBy, now);
+        INSERT INTO research_edges (id, project_id, thread_id, from_node, from_revision, to_node, to_revision, kind, metadata_json, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(randomUUID(), projectId, threadId, parent.nodeId, fromRevision, nodeId, revisionId, parent.kind, JSON.stringify(parent.metadata || {}), createdBy, now);
     }
     db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, projectId);
     recordAuditEvent(db, {
@@ -2802,6 +2887,7 @@ function linkResearchNodes({
   const to = getResearchNode(toNodeId);
   if (!from || !to) throw new Error("Both research nodes must exist.");
   if (from.project_id !== to.project_id) throw new Error("Research edges must connect nodes in the same project.");
+  if (from.thread_id !== to.thread_id) throw new Error("Research edges must connect nodes in the same session.");
   if (from.archived || to.archived) throw new Error("Restore archived nodes before linking them.");
   if (!canAccessProject(from.project_id, "editor")) throw new Error("You do not have permission to link research nodes.");
   const db = requireDatabase();
@@ -2817,9 +2903,9 @@ function linkResearchNodes({
   db.exec("BEGIN");
   try {
     db.prepare(`
-      INSERT INTO research_edges (id, project_id, from_node, from_revision, to_node, to_revision, kind, metadata_json, created_by, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(edgeId, from.project_id, fromNodeId, resolvedFromRevision, toNodeId, resolvedToRevision, kind, metadataJson, createdBy, now);
+      INSERT INTO research_edges (id, project_id, thread_id, from_node, from_revision, to_node, to_revision, kind, metadata_json, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(edgeId, from.project_id, from.thread_id, fromNodeId, resolvedFromRevision, toNodeId, resolvedToRevision, kind, metadataJson, createdBy, now);
     db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, from.project_id);
     recordAuditEvent(db, {
       projectId: from.project_id,

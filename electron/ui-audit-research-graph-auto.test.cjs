@@ -15,7 +15,10 @@ test("Research mode refreshes the graph from automatic graph-update events", () 
   assert.match(app, /event\.type === "graph_update"/);
   assert.match(app, /version=\{graphVersion\}/);
   assert.match(app, /update=\{graphUpdate\}/);
+  assert.match(app, /threadId=\{pathThread\?\.id \?\? null\}/);
   assert.match(panel, /includeArchived: false/);
+  assert.match(panel, /listResearchGraph\(\{ projectId, threadId, includeArchived: false \}\)/);
+  assert.match(panel, /update\.threadId === threadId/);
   assert.match(panel, /archiveResearchNode\(nodeId, "Undo automatic research graph update"\)/);
   assert.match(panel, /setResearchNodeStatus\?\.\(item\.nodeId, item\.previousStatus/);
   assert.match(panel, /Research graph updated/);

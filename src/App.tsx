@@ -3640,6 +3640,7 @@ function App() {
           />}
           research={showResearchGraph ? <ResearchGraphPanel
             projectId={pathProject?.id ?? activeProjectId ?? null}
+            threadId={pathThread?.id ?? null}
             projectName={pathProject?.name ?? t("No project")}
             threadTitle={pathThread?.title ?? t("No active session")}
             hasThread={Boolean(pathThread)}

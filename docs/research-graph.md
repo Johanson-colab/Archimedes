@@ -6,11 +6,14 @@ runs, or collaboration sync yet.
 
 ## Object model
 
-A research project owns a graph of five node kinds:
+Each Research session owns an independent graph. A project can contain many
+sessions, but nodes and edges never cross session boundaries.
+
+The graph has five node kinds:
 
 | Kind | Meaning |
 | --- | --- |
-| `question` | The question the project is trying to answer. |
+| `question` | The question this session is trying to answer. |
 | `idea` | A testable hypothesis. An "idea spark" is an `idea` with `status = draft`; it is not a separate node kind. |
 | `experiment` | A plan that tests an idea or question. Runs are attempts inside the experiment, not graph nodes. |
 | `result` | What was measured plus what it means. Evidence and interpretation live in two content blocks on one node. |
@@ -43,9 +46,17 @@ edges and do not participate in structural cycle detection. Lineage edges do.
 
 New tables in `electron/store.cjs`:
 
-- `research_nodes`
+- `research_nodes` (`project_id`, `thread_id`)
 - `research_node_revisions`
-- `research_edges`
+- `research_edges` (`project_id`, `thread_id`)
+
+`thread_id` is the graph scope. `listGraph`, `applyPatch`, and `validateGraph`
+accept it; `createNode` and `linkNodes` reject parents or edges that cross
+sessions. Existing project-scoped graph data is migrated on open: nodes inherit
+the session of their earliest source turn, explicit thread links are honored,
+and remaining manual nodes fall back to the oldest Research session in the
+project. Edges whose endpoints land in different sessions are left unscoped and
+are not shown in a session graph.
 
 Existing tables gain optional links so conversations and artifacts can be
 attached to a node revision without changing their current ownership:
@@ -69,7 +80,10 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
 - A selected node exposes its allowed child kinds. Creating a child writes the
   node and its typed edge; creating writing from a result creates the writing
   node and then links `cites`.
-- Empty projects start with a question form.
+- The panel shows the active session's graph. Switching sessions switches the
+  canvas; nodes from other sessions in the same project are never displayed.
+- Empty sessions start with a question form. A new chat with no session yet
+  shows a prompt to start a Research conversation.
 - The panel defaults to the current idea round. A History toggle reveals
   `retracted` ideas from earlier rounds; they remain in the database and can be
   restored.
@@ -82,8 +96,9 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
 
 ## Automatic graph building
 
-Every successful Research-mode turn now schedules a background graph build. The
-turn itself is not blocked; the answer and composer are released first.
+Every successful Research-mode turn now schedules a background graph build for
+the active session. The turn itself is not blocked; the answer and composer are
+released first.
 
 - **API harness:** the extractor reuses the active Agent model with a JSON-only
   prompt and JSON response mode. It never exposes tools and is capped at a short
@@ -121,16 +136,16 @@ turn itself is not blocked; the answer and composer are released first.
 `electron/research-graph/service.cjs` exposes:
 
 ```text
-createNode({ projectId, kind, status, title, summary, content, parents, sourceTurnId, sourceEventId, author })
+createNode({ projectId, threadId, kind, status, title, summary, content, parents, sourceTurnId, sourceEventId, author })
 reviseNode({ nodeId, content, title, summary, sourceTurnId, sourceEventId, gitCommit, author })
 linkNodes({ fromNodeId, toNodeId, kind, fromRevisionId, toRevisionId, metadata, author })
 setNodeStatus({ nodeId, status, reason, author })
 applyPatch({ projectId, threadId, turnId, patch, author })
-listGraph({ projectId, includeArchived })
+listGraph({ projectId, threadId, includeArchived })
 getNodeHistory(nodeId)
 archiveNode({ nodeId, reason, author })
 restoreNode({ nodeId, author })
-validateGraph({ projectId })
+validateGraph({ projectId, threadId })
 ```
 
 The matching IPC channels are `research-graph:create-node`,

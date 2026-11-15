@@ -430,16 +430,17 @@ test("a new question branch does not retire ideas under another question", () =>
 
 test("maybeAutoBuild reports superseded ideas in its graph update", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
-    const question = graph.createNode({ projectId: project.id, kind: "question", status: "active", title: "Question", content: {} });
+    const { thread, turn } = threadFor(project.id);
+    const question = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "question", status: "active", title: "Question", content: {} });
     const oldIdea = graph.createNode({
       projectId: project.id,
+      threadId: thread.id,
       kind: "idea",
       status: "active",
       title: "Old idea",
       content: { hypothesis: "old" },
       parents: [{ nodeId: question.id, kind: "generates" }],
     });
-    const { thread, turn } = threadFor(project.id);
     const events = [];
     const result = await auto.maybeAutoBuild({
       projectId: project.id,
@@ -472,6 +473,49 @@ test("maybeAutoBuild reports superseded ideas in its graph update", async () => 
     const update = events.find((event) => event.type === "graph_update");
     assert.equal(update.graph.superseded.length, 1);
     assert.match(update.detail, /moved to history/);
+  });
+});
+
+test("graphs are isolated per session and reject cross-session edges", () => {
+  withWorkspace(({ project }) => {
+    const threadA = store.createResearchThread({ prompt: "Session A", mode: "research", projectId: project.id });
+    const threadB = store.createResearchThread({ prompt: "Session B", mode: "research", projectId: project.id });
+    const questionA = graph.createNode({ projectId: project.id, threadId: threadA.id, kind: "question", status: "active", title: "Question A", content: {} });
+    const ideaA = graph.createNode({
+      projectId: project.id,
+      threadId: threadA.id,
+      kind: "idea",
+      title: "Idea A",
+      content: {},
+      parents: [{ nodeId: questionA.id, kind: "generates" }],
+    });
+    const questionB = graph.createNode({ projectId: project.id, threadId: threadB.id, kind: "question", status: "active", title: "Question B", content: {} });
+    const ideaB = graph.createNode({
+      projectId: project.id,
+      threadId: threadB.id,
+      kind: "idea",
+      title: "Idea B",
+      content: {},
+      parents: [{ nodeId: questionB.id, kind: "generates" }],
+    });
+    assert.equal(graph.listGraph({ projectId: project.id, threadId: threadA.id }).nodes.length, 2);
+    assert.equal(graph.listGraph({ projectId: project.id, threadId: threadB.id }).nodes.length, 2);
+    assert.equal(graph.listGraph({ projectId: project.id, threadId: threadA.id }).edges.length, 1);
+    assert.throws(
+      () => graph.linkNodes({ fromNodeId: ideaA.id, toNodeId: ideaB.id, kind: "refines" }),
+      /same session/,
+    );
+    assert.throws(
+      () => graph.createNode({
+        projectId: project.id,
+        threadId: threadA.id,
+        kind: "idea",
+        title: "Cross-session child",
+        content: {},
+        parents: [{ nodeId: questionB.id, kind: "generates" }],
+      }),
+      /same research session/,
+    );
   });
 });
 
