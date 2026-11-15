@@ -45,7 +45,7 @@ test("legacy settings entry points resolve to their new module and subview", () 
   assert.match(registry, /journey: \{ section: "workbench", subview: "research-path" \}/);
   assert.match(registry, /terminal: \{ section: "workbench", subview: "terminal" \}/);
   assert.match(registry, /proactive: \{ section: "research-aids", subview: "proactive" \}/);
-  assert.match(registry, /members: \{ section: "workspace", subview: CLOUD_FEATURES_ENABLED \? "members" : "folder" \}/);
+  assert.match(registry, /members: \{ section: "workspace", subview: "members" \}/);
   assert.match(registry, /export function resolveSettingsLocation/);
   assert.match(modal, /const location = resolveSettingsLocation\(section\);/);
   assert.match(modal, /activeSection\.subviews && <SettingsSubnav/);

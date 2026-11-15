@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { FolderOpen, Globe2, LayoutPanelTop, Orbit, Palette, Puzzle, Server, SlidersHorizontal, Sparkle, UserRound } from "lucide-react";
-import { CLOUD_FEATURES_ENABLED } from "../cloud-features";
 
 export type SettingsSectionId =
   | "general"
@@ -57,13 +56,13 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     group: "personal",
     icon: <Palette size={15} />,
   },
-  ...(CLOUD_FEATURES_ENABLED ? [{
-    id: "account" as const,
+  {
+    id: "account",
     label: "Account",
     description: "Local identity and cloud account",
-    group: "personal" as const,
+    group: "personal",
     icon: <UserRound size={15} />,
-  }] : []),
+  },
   {
     id: "workbench",
     label: "Workbench",
@@ -110,7 +109,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     icon: <FolderOpen size={15} />,
     subviews: [
       { id: "folder", label: "Folder" },
-      ...(CLOUD_FEATURES_ENABLED ? [{ id: "members", label: "Members" }] : []),
+      { id: "members", label: "Members" },
     ],
   },
   {
@@ -135,7 +134,7 @@ const ALIASES: Record<SettingsSectionAlias, { section: SettingsSectionId; subvie
   journey: { section: "workbench", subview: "research-path" },
   terminal: { section: "workbench", subview: "terminal" },
   proactive: { section: "research-aids", subview: "proactive" },
-  members: { section: "workspace", subview: CLOUD_FEATURES_ENABLED ? "members" : "folder" },
+  members: { section: "workspace", subview: "members" },
   about: { section: "general" },
 };
 
