@@ -1,13 +1,16 @@
 # Archimedes
 
-> A local-first research-agent suite for discovering evidence, reading papers, inspecting code, running research work, and writing with traceability.
-
 <p align="center">
-  <img src="docs/assets/readme/archimedes-hero-1.webp" alt="Archimedes research chat, original paper reader, Daily papers, and Canvas">
+  <a href="README.md"><img src="https://img.shields.io/badge/English-111111?style=for-the-badge" alt="English"></a>
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-9a6a06?style=for-the-badge" alt="中文"></a>
 </p>
 
+> A local-first research-agent suite for discovering evidence, reading papers, inspecting code, running research work, and writing with traceability.
+
+**Website:** [archimedes-research.com](https://archimedes-research.com)
+
 <p align="center">
-  <img src="docs/assets/readme/archimedes-hero-2.webp" alt="Archimedes Workbench Files and Trajectory, Paper writing, and Image creation">
+  <img src="docs/assets/readme/archimedes-hero-light.webp" alt="Archimedes research workspace with research chat, agent activity, and Files">
 </p>
 
 Archimedes is not a generic chat shell with a paper list attached. Its center of gravity is the research loop: question → sources → evidence → implementation → experiment → writing. It runs as an Electron desktop application, keeps workspace data local by default, and leaves model and search providers configurable rather than locked to one vendor.
