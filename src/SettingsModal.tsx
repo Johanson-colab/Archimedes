@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { CLOUD_FEATURES_ENABLED } from "./cloud-features";
 import AccountSettingsPanel from "./AccountSettingsPanel";
 import ModelSettingsModal, { type ModelExecutionPreferences } from "./ModelSettingsModal";
 import PluginsSettingsPanel from "./PluginsSettingsPanel";
@@ -175,7 +176,7 @@ export default function SettingsModal({
             onThemePreferenceChange={onThemePreferenceChange}
             onAppearanceChange={onAppearanceChange}
           />}
-          {location.section === "account" && <AccountSettingsPanel identity={identity} onSave={onSaveIdentity} authState={authState} onOpenAuth={onOpenAuth} onSignOut={onSignOut} />}
+          {CLOUD_FEATURES_ENABLED && location.section === "account" && <AccountSettingsPanel identity={identity} onSave={onSaveIdentity} authState={authState} onOpenAuth={onOpenAuth} onSignOut={onSignOut} />}
           {location.section === "workbench" && <WorkbenchSettingsHub
             view={subview}
             preferences={workbenchPreferences}

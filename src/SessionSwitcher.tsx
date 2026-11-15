@@ -13,6 +13,7 @@ import {
   Trash,
 } from "lucide-react";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
+import { CLOUD_FEATURES_ENABLED } from "./cloud-features";
 import { useUISettings } from "./i18n";
 import { workspaceName } from "./workspace-name";
 import WorkspaceMenuActions from "./WorkspaceMenuActions";
@@ -42,7 +43,7 @@ type SessionSwitcherProps = {
   openSignal: number;
 };
 
-const FILTERS: SessionFilter[] = ["all", "mine", "shared", "archived"];
+const FILTERS: SessionFilter[] = CLOUD_FEATURES_ENABLED ? ["all", "mine", "shared", "archived"] : ["all", "mine", "archived"];
 
 function sessionStatus(session: ResearchThread, runningThreadId: string | null): SessionStatus {
   if (session.status === "running" || session.id === runningThreadId) return "running";

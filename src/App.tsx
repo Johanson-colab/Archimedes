@@ -67,6 +67,7 @@ import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import ThreadShareModal from "./ThreadShareModal";
 import SessionComments, { type SessionCommentsScope } from "./SessionComments";
 import AccountChip from "./AccountChip";
+import { CLOUD_FEATURES_ENABLED } from "./cloud-features";
 import packageMetadata from "../package.json";
 import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
@@ -1549,7 +1550,7 @@ function App() {
     return () => { void desktopBridge.claimApprovals(activeThreadId, false).catch(() => {}); };
   }, [activeThreadId]);
   useEffect(() => {
-    if (!activeProjectId || !authState?.user || typeof desktopBridge?.joinProjectPresence !== "function") {
+    if (!CLOUD_FEATURES_ENABLED || !activeProjectId || !authState?.user || typeof desktopBridge?.joinProjectPresence !== "function") {
       setPresenceMembers([]);
       return;
     }
@@ -1561,7 +1562,7 @@ function App() {
     };
   }, [activeProjectId, authState?.user?.id]);
   useEffect(() => {
-    if (activeProjectId && authState?.user) void desktopBridge.updateProjectPresence?.(activeThreadId);
+    if (CLOUD_FEATURES_ENABLED && activeProjectId && authState?.user) void desktopBridge.updateProjectPresence?.(activeThreadId);
   }, [activeProjectId, activeThreadId, authState?.user?.id]);
   // Research data lives in the primary workspace. Agent tools, files, terminal,
   // and paper writing operate inside the session folder: session snapshot →
@@ -1815,6 +1816,7 @@ function App() {
   }
 
   function openAuth(mode: "choice" | "password" | "signup" | "reset" | "recovery" = "choice") {
+    if (!CLOUD_FEATURES_ENABLED) return;
     setAuthModalMode(mode);
     setAuthModalOpen(true);
   }
@@ -3439,7 +3441,7 @@ function App() {
         <span className="sidebar-order-live" aria-live="polite">{sidebarOrderAnnouncement}</span>
 
         <div className="sidebar-runtime">
-          <AccountChip compact authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />
+          {CLOUD_FEATURES_ENABLED && <AccountChip compact authState={authState} identity={localIdentity} onOpenAuth={() => openAuth("choice")} onOpenAccountSettings={() => { setSettingsSection("account"); setSettingsOpen(true); }} onSignOut={signOut} />}
           {availableAppUpdate && <button className="sidebar-footer-update" onClick={() => {
             const requested = availableAppUpdate.url;
             let url = "https://github.com/Johanson-colab/Archimedes/releases/latest";
@@ -3487,7 +3489,7 @@ function App() {
           />
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
-            {presenceMembers.length > 0 && <div className="presence-stack" title={presenceMembers.map((member) => member.displayName).join(", ")} aria-label={`${presenceMembers.length} collaborators online`}>
+            {CLOUD_FEATURES_ENABLED && presenceMembers.length > 0 && <div className="presence-stack" title={presenceMembers.map((member) => member.displayName).join(", ")} aria-label={`${presenceMembers.length} collaborators online`}>
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
             </div>}
@@ -3754,7 +3756,7 @@ function App() {
         onCreateFile={() => void createFile()}
       />
       <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={executionWorkspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
-      <AuthModal
+      {CLOUD_FEATURES_ENABLED && <AuthModal
         open={authModalOpen}
         authState={authState}
         initialMode={authModalMode}
@@ -3766,7 +3768,7 @@ function App() {
         onResetPassword={requestPasswordReset}
         onUpdatePassword={updateCloudPassword}
         onOpenExternal={(url) => { void desktopBridge.openExternalUrl?.(url); }}
-      />
+      />}
       <SettingsModal
         open={settingsOpen}
         section={settingsSection}
