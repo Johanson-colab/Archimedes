@@ -638,8 +638,8 @@ if (!singleInstanceLock) {
 }
 
 app.whenReady().then(async () => {
-  if (!singleInstanceLock) return;
   configureAppIcon(app);
+  if (!singleInstanceLock) return;
   loadLocalAgentEnvironment();
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
   modelConfig.initializeModelConfig(app.getPath("userData"));
