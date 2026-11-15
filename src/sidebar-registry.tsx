@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { researchAppMetadata, type ResearchAppCategory } from "./research-apps";
+import { isBetaResearchApp, researchAppMetadata, type ResearchAppCategory } from "./research-apps";
 import type { LucideIcon } from "lucide-react";
 import { BookOpen, Calendar, ChartLine, ClipboardCheck, FilePen, FlaskConical, ImagePlus, Puzzle, Radar, Rss, Table, Presentation } from "lucide-react";
 
@@ -70,7 +70,7 @@ export const coreSidebarEntries: SidebarEntry[] = ([
   { id: "paper-review", commandId: "open-paper-review", section: "evaluate", labelKey: "Paper review", titleKey: "Paper review", icon: ClipboardCheck, destination: { type: "section", section: "paper-review" }, source: "core" },
 ] satisfies Omit<SidebarEntry, "order">[]).map((entry) => {
   const metadata = researchAppMetadata[entry.id as keyof typeof researchAppMetadata];
-  return { ...entry, researchCategory: metadata.category as ResearchAppCategory, descriptionKey: metadata.description, order: metadata.order };
+  return { ...entry, researchCategory: metadata.category as ResearchAppCategory, descriptionKey: metadata.description, order: metadata.order, badge: isBetaResearchApp(entry.id) ? "Beta" : undefined };
 });
 
 /** Runtime plugin modules register here; the projection below merges them. */
