@@ -2208,7 +2208,7 @@ function App() {
       if (event.type === "graph_update") {
         setGraphVersion((current) => current + 1);
         if (event.graph) setGraphUpdate(event.graph);
-        if (!event.graph || event.graph.nodeCount + event.graph.edgeCount === 0) {
+        if (!event.graph || event.graph.nodeCount + event.graph.edgeCount + (event.graph.superseded?.length ?? 0) === 0) {
           if (!event.threadId || activeThreadIdRef.current === event.threadId) {
             setEvents((current) => current.filter((item) => item.title !== event.title));
           }

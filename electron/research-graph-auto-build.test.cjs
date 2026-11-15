@@ -335,6 +335,146 @@ test("maybeAutoBuild records a failure event when both API attempts fail", async
   });
 });
 
+test("a new idea round retires previous direct ideas and can restore them", () => {
+  withWorkspace(({ project }) => {
+    const question = graph.createNode({
+      projectId: project.id,
+      kind: "question",
+      status: "active",
+      title: "Does calibration track accuracy?",
+      content: { question: "Does calibration track accuracy under shift?" },
+    });
+    const oldIdeas = ["Old A", "Old B", "Old C"].map((title) => graph.createNode({
+      projectId: project.id,
+      kind: "idea",
+      status: "active",
+      title,
+      content: { hypothesis: title },
+      parents: [{ nodeId: question.id, kind: "generates" }],
+    }));
+    const applied = graph.applyPatch({
+      projectId: project.id,
+      patch: {
+        nodes: [
+          { id: "n1", kind: "idea", title: "New A", content: { hypothesis: "New A" } },
+          { id: "n2", kind: "idea", title: "New B", content: { hypothesis: "New B" } },
+        ],
+        edges: [
+          { from: question.id, to: "n1", kind: "generates" },
+          { from: question.id, to: "n2", kind: "generates" },
+        ],
+      },
+    });
+    assert.equal(applied.createdNodes.length, 2);
+    assert.equal(applied.supersededNodes.length, 3);
+    for (const node of oldIdeas) assert.equal(store.getResearchNode(node.id).status, "retracted");
+    graph.setNodeStatus({ nodeId: oldIdeas[0].id, status: "active", reason: "restore test" });
+    assert.equal(store.getResearchNode(oldIdeas[0].id).status, "active");
+  });
+});
+
+test("an explicit supersede retires an idea even without a full new round", () => {
+  withWorkspace(({ project }) => {
+    const question = graph.createNode({ projectId: project.id, kind: "question", status: "active", title: "Question", content: {} });
+    const oldIdea = graph.createNode({
+      projectId: project.id,
+      kind: "idea",
+      status: "active",
+      title: "Old idea",
+      content: { hypothesis: "old" },
+      parents: [{ nodeId: question.id, kind: "generates" }],
+    });
+    const applied = graph.applyPatch({
+      projectId: project.id,
+      patch: {
+        nodes: [{ id: "n1", kind: "idea", title: "New idea", content: { hypothesis: "new" } }],
+        edges: [{ from: question.id, to: "n1", kind: "generates" }],
+        supersede: [{ nodeId: oldIdea.id, reason: "Covered by a newer paper." }],
+      },
+    });
+    assert.equal(applied.supersededNodes.length, 1);
+    assert.equal(applied.supersededNodes[0].previousStatus, "active");
+    assert.equal(store.getResearchNode(oldIdea.id).status, "retracted");
+  });
+});
+
+test("a new question branch does not retire ideas under another question", () => {
+  withWorkspace(({ project }) => {
+    const questionA = graph.createNode({ projectId: project.id, kind: "question", status: "active", title: "Question A", content: {} });
+    const oldIdea = graph.createNode({
+      projectId: project.id,
+      kind: "idea",
+      status: "active",
+      title: "Old idea under A",
+      content: { hypothesis: "old" },
+      parents: [{ nodeId: questionA.id, kind: "generates" }],
+    });
+    const applied = graph.applyPatch({
+      projectId: project.id,
+      patch: {
+        nodes: [
+          { id: "q2", kind: "question", title: "Question B", content: {} },
+          { id: "n1", kind: "idea", title: "New B1", content: { hypothesis: "B1" } },
+          { id: "n2", kind: "idea", title: "New B2", content: { hypothesis: "B2" } },
+        ],
+        edges: [
+          { from: "q2", to: "n1", kind: "generates" },
+          { from: "q2", to: "n2", kind: "generates" },
+        ],
+      },
+    });
+    assert.equal(applied.supersededNodes.length, 0);
+    assert.equal(store.getResearchNode(oldIdea.id).status, "active");
+  });
+});
+
+test("maybeAutoBuild reports superseded ideas in its graph update", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const question = graph.createNode({ projectId: project.id, kind: "question", status: "active", title: "Question", content: {} });
+    const oldIdea = graph.createNode({
+      projectId: project.id,
+      kind: "idea",
+      status: "active",
+      title: "Old idea",
+      content: { hypothesis: "old" },
+      parents: [{ nodeId: question.id, kind: "generates" }],
+    });
+    const { thread, turn } = threadFor(project.id);
+    const events = [];
+    const result = await auto.maybeAutoBuild({
+      projectId: project.id,
+      threadId: thread.id,
+      turnId: turn.id,
+      mode: "research",
+      origin: "research",
+      backend: "api",
+      config: { apiKey: "test", model: "fixture" },
+      workspace: root,
+      userPrompt: "Give me a new set of ideas.",
+      assistantResponse: "Two new alternatives are proposed here.",
+      emit: (event) => events.push(event),
+      recordEvent: () => {},
+      complete: async () => ({
+        content: JSON.stringify({
+          nodes: [
+            { id: "n1", kind: "idea", title: "New A", content: { hypothesis: "A" } },
+            { id: "n2", kind: "idea", title: "New B", content: { hypothesis: "B" } },
+          ],
+          edges: [
+            { from: question.id, to: "n1", kind: "generates" },
+            { from: question.id, to: "n2", kind: "generates" },
+          ],
+        }),
+      }),
+    });
+    assert.equal(result.supersededNodeIds.length, 1);
+    assert.equal(store.getResearchNode(oldIdea.id).status, "retracted");
+    const update = events.find((event) => event.type === "graph_update");
+    assert.equal(update.graph.superseded.length, 1);
+    assert.match(update.detail, /moved to history/);
+  });
+});
+
 test("a completed API Research turn schedules a background graph build", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
     modelConfig.initializeModelConfig(root);

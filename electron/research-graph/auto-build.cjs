@@ -65,6 +65,8 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
     "- Link new nodes to existing nodes when the answer clearly continues an existing thread.",
     "- If the request is a follow-up to an existing question, link new objects to that existing question instead of creating another question node.",
     "- Do not duplicate an existing node with the same kind and title.",
+    "- A new idea round supersedes the previous one. When this turn presents a new set of idea alternatives for the same question, list the previous idea nodes under that question in `supersede`. The app also retires previous direct idea children automatically when the patch adds at least two new ideas, so use `supersede` mainly to provide a specific reason or to retire an additional idea.",
+    "- Only idea nodes can be superseded. Never supersede question, experiment, result, or writing nodes.",
     "- Every experiment or result must have at least one incoming edge (tests or produces).",
     "- A merge needs at least two incoming merges edges.",
     "- Use the user's language for titles and summaries. Titles <= 120 characters; summaries <= 240 characters.",
@@ -83,6 +85,7 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
         { id: "n2", kind: "idea", title: "...", summary: "...", content: { hypothesis: "...", prediction: "..." } },
       ],
       edges: [{ from: "n1", to: "n2", kind: "generates" }],
+      supersede: [{ nodeId: "existing-idea-id", reason: "Superseded by the new idea round" }],
       reason: "short explanation",
     }),
   ].join("\n");
@@ -257,18 +260,27 @@ async function maybeAutoBuild({
     }
     const createdNodeIds = applied.createdNodes.map((node) => node.id);
     const createdEdgeIds = applied.createdEdges.map((edge) => edge.id);
+    const superseded = (applied.supersededNodes || []).map((node) => ({
+      nodeId: node.nodeId,
+      previousStatus: node.previousStatus,
+      reason: node.reason,
+    }));
+    const supersededNodeIds = superseded.map((node) => node.nodeId);
     const nodeCount = createdNodeIds.length;
     const edgeCount = createdEdgeIds.length;
-    const detail = nodeCount || edgeCount
-      ? `Added ${nodeCount} node${nodeCount === 1 ? "" : "s"} and ${edgeCount} edge${edgeCount === 1 ? "" : "s"}`
-      : (applied.reason || "No new research objects detected");
-    if (nodeCount || edgeCount) {
+    const details = [];
+    if (nodeCount) details.push(`${nodeCount} node${nodeCount === 1 ? "" : "s"}`);
+    if (edgeCount) details.push(`${edgeCount} edge${edgeCount === 1 ? "" : "s"}`);
+    if (superseded.length) details.push(`${superseded.length} previous idea${superseded.length === 1 ? "" : "s"} moved to history`);
+    const detail = details.length ? `Added ${details.join(" · ")}` : (applied.reason || "No new research objects detected");
+    if (nodeCount || edgeCount || superseded.length) {
       recordEvent({
         type: "graph_applied",
         payload: {
           projectId,
           createdNodeIds,
           createdEdgeIds,
+          supersededNodeIds,
           skippedNodeCount: applied.skippedNodes.length,
           reason: applied.reason,
         },
@@ -292,13 +304,14 @@ async function maybeAutoBuild({
         turnId,
         createdNodeIds,
         createdEdgeIds,
+        superseded,
         nodeCount,
         edgeCount,
         skippedNodeCount: applied.skippedNodes.length,
         reason: applied.reason,
       },
     });
-    return { ...applied, createdNodeIds, createdEdgeIds };
+    return { ...applied, createdNodeIds, createdEdgeIds, supersededNodeIds, superseded };
   } catch (error) {
     console.warn("[research-graph] auto-build skipped:", error?.message || String(error));
     try {

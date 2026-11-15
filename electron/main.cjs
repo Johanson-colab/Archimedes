@@ -1036,6 +1036,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("research-graph:history", (_event, input = {}) => researchGraph.getNodeHistory(input.nodeId));
   ipcMain.handle("research-graph:archive", (_event, input = {}) => researchGraph.archiveNode(input));
   ipcMain.handle("research-graph:restore", (_event, input = {}) => researchGraph.restoreNode(input));
+  ipcMain.handle("research-graph:set-status", (_event, input = {}) => researchGraph.setNodeStatus(input));
   ipcMain.handle("research-graph:validate", (_event, input = {}) => researchGraph.validateGraph(input));
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),

@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   getResearchNodeHistory: (nodeId) => ipcRenderer.invoke("research-graph:history", { nodeId }),
   archiveResearchNode: (nodeId, reason = "") => ipcRenderer.invoke("research-graph:archive", { nodeId, reason }),
   restoreResearchNode: (nodeId) => ipcRenderer.invoke("research-graph:restore", { nodeId }),
+  setResearchNodeStatus: (nodeId, status, reason = "") => ipcRenderer.invoke("research-graph:set-status", { nodeId, status, reason }),
   validateResearchGraph: (projectId) => ipcRenderer.invoke("research-graph:validate", { projectId }),
   createResearchThread: (input) => ipcRenderer.invoke("research-thread:create", input),
   forkResearchThread: (threadId, workspace, side = false) => ipcRenderer.invoke("research-thread:fork", { threadId, workspace, side }),

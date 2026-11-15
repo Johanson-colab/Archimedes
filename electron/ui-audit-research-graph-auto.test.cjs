@@ -17,8 +17,20 @@ test("Research mode refreshes the graph from automatic graph-update events", () 
   assert.match(app, /update=\{graphUpdate\}/);
   assert.match(panel, /includeArchived: false/);
   assert.match(panel, /archiveResearchNode\(nodeId, "Undo automatic research graph update"\)/);
+  assert.match(panel, /setResearchNodeStatus\?\.\(item\.nodeId, item\.previousStatus/);
   assert.match(panel, /Research graph updated/);
   assert.match(css, /\.research-graph-update \{/);
+});
+
+test("the graph hides superseded ideas until History is opened", () => {
+  const panel = read("src", "research-graph", "ResearchGraphPanel.tsx");
+  const css = read("src", "styles.css");
+  assert.match(panel, /const \[showHistory, setShowHistory\] = useState\(false\)/);
+  assert.match(panel, /node\.status !== "retracted"/);
+  assert.match(panel, /Show history/);
+  assert.match(panel, /Hide history/);
+  assert.match(panel, /previous ideas moved to history/);
+  assert.match(css, /\.research-graph-node\.status-retracted \{ opacity: \.5; border-style: dashed; \}/);
 });
 
 test("Agent turns schedule a background graph build for Research mode", () => {

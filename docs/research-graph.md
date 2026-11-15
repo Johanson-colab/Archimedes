@@ -70,6 +70,9 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
   node and its typed edge; creating writing from a result creates the writing
   node and then links `cites`.
 - Empty projects start with a question form.
+- The panel defaults to the current idea round. A History toggle reveals
+  `retracted` ideas from earlier rounds; they remain in the database and can be
+  restored.
 - The panel header expands the graph into a full-window view with the inspector
   beside it; Escape or the minimize button returns to the dock.
 
@@ -100,10 +103,16 @@ turn itself is not blocked; the answer and composer are released first.
 - New nodes and edges are applied automatically. Each new revision records the
   source `turn_id`; the thread receives a `graph_applied` event (or
   `graph_checked` when nothing was added).
+- A new idea round supersedes the previous one. When a patch adds at least two
+  new ideas directly under the same question, the previous direct idea children
+  of that question become `retracted`. The extractor may also name specific
+  `supersede` entries with a reason. Retracted ideas stay in the database and
+  are shown only when History is enabled; they are never hard-deleted.
 - The graph panel listens for `graph_update` events, refreshes in place, and
   shows a compact "Research graph updated" bar with an Undo action. Undo
-  archives only the nodes created by that patch, so user-created nodes and
-  earlier graph history remain intact.
+  archives only the nodes created by that patch and restores any superseded
+  nodes to their previous status, so user-created nodes and earlier graph
+  history remain intact.
 - If extraction fails, times out, or returns no research object, the graph is
   unchanged and the failure is not treated as a turn failure.
 
@@ -115,6 +124,7 @@ turn itself is not blocked; the answer and composer are released first.
 createNode({ projectId, kind, status, title, summary, content, parents, sourceTurnId, sourceEventId, author })
 reviseNode({ nodeId, content, title, summary, sourceTurnId, sourceEventId, gitCommit, author })
 linkNodes({ fromNodeId, toNodeId, kind, fromRevisionId, toRevisionId, metadata, author })
+setNodeStatus({ nodeId, status, reason, author })
 applyPatch({ projectId, threadId, turnId, patch, author })
 listGraph({ projectId, includeArchived })
 getNodeHistory(nodeId)

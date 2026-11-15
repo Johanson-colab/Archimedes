@@ -94,6 +94,8 @@ export interface ResearchGraphUpdate {
   turnId: string;
   createdNodeIds: string[];
   createdEdgeIds: string[];
+  superseded?: Array<{ nodeId: string; previousStatus: ResearchNodeStatus; reason?: string }>;
+  supersededNodeIds?: string[];
   nodeCount: number;
   edgeCount: number;
   skippedNodeCount?: number;

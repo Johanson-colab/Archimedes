@@ -16,6 +16,7 @@ const MAX_TITLE_CHARS = 200;
 const MAX_SUMMARY_CHARS = 500;
 const MAX_PATCH_NODES = 6;
 const MAX_PATCH_EDGES = 8;
+const MAX_PATCH_SUPERSEDE = 12;
 
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
@@ -268,7 +269,19 @@ function normalizePatch(patch) {
     edgeKeys.add(key);
     return { from, to, kind: edge.kind, metadata: edge.metadata && typeof edge.metadata === "object" ? edge.metadata : {} };
   });
-  return { nodes, edges, reason: String(patch.reason || "").trim().slice(0, 1000) };
+  const supersedeInput = patch.supersede ?? patch.retractions ?? [];
+  if (!Array.isArray(supersedeInput)) throw new Error("Graph patch supersede entries must be an array.");
+  if (supersedeInput.length > MAX_PATCH_SUPERSEDE) throw new Error(`A graph patch can supersede at most ${MAX_PATCH_SUPERSEDE} nodes.`);
+  const superseded = new Set();
+  const supersede = supersedeInput.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`Graph patch supersede entry ${index + 1} must be an object.`);
+    const nodeId = String(entry.nodeId ?? entry.id ?? "").trim();
+    if (!nodeId) throw new Error("Every supersede entry needs a node id.");
+    if (superseded.has(nodeId)) throw new Error(`Duplicate supersede entry: ${nodeId}`);
+    superseded.add(nodeId);
+    return { nodeId, reason: String(entry.reason || "Superseded by a newer idea round.").trim().slice(0, 500) };
+  });
+  return { nodes, edges, supersede, reason: String(patch.reason || "").trim().slice(0, 1000) };
 }
 
 function titleKey(kind, title) {
@@ -301,6 +314,10 @@ function assertPatchAcyclic(nodeIds, existingEdges, patchEdges) {
   for (const nodeId of adjacency.keys()) visit(nodeId);
 }
 
+function setNodeStatus({ nodeId, status, reason = "", author } = {}) {
+  return store.setResearchNodeStatus({ nodeId, status, reason, createdBy: author || undefined });
+}
+
 // Apply a bounded extractor patch in one logical operation. The whole patch is
 // validated before writing; a failed write archives any nodes it already made.
 function applyPatch({ projectId, threadId = null, turnId = null, patch, author } = {}) {
@@ -312,6 +329,11 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author }
   const existingById = new Map(existing.nodes.map((node) => [node.id, node]));
   const existingKeys = new Map();
   for (const node of existing.nodes) existingKeys.set(titleKey(node.kind, node.title), node.id);
+  for (const entry of normalized.supersede) {
+    const node = existingById.get(entry.nodeId);
+    if (!node) throw new Error("The superseded node was not found in this project.");
+    if (node.kind !== "idea") throw new Error("Only idea nodes can be superseded by a new idea round.");
+  }
 
   const resolved = new Map();
   const newNodes = [];
@@ -394,6 +416,30 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author }
     edges,
   );
 
+  const supersedeMap = new Map(normalized.supersede.map((entry) => [entry.nodeId, entry]));
+  const newIdeaTempIds = newNodes.filter((node) => node.kind === "idea").map((node) => node.tempId);
+  if (newIdeaTempIds.length >= 2) {
+    const questionIds = new Set();
+    for (const edge of edges) {
+      if (edge.kind !== "generates" || !newIdeaTempIds.includes(edge.to)) continue;
+      const fromId = resolved.get(edge.from) || (existingById.has(edge.from) ? edge.from : null);
+      if (fromId && existingById.get(fromId)?.kind === "question") questionIds.add(fromId);
+    }
+    for (const questionId of questionIds) {
+      for (const edge of existingEdges) {
+        if (edge.from_node !== questionId || edge.kind !== "generates") continue;
+        const target = existingById.get(edge.to_node);
+        if (target?.kind === "idea" && target.status !== "retracted" && !supersedeMap.has(target.id)) {
+          supersedeMap.set(target.id, {
+            nodeId: target.id,
+            reason: "Superseded by a newer idea round on this question.",
+          });
+        }
+      }
+    }
+  }
+  const supersede = [...supersedeMap.values()];
+
   const createdNodes = [];
   const appliedEdges = new Set();
   try {
@@ -439,7 +485,21 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author }
       });
     }
     const createdEdges = store.listResearchEdges({ projectId }).filter((edge) => !existingEdgeIds.has(edge.id));
-    return { projectId, threadId, turnId, createdNodes, createdEdges, skippedNodes, skippedEdges, reason: normalized.reason };
+    const supersededNodes = [];
+    try {
+      for (const entry of supersede) {
+        const node = existingById.get(entry.nodeId);
+        if (!node || node.status === "retracted") continue;
+        setNodeStatus({ nodeId: node.id, status: "retracted", reason: entry.reason, author });
+        supersededNodes.push({ nodeId: node.id, previousStatus: node.status, reason: entry.reason });
+      }
+    } catch (error) {
+      for (const item of supersededNodes) {
+        try { setNodeStatus({ nodeId: item.nodeId, status: item.previousStatus, reason: "Graph patch rollback", author }); } catch { /* best effort */ }
+      }
+      throw error;
+    }
+    return { projectId, threadId, turnId, createdNodes, createdEdges, skippedNodes, skippedEdges, supersededNodes, reason: normalized.reason };
   } catch (error) {
     for (const node of createdNodes) {
       try { store.archiveResearchNode({ nodeId: node.id, reason: "Automatic graph patch rollback", createdBy: author || undefined }); } catch { /* best effort */ }
@@ -533,6 +593,7 @@ module.exports = {
   createNode,
   reviseNode,
   linkNodes,
+  setNodeStatus,
   applyPatch,
   listGraph,
   getNodeHistory,

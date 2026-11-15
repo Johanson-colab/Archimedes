@@ -6269,6 +6269,7 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .research-graph-node:hover { background: var(--surface-soft); border-color: var(--border-strong); }
 .research-graph-node.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .research-graph-node.archived { opacity: .5; border-style: dashed; }
+.research-graph-node.status-retracted { opacity: .5; border-style: dashed; }
 .research-graph-node:focus-visible { outline: 1px solid var(--focus-ring); outline-offset: 2px; }
 .research-graph-node-icon { display: grid; width: 16px; height: 16px; flex: 0 0 auto; place-items: center; color: var(--text-muted); }
 .research-graph-node.kind-question .research-graph-node-icon { color: var(--state-info); }

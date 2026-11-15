@@ -124,6 +124,7 @@ interface ResearchDeskBridge {
     getResearchNodeHistory: (nodeId: string) => Promise<import("./research-graph/types").ResearchRevision[]>;
     archiveResearchNode: (nodeId: string, reason?: string) => Promise<ResearchGraphNode>;
     restoreResearchNode: (nodeId: string) => Promise<ResearchGraphNode>;
+    setResearchNodeStatus: (nodeId: string, status: ResearchGraphStatus, reason?: string) => Promise<ResearchGraphNode>;
     validateResearchGraph: (projectId: string) => Promise<{ projectId: string; ok: boolean; issues: ResearchGraphIssue[] }>;
     createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;

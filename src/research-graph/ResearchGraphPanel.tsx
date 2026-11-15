@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
+import { ArrowUpRight, History, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
 import { useUISettings } from "../i18n";
 import { layoutGraph } from "./graphLayout";
 import NodeInspector, { type ChildOption } from "./NodeInspector";
@@ -53,6 +53,7 @@ export default function ResearchGraphPanel({
   const [expanded, setExpanded] = useState(false);
   const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (!projectId) {
@@ -74,7 +75,9 @@ export default function ResearchGraphPanel({
         if (cancelled) return;
         setGraph(next);
         setSelectedId((current) => (
-          current && next.nodes.some((node) => node.id === current) ? current : next.nodes[0]?.id ?? null
+          current && next.nodes.some((node) => node.id === current)
+            ? current
+            : next.nodes.find((node) => node.status !== "retracted")?.id ?? next.nodes[0]?.id ?? null
         ));
       })
       .catch((cause: unknown) => {
@@ -95,9 +98,16 @@ export default function ResearchGraphPanel({
     return () => window.removeEventListener("keydown", close);
   }, [expanded]);
 
-  const layout = useMemo(() => (graph ? layoutGraph(graph) : null), [graph]);
-  const selectedNode = graph?.nodes.find((node) => node.id === selectedId) ?? null;
-  const childOptions = selectedNode ? CHILD_OPTIONS[selectedNode.kind] : [];
+  const layout = useMemo(() => {
+    if (!graph) return null;
+    const nodes = showHistory ? graph.nodes : graph.nodes.filter((node) => node.status !== "retracted");
+    const visibleIds = new Set(nodes.map((node) => node.id));
+    return layoutGraph({ ...graph, nodes, edges: graph.edges.filter((edge) => visibleIds.has(edge.from_node) && visibleIds.has(edge.to_node)) });
+  }, [graph, showHistory]);
+  const selectedNode = graph?.nodes.find((node) => node.id === selectedId && (showHistory || node.status !== "retracted")) ?? null;
+  const retractedCount = graph?.nodes.filter((node) => node.status === "retracted").length ?? 0;
+  const visibleNodeCount = graph ? (showHistory ? graph.nodes.length : graph.nodes.length - retractedCount) : 0;
+  const childOptions = selectedNode && selectedNode.status !== "retracted" ? CHILD_OPTIONS[selectedNode.kind] : [];
 
   const refresh = () => setRefreshKey((key) => key + 1);
 
@@ -108,6 +118,9 @@ export default function ResearchGraphPanel({
     try {
       for (const nodeId of update.createdNodeIds) {
         await window.researchDesk.archiveResearchNode(nodeId, "Undo automatic research graph update");
+      }
+      for (const item of update.superseded ?? []) {
+        await window.researchDesk.setResearchNodeStatus?.(item.nodeId, item.previousStatus, "Undo automatic research graph update");
       }
       setSelectedId(null);
       setDismissedUpdate(update.turnId);
@@ -179,6 +192,15 @@ export default function ResearchGraphPanel({
   };
 
   const actions = <>
+    {retractedCount > 0 && <button
+      className={showHistory ? "agent-path-icon on" : "agent-path-icon"}
+      onClick={() => setShowHistory((value) => !value)}
+      title={t(showHistory ? "Hide history" : "Show history")}
+      aria-label={`${t(showHistory ? "Hide history" : "Show history")} (${retractedCount})`}
+      aria-pressed={showHistory}
+    >
+      <History size={12} />
+    </button>}
     <button
       className="agent-path-icon"
       onClick={refresh}
@@ -213,8 +235,8 @@ export default function ResearchGraphPanel({
   const content = <div className={expanded ? "research-graph-content expanded" : "research-graph-content"}>
     {update && update.projectId === projectId && update.nodeCount + update.edgeCount > 0 && dismissedUpdate !== update.turnId && (
       <div className="research-graph-update" role="status" aria-live="polite">
-        <span>{t("Research graph updated")} · +{update.nodeCount} {t("nodes")} · +{update.edgeCount} {t("edges")}</span>
-        {update.createdNodeIds.length > 0 && <button type="button" disabled={undoing} onClick={() => void undoUpdate()}>{t(undoing ? "Undoing…" : "Undo")}</button>}
+        <span>{t("Research graph updated")} · +{update.nodeCount} {t("nodes")} · +{update.edgeCount} {t("edges")}{update.superseded?.length ? ` · ${update.superseded.length} ${t("previous ideas moved to history")}` : ""}</span>
+        {(update.createdNodeIds.length > 0 || (update.superseded?.length ?? 0) > 0) && <button type="button" disabled={undoing} onClick={() => void undoUpdate()}>{t(undoing ? "Undoing…" : "Undo")}</button>}
         <button type="button" className="research-graph-update-dismiss" onClick={() => setDismissedUpdate(update.turnId)} aria-label={t("Dismiss")} title={t("Dismiss")}><X size={11} /></button>
       </div>
     )}
@@ -262,7 +284,7 @@ export default function ResearchGraphPanel({
           {t("Research graph")}
         </span>
         <span className="agent-path-project" title={threadTitle}>{projectName}</span>
-        <span className="agent-path-count">{graph?.nodes.length ?? 0}</span>
+        <span className="agent-path-count">{visibleNodeCount}</span>
         <div className="agent-path-actions">{actions}</div>
       </header>
       {content}
@@ -275,7 +297,7 @@ export default function ResearchGraphPanel({
         <i aria-hidden="true" />
         {projectName}
       </span>
-      <span className="agent-path-count">{graph?.nodes.length ?? 0}</span>
+      <span className="agent-path-count">{visibleNodeCount}</span>
       <div className="agent-path-actions">{actions}</div>
     </header>
     {content}

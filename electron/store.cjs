@@ -2872,6 +2872,26 @@ function restoreResearchNode({ nodeId, createdBy = localIdentity.userId } = {}) 
   return getResearchNode(nodeId);
 }
 
+function setResearchNodeStatus({ nodeId, status, reason = "", createdBy = localIdentity.userId } = {}) {
+  const node = getResearchNode(nodeId);
+  if (!node) throw new Error("Research node not found.");
+  if (!canAccessProject(node.project_id, "editor")) throw new Error("You do not have permission to change this research node.");
+  if (!researchGraphConstants.isNodeStatus(status)) throw new Error(`Unknown research node status: ${status}`);
+  if (node.archived) throw new Error("Restore this research node before changing its status.");
+  if (node.status === status) return node;
+  const db = requireDatabase();
+  const now = timestamp();
+  db.prepare("UPDATE research_nodes SET status = ?, updated_at = ? WHERE id = ?").run(status, now, nodeId);
+  recordAuditEvent(db, {
+    projectId: node.project_id,
+    action: "research.node_status_changed",
+    targetType: "research_node",
+    targetId: nodeId,
+    metadata: { from: node.status, to: status, reason: String(reason || "").slice(0, 500) },
+  });
+  return getResearchNode(nodeId);
+}
+
 function bindResearchThreadHarness(id, harness) {
   if (!["api", "codex", "claude", "opencode"].includes(harness)) throw new Error("Unknown Agent backend.");
   const db = requireDatabase();
@@ -3905,6 +3925,7 @@ module.exports = {
   linkResearchNodes,
   archiveResearchNode,
   restoreResearchNode,
+  setResearchNodeStatus,
   bindResearchThreadHarness,
   compactResearchThread,
   forkResearchThread,
