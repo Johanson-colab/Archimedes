@@ -118,7 +118,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
           {builtIn.map((entry) => <SettingsRow
             key={entry.id}
             title={t(entry.labelKey)}
-            description={t(entry.descriptionKey ?? "Built-in research app")}
+            description={<>{entry.badge === "Beta" && <span className="research-apps-beta">{t("Beta")}</span>}{t(entry.descriptionKey ?? "Built-in research app")}</>}
             icon={<entry.icon size={14} />}
           >
             <SettingsSwitch
