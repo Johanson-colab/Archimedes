@@ -14,9 +14,19 @@ Archimedes is not a generic chat shell with a paper list attached. Its center of
 
 ## Install and Run
 
-**Start here.** The recommended path is to let a coding agent handle the install and first launch.
+### Download a build
 
-### Recommended: let your coding agent install it
+Prebuilt installers are published on the [Releases](https://github.com/Johanson-colab/Archimedes/releases) page.
+
+| Platform | File | Notes |
+| --- | --- | --- |
+| Windows 10/11 (x64) | `Archimedes-0.1.0-win-x64.exe` | Unsigned: SmartScreen shows "Unknown publisher". Choose **More info → Run anyway**. |
+| macOS (Apple Silicon) | `Archimedes-0.1.0-mac-arm64.dmg` | Unsigned and not notarized: right-click the app and choose **Open** the first time. |
+| macOS (Intel) | `Archimedes-0.1.0-mac-x64.dmg` | Same unsigned first-launch step. |
+
+The installers bundle the LaTeX engine (Tectonic). The first paper compile also downloads TeX packages, so it needs network access once.
+
+### Recommended for source installs: let your coding agent install it
 
 **Copy to agent.** Paste the block below into Claude Code, Codex, Cursor, or another coding agent that can work with files and a terminal.
 
@@ -35,7 +45,7 @@ The goal is a working local Electron desktop install, not just the web preview.
 7. Report the commands you ran, the app location, and any exact remaining error.
 ```
 
-This is the fastest path for non-developers: the agent can check prerequisites, run the install, diagnose native-module errors, and confirm the Electron window opens.
+This is the fastest path for source installs: the agent can check prerequisites, run the install, diagnose native-module errors, and confirm the Electron window opens.
 
 ### Manual install
 
@@ -60,7 +70,7 @@ Fill `.env.local` with an OpenAI-compatible endpoint before starting, or configu
 ```bash
 ARCHIMEDES_LLM_API_KEY=your-api-key
 ARCHIMEDES_LLM_BASE_URL=https://api.openai.com/v1
-ARCHIMEDES_LLM_MODEL=gpt-6.1 Terra
+ARCHIMEDES_LLM_MODEL=gpt-4.1-mini
 ```
 
 The app opens without a model key, but chat and agent actions will not run. Web search is optional and uses a separate key.
@@ -81,7 +91,7 @@ The app opens without a model key, but chat and agent actions will not run. Web 
 - **Research context and provenance** — preserve project conversations, papers, and source references so researchers can return to the context behind their work. Experiment lineage and broader evidence provenance are in development.
 - **Research memory and collaboration** — long-term experience retention and shared research projects are areas of ongoing exploration.
 
-Research App customization and automatic composition of Skills, MCP tools, models, and backends are part of the product direction; not every combination is supported today. Image generation is not wired up yet: Image creation currently provides a conference-figure gallery and a scaffolded compose dock.
+Research App customization and automatic composition of Skills, MCP tools, models, and backends are part of the product direction; not every combination is supported today. Image creation can draft and export figures through FigureForge, but its reference gallery and CLIP weights load from an external host, so it ships off by default and is labeled Beta.
 
 ## The Research Loop
 
@@ -156,3 +166,7 @@ If Archimedes supports your research, please cite it:
 ```
 
 In LaTeX, add `\cite{archimedes2026}` after including the BibTeX entry in your bibliography.
+
+## License
+
+Archimedes is released under the [MIT License](./LICENSE). Third-party components keep their own licenses; the bundled Tectonic engine ships its license alongside the binary in the app resources.
