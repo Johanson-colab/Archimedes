@@ -6,7 +6,7 @@ const read = (name) => fs.readFileSync(path.join(__dirname, "..", name), "utf8")
 const share = read("src/ThreadShareModal.tsx");
 test("guest links require login and cannot widen custom or private exports", () => {
   assert.match(read("src/App.tsx"), /signedIn=\{Boolean\(authState\?\.user\)\}/);
-  assert.match(share, /\{linkSharingEnabled && <section className="snapshot-guest-link"/);
+  assert.match(share, /\{signedIn && <section className="snapshot-guest-link"/);
   assert.match(share, /if \(!signedIn \|\| !allSelected\) return/);
   assert.match(share, /Guest links open the complete session, not this selected frozen export/);
   assert.match(share, /key=\{props\.snapshot\.id\}/);

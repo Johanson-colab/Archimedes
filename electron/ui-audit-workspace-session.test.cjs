@@ -82,7 +82,7 @@ test("the main toolbar carries a breadcrumb and one session chip instead of tabs
 
 test("session search, filters, pinning, archiving and status are exposed", () => {
   assert.match(switcher, /placeholder=\{t\("Search sessions"\)\}/);
-  assert.match(switcher, /FILTERS: SessionFilter\[\] = CLOUD_FEATURES_ENABLED \? \["all", "mine", "shared", "archived"\] : \["all", "mine", "archived"\]/);
+  assert.match(switcher, /FILTERS: SessionFilter\[\] = \["all", "mine", "shared", "archived"\]/);
   assert.match(switcher, /pinned\.length > 0 && rest\.length > 0 && <div className="session-list-label">/);
   assert.match(switcher, /onPinSession\(session, !pinnedNow\)/);
   assert.match(switcher, /onArchiveSession\(session, filter !== "archived"\)/);

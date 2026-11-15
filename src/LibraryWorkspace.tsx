@@ -8,7 +8,6 @@ import { MenuItem, MenuSurface } from "./Menu";
 import { StateView } from "./StateView";
 import { LibraryPaperNotes, type LibraryNoteDrafts } from "./LibraryPaperNotes";
 import { createLibraryRequestQueue, libraryDocumentKey, matchLibraryPaper, sortLibraryPapers, uniqueLibraryPapers, type LibraryDocument, type PaperReaderSession } from "./library-workspace-state";
-import { CLOUD_FEATURES_ENABLED } from "./cloud-features";
 import "./library-workspace.css";
 
 type PaperPatch = Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1];
@@ -316,7 +315,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
           if (!paper) return null;
           return <div className={`library-document-tab${activeDocument === key ? " active" : ""}`} key={key}><button role="tab" aria-selected={activeDocument === key} onClick={() => { if (canNavigate()) setActiveDocument(key); }} title={paper.title}>{document.kind === "notes" ? <FilePen size={14} /> : <FileText size={14} />}<span>{document.kind === "notes" ? `${t("Notes")} · ` : ""}{paper.title}</span></button><button className="library-document-close" aria-label={t("Close {name}", { name: paper.title })} onClick={() => closeDocument(document)}><X size={13} /></button></div>;
         })}</div>
-        <div className="library-workspace-actions">{CLOUD_FEATURES_ENABLED && <button className="icon-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync cloud")} aria-label={t("Sync cloud")}>{cloudBusy ? <LoaderCircle className="spin" size={15} /> : <Cloud size={15} />}</button>}<button className="primary-button" onClick={beginImport}><Plus size={14} />{t("Import paper")}</button></div>
+        <div className="library-workspace-actions"><button className="icon-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync cloud")} aria-label={t("Sync cloud")}>{cloudBusy ? <LoaderCircle className="spin" size={15} /> : <Cloud size={15} />}</button><button className="primary-button" onClick={beginImport}><Plus size={14} />{t("Import paper")}</button></div>
       </div>
       {(error || notice) && <div className="library-workspace-notices"><InlineNotice tone={error ? "danger" : "info"}>{error || notice}</InlineNotice><button className="icon-button" aria-label={t("Dismiss notice")} onClick={() => { setError(""); setNotice(""); }}><X size={14} /></button></div>}
       {currentDocument && documentPaper && documentLibrary ? <div className="library-document-content" key={libraryDocumentKey(currentDocument)}>

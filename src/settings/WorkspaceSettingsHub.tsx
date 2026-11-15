@@ -2,7 +2,6 @@ import { FolderOpen } from "lucide-react";
 import { useUISettings } from "../i18n";
 import { SettingsRow, SettingsSection } from "../SettingsPrimitives";
 import ProjectMembersPanel from "../ProjectMembersPanel";
-import { CLOUD_FEATURES_ENABLED } from "../cloud-features";
 
 type WorkspaceSettingsHubProps = {
   view: string;
@@ -45,10 +44,10 @@ export default function WorkspaceSettingsHub({
         </div>
       </SettingsSection>
     </div>
-    {CLOUD_FEATURES_ENABLED && <div className="settings-hub-panel" role="tabpanel" hidden={view !== "members"}>
+    <div className="settings-hub-panel" role="tabpanel" hidden={view !== "members"}>
       {activeProject
         ? <ProjectMembersPanel bridge={bridge} project={activeProject} activeThreadId={activeThreadId} onProjectsChanged={onProjectsChanged} />
         : <div className="project-members-empty">{t("Select a project to manage members.")}</div>}
-    </div>}
+    </div>
   </div>;
 }

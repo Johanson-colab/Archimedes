@@ -15,9 +15,6 @@ before(async () => {
   const t = (key, values = {}) => key.replace(/\{(\w+)\}/g, (_, name) => values[name] ?? name);
   const scope = {
     React, ...React, useUISettings: () => ({ t }), useConfirm: () => async () => true,
-    // Library mechanics must keep working when cloud sharing is re-enabled;
-    // the shipped default is asserted in ui-audit-cloud-entry-points.
-    CLOUD_FEATURES_ENABLED: true,
     Dialog: ({ open, children }) => open ? element("section", { role: "dialog" }, children) : null,
     InlineNotice: ({ children }) => element("p", { role: "alert" }, children),
     MenuSurface: ({ open, children }) => open ? element("div", { role: "menu" }, children) : null,
