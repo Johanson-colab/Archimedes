@@ -10,7 +10,7 @@ async function loadLayout() {
   const { transformWithOxc } = await import("vite");
   const source = fs.readFileSync(path.join(__dirname, "../src/research-graph/graphLayout.ts"), "utf8");
   const { code } = await transformWithOxc(source, "graphLayout.ts", {});
-  const factory = new Function(`${code.replace(/^export /gm, "")}\nreturn { layoutGraph, GRAPH_PAD, GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT, GRAPH_LANE_WIDTH, GRAPH_ROW_HEIGHT };`);
+  const factory = new Function(`${code.replace(/^export /gm, "")}\nreturn { layoutGraph, layoutTree, GRAPH_PAD, GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT, GRAPH_LANE_WIDTH, GRAPH_ROW_HEIGHT, GRAPH_TREE_INDENT, GRAPH_TREE_ROW_HEIGHT };`);
   layoutModule = factory();
   return layoutModule;
 }
@@ -145,4 +145,51 @@ test("orphans and cycles still produce a deterministic layout", async () => {
     edges: [edge("e1", "a", "b", "refines"), edge("e2", "b", "a", "refines"), edge("e3", "c", "c", "refines")],
   });
   assert.deepEqual(layout.nodes.map((item) => [item.node.id, item.x, item.y]), second.nodes.map((item) => [item.node.id, item.x, item.y]));
+});
+
+test("tree layout nests ideas and experiments as a compact vertical step list", async () => {
+  const { layoutTree, GRAPH_PAD, GRAPH_NODE_WIDTH, GRAPH_TREE_INDENT, GRAPH_TREE_ROW_HEIGHT } = await loadLayout();
+  const nodes = [
+    node("q", "question", "2026-01-01T00:00:00.000Z"),
+    node("i", "idea", "2026-01-01T00:01:00.000Z"),
+    node("e", "experiment", "2026-01-01T00:02:00.000Z"),
+  ];
+  const layout = layoutTree({
+    nodes,
+    edges: [
+      edge("e1", "q", "i", "generates"),
+      edge("e2", "i", "e", "tests"),
+    ],
+  });
+  assert.deepEqual(layout.nodes.map((item) => item.node.id), ["q", "i", "e"]);
+  assert.deepEqual(layout.nodes.map((item) => item.row), [0, 1, 2]);
+  assert.deepEqual(layout.nodes.map((item) => item.x), [GRAPH_PAD, GRAPH_PAD + GRAPH_TREE_INDENT, GRAPH_PAD + 2 * GRAPH_TREE_INDENT]);
+  assert.equal(layout.width, GRAPH_PAD * 2 + 2 * GRAPH_TREE_INDENT + GRAPH_NODE_WIDTH);
+  assert.equal(layout.height, GRAPH_PAD * 2 + 3 * GRAPH_TREE_ROW_HEIGHT);
+  assert.match(layout.edges.find((item) => item.edge.id === "e1").path, /^M /);
+});
+
+test("tree siblings stack vertically and secondary tests edges stay faint", async () => {
+  const { layoutTree, GRAPH_PAD, GRAPH_TREE_INDENT } = await loadLayout();
+  const nodes = [
+    node("q", "question", "2026-01-01T00:00:00.000Z"),
+    node("i1", "idea", "2026-01-01T00:01:00.000Z"),
+    node("i2", "idea", "2026-01-01T00:02:00.000Z"),
+    node("e", "experiment", "2026-01-01T00:03:00.000Z"),
+  ];
+  const layout = layoutTree({
+    nodes,
+    edges: [
+      edge("e1", "q", "i1", "generates"),
+      edge("e2", "q", "i2", "generates"),
+      edge("e3", "i1", "e", "tests"),
+      edge("e4", "i2", "e", "tests"),
+    ],
+  });
+  assert.deepEqual(layout.nodes.map((item) => item.node.id), ["q", "i1", "e", "i2"]);
+  assert.equal(layout.nodes.find((item) => item.node.id === "i1").x, GRAPH_PAD + GRAPH_TREE_INDENT);
+  assert.equal(layout.nodes.find((item) => item.node.id === "i2").x, GRAPH_PAD + GRAPH_TREE_INDENT);
+  assert.equal(layout.nodes.find((item) => item.node.id === "e").x, GRAPH_PAD + 2 * GRAPH_TREE_INDENT);
+  assert.equal(layout.edges.find((item) => item.edge.id === "e3").secondary, undefined);
+  assert.equal(layout.edges.find((item) => item.edge.id === "e4").secondary, true);
 });

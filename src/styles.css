@@ -6250,6 +6250,7 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .research-graph-edges { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .research-graph-edge { fill: none; stroke: var(--border-strong); stroke-width: 1; opacity: .7; }
 .research-graph-edge.feedback { stroke-dasharray: 4 4; opacity: .65; }
+.research-graph-edge.secondary { stroke-dasharray: 2 4; opacity: .28; stroke-width: .9; }
 .research-graph-edge.kind-supports { stroke: var(--state-success); }
 .research-graph-edge.kind-contradicts { stroke: var(--state-danger); }
 .research-graph-edge.kind-inconclusive { stroke: var(--text-faint); }

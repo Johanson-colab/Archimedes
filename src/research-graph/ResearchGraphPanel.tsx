@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, History, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
 import { useUISettings } from "../i18n";
-import { layoutGraph } from "./graphLayout";
+import { layoutTree } from "./graphLayout";
 import NodeInspector, { type ChildOption } from "./NodeInspector";
 import ResearchGraphView from "./ResearchGraphView";
 import type { ResearchGraph, ResearchGraphUpdate, ResearchNodeKind } from "./types";
@@ -131,7 +131,7 @@ export default function ResearchGraphPanel({
     if (!graph) return null;
     const nodes = showHistory ? stageNodes : stageNodes.filter((node) => node.status !== "retracted");
     const visibleIds = new Set(nodes.map((node) => node.id));
-    return layoutGraph({
+    return layoutTree({
       ...graph,
       nodes,
       edges: graph.edges.filter((edge) =>

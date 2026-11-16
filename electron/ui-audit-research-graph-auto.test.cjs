@@ -19,6 +19,7 @@ test("Research mode refreshes the graph from automatic graph-update events", () 
   assert.match(app, /mode=\{pathMode\}/);
   assert.match(panel, /const \[viewStage, setViewStage\] = useState<"ideas" \| "experiments">/);
   assert.match(panel, /const ideaStage = viewStage === "ideas"/);
+  assert.match(panel, /layoutTree\(/);
   assert.match(panel, /className="research-graph-stage-switch"/);
   assert.match(panel, /setViewStage\("experiments"\)/);
   assert.match(panel, /const IDEA_STAGE_EDGES = new Set\(\["generates", "refines"\]\)/);
@@ -42,6 +43,8 @@ test("the graph hides superseded ideas until History is opened", () => {
   assert.match(panel, /Hide history/);
   assert.match(panel, /previous ideas moved to history/);
   assert.match(css, /\.research-graph-node\.status-retracted \{ opacity: \.5; border-style: dashed; \}/);
+  assert.match(css, /\.research-graph-edge\.secondary \{/);
+  assert.match(css, /\.research-graph-stage-switch \{/);
 });
 
 test("Agent turns schedule a background graph build for Research mode", () => {

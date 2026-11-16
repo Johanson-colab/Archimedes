@@ -38,11 +38,11 @@ export default function ResearchGraphView({ layout, selectedId, onSelect }: Prop
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       aria-hidden="true"
     >
-      {layout.edges.map(({ edge, path, feedback }) => (
+      {layout.edges.map(({ edge, path, feedback, secondary }) => (
         <path
           key={edge.id}
           d={path}
-          className={`research-graph-edge kind-${edge.kind}${feedback ? " feedback" : ""}`}
+          className={`research-graph-edge kind-${edge.kind}${feedback ? " feedback" : ""}${secondary ? " secondary" : ""}`}
         />
       ))}
     </svg>

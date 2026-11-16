@@ -10,9 +10,11 @@ import type { ResearchEdge, ResearchGraph, ResearchNode } from "./types";
 
 export const GRAPH_PAD = 14;
 export const GRAPH_NODE_WIDTH = 150;
-export const GRAPH_NODE_HEIGHT = 40;
+export const GRAPH_NODE_HEIGHT = 42;
 export const GRAPH_LANE_WIDTH = 170;
 export const GRAPH_ROW_HEIGHT = 60;
+export const GRAPH_TREE_INDENT = 22;
+export const GRAPH_TREE_ROW_HEIGHT = 56;
 
 const STRUCTURAL_EDGE_KINDS = new Set([
   "generates",
@@ -45,6 +47,7 @@ export type GraphLayoutEdge = {
   edge: ResearchEdge;
   path: string;
   feedback: boolean;
+  secondary?: boolean;
 };
 
 export type GraphLayout = {
@@ -181,6 +184,146 @@ export function layoutGraph(graph: LayoutInput): GraphLayout {
     width: GRAPH_PAD * 2 + laneCount * GRAPH_LANE_WIDTH,
     height: GRAPH_PAD * 2 + rowCount * GRAPH_ROW_HEIGHT,
     laneCount,
+    rowCount,
+  };
+}
+
+/**
+ * Compact vertical tree used by the Research graph.
+ *
+ * A question is the spine, ideas are indented rows under it, and experiments
+ * sit under the idea they primarily test. Additional idea->experiment tests
+ * edges remain visible as faint secondary connections. This is intentionally
+ * narrower than the lane layout so several ideas read as a step list rather
+ * than a large canvas.
+ */
+export function layoutTree(graph: LayoutInput): GraphLayout {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const incoming = new Map<string, ResearchEdge[]>();
+  for (const node of graph.nodes) incoming.set(node.id, []);
+  for (const edge of graph.edges) {
+    if (!STRUCTURAL_EDGE_KINDS.has(edge.kind) || !nodeById.has(edge.from_node) || !nodeById.has(edge.to_node)) continue;
+    incoming.get(edge.to_node)?.push(edge);
+  }
+  const priority = (edge: ResearchEdge, child: ResearchNode) => {
+    const parent = nodeById.get(edge.from_node);
+    if (edge.kind === "refines" && child.kind === "idea" && parent?.kind === "idea") return 0;
+    if (edge.kind === "tests" && child.kind === "experiment" && parent?.kind === "idea") return 1;
+    if (edge.kind === "produces" && child.kind === "result" && parent?.kind === "experiment") return 2;
+    if (edge.kind === "merges") return 3;
+    if (edge.kind === "generates" && child.kind === "idea" && parent?.kind === "question") return 4;
+    if (["extends", "replicates"].includes(edge.kind)) return 5;
+    if (edge.kind === "cites") return 6;
+    return 7;
+  };
+  const primaryParent = new Map<string, ResearchEdge>();
+  const primaryChildren = new Map<string, ResearchEdge[]>();
+  for (const node of graph.nodes) primaryChildren.set(node.id, []);
+  for (const node of graph.nodes) {
+    const candidates = [...(incoming.get(node.id) || [])].sort((left, right) => {
+      const byPriority = priority(left, node) - priority(right, node);
+      if (byPriority) return byPriority;
+      const leftParent = nodeById.get(left.from_node);
+      const rightParent = nodeById.get(right.from_node);
+      if (leftParent && rightParent) return createdOrder(leftParent, rightParent);
+      return left.id.localeCompare(right.id);
+    });
+    if (!candidates.length) continue;
+    primaryParent.set(node.id, candidates[0]);
+    primaryChildren.get(candidates[0].from_node)?.push(candidates[0]);
+  }
+  for (const children of primaryChildren.values()) {
+    children.sort((left, right) => {
+      const leftNode = nodeById.get(left.to_node);
+      const rightNode = nodeById.get(right.to_node);
+      return leftNode && rightNode ? createdOrder(leftNode, rightNode) : left.id.localeCompare(right.id);
+    });
+  }
+
+  const rank = (node: ResearchNode) => node.kind === "question" ? 0 : node.kind === "idea" ? 1 : node.kind === "experiment" ? 2 : 3;
+  const roots = graph.nodes
+    .filter((node) => !primaryParent.has(node.id))
+    .sort((left, right) => rank(left) - rank(right) || createdOrder(left, right));
+  const laidOut: GraphLayoutNode[] = [];
+  const positions = new Map<string, GraphLayoutNode>();
+  const visited = new Set<string>();
+  let row = 0;
+  let maxDepth = 0;
+  const visit = (nodeId: string, depth: number) => {
+    if (visited.has(nodeId)) return;
+    const node = nodeById.get(nodeId);
+    if (!node) return;
+    visited.add(nodeId);
+    maxDepth = Math.max(maxDepth, depth);
+    const placed = {
+      node,
+      x: GRAPH_PAD + depth * GRAPH_TREE_INDENT,
+      y: GRAPH_PAD + row * GRAPH_TREE_ROW_HEIGHT,
+      lane: depth,
+      row,
+    };
+    row += 1;
+    laidOut.push(placed);
+    positions.set(nodeId, placed);
+    for (const edge of primaryChildren.get(nodeId) || []) visit(edge.to_node, depth + 1);
+  };
+  for (const root of roots) visit(root.id, 0);
+  for (const node of [...graph.nodes].sort(createdOrder)) visit(node.id, 0);
+
+  const treeSpinePath = (parent: GraphLayoutNode, child: GraphLayoutNode) => {
+    const x = parent.x + 8;
+    const startY = parent.y + GRAPH_NODE_HEIGHT;
+    const endY = child.y + GRAPH_NODE_HEIGHT / 2;
+    return `M ${x} ${startY} L ${x} ${endY} L ${child.x} ${endY}`;
+  };
+  const treeElbowPath = (parent: GraphLayoutNode, child: GraphLayoutNode) => {
+    const x = parent.x + 10;
+    const startY = parent.y + GRAPH_NODE_HEIGHT;
+    const endY = child.y + GRAPH_NODE_HEIGHT / 2;
+    if (Math.abs(child.x - x) < 2) return `M ${x} ${startY} L ${x} ${endY - 3}`;
+    return `M ${x} ${startY} L ${x} ${endY} L ${child.x} ${endY}`;
+  };
+  const treeSecondaryPath = (parent: GraphLayoutNode, child: GraphLayoutNode) => {
+    const x1 = parent.x + GRAPH_NODE_WIDTH - 10;
+    const y1 = parent.y + GRAPH_NODE_HEIGHT;
+    const x2 = child.x + 8;
+    const y2 = child.y;
+    const direction = y2 >= y1 ? 1 : -1;
+    const bend = Math.max(12, Math.abs(y2 - y1) * 0.22);
+    return `M ${x1} ${y1} C ${x1} ${y1 + direction * bend}, ${x2} ${y2 - direction * bend}, ${x2} ${y2 - 3}`;
+  };
+
+  const edges: GraphLayoutEdge[] = [];
+  for (const edge of graph.edges) {
+    const from = positions.get(edge.from_node);
+    const to = positions.get(edge.to_node);
+    if (!from || !to) continue;
+    if (primaryParent.get(edge.to_node)?.id === edge.id) {
+      edges.push({
+        edge,
+        path: from.node.kind === "question" ? treeSpinePath(from, to) : treeElbowPath(from, to),
+        feedback: FEEDBACK_EDGE_KINDS.has(edge.kind),
+      });
+      continue;
+    }
+    // A question->idea generates edge is already represented by the idea's
+    // position inside the question's tree when it also has a refines parent.
+    if (edge.kind === "generates" && from.node.kind === "question" && to.node.kind === "idea" && primaryParent.has(edge.to_node)) continue;
+    edges.push({
+      edge,
+      path: treeSecondaryPath(from, to),
+      feedback: FEEDBACK_EDGE_KINDS.has(edge.kind),
+      secondary: true,
+    });
+  }
+
+  const rowCount = Math.max(1, laidOut.length);
+  return {
+    nodes: laidOut,
+    edges,
+    width: GRAPH_PAD * 2 + maxDepth * GRAPH_TREE_INDENT + GRAPH_NODE_WIDTH,
+    height: GRAPH_PAD * 2 + rowCount * GRAPH_TREE_ROW_HEIGHT,
+    laneCount: maxDepth + 1,
     rowCount,
   };
 }

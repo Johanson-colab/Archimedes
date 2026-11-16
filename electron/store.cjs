@@ -1005,6 +1005,24 @@ function backfillResearchGraphThreads(db) {
           AND idea_edge.kind = 'tests' AND idea.kind = 'idea'
       )
   `).run();
+  // An experiment inherited from a superseded idea has no active idea parent.
+  // Keep it in History rather than showing it as a disconnected root in the
+  // idea/experiment tree.
+  db.prepare(`
+    UPDATE research_nodes
+    SET status = 'retracted', updated_at = ?
+    WHERE kind = 'experiment'
+      AND status != 'retracted'
+      AND thread_id IN (SELECT id FROM research_threads WHERE mode = 'research')
+      AND NOT EXISTS (
+        SELECT 1 FROM research_edges edge
+        JOIN research_nodes idea ON idea.id = edge.from_node
+        WHERE edge.to_node = research_nodes.id
+          AND edge.kind = 'tests'
+          AND idea.kind = 'idea'
+          AND idea.status != 'retracted'
+      )
+  `).run(timestamp());
 }
 
 function backfillPaperRepositories(db) {

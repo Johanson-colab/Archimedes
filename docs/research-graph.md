@@ -74,8 +74,10 @@ and parent revision ids.
 Research mode now renders `ResearchGraphPanel` instead of the linear
 `ResearchPathPanel`; Standard and Create keep the existing stepper.
 
-- Nodes are laid out by `src/research-graph/graphLayout.ts`: time downward,
-  branches in lanes, feedback edges dashed.
+- Nodes use a compact vertical tree layout: the question is the spine, ideas
+  are indented rows, and experiments sit under the idea they primarily test.
+  Additional idea→experiment tests edges are shown as faint secondary lines.
+  This keeps the default canvas narrow and readable.
 - Clicking a node opens the inspector and shows its current revision content.
 - A selected node exposes its allowed child kinds. Creating a child writes the
   node and its typed edge; creating writing from a result creates the writing
