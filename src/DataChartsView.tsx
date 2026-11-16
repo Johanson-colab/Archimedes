@@ -7,9 +7,9 @@ export default function DataChartsView({ active }: { active: boolean }) {
   const { t } = useUISettings();
   const [sort, setSort] = useState<"preferred" | "newest">("preferred");
 
-  return <main className="image-creation-page data-chart-page" aria-label={t("Data charts")}>
+  return <main className="image-creation-page data-chart-page" aria-label={t("Paper chart references")}>
     <header className="image-creation-tabs">
-      <h2 className="image-creation-heading">{t("Data charts")}</h2>
+      <h2 className="image-creation-heading">{t("Paper chart references")}</h2>
       <div className="image-creation-actions">
         <label className="image-creation-sort">
           <select value={sort} onChange={(event) => setSort(event.target.value as "preferred" | "newest")} aria-label={t("Sort data charts")}>

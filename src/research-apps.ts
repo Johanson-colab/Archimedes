@@ -21,3 +21,8 @@ export function researchAppCategory(app: { id: string; researchCategory?: string
     ?? (app.section && Object.hasOwn(sections, app.section) ? sections[app.section] : undefined)
     ?? "evidence";
 }
+
+/** Old names remain searchable while module IDs and saved visibility stay stable. */
+export function legacyResearchAppLabel(id: string): string | undefined {
+  return (metadata.apps as Record<string, { legacyLabel?: string }>)[id]?.legacyLabel;
+}
