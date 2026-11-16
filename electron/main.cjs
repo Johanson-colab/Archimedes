@@ -80,6 +80,7 @@ const extensionMarketplace = require("./extensions-marketplace.cjs");
 const sidebarPlugins = require("./sidebar-plugins.cjs");
 
 const commandSessions = new Map();
+let quitting = false, readyToQuit = false;
 const interactiveTerminalSessions = new Map();
 const windowWorkspaces = new Map();
 const windowPreviewTokens = new Map();
@@ -2586,9 +2587,17 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (readyToQuit) return;
+  event.preventDefault();
+  if (quitting) return;
+  quitting = true;
   closeAllNativeClients();
   closeAllTerminals();
-  collaborationServer?.close?.();
-  void presence?.closeAll();
+  void agent.shutdownAgents().finally(() => {
+    collaborationServer?.close?.();
+    void presence?.closeAll();
+    readyToQuit = true;
+    app.quit();
+  });
 });

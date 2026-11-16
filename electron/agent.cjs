@@ -30,6 +30,7 @@ const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckou
 const MAX_FILE_BYTES = 64_000;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
+let shuttingDown = false;
 
 const tools = [
   {
@@ -982,6 +983,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
 }
 
 async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry }) {
+  if (shuttingDown) throw new Error("Archimedes is closing. Wait for shutdown to finish before starting another turn.");
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -1173,6 +1175,14 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   }
 }
 
+async function shutdownAgents({ timeoutMs = 2000 } = {}) {
+  shuttingDown = true;
+  for (const controller of activeRuns.values()) controller.abort();
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  while (activeRuns.size && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  return { pending: activeRuns.size };
+}
+
 function interruptAgent(threadId) {
   const controller = activeRuns.get(threadId);
   if (!controller) return false;
@@ -1180,4 +1190,4 @@ function interruptAgent(threadId) {
   return true;
 }
 
-module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, setApprovalSurface, translatePaperSelection };
+module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, setApprovalSurface, shutdownAgents, translatePaperSelection };
