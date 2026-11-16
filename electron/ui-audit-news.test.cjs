@@ -29,7 +29,7 @@ test("News is a Discovery & tracking app ordered between Daily papers and Benchm
 test("News view is registry-hosted with a real bridge, not a static import", () => {
   assert.match(app, /lazy\(\(\) => import\("\.\/NewsView"\)\)/);
   assert.doesNotMatch(app, /import NewsView from "\.\/NewsView"/);
-  assert.match(app, /news: <NewsView bridge=\{desktopBridge\} projectId=\{activeProjectId\} active=\{mainSection === "news"\} onSendToChat=\{sendNoteToChat\} \/>/);
+  assert.match(app, /news: <NewsView chatTargetLabel=\{activeThread\?\.title \|\| t\("New conversation"\)\} bridge=\{desktopBridge\} projectId=\{activeProjectId\} active=\{mainSection === "news"\} onSendToChat=\{sendNoteToChat\} \/>/);
   assert.match(app, /if \(mainSection !== "chat" && mainSection !== "files" && hiddenCoreModules\.has\(mainSection\)\)/);
 });
 
