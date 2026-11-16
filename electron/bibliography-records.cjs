@@ -10,6 +10,8 @@ function conflictingIdentifiers(first, second) {
 }
 
 function findImportMatch(db, paper, canonicalKey, { libraryId, projectId } = {}) {
+  // A local PDF's content hash is its identity; equal filenames are not duplicates.
+  if (canonicalKey.startsWith("local-pdf:")) return db.prepare("SELECT * FROM papers WHERE canonical_key = ?").get(canonicalKey) || null;
   const fields = 'papers.id, papers.canonical_key, papers.title, papers.s2_id, papers.arxiv_id, papers.doi';
   const ownLibrary = libraryId ? db.prepare(`SELECT ${fields} FROM papers JOIN library_papers ON library_papers.paper_id = papers.id
     WHERE library_papers.library_id = ? ORDER BY library_papers.added_at, papers.id`).all(libraryId) : [];
