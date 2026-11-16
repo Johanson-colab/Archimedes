@@ -35,7 +35,7 @@ before(async () => {
     const result = new Function(...Object.keys(scope), `${code.replace(/^export \{\};?$/gm, "")}\nreturn {${names.join(",")}};`)(...Object.values(scope));
     Object.assign(scope, result);
   }
-  await load("bibliography.ts", ["parseBibliography", "exportBibliography", "matchBibliographyPaper", "metadataDifferences"]);
+  await load("bibliography.ts", ["parseBibliography", "exportBibliography", "matchBibliographyPaper", "metadataDifferences", "citationKeyIdentity"]);
   await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
   scope.conferenceCatalog = require("../shared/conferences.json");
   scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
@@ -93,6 +93,56 @@ test("BibTeX supports nested values, grouped authors, stable keys and explicit u
   assert.ok(scope.parseBibliography('@article{bad,title={Unclosed}').warnings.length);
   assert.equal(scope.parseBibliography('% @article{ignored,title={Do not import}}\n' + source).entries.length, 1);
   assert.equal(scope.parseBibliography('@article{bad#key,title={Invalid key}}').entries.length, 0);
+});
+
+
+test("BibTeX export retains explicit keys and disambiguates every generated key after normalization", () => {
+  const exported = scope.exportBibliography([
+    { ...fixture.paper, id: "paper-1", title: "Generated first", citekey: "", entry_type: "article" },
+    { ...fixture.paper, id: "paper1", title: "Generated second", citekey: "", entry_type: "article" },
+    { ...fixture.paper, id: "explicit", title: "Explicit target", citekey: "PAPER_PAPER1", entry_type: "article" },
+  ]);
+  const entries = scope.parseBibliography(exported).entries, keys = entries.map((entry) => entry.citekey);
+  assert.equal(new Set(keys.map((key) => key.toLowerCase())).size, keys.length);
+  assert.equal(entries.find((entry) => entry.paper.title === "Explicit target").citekey, "PAPER_PAPER1", "an existing citation key keeps its paper");
+  assert.equal(entries.find((entry) => entry.paper.title === "Generated first").citekey, "paper_paper1_2");
+  assert.equal(entries.find((entry) => entry.paper.title === "Generated second").citekey, "paper_paper1_3");
+});
+
+
+test("BibTeX export uses booktitle for proceedings and round-trips TeX character escapes", () => {
+  const paper = { ...fixture.paper, id: "proceedings", citekey: "proceedings", entry_type: "inproceedings", title: "Costs $5 & 100% of #refs_name {x}", authors: ["A & B"], venue: "Proceedings #1" };
+  const exported = scope.exportBibliography([paper]);
+  assert.match(exported, /booktitle = \{Proceedings \\#1\}/);
+  assert.doesNotMatch(exported, /journal =/);
+  const parsed = scope.parseBibliography(exported);
+  assert.deepEqual(parsed.warnings, []);
+  assert.equal(parsed.entries[0].entryType, "inproceedings");
+  assert.equal(parsed.entries[0].paper.title, paper.title);
+  assert.deepEqual(parsed.entries[0].paper.authors, paper.authors);
+  assert.equal(parsed.entries[0].paper.venue, paper.venue);
+});
+
+
+test("BibTeX ignores commented-out entries with nested braces and tolerates whitespace after the opener", () => {
+  const parsed = scope.parseBibliography('@comment{outer {nested} @article{ignored, title={Commented}}}\n@comment(@article{paren, title={A ) B}})\n@article { realKey,\n title = {Kept}\n}');
+  assert.deepEqual(parsed.entries.map((entry) => entry.citekey), ["realKey"]);
+  assert.equal(parsed.entries[0].paper.title, "Kept");
+});
+
+
+test("BibTeX preview rejects citation keys that collide only by case", async () => {
+  const data = database("Key case"); let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    const existing = data.db.addPaper(library.id, { ...fixture.paper, title: "Existing target", doi: "10.5555/existing-key" });
+    data.db.setPaperBibliography(existing.id, { citekey: "Smith2020", entryType: "article" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), '@article{smith2020,title={Different target},doi={10.5555/different}}');
+    assert.ok(document.body.textContent.includes("Citation key conflict"), "target collection keys collide case-insensitively");
+    await input(document.querySelector('[aria-label="BibTeX source"]'), '@article{Batch2020,title={First batch},doi={10.5555/batch-one}}\n@article{batch2020,title={Second batch},doi={10.5555/batch-two}}');
+    assert.ok(document.body.textContent.includes("Citation key conflict"), "batch entries collide case-insensitively");
+  } finally { if (unmount) await unmount(); data.close(); }
 });
 
 

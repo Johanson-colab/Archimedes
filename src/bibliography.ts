@@ -48,6 +48,27 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
   const entries: BibliographyEntry[] = [], warnings: string[] = [];
   let cursor = 0;
   const skip = () => { while (cursor < input.length) { if (/\s|,/.test(input[cursor])) cursor++; else if (input[cursor] === "%") { while (cursor < input.length && input[cursor] !== "\n") cursor++; } else break; } };
+  const skipWhitespace = () => { while (cursor < input.length && /\s/.test(input[cursor])) cursor++; };
+  // Directive bodies are opaque: nested braces and parentheses must not expose
+  // a commented-out entry to the entry parser.
+  const skipDelimited = (open: string, close: string) => {
+    let depth = 1, braces = 0;
+    while (cursor < input.length) {
+      const character = input[cursor];
+      if (character === "\\") { cursor += 2; continue; }
+      if (open === "{") {
+        if (character === "{") depth++;
+        else if (character === "}" && --depth === 0) { cursor++; return; }
+      } else {
+        if (character === "{") braces++;
+        else if (character === "}" && braces > 0) braces--;
+        else if (character === "(" && braces === 0) depth++;
+        else if (character === ")" && braces === 0 && --depth === 0) { cursor++; return; }
+      }
+      cursor++;
+    }
+    throw new Error("Unclosed BibTeX directive");
+  };
   const delimited = (open: string, close: string) => {
     cursor++;
     const start = cursor;
@@ -76,12 +97,14 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
     if (!kind) { cursor++; continue; }
     cursor += kind[0].length; skip();
     if (!["{", "("].includes(input[cursor])) { warnings.push(`Invalid entry at ${at}`); continue; }
-    const close = input[cursor++] === "{" ? "}" : ")";
-    const key = /^[^,}\s)]+/.exec(input.slice(cursor));
+    const open = input[cursor], close = open === "{" ? "}" : ")";
+    cursor++;
     if (["comment", "preamble", "string"].includes(kind[0].toLowerCase())) {
-      cursor--; try { delimited(close === "}" ? "{" : "(", close); } catch { cursor = input.length; }
+      try { skipDelimited(open, close); } catch { cursor = input.length; }
       warnings.push(`Skipped @${kind[0]} directive`); continue;
     }
+    skipWhitespace();
+    const key = /^[^,}\s)]+/.exec(input.slice(cursor));
     if (!key) { warnings.push(`Missing citation key at ${at}`); continue; }
     cursor += key[0].length;
     if (/[\s,{}\\#%"]/.test(key[0])) { warnings.push(`Invalid citation key: ${key[0]}`); const next = input.indexOf("@", cursor); cursor = next < 0 ? input.length : next; continue; }
@@ -149,15 +172,31 @@ export function metadataDifferences(entry: AcademicSearchResult, current: Academ
   }).map((field) => [field, entry[field]]));
 }
 
-export function exportBibliography(papers: BibliographyPaper[]) {
-  const used = new Set<string>();
-  return papers.map((paper) => {
-    const base = paper.citekey || `paper_${paper.id.replace(/[^a-z0-9]/gi, "")}`;
+export function citationKeyIdentity(key: string) {
+  return key.normalize("NFKC").trim().toLowerCase();
+}
+
+// Explicit keys are reserved before generated ones so an existing citation
+// keeps resolving to its original paper instead of a newly allocated key.
+function allocateCitationKeys(papers: BibliographyPaper[]) {
+  const used = new Set<string>(), keys = new Array<string>(papers.length);
+  const allocate = (index: number, base: string) => {
     let key = base, suffix = 2;
-    while (used.has(key)) key = `${base}_${suffix++}`;
-    used.add(key);
-    const values: Record<string, string> = { title: paper.title, author: paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${author}}` : author).join(" and "), year: paper.year ? String(paper.year) : "", journal: paper.venue, doi: paper.doi, eprint: paper.arxiv_id, url: paper.url };
+    while (used.has(citationKeyIdentity(key))) key = `${base}_${suffix++}`;
+    used.add(citationKeyIdentity(key));
+    keys[index] = key;
+  };
+  papers.forEach((paper, index) => { if (paper.citekey) allocate(index, paper.citekey); });
+  papers.forEach((paper, index) => { if (!keys[index]) allocate(index, `paper_${paper.id.replace(/[^a-z0-9]/gi, "")}`); });
+  return keys;
+}
+
+export function exportBibliography(papers: BibliographyPaper[]) {
+  const keys = allocateCitationKeys(papers);
+  return papers.map((paper, index) => {
+    const venueField = /^(inproceedings|conference|incollection)$/.test(paper.entry_type || "") ? "booktitle" : "journal";
+    const values: Record<string, string> = { title: paper.title, author: paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${author}}` : author).join(" and "), year: paper.year ? String(paper.year) : "", [venueField]: paper.venue, doi: paper.doi, eprint: paper.arxiv_id, url: paper.url };
     const escape = (value: string) => value.replace(/[\\{}%&#_$]/g, (character) => character === "\\" ? "\\textbackslash{} " : `\\${character}`);
-    return `@${paper.entry_type || "article"}{${key},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${field === "author" ? paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ") : escape(value)}}`).join(",\n")}\n}`;
+    return `@${paper.entry_type || "article"}{${keys[index]},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${field === "author" ? paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ") : escape(value)}}`).join(",\n")}\n}`;
   }).join("\n\n") + "\n";
 }

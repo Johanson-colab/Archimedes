@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
 import { useUISettings } from "./i18n";
-import { exportBibliography, matchBibliographyPaper, metadataDifferences, parseBibliography, type BibliographyBridge, type BibliographyPaper, type MetadataPatch } from "./bibliography";
+import { citationKeyIdentity, exportBibliography, matchBibliographyPaper, metadataDifferences, parseBibliography, type BibliographyBridge, type BibliographyPaper, type MetadataPatch } from "./bibliography";
 import "./bibliography.css";
 
 export default function BibliographyDialog({ bridge, library, onClose, onChanged }: { bridge: ResearchDeskBridge; library: ResearchLibrary; onClose: () => void; onChanged: () => Promise<void> }) {
@@ -29,7 +29,8 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
       || matchBibliographyPaper(entry.paper, projectPapers)
       || matchBibliographyPaper(entry.paper, known);
     const duplicate = parsed.entries.findIndex((candidate) => matchBibliographyPaper(entry.paper, [candidate.paper as BibliographyPaper])) < index;
-    const keyConflict = targetPapers.some((paper) => paper.citekey === entry.citekey && paper.id !== existing?.id) || parsed.entries.some((candidate, candidateIndex) => candidateIndex < index && candidate.citekey === entry.citekey && !matchBibliographyPaper(entry.paper, [candidate.paper as BibliographyPaper]));
+    const keyIdentity = citationKeyIdentity(entry.citekey);
+    const keyConflict = targetPapers.some((paper) => paper.citekey && citationKeyIdentity(paper.citekey) === keyIdentity && paper.id !== existing?.id) || parsed.entries.some((candidate, candidateIndex) => candidateIndex < index && citationKeyIdentity(candidate.citekey) === keyIdentity && !matchBibliographyPaper(entry.paper, [candidate.paper as BibliographyPaper]));
     return { entry, existing, duplicate, keyConflict, differences: existing ? metadataDifferences(entry.paper, existing) : {} };
   }), [parsed.entries, known, targetPapers, projectPapers]);
   useEffect(() => {
