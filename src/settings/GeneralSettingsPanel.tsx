@@ -2,6 +2,8 @@ import type { CSSProperties } from "react";
 import { TEXT_SIZE_SCALE, useUISettings, type ChatVerbosity, type Language, type TextSize } from "../i18n";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection } from "../SettingsPrimitives";
 import ArchimedesMark from "../brand/ArchimedesMark";
+import BuildDiagnostics from "../BuildDiagnostics";
+import packageMetadata from "../../package.json";
 
 const textSizeSteps: Array<{ id: TextSize; label: string; scale: number }> = [
   { id: "smaller", label: "Smaller", scale: TEXT_SIZE_SCALE.smaller },
@@ -87,7 +89,8 @@ export default function GeneralSettingsPanel() {
         <ArchimedesMark className="settings-about-logo" size={88} decorative />
         <strong>Archimedes</strong>
         <p>{t("Local-first AI for research.")}</p>
-        <dl><dt>{t("Version")}</dt><dd>0.1.0</dd></dl>
+        <dl><dt>{t("Version")}</dt><dd>{packageMetadata.version}</dd></dl>
+        <BuildDiagnostics />
       </div>
     </SettingsSection>
   </div>;

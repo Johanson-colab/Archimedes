@@ -13,6 +13,7 @@ type WorkbenchSettingsSnapshot = {
   layout?: WorkbenchLayoutSnapshot;
 };
 interface ResearchDeskBridge {
+  getBuildInfo?: () => Promise<import("./build-info").BuildInfo>;
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
     getLocalIdentity: () => Promise<LocalIdentity>;

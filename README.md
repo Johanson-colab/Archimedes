@@ -17,6 +17,8 @@ Archimedes is not a generic chat shell with a paper list attached. Its center of
 
 ## Install and Run
 
+Published installers and source builds can expose different features while showing the same application version. In source builds, **Settings → General → About → Build diagnostics** displays the commit, build channel, source fingerprint, platform/architecture and enabled feature policy. Packaged builds retain the identity recorded during their build; source archives without Git report unknown identity. See the [published releases](https://github.com/Johanson-colab/Archimedes/releases) for installer-specific instructions.
+
 **Start here.** The recommended path is to let a coding agent handle the install and first launch.
 
 ### Recommended: let your coding agent install it

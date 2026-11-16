@@ -11,6 +11,7 @@
     "desktop": "electron .",
     "dev:renderer": "vite",
     "dev:electron": "wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "prebuild": "node scripts/build-info.cjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "package:desktop": "npm run build && electron-builder --config electron-builder.config.cjs --dir --publish never",

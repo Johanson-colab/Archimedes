@@ -741,6 +741,10 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.handle("app:build-info", () => require("./build-info.cjs").getBuildInfo({
+    isPackaged: app.isPackaged, appPath: app.getAppPath(), platform: process.platform, arch: process.arch,
+  }));
+
   ipcMain.handle("window:initial-workspace", (event) => {
     return windowWorkspaces.get(event.sender.id) ?? null;
   });

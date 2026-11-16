@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("researchDesk", {
   platform: process.platform,
+  getBuildInfo: () => ipcRenderer.invoke("app:build-info"),
   getInitialWorkspace: () => ipcRenderer.invoke("window:initial-workspace"),
   getLocalIdentity: () => ipcRenderer.invoke("identity:get"),
   getAuthState: () => ipcRenderer.invoke("auth:get-state"),
