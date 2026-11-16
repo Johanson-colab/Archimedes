@@ -85,6 +85,16 @@ contextBridge.exposeInMainWorld("researchDesk", {
   restoreResearchNode: (nodeId) => ipcRenderer.invoke("research-graph:restore", { nodeId }),
   setResearchNodeStatus: (nodeId, status, reason = "") => ipcRenderer.invoke("research-graph:set-status", { nodeId, status, reason }),
   validateResearchGraph: (projectId, threadId = null) => ipcRenderer.invoke("research-graph:validate", { projectId, threadId }),
+  listExperimentRuns: (input) => ipcRenderer.invoke("experiment-run:list", input),
+  startExperimentRun: (input) => ipcRenderer.invoke("experiment-run:start", input),
+  cancelExperimentRun: (runId) => ipcRenderer.invoke("experiment-run:cancel", runId),
+  readExperimentRunLog: (runId, maxBytes) => ipcRenderer.invoke("experiment-run:log", { runId, maxBytes }),
+  createResultFromRun: (input) => ipcRenderer.invoke("experiment-run:result", input),
+  onExperimentRunUpdate: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("experiment-run:update", listener);
+    return () => ipcRenderer.removeListener("experiment-run:update", listener);
+  },
   createResearchThread: (input) => ipcRenderer.invoke("research-thread:create", input),
   forkResearchThread: (threadId, workspace, side = false) => ipcRenderer.invoke("research-thread:fork", { threadId, workspace, side }),
   undoResearchTurn: (threadId, workspace) => ipcRenderer.invoke("research-thread:undo", { threadId, workspace }),

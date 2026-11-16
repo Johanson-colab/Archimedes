@@ -208,6 +208,7 @@ export function layoutTree(graph: LayoutInput): GraphLayout {
   const priority = (edge: ResearchEdge, child: ResearchNode) => {
     const parent = nodeById.get(edge.from_node);
     if (edge.kind === "refines" && child.kind === "idea" && parent?.kind === "idea") return 0;
+    if (child.kind === "experiment" && parent?.kind === "experiment" && (edge.kind === "extends" || edge.kind === "replicates")) return 0;
     if (edge.kind === "tests" && child.kind === "experiment" && parent?.kind === "idea") return 1;
     if (edge.kind === "produces" && child.kind === "result" && parent?.kind === "experiment") return 2;
     if (edge.kind === "merges") return 3;

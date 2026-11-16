@@ -8,6 +8,8 @@ type ResearchGraphUpdate = import("./research-graph/types").ResearchGraphUpdate;
 type ResearchGraphNodeKind = import("./research-graph/types").ResearchNodeKind;
 type ResearchGraphEdgeKind = import("./research-graph/types").ResearchEdgeKind;
 type ResearchGraphStatus = import("./research-graph/types").ResearchNodeStatus;
+type ExperimentRun = import("./research-graph/types").ExperimentRun;
+type ExperimentVerdict = import("./research-graph/types").ExperimentVerdict;
 type ResearchGraphParent = { nodeId: string; revisionId?: string; kind?: ResearchGraphEdgeKind; metadata?: Record<string, unknown> };
 
 type FigureForgeConnection = { provider: string; baseUrl?: string; apiKey?: string; model?: string };
@@ -126,6 +128,12 @@ interface ResearchDeskBridge {
     restoreResearchNode: (nodeId: string) => Promise<ResearchGraphNode>;
     setResearchNodeStatus: (nodeId: string, status: ResearchGraphStatus, reason?: string) => Promise<ResearchGraphNode>;
     validateResearchGraph: (projectId: string, threadId?: string | null) => Promise<{ projectId: string; ok: boolean; issues: ResearchGraphIssue[] }>;
+    listExperimentRuns: (input: { projectId?: string; threadId?: string | null; nodeId?: string }) => Promise<ExperimentRun[]>;
+    startExperimentRun: (input: { projectId: string; threadId: string; nodeId: string; command: string; workspace: string; cwd?: string }) => Promise<ExperimentRun>;
+    cancelExperimentRun: (runId: string) => Promise<ExperimentRun>;
+    readExperimentRunLog: (runId: string, maxBytes?: number) => Promise<{ path: string; size: number; text: string }>;
+    createResultFromRun: (input: { runId: string; verdict?: ExperimentVerdict; reasoning?: string; title?: string }) => Promise<ResearchGraphNode>;
+    onExperimentRunUpdate?: (callback: (run: ExperimentRun) => void) => () => void;
     createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     setResearchProjectWorkspace: (id: string, workspacePath: string) => Promise<ResearchProject>;

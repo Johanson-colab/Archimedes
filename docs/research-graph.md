@@ -1,8 +1,8 @@
 # Research graph foundation
 
 This change adds the storage and service layer for a versioned research object
-graph. It deliberately does not add the graph canvas, Git worktrees, experiment
-runs, or collaboration sync yet.
+graph. It deliberately does not add the graph canvas, Git worktrees, remote
+experiment backends, or collaboration sync yet.
 
 ## Object model
 
@@ -15,7 +15,7 @@ The graph has five node kinds:
 | --- | --- |
 | `question` | The question this session is trying to answer. |
 | `idea` | A testable hypothesis. An "idea spark" is an `idea` with `status = draft`; it is not a separate node kind. |
-| `experiment` | A plan that tests one or more ideas. Runs are attempts inside the experiment, not graph nodes. |
+| `experiment` | A plan that tests one or more ideas. Runs are attempts inside the experiment, not graph nodes; each run records its own command, log, exit code, and commit. |
 | `result` | What was measured plus what it means. Evidence and interpretation live in two content blocks on one node. |
 | `writing` | A paper section or claim-bearing draft. |
 
@@ -46,9 +46,10 @@ edges and do not participate in structural cycle detection. Lineage edges do.
 
 New tables in `electron/store.cjs`:
 
-- `research_nodes` (`project_id`, `thread_id`)
+- `research_nodes` (`project_id`, `thread_id`, `source_run_id`)
 - `research_node_revisions`
 - `research_edges` (`project_id`, `thread_id`)
+- `experiment_runs` (`project_id`, `thread_id`, `node_id`, `status`)
 
 `thread_id` is the graph scope. `listGraph`, `applyPatch`, and `validateGraph`
 accept it; `createNode` and `linkNodes` reject parents or edges that cross
@@ -146,17 +147,70 @@ released first. Extraction is stage-aware:
   history remain intact.
 - If extraction fails, times out, or returns no research object, the graph is
   unchanged and the failure is not treated as a turn failure.
+- Automatic extraction never creates `result` nodes. A result is created only
+  from a completed run, so its evidence can be traced to a real command, log,
+  exit code, and commit.
+
+## Experiment runs
+
+The experiment node is the plan. Each `experiment_runs` row is one attempt:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `starting`, `running`, `succeeded`, `failed`, or `cancelled`; terminal states never change. |
+| `command` | The shell command that was run. |
+| `cwd` | The folder the command ran in. |
+| `commit_sha` | `git rev-parse HEAD` at launch, when the folder is a Git worktree. |
+| `log_path` | `.archimedes/experiment-runs/<runId>/run.log`. |
+| `exit_code` | The process exit code, when the run ended. |
+| `metrics` | Reserved for structured metrics; empty in the local-first v1. |
+
+The local runner starts the command in a child process, tees stdout and stderr
+into the run log, and writes the final exit line. The renderer receives
+`experiment-run:update` events on status changes and can read the log tail
+without loading the whole file.
+
+Runs belong to the workspace that was active when they started. Switching
+workspaces while a run is in progress is not supported in v1: the process keeps
+running, but its status updates may not reach the newly opened workspace.
+Interrupted runs whose process is gone are marked `failed` when the workspace
+reopens.
+
+Two rules keep run evidence comparable:
+
+- **The command is fixed after a successful run.** A failed-only experiment is
+  still provisional and may be repaired with a new command. Once a run answers
+  the experiment, changing the command would invalidate the comparison; create
+  a child experiment with an `extends` edge instead.
+- **The plan is frozen after a successful run.** Content revisions are rejected
+  while a run is active and after a successful run. Title and summary edits do
+  not change the plan.
+
+`createResultFromRun` is the only path that creates a result from measured
+output. It requires a `succeeded` run, records `source_run_id` on the result
+node, and copies the run id, command, exit code, commit, log path, log tail, and
+metrics into `content.evidence`. The result also gets a `produces` edge from its
+experiment. A run can produce at most one result; the unique index on
+`research_nodes(source_run_id)` enforces this.
+
+The Experiments view shows experiment lineage (`extends`/`replicates`), the
+latest run status on each node, and an inspector for the plan, runs, log, and
+result form. The **Next round** action creates a child experiment with both an
+`extends` edge to the selected experiment and the `tests` edge(s) of its parent
+idea, so the new round stays attached to the idea while descending from the
+winner.
 
 ## Service API
 
 `electron/research-graph/service.cjs` exposes:
 
 ```text
-createNode({ projectId, threadId, kind, status, title, summary, content, parents, sourceTurnId, sourceEventId, author })
+createNode({ projectId, threadId, kind, status, title, summary, content, parents, sourceTurnId, sourceEventId, sourceRunId, author })
 reviseNode({ nodeId, content, title, summary, sourceTurnId, sourceEventId, gitCommit, author })
+createResultFromRun({ runId, verdict, reasoning, title, author })
 linkNodes({ fromNodeId, toNodeId, kind, fromRevisionId, toRevisionId, metadata, author })
 setNodeStatus({ nodeId, status, reason, author })
-applyPatch({ projectId, threadId, turnId, patch, author })
+applyPatch({ projectId, threadId, turnId, patch, author, allowResults })
 listGraph({ projectId, threadId, includeArchived })
 getNodeHistory(nodeId)
 archiveNode({ nodeId, reason, author })
@@ -168,6 +222,20 @@ The matching IPC channels are `research-graph:create-node`,
 `research-graph:revise-node`, `research-graph:link`, `research-graph:list`,
 `research-graph:history`, `research-graph:archive`, `research-graph:restore`,
 and `research-graph:validate`.
+
+Experiment runs are exposed separately:
+
+```text
+listExperimentRuns({ projectId, threadId, nodeId })
+startExperimentRun({ projectId, threadId, nodeId, command, cwd, workspace })
+cancelExperimentRun(runId)
+readExperimentRunLog({ runId, maxBytes })
+createResultFromRun({ runId, verdict, reasoning })
+```
+
+The IPC channels are `experiment-run:list`, `experiment-run:start`,
+`experiment-run:cancel`, `experiment-run:log`, and `experiment-run:result`.
+Status changes are pushed to the renderer as `experiment-run:update`.
 
 ## Invariants enforced now
 
@@ -184,8 +252,9 @@ and `research-graph:validate`.
 ## Intentionally out of scope
 
 - Node Chat and context packs.
-- Git worktrees and experiment branches.
-- Run submission and detached supervisors.
+- Git worktrees and per-experiment branches.
+- Remote run backends, detached supervisors that survive app exit, and
+  structured metric ingestion.
 - Merge proposals, tags, and research commits.
 - Collaboration sync and RLS.
 
@@ -195,6 +264,7 @@ and `research-graph:validate`.
 node --test electron/research-graph.test.cjs
 node --test electron/research-graph-layout.test.cjs
 node --test electron/research-graph-auto-build.test.cjs
+node --test electron/experiment-runs.test.cjs
 node --test electron/ui-audit-research-graph-auto.test.cjs
 node --test electron/store-schema-order.test.cjs
 npm run lint

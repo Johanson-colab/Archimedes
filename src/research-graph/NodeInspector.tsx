@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { useUISettings } from "../i18n";
-import type { ResearchEdgeKind, ResearchNode, ResearchNodeKind } from "./types";
+import ExperimentInspector from "./ExperimentInspector";
+import type { ExperimentRun, ExperimentVerdict, ResearchEdgeKind, ResearchNode, ResearchNodeKind } from "./types";
 
 export type ChildOption = {
   kind: ResearchNodeKind;
@@ -9,10 +10,20 @@ export type ChildOption = {
   label: string;
 };
 
+export type ExperimentInspectorActions = {
+  runs: ExperimentRun[];
+  onSavePlan: (content: Record<string, unknown>) => Promise<void>;
+  onStartRun: (command: string) => Promise<void>;
+  onCancelRun: (runId: string) => Promise<void>;
+  onCreateResult: (run: ExperimentRun, verdict: ExperimentVerdict, reasoning: string) => Promise<void>;
+  onReadLog: (runId: string) => Promise<string>;
+};
+
 type Props = {
   node: ResearchNode;
   childOptions: ChildOption[];
   busy: boolean;
+  experiment?: ExperimentInspectorActions;
   onCreateChild: (option: ChildOption, title: string) => Promise<void>;
 };
 
@@ -22,7 +33,7 @@ const STATUS_LABELS: Record<string, string> = {
   retracted: "Retracted",
 };
 
-export default function NodeInspector({ node, childOptions, busy, onCreateChild }: Props) {
+export default function NodeInspector({ node, childOptions, busy, experiment, onCreateChild }: Props) {
   const { t } = useUISettings();
   const [childKind, setChildKind] = useState(childOptions[0]?.kind ?? "");
   const [title, setTitle] = useState("");
@@ -35,16 +46,18 @@ export default function NodeInspector({ node, childOptions, busy, onCreateChild 
   const option = childOptions.find((item) => item.kind === childKind) || childOptions[0] || null;
   const content = node.current_revision?.content ?? {};
 
-  return <div className="research-graph-inspector">
+  return <div className={`research-graph-inspector${node.kind === "experiment" ? " experiment" : ""}`}>
     <div className="research-graph-inspector-head">
       <strong>{node.title}</strong>
       <span>{t(STATUS_LABELS[node.status] || node.status)}</span>
     </div>
     {node.summary && <p className="research-graph-summary">{node.summary}</p>}
-    <details className="research-graph-content-details" open>
-      <summary>{t("Content")}</summary>
-      <pre className="research-graph-content-json">{JSON.stringify(content, null, 2)}</pre>
-    </details>
+    {node.kind === "experiment" && experiment
+      ? <ExperimentInspector node={node} busy={busy} {...experiment} />
+      : <details className="research-graph-content-details" open>
+        <summary>{t("Content")}</summary>
+        <pre className="research-graph-content-json">{JSON.stringify(content, null, 2)}</pre>
+      </details>}
     {option && <form
       className="research-graph-add-child"
       onSubmit={(event) => {

@@ -193,3 +193,26 @@ test("tree siblings stack vertically and secondary tests edges stay faint", asyn
   assert.equal(layout.edges.find((item) => item.edge.id === "e3").secondary, undefined);
   assert.equal(layout.edges.find((item) => item.edge.id === "e4").secondary, true);
 });
+
+test("an experiment round nests under its parent experiment, not the idea", async () => {
+  const { layoutTree, GRAPH_PAD, GRAPH_TREE_INDENT } = await loadLayout();
+  const nodes = [
+    node("q", "question", "2026-01-01T00:00:00.000Z"),
+    node("i", "idea", "2026-01-01T00:01:00.000Z"),
+    node("e1", "experiment", "2026-01-01T00:02:00.000Z"),
+    node("e2", "experiment", "2026-01-01T00:03:00.000Z"),
+  ];
+  const layout = layoutTree({
+    nodes,
+    edges: [
+      edge("e1", "q", "i", "generates"),
+      edge("e2", "i", "e1", "tests"),
+      edge("e3", "e1", "e2", "extends"),
+      edge("e4", "i", "e2", "tests"),
+    ],
+  });
+  assert.deepEqual(layout.nodes.map((item) => item.node.id), ["q", "i", "e1", "e2"]);
+  assert.equal(layout.nodes.find((item) => item.node.id === "e2").x, GRAPH_PAD + 3 * GRAPH_TREE_INDENT);
+  assert.equal(layout.edges.find((item) => item.edge.id === "e3").secondary, undefined);
+  assert.equal(layout.edges.find((item) => item.edge.id === "e4").secondary, true);
+});

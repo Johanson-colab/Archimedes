@@ -61,6 +61,7 @@ export interface ResearchNode {
   summary: string;
   current_revision_id: string | null;
   current_revision: ResearchRevision | null;
+  source_run_id?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -110,4 +111,31 @@ export interface ResearchGraphIssue {
   message: string;
   nodeId?: string;
   edgeId?: string;
+}
+
+export const EXPERIMENT_RUN_STATUSES = ["starting", "running", "succeeded", "failed", "cancelled"] as const;
+
+export type ExperimentRunStatus = (typeof EXPERIMENT_RUN_STATUSES)[number];
+
+export type ExperimentVerdict = "supports" | "contradicts" | "inconclusive";
+
+export interface ExperimentRun {
+  id: string;
+  project_id: string;
+  thread_id: string;
+  node_id: string;
+  status: ExperimentRunStatus;
+  backend: string;
+  command: string;
+  cwd: string;
+  commit_sha: string | null;
+  log_path: string;
+  pid: number | null;
+  exit_code: number | null;
+  metrics: Record<string, unknown>;
+  error: string;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  updated_at: string;
 }

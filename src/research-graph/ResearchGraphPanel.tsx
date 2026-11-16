@@ -5,7 +5,7 @@ import { useUISettings } from "../i18n";
 import { layoutTree } from "./graphLayout";
 import NodeInspector, { type ChildOption } from "./NodeInspector";
 import ResearchGraphView from "./ResearchGraphView";
-import type { ResearchGraph, ResearchGraphUpdate, ResearchNodeKind } from "./types";
+import type { ExperimentRun, ExperimentVerdict, ResearchEdgeKind, ResearchGraph, ResearchGraphUpdate, ResearchNodeKind } from "./types";
 
 type Props = {
   projectId: string | null;
@@ -14,6 +14,7 @@ type Props = {
   threadTitle: string;
   hasThread: boolean;
   mode: string;
+  workspace: string;
   version?: number;
   update?: ResearchGraphUpdate | null;
   onOpenThread: () => void;
@@ -34,7 +35,7 @@ const EXPERIMENT_STAGE_CHILD_OPTIONS: Record<ResearchNodeKind, ChildOption[]> = 
     { kind: "experiment", edge: "tests", label: "Experiment" },
     { kind: "idea", edge: "refines", label: "Idea" },
   ],
-  experiment: [{ kind: "result", edge: "produces", label: "Result" }],
+  experiment: [{ kind: "experiment", edge: "extends", label: "Next round" }],
   result: [
     { kind: "writing", edge: "cite-after-create", label: "Writing" },
     { kind: "idea", edge: "informs", label: "Idea" },
@@ -43,7 +44,7 @@ const EXPERIMENT_STAGE_CHILD_OPTIONS: Record<ResearchNodeKind, ChildOption[]> = 
 };
 
 const IDEA_STAGE_EDGES = new Set(["generates", "refines"]);
-const EXPERIMENT_STAGE_EDGES = new Set(["generates", "refines", "tests"]);
+const EXPERIMENT_STAGE_EDGES = new Set(["generates", "refines", "tests", "extends", "replicates", "produces"]);
 
 export default function ResearchGraphPanel({
   projectId,
@@ -52,6 +53,7 @@ export default function ResearchGraphPanel({
   threadTitle,
   hasThread,
   mode,
+  workspace,
   version = 0,
   update = null,
   onOpenThread,
@@ -59,6 +61,7 @@ export default function ResearchGraphPanel({
 }: Props) {
   const { t } = useUISettings();
   const [graph, setGraph] = useState<ResearchGraph | null>(null);
+  const [runs, setRuns] = useState<ExperimentRun[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
@@ -115,6 +118,40 @@ export default function ResearchGraphPanel({
   }, [projectId, threadId, refreshKey, version, t]);
 
   useEffect(() => {
+    if (!projectId || !threadId) {
+      setRuns([]);
+      return;
+    }
+    if (!window.researchDesk?.listExperimentRuns) {
+      setRuns([]);
+      return;
+    }
+    let cancelled = false;
+    window.researchDesk.listExperimentRuns({ projectId, threadId })
+      .then((next) => {
+        if (!cancelled) setRuns(next);
+      })
+      .catch(() => {
+        if (!cancelled) setRuns([]);
+      });
+    return () => { cancelled = true; };
+  }, [projectId, threadId, refreshKey, version]);
+
+  useEffect(() => {
+    if (!threadId) return;
+    const unsubscribe = window.researchDesk?.onExperimentRunUpdate?.((run) => {
+      if (run.thread_id !== threadId) return;
+      setRuns((current) => {
+        const next = current.filter((item) => item.id !== run.id);
+        next.push(run);
+        next.sort((left, right) => left.created_at.localeCompare(right.created_at));
+        return next;
+      });
+    });
+    return unsubscribe;
+  }, [threadId]);
+
+  useEffect(() => {
     if (!expanded) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") setExpanded(false);
@@ -123,10 +160,21 @@ export default function ResearchGraphPanel({
     return () => window.removeEventListener("keydown", close);
   }, [expanded]);
 
-  const stageNodes = useMemo(
-    () => graph ? graph.nodes.filter((node) => !ideaStage || node.kind === "question" || node.kind === "idea") : [],
-    [graph, ideaStage],
-  );
+  const stageNodes = useMemo(() => {
+    if (!graph) return [];
+    if (ideaStage) return graph.nodes.filter((node) => node.kind === "question" || node.kind === "idea");
+    return graph.nodes.filter((node) => node.kind !== "writing");
+  }, [graph, ideaStage]);
+  const runsByNode = useMemo(() => {
+    const map = new Map<string, ExperimentRun[]>();
+    for (const run of runs) {
+      const list = map.get(run.node_id) ?? [];
+      list.push(run);
+      map.set(run.node_id, list);
+    }
+    for (const list of map.values()) list.sort((left, right) => left.created_at.localeCompare(right.created_at));
+    return map;
+  }, [runs]);
   const layout = useMemo(() => {
     if (!graph) return null;
     const nodes = showHistory ? stageNodes : stageNodes.filter((node) => node.status !== "retracted");
@@ -213,13 +261,25 @@ export default function ResearchGraphPanel({
           kind: "cites",
         });
       } else {
+        const parents: Array<{ nodeId: string; kind: ResearchEdgeKind }> = [{ nodeId: selectedNode.id, kind: option.edge }];
+        if (option.edge === "extends" && selectedNode.kind === "experiment") {
+          for (const edge of graph?.edges ?? []) {
+            if (edge.to_node !== selectedNode.id || edge.kind !== "tests") continue;
+            if (!parents.some((parent) => parent.nodeId === edge.from_node && parent.kind === "tests")) {
+              parents.push({ nodeId: edge.from_node, kind: "tests" });
+            }
+          }
+        }
+        const parentRun = option.edge === "extends"
+          ? (runsByNode.get(selectedNode.id) ?? []).find((run) => run.status === "succeeded")
+          : null;
         child = await window.researchDesk.createResearchNode({
           projectId,
           threadId,
           kind: option.kind,
           title,
-          content: {},
-          parents: [{ nodeId: selectedNode.id, kind: option.edge }],
+          content: parentRun ? { runCommand: parentRun.command } : {},
+          parents,
         });
       }
       setSelectedId(child.id);
@@ -228,6 +288,73 @@ export default function ResearchGraphPanel({
       setError(cause instanceof Error ? cause.message : t("Could not create the research node."));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const updateNodePlan = async (content: Record<string, unknown>) => {
+    if (!selectedNode || !window.researchDesk?.reviseResearchNode) return;
+    setError("");
+    try {
+      await window.researchDesk.reviseResearchNode({ nodeId: selectedNode.id, content });
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("Could not save the experiment plan."));
+      throw cause;
+    }
+  };
+
+  const startExperiment = async (command: string) => {
+    if (!projectId || !threadId || !selectedNode || !workspace || !window.researchDesk?.startExperimentRun) return;
+    setError("");
+    try {
+      const run = await window.researchDesk.startExperimentRun({
+        projectId,
+        threadId,
+        nodeId: selectedNode.id,
+        command,
+        workspace,
+      });
+      setRuns((current) => [...current.filter((item) => item.id !== run.id), run]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("Could not start the experiment run."));
+      throw cause;
+    }
+  };
+
+  const cancelExperiment = async (runId: string) => {
+    if (!window.researchDesk?.cancelExperimentRun) return;
+    setError("");
+    try {
+      const run = await window.researchDesk.cancelExperimentRun(runId);
+      setRuns((current) => current.map((item) => item.id === run.id ? run : item));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("Could not cancel the experiment run."));
+      throw cause;
+    }
+  };
+
+  const createResult = async (run: ExperimentRun, verdict: ExperimentVerdict, reasoning: string) => {
+    if (!window.researchDesk?.createResultFromRun) return;
+    setError("");
+    try {
+      const result = await window.researchDesk.createResultFromRun({ runId: run.id, verdict, reasoning });
+      setSelectedId(result.id);
+      refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("Could not create the result."));
+      throw cause;
+    }
+  };
+
+  const readExperimentLog = async (runId: string) => {
+    if (!window.researchDesk?.readExperimentRunLog) return "";
+    setError("");
+    try {
+      const log = await window.researchDesk.readExperimentRunLog(runId);
+      return log.text;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("Could not read the run log."));
+      return "";
     }
   };
 
@@ -313,12 +440,20 @@ export default function ResearchGraphPanel({
     ) : <>
       <div className="research-graph-body">
         {loading && !graph ? <span className="research-graph-loading">{t("Refresh graph")}…</span> : null}
-        {layout ? <ResearchGraphView layout={layout} selectedId={selectedId} onSelect={setSelectedId} /> : null}
+        {layout ? <ResearchGraphView layout={layout} selectedId={selectedId} runsByNode={runsByNode} onSelect={setSelectedId} /> : null}
       </div>
       {selectedNode ? <NodeInspector
         node={selectedNode}
         childOptions={childOptions}
         busy={busy}
+        experiment={selectedNode.kind === "experiment" ? {
+          runs: runsByNode.get(selectedNode.id) ?? [],
+          onSavePlan: updateNodePlan,
+          onStartRun: startExperiment,
+          onCancelRun: cancelExperiment,
+          onCreateResult: createResult,
+          onReadLog: readExperimentLog,
+        } : undefined}
         onCreateChild={createChild}
       /> : null}
     </>}

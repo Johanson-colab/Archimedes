@@ -548,6 +548,28 @@ function schema(db) {
       ))
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS experiment_runs (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
+      node_id TEXT NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      backend TEXT NOT NULL DEFAULT 'local',
+      command TEXT NOT NULL,
+      cwd TEXT NOT NULL,
+      commit_sha TEXT,
+      log_path TEXT NOT NULL DEFAULT '',
+      pid INTEGER,
+      exit_code INTEGER,
+      metrics_json TEXT NOT NULL DEFAULT '{}',
+      error TEXT NOT NULL DEFAULT '',
+      started_at TEXT,
+      ended_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      CHECK (status IN ('starting', 'running', 'succeeded', 'failed', 'cancelled'))
+    ) STRICT;
+
     CREATE TRIGGER IF NOT EXISTS research_node_revisions_immutable
     BEFORE UPDATE OF content_json, content_hash, node_id, parent_revision_id
     ON research_node_revisions
@@ -560,6 +582,8 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_edges_project ON research_edges(project_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_edges_from ON research_edges(from_node);
     CREATE INDEX IF NOT EXISTS idx_research_edges_to ON research_edges(to_node);
+    CREATE INDEX IF NOT EXISTS idx_experiment_runs_node ON experiment_runs(node_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_experiment_runs_thread ON experiment_runs(thread_id, created_at ASC);
 
     CREATE INDEX IF NOT EXISTS idx_library_papers_library ON library_papers(library_id, added_at DESC);
     CREATE INDEX IF NOT EXISTS idx_papers_title ON papers(title);
@@ -632,6 +656,9 @@ function schema(db) {
   // Research graph nodes and edges are scoped to one conversation/session.
   ensureColumn(db, "research_nodes", "thread_id", "TEXT");
   ensureColumn(db, "research_edges", "thread_id", "TEXT");
+  // A result records the completed run that produced its evidence.
+  ensureColumn(db, "research_nodes", "source_run_id", "TEXT");
+  ensureColumn(db, "experiment_runs", "pid", "INTEGER");
   ensureColumn(db, "project_workspaces", "name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
@@ -651,6 +678,7 @@ function schema(db) {
     CREATE INDEX IF NOT EXISTS idx_research_threads_workspace ON research_threads(workspace_id, archived_at, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_research_threads_node ON research_threads(node_id);
     CREATE INDEX IF NOT EXISTS idx_research_nodes_thread ON research_nodes(thread_id, archived_at, updated_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_research_nodes_source_run ON research_nodes(source_run_id) WHERE source_run_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_research_edges_thread ON research_edges(thread_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_research_artifacts_node ON research_artifacts(node_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_project_environments_project ON project_environments(project_id);
@@ -1057,6 +1085,31 @@ function reconcileInterruptedReproductions(db) {
   return stuck.length;
 }
 
+function reconcileInterruptedExperimentRuns(db) {
+  try {
+    const rows = db.prepare("SELECT id, pid FROM experiment_runs WHERE status IN ('starting', 'running')").all();
+    if (!rows.length) return;
+    const now = timestamp();
+    for (const row of rows) {
+      let alive = false;
+      if (row.pid) {
+        try {
+          process.kill(Number(row.pid), 0);
+          alive = true;
+        } catch (error) {
+          // EPERM means the process exists but belongs to another user.
+          alive = error?.code === "EPERM";
+        }
+      }
+      if (alive) continue;
+      db.prepare("UPDATE experiment_runs SET status = 'failed', error = ?, ended_at = ?, updated_at = ? WHERE id = ?")
+        .run("The run process is no longer available.", now, now, row.id);
+    }
+  } catch {
+    // A pre-migration workspace may not have the experiment_runs table yet.
+  }
+}
+
 function openWorkspace(workspacePath) {
   if (activeWorkspace === workspacePath && database) return getSnapshot();
 
@@ -1078,6 +1131,7 @@ function openWorkspace(workspacePath) {
   database = new DatabaseSync(databasePath);
   activeWorkspace = workspacePath;
   schema(database);
+  reconcileInterruptedExperimentRuns(database);
   backfillPaperRepositories(database);
   reconcileInterruptedReproductions(database);
   migrateLegacyTasks(database);
@@ -2661,6 +2715,7 @@ function hydrateResearchNode(row) {
     summary: row.summary || "",
     current_revision_id: row.current_revision_id || null,
     current_revision: currentRevision,
+    source_run_id: row.source_run_id || null,
     created_by: row.created_by,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -2715,8 +2770,29 @@ function getResearchNode(id) {
   return hydrateResearchNode(row);
 }
 
-function listResearchGraph({ projectId, threadId = null, includeArchived = false } = {}) {
-  if (!projectId) throw new Error("A project is required to list the research graph.");
+function getResearchNodeBySourceRun(sourceRunId) {
+  if (!sourceRunId) return null;
+  const db = requireDatabase();
+  const row = db.prepare(`
+    SELECT n.*,
+      r.parent_revision_id AS revision_parent_revision_id,
+      r.content_json,
+      r.content_hash,
+      r.source_turn_id,
+      r.source_event_id,
+      r.git_commit,
+      r.created_by AS revision_created_by,
+      r.created_at AS revision_created_at
+    FROM research_nodes n
+    LEFT JOIN research_node_revisions r ON r.id = n.current_revision_id
+    WHERE n.source_run_id = ?
+  `).get(sourceRunId);
+  if (!row) return null;
+  if (!canAccessProject(row.project_id, "viewer")) throw new Error("You do not have access to this research node.");
+  return hydrateResearchNode(row);
+}
+
+function listResearchGraph({ projectId, threadId = null, includeArchived = false } = {}) {  if (!projectId) throw new Error("A project is required to list the research graph.");
   if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
   const db = requireDatabase();
   if (threadId) {
@@ -2799,6 +2875,7 @@ function createResearchNode({
   parents = [],
   sourceTurnId = null,
   sourceEventId = null,
+  sourceRunId = null,
   createdBy = localIdentity.userId,
 } = {}) {
   if (!projectId) throw new Error("A project is required to create a research node.");
@@ -2825,9 +2902,9 @@ function createResearchNode({
   db.exec("BEGIN");
   try {
     db.prepare(`
-      INSERT INTO research_nodes (id, project_id, thread_id, kind, status, title, summary, current_revision_id, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
-    `).run(nodeId, projectId, threadId, kind, status, normalizedTitle, String(summary || "").slice(0, 500), createdBy, now, now);
+      INSERT INTO research_nodes (id, project_id, thread_id, kind, status, title, summary, current_revision_id, source_run_id, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+    `).run(nodeId, projectId, threadId, kind, status, normalizedTitle, String(summary || "").slice(0, 500), sourceRunId, createdBy, now, now);
     db.prepare(`
       INSERT INTO research_node_revisions (id, node_id, parent_revision_id, content_json, content_hash, source_turn_id, source_event_id, git_commit, created_by, created_at)
       VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?)
@@ -3009,6 +3086,189 @@ function setResearchNodeStatus({ nodeId, status, reason = "", createdBy = localI
     metadata: { from: node.status, to: status, reason: String(reason || "").slice(0, 500) },
   });
   return getResearchNode(nodeId);
+}
+
+function hydrateExperimentRun(row) {
+  if (!row) return null;
+  let metrics = {};
+  try {
+    metrics = JSON.parse(row.metrics_json || "{}");
+  } catch {
+    metrics = {};
+  }
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    thread_id: row.thread_id,
+    node_id: row.node_id,
+    status: row.status,
+    backend: row.backend,
+    command: row.command,
+    cwd: row.cwd,
+    commit_sha: row.commit_sha || null,
+    log_path: row.log_path || "",
+    pid: row.pid == null ? null : Number(row.pid),
+    exit_code: row.exit_code == null ? null : row.exit_code,
+    metrics,
+    error: row.error || "",
+    started_at: row.started_at || null,
+    ended_at: row.ended_at || null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function experimentRunScope({ projectId = null, threadId = null, nodeId = null } = {}) {
+  const db = requireDatabase();
+  let resolvedProjectId = projectId || null;
+  if (threadId) {
+    const thread = db.prepare("SELECT project_id FROM research_threads WHERE id = ?").get(threadId);
+    if (!thread) throw new Error("Research session not found.");
+    if (resolvedProjectId && thread.project_id !== resolvedProjectId) throw new Error("The research session does not belong to this project.");
+    resolvedProjectId = thread.project_id;
+  }
+  if (nodeId) {
+    const node = db.prepare("SELECT project_id, thread_id, kind FROM research_nodes WHERE id = ?").get(nodeId);
+    if (!node) throw new Error("Research node not found.");
+    if (resolvedProjectId && node.project_id !== resolvedProjectId) throw new Error("The research node does not belong to this project.");
+    if (threadId && node.thread_id !== threadId) throw new Error("The research node does not belong to this session.");
+    resolvedProjectId = node.project_id;
+  }
+  if (!resolvedProjectId) throw new Error("A project, session, or experiment is required.");
+  if (!canAccessProject(resolvedProjectId, "viewer")) throw new Error("You do not have access to this experiment.");
+  return { projectId: resolvedProjectId, threadId, nodeId };
+}
+
+function getExperimentRun(id) {
+  if (!id) return null;
+  const db = requireDatabase();
+  const row = db.prepare("SELECT * FROM experiment_runs WHERE id = ?").get(id);
+  if (!row) return null;
+  if (!canAccessProject(row.project_id, "viewer")) throw new Error("You do not have access to this experiment run.");
+  return hydrateExperimentRun(row);
+}
+
+function listExperimentRuns({ projectId = null, threadId = null, nodeId = null } = {}) {
+  const scope = experimentRunScope({ projectId, threadId, nodeId });
+  const db = requireDatabase();
+  const clauses = ["project_id = ?"];
+  const params = [scope.projectId];
+  if (scope.threadId) {
+    clauses.push("thread_id = ?");
+    params.push(scope.threadId);
+  }
+  if (scope.nodeId) {
+    clauses.push("node_id = ?");
+    params.push(scope.nodeId);
+  }
+  return db.prepare(`SELECT * FROM experiment_runs WHERE ${clauses.join(" AND ")} ORDER BY created_at ASC, rowid ASC`)
+    .all(...params)
+    .map(hydrateExperimentRun);
+}
+
+function createExperimentRun({
+  id = randomUUID(),
+  projectId,
+  threadId,
+  nodeId,
+  status = "starting",
+  backend = "local",
+  command,
+  cwd,
+  commitSha = null,
+  logPath = "",
+  metricsJson = "{}",
+} = {}) {
+  if (!projectId || !threadId || !nodeId) throw new Error("A project, session, and experiment node are required to start a run.");
+  if (!["starting", "running"].includes(status)) throw new Error("A new experiment run must start or run.");
+  const text = String(command || "").trim();
+  if (!text) throw new Error("An experiment run requires a command.");
+  const runCwd = String(cwd || "").trim();
+  if (!runCwd) throw new Error("An experiment run requires a working folder.");
+  const node = getResearchNode(nodeId);
+  if (!node) throw new Error("Research node not found.");
+  if (node.kind !== "experiment") throw new Error("Only an experiment node can start a run.");
+  if (node.project_id !== projectId || node.thread_id !== threadId) throw new Error("The experiment does not belong to this session.");
+  if (node.archived || node.status === "retracted") throw new Error("Restore the experiment before starting a run.");
+  if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to start this experiment.");
+  const active = requireDatabase().prepare("SELECT id FROM experiment_runs WHERE node_id = ? AND status IN ('starting', 'running') LIMIT 1").get(nodeId);
+  if (active) throw new Error("This experiment already has a run in progress.");
+  let normalizedMetrics = "{}";
+  try {
+    normalizedMetrics = JSON.stringify(metricsJson && typeof metricsJson === "object" ? metricsJson : JSON.parse(metricsJson || "{}"));
+  } catch {
+    normalizedMetrics = "{}";
+  }
+  const db = requireDatabase();
+  const now = timestamp();
+  db.prepare(`
+    INSERT INTO experiment_runs (
+      id, project_id, thread_id, node_id, status, backend, command, cwd,
+      commit_sha, log_path, exit_code, metrics_json, error, started_at, ended_at,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, '', NULL, NULL, ?, ?)
+  `).run(
+    id, projectId, threadId, nodeId, status, String(backend || "local"), text, runCwd,
+    commitSha || null, String(logPath || ""), normalizedMetrics, now, now,
+  );
+  recordAuditEvent(db, {
+    projectId,
+    action: "experiment.run_started",
+    targetType: "experiment_run",
+    targetId: id,
+    metadata: { nodeId, command: text.slice(0, 500), backend },
+  });
+  return getExperimentRun(id);
+}
+
+function updateExperimentRun({
+  runId,
+  status,
+  exitCode,
+  error = null,
+  metricsJson = null,
+  logPath = null,
+  pid = undefined,
+  startedAt = null,
+  endedAt = null,
+} = {}) {
+  if (!runId) throw new Error("An experiment run id is required.");
+  if (!["starting", "running", "succeeded", "failed", "cancelled"].includes(status)) throw new Error(`Unknown experiment run status: ${status}`);
+  const run = getExperimentRun(runId);
+  if (!run) throw new Error("Experiment run not found.");
+  if (!canAccessProject(run.project_id, "editor")) throw new Error("You do not have permission to update this experiment run.");
+  const terminal = ["succeeded", "failed", "cancelled"];
+  if (terminal.includes(run.status) && run.status !== status) throw new Error("A finished experiment run cannot change status.");
+  const allowed = {
+    starting: ["starting", "running", "succeeded", "failed", "cancelled"],
+    running: ["running", "succeeded", "failed", "cancelled"],
+  };
+  if (!terminal.includes(run.status) && !allowed[run.status]?.includes(status)) {
+    throw new Error(`Cannot move an experiment run from ${run.status} to ${status}.`);
+  }
+  const db = requireDatabase();
+  const now = timestamp();
+  const nextStartedAt = startedAt || run.started_at || (status === "running" ? now : null);
+  const nextEndedAt = terminal.includes(status) ? (endedAt || run.ended_at || now) : null;
+  const nextExitCode = exitCode === undefined ? run.exit_code : exitCode;
+  const nextError = error === null ? run.error : String(error || "").slice(0, 2000);
+  const nextMetrics = metricsJson === null ? JSON.stringify(run.metrics || {}) : metricsJson;
+  const nextPid = pid === undefined ? null : pid;
+  db.prepare(`
+    UPDATE experiment_runs
+    SET status = ?, exit_code = ?, metrics_json = ?, error = ?,
+      log_path = COALESCE(?, log_path), pid = COALESCE(?, pid),
+      started_at = ?, ended_at = ?, updated_at = ?
+    WHERE id = ?
+  `).run(status, nextExitCode, nextMetrics, nextError, logPath, nextPid, nextStartedAt, nextEndedAt, now, runId);
+  recordAuditEvent(db, {
+    projectId: run.project_id,
+    action: "experiment.run_status_changed",
+    targetType: "experiment_run",
+    targetId: runId,
+    metadata: { from: run.status, to: status, exitCode: nextExitCode },
+  });
+  return getExperimentRun(runId);
 }
 
 function bindResearchThreadHarness(id, harness) {
@@ -4036,6 +4296,7 @@ module.exports = {
   nativeAgentBindings,
   createResearchNode,
   getResearchNode,
+  getResearchNodeBySourceRun,
   listResearchGraph,
   listResearchEdges,
   findResearchEdge,
@@ -4045,6 +4306,10 @@ module.exports = {
   archiveResearchNode,
   restoreResearchNode,
   setResearchNodeStatus,
+  createExperimentRun,
+  getExperimentRun,
+  listExperimentRuns,
+  updateExperimentRun,
   bindResearchThreadHarness,
   compactResearchThread,
   forkResearchThread,

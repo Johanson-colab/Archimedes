@@ -1,5 +1,6 @@
 const { createHash } = require("node:crypto");
 const store = require("../store.cjs");
+const experimentRuns = require("./experiment-runs.cjs");
 const {
   EDGE_KINDS,
   NODE_KINDS,
@@ -135,6 +136,7 @@ function createNode({
   parents = [],
   sourceTurnId = null,
   sourceEventId = null,
+  sourceRunId = null,
   author,
 } = {}) {
   if (!isNodeKind(kind)) throw new Error(`Unknown research node kind: ${kind}`);
@@ -154,6 +156,7 @@ function createNode({
     parents: normalizedParents.map(({ node, ...parent }) => parent),
     sourceTurnId,
     sourceEventId,
+    sourceRunId,
     createdBy: author || undefined,
   });
   return node;
@@ -184,6 +187,15 @@ function reviseNode({
   ) {
     return node;
   }
+  if (node.kind === "experiment" && nextHash !== node.current_revision?.content_hash) {
+    const runs = store.listExperimentRuns({ nodeId });
+    if (runs.some((run) => run.status === "succeeded")) {
+      throw new Error("This experiment already has a successful run. Create a next round to change the plan.");
+    }
+    if (runs.some((run) => run.status === "starting" || run.status === "running")) {
+      throw new Error("Wait for the active run to finish before changing the experiment plan.");
+    }
+  }
   return store.reviseResearchNode({
     nodeId,
     title: nextTitle,
@@ -194,6 +206,54 @@ function reviseNode({
     sourceEventId,
     gitCommit,
     createdBy: author || undefined,
+  });
+}
+
+function createResultFromRun({
+  runId,
+  verdict = "inconclusive",
+  reasoning = "",
+  title,
+  author,
+} = {}) {
+  if (!runId) throw new Error("An experiment run id is required.");
+  const run = store.getExperimentRun(runId);
+  if (!run) throw new Error("Experiment run not found.");
+  if (run.status !== "succeeded") throw new Error("Only a successful run can produce a result.");
+  const experiment = store.getResearchNode(run.node_id);
+  if (!experiment || experiment.kind !== "experiment") throw new Error("The run is not attached to an experiment node.");
+  if (experiment.archived) throw new Error("Restore the experiment before creating a result.");
+  if (store.getResearchNodeBySourceRun(run.id)) throw new Error("This run already has a result.");
+  const allowedVerdicts = new Set(["supports", "contradicts", "inconclusive"]);
+  const normalizedVerdict = allowedVerdicts.has(verdict) ? verdict : "inconclusive";
+  const text = String(reasoning || "").trim().slice(0, 4_000);
+  const log = experimentRuns.readExperimentRunLog({ runId: run.id, maxBytes: 6_000 });
+  return createNode({
+    projectId: run.project_id,
+    threadId: run.thread_id,
+    kind: "result",
+    status: "active",
+    title: String(title || `Result: ${experiment.title}`).slice(0, 200),
+    summary: normalizeSummary(text),
+    content: {
+      evidence: {
+        runId: run.id,
+        command: run.command,
+        cwd: run.cwd,
+        exitCode: run.exit_code,
+        commit: run.commit_sha,
+        logPath: run.log_path,
+        logTail: log.text,
+        metrics: run.metrics,
+      },
+      interpretation: {
+        verdict: normalizedVerdict,
+        reasoning: text,
+      },
+    },
+    parents: [{ nodeId: experiment.id, kind: "produces" }],
+    sourceRunId: run.id,
+    author,
   });
 }
 
@@ -326,9 +386,12 @@ function setNodeStatus({ nodeId, status, reason = "", author } = {}) {
 
 // Apply a bounded extractor patch in one logical operation. The whole patch is
 // validated before writing; a failed write archives any nodes it already made.
-function applyPatch({ projectId, threadId = null, turnId = null, patch, author } = {}) {
+function applyPatch({ projectId, threadId = null, turnId = null, patch, author, allowResults = true } = {}) {
   if (!projectId) throw new Error("A project is required to apply a graph patch.");
   const normalized = normalizePatch(patch);
+  if (!allowResults && normalized.nodes.some((node) => node.kind === "result")) {
+    throw new Error("Results are created from completed runs, not extracted from a conversation.");
+  }
   const existing = store.listResearchGraph({ projectId, threadId });
   const existingEdges = store.listResearchEdges({ projectId, threadId });
   const existingEdgeIds = new Set(existingEdges.map((edge) => edge.id));
@@ -599,6 +662,7 @@ module.exports = {
   NODE_KINDS,
   createNode,
   reviseNode,
+  createResultFromRun,
   linkNodes,
   setNodeStatus,
   applyPatch,

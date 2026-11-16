@@ -1,7 +1,7 @@
 import { Activity, FileText, FlaskConical, HelpCircle, Lightbulb, type LucideIcon } from "lucide-react";
 import { useUISettings } from "../i18n";
 import { GRAPH_NODE_HEIGHT, GRAPH_NODE_WIDTH, type GraphLayout } from "./graphLayout";
-import type { ResearchNodeKind } from "./types";
+import type { ExperimentRun, ResearchNodeKind } from "./types";
 
 const KIND_ICONS: Record<ResearchNodeKind, LucideIcon> = {
   question: HelpCircle,
@@ -22,10 +22,11 @@ const KIND_LABELS: Record<ResearchNodeKind, string> = {
 type Props = {
   layout: GraphLayout;
   selectedId: string | null;
+  runsByNode: Map<string, ExperimentRun[]>;
   onSelect: (nodeId: string) => void;
 };
 
-export default function ResearchGraphView({ layout, selectedId, onSelect }: Props) {
+export default function ResearchGraphView({ layout, selectedId, runsByNode, onSelect }: Props) {
   const { t } = useUISettings();
   return <div
     className="research-graph-canvas"
@@ -52,6 +53,8 @@ export default function ResearchGraphView({ layout, selectedId, onSelect }: Prop
         ? String((node.current_revision?.content as { interpretation?: { verdict?: unknown } } | null)?.interpretation?.verdict || "")
         : "";
       const selected = node.id === selectedId;
+      const nodeRuns = runsByNode.get(node.id) ?? [];
+      const latestRun = nodeRuns.at(-1) ?? null;
       return <button
         key={node.id}
         type="button"
@@ -73,6 +76,14 @@ export default function ResearchGraphView({ layout, selectedId, onSelect }: Prop
           <span className="research-graph-node-kind">{t(KIND_LABELS[node.kind])}</span>
           <span className="research-graph-node-title">{node.title}</span>
         </span>
+        {node.kind === "experiment" && latestRun && <span
+          className={`research-graph-node-runs status-${latestRun.status}`}
+          title={`${nodeRuns.length} runs · ${latestRun.status}`}
+          aria-label={`${nodeRuns.length} runs · ${latestRun.status}`}
+        >
+          <i aria-hidden="true" />
+          {nodeRuns.length > 1 ? nodeRuns.length : ""}
+        </span>}
         <span className="research-graph-node-status" aria-hidden="true" />
       </button>;
     })}

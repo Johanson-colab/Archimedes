@@ -43,7 +43,7 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
       "- idea: a testable hypothesis. Use status draft unless the answer clearly establishes it.",
     ];
   const allowedEdgeKinds = experimentStage
-    ? ["generates", "refines", "tests"]
+    ? ["generates", "refines", "tests", "extends", "replicates"]
     : ["generates", "refines"];
   const edgeRules = allowedEdgeKinds
     .map((kind) => `${kind}: ${EDGE_RULES[kind].map(([from, to]) => `${from}->${to}`).join(", ")}`)
@@ -54,7 +54,8 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
       "Every experiment must have at least one tests edge from an idea. Never link an experiment directly to a question.",
       "One idea may have multiple experiments. Attach each experiment to every idea it actually tests.",
       "Do not create result or writing nodes in this stage.",
-      "Allowed edges are only generates, refines, and tests. Do not create extends, replicates, feedback, produces, merges, or cites edges.",
+      "Allowed edges are only generates, refines, tests, extends, and replicates. Do not create feedback, produces, merges, or cites edges.",
+      "When the plan builds on an existing experiment, link it with an extends edge as well as the idea tests edge.",
     ]
     : [
       "This is the idea discussion stage. Create only question and idea nodes.",
@@ -66,7 +67,7 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
       nodes: [
         { id: "n1", kind: "question", title: "...", summary: "...", content: { question: "..." } },
         { id: "n2", kind: "idea", title: "...", summary: "...", content: { hypothesis: "...", prediction: "..." } },
-        { id: "n3", kind: "experiment", title: "...", summary: "...", content: { plan: "..." } },
+        { id: "n3", kind: "experiment", title: "...", summary: "...", content: { hypothesis: "...", baseline: "...", method: "...", metrics: ["..."], stopCriteria: "..." } },
       ],
       edges: [
         { from: "n1", to: "n2", kind: "generates" },
@@ -117,7 +118,7 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
     "- content must be a compact JSON object. Suggested fields:",
     "  question: { question }",
     "  idea: { hypothesis, prediction }",
-    ...(experimentStage ? ["  experiment: { plan }"] : []),
+    ...(experimentStage ? ["  experiment: { hypothesis, baseline, method, metrics, stopCriteria }"] : []),
     "- If the answer contains no new research object, return {\"nodes\":[],\"edges\":[],\"reason\":\"no_new_objects\"}.",
     "",
     "Required JSON shape:",
@@ -282,14 +283,14 @@ async function maybeAutoBuild({
         ? await extractWithApi({ complete, config, prompt: nextPrompt, signal: controller.signal })
         : await extractWithNative({ runNative, config, workspace, prompt: nextPrompt, signal: controller.signal });
       if (controller.signal.aborted) throw new Error("Graph extraction timed out.");
-      return graph.applyPatch({ projectId, threadId, turnId, patch: parseGraphPatch(text) });
+      return graph.applyPatch({ projectId, threadId, turnId, patch: parseGraphPatch(text), allowResults: false });
     };
     let applied;
     try {
       applied = await runExtraction(prompt);
     } catch (firstError) {
       if (backend !== "api" || controller.signal.aborted || /No API model|unavailable/i.test(firstError?.message || "")) throw firstError;
-      const retryPrompt = `${prompt}\n\nYour previous graph patch could not be applied: ${firstError?.message || String(firstError)}\nReturn ONLY a valid JSON object with at most 3 new nodes and 4 new edges. Do not include Markdown or commentary. Do not create experiment or result nodes unless the answer reports a concrete experiment plan or measured result.`;
+      const retryPrompt = `${prompt}\n\nYour previous graph patch could not be applied: ${firstError?.message || String(firstError)}\nReturn ONLY a valid JSON object with at most 3 new nodes and 4 new edges. Do not include Markdown or commentary. Do not create result nodes; results come from completed runs. Create experiment nodes only when the answer reports a concrete experiment plan.`;
       applied = await runExtraction(retryPrompt);
     }
     const createdNodeIds = applied.createdNodes.map((node) => node.id);

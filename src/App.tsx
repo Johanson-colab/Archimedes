@@ -2357,7 +2357,7 @@ function App() {
       setBoundHarness(thread.harness ?? null);
       setActiveProjectId(thread.project_id);
       if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
-      setResearchMode(chatModeFromThread(thread.mode, thread.events));
+      setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
     } else {
       setMessages(initialMessages);
@@ -2558,7 +2558,7 @@ function App() {
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
       setEvents([]);
-      setResearchMode(chatModeFromThread(thread.mode, thread.events));
+      setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
       const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
       setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
@@ -3645,6 +3645,7 @@ function App() {
             threadTitle={pathThread?.title ?? t("No active session")}
             hasThread={Boolean(pathThread)}
             mode={pathMode}
+            workspace={executionWorkspace}
             version={graphVersion}
             update={graphUpdate}
             onOpenThread={openPathThread}
@@ -4552,7 +4553,11 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     }
     const draft = prompt;
     const submittedContext = contextItems;
-    const submittedMode: ResearchMode = pendingResearchSkill ? "research" : predictedMode;
+    const submittedMode: ResearchMode = pendingResearchSkill
+      ? "research"
+      : researchMode === "experiment-setup"
+        ? "experiment-setup"
+        : predictedMode;
     rememberPrompt(draft);
     setPrompt("");
     setComposerError("");

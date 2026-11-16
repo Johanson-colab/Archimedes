@@ -54,6 +54,14 @@ const chainPatch = {
   reason: "test chain",
 };
 
+// Automatic extraction never creates result nodes: results come from a
+// completed run with its log and exit code.
+const autoChainPatch = {
+  nodes: chainPatch.nodes.slice(0, 3),
+  edges: chainPatch.edges.slice(0, 2),
+  reason: "auto test chain",
+};
+
 test("applyPatch creates a typed chain and records the source turn", () => {
   withWorkspace(({ project }) => {
     const { turn } = threadFor(project.id);
@@ -178,15 +186,15 @@ test("maybeAutoBuild applies an API patch once and emits a graph update", async 
       complete: async (_config, _messages, options) => {
         completeCalls += 1;
         assert.equal(options.allowTools, false);
-        return { content: JSON.stringify(chainPatch) };
+        return { content: JSON.stringify(autoChainPatch) };
       },
     });
     assert.equal(completeCalls, 1);
-    assert.equal(result.createdNodes.length, 4);
+    assert.equal(result.createdNodes.length, 3);
     assert.ok(events.some((event) => event.type === "graph_update_pending"));
     const update = events.find((event) => event.type === "graph_update");
-    assert.equal(update.graph.nodeCount, 4);
-    assert.equal(update.graph.edgeCount, 3);
+    assert.equal(update.graph.nodeCount, 3);
+    assert.equal(update.graph.edgeCount, 2);
     const again = await auto.maybeAutoBuild({
       projectId: project.id,
       threadId: thread.id,
@@ -203,7 +211,7 @@ test("maybeAutoBuild applies an API patch once and emits a graph update", async 
       complete: async () => { throw new Error("should not be called"); },
     });
     assert.equal(again, null);
-    assert.equal(graph.listGraph({ projectId: project.id }).nodes.length, 4);
+    assert.equal(graph.listGraph({ projectId: project.id }).nodes.length, 3);
   });
 });
 
@@ -226,14 +234,14 @@ test("maybeAutoBuild uses a transient native turn without touching the main thre
       recordEvent: () => {},
       runNative: async (options) => {
         captured = options;
-        return JSON.stringify(chainPatch);
+        return JSON.stringify(autoChainPatch);
       },
     });
     assert.equal(captured.config.permissionMode, "plan");
     assert.equal(captured.thread.id === thread.id, false);
     assert.equal(captured.thread.turns.length, 0);
     assert.equal(captured.turn.user_message.includes("severity sweep"), true);
-    assert.equal(result.createdNodes.length, 4);
+    assert.equal(result.createdNodes.length, 3);
   });
 });
 
@@ -530,7 +538,7 @@ test("extraction prompts separate idea discussion from experiment setup", () => 
   assert.match(experimentPrompt, /Experiment setup stage/i);
   assert.match(experimentPrompt, /Every experiment must have at least one tests edge from an idea/i);
   assert.match(experimentPrompt, /One idea may have multiple experiments/i);
-  assert.match(experimentPrompt, /experiment: \{ plan \}/);
+  assert.match(experimentPrompt, /experiment: \{ hypothesis, baseline, method, metrics, stopCriteria \}/);
 });
 
 test("a completed API Research turn schedules a background graph build", async () => {
@@ -549,7 +557,7 @@ test("a completed API Research turn schedules a background graph build", async (
       requests.push(body);
       const system = String(body.messages?.[0]?.content || "");
       const message = system.includes("strict research graph extractor")
-        ? { role: "assistant", content: JSON.stringify(chainPatch) }
+        ? { role: "assistant", content: JSON.stringify(autoChainPatch) }
         : { role: "assistant", content: "The answer proposes a severity sweep." };
       return {
         ok: true,
@@ -576,11 +584,11 @@ test("a completed API Research turn schedules a background graph build", async (
       assert.ok(events.some((event) => event.type === "graph_update_pending"));
       const update = events.find((event) => event.type === "graph_update" && event.graph?.nodeCount > 0);
       assert.ok(update);
-      assert.equal(update.graph.nodeCount, 4);
-      assert.equal(update.graph.edgeCount, 3);
+      assert.equal(update.graph.nodeCount, 3);
+      assert.equal(update.graph.edgeCount, 2);
       const listed = store.listResearchGraph({ projectId: project.id });
-      assert.equal(listed.nodes.length, 4);
-      assert.equal(listed.edges.length, 3);
+      assert.equal(listed.nodes.length, 3);
+      assert.equal(listed.edges.length, 2);
       assert.ok(requests.some((request) => String(request.messages?.[0]?.content || "").includes("strict research graph extractor")));
     } finally {
       global.fetch = previousFetch;
