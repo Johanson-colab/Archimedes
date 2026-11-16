@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUISettings } from "./i18n";
-import { chapterChunkStatus, eventFailedAnswer, eventHasError, eventOrdinal, isUnresolvedError, latestAnswerOrdinal } from "./journeyEventState";
+import { chapterChunkStatus, eventFailedAnswer, eventHasError, eventIncomplete, eventOrdinal, isUnresolvedError, latestAnswerOrdinal } from "./journeyEventState";
 import { artifactPaths, collectTouchedPaths, toolArgumentsOf, toolNameOf } from "./evidencePaths";
 import { planChapterMerges } from "./journeyMergePlan";
 
@@ -25,7 +25,7 @@ type JourneyEpisode = {
   id: string;
   title: string;
   outcome: string;
-  status: "done" | "running" | "waiting" | "error" | "open";
+  status: "done" | "running" | "waiting" | "error" | "open" | "incomplete";
   start: number;
   end: number;
   steps: number;
@@ -35,7 +35,7 @@ type JourneyChapter = {
   id: string;
   title: string;
   summary: string;
-  status: "done" | "running" | "waiting" | "error" | "open";
+  status: "done" | "running" | "waiting" | "error" | "open" | "incomplete";
   start: number;
   end: number;
   steps: number;
@@ -217,7 +217,7 @@ function buildEpisodes(events: ResearchEvent[]): JourneyEpisode[] {
     if (event.type === "assistant_message") {
       const value = eventText(event);
       if (!value) continue;
-      episodes.push({ id: `${event.id}:answer`, title: "Drafted the answer", outcome: truncate(value, 140), status: "done", start: ordinal, end: ordinal, steps: 1 });
+      episodes.push({ id: `${event.id}:answer`, title: "Drafted the answer", outcome: truncate(value, 140), status: eventIncomplete(event) ? "incomplete" : "done", start: ordinal, end: ordinal, steps: 1 });
       index += 1;
     }
   }
@@ -241,7 +241,7 @@ function chapterTitle(firstUser: ResearchEvent | undefined, index: number, t: (k
   return truncate(raw, 58);
 }
 
-function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: boolean, t: (key: string, values?: Record<string, string | number>) => string, turn?: { last: boolean; failed: boolean }): JourneyChapter {
+function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: boolean, t: (key: string, values?: Record<string, string | number>) => string, turn?: { last: boolean; failed: boolean; incomplete?: boolean }): JourneyChapter {
   const sorted = [...events].sort((a, b) => (a.ordinal ?? a.sequence) - (b.ordinal ?? b.sequence));
   const sources = new Set<string>();
   const files = new Set<string>();
@@ -249,6 +249,7 @@ function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: 
   let toolCalls = 0;
   let hasAnswer = false;
   let hasFailure = false;
+  let hasIncomplete = false;
   for (const event of sorted) {
     if (event.type === "tool_call") {
       toolCalls += 1;
@@ -258,6 +259,7 @@ function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: 
     for (const file of eventFiles(event)) files.add(file);
     if (event.type === "assistant_message" && eventText(event)) hasAnswer = true;
     if (eventFailedAnswer(event)) hasFailure = true;
+    if (eventIncomplete(event)) hasIncomplete = true;
   }
   const firstUser = sorted.find((event) => event.type === "user_message");
   const title = firstOfTurn && firstUser ? chapterTitle(firstUser, index, t) : `Continued research ${index + 1}`;
@@ -272,8 +274,10 @@ function chapterFromEvents(events: ResearchEvent[], index: number, firstOfTurn: 
   const status: JourneyChapter["status"] = chapterChunkStatus({
     hasAnswer,
     hasFailure,
+    hasIncomplete,
     lastInTurn: turn ? turn.last : true,
     turnFailed: turn?.failed ?? false,
+    turnIncomplete: turn?.incomplete ?? false,
   });
   return {
     id: `${sorted[0]?.turn_id || "thread"}:${sorted[0]?.sequence ?? index}:${index}`,
@@ -296,7 +300,7 @@ function mergeChapterBatch(merged: JourneyChapter[], t: (key: string, values?: R
     id: `merged:${merged[0]?.id ?? "early"}`,
     title: `${t("Earlier research")} · #${start}–#${end}`,
     summary: `${plural(merged.length, t("chapter"))} · ${plural(steps, t("step"))}`,
-    status: merged.some((chapter) => chapter.status === "error") ? "error" : merged.some((chapter) => chapter.status === "waiting") ? "waiting" : merged.some((chapter) => chapter.status === "running") ? "running" : merged.some((chapter) => chapter.status === "open") ? "open" : "done",
+    status: merged.some((chapter) => chapter.status === "error") ? "error" : merged.some((chapter) => chapter.status === "incomplete") ? "incomplete" : merged.some((chapter) => chapter.status === "waiting") ? "waiting" : merged.some((chapter) => chapter.status === "running") ? "running" : merged.some((chapter) => chapter.status === "open") ? "open" : "done",
     start,
     end,
     steps,
@@ -313,7 +317,7 @@ function mergeChapterRange(chapters: JourneyChapter[], range: JourneyMergeRange,
     id: manualChapterId(range),
     title: t("Merged chapter"),
     summary: `${plural(parts.length, t("chapter"))} · ${plural(steps, t("step"))}`,
-    status: parts.some((chapter) => chapter.status === "error") ? "error" : parts.some((chapter) => chapter.status === "waiting") ? "waiting" : parts.some((chapter) => chapter.status === "running") ? "running" : parts.some((chapter) => chapter.status === "open") ? "open" : "done",
+    status: parts.some((chapter) => chapter.status === "error") ? "error" : parts.some((chapter) => chapter.status === "incomplete") ? "incomplete" : parts.some((chapter) => chapter.status === "waiting") ? "waiting" : parts.some((chapter) => chapter.status === "running") ? "running" : parts.some((chapter) => chapter.status === "open") ? "open" : "done",
     start: parts[0].start,
     end: parts.at(-1)?.end ?? range.end,
     steps,
@@ -358,10 +362,12 @@ function buildChapters(events: ResearchEvent[], settings: JourneySettings, pendi
   for (const group of groups.values()) {
     const segments = chunk(group, CHAPTER_EVENT_LIMIT);
     const failed = group.some(eventFailedAnswer);
+    const incomplete = group.some(eventIncomplete);
     for (const [segmentIndex, segment] of segments.entries()) {
       chapters.push(chapterFromEvents(segment, chapters.length, segmentIndex === 0, t, {
         last: segmentIndex === segments.length - 1,
         failed,
+        incomplete,
       }));
     }
   }
@@ -413,7 +419,7 @@ function buildEvidence(events: ResearchEvent[], pendingAction: AgentAction | nul
   return { sources: sources.size, files: files.size, artifacts: artifacts.size, open };
 }
 
-function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence: JourneyEvidence; pendingAction: AgentAction | null; thread: ResearchThread | null; openChapters: number; failedTurn: boolean; chatOnly: boolean }, t: (key: string, values?: Record<string, string | number>) => string): string {
+function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence: JourneyEvidence; pendingAction: AgentAction | null; thread: ResearchThread | null; openChapters: number; failedTurn: boolean; incompleteTurn: boolean; chatOnly: boolean }, t: (key: string, values?: Record<string, string | number>) => string): string {
   const { steps, chapters, evidence, openChapters } = data;
   if (!steps) return t("No research activity yet. Start a task and the journey will take shape here.");
   const hasResearch = evidence.sources + evidence.files + evidence.artifacts > 0;
@@ -432,6 +438,9 @@ function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence:
   if (data.failedTurn) {
     return `${facts} ${t("The last turn failed before producing a final answer.")}`;
   }
+  if (data.incompleteTurn) {
+    return `${facts} ${t("The last turn stopped before the model finished its answer. The partial response was kept.")}`;
+  }
   if (evidence.open > 0) {
     return `${facts} ${t("{count} steps still need attention before the chapter can be considered closed.", { count: evidence.open })}`;
   }
@@ -447,10 +456,11 @@ function buildBrief(data: { steps: number; chapters: JourneyChapter[]; evidence:
   return latestChapter ? `${facts} ${t("Latest chapter: {title}.", { title: latestChapter })}` : facts;
 }
 
-function buildNextMove(data: { pendingAction: AgentAction | null; thread: ResearchThread | null; evidence: JourneyEvidence; steps: number; openChapters: number; failedTurn: boolean; hasToolActivity: boolean }, t: (key: string, values?: Record<string, string | number>) => string): string {
+function buildNextMove(data: { pendingAction: AgentAction | null; thread: ResearchThread | null; evidence: JourneyEvidence; steps: number; openChapters: number; failedTurn: boolean; incompleteTurn: boolean; hasToolActivity: boolean }, t: (key: string, values?: Record<string, string | number>) => string): string {
   if (data.pendingAction) return t("Review the pending {kind}, then continue.", { kind: t(data.pendingAction.kind === "write" ? "file write" : "command") });
   if (data.thread?.status === "running") return t("Let the agent finish the current chapter, then audit the result.");
   if (data.failedTurn) return t("Retry the failed turn, or continue with a follow-up question.");
+  if (data.incompleteTurn) return t("Retry the incomplete turn, or continue with a follow-up question.");
   if (data.evidence.open > 0) return t("Resolve {count} open steps, or continue with a follow-up question.", { count: data.evidence.open });
   if (data.openChapters > 0) return t("Review {count} open chapters, or continue with a follow-up question.", { count: data.openChapters });
   if (!data.steps) return t("Start a research task to build a journey.");
@@ -561,7 +571,7 @@ function applyChapterPlan(chapters: JourneyChapter[], plan: JourneyChapterPlan[]
       id: parts[0].id,
       title: plainText(group.title) || parts[0].title,
       summary: plainText(group.summary) || `${plural(parts.length, t("chapter"))} · ${plural(steps, t("step"))}`,
-      status: parts.some((part) => part.status === "error") ? "error" : parts.some((part) => part.status === "waiting") ? "waiting" : parts.some((part) => part.status === "running") ? "running" : parts.some((part) => part.status === "open") ? "open" : "done",
+      status: parts.some((part) => part.status === "error") ? "error" : parts.some((part) => part.status === "incomplete") ? "incomplete" : parts.some((part) => part.status === "waiting") ? "waiting" : parts.some((part) => part.status === "running") ? "running" : parts.some((part) => part.status === "open") ? "open" : "done",
       start: parts[0].start,
       end: parts.at(-1)?.end ?? parts[0].end,
       steps,
@@ -597,12 +607,13 @@ function chapterStatusLabel(status: JourneyChapter["status"]): string {
   if (status === "running") return "active";
   if (status === "waiting") return "waiting";
   if (status === "error") return "error";
+  if (status === "incomplete") return "Incomplete";
   if (status === "open") return "open";
   return "done";
 }
 
 function isOpenChapter(chapter: JourneyChapter): boolean {
-  return chapter.status === "open" || chapter.status === "waiting" || chapter.status === "running";
+  return chapter.status === "open" || chapter.status === "waiting" || chapter.status === "running" || chapter.status === "incomplete";
 }
 
 function episodeLabel(episode: JourneyEpisode): string {
@@ -677,22 +688,26 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
   const hasResearch = evidence.sources + evidence.files + evidence.artifacts > 0;
   const allDone = chapters.every((chapter) => chapter.status === "done");
   const failedChapterCount = chapters.filter((chapter) => chapter.status === "error").length;
+  const incompleteChapterCount = chapters.filter((chapter) => chapter.status === "incomplete").length;
   const openChapterCount = chapters.filter(isOpenChapter).length;
   const lastAnswer = [...events].reverse().find((event) => event.type === "assistant_message");
   const failedTurn = Boolean(lastAnswer && eventFailedAnswer(lastAnswer));
+  const incompleteTurn = Boolean(lastAnswer && eventIncomplete(lastAnswer));
   const hasToolActivity = useMemo(() => events.some((event) => event.type === "tool_call" || event.type === "tool_result"), [events]);
   const attentionLabel = failedChapterCount > 0
     ? plural(failedChapterCount, t("failed chapter"), t("failed chapters"))
-    : openChapterCount > 0
-      ? plural(openChapterCount, t("open chapter"), t("open chapters"))
-      : evidence.open > 0
-        ? plural(evidence.open, t("open step"), t("open steps"))
-        : "";
+    : incompleteChapterCount > 0
+      ? plural(incompleteChapterCount, t("incomplete chapter"), t("incomplete chapters"))
+      : openChapterCount > 0
+        ? plural(openChapterCount, t("open chapter"), t("open chapters"))
+        : evidence.open > 0
+          ? plural(evidence.open, t("open step"), t("open steps"))
+          : "";
   const chatOnly = steps > 0 && !hasResearch && !hasToolActivity && !pendingAction && !hasErrors && allDone;
   const hasOpenChapters = openChapterCount > 0;
   const status: JourneyData["status"] = !steps ? "not-started" : pendingAction ? "waiting" : agentBusy || thread?.status === "running" ? "running" : hasErrors ? "attention" : chatOnly ? "chat-only" : allDone ? "complete" : "attention";
-  const ruleBrief = useMemo(() => buildBrief({ steps, chapters, evidence, pendingAction, thread, openChapters: openChapterCount, failedTurn, chatOnly }, t), [chapters, chatOnly, evidence, failedTurn, openChapterCount, pendingAction, steps, thread, t]);
-  const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps, openChapters: openChapterCount, failedTurn, hasToolActivity }, t);
+  const ruleBrief = useMemo(() => buildBrief({ steps, chapters, evidence, pendingAction, thread, openChapters: openChapterCount, failedTurn, incompleteTurn, chatOnly }, t), [chapters, chatOnly, evidence, failedTurn, incompleteTurn, openChapterCount, pendingAction, steps, thread, t]);
+  const ruleNextMove = buildNextMove({ pendingAction, thread, evidence, steps, openChapters: openChapterCount, failedTurn, incompleteTurn, hasToolActivity }, t);
   const brief = summary?.brief ? plainText(summary.brief) : ruleBrief;
   const nextMove = summary?.nextMove ? plainText(summary.nextMove) : ruleNextMove;
   const pinnedChapters = chapters.filter((chapter) => chapterPinIds(chapter).some((id) => pins.includes(id)));
@@ -1211,7 +1226,7 @@ export default function JourneyView({ bridge, thread, events, modeLabel, setting
     {header}
     <div className="journey-scrubber" aria-label={t("Chapter timeline")} style={{ "--journey-playhead": `${Math.round(readProgress * 100)}%` } as React.CSSProperties}>
       <div className="journey-scrubber-bars">
-        {chapters.map((chapter) => <button key={chapter.id} className={chapter.id === activeChapter?.id ? "current" : chapter.status === "error" ? "error" : "done"} style={{ flex: Math.max(1, chapter.steps) }} title={`${chapter.title} · ${plural(chapter.steps, t("step"))}`} aria-label={`${chapter.title}, ${plural(chapter.steps, t("step"))}`} onClick={() => jumpToChapter(chapter.id)} />)}
+        {chapters.map((chapter) => <button key={chapter.id} className={chapter.id === activeChapter?.id ? "current" : chapter.status === "error" ? "error" : chapter.status === "incomplete" ? "incomplete" : "done"} style={{ flex: Math.max(1, chapter.steps) }} title={`${chapter.title} · ${plural(chapter.steps, t("step"))}`} aria-label={`${chapter.title}, ${plural(chapter.steps, t("step"))}`} onClick={() => jumpToChapter(chapter.id)} />)}
         <span className="journey-playhead" />
         {chapters.filter((chapter) => pins.includes(chapter.id)).map((chapter) => <span key={`pin-${chapter.id}`} className="journey-mark pin" style={{ left: `${Math.min(99, (chapters.slice(0, chapters.indexOf(chapter)).reduce((total, item) => total + item.steps, 0) / Math.max(1, steps)) * 100)}%` }} />)}
         {chapters.filter((chapter) => chapter.status === "error").map((chapter) => <span key={`error-${chapter.id}`} className="journey-mark error" style={{ left: `${Math.min(99, (chapters.slice(0, chapters.indexOf(chapter)).reduce((total, item) => total + item.steps, 0) / Math.max(1, steps)) * 100)}%` }} />)}

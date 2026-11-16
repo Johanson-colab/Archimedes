@@ -1613,6 +1613,7 @@ body.workbench-panes-resizing-column { cursor: row-resize; user-select: none; }
 .journey-scrubber-bars > button.done { background: var(--night-faint); }
 .journey-scrubber-bars > button.current { background: var(--accent); }
 .journey-scrubber-bars > button.error { background: var(--night-danger); }
+.journey-scrubber-bars > button.incomplete { background: var(--night-warning); }
 .journey-playhead { position: absolute; top: -3px; bottom: -3px; left: var(--journey-playhead, 50%); width: 2px; background: var(--accent); border-radius: 2px; }
 .journey-playhead::after { position: absolute; top: -3px; left: -2px; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; content: ""; }
 .journey-mark { position: absolute; top: -2px; width: 1px; height: 8px; }
@@ -1685,6 +1686,7 @@ body.workbench-panes-resizing-column { cursor: row-resize; user-select: none; }
 .journey-episode.waiting .journey-episode-dot,
 .journey-episode.open .journey-episode-dot { background: var(--accent); }
 .journey-episode.error .journey-episode-dot { background: var(--night-danger); }
+.journey-episode.incomplete .journey-episode-dot { background: var(--night-warning); }
 .journey-episode-title { min-width: 0; flex: 1; overflow: hidden; color: var(--night-ink-soft); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .journey-episode-meta { flex: 0 0 auto; color: var(--night-faint); font-family: var(--font-mono); font-size: 11px; }
 .journey-episode-outcome { overflow: hidden; margin-left: 13px; color: var(--night-muted); font-size: 11px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
@@ -1772,6 +1774,7 @@ body.workbench-panes-resizing-column { cursor: row-resize; user-select: none; }
 .journey-map-episode-dot.running,
 .journey-map-episode-dot.open { background: var(--accent); }
 .journey-map-episode-dot.error { background: var(--night-danger); }
+.journey-map-episode-dot.incomplete { background: var(--night-warning); }
 .journey-map-episode-list strong { min-width: 0; flex: 1; overflow: hidden; color: var(--night-ink-soft); font-size: 12px; font-weight: 450; text-overflow: ellipsis; white-space: nowrap; }
 .journey-map-episode-list small { color: var(--night-faint); font-family: var(--font-mono); font-size: 11px; }
 .journey-map-inspector { min-height: 0; overflow: auto; padding: 20px; border-left: 1px solid var(--night-line-soft); }
@@ -4741,6 +4744,8 @@ html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4;
 .chat-activity-footer strong { color: var(--night-ink-soft); font-weight: 500; }
 .chat-activity-footer.failed { color: var(--night-danger); }
 .chat-activity-footer.failed strong { color: var(--night-danger); }
+.chat-activity-footer.incomplete { color: var(--night-warning); }
+.chat-activity-footer.incomplete strong { color: var(--night-warning); }
 .chat-activity-footer-sep { color: var(--night-faint); }
 .chat-activity-low-summary { display: flex; align-items: center; gap: 6px; padding: 0; color: var(--night-muted); background: transparent; border: 0; font-family: var(--font-mono); font-size: 11px; text-align: left; cursor: pointer; }
 .chat-activity-low-summary:hover { color: var(--night-ink-soft); }
