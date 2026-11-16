@@ -16,6 +16,7 @@
  */
 
 const { spawn } = require("node:child_process");
+const { remotePathChecks } = require("./structured-paths.cjs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { isOutputPath } = require("./paths.cjs");
@@ -114,7 +115,7 @@ function probeCommand() {
   ].join("; ");
 }
 
-function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {}, secrets = {} }) {
+function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {}, secrets = {}, spawnImpl = spawn }) {
   const { target, password, env } = authFor(server);
   const root = remoteRoot(target.workspace || workspace, repoUrl, branch);
   const repo = `${root}/repo`;
@@ -139,7 +140,7 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
 
   const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true, stdin } = {}) => new Promise((resolve) => {
     const args = connectionArgs(target, login ? loginCommand(command) : command, { allowPassword: Boolean(password) });
-    const child = spawn("ssh", args, { windowsHide: true, env: { ...process.env, ...env } });
+    const child = spawnImpl("ssh", args, { windowsHide: true, env: { ...process.env, ...env } });
     const out = [];
     if (stdin !== undefined) {
       // ssh forwards stdin over the channel; a command that exits early closes it.
@@ -245,31 +246,20 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
 
     /** Writes a file inside the checkout. Used by the structured write/edit actions. */
     async writeRepoFile(relativePath, content) {
-      const relative = String(relativePath || "");
-      const absolute = path.posix.join(repo, relative);
-      if (absolute.includes("..") || absolute.split("/").includes(".git")) {
-        throw new Error("The path is outside the checkout.");
-      }
-      const dir = path.posix.dirname(absolute);
+      const checked = remotePathChecks(repo, relativePath, { quote: quoteRemotePath, write: true });
       const payload = String(content ?? "");
-      const result = await run(
-        `umask 022; mkdir -p ${quoteRemotePath(dir)} && cat > ${quoteRemotePath(absolute)}`,
-        { timeoutMs: 120_000, login: false, stdin: payload },
-      );
-      if (result.code !== 0) {
-        throw new Error(`Could not write ${relative}: ${String(result.output || "").trim().slice(0, 200)}`);
-      }
-      return { path: relative, bytes: Buffer.byteLength(payload, "utf8") };
+      const result = await run(`${checked.commands}; cat > ${quoteRemotePath(checked.path)}`, { timeoutMs: 120_000, login: false, stdin: payload });
+      if (result.code !== 0) throw new Error(`Could not write ${relativePath}: ${String(result.output || result.error || "Operation stopped").trim().slice(-300)}`);
+      return { path: String(relativePath), bytes: Buffer.byteLength(payload) };
     },
 
     async readFile(relativePath) {
-      const absolute = path.posix.join(repo, String(relativePath || ""));
-      if (absolute.includes("..")) throw new Error("The checked path is outside the checkout.");
-      const result = await run(`cat -- ${quoteRemotePath(absolute)}`, { timeoutMs: 60_000, login: false });
+      const checked = remotePathChecks(repo, relativePath, { quote: quoteRemotePath });
+      const file = quoteRemotePath(checked.path);
+      const result = await run(`${checked.commands}; bytes=$(wc -c < ${file}) || exit 1; test "$bytes" -le 2097152 || { echo "The file exceeds the complete structured-read limit. Use a paged shell command for large data." >&2; exit 74; }; cat -- ${file}`, { timeoutMs: 60_000, login: false });
       if (result.code !== 0) {
-        // A missing file is an answer, not a crash: the checkpoint reports it.
         if (/No such file|Not a directory|cannot open/i.test(result.output)) return null;
-        throw new Error(result.output.trim().slice(0, 300) || "The file could not be read.");
+        throw new Error(result.output.trim().slice(-300) || result.error || "The file could not be read.");
       }
       return result.output;
     },
