@@ -6,6 +6,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const paperSelection = require("./project-paper-selection.cjs");
 const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
 const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles.cjs");
@@ -340,6 +341,15 @@ function schema(db) {
       paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
       added_at TEXT NOT NULL,
       PRIMARY KEY (library_id, paper_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS project_paper_selections (
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL DEFAULT '',
+      discovery_json TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, paper_id)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS paper_reader_assets (
@@ -1643,7 +1653,24 @@ function setPaperChatThread(paperId, threadId, projectId = null) {
   return getPaperChatThread(paperId, resolvedProject);
 }
 
-function addPaper(libraryId, paper) {
+function addPaper(libraryId, paper, selection) {
+  const db = requireDatabase();
+  db.exec("SAVEPOINT add_paper_selection");
+  try {
+    const result = addPaperRecord(libraryId, paper);
+    if (selection !== undefined) {
+      const library = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(libraryId);
+      saveProjectPaperSelection(result.id, library.project_id, selection);
+    }
+    db.exec("RELEASE add_paper_selection");
+    return result;
+  } catch (error) { db.exec("ROLLBACK TO add_paper_selection"); db.exec("RELEASE add_paper_selection"); throw error; }
+}
+
+function getProjectPaperSelection(paperId, projectId) { return paperSelection.getSelection(requireDatabase(), paperId, projectId, canAccessProject); }
+function saveProjectPaperSelection(paperId, projectId, patch = {}) { return paperSelection.saveSelection(requireDatabase(), paperId, projectId, patch, canAccessProject); }
+
+function addPaperRecord(libraryId, paper) {
   const db = requireDatabase();
   const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Choose a valid library before importing a paper.");
@@ -3469,6 +3496,8 @@ function listReproductionAttempts(runId) {
 }
 
 module.exports = {
+  getProjectPaperSelection,
+  saveProjectPaperSelection,
   nativeAgentBindings,
   bindResearchThreadHarness,
   compactResearchThread,

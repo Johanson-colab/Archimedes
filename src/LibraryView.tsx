@@ -26,6 +26,8 @@ import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typesc
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import { forgetDailyFigure, peekDailyFigure, subscribeDailyFigure } from "./daily-figures";
 import ConferenceDiscovery from "./ConferenceDiscovery";
+import ProjectPaperContext from "./ProjectPaperContext";
+import { discoveryProvenance, type SelectionBridge } from "./project-paper-selection";
 import PaperReviewWorkbench from "./PaperReviewWorkbench";
 import PaperCanvas, { type PaperCanvasInsert, type PaperCanvasSource } from "./PaperCanvas";
 import { equationTokens, findEquationRects } from "./pdf-equations";
@@ -194,7 +196,7 @@ export default function LibraryView(props: LibraryViewProps) {
     bridge={bridge} projectId={projectId} active={active} refreshVersion={libraryRefreshVersion}
     onLibraryImported={onLibraryImported} onOpenProject={onOpenProject}
     renderReader={(readerProps) => <PaperReadingWorkbench {...readerProps} bridge={bridge} workspace={workspace} projectId={projectId} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} onReproduceOpened={onReproduceOpened} />}
-    renderInspector={(inspectorProps) => <PaperInspector {...inspectorProps} />}
+    renderInspector={(inspectorProps) => <PaperInspector {...inspectorProps} bridge={bridge} projectId={projectId} />}
     renderEditor={(editorProps) => <LibraryEditor {...editorProps} active={active} />}
     renderImport={(importProps) => <PaperImportModal {...importProps} bridge={bridge} workspace={workspace} />}
   />;
@@ -218,10 +220,10 @@ function DailyLibraryView({ bridge, projectId, initialMode, refreshVersion, onLi
     void loadLibraries().catch(() => {});
     return () => { alive.current = false; };
   }, [loadLibraries, refreshVersion]);
-  return <DailyDiscovery initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => { await loadLibraries(); onLibraryImported?.(); }} />;
+  return <DailyDiscovery projectId={projectId} initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => { await loadLibraries(); onLibraryImported?.(); }} />;
 }
 
-function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void; noteDrafts: LibraryNoteDrafts }) {
+function PaperInspector({ bridge, projectId, paper, onUpdate, onRemove, onRead, noteDrafts }: { bridge: ResearchDeskBridge; projectId?: string | null; paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void; noteDrafts: LibraryNoteDrafts }) {
   const { t } = useUISettings();
   const [authorsExpanded, setAuthorsExpanded] = useState(false);
   const [error, setError] = useState("");
@@ -241,6 +243,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { pap
     <p className="paper-abstract">{paper.abstract || t("No abstract available.")}</p>
     <div className="paper-record-row"><label>{t("Reading status")}<select value={paper.reading_status} onChange={(event) => void update({ reading_status: event.target.value as ReadingStatus })}><option value="unread">{t("Unread")}</option><option value="reading">{t("Reading")}</option><option value="read">{t("Already read")}</option></select></label>{publicPaperRecordUrl(paper) && <a className="outline-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer"><ExternalLink size={14} />{t("Open source")}</a>}</div>
     <button className="paper-reader-launch" onClick={onRead}><BookOpen size={15} /><span><strong>{t("Open reading workspace")}</strong><small>{t("Notes, evidence, and paper structure")}</small></span><ChevronRight size={16} /></button>
+    <ProjectPaperContext key={`${projectId}:${paper.id}`} bridge={bridge} paperId={paper.id} projectId={projectId} />
     <LibraryPaperNotes key={paper.id} paper={paper} drafts={noteDrafts} compact onSave={(notes) => onUpdate({ notes })} />
     <button className="secondary-button danger-text library-remove-paper" onClick={() => void onRemove()}><Trash size={14} />{t("Remove")}</button>
   </article>;
@@ -2545,7 +2548,7 @@ function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: Research
   </div>;
 }
 
-function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
+function DailyDiscovery({ projectId, initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
   const { t } = useUISettings();
   const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
   const [range, setRange] = useState<DailyDiscoveryRange>("7d");
@@ -2561,6 +2564,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   const [adding, setAdding] = useState<string | null>(null);
   const [previewPaper, setPreviewPaper] = useState<DailyPaper | null>(null);
   const [error, setError] = useState("");
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const feedRequestId = useRef(0);
   const deepRequestId = useRef(0);
   const responseRef = useRef<DailyDiscoveryResponse | null>(null);
@@ -2659,7 +2663,10 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     setAdding(key);
     setError("");
     try {
-      await bridge.addLibraryPaper(targetLibraryId, paper);
+      await (bridge as SelectionBridge).addLibraryPaper(targetLibraryId, paper, projectId ? {
+        ...(reasons[key]?.trim() ? { reason: reasons[key].trim() } : {}),
+        discovery: discoveryProvenance({ mode, range, topic, searchKind, submittedQuery, response, deepResponse }, paper),
+      } : undefined);
       setAdded((current) => new Set(current).add(key));
       await onImported();
     } catch (addError) {
@@ -2683,7 +2690,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
     </div>
     <FilterGroup label="AI research topic" className="daily-topic-filter">{DAILY_TOPICS.map((item) => <FilterButton key={item.id} active={topic === item.id} disabled={searchActive && searchKind === "deep"} title={searchActive && searchKind === "deep" ? "Clear deep search to change its topic constraint" : item.description} onClick={() => setTopic(item.id)}>{item.label}</FilterButton>)}</FilterGroup>
-    {mode === "conference" ? <ConferenceDiscovery bridge={bridge} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /> : <>
+    {mode === "conference" ? <ConferenceDiscovery projectId={projectId} bridge={bridge} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /> : <>
     <div className={searchKind === "deep" ? "daily-search-panel deep" : "daily-search-panel"}>
       <Tabs value={searchKind} onChange={(value) => changeSearchKind(value as typeof searchKind)} label="Paper search type" variant="segmented" className="daily-search-kind">
         <Tab value="quick" icon={<Search size={12} />}>Quick search</Tab>
@@ -2695,7 +2702,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}{searchKind === "quick" && searchActive && response?.options?.topic === "all" && topic !== "all" ? " · title search across all topics" : ""}</span></div>}
     </div>
     {error && <InlineNotice tone={deepResponse ? "warning" : "danger"} className={deepResponse ? "daily-search-warning" : "library-error"}>{error}</InlineNotice>}
-    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} reasons={reasons} onReason={(key, reason) => setReasons((current) => ({ ...current, [key]: reason }))} /> : loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
       const isAdding = adding === key;
@@ -2722,6 +2729,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
           <div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}<button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button></div>
           <p className="daily-paper-meta"><span className="daily-paper-date">{formatPaperDate(paper.published_at)}</span><span className="daily-paper-source">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}</span><span className="daily-paper-authors">{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</span></p>
           <small>{paper.abstract || "No abstract available."}</small>
+          <label>{t("Project selection reason")}<input aria-label={`${t("Project selection reason")}: ${paper.title}`} value={reasons[key] || ""} onChange={(event) => setReasons((current) => ({ ...current, [key]: event.target.value }))} placeholder={t("Your reason for selecting this paper")} /></label>
           <div className="daily-paper-signals">{paper.categories.slice(0, 3).map((category) => <span key={category}>{category}</span>)}{paper.upvotes > 0 && <span><Flame size={11} />{paper.upvotes}</span>}{paper.github_url && <a href={paper.github_url} target="_blank" rel="noreferrer"><Code2 size={11} />{paper.github_stars > 0 ? paper.github_stars : "Code"}</a>}</div>
         </div>
         <DailyThumbnail paper={paper} bridge={bridge} />
@@ -2802,7 +2810,7 @@ function DailyPaperPreview({ paper, bridge, canSave, isAdded, isAdding, onAdd, o
   </Dialog>;
 }
 
-function DeepSearchResults({ response, loading, error, targetLibrary, added, adding, onSave }: {
+function DeepSearchResults({ response, loading, error, targetLibrary, added, adding, onSave, reasons, onReason }: {
   response: DeepPaperSearchResponse | null;
   loading: boolean;
   error: string;
@@ -2810,7 +2818,10 @@ function DeepSearchResults({ response, loading, error, targetLibrary, added, add
   added: Set<string>;
   adding: string | null;
   onSave: (paper: AcademicSearchResult) => Promise<void>;
+  reasons: Record<string, string>;
+  onReason: (key: string, reason: string) => void;
 }) {
+  const { t } = useUISettings();
   if (loading && !response) return <StateView tone="loading" className="daily-deep-progress" icon={<LoaderCircle className="spin" size={22} />} title="Expanding and matching your research request" description="Understanding methods and domains, searching multiple scholarly indexes, deduplicating, then reranking titles and abstracts." />;
   if (error && !response) return <StateView tone="error" className="daily-empty daily-feed-failed" icon={<Search size={28} />} title="Deep search could not finish" description="Check the model configuration or try a shorter, more specific research request." />;
   if (!response?.results.length) return <StateView className="daily-empty" icon={<Search size={28} />} title="No deep-search results yet" description="Describe the research problem, preferred methods, and evaluation setting, then start a deep search." />;
@@ -2829,6 +2840,7 @@ function DeepSearchResults({ response, loading, error, targetLibrary, added, add
       return <article className="daily-paper-row" key={key}>
         <div className="daily-paper-date"><strong>{paper.year || "—"}</strong><span>{paper.source?.split(",").join(" + ") || "Index"}</span></div>
         <div className="daily-paper-content"><div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}</div><p>{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}{paper.venue ? ` · ${paper.venue}` : ""}</p><div className={`deep-match-reason ${result.relevance}`}><strong>{result.relevance === "strong" ? "Strong match" : result.relevance === "related" ? "Related method" : "Background"}</strong><span>{result.reason}</span></div><small>{paper.abstract || "No abstract available."}</small><div className="daily-paper-signals">{result.matched_terms.map((term) => <span key={term}>{term}</span>)}{paper.citation_count > 0 && <span>{paper.citation_count.toLocaleString()} citations</span>}{paper.pdf_url && <a href={paper.pdf_url} target="_blank" rel="noreferrer"><FileText size={11} />PDF</a>}</div></div>
+        <label>{t("Project selection reason")}<input aria-label={`${t("Project selection reason")}: ${paper.title}`} value={reasons[key] || ""} onChange={(event) => onReason(key, event.target.value)} /></label>
         <button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void onSave(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button>
       </article>;
     })}</div>

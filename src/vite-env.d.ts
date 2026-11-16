@@ -204,7 +204,9 @@ interface ResearchDeskBridge {
     getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
     importLocalLibraryPaper: (libraryId: string, workspace?: string) => Promise<LibraryPaper | null>;
-    addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
+    addLibraryPaper: (libraryId: string, paper: AcademicSearchResult, selection?: { reason?: string; discovery?: Record<string, unknown> }) => Promise<LibraryPaper>;
+    getProjectPaperSelection: (paperId: string, projectId: string) => Promise<import("./project-paper-selection").ProjectPaperSelection | null>;
+    saveProjectPaperSelection: (paperId: string, projectId: string, patch: { reason?: string; discovery?: Record<string, unknown> }) => Promise<import("./project-paper-selection").ProjectPaperSelection>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     getLibraryPaperReader: (paperId: string, workspace?: string, projectId?: string | null) => Promise<PaperReaderState>;

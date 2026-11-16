@@ -1,3 +1,4 @@
+import type { ProjectPaperSelection } from "./project-paper-selection";
 import seedData from "../shared/library-seeds.json";
 
 const now = new Date().toISOString();
@@ -12,6 +13,7 @@ const previewLibraries: ResearchLibrary[] = seedData.libraries.map((library) => 
 }));
 
 const previewPapers = new Map<string, LibraryPaper>();
+const previewSelections = new Map<string, ProjectPaperSelection>();
 const previewLinks = new Map<string, Set<string>>();
 
 for (const library of seedData.libraries) {
@@ -139,7 +141,7 @@ export const previewLibraryBridge = {
       fetched_at: new Date().toISOString(),
     };
   },
-  addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult) => {
+  addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult, selection?: { reason?: string; discovery?: Record<string, unknown> }) => {
     const existing = [...previewPapers.values()].find((candidate) => candidate.arxiv_id && candidate.arxiv_id === paper.arxiv_id)
       ?? [...previewPapers.values()].find((candidate) => candidate.title === paper.title);
     const id = existing?.id ?? crypto.randomUUID();
@@ -162,7 +164,21 @@ export const previewLibraryBridge = {
     if (!links) throw new Error("Library not found.");
     links.add(id);
     refreshCount(libraryId);
+    if (selection) {
+      const projectId = previewLibraries.find((library) => library.id === libraryId)?.project_id || "preview-project";
+      const key = JSON.stringify([projectId, id]);
+      const current = previewSelections.get(key);
+      previewSelections.set(key, { project_id: projectId, paper_id: id, reason: selection.reason ?? current?.reason ?? "", discovery: selection.discovery ?? current?.discovery ?? {}, updated_at: new Date().toISOString() });
+    }
     return { ...(previewPapers.get(id) as LibraryPaper) };
+  },
+  getProjectPaperSelection: async (paperId: string, projectId: string): Promise<ProjectPaperSelection | null> => previewSelections.get(JSON.stringify([projectId, paperId])) || null,
+  saveProjectPaperSelection: async (paperId: string, projectId: string, patch: { reason?: string; discovery?: Record<string, unknown> }): Promise<ProjectPaperSelection> => {
+    if (!previewPapers.has(paperId)) throw new Error("Paper not found.");
+    const key = JSON.stringify([projectId, paperId]);
+    const current = previewSelections.get(key);
+    const next = { project_id: projectId, paper_id: paperId, reason: patch.reason ?? current?.reason ?? "", discovery: patch.discovery ?? current?.discovery ?? {}, updated_at: new Date().toISOString() };
+    previewSelections.set(key, next); return next;
   },
   updateLibraryPaper: async (paperId: string, patch: Partial<LibraryPaper>) => {
     const paper = previewPapers.get(paperId);

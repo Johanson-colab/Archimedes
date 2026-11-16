@@ -1699,13 +1699,16 @@ app.whenReady().then(async () => {
     seedPath: path.join(__dirname, "assets", "benchmark-radar", "public-index.json"),
   }));
 
-  ipcMain.handle("library:add-paper", (_event, { libraryId, paper }) => {
+  ipcMain.handle("library:add-paper", (_event, { libraryId, paper, selection }) => {
     if (typeof libraryId !== "string" || !paper || typeof paper.title !== "string" || !paper.title.trim()) {
       throw new Error("Choose a library and a valid paper before importing.");
     }
     if (paper.title.length > 1000 || String(paper.abstract || "").length > 100_000) throw new Error("Paper metadata is too large.");
-    return store.addPaper(libraryId, paper);
+    return store.addPaper(libraryId, paper, selection);
   });
+
+  ipcMain.handle("library:get-project-selection", (_event, { paperId, projectId }) => store.getProjectPaperSelection(paperId, projectId));
+  ipcMain.handle("library:save-project-selection", (_event, { paperId, projectId, patch }) => store.saveProjectPaperSelection(paperId, projectId, patch));
 
   ipcMain.handle("library:import-local-pdf", async (event, { libraryId, workspace } = {}) => {
     if (typeof libraryId !== "string") throw new Error("Choose a library before importing a paper.");

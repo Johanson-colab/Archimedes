@@ -8,6 +8,8 @@ import { FilterGroup, FilterButton } from "./Tabs";
 
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
+import { useUISettings } from "./i18n";
+import type { SelectionBridge } from "./project-paper-selection";
 const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }> = [
   { id: "all", label: "All" }, { id: "oral", label: "Oral" }, { id: "spotlight", label: "Spotlight" },
   { id: "poster", label: "Poster" }, { id: "unknown", label: "Unclassified" },
@@ -17,9 +19,11 @@ function errorMessage(error: unknown) {
   return String(error).replace(/^Error:\s*/, "").replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, "");
 }
 
-export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, onImported }: {
-  bridge: ResearchDeskBridge; targetLibraryId: string; topic: DailyDiscoveryTopic; onImported: () => Promise<void>;
+export default function ConferenceDiscovery({ projectId, bridge, targetLibraryId, topic, onImported }: {
+  projectId?: string | null; bridge: ResearchDeskBridge; targetLibraryId: string; topic: DailyDiscoveryTopic; onImported: () => Promise<void>;
 }) {
+  const { t } = useUISettings();
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const [conference, setConference] = useState<ConferenceId>("icml");
   const [year, setYear] = useState(2026);
   const [presentation, setPresentation] = useState<ConferencePresentation | "all">("all");
@@ -55,7 +59,10 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
     const key = `${targetLibraryId}:${paper.external_id}`;
     setAdding(key);
     try {
-      await bridge.addLibraryPaper(targetLibraryId, paper);
+      await (bridge as SelectionBridge).addLibraryPaper(targetLibraryId, paper, projectId ? {
+        ...(reasons[paper.external_id]?.trim() ? { reason: reasons[paper.external_id].trim() } : {}),
+        discovery: { query: submittedQuery, criteria: JSON.stringify({ mode: "conference", conference, year, presentation, topic }), fetched_at: response?.fetched_at || new Date().toISOString(), providers: response?.sources || [], degraded: Boolean(response?.stale || response?.warnings.length), warning: response?.warnings.join("; ") || "" },
+      } : undefined);
       setAdded((current) => new Set(current).add(key));
       await onImported();
     } catch (failure) { setError(errorMessage(failure)); }
@@ -106,6 +113,7 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
             </div>
             <p className="daily-paper-meta"><span className="daily-paper-date">{selected.label} {year}</span><span className="daily-paper-authors">{authors}</span></p>
             {paper.abstract && <small>{paper.abstract}</small>}
+            <label>{t("Project selection reason")}<input aria-label={`${t("Project selection reason")}: ${paper.title}`} value={reasons[paper.external_id] || ""} onChange={(event) => setReasons((current) => ({ ...current, [paper.external_id]: event.target.value }))} /></label>
             <div className="daily-paper-signals">
               <a className={`conference-badge ${metadata.presentation}`} href={metadata.presentation_source_url || metadata.source_url} title={metadata.decision} target="_blank" rel="noreferrer">{presentationLabel}</a>
               <span>{metadata.track}</span>
