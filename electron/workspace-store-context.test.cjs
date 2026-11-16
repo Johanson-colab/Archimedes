@@ -1,0 +1,125 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+const { test } = require("node:test");
+const store = require("./store.cjs");
+const agent = require("./agent.cjs");
+const model = require("./model-config.cjs");
+const { DatabaseSync } = require("node:sqlite");
+const { spawn } = require("node:child_process");
+const { randomUUID } = require("node:crypto");
+const { createWorkspaceIpc } = require("./workspace-context.cjs");
+
+function fixture(t) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-store-owner-")));
+  const a = path.join(root, "a"), b = path.join(root, "b"), executionA = path.join(root, "executionA"); fs.mkdirSync(a); fs.mkdirSync(b); fs.mkdirSync(executionA);
+  t.after(() => { store.closeAllWorkspaces(); fs.rmSync(root, { recursive: true, force: true }); });
+  return { root, a, b, executionA };
+}
+function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
+
+test("an in-flight window request retains its database through another selection and its window close", async t => {
+  const f = fixture(t), handlers = new Map(), gate = deferred();
+  const a = store.createWorkspaceStore(f.a), b = store.createWorkspaceStore(f.b);
+  const ipc = createWorkspaceIpc({ ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, store, workspaceForEvent: event => event.dataRoot });
+  ipc.handle("delayed-save", async () => { await gate.promise; return store.saveTask({ prompt: "Origin A", response: "Delayed A", status: "completed" }); });
+  const pending = handlers.get("delayed-save")({ dataRoot: f.a });
+  b.saveTask({ prompt: "Origin B", response: "B only", status: "completed" });
+  a.close(); gate.resolve(); await pending;
+  assert.deepEqual(store.createWorkspaceStore(f.a).getSnapshot().tasks.map(task => task.prompt), ["Origin A"]);
+  assert.deepEqual(b.getSnapshot().tasks.map(task => task.prompt), ["Origin B"]);
+});
+
+test("canonical aliases share one data store and same-ID runtime identities remain distinct across roots", t => {
+  const f = fixture(t), alias = path.join(f.root, "alias"); fs.symlinkSync(f.a, alias, process.platform === "win32" ? "junction" : "dir");
+  const a = store.createWorkspaceStore(f.a), otherName = store.createWorkspaceStore(alias), b = store.createWorkspaceStore(f.b);
+  assert.equal(a, otherName); assert.equal(a.workspace, fs.realpathSync(f.a));
+  assert.notEqual(a.runtimeThreadId("same-thread"), b.runtimeThreadId("same-thread"));
+  assert.throws(() => a.openWorkspace(f.b), /different data workspace/);
+});
+
+test("a synchronously failing IPC invocation releases its store lease", t => {
+  const f = fixture(t), handlers = new Map(), a = store.createWorkspaceStore(f.a);
+  const ipc = createWorkspaceIpc({ ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, store, workspaceForEvent: () => f.a });
+  ipc.handle("fail", () => { throw new Error("Expected failure"); });
+  assert.throws(() => handlers.get("fail")({}), /Expected failure/);
+  a.close();
+  assert.throws(() => a.getSnapshot(), /Open a workspace/);
+  assert.equal(store.createWorkspaceStore(f.a).workspace, f.a);
+});
+
+test("real terminal child persists in its data store after IPC returns and its execution folder has no database", async t => {
+  const roots = fixture(t);
+  const a = store.createWorkspaceStore(roots.a), b = store.createWorkspaceStore(roots.b);
+  const handlers = new Map(), sessions = new Map(), events = [];
+  let child;
+  const ipc = createWorkspaceIpc({ ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, store, workspaceForEvent: () => roots.a });
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = main.indexOf('  ipcMain.handle("terminal:run",');
+  const end = main.indexOf('  ipcMain.handle("terminal:stop",', start);
+  assert.ok(start >= 0 && end > start);
+  // Register the complete production handler, including stdout/close callbacks.
+  new Function("ipcMain", "store", "resolveWorkspace", "workspaceFiles", "randomUUID", "spawn", "process", "commandSessions", main.slice(start, end))(
+    ipc, store, fs.realpathSync, require("./workspace-files.cjs"), randomUUID,
+    (...args) => { child = spawn(...args); return child; }, process, sessions,
+  );
+  const result = handlers.get("terminal:run")({ sender: { id: 1, isDestroyed: () => false, send: (...args) => events.push(args) } }, { command: "echo terminal-owner-A", cwd: roots.executionA });
+  const closed = new Promise((resolve, reject) => { child.once("close", resolve); child.once("error", reject); });
+  store.openWorkspace(roots.b);
+  a.close(); // The terminal's explicit lease, not the completed IPC, owns A now.
+  await closed;
+  const restored = store.createWorkspaceStore(roots.a);
+  const command = restored.getSnapshot().commands.find(item => item.id === result.commandRunId);
+  assert.equal(command.status, "completed");
+  assert.match(command.output, /terminal-owner-A/);
+  assert.equal(command.cwd, roots.executionA);
+  assert.equal(b.getSnapshot().commands.length, 0);
+  assert.equal(fs.existsSync(path.join(roots.executionA, ".archimedes")), false);
+  assert.equal(sessions.size, 0);
+  assert.ok(events.some(([, payload]) => payload.commandRunId === result.commandRunId));
+});
+
+
+test("same imported thread id in two data stores has independent running/stop/approval identity", async t => {
+  const roots = fixture(t);
+  const a = store.createWorkspaceStore(roots.a), b = store.createWorkspaceStore(roots.b);
+  const threadId = "shared-cloud-thread";
+  for (const owner of [a, b]) {
+    const project = owner.listResearchProjects()[0], workspace = owner.defaultProjectWorkspace(project.id);
+    owner.applyCloudThread(project.id, { thread: { id: threadId, title: "Shared", status: "idle" }, turns: [] });
+    // Copying/syncing a thread ID is independent of the execution-context binding feature.
+    const db = new DatabaseSync(path.join(owner.workspace, ".archimedes/archimedes.db"));
+    db.prepare("UPDATE research_threads SET workspace_id=?, workspace_path=? WHERE id=?").run(workspace.id, owner.workspace, threadId); db.close();
+  }
+  a.run(() => agent.setApprovalSurface(threadId, true));
+  assert.equal(a.run(() => agent.hasApprovalSurface(threadId)), true);
+  assert.equal(b.run(() => agent.hasApprovalSurface(threadId)), false);
+  model.initializeModelConfig(path.join(roots.root, "settings"));
+  model.saveModelConfig({ provider: "custom", baseUrl: "https://context.invalid/v1", model: "fake", apiKey: "fake-not-a-credential" });
+  const arrived = deferred(), finishB = deferred();
+  let calls = 0;
+  const previous = global.fetch;
+  global.fetch = async (_url, options) => {
+    const current = ++calls;
+    if (calls === 2) arrived.resolve();
+    if (current === 1) await new Promise((resolve, reject) => {
+      if (options.signal.aborted) reject(new Error("aborted"));
+      else options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    });
+    else await finishB.promise;
+    return { ok: true, headers: { get: () => "application/json" }, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "B completed independently" } }] }) };
+  };
+  t.after(() => { global.fetch = previous; a.run(() => agent.setApprovalSurface(threadId, false)); });
+  const runningA = agent.runAgent({ dataStore: a, threadId, workspace: roots.a, prompt: "A" });
+  const runningB = agent.runAgent({ dataStore: b, threadId, workspace: roots.b, prompt: "B" });
+  await arrived.promise;
+  assert.equal(a.run(() => agent.interruptAgent(threadId)), true);
+  const resultA = await runningA;
+  assert.equal(resultA.status, "interrupted");
+  assert.equal(b.getResearchThread(threadId).status, "running");
+  finishB.resolve();
+  const resultB = await runningB;
+  assert.equal(resultB.status, "completed");
+  assert.equal(resultB.thread.workspace_path, roots.b);
+  assert.equal(resultB.thread.turns[0].assistant_message, "B completed independently");
+  assert.equal(a.getResearchThread(threadId).turns[0].status, "interrupted");
+});

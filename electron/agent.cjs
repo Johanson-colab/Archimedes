@@ -1,13 +1,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const store = require("./store.cjs");
+const defaultStore = require("./store.cjs");
 const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { workspaceInstructions } = require("./thread-commands.cjs");
-const { hasApprovalSurface, resolveApproval, setApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
+const { hasApprovalSurface: hasClaimedSurface, resolveApproval, setApprovalSurface: claimApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { completeAnthropic } = require("./agent/anthropic.cjs");
 const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData } = require("./agent/pdf-reader.cjs");
@@ -559,7 +559,8 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort }, args) {
+async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, dataStore = defaultStore.currentStore() }, args) {
+  const store = dataStore;
   const name = call.function.name;
 
   if (name === "list_skills") return { content: JSON.stringify({ skills: discoverSkills(root) }) };
@@ -605,7 +606,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
         if (!message.tool_calls.length) { response = message.content || ""; break; }
         for (const child of message.tool_calls) {
           try {
-            const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, preflight: (toolName, toolArgs) => {
+            const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, dataStore, preflight: (toolName, toolArgs) => {
               if (!allowed.has(toolName)) throw new Error("Tool unavailable in isolated phase.");
               if ((toolName === "write_artifact" || toolName === "edit_workspace_file") && !outputs.includes(String(toolArgs.path || "").replaceAll("\\", "/"))) throw new Error("The file was not declared as a phase output.");
             } });
@@ -800,7 +801,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const proposal = name === "edit_workspace_file" ? prepareEdit(root, args.path, args.old_text, args.new_text, args.replace_all === true) : prepareWrite(root, args.path, args.content);
     const relative = proposal.path;
     const action = store.createAction({ taskId, kind: "write", payload: proposal });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: `Write ${relative}`, action });
     let decision;
     try { decision = await waiting; }
@@ -817,7 +818,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const workingDirectory = existingWorkspacePath(root, args.cwd || "");
     if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The command working directory is not a directory.");
     const action = store.createAction({ taskId, kind: "command", payload: { command: args.command.trim(), cwd: workingDirectory, managedByAgent: true } });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: args.command.trim(), action });
     let decision;
     try { decision = await waiting; }
@@ -981,7 +982,14 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry }) {
+async function runAgent(options) {
+  const captured = (options.dataStore || defaultStore).captureStore();
+  try { return await captured.store.run(() => runAgentInStore({ ...options, dataStore: captured.store })); }
+  finally { captured.release(); }
+}
+
+async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, dataStore }) {
+  const store = dataStore;
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -989,7 +997,8 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   };
   const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace, workspaceId, visibility, kind: origin === "paper" ? "paper" : "research", title });
   if (!transient && origin !== "paper") store.bindResearchThreadHarness(thread.id, externalBackend?.backend || "api");
-  if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
+  const runtimeId = store.runtimeThreadId(thread.id);
+  if (activeRuns.has(runtimeId)) throw new Error("This research thread already has a running turn.");
   const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });
   const turn = transient
     ? { id: randomUUID(), thread_id: thread.id, task_id: task.id, mode, user_message: prompt, assistant_message: "", status: "running", created_at: new Date().toISOString(), completed_at: null }
@@ -1003,7 +1012,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   if (externalSignal?.aborted) controller.abort();
   else externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
   const actions = [];
-  activeRuns.set(thread.id, controller);
+  activeRuns.set(runtimeId, controller);
 
   const emitTurn = (payload) => emit({ ...payload, threadId: thread.id, turnId: turn.id });
   const recordEvent = (event) => {
@@ -1037,15 +1046,15 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     }
     if (externalBackend) {
       const response = await runNative({
-        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken,
+        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken, runtimeId,
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: async (payload) => {
-          if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;
+          if (controller.signal.aborted || !hasClaimedSurface(runtimeId)) return false;
           const { signal: approvalSignal, ...actionPayload } = payload;
           const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: externalBackend.backend } });
           actions.push(action);
           // Register before exposing the card, so an immediate click cannot be lost.
-          const waiting = waitForApproval(action.id, approvalSignal || controller.signal, thread.id);
+          const waiting = waitForApproval(action.id, approvalSignal || controller.signal, runtimeId);
           emitTurn({ type: "approval", title: "Native approval required", detail: payload.command, action });
           try { return (await waiting).approved; }
           finally {
@@ -1118,7 +1127,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
 
       for (const call of message.tool_calls) {
         try {
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, dataStore, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
             if (name === "search_academic_papers") {
               if (academicSearches >= policy.maxAcademicSearches) throw new Error("The academic search budget is exhausted. Synthesize the findings already collected.");
               academicSearches += 1;
@@ -1169,15 +1178,23 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   } finally {
     externalSignal?.removeEventListener("abort", onExternalAbort);
     controller.abort();
-    activeRuns.delete(thread.id);
+    activeRuns.delete(runtimeId);
   }
 }
 
 function interruptAgent(threadId) {
-  const controller = activeRuns.get(threadId);
+  const controller = activeRuns.get(defaultStore.runtimeThreadId(threadId));
   if (!controller) return false;
   controller.abort();
   return true;
+}
+
+function hasApprovalSurface(threadId) {
+  return hasClaimedSurface(defaultStore.runtimeThreadId(threadId));
+}
+
+function setApprovalSurface(threadId, active) {
+  return claimApprovalSurface(defaultStore.runtimeThreadId(threadId), active);
 }
 
 module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, setApprovalSurface, translatePaperSelection };
