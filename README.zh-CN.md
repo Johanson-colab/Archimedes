@@ -29,7 +29,7 @@ Archimedes 不是套着论文列表的通用聊天壳。它的重心是研究闭
 
 1. 确认 Git 和 Node.js 20+ 可用。
 2. 将仓库克隆到合适的本地目录，并进入该目录。
-3. 运行 `npm install`，等待原生终端模块重新构建完成。
+3. 运行 `npm install`，等待原生终端模块重新构建完成，然后显式运行 `npm run prepare:desktop`。
 4. 使用适合当前平台的命令，从 `.env.example` 创建 `.env.local`。
    不要要求我在聊天中粘贴 API key。暂停并让我直接填写模型配置，然后继续。
 5. 运行 `npm run dev` 启动应用。确认 Electron 窗口已打开。
@@ -48,6 +48,7 @@ Archimedes 不是套着论文列表的通用聊天壳。它的重心是研究闭
 git clone https://github.com/Johanson-colab/Archimedes.git
 cd Archimedes
 npm install
+npm run prepare:desktop
 cp .env.example .env.local    # macOS / Linux
 npm run dev
 ```
@@ -117,10 +118,15 @@ Research App 自定义，以及 Skills、MCP 工具、模型和后端的自动�
 ## 验证
 
 ```bash
+npm run prepare:desktop
 npm run lint
 npm run build
 npm test
 ```
+
+`prepare:desktop` 显式准备 Electron 二进制，三分钟超时；`check:desktop` 只检查已有二进制，不启动下载。慢网络可将 `ARCHIMEDES_DESKTOP_PREPARE_TIMEOUT_MS` 设到 600000。缺少运行时会在启动或完整测试前显示准备命令。
+
+`npm test` 包含两项真实 Electron 布局回归，需要桌面显示环境（无显示的 Linux 可用 `xvfb-run npm test`）。`test:core` 用于非桌面测试迭代；`test:desktop` 运行两项桌面检查。完整 PR 检查仍运行 `npm test`。
 
 ## 更多
 
