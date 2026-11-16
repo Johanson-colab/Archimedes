@@ -153,3 +153,28 @@ test("indexPayload shares one record list between the radar and library tabs", (
   assert.equal(result.radar, result.library);
   assert.deepEqual(result.directions, index.directions);
 });
+
+test("forecast explanations survive both public formats and unknown fields stay absent", () => {
+  const forecast = { score: 45, horizon: "7d", confidence: "Low", reason: "A broad evaluation with public artifacts." };
+  for (const field of ["attentionForecast", "attention_forecast"]) {
+    const record = normalizePublicIndex(payload({ benchmarks: [benchmark({ [field]: forecast, readiness: "Runnable" })] })).records[0];
+    assert.equal(record.forecast, 45);
+    assert.equal(record.forecastReason, forecast.reason);
+    assert.equal(record.forecastConfidence, "Low");
+    assert.equal(record.forecastHorizon, "7d");
+    assert.equal(record.readiness, "Runnable");
+  }
+  const absent = normalizePublicIndex(payload()).records[0];
+  assert.equal(absent.forecast, null);
+  assert.equal(absent.forecastReason, "");
+});
+
+test("304 revalidation reports the new check time in the current response", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-radar-304-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const cachePath = path.join(directory, "cache.json");
+  writeIndexFile(cachePath, { ...normalizePublicIndex(payload()), fetchedAt: "2026-10-01T00:00:00Z", etag: "abc" });
+  const now = new Date("2026-11-16T00:00:00Z");
+  const result = await refreshPublicIndex({ cachePath, now, force: true, fetchImpl: async () => response({ status: 304 }) });
+  assert.equal(indexPayload(result.index).fetchedAt, now.toISOString());
+});

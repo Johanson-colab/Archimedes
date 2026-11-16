@@ -28,13 +28,14 @@ fs.writeFileSync(path.join(temporary, "index.html"), '<div id="fixture-toolbar" 
 fs.writeFileSync(path.join(temporary, "entry.tsx"), `
 import {createRoot} from 'react-dom/client';
 import BenchmarkRadarView from ${from("BenchmarkRadarView.tsx")};
+import {UISettingsProvider} from ${from("i18n.tsx")};
 import ${from("tokens.css")};
 import ${from("styles.css")};
 import ${from("typography.css")};
 import payload from './payload.json';
 (window as unknown as { researchDesk: unknown }).researchDesk = { getBenchmarkRadarData: async () => payload };
 document.documentElement.dataset.theme = new URLSearchParams(location.search).get('theme') || 'paper';
-createRoot(document.getElementById('root')!).render(<BenchmarkRadarView />);
+createRoot(document.getElementById('root')!).render(<UISettingsProvider><BenchmarkRadarView /></UISettingsProvider>);
 `);
 
 try {

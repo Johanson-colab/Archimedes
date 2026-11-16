@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { benchmarkRadar as benchmarkRadarStrings } from "./i18n/translations/benchmarkRadar";
 import { app as appStrings } from "./i18n/translations/app";
 import { library as libraryStrings } from "./i18n/translations/library";
 import { gallery as galleryStrings } from "./i18n/translations/gallery";
@@ -52,6 +53,7 @@ const translations: Record<string, string> = {
   ...sessionCommentsStrings,
   ...sessionSnapshotStrings,
   ...appStrings,
+  ...benchmarkRadarStrings,
   ...libraryStrings,
   ...galleryStrings,
   ...figureforgeStrings,

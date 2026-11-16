@@ -7,7 +7,7 @@ const PUBLIC_INDEX_URL = "https://benchmark-radar.org/data/benchmark-index.json"
 const CACHE_SCHEMA = 1;
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_INDEX_BYTES = 32 * 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 function text(value, limit = 1600) {
   return typeof value === "string" ? value.slice(0, limit) : "";
@@ -59,7 +59,10 @@ function normalizeRecord(record) {
     attention: attention(record.attention),
     attentionScore: Number.isFinite(ranking["90d"]?.score) ? ranking["90d"].score : null,
     attentionRank: Number.isFinite(ranking["90d"]?.rank) ? ranking["90d"].rank : null,
-    forecast: Number.isFinite(record.attentionForecast?.score) ? record.attentionForecast.score : null,
+    forecast: Number.isFinite(record.attentionForecast?.score) ? Math.max(0, Math.min(100, record.attentionForecast.score)) : null,
+    forecastReason: text(record.attentionForecast?.reason, 700),
+    forecastConfidence: text(record.attentionForecast?.confidence, 32),
+    forecastHorizon: text(record.attentionForecast?.horizon, 32),
   };
 }
 
@@ -94,6 +97,8 @@ function adaptPublicRecord(record) {
       paper: httpsUrl(released.source_url) || httpsUrl(record.source_url),
       code: repository ? httpsUrl(`https://github.com/${repository}`) : "",
     },
+    readiness: text(record.readiness, 80),
+    attentionForecast: record.attentionForecast || record.attention_forecast,
     attention: {
       githubStars: Number.isFinite(signals.github_stars) ? signals.github_stars : null,
       hfPaperUpvotes: Number.isFinite(signals.hf_paper_upvotes) ? signals.hf_paper_upvotes : null,
@@ -179,7 +184,7 @@ async function refreshPublicIndex({ cachePath = "", url = PUBLIC_INDEX_URL, fetc
   const result = await fetchPublicIndex({ url, fetchImpl, etag: cached?.etag || "", now, ...(timeoutMs ? { timeoutMs } : {}) });
   if (result.notModified) {
     if (cached && cachePath) writeIndexFile(cachePath, { ...cached, fetchedAt: now.toISOString() });
-    return { index: cached, refreshed: false, skipped: false };
+    return { index: cached ? { ...cached, fetchedAt: now.toISOString() } : null, refreshed: false, skipped: false };
   }
   const envelope = { ...result.index, fetchedAt: result.fetchedAt, etag: result.etag };
   if (cachePath) writeIndexFile(cachePath, envelope);
@@ -192,6 +197,7 @@ function indexPayload(index, { source = "cached", sourceRoot = PUBLIC_INDEX_URL 
     source,
     sourceRoot,
     updatedAt: text(index?.updatedAt, 32),
+    fetchedAt: text(index?.fetchedAt, 40),
     radar: records,
     library: records,
     directions: Array.isArray(index?.directions) ? index.directions : [],

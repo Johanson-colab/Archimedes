@@ -1694,7 +1694,10 @@ app.whenReady().then(async () => {
     return deepSearchPapers(input, { modelConfig: modelConfig.getActiveModelConfig() });
   });
 
-  ipcMain.handle("benchmark-radar:get-data", () => getBenchmarkRadarData({
+  ipcMain.handle("benchmark-radar:get-data", (_event, input) => getBenchmarkRadarData({
+    allowNetwork: input?.cachedOnly !== true,
+    force: input?.refresh === true,
+    fetchImpl: (...args) => net.fetch(...args),
     cachePath: path.join(app.getPath("userData"), "benchmark-radar", "public-index.json"),
     seedPath: path.join(__dirname, "assets", "benchmark-radar", "public-index.json"),
   }));

@@ -201,7 +201,7 @@ interface ResearchDeskBridge {
       step?: ReproductionRunStep;
     }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
-    getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
+    getBenchmarkRadarData: (options?: { cachedOnly?: boolean; refresh?: boolean }) => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
     importLocalLibraryPaper: (libraryId: string, workspace?: string) => Promise<LibraryPaper | null>;
     addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
@@ -2078,6 +2078,9 @@ interface BenchmarkRadarRecord {
   attentionScore: number | null;
   attentionRank: number | null;
   forecast: number | null;
+  forecastReason?: string;
+  forecastConfidence?: string;
+  forecastHorizon?: string;
 }
 
 interface BenchmarkRadarDirection {
@@ -2088,6 +2091,8 @@ interface BenchmarkRadarDirection {
 }
 
 interface BenchmarkRadarData {
+  fetchedAt?: string;
+  refreshError?: string;
   source: "local" | "remote" | "cached" | "bundled";
   sourceRoot: string;
   updatedAt: string;

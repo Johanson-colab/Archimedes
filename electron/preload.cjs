@@ -170,7 +170,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   removeReproductionEnv: (id, name) => ipcRenderer.invoke("reproduction:env-remove", { id, name }),
   testReproductionEnv: (id, name) => ipcRenderer.invoke("reproduction:env-test", { id, name }),
   deepSearchPapers: (input) => ipcRenderer.invoke("library:deep-search", input),
-  getBenchmarkRadarData: () => ipcRenderer.invoke("benchmark-radar:get-data"),
+  getBenchmarkRadarData: (options) => ipcRenderer.invoke("benchmark-radar:get-data", options),
   searchConferencePapers: (input) => ipcRenderer.invoke("library:search-conferences", input),
   importLocalLibraryPaper: (libraryId, workspace) => ipcRenderer.invoke("library:import-local-pdf", { libraryId, workspace }),
   addLibraryPaper: (libraryId, paper) => ipcRenderer.invoke("library:add-paper", { libraryId, paper }),
