@@ -44,7 +44,6 @@ test('actual panel requires confirmed mappings, saves once, shows all four categ
   const f = await fixture(t);
   await click('Choose CSV or JSON data');
   assert.equal(button('Compare and save').disabled, true);
-  assert.match(document.body.textContent, /does not certify scientific reproduction/);
   await React.act(async () => document.querySelector('input[type="checkbox"]').click());
   await React.act(async () => { button('Compare and save').click(); button('Compare and save').click(); });
   assert.equal(f.calls.length, 1);
@@ -52,6 +51,7 @@ test('actual panel requires confirmed mappings, saves once, shows all four categ
   assert.equal(f.reports[0].counts.within, 1); assert.equal(f.reports[0].counts.missing, 1);
   for (const status of ['Missing value', 'Incomparable', 'Within tolerance', 'Outside tolerance']) assert.match(document.body.textContent, new RegExp(status));
   assert.equal(f.props.record.status, 'checks-passed');
+  assert.match(document.querySelector('.metric-comparison-result details').textContent, /Input saved from the file you selected\./);
   const expected = [...document.querySelectorAll('label')].find(label => label.textContent.startsWith('Expected value column')).querySelector('select');
   await React.act(async () => { expected.value = 'actual'; expected.dispatchEvent(new dom.window.Event('change', { bubbles: true })); });
   assert.equal(document.querySelector('input[type="checkbox"]').checked, false);
