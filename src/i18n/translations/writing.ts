@@ -92,6 +92,8 @@ export const writing: Record<string, string> = {
   "The compiler stopped producing output. Check Internet access and the system HTTP proxy, then retry. Downloaded dependencies are retained; see the build log below.": "编译器长时间没有新输出。请检查网络与系统 HTTP 代理后重试；已下载的依赖会保留。详细原因请查看下方编译日志。",
   "The first build exceeded its preparation time limit. Downloaded dependencies are retained. Retry to continue using the cache; see the build log below.": "首次编译超过准备时限。已下载的依赖会保留，重试会继续使用缓存。请查看下方编译日志。",
   "The first build needs Internet access to download fonts and packages. Check the connection and click Recompile. Previously downloaded dependencies are cached locally.": "首次编译需要联网下载字体和宏包。请检查网络后点击重新编译；已下载的依赖会缓存在本地。",
+  "The manuscript sources changed during compilation. Compile again before using this PDF.": "编译期间稿件源文件已更改。请重新编译后再使用此 PDF。",
+  "The manuscript sources changed while this build was queued. Compile again to use the latest inputs.": "编译排队期间稿件源文件已更改。请重新编译以使用最新内容。",
   "TMLR anonymous submission style with an editable paper and BibTeX reference example.": "TMLR 匿名投稿样式，附可编辑正文和 BibTeX 参考文献示例。",
   "Try a different filter.": "试试其他筛选条件。",
   "Unable to download LaTeX dependencies.": "无法下载 LaTeX 依赖。",
