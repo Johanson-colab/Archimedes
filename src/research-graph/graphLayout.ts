@@ -48,7 +48,69 @@ export type GraphLayoutEdge = {
   path: string;
   feedback: boolean;
   secondary?: boolean;
+  fromId?: string;
+  toId?: string;
+  lane?: number;
 };
+
+export const LINEAGE_ROW_HEIGHT = 64;
+export const LINEAGE_LANE_WIDTH = 20;
+export const LINEAGE_PAD = 18;
+export const LINEAGE_MARKER_Y = 25;
+export type LineageLayout = GraphLayout & { railWidth: number };
+
+/** A Git-style rail, ordered so every structural parent precedes its children.
+ * Citations are stored writing -> evidence; visually evidence precedes writing.
+ * Feedback keeps its true direction and never changes the structural order. */
+export function layoutLineage(graph: LayoutInput): LineageLayout {
+  const byId = new Map(graph.nodes.map(node => [node.id, node]));
+  const relations = graph.edges.filter(edge => byId.has(edge.from_node) && byId.has(edge.to_node)).map(edge => ({
+    edge,
+    from: edge.kind === "cites" ? edge.to_node : edge.from_node,
+    to: edge.kind === "cites" ? edge.from_node : edge.to_node,
+    feedback: FEEDBACK_EDGE_KINDS.has(edge.kind),
+  }));
+  const structural = relations.filter(item => STRUCTURAL_EDGE_KINDS.has(item.edge.kind));
+  const incoming = new Map(graph.nodes.map(node => [node.id, structural.filter(item => item.to === node.id)]));
+  const outgoing = new Map(graph.nodes.map(node => [node.id, structural.filter(item => item.from === node.id)]));
+  const order = (a: string, b: string) => createdOrder(byId.get(a)!, byId.get(b)!);
+  const firstChild = new Map([...outgoing].map(([id, items]) => [id, [...new Set(items.map(item => item.to))].sort(order)[0]]));
+  const remaining = new Set(byId.keys());
+  const placed: GraphLayoutNode[] = [];
+  const positions = new Map<string, GraphLayoutNode>();
+  let nextLane = 0;
+  while (remaining.size) {
+    const ready = [...remaining].filter(id => incoming.get(id)!.every(item => !remaining.has(item.from))).sort(order);
+    // Malformed legacy cycles are still inspectable; the service validates new graphs.
+    const id = ready[0] ?? [...remaining].sort(order)[0];
+    const parents = incoming.get(id)!.filter(item => positions.has(item.from));
+    const continuation = parents.filter(item => firstChild.get(item.from) === id)
+      .sort((a, b) => positions.get(a.from)!.lane - positions.get(b.from)!.lane)[0];
+    const lane = continuation ? positions.get(continuation.from)!.lane : nextLane++;
+    const position = { node: byId.get(id)!, lane, row: placed.length, x: LINEAGE_PAD + lane * LINEAGE_LANE_WIDTH, y: LINEAGE_PAD + placed.length * LINEAGE_ROW_HEIGHT };
+    remaining.delete(id);
+    positions.set(id, position);
+    placed.push(position);
+  }
+  const laneCount = Math.max(1, nextLane);
+  const railWidth = LINEAGE_PAD * 2 + laneCount * LINEAGE_LANE_WIDTH;
+  const edges = relations.map(({ edge, from, to, feedback }) => {
+    const a = positions.get(from)!;
+    const b = positions.get(to)!;
+    const direction = b.y >= a.y ? 1 : -1;
+    const y1 = a.y + LINEAGE_MARKER_Y + direction * 6;
+    const y2 = b.y + LINEAGE_MARKER_Y - direction * 6;
+    const bend = Math.min(16, Math.abs(y2 - y1) / 2);
+    const returnX = railWidth - 8;
+    const path = feedback
+      ? `M ${a.x + 6} ${a.y + LINEAGE_MARKER_Y} L ${returnX - 6} ${a.y + LINEAGE_MARKER_Y} Q ${returnX} ${a.y + LINEAGE_MARKER_Y} ${returnX} ${a.y + LINEAGE_MARKER_Y - 6} L ${returnX} ${b.y + LINEAGE_MARKER_Y + 6} Q ${returnX} ${b.y + LINEAGE_MARKER_Y} ${returnX - 6} ${b.y + LINEAGE_MARKER_Y} L ${b.x + 6} ${b.y + LINEAGE_MARKER_Y}`
+      : a.x === b.x
+      ? `M ${a.x} ${y1} L ${b.x} ${y2}`
+      : `M ${a.x} ${y1} L ${a.x} ${y2 - direction * bend} Q ${a.x} ${y2} ${(a.x + b.x) / 2} ${y2} L ${b.x} ${y2}`;
+    return { edge, fromId: from, toId: to, path, feedback, lane: b.lane };
+  });
+  return { nodes: placed, edges, railWidth, width: railWidth + 240, height: LINEAGE_PAD * 2 + Math.max(1, placed.length) * LINEAGE_ROW_HEIGHT, laneCount, rowCount: placed.length };
+}
 
 export type GraphLayout = {
   nodes: GraphLayoutNode[];

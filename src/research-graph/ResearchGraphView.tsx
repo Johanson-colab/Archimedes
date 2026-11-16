@@ -1,91 +1,84 @@
-import { Activity, FileText, FlaskConical, HelpCircle, Lightbulb, type LucideIcon } from "lucide-react";
+import type { CSSProperties, KeyboardEvent } from "react";
+import { Activity, FileText, FlaskConical, HelpCircle, Lightbulb, GitMerge, type LucideIcon } from "lucide-react";
 import { useUISettings } from "../i18n";
-import { GRAPH_NODE_HEIGHT, GRAPH_NODE_WIDTH, type GraphLayout } from "./graphLayout";
-import type { ExperimentRun, ResearchNodeKind } from "./types";
+import { LINEAGE_MARKER_Y, LINEAGE_ROW_HEIGHT, type LineageLayout } from "./graphLayout";
+import type { ExperimentRun, ResearchNode, ResearchNodeKind } from "./types";
 
-const KIND_ICONS: Record<ResearchNodeKind, LucideIcon> = {
-  question: HelpCircle,
-  idea: Lightbulb,
-  experiment: FlaskConical,
-  result: Activity,
-  writing: FileText,
-};
+const KIND_ICONS: Record<ResearchNodeKind, LucideIcon> = { question: HelpCircle, idea: Lightbulb, experiment: FlaskConical, result: Activity, writing: FileText };
+const KIND_LABELS: Record<ResearchNodeKind, string> = { question: "Question", idea: "Idea", experiment: "Experiment", result: "Result", writing: "Writing" };
+const RUN_LABELS: Record<string, string> = { starting: "Run starting", running: "Run running", succeeded: "Run succeeded", failed: "Run failed", cancelled: "Run cancelled" };
+const TONES = ["var(--accent)", "var(--analysis-series-3)", "var(--analysis-series-1)", "var(--analysis-series-5)", "var(--analysis-series-2)"];
+const tone = (lane: number) => TONES[lane % TONES.length];
 
-const KIND_LABELS: Record<ResearchNodeKind, string> = {
-  question: "Question",
-  idea: "Idea",
-  experiment: "Experiment",
-  result: "Result",
-  writing: "Writing",
-};
+type Props = { layout: LineageLayout; selectedId: string | null; runsByNode: Map<string, ExperimentRun[]>; onSelect: (nodeId: string) => void };
 
-type Props = {
-  layout: GraphLayout;
-  selectedId: string | null;
-  runsByNode: Map<string, ExperimentRun[]>;
-  onSelect: (nodeId: string) => void;
-};
+export function lineageAncestors(layout: LineageLayout, selectedId: string | null): Set<string> {
+  const ancestors = new Set<string>();
+  const pending = selectedId ? [selectedId] : [];
+  while (pending.length) {
+    const id = pending.pop()!;
+    if (ancestors.has(id)) continue;
+    ancestors.add(id);
+    for (const item of layout.edges) if (!item.feedback && item.toId === id && item.fromId) pending.push(item.fromId);
+  }
+  return ancestors;
+}
+
+function nodeState(node: ResearchNode, latest?: ExperimentRun) {
+  if (node.archived || node.status === "retracted") return "retired";
+  if (latest) return latest.status;
+  return node.status;
+}
 
 export default function ResearchGraphView({ layout, selectedId, runsByNode, onSelect }: Props) {
   const { t } = useUISettings();
-  return <div
-    className="research-graph-canvas"
-    style={{ width: layout.width, height: layout.height }}
-  >
-    <svg
-      className="research-graph-edges"
-      width={layout.width}
-      height={layout.height}
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
-      aria-hidden="true"
-    >
-      {layout.edges.map(({ edge, path, feedback, secondary }) => (
-        <path
-          key={edge.id}
-          d={path}
-          className={`research-graph-edge kind-${edge.kind}${feedback ? " feedback" : ""}${secondary ? " secondary" : ""}`}
-        />
-      ))}
-    </svg>
-    {layout.nodes.map(({ node, x, y }) => {
+  const ancestors = lineageAncestors(layout, selectedId);
+  const navigate = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const buttons = [...event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>(".research-graph-node")];
+    const current = buttons.indexOf(event.currentTarget);
+    const index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)));
+    buttons[index]?.focus();
+  };
+  return <div className="research-graph-canvas research-lineage" aria-label={t("Research lineage")} style={{ minWidth: layout.width, height: layout.height }}>
+    {layout.nodes.map(({ node, y, lane }) => {
       const Icon = KIND_ICONS[node.kind];
-      const verdict = node.kind === "result"
-        ? String((node.current_revision?.content as { interpretation?: { verdict?: unknown } } | null)?.interpretation?.verdict || "")
-        : "";
       const selected = node.id === selectedId;
       const nodeRuns = runsByNode.get(node.id) ?? [];
-      const latestRun = nodeRuns.at(-1) ?? null;
-      return <button
-        key={node.id}
-        type="button"
-        className={[
-          "research-graph-node",
-          `kind-${node.kind}`,
-          `status-${node.status}`,
-          node.archived ? "archived" : "",
-          verdict ? `verdict-${verdict}` : "",
-          selected ? "selected" : "",
-        ].filter(Boolean).join(" ")}
-        style={{ left: x, top: y, width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT }}
-        onClick={() => onSelect(node.id)}
-        aria-pressed={selected}
-        title={node.title}
-      >
-        <span className="research-graph-node-icon"><Icon size={12} aria-hidden="true" /></span>
+      const latest = nodeRuns.at(-1);
+      const state = nodeState(node, latest);
+      const mergeCount = layout.edges.filter(item => item.edge.kind === "merges" && item.toId === node.id).length;
+      const label = node.archived ? "Archived" : node.status === "retracted" ? "Retracted" : latest ? RUN_LABELS[latest.status] : node.kind === "experiment" ? "Not run" : node.status === "active" ? "Active" : "Draft";
+      return <button key={node.id} type="button" className={`research-graph-node kind-${node.kind} state-${state}${selected ? " selected" : ""}${ancestors.has(node.id) ? " on-path" : ""}${node.archived ? " archived" : ""}${node.status === "retracted" ? " status-retracted" : ""}`}
+        style={{ top: y, height: LINEAGE_ROW_HEIGHT, paddingLeft: layout.railWidth + 8, "--branch-color": tone(lane) } as CSSProperties}
+        onClick={() => onSelect(node.id)} onKeyDown={navigate} aria-pressed={selected} title={node.title}>
         <span className="research-graph-node-copy">
-          <span className="research-graph-node-kind">{t(KIND_LABELS[node.kind])}</span>
           <span className="research-graph-node-title">{node.title}</span>
+          <span className="research-lineage-meta"><Icon size={12} aria-hidden="true" /><span>{t(KIND_LABELS[node.kind])}</span>
+            {node.current_revision_id && <code title={t("Revision")}>{node.current_revision_id.slice(0, 8)}</code>}
+            {mergeCount > 1 && <span className="research-lineage-merge"><GitMerge size={12} />{t("Merged")} · {mergeCount}</span>}
+            {nodeRuns.length > 0 && <span className="research-graph-node-runs">{nodeRuns.length} {t("runs")}</span>}
+            {latest?.commit_sha && <code title={t("Git commit")}>{latest.commit_sha.slice(0, 7)}</code>}
+          </span>
         </span>
-        {node.kind === "experiment" && latestRun && <span
-          className={`research-graph-node-runs status-${latestRun.status}`}
-          title={`${nodeRuns.length} runs · ${latestRun.status}`}
-          aria-label={`${nodeRuns.length} runs · ${latestRun.status}`}
-        >
-          <i aria-hidden="true" />
-          {nodeRuns.length > 1 ? nodeRuns.length : ""}
-        </span>}
-        <span className="research-graph-node-status" aria-hidden="true" />
+        <span className={`research-lineage-state state-${state}`}>{t(label)}</span>
       </button>;
     })}
+    <svg className="research-graph-edges" width={layout.railWidth} height={layout.height} viewBox={`0 0 ${layout.railWidth} ${layout.height}`} aria-hidden="true">
+      {layout.edges.map(({ edge, path, feedback, fromId, toId, lane = 0 }) => <path key={edge.id} d={path}
+        className={`research-graph-edge kind-${edge.kind}${feedback ? " feedback" : ""}${!feedback && ancestors.has(fromId!) && ancestors.has(toId!) ? " on-path" : ""}`}
+        style={{ "--branch-color": tone(lane) } as CSSProperties} />)}
+      {layout.nodes.map(({ node, x, y, lane }) => {
+        const selected = node.id === selectedId;
+        const state = nodeState(node, runsByNode.get(node.id)?.at(-1));
+        return <g key={node.id} className={`research-lineage-marker kind-${node.kind} state-${state}${selected ? " selected" : ""}`} style={{ "--branch-color": tone(lane) } as CSSProperties} transform={`translate(${x},${y + LINEAGE_MARKER_Y})`}>
+          {selected && <circle className="research-lineage-halo" r={11} />}
+          {node.kind === "result" ? <path className="research-lineage-dot" d="M 0 -6 L 6 0 L 0 6 L -6 0 Z" /> : node.kind === "writing" ? <rect className="research-lineage-dot" x={-5} y={-5} width={10} height={10} rx={2} /> : <circle className="research-lineage-dot" r={node.kind === "question" ? 6 : 5} />}
+          {state === "failed" && <path className="research-lineage-glyph" d="M -2 -2 L 2 2 M 2 -2 L -2 2" />}
+          {state === "succeeded" && <path className="research-lineage-glyph" d="M -2 0 L 0 2 L 3 -2" />}
+        </g>;
+      })}
+    </svg>
   </div>;
 }

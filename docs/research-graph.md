@@ -1,8 +1,9 @@
 # Research graph foundation
 
 This change adds the storage and service layer for a versioned research object
-graph. It deliberately does not add the graph canvas, Git worktrees, remote
-experiment backends, or collaboration sync yet.
+graph, automatic extraction, a lineage view, and recorded local experiment runs.
+Git worktrees, node-scoped context packs, remote experiment backends, and graph
+collaboration sync are not implemented yet. See [the current implementation review](./research-graph-review.md) for the gap analysis and development sequence.
 
 ## Object model
 
@@ -75,35 +76,36 @@ and parent revision ids.
 Research mode now renders `ResearchGraphPanel` instead of the linear
 `ResearchPathPanel`; Standard and Create keep the existing stepper.
 
-- Nodes use a compact vertical tree layout: the question is the spine, ideas
-  are indented rows, and experiments sit under the idea they primarily test.
-  Additional idea→experiment tests edges are shown as faint secondary lines.
-  This keeps the default canvas narrow and readable.
-- The panel is read-only. The model creates and updates nodes from the main
-  conversation; the inspector only shows the current revision, experiment plan,
-  runs, and logs. There is no manual question form, add-child form, experiment
-  plan form, or run button.
-- Clicking a node opens the inspector and shows its current revision content.
-- A selected node exposes its allowed child kinds. Creating a child writes the
-  node and its typed edge; creating writing from a result creates the writing
-  node and then links `cites`.
-- The panel shows the active session's graph. Switching sessions switches the
-  canvas; nodes from other sessions in the same project are never displayed.
-- The idea discussion stage shows only question and idea nodes. Experiment
-  nodes are hidden until the session enters Experiment setup, where they appear
-  under the ideas they test. The panel header also exposes an Ideas /
-  Experiments view switch for inspecting experiment plans without running them.
-- Empty sessions start with a question form. A new chat with no session yet
-  shows a prompt to start a Research conversation.
-- The panel defaults to the current idea round. A History toggle reveals
-  `retracted` ideas from earlier rounds; they remain in the database and can be
-  restored.
-- The panel header expands the graph into a full-window view with the inspector
-  beside it; Escape or the minimize button returns to the dock.
+- Nodes use a compact Git-style rail with a shared text column. Structural parents
+  precede children, merges retain both incoming connections, and selected ancestry
+  is highlighted. The original stored citation direction remains unchanged while
+  the visual flow leads from evidence to writing.
+- The panel is read-only: the model creates research objects from the main chat.
+  The inspector shows readable content, provenance, related nodes, immutable
+  revision history, experiment plans, runs and logs. Raw JSON is collapsed.
+- Graph data remains scoped to the active session. Late responses from a previous
+  session cannot replace the current graph.
+- Ideas shows questions and hypotheses; Experiments adds experiments and results;
+  All activity also includes existing writing nodes and citation edges. Stored
+  merge and feedback relationships are visible. The extractor does not yet create
+  writing or merge relationships automatically.
+- History reveals retracted and archived records without deleting them. Selecting
+  a relationship opens the related node; the relationship lists its pinned revision.
+- Empty sessions explain that a Research conversation builds the graph; there is
+  no manual question or node-authoring form.
+- The header opens the graph in the shared Dialog, with optional node details.
+  Escape or minimize returns to the dock. Standard mode keeps its existing UI.
 
-| Before | After (dock) | After (expanded) |
-| --- | --- | --- |
-| ![Linear stage stepper](./assets/research-graph/before-research-path.png) | ![Research graph panel](./assets/research-graph/after-research-graph.png) | ![Expanded research graph](./assets/research-graph/after-research-graph-expanded.png) |
+Same fixture, window, Paper theme, experiment scope and selected question:
+
+| Before: indented cards | After: shared text column and branch rail |
+| --- | --- |
+| ![Before](./assets/research-graph/lineage-before.png) | ![After](./assets/research-graph/lineage-after.png) |
+
+Additional checks: [full activity and evidence](./assets/research-graph/lineage-evidence.png),
+[dark theme](./assets/research-graph/lineage-dark.png), and
+[narrow window](./assets/research-graph/lineage-narrow.png). These use illustrative
+renderer fixtures, not real experiment results or a claim of completed replay.
 
 ## Automatic graph building
 
@@ -120,8 +122,8 @@ released first. Extraction is stage-aware:
   allowed only when the answer reports a measured outcome (a number, metric,
   table, or observed result); proposals and promises to run do not create
   results. The stage uses `generates`, `refines`, `tests`, `extends`,
-  `replicates`, and `produces`; feedback edges remain in the data model but are
-  not drawn in this stage.
+  `replicates`, and `produces`; the view can display existing feedback edges,
+  although the current extractor does not generate them.
 - **Result provenance:** a result extracted from the conversation records
   `evidence.source = "conversation"`. A result created by
   `createResultFromRun` records `evidence.source = "run"` plus the run id,

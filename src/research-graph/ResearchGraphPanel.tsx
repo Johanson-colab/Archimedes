@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { ArrowUpRight, History, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
+import { ArrowUpRight, History, Maximize2, Minimize2, PanelRight, RefreshCw, X } from "lucide-react";
 import { useUISettings } from "../i18n";
-import { layoutTree } from "./graphLayout";
+import { Dialog } from "../Dialog";
+import { layoutLineage } from "./graphLayout";
 import NodeInspector from "./NodeInspector";
 import ResearchGraphView from "./ResearchGraphView";
 import type { ExperimentRun, ResearchGraph, ResearchGraphUpdate } from "./types";
@@ -20,8 +20,7 @@ type Props = {
   onCollapse: () => void;
 };
 
-const IDEA_STAGE_EDGES = new Set(["generates", "refines"]);
-const EXPERIMENT_STAGE_EDGES = new Set(["generates", "refines", "tests", "extends", "replicates", "produces"]);
+const IDEA_STAGE_EDGES = new Set(["generates", "refines", "merges"]);
 
 export default function ResearchGraphPanel({
   projectId,
@@ -46,14 +45,16 @@ export default function ResearchGraphPanel({
   const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [viewStage, setViewStage] = useState<"ideas" | "experiments">(mode === "experiment-setup" ? "experiments" : "ideas");
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [viewStage, setViewStage] = useState<"ideas" | "experiments" | "all">(mode === "experiment-setup" ? "experiments" : "ideas");
+
+  useEffect(() => { setGraph(null); setRuns([]); setSelectedId(null); setInspectorOpen(false); }, [projectId, threadId]);
 
   useEffect(() => {
     setViewStage(mode === "experiment-setup" ? "experiments" : "ideas");
   }, [mode]);
 
   const ideaStage = viewStage === "ideas";
-  const allowedEdgeKinds = ideaStage ? IDEA_STAGE_EDGES : EXPERIMENT_STAGE_EDGES;
 
   useEffect(() => {
     if (!projectId || !threadId) {
@@ -71,7 +72,7 @@ export default function ResearchGraphPanel({
       setLoading(false);
       return;
     }
-    window.researchDesk.listResearchGraph({ projectId, threadId, includeArchived: false })
+    window.researchDesk.listResearchGraph({ projectId, threadId, includeArchived: true })
       .then((next) => {
         if (cancelled) return;
         setGraph(next);
@@ -124,20 +125,11 @@ export default function ResearchGraphPanel({
     return unsubscribe;
   }, [threadId]);
 
-  useEffect(() => {
-    if (!expanded) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setExpanded(false);
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [expanded]);
-
   const stageNodes = useMemo(() => {
     if (!graph) return [];
     if (ideaStage) return graph.nodes.filter((node) => node.kind === "question" || node.kind === "idea");
-    return graph.nodes.filter((node) => node.kind !== "writing");
-  }, [graph, ideaStage]);
+    return viewStage === "all" ? graph.nodes : graph.nodes.filter((node) => node.kind !== "writing");
+  }, [graph, ideaStage, viewStage]);
   const runsByNode = useMemo(() => {
     const map = new Map<string, ExperimentRun[]>();
     for (const run of runs) {
@@ -150,19 +142,19 @@ export default function ResearchGraphPanel({
   }, [runs]);
   const layout = useMemo(() => {
     if (!graph) return null;
-    const nodes = showHistory ? stageNodes : stageNodes.filter((node) => node.status !== "retracted");
+    const nodes = showHistory ? stageNodes : stageNodes.filter((node) => node.status !== "retracted" && !node.archived);
     const visibleIds = new Set(nodes.map((node) => node.id));
-    return layoutTree({
+    return layoutLineage({
       ...graph,
       nodes,
       edges: graph.edges.filter((edge) =>
-        allowedEdgeKinds.has(edge.kind)
+        (!ideaStage || IDEA_STAGE_EDGES.has(edge.kind))
         && visibleIds.has(edge.from_node)
         && visibleIds.has(edge.to_node)),
     });
-  }, [graph, stageNodes, showHistory, allowedEdgeKinds]);
-  const selectedNode = stageNodes.find((node) => node.id === selectedId && (showHistory || node.status !== "retracted")) ?? null;
-  const retractedCount = stageNodes.filter((node) => node.status === "retracted").length;
+  }, [graph, stageNodes, showHistory, ideaStage]);
+  const selectedNode = layout?.nodes.find(({ node }) => node.id === selectedId)?.node ?? layout?.nodes[0]?.node ?? null;
+  const retractedCount = stageNodes.filter((node) => node.status === "retracted" || node.archived).length;
   const visibleNodeCount = showHistory ? stageNodes.length : stageNodes.length - retractedCount;
   const hasExperiments = graph?.nodes.some((node) => node.kind === "experiment") ?? false;
 
@@ -202,10 +194,12 @@ export default function ResearchGraphPanel({
   };
 
   const actions = <>
-    {(hasExperiments || mode === "experiment-setup") && <div className="research-graph-stage-switch" role="group" aria-label={t("Research graph stage")}>
+    {(graph?.nodes.length || hasExperiments || mode === "experiment-setup") ? <div className="research-graph-stage-switch" role="group" aria-label={t("Research graph stage")}>
       <button type="button" className={viewStage === "ideas" ? "active" : ""} aria-pressed={viewStage === "ideas"} onClick={() => setViewStage("ideas")}>{t("Ideas")}</button>
       <button type="button" className={viewStage === "experiments" ? "active" : ""} aria-pressed={viewStage === "experiments"} onClick={() => setViewStage("experiments")}>{t("Experiments")}</button>
-    </div>}
+      <button type="button" className={viewStage === "all" ? "active" : ""} aria-pressed={viewStage === "all"} onClick={() => setViewStage("all")}>{t("All activity")}</button>
+    </div> : null}
+    <button className={inspectorOpen ? "agent-path-icon on" : "agent-path-icon"} onClick={() => setInspectorOpen(value => !value)} aria-label={t(inspectorOpen ? "Hide node details" : "Show node details")} title={t(inspectorOpen ? "Hide node details" : "Show node details")} aria-pressed={inspectorOpen}><PanelRight size={13} /></button>
     {retractedCount > 0 && <button
       className={showHistory ? "agent-path-icon on" : "agent-path-icon"}
       onClick={() => setShowHistory((value) => !value)}
@@ -226,7 +220,7 @@ export default function ResearchGraphPanel({
     </button>
     <button
       className="agent-path-icon"
-      onClick={() => setExpanded((value) => !value)}
+      onClick={() => { setExpanded(value => !value); setInspectorOpen(!expanded); }}
       title={t(expanded ? "Collapse graph" : "Expand graph")}
       aria-label={t(expanded ? "Collapse graph" : "Expand graph")}
     >
@@ -265,23 +259,37 @@ export default function ResearchGraphPanel({
         <p>{t("Start a Research conversation. The graph builds automatically from the conversation.")}</p>
       </div>
     ) : <>
+      <div className={`research-graph-workspace${inspectorOpen && selectedNode ? " has-inspector" : ""}`}>
       <div className="research-graph-body">
         {loading && !graph ? <span className="research-graph-loading">{t("Refresh graph")}…</span> : null}
-        {layout ? <ResearchGraphView layout={layout} selectedId={selectedId} runsByNode={runsByNode} onSelect={setSelectedId} /> : null}
+        {layout ? <ResearchGraphView layout={layout} selectedId={selectedNode?.id ?? null} runsByNode={runsByNode} onSelect={(id) => { setSelectedId(id); setInspectorOpen(true); }} /> : null}
       </div>
-      {selectedNode ? <NodeInspector
+      {selectedNode && inspectorOpen ? <NodeInspector
+        key={selectedNode.id}
         node={selectedNode}
+        connections={(graph?.edges ?? []).flatMap(edge => {
+          const incoming = edge.to_node === selectedNode.id;
+          if (!incoming && edge.from_node !== selectedNode.id) return [];
+          const related = graph?.nodes.find(node => node.id === (incoming ? edge.from_node : edge.to_node));
+          return related ? [{ nodeId: related.id, title: related.title, relation: edge.kind, revisionId: incoming ? edge.from_revision : edge.to_revision, incoming }] : [];
+        })}
+        onSelectNode={id => {
+          setViewStage("all");
+          if (graph?.nodes.some(node => node.id === id && (node.archived || node.status === "retracted"))) setShowHistory(true);
+          setSelectedId(id);
+        }}
         experiment={selectedNode.kind === "experiment" ? {
           runs: runsByNode.get(selectedNode.id) ?? [],
           onReadLog: readExperimentLog,
         } : undefined}
       /> : null}
+      </div>
     </>}
     {error ? <div className="research-graph-error">{error}</div> : null}
   </div>;
 
   if (expanded) {
-    return createPortal(<div className="research-graph-expanded" role="dialog" aria-modal="true" aria-label={t("Research graph")}>
+    return <Dialog open onClose={() => setExpanded(false)} size="full" className="research-graph-expanded" ariaLabel={t("Research graph")}>
       <header className="research-graph-expanded-head">
         <span className="research-graph-expanded-title">
           <i aria-hidden="true" />
@@ -292,7 +300,7 @@ export default function ResearchGraphPanel({
         <div className="agent-path-actions">{actions}</div>
       </header>
       {content}
-    </div>, document.body);
+    </Dialog>;
   }
 
   return <div className="agent-path-panel research-graph-panel dock-panel">
