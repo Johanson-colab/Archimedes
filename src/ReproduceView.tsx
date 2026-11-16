@@ -5,6 +5,7 @@ import { useUISettings } from "./i18n";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
 import { ReproductionEnvironmentDialog } from "./ReproductionEnvironmentDialog";
+import MetricComparisonPanel from "./MetricComparisonPanel";
 const STATUS_LABELS: Record<ReproductionStatus, string> = {
   draft: "Draft",
   planned: "Plan ready",
@@ -13,7 +14,7 @@ const STATUS_LABELS: Record<ReproductionStatus, string> = {
   running: "Running",
   diagnosing: "Diagnosing",
   "checks-passed": "Checkpoints passed",
-  verified: "Verified",
+  verified: "Checkpoints passed",
   diverged: "Diverged",
   blocked: "Blocked",
   cancelled: "Cancelled",
@@ -91,6 +92,21 @@ function stepDuration(step: ReproductionRunStep) {
   return step.duration_ms < 1000 ? `${step.duration_ms} ms` : `${(step.duration_ms / 1000).toFixed(1)} s`;
 }
 
+function ReproductionInputReceipt({ run }: { run: ReproductionRun }) {
+  const { t } = useUISettings();
+  const snapshot = run.snapshot;
+  if (!snapshot) return <p className="reproduce-hint">{t("Input snapshots were not recorded for this older run.")}</p>;
+  const checkout = snapshot.prepared?.checkout;
+  return <div className="reproduction-input-receipt">
+    <strong>{t("Recorded run inputs")}</strong>
+    <span>{t("Plan")}: <code title={snapshot.plan.version}>{snapshot.plan.version.slice(0, 12)}</code></span>
+    <span>{t("Execution folder")}: {snapshot.owner.executionRoot || t("Not recorded")}</span>
+    <span>{t("Checkout")}: {checkout?.commit ? <code title={checkout.commit}>{checkout.commit.slice(0, 12)}</code> : t("Not recorded")}{checkout?.dirty === true ? ` · ${t("Local changes recorded")}` : checkout?.dirty === false ? ` · ${t("Clean checkout recorded")}` : ""}{checkout?.storage ? ` · ${checkout.storage}` : ""}</span>
+    {run.snapshot_state?.reasons.map((reason) => <p key={reason} className="reproduce-hint">{reason}</p>)}
+    {run.snapshot_state?.limitations?.map((limitation) => <small key={limitation}>{limitation}</small>)}
+  </div>;
+}
+
 function preflightSummary(results: Record<string, { status: ReproductionCheckStatus }>) {
   const counts = { passed: 0, failed: 0, needsRun: 0, manual: 0 } as Record<string, number>;
   for (const entry of Object.values(results)) {
@@ -138,12 +154,32 @@ type JournalEntry =
   | { kind: "reading"; text: string }
   | { kind: "write"; text: string };
 
-export default function ReproduceView({ bridge, selectedId, onSelect }: {
+type ReproduceViewProps = {
   bridge: ResearchDeskBridge;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-}) {
+  ownerKey?: string;
+  dataRoot?: string;
+  projectId?: string | null;
+  projectName?: string;
+  workspaceId?: string | null;
+  active?: boolean;
+};
+
+export default function ReproduceView(props: ReproduceViewProps) {
+  const key = props.ownerKey ?? "preview";
+  const [visited, setVisited] = useState<Record<string, Omit<ReproduceViewProps, "bridge" | "active">>>({});
+  useEffect(() => { setVisited((current) => ({ ...current, [key]: props })); }, [key, props.projectId, props.workspaceId, props.selectedId]);
+  return <>{Object.entries({ ...visited, [key]: props }).map(([ownerKey, owner]) => <div className="reproduction-owner-workspace" key={ownerKey} hidden={ownerKey !== key || props.active === false}><ReproductionWorkspace {...owner} bridge={props.bridge} active={ownerKey === key && props.active !== false} /></div>)}</>;
+}
+
+function ReproductionWorkspace({ bridge, selectedId, onSelect, dataRoot, ownerKey, projectId, projectName, workspaceId, active = true }: ReproduceViewProps) {
   const { t } = useUISettings();
+  const activeRef = useRef(active); activeRef.current = active;
+  const selectionRef = useRef({ id: selectedId, version: 0 });
+  if (selectionRef.current.id !== selectedId) selectionRef.current = { id: selectedId, version: selectionRef.current.version + 1 };
+  const isSelected = (id: string, version: number) => activeRef.current && selectionRef.current.id === id && selectionRef.current.version === version;
+  const matchesOwner = (payload: { dataRoot?: string; projectId?: string | null; workspaceId?: string | null }) => (!dataRoot || payload.dataRoot === dataRoot) && (!projectId || payload.projectId === projectId) && (!workspaceId || payload.workspaceId === workspaceId);
   const [items, setItems] = useState<Reproduction[]>([]);
   const [detail, setDetail] = useState<Reproduction | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,6 +191,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [preflightBranch, setPreflightBranch] = useState<{ actual: string; expected: string; mismatch: boolean } | null>(null);
   const [checking, setChecking] = useState(false);
   const [run, setRun] = useState<ReproductionRun | null>(null);
+  const [historyRows, setHistoryRows] = useState<ReproductionRun[]>([]);
+  const [historicalRun, setHistoricalRun] = useState<ReproductionRun | null>(null);
+  const historyRequest = useRef(0);
   const [runSteps, setRunSteps] = useState<Record<string, ReproductionRunStep>>({});
   const [liveSteps, setLiveSteps] = useState<ReproductionStep[] | null>(null);
   const [liveLog, setLiveLog] = useState("");
@@ -180,9 +219,10 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [pickerLoading, setPickerLoading] = useState(false);
 
   const refresh = useCallback(async () => {
+    if (!activeRef.current) return;
     setLoading(true);
     try {
-      const next = await bridge.listReproductions();
+      const next = await bridge.listReproductions({ projectId: projectId || undefined, workspaceId: workspaceId || undefined, includeUnassigned: true });
       setItems(next);
       setError("");
     } catch (loadError) {
@@ -190,9 +230,9 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     } finally {
       setLoading(false);
     }
-  }, [bridge]);
+  }, [bridge, projectId, workspaceId]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { if (active) void refresh(); }, [refresh, active]);
 
   useEffect(() => {
     void bridge.listSshServers().then((list) => {
@@ -208,14 +248,14 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
 
   useEffect(() => {
     const off = bridge.onReproductionPlanEvent?.((payload) => {
-      if (payload?.detail) setPlanStatus(payload.detail);
+      if (activeRef.current && payload && matchesOwner(payload) && payload.reproductionId === selectedId && payload.detail) setPlanStatus(payload.detail);
     });
     return () => off?.();
-  }, [bridge]);
+  }, [bridge, selectedId, dataRoot, projectId, workspaceId]);
 
   useEffect(() => {
     const off = bridge.onReproductionRunEvent?.((payload) => {
-      if (!payload?.reproductionId || payload.reproductionId !== selectedId) return;
+      if (!activeRef.current || !payload?.reproductionId || !matchesOwner(payload) || payload.reproductionId !== selectedId) return;
       if (payload.type === "preparing" || payload.type === "started" || payload.type === "error") {
         if (payload.detail) setRunLine(payload.detail);
         return;
@@ -297,12 +337,13 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         return;
       }
       if (payload.type === "finished") {
+        const version = selectionRef.current.version;
         setRunning(false);
         setProgress(null);
         setRunLine(payload.summary || "");
         if (payload.question) setQuestion(payload.question);
         void bridge.getReproduction(selectedId).then((record) => {
-          if (!record) return;
+          if (!record || !isSelected(selectedId, version)) return;
           setDetail(record);
           setRun(record.run ?? null);
           if (record.contract) setLiveSteps(record.contract.steps);
@@ -311,9 +352,10 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       }
     });
     return () => off?.();
-  }, [bridge, refresh, selectedId]);
+  }, [bridge, refresh, selectedId, dataRoot, projectId, workspaceId]);
 
   useEffect(() => {
+    if (!active) return;
     if (!selectedId) { setDetail(null); return; }
     let cancelled = false;
     void bridge.getReproduction(selectedId).then((record) => {
@@ -332,19 +374,37 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       setLiveSteps(record?.contract?.steps ?? null);
     }).catch((detailError) => { if (!cancelled) setError(readable(detailError, "Could not open this reproduction.")); });
     return () => { cancelled = true; };
-  }, [bridge, selectedId]);
+  }, [bridge, selectedId, active]);
+
+  useEffect(() => { setHistoricalRun(null); setHistoryRows([]); historyRequest.current += 1; }, [selectedId]);
+
+  useEffect(() => {
+    if (!active || !selectedId || !bridge.listReproductionRuns) { setHistoryRows([]); return; }
+    let cancelled = false;
+    void bridge.listReproductionRuns(selectedId, 50).then((rows) => { if (!cancelled) setHistoryRows(rows); }).catch((reason) => { if (!cancelled) setError(readable(reason, "Could not load run history.")); });
+    return () => { cancelled = true; };
+  }, [active, selectedId, bridge, run?.id, run?.status, run?.snapshot_state?.status]);
+
+  async function openHistoricalRun(id: string) {
+    const request = ++historyRequest.current, selected = selectionRef.current;
+    if (!id) { setHistoricalRun(null); return; }
+    try {
+      const previous = await bridge.getReproductionRun(id);
+      if (request === historyRequest.current && selected.id && isSelected(selected.id, selected.version)) setHistoricalRun(previous);
+    } catch (reason) { if (request === historyRequest.current) setError(readable(reason, "Could not open the historical run.")); }
+  }
 
   const openPicker = useCallback(async () => {
     setPicking(true);
     setError("");
     try {
-      const list = await bridge.listLibraries();
+      const list = await bridge.listLibraries(projectId);
       setLibraries(list);
       setLibraryId((current) => current || list[0]?.id || "");
     } catch (pickerError) {
       setError(readable(pickerError, "Could not load libraries."));
     }
-  }, [bridge]);
+  }, [bridge, projectId]);
 
   useEffect(() => {
     if (!picking || !libraryId) { setPapers([]); return; }
@@ -362,7 +422,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     setBusy("create");
     setError("");
     try {
-      const record = await bridge.createReproduction({ paperId: paper.id, repoUrl: paper.github_url || paper.url || "", title: paper.title });
+      const record = await bridge.createReproduction({ projectId: projectId || undefined, workspaceId: workspaceId || undefined, paperId: paper.id, repoUrl: paper.github_url || paper.url || "", title: paper.title });
       setPicking(false);
       setQuery("");
       await refresh();
@@ -372,37 +432,43 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     } finally {
       setBusy("");
     }
-  }, [bridge, onSelect, refresh]);
+  }, [bridge, onSelect, refresh, projectId, workspaceId]);
 
   const plan = useCallback(async () => {
     if (!detail) return;
+    const version = selectionRef.current.version;
     setBusy("plan");
     setError("");
     setPlanStatus("Starting…");
     try {
-      const next = await bridge.planReproduction(detail.id);
+      const next = await bridge.planReproduction(detail.id, { projectId: projectId || undefined, workspaceId: workspaceId || undefined });
+      if (!isSelected(detail.id, version)) return;
       setDetail(next);
+      setRun(next.run ?? null); setLiveSteps(next.contract?.steps ?? null);
       await refresh();
     } catch (planError) {
+      if (!isSelected(detail.id, version)) return;
       setError(readable(planError, "The plan could not be generated."));
       const next = await bridge.getReproduction(detail.id).catch(() => null);
-      if (next) setDetail(next);
+      if (next && isSelected(detail.id, version)) setDetail(next);
     } finally {
       setBusy("");
       setPlanStatus("");
     }
-  }, [bridge, detail, refresh]);
+  }, [bridge, detail, refresh, projectId, workspaceId]);
 
   const checkFiles = useCallback(async () => {
     if (!detail) return;
+    const version = selectionRef.current.version;
     setChecking(true);
     setError("");
     try {
       const result = await bridge.preflightReproduction(detail.id);
+      if (!isSelected(detail.id, version)) return;
       setPreflight(Object.fromEntries(result.results.map((entry) => [entry.id, { status: entry.status, detail: entry.detail, resolved: entry.resolved, written: entry.written }])));
       setPreflightBranch({ actual: result.branch, expected: result.expected_branch, mismatch: result.branch_mismatch });
     } catch (checkError) {
-      setError(readable(checkError, "Could not check the repository."));
+      if (isSelected(detail.id, version)) setError(readable(checkError, "Could not check the repository."));
     } finally {
       setChecking(false);
     }
@@ -410,6 +476,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
 
   const startRun = useCallback(async () => {
     if (!detail) return;
+    const version = selectionRef.current.version;
     setBusy("run");
     setError("");
     setRunLine("Starting…");
@@ -420,27 +487,30 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
     setProgress(null);
     setLiveSteps(detail.contract?.steps ?? null);
     try {
-      const next = await bridge.runReproduction(detail.id, target === "docker" ? { backend: "docker" } : { backend: "ssh", serverId: target });
+      const next = await bridge.runReproduction(detail.id, { ...(target === "docker" ? { backend: "docker" as const } : { backend: "ssh" as const, serverId: target }), projectId: projectId || undefined, workspaceId: workspaceId || undefined });
+      if (!isSelected(detail.id, version)) return;
       setDetail(next);
       setRun(next.run ?? null);
       setRunning(true);
     } catch (runError) {
+      if (!isSelected(detail.id, version)) return;
       setError(readable(runError, "The runbook could not start."));
       setRunning(false);
       setRunLine("");
     } finally {
       setBusy("");
     }
-  }, [bridge, detail, target]);
+  }, [bridge, detail, target, projectId, workspaceId]);
 
   const stopRun = useCallback(async () => {
     if (!detail) return;
+    const version = selectionRef.current.version;
     setBusy("stop");
     try {
       await bridge.stopReproduction(detail.id);
-      setRunLine("Stopping…");
+      if (isSelected(detail.id, version)) setRunLine("Stopping…");
     } catch (stopError) {
-      setError(readable(stopError, "The run could not be stopped."));
+      if (isSelected(detail.id, version)) setError(readable(stopError, "The run could not be stopped."));
     } finally {
       setBusy("");
     }
@@ -448,13 +518,14 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
 
   const remove = useCallback(async () => {
     if (!detail) return;
+    const version = selectionRef.current.version;
     setBusy("delete");
     try {
       await bridge.deleteReproduction(detail.id);
-      onSelect(null);
+      if (isSelected(detail.id, version)) onSelect(null);
       await refresh();
     } catch (deleteError) {
-      setError(readable(deleteError, "Could not delete this reproduction."));
+      if (isSelected(detail.id, version)) setError(readable(deleteError, "Could not delete this reproduction."));
     } finally {
       setBusy("");
     }
@@ -480,6 +551,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
       </header>
 
       {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
+      {!detail.project_id && <InlineNotice tone="info">{t("Unassigned reproduction. Planning or running will bind it to {project}.", { project: projectName || t("the selected project") })}</InlineNotice>}
 
       {!contract ? <div className="reproduce-blank">
         <FlaskConical size={26} />
@@ -563,6 +635,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
             {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : run.status === "manual" || run.status === "stopped" || run.status === "interrupted" ? "manual" : "failed"}`}>{RUN_LABELS[run.status]}</span>}
           </h2>
           {run?.backend && <p className="reproduce-hint">{run.backend}</p>}
+          {run && <ReproductionInputReceipt run={run} />}
           {runLine && <p className="reproduce-hint">{runLine}</p>}
           {question && <InlineNotice tone="warning" className="reproduce-question" title="Needs you">{question}</InlineNotice>}
           {journal.length > 0 && <ol className="reproduce-journal">
@@ -595,6 +668,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
 
         <section className="reproduce-block">
           <h2>Numbers this runbook should produce</h2>
+          <MetricComparisonPanel bridge={bridge} record={detail} run={run} projectId={projectId} workspaceId={workspaceId} ownerKey={ownerKey} />
           <ol className="reproduce-claim-list">
             {(contract.claims ?? []).map((claim, index) => {
               const open = openClaim === claim.id;
@@ -676,7 +750,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
                 </button>
               </>}
         </footer>
-        {!running && run?.status === "verified" && <p className="reproduce-hint reproduce-queued">Every runbook step passed with evidence. Comparing the reported numbers is the next milestone.</p>}
+        {!running && run?.status === "verified" && <p className="reproduce-hint reproduce-queued">{t("Runbook checkpoints passed. Compare the reported values above.")}</p>}
         <ReproductionEnvironmentDialog
           bridge={bridge}
           reproductionId={detail.id}
@@ -685,6 +759,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
           running={running}
         />
       </>}
+      {historyRows.length > 0 && <details className="reproduce-block reproduction-run-history"><summary>{t("Run history")}</summary><select aria-label={t("Historical run")} value={historicalRun?.id || ""} onChange={(event) => void openHistoricalRun(event.target.value)}><option value="">{t("Choose a recorded run")}</option>{historyRows.map((item) => <option key={item.id} value={item.id}>{item.started_at} · {RUN_LABELS[item.status]} · {item.id.slice(0, 8)}</option>)}</select>{historicalRun && <article><h3>{t("Historical run")} · {historicalRun.id.slice(0, 8)}</h3><ReproductionInputReceipt run={historicalRun} /><p>{historicalRun.snapshot?.final?.summary || historicalRun.error}</p><MetricComparisonPanel bridge={bridge} record={detail} run={historicalRun} projectId={projectId} workspaceId={workspaceId} ownerKey={ownerKey} /><ol>{(historicalRun.snapshot?.final?.runbook || historicalRun.snapshot?.plan.contract.steps || []).map((step) => <li key={step.id}><strong>{step.title}</strong><code>{step.command}</code></li>)}</ol><details><summary>{t("Recorded output")}</summary><pre>{historicalRun.log || t("No recorded output")}</pre></details></article>}</details>}
     </section>;
   }
 

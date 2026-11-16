@@ -99,10 +99,10 @@ test("session search, filters, pinning, archiving and status are exposed", () =>
 
 test("the switcher only sees the active workspace and preserves sessions across switches", () => {
   assert.match(app, /const workspaceSessions = useMemo/);
-  assert.match(app, /threads\.filter\(\(thread\) => thread\.workspace_id === activeWorkspace\.id\)/);
+  assert.match(app, /threads\.filter\(\(thread\) => thread\.project_id === activeProjectId && \(!activeWorkspace \|\| thread\.workspace_id === activeWorkspace\.id\)\)/);
   assert.match(app, /sessions=\{workspaceSessions\}/);
   assert.match(app, /archivedSessions=\{archivedWorkspaceSessions\}/);
-  assert.match(app, /markResearchThreadViewed\?\.\(threadSummary\.id\)/);
+  assert.match(app, /markResearchThreadViewed\?\.\(thread\.id\)/);
   assert.match(app, /Alt\+↑\/↓|BracketLeft|BracketRight/);
   assert.match(app, /conversationScrollPositionsRef = useRef\(new Map/);
   assert.match(app, /initialScrollTop=\{conversationScrollPositionsRef\.current\.get/);

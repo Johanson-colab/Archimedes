@@ -61,6 +61,38 @@ See [`docs/collaboration/lan.md`](../docs/collaboration/lan.md).
 See [`docs/collaboration-api.md`](../docs/collaboration-api.md) and run
 `npm run server:supabase`.
 
+Apply the numbered SQL migrations in order, including
+[`0013_sync_integrity.sql`](sql/0013_sync_integrity.sql), before deploying the
+current Supabase API. The desktop's versioned library sync reads
+`GET /v1/projects/:id/library-sync`; it retains local deletion intent and reports
+an upgrade warning when the server lacks that route/migration. It does not send
+unversioned hard deletes as a fallback.
+
+A turn ID represents one execution. Its active revision is 1 and its final
+revision is 2 (`completed`, `failed`, `incomplete`, `interrupted`,
+`needs_configuration`, or `cancelled`). The first final record is immutable;
+retries create a new turn ID. Both desktop imports and PostgreSQL triggers reject
+old running snapshots, including writes made through older API processes.
+Conversation status is derived from the merged turns, so an old conversation
+header cannot mark a finished execution as running again.
+
+Libraries and library/paper memberships retain `deleted_at` and server-assigned
+`sync_revision`. Removing a paper affects that membership, preserving its other
+libraries and canonical metadata. Deleted library IDs stay deleted; create a new
+library to share those contents again. An explicit user re-add of a paper names
+the observed membership deletion revision; a stale normal upload cannot restore
+it. Local mutation IDs keep delayed acknowledgements from clearing later edits.
+The migration preserves existing records but cannot reconstruct hard deletions
+made before deployment. An already-linked library absent from the server is
+therefore kept local with an explanation, rather than silently recreated.
+Deleting a parent project keeps the existing foreign-key cascade: library/item
+triggers allow physical removal once their parent has gone, so tombstones do
+not strand child records outside a deleted project.
+
+The local integration tests use two real SQLite stores, the real HTTP API and a
+controlled SDK backend. They do not establish hosted Supabase Auth or Realtime
+behavior; the two-account live suite remains an environment-dependent check.
+
 ## Production gaps
 
 - Real login/OIDC, email delivery, invites, token expiry/rotation

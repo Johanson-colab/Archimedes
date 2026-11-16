@@ -14,12 +14,12 @@ const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const i18n = readLocale();
 
 test("Paper diagrams is a view inside Image creation, not a second Create destination", () => {
-  assert.match(registry, /id: "image-creation"[^\n]*labelKey: "Image creation"[^\n]*destination: \{ type: "section", section: "image-creation" \}/);
+  assert.match(registry, /id: "image-creation"[^\n]*labelKey: "Figure generation"[^\n]*destination: \{ type: "section", section: "image-creation" \}/);
   assert.doesNotMatch(registry, /id: "gallery"/);
   assert.doesNotMatch(registry, /id: "image-creation"[^\n]*disabled/);
   assert.doesNotMatch(registry, /id: "image-creation"[^\n]*badge/);
-  assert.match(app, /<ImageCreationView active=\{mainSection === "image-creation"\}/);
-  assert.match(registry, /id: "image-creation"[^\n]*titleKey: "Image creation"/);
+  assert.match(app, /<ImageCreationView [^\n]*active=\{mainSection === "image-creation"\}/);
+  assert.match(registry, /id: "image-creation"[^\n]*titleKey: "Figure generation"/);
   assert.match(app, /const activeModule = mainSection === "chat" \|\| mainSection === "files" \? null : sidebarModule\(mainSection\)/);
   assert.match(i18n, /"Generate and remix research figures"/);
 });
@@ -27,7 +27,7 @@ test("Paper diagrams is a view inside Image creation, not a second Create destin
 test("Image creation keeps Paper diagrams and FigureForge without Data charts or Templates", () => {
   assert.match(view, /className="image-creation-tabs">/);
   assert.ok(view.includes('className="image-creation-heading"'));
-  assert.match(view, /className="image-creation-heading">Paper diagrams<\/h2>/);
+  assert.match(view, /className="image-creation-heading">\{t\("Diagram references"\)\}<\/h2>/);
   assert.ok(!view.includes("DataChartGallery"));
   assert.ok(!view.includes("image-creation-tab-charts"));
   assert.doesNotMatch(view, /image-creation-tab-templates|image-creation-panel-templates|TemplateCard/);
@@ -100,7 +100,7 @@ test("FigureForge opens as a separate workspace without a gallery composer", () 
   assert.match(view, /className="image-creation-forge-button" onClick=\{\(\) => showForge\(true\)\}/);
   assert.match(view, /className="figure-forge-page"/);
   assert.match(view, /className="figure-forge-back" onClick=\{\(\) => showForge\(false\)\}/);
-  assert.ok(view.includes('onClick={() => showForge(false)}>{t("Browse gallery")}'));
+  assert.ok(view.includes('onClick={() => showForge(false)}>{t("Diagram references")}'));
   assert.match(view, /function useAsTemplate[\s\S]*?setReferences[\s\S]*?showForge\(true\)/);
   assert.match(view, /pageRef\.current\?\.scrollIntoView\(\{ block: "start" \}\)/);
   assert.doesNotMatch(view, /<Dialog open=\{forgeOpen\}/);
@@ -127,11 +127,12 @@ test("FigureForge reads as four numbered steps with one primary action each", ()
   assert.match(view, /className="forge-step-actions"/);
   assert.match(css, /\.forge-step-index \{/);
   assert.match(css, /\.forge-step-subtitle \{/);
-  // Configuration is behind a disclosure so the default path needs no setup.
+  // Model details stay in a disclosure; missing required configuration is explained.
   assert.match(view, /<summary>\{t\("Model settings"\)\}/);
   assert.match(view, /Archimedes main model/);
   // Every disabled primary action explains itself.
-  assert.match(view, /const analyzeBlockedReason = hasPaperInput \? "" : t\("Add a PDF, or at least 100 characters of paper text\."\)/);
+  assert.match(view, /const analyzeBlockedReason = modelSetupMessage \|\| \(hasPaperInput \? "" : t\("Add a PDF, or at least 100 characters of paper text\."\)\)/);
+  assert.match(view, /modelSetupMessage[\s\S]*?onOpenModelSettings/);
   assert.match(view, /const generateBlockedReason =/);
   assert.match(view, /className="forge-blocked">\{analyzeBlockedReason\}/);
   assert.match(view, /className="forge-blocked">\{generateBlockedReason\}/);

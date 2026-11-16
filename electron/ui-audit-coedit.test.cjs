@@ -21,7 +21,8 @@ test("shared note editor never reports edits before the document loads", () => {
 });
 
 test("paper writing only mounts the co-edit pane for a loaded document", () => {
+  assert.match(writing, /file \? <>\{coedit && projectId &&/);
   assert.match(writing, /initialText=\{draft\}/);
   assert.match(writing, /docKey=\{`latex:\$\{file\.path\}`\}/);
-  assert.match(writing, /onTextChange=\{\(text\) => \{ draftRef\.current = text; setDraft\(text\); \}\}/);
+  assert.match(writing, /onTextChange=\{\(text\) => \{ setDraft\(text\); \}\}/);
 });

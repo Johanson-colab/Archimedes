@@ -9,8 +9,11 @@
  * removes it. Nothing survives on the host except the checkout itself.
  */
 
-const { spawn } = require("node:child_process");
-const fsp = require("node:fs/promises");
+const { randomUUID } = require("node:crypto");
+const { runProcess } = require("./process-runner.cjs");
+const structuredPaths = require("./structured-paths.cjs");
+const { loggedCommand, writeOutputCommand } = require("./target-log.cjs");
+const { outputPathFor } = require("./paths.cjs");
 const path = require("node:path");
 const { isOutputPath } = require("./paths.cjs");
 const { envFileContent, envPrelude } = require("./env-file.cjs");
@@ -38,10 +41,6 @@ const NODE_PROBE = [
   "r.setTimeout(8000,()=>{console.log(0);process.exit(0)});",
 ].join("");
 
-function isWithin(root, target) {
-  const relative = path.relative(root, target);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
 
 /**
  * Docker images are chosen from what the contract says the paper needs, never
@@ -59,63 +58,8 @@ function quotePath(value) {
   return `'${String(value || "").replace(/'/g, `'"'"'`)}'`;
 }
 
-function runProcess(command, args, { cwd, onData, signal, timeoutMs, stdin } = {}) {
-  return new Promise((resolve) => {
-    let settled = false;
-    let timedOut = false;
-    const collected = [];
-    let timer = null;
-
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      resolve({ ...result, output: collected.join("") });
-    };
-
-    let child;
-    try {
-      child = spawn(command, args, { cwd, shell: false, windowsHide: true });
-    } catch (error) {
-      finish({ exitCode: null, error: error?.message || `${command} could not start`, timedOut: false });
-      return;
-    }
-
-    const push = (chunk) => {
-      const text = chunk.toString();
-      collected.push(text);
-      onData?.(text);
-    };
-
-    if (stdin !== undefined) {
-      // A command that exits before reading stdin is normal, not an error.
-      child.stdin.on("error", () => {});
-      child.stdin.end(String(stdin));
-    }
-    child.stdout.on("data", push);
-    child.stderr.on("data", push);
-    child.once("error", (error) => finish({ exitCode: null, error: error?.message || `${command} failed`, timedOut }));
-    child.once("close", (code) => finish({ exitCode: code, timedOut }));
-
-    if (signal) {
-      if (signal.aborted) {
-        child.kill("SIGKILL");
-      } else {
-        signal.addEventListener("abort", () => child.kill("SIGKILL"), { once: true });
-      }
-    }
-
-    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
-      timer = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGKILL");
-      }, timeoutMs);
-    }
-  });
-}
-
-async function dockerVersion() {
-  const result = await runProcess("docker", ["info", "--format", "{{.ServerVersion}}"], { timeoutMs: DOCKER_TIMEOUT_MS });
+async function dockerVersion({ signal, execute = runProcess } = {}) {
+  const result = await execute("docker", ["info", "--format", "{{.ServerVersion}}"], { signal, timeoutMs: DOCKER_TIMEOUT_MS });
   if (result.exitCode !== 0) {
     const hint = String(result.output || "").trim().split("\n").slice(-1)[0] || "Docker did not answer.";
     throw new Error(`Docker is not available: ${hint}. Start Docker Desktop and run this again.`);
@@ -123,22 +67,26 @@ async function dockerVersion() {
   return String(result.output || "").trim();
 }
 
-function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {} } = {}) {
+function createDockerBackend({ checkoutDir, dataRoot = checkoutDir, environment = {}, name, secrets = {}, signal, runId = randomUUID(), ownerToken = randomUUID(), execute = runProcess, limits = {} } = {}) {
   if (!checkoutDir) throw new Error("A Docker backend needs a checkout directory.");
   const image = imageFor(environment);
-  const container = name || `archimedes-repro-${Math.random().toString(36).slice(2, 10)}`;
+  const container = name || `archimedes-repro-${runId}`;
+  const run = (command, args, options = {}) => execute(command, args, { signal, ...options });
+  const logRelative = `.archimedes/reproduction-logs/${runId}`;
+  const logDirectory = path.join(dataRoot, logRelative);
+  const targetLogDirectory = path.posix.dirname(outputPathFor(runId, 1));
+  let commandIndex = 0, disposed = false, disposal;
   const envPath = Object.keys(secrets || {}).length
     ? `/tmp/archimedes/${Math.random().toString(36).slice(2, 10)}/env`
     : "";
-  let prepared = false;
+
 
   /** Keeps a command's full output from being lost. */
   const writeFile = async (absolutePath, content) => {
     if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
-    const dir = path.posix.dirname(absolutePath);
-    const result = await runProcess("docker", [
+    const result = await run("docker", [
       "exec", "-i", container, "sh", "-c",
-      `umask 077; mkdir -p ${quotePath(dir)} && cat > ${quotePath(absolutePath)}`,
+      writeOutputCommand(absolutePath),
     ], { stdin: String(content || ""), timeoutMs: 60_000 });
     if (result.exitCode !== 0) {
       throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
@@ -146,11 +94,15 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
     return absolutePath;
   };
 
-  const exec = async (command, { timeoutMs, onData, signal } = {}) => {
+  const exec = async (command, { timeoutMs, onData, signal: commandSignal = signal, outputPath = outputPathFor(runId, ++commandIndex) } = {}) => {
+    if (path.posix.dirname(outputPath) !== targetLogDirectory) throw new Error("The log path belongs to a different run.");
+    // Pre-create as the desktop user. A root process in Linux Docker can append
+    // without making the persisted log unreadable to that user after disposal.
+    await structuredPaths.writeRepoFile(dataRoot, `${logRelative}/${path.posix.basename(outputPath)}`, "", { mode: 0o600 });
     // The keys are sourced, not passed on the command line: they never appear in
     // the journal, the log, or the process list.
-    const result = await runProcess("docker", ["exec", container, "sh", "-lc", `${envPrelude(envPath)}${command}`], { onData, signal, timeoutMs });
-    return { exitCode: result.exitCode, timedOut: result.timedOut, error: result.error };
+    const result = await run("docker", ["exec", container, "sh", "-lc", `${envPrelude(envPath)}${loggedCommand(command, outputPath)}`], { onData, signal: commandSignal, timeoutMs });
+    return { ...result, outputPath, logReference: { storage: "local", path: `${logRelative}/${path.posix.basename(outputPath)}` } };
   };
 
   const httpStatus = async (url) => {
@@ -160,7 +112,7 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
       ["node", ["-e", NODE_PROBE, url]],
     ];
     for (const [program, args] of probes) {
-      const result = await runProcess("docker", ["exec", container, program, ...args], { timeoutMs: DOCKER_TIMEOUT_MS });
+      const result = await run("docker", ["exec", container, program, ...args], { timeoutMs: DOCKER_TIMEOUT_MS });
       const status = Number(String(result.output || "").trim().split("\n").pop());
       if (Number.isFinite(status) && status >= 100) return status;
     }
@@ -173,19 +125,29 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
     container,
     describe: () => `Docker · ${image}`,
 
+    resource: () => ({ kind: "docker", container, runId, ownerToken }),
+
     async prepare() {
-      await dockerVersion();
-      const created = await runProcess("docker", [
+      if (disposed) throw new Error("This run has been disposed.");
+      await structuredPaths.writeRepoFile(dataRoot, `${logRelative}/.run`, runId);
+      await dockerVersion({ signal, execute });
+      if (disposed || signal?.aborted) throw new Error("This run was stopped before container creation.");
+      const created = await run("docker", [
         "run", "-d", "--rm",
         "--name", container,
+        "--label", `com.archimedes.reproduction.run=${runId}`,
+        "--label", `com.archimedes.reproduction.owner=${ownerToken}`,
+        ...(limits.cpus ? ["--cpus", String(limits.cpus)] : []),
+        ...(limits.memory ? ["--memory", String(limits.memory)] : []),
+        ...(limits.pids ? ["--pids-limit", String(limits.pids)] : []),
         "-v", `${checkoutDir}:${MOUNT}`,
+        "-v", `${logDirectory}:${targetLogDirectory}`,
         "-w", MOUNT,
         image, "sleep", "infinity",
       ], { timeoutMs: 120_000 });
       if (created.exitCode !== 0) {
         throw new Error(`Could not start the ${image} container: ${String(created.output || "").trim().slice(0, 400)}`);
       }
-      prepared = true;
       if (envPath) await writeFile(envPath, envFileContent(secrets));
       return { image, container };
     },
@@ -195,31 +157,29 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
 
     writeFile,
 
-    /** Writes a file inside the checkout. Used by the structured write/edit actions. */
-    async writeRepoFile(relativePath, content) {
-      const target = path.resolve(checkoutDir, String(relativePath || ""));
-      if (!isWithin(checkoutDir, target)) throw new Error("The path is outside the checkout.");
-      if (target.split(path.sep).includes(".git")) throw new Error("Refusing to write inside .git.");
-      await fsp.mkdir(path.dirname(target), { recursive: true });
-      await fsp.writeFile(target, String(content ?? ""), "utf8");
-      return { path: String(relativePath || ""), bytes: Buffer.byteLength(String(content ?? ""), "utf8") };
-    },
-
-    async readFile(relativePath) {
-      const target = path.resolve(checkoutDir, String(relativePath || ""));
-      if (!isWithin(checkoutDir, target)) throw new Error("The checked path is outside the checkout.");
-      try {
-        return await fsp.readFile(target, "utf8");
-      } catch (error) {
-        if (error?.code === "ENOENT" || error?.code === "EISDIR") return null;
-        throw error;
-      }
-    },
+    /** Structured writes do not inherit shell access to mounted host data. */
+    writeRepoFile: (relativePath, content) => structuredPaths.writeRepoFile(checkoutDir, relativePath, content),
+    readFile: relativePath => structuredPaths.readRepoFile(checkoutDir, relativePath),
 
     async dispose() {
-      if (!prepared) return;
-      prepared = false;
-      await runProcess("docker", ["rm", "-f", container], { timeoutMs: 30_000 });
+      if (disposal) return disposal;
+      disposed = true;
+      disposal = (async () => {
+        // A failed/pending docker run can already have created its named resource.
+        // Inspect exact labels before removing; never sweep by a name prefix.
+        const cleanupSignal = AbortSignal.timeout(10_000);
+        const inspected = await execute("docker", ["inspect", "--format", "{{json .Config.Labels}}", container], { signal: cleanupSignal, timeoutMs: 10_000 });
+        if (inspected.exitCode !== 0) {
+          if (/No such (?:object|container)/i.test(inspected.output || "")) return;
+          throw new Error(`Could not inspect this run's container for cleanup: ${String(inspected.output || inspected.error || "Docker unavailable").slice(-300)}`);
+        }
+        let labels;
+        try { labels = JSON.parse(inspected.output.trim()); } catch { throw new Error("Docker ownership labels could not be read. The container was left untouched."); }
+        if (labels?.["com.archimedes.reproduction.run"] !== runId || labels?.["com.archimedes.reproduction.owner"] !== ownerToken) throw new Error("The container belongs to a different run and was left untouched.");
+        const removed = await execute("docker", ["rm", "-f", container], { signal: cleanupSignal, timeoutMs: 10_000 });
+        if (removed.exitCode !== 0 && !/No such (?:object|container)/i.test(removed.output || "")) throw new Error("This run's container could not be removed.");
+      })();
+      return disposal;
     },
   };
 }

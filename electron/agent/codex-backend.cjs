@@ -129,7 +129,7 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   return { answered: true };
 }
 
-async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
+async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false, runtimeId = thread.id }) {
   const root = fs.realpathSync(workspace);
   const policy = nativePolicy(config, root);
   const attachments = nativeContext(contextItems);
@@ -137,7 +137,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   const binding = bindings.get();
   const resume = canResume(binding, { workspace: root, model: config.model, previousTurnId });
   if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
-  if (thread.id && activeNativeRuns.has(thread.id)) throw new Error('This chat already has an active native Codex operation.');
+  if (runtimeId && activeNativeRuns.has(runtimeId)) throw new Error('This chat already has an active native Codex operation.');
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments);
   if (signal.aborted) throw new Error('Codex turn interrupted before skill setup.');
   if (nativeSkill && (nativeSkill !== 'paper-deep-reading' || researchSkill)) throw new Error('Unsupported native skill.');
@@ -153,7 +153,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   } });
   const items = new Map();
   const active = { client, emit, recordEvent, questions: new Map(), approvals: new Map(), resolvedRequests: new Set(), settled: false, compaction, nativeThreadId: null, nativeTurnId: null };
-  if (thread.id) activeNativeRuns.set(thread.id, active);
+  if (runtimeId) activeNativeRuns.set(runtimeId, active);
   let accepted = false, compacted = false, serverQueue = Promise.resolve(), resultStatus = 'failed';
   let resolveDone, rejectDone;
   const done = new Promise((resolve, reject) => { resolveDone = resolve; rejectDone = reject; });
@@ -323,7 +323,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
       active.approvals.clear();
       active.resolvedRequests.clear();
       events.dispose();
-      if (thread.id && activeNativeRuns.get(thread.id) === active) activeNativeRuns.delete(thread.id);
+      if (runtimeId && activeNativeRuns.get(runtimeId) === active) activeNativeRuns.delete(runtimeId);
       client.close();
     }
   }

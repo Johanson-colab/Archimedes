@@ -13,7 +13,22 @@ type WorkbenchSettingsSnapshot = {
   layout?: WorkbenchLayoutSnapshot;
 };
 interface ResearchDeskBridge {
+  chooseMetricComparisonInput?: import("./metric-comparison").MetricComparisonBridge["chooseMetricComparisonInput"];
+  saveMetricComparison?: import("./metric-comparison").MetricComparisonBridge["saveMetricComparison"];
+  listMetricComparisons?: import("./metric-comparison").MetricComparisonBridge["listMetricComparisons"];
+  getMetricComparison?: import("./metric-comparison").MetricComparisonBridge["getMetricComparison"];
+  stageProjectResultFigure?: (input: import("./project-results").StageProjectResultFigureInput) => Promise<import("./project-results").StageProjectResultFigureReceipt>;
+  previewProjectPackage?: import("./project-transfer").ProjectTransferBridge["previewProjectPackage"];
+  exportProjectPackage?: import("./project-transfer").ProjectTransferBridge["exportProjectPackage"];
+  chooseProjectTransferSources?: import("./project-transfer").ProjectTransferBridge["chooseProjectTransferSources"];
+  inspectProjectPackage?: import("./project-transfer").ProjectTransferBridge["inspectProjectPackage"];
+  importProjectPackage?: import("./project-transfer").ProjectTransferBridge["importProjectPackage"];
+  saveProjectResult: import("./project-results").ProjectResultsBridge["saveProjectResult"];
+  listProjectResults: import("./project-results").ProjectResultsBridge["listProjectResults"];
+  getProjectResult: import("./project-results").ProjectResultsBridge["getProjectResult"];
+  readProjectResultFile: import("./project-results").ProjectResultsBridge["readProjectResultFile"];
     platform?: string;
+    getBuildInfo?: () => Promise<import("./build-info").BuildInfo>;
     getInitialWorkspace: () => Promise<string | null>;
     getLocalIdentity: () => Promise<LocalIdentity>;
     getAuthState: () => Promise<AuthState>;
@@ -97,11 +112,12 @@ interface ResearchDeskBridge {
     createLatexFile: (workspace: string, path: string) => Promise<WorkspaceFilePreview>;
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
-    compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
-    onLatexCompileProgress?: (callback: (input: { path: string; stage: string; log?: string }) => void) => () => void;
+    compileLatexDocument: (workspace: string, path: string, requestId?: string) => Promise<LatexCompileResult>;
+    readManuscriptSnapshot?: (workspace: string, manifestPath: string) => Promise<import("./manuscript-snapshot").ManuscriptBuildVerification>;
+    onLatexCompileProgress?: (callback: (input: { workspace?: string; requestId?: string; path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
-    createResearchThread: (input: { projectId?: string; workspacePath?: string; workspaceId?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
+    createResearchThread: (input: { projectId?: string; workspacePath?: string; workspaceId?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string; basedOnThreadId?: string; basedOnResultId?: string }) => Promise<ResearchThreadDetail>;
     forkResearchThread: (threadId: string, workspace?: string, side?: boolean) => Promise<ResearchThreadDetail>;
     undoResearchTurn: (threadId: string, workspace?: string) => Promise<{ thread: ResearchThreadDetail; prompt: string; backupThreadId: string }>;
     compactResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
@@ -156,21 +172,26 @@ interface ResearchDeskBridge {
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
     getDailyFigure?: (arxivId: string, options?: { thumbnail?: boolean }) => Promise<string>;
-    listReproductions: () => Promise<Reproduction[]>;
+    listReproductions: (input?: { projectId?: string; workspaceId?: string; includeUnassigned?: boolean }) => Promise<Reproduction[]>;
+    listReproductionRuns: (reproductionId: string, limit?: number) => Promise<ReproductionRun[]>;
+    getReproductionRun: (runId: string) => Promise<ReproductionRun | null>;
     createReproduction: (input: ReproductionCreateInput) => Promise<Reproduction>;
     getReproduction: (id: string) => Promise<Reproduction | null>;
     updateReproduction: (id: string, patch: ReproductionPatch) => Promise<Reproduction>;
     deleteReproduction: (id: string) => Promise<boolean>;
-    planReproduction: (id: string, workspace?: string) => Promise<Reproduction>;
+    planReproduction: (id: string, context?: string | { workspace?: string; projectId?: string; workspaceId?: string }) => Promise<Reproduction>;
     preflightReproduction: (id: string, workspace?: string) => Promise<ReproductionPreflight>;
-    runReproduction: (id: string, options?: { backend?: "docker" | "ssh"; serverId?: string; workspace?: string }) => Promise<Reproduction>;
+    runReproduction: (id: string, options?: { backend?: "docker" | "ssh"; serverId?: string; workspace?: string; projectId?: string; workspaceId?: string }) => Promise<Reproduction>;
     stopReproduction: (id: string) => Promise<boolean>;
     listReproductionEnv: (id: string) => Promise<ReproductionEnvItem[]>;
     setReproductionEnv: (id: string, name: string, value: string) => Promise<ReproductionEnvItem[]>;
     removeReproductionEnv: (id: string, name: string) => Promise<ReproductionEnvItem[]>;
     testReproductionEnv: (id: string, name: string) => Promise<ReproductionEnvTestResult>;
-    onReproductionPlanEvent?: (callback: (payload: { paperId?: string; type?: string; detail?: string }) => void) => () => void;
+    onReproductionPlanEvent?: (callback: (payload: { dataRoot?: string; projectId?: string | null; workspaceId?: string | null; reproductionId?: string; paperId?: string; type?: string; detail?: string }) => void) => () => void;
     onReproductionRunEvent?: (callback: (payload: {
+      dataRoot?: string;
+      projectId?: string | null;
+      workspaceId?: string | null;
       reproductionId?: string;
       runId?: string;
       type?: string;
@@ -204,7 +225,12 @@ interface ResearchDeskBridge {
     getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
     importLocalLibraryPaper: (libraryId: string, workspace?: string) => Promise<LibraryPaper | null>;
-    addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
+    addLibraryPaper: (libraryId: string, paper: AcademicSearchResult, selection?: ProjectPaperSelectionPatch) => Promise<LibraryPaper>;
+    getProjectPaperSelection: (paperId: string, projectId: string) => Promise<ProjectPaperSelection | null>;
+    saveProjectPaperSelection: (paperId: string, projectId: string, patch: ProjectPaperSelectionPatch) => Promise<ProjectPaperSelection>;
+    getPaperBibliography: (paperId: string) => Promise<PaperBibliography>;
+    setPaperBibliography: (paperId: string, patch: { citekey?: string; entryType?: string }) => Promise<PaperBibliography>;
+    repairLibraryPaperMetadata: (paperId: string, patch: PaperMetadataPatch) => Promise<LibraryPaper>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     getLibraryPaperReader: (paperId: string, workspace?: string, projectId?: string | null) => Promise<PaperReaderState>;
@@ -273,8 +299,9 @@ interface ResearchDeskBridge {
     listPaperReviewVenues: () => Promise<PaperReviewVenueSummary[]>;
     listPaperReviewPapers: (input?: { workspace?: string; projectId?: string }) => Promise<PaperReviewPaperSummary[]>;
     choosePaperReviewPdf: () => Promise<string>;
-    stagePaperToSlidesPdf: (workspace: string, path: string) => Promise<string>;
-    createPaperReviewRun: (input: PaperReviewCreateInput) => Promise<{ runId: string; document: PaperReviewDocumentSummary | null; venue: { id: string; displayName: string; version: string }; model: string }>;
+    stagePaperToSlidesPdf: (workspace: string, path: string, options?: { manuscript?: import("./manuscript-handoff").ManuscriptOrigin; threadId: string }) => Promise<string>;
+    checkPaperToSlidesSetup?: (input: { backend: "codex" | "claude"; hasTaskToken: boolean }) => Promise<{ checks: Array<{ id: string; label: string; status: "ready" | "missing" | "optional"; detail: string }>; canStart: boolean }>;
+    createPaperReviewRun: (input: PaperReviewCreateInput) => Promise<{ runId: string; document: PaperReviewDocumentSummary | null; venue: { id: string; displayName: string; version: string }; model: string; manuscript?: import("./manuscript-handoff").ManuscriptOrigin | null }>;
     getPaperReviewRun: (runId: string) => Promise<PaperReviewRunSummary | null>;
     listPaperReviewRuns: (input?: { projectId?: string; limit?: number }) => Promise<PaperReviewRunSummary[]>;
     cancelPaperReviewRun: (runId: string) => Promise<{ cancelled: boolean }>;
@@ -530,6 +557,7 @@ type PaperReviewSource =
   | { kind: "pdf"; filePath: string };
 
 interface PaperReviewCreateInput {
+  manuscript?: import("./manuscript-handoff").ManuscriptOrigin;
   source: PaperReviewSource;
   venueId?: string;
   workspace?: string;
@@ -660,6 +688,8 @@ interface PaperReviewResult {
 }
 
 interface PaperReviewRunSummary {
+  ownerDataRoot?: string;
+  manuscript?: import("./manuscript-handoff").ManuscriptOrigin | null;
   id: string;
   documentId: string;
   projectId: string;
@@ -796,6 +826,7 @@ interface LatexCompileDiagnostic {
 }
 
 interface LatexCompileResult {
+  source_snapshot?: import("./manuscript-snapshot").ManuscriptBuildSnapshot;
   timed_out?: boolean;
   ok: boolean;
   engine: string;
@@ -1275,6 +1306,9 @@ interface ReproductionAttempt {
 interface Reproduction {
   id: string;
   paper_id: string | null;
+  project_id?: string | null;
+  workspace_id?: string | null;
+  execution_root?: string | null;
   repo_url: string;
   title: string;
   status: ReproductionStatus;
@@ -1312,6 +1346,8 @@ interface ReproductionRun {
   backend: string;
   image: string;
   steps: ReproductionRunStep[];
+  snapshot?: import("./reproduction-snapshot").ReproductionInputSnapshot | null;
+  snapshot_state?: import("./reproduction-snapshot").ReproductionSnapshotState;
   log: string;
   error: string;
   started_at: string;
@@ -1328,7 +1364,7 @@ interface ReproductionPreflight {
   results: Array<{ id: string; status: ReproductionCheckStatus; detail: string; resolved?: string; written?: string }>;
 }
 
-interface ReproductionCreateInput { paperId?: string | null; repoUrl?: string; title?: string; budget?: Partial<Reproduction["budget"]> }
+interface ReproductionCreateInput { paperId?: string | null; projectId?: string; workspaceId?: string; repoUrl?: string; title?: string; budget?: Partial<Reproduction["budget"]> }
 interface ReproductionPatch { title?: string; status?: ReproductionStatus; contract?: ReproductionContract | null; budget?: Partial<Reproduction["budget"]>; error?: string; repoUrl?: string }
 
 interface DailyDiscoveryResponse {
@@ -1418,7 +1454,14 @@ interface LibraryPaper extends AcademicSearchResult {
   updated_at: string;
   github_url: string;
   github_stars: number;
+  citekey?: string;
+  entry_type?: string;
 }
+
+type ProjectPaperSelectionPatch = { reason?: string; discovery?: Record<string, unknown> };
+interface ProjectPaperSelection { project_id: string; paper_id: string; reason: string; discovery: Record<string, unknown>; updated_at: string }
+interface PaperBibliography { paper_id: string; citekey: string; entryType: string; updated_at: string | null }
+type PaperMetadataPatch = { title?: string; authors?: string[]; year?: number | null; venue?: string; doi?: string; arxiv_id?: string; url?: string; pdf_url?: string };
 
 interface PaperReaderAsset {
   paper_id: string;
@@ -1878,18 +1921,22 @@ interface AgentRunResult {
   taskId: string;
   response: string;
   status: string;
+  error?: ModelIncompleteFailure;
   actions: AgentAction[];
   thread: ResearchThreadDetail;
 }
 
+interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
+
 interface AgentEvent {
-  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "incomplete" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
   title: string;
   detail: string;
   threadId?: string;
   turnId?: string;
   delta?: string;
   clientRunId?: string;
+  error?: ModelIncompleteFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
   toolCall?: { id?: string; name?: string; source: string; status: "running" | "completed" | "failed" | "interrupted"; durationMs: number };

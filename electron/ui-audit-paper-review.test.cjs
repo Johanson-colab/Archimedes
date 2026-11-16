@@ -29,7 +29,14 @@ test("Paper review remains available as a Writing & delivery app, hidden by defa
 
 test("Paper review is registry-hosted with a real bridge and in-page controls", () => {
   assert.match(app, /lazy\(\(\) => import\("\.\/PaperReviewView"\)\)/);
-  assert.match(app, /"paper-review": <PaperReviewView bridge=\{desktopBridge\} workspace=\{executionWorkspace\} projectId=\{activeProjectId\} active=\{mainSection === "paper-review"\} \/>/);
+  const route = app.match(/"paper-review": <PaperReviewView[^\n]+/)[0];
+  assert.match(route, /bridge=\{desktopBridge\}/);
+  assert.match(route, /workspace=\{executionWorkspace\}/);
+  assert.match(route, /dataRoot=\{workspace\}/);
+  assert.match(route, /projectId=\{activeProjectId\}/);
+  assert.match(route, /active=\{mainSection === "paper-review"\}/);
+  assert.match(route, /onReturnToManuscript=\{returnToManuscript\}/);
+  assert.match(route, /onDraftRevision=\{draftManuscriptRevision\}/);
   assert.doesNotMatch(view, /ToolbarActions|ToolbarPortal|module-toolbar-actions/);
   assert.match(view, /pra-header/);
   assert.match(view, /Run simulated review/);

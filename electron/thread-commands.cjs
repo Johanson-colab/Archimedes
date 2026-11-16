@@ -55,14 +55,20 @@ function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, Br
   }
   ipcMain.handle("research-thread:create", (event, input = {}) => {
     store.openWorkspace(dataWorkspace(event, input));
+    const { resolveResearchContext } = require("./workspace-context.cjs");
+    if (input.basedOnThreadId && input.basedOnResultId) throw new Error("Choose one source conversation or project result for the new conversation.");
+    const context = resolveResearchContext(store.currentStore(), { threadId: input.basedOnThreadId, basedOnResultId: input.basedOnResultId,
+      projectId: input.projectId, workspaceId: input.workspaceId, workspace: input.workspacePath });
     const thread = store.createResearchThread({
       prompt: "New conversation",
       title: typeof input.title === "string" ? input.title : "New conversation",
       mode: "free-chat",
-      projectId: input.projectId,
-      workspacePath: input.workspacePath,
-      workspaceId: input.workspaceId,
+      projectId: context.projectId,
+      workspacePath: context.workspace,
+      workspaceId: context.workspaceId,
       visibility: input.visibility,
+      basedOnThreadId: input.basedOnThreadId,
+      basedOnResultId: input.basedOnResultId,
     });
     return store.getResearchThread(thread.id);
   });
@@ -96,16 +102,14 @@ function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, Br
         requireEditor();
         await nativeBackend.compact({ config: backend, workspace: thread.workspace_path || workspace, thread, bindings: store.nativeAgentBindings(thread.id),
           signal: AbortSignal.timeout(180_000),
-          recordEvent: (record) => { store.openWorkspace(workspace); requireEditor(); store.appendResearchEvent({ threadId: thread.id, turnId: expectedTurnId, ...record }); },
+          recordEvent: (record) => { requireEditor(); store.appendResearchEvent({ threadId: thread.id, turnId: expectedTurnId, ...record }); },
         });
-        store.openWorkspace(workspace);
         requireEditor();
         const current = store.getResearchThread(thread.id);
         if (current.turns.at(-1)?.id !== expectedTurnId || current.status === "running") throw new Error("Conversation changed during native compaction. Reload it before continuing.");
         return current;
       }
       const summary = await summarizeConversation(context, agent.complete, modelConfig.getActiveModelConfig(), AbortSignal.timeout(180_000));
-      store.openWorkspace(workspace);
       return store.compactResearchThread(thread.id, summary, expectedTurnId);
     } finally { compacting.delete(key); }
   });

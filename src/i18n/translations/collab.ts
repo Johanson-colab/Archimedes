@@ -94,6 +94,7 @@ export const collab: Record<string, string> = {
   "Sign-out behavior": "退出登录行为",
   "Supabase auth is not configured.": "Supabase 登录尚未配置。",
   "This device": "此设备",
+  "Transfer project…": "迁移项目…",
   "Upload boundary": "上传边界",
   "Use a short name that makes the project easy to find later.": "使用一个简短名称，方便之后快速找到项目。",
   "Viewer": "只读",

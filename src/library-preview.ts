@@ -1,4 +1,6 @@
 import seedData from "../shared/library-seeds.json";
+import { matchBibliographyPaper, type MetadataPatch } from "./bibliography";
+import type { ProjectPaperSelection } from "./discovery-state";
 
 const now = new Date().toISOString();
 const previewLibraries: ResearchLibrary[] = seedData.libraries.map((library) => ({
@@ -13,6 +15,7 @@ const previewLibraries: ResearchLibrary[] = seedData.libraries.map((library) => 
 
 const previewPapers = new Map<string, LibraryPaper>();
 const previewLinks = new Map<string, Set<string>>();
+const previewSelections = new Map<string, ProjectPaperSelection>();
 
 for (const library of seedData.libraries) {
   previewLinks.set(library.id, new Set(library.papers.map((paper) => paper.id)));
@@ -139,9 +142,8 @@ export const previewLibraryBridge = {
       fetched_at: new Date().toISOString(),
     };
   },
-  addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult) => {
-    const existing = [...previewPapers.values()].find((candidate) => candidate.arxiv_id && candidate.arxiv_id === paper.arxiv_id)
-      ?? [...previewPapers.values()].find((candidate) => candidate.title === paper.title);
+  addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult, selection?: { reason?: string; discovery?: Record<string, unknown> }) => {
+    const existing = matchBibliographyPaper(paper, [...previewPapers.values()]);
     const id = existing?.id ?? crypto.randomUUID();
     if (!existing) {
       previewPapers.set(id, {
@@ -162,7 +164,37 @@ export const previewLibraryBridge = {
     if (!links) throw new Error("Library not found.");
     links.add(id);
     refreshCount(libraryId);
+    if (selection) {
+      const projectId = previewLibraries.find((library) => library.id === libraryId)?.project_id || "preview-project";
+      const key = JSON.stringify([projectId, id]);
+      const current = previewSelections.get(key);
+      previewSelections.set(key, { project_id: projectId, paper_id: id, reason: selection.reason ?? current?.reason ?? "", discovery: selection.discovery ?? current?.discovery ?? {}, updated_at: new Date().toISOString() });
+    }
     return { ...(previewPapers.get(id) as LibraryPaper) };
+  },
+  getProjectPaperSelection: async (paperId: string, projectId: string): Promise<ProjectPaperSelection | null> => previewSelections.get(JSON.stringify([projectId, paperId])) || null,
+  saveProjectPaperSelection: async (paperId: string, projectId: string, patch: { reason?: string; discovery?: Record<string, unknown> }): Promise<ProjectPaperSelection> => {
+    if (!previewPapers.has(paperId)) throw new Error("Paper not found.");
+    const key = JSON.stringify([projectId, paperId]);
+    const current = previewSelections.get(key);
+    const next = { project_id: projectId, paper_id: paperId, reason: patch.reason ?? current?.reason ?? "", discovery: patch.discovery ?? current?.discovery ?? {}, updated_at: new Date().toISOString() };
+    previewSelections.set(key, next); return next;
+  },
+  getPaperBibliography: async (paperId: string) => {
+    const paper = previewPapers.get(paperId);
+    if (!paper) throw new Error("Paper not found.");
+    return { paper_id: paperId, citekey: paper.citekey || "", entryType: paper.entry_type || "article", updated_at: paper.updated_at };
+  },
+  setPaperBibliography: async (paperId: string, input: { citekey: string; entryType: string }) => {
+    const paper = previewPapers.get(paperId);
+    if (!paper) throw new Error("Paper not found.");
+    Object.assign(paper, { citekey: input.citekey, entry_type: input.entryType, updated_at: new Date().toISOString() });
+    return { paper_id: paperId, ...input, updated_at: paper.updated_at };
+  },
+  repairLibraryPaperMetadata: async (paperId: string, patch: MetadataPatch) => {
+    const paper = previewPapers.get(paperId);
+    if (!paper) throw new Error("Paper not found.");
+    Object.assign(paper, patch, { updated_at: new Date().toISOString() }); return { ...paper };
   },
   updateLibraryPaper: async (paperId: string, patch: Partial<LibraryPaper>) => {
     const paper = previewPapers.get(paperId);

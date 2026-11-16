@@ -30,3 +30,6 @@
 .analysis-guide p, .analysis-guide ol { font-size: 14px; }
 .analysis-plot text, .analysis-plot .analysis-axis-title { font-size: inherit; }
 .analysis-file-title { max-width: 100%; }.analysis-file-title h1 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.analysis-project-results { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 18px; }
+.analysis-project-results select { max-width: 280px; min-width: 120px; padding: 7px 9px; color: var(--text-primary); background: var(--surface-control); border: 1px solid var(--border-soft); border-radius: var(--radius-control); }
+.analysis-project-results > span { color: var(--text-secondary); font-size: 12px; }

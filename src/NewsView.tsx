@@ -243,10 +243,11 @@ function nativeCard(item: NewsItem, t: TFunction) {
   }
 }
 
-export default function NewsView({ bridge, projectId, active, onSendToChat }: {
+export default function NewsView({ bridge, projectId, active, onSendToChat, chatTargetLabel }: {
   bridge: ResearchDeskBridge;
   projectId: string | null;
   active: boolean;
+  chatTargetLabel?: string;
   onSendToChat: (text: string, mode: "append" | "replace") => void;
 }) {
   const { t } = useUISettings();
@@ -481,6 +482,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
         <Tab value="feed">{t("Feed")}</Tab>
         <Tab value="board">{t("Board")}</Tab>
       </Tabs>
+      {chatTargetLabel && <span className="news-updated">{t("Chat target: {name}", { name: chatTargetLabel })}</span>}
       <span className="news-updated">{updatedLabel}</span>
       <span className="news-head-spacer" />
       <button className="quiet-icon-button" onClick={() => void refresh()} title={t("Refresh")} aria-label={t("Refresh")} disabled={refreshing}>

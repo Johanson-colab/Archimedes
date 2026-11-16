@@ -1,10 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { createHash } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { StringDecoder } = require("node:string_decoder");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexTemplates = require("../shared/latex-templates.json");
+const { captureManuscriptSources, writeManuscriptSnapshot, pruneManuscriptPreviews } = require("./manuscript-snapshot.cjs");
 
 const PAPER_EXTENSIONS = new Set([".tex", ".bib", ".bst", ".cls", ".sty", ".cfg"]);
 const SKIPPED_DIRECTORIES = new Set([".archimedes", ".git", "node_modules", "dist", "build", ".next"]);
@@ -277,14 +278,24 @@ function compilerKind(executable) {
 }
 
 async function compileLatexDocument(root, requestedPath, options = {}) {
+  root = workspaceFiles.workspacePath(root);
   const sourcePath = normalizePaperPath(requestedPath);
   const absoluteSource = workspaceFiles.workspacePath(root, sourcePath);
   if (!fs.statSync(absoluteSource).isFile()) throw new Error("The selected LaTeX document is not a file.");
   const sourceDirectory = path.dirname(absoluteSource);
   const documentName = path.basename(absoluteSource, ".tex");
+  const startedSource = captureManuscriptSources(root, sourcePath);
+  const requestedSource = options.requestedSource || startedSource;
+  const buildId = randomUUID();
   const buildKey = createHash("sha1").update(sourcePath).digest("hex").slice(0, 12);
-  const buildDirectory = workspaceFiles.workspacePath(root, `.archimedes/latex-build/${buildKey}`, { mustExist: false });
+  const buildDirectory = workspaceFiles.workspacePath(root, `.archimedes/latex-build/${buildKey}/${buildId}`, { mustExist: false });
   fs.mkdirSync(buildDirectory, { recursive: true });
+  if (requestedSource.source_version !== startedSource.source_version) {
+    const message = "The manuscript sources changed while this build was queued. Compile again to use the latest inputs.";
+    const snapshot = writeManuscriptSnapshot({ root, buildDirectory, buildId, requested: requestedSource, started: startedSource, finished: startedSource, pdfPath: null, log: message, compiled: false, engine: "not-started" });
+    const previewCleanup = pruneManuscriptPreviews(root, snapshot.manifest_path);
+    return { ok: false, timed_out: false, engine: "not-started", source_path: sourcePath, pdf_path: "", duration_ms: 0, diagnostics: [{ line: null, message }], log: message, source_snapshot: snapshot, preview_cleanup: previewCleanup };
+  }
 
   const compilerEnv = { ...process.env, ...(options.env || {}), LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
   const latexmk = options.executable || findExecutable(["latexmk", "latexmk.exe", "/Library/TeX/texbin/latexmk", "/opt/homebrew/bin/latexmk", "/usr/local/bin/latexmk"], compilerEnv);
@@ -315,8 +326,17 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   const logPath = path.join(buildDirectory, `${documentName}.log`);
   const log = !run.timedOut && fs.existsSync(logPath) && fs.statSync(logPath).mtimeMs >= startedAt
     ? fs.readFileSync(logPath, "utf8").slice(-80_000) : run.output;
-  const ok = run.code === 0 && hasPdf;
+  let ok = run.code === 0 && hasPdf;
   const diagnostics = parseLatexDiagnostics(`${run.output}\n${log}`);
+  let finishedSource;
+  try { finishedSource = captureManuscriptSources(root, sourcePath); }
+  catch (error) { finishedSource = { ...startedSource, source_version: null, observation_version: null, verification_error: error.message }; }
+  const snapshot = writeManuscriptSnapshot({ root, buildDirectory, buildId, requested: requestedSource, started: startedSource, finished: finishedSource, pdfPath: hasPdf ? absolutePdf : null, log: String(run.output || log), compiled: ok, engine: path.basename(executable) });
+  const previewCleanup = pruneManuscriptPreviews(root, snapshot.manifest_path);
+  if (snapshot.source_changed) {
+    ok = false;
+    diagnostics.unshift({ line: null, message: "The manuscript sources changed during compilation. Compile again before using this PDF." });
+  }
   if (run.timedOut) diagnostics.unshift({
     line: null, message: "LaTeX compilation timed out.",
     help: run.timeoutReason === "idle"
@@ -336,6 +356,8 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
     duration_ms: Date.now() - startedAt,
     diagnostics,
     log: String(run.output || log).slice(-12_000),
+    source_snapshot: snapshot,
+    preview_cleanup: previewCleanup,
   };
 }
 

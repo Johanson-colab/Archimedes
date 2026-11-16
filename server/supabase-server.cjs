@@ -3,7 +3,7 @@ const { createHash, randomBytes, randomUUID } = require("node:crypto");
 const { createClient } = require("@supabase/supabase-js");
 const Y = require("yjs");
 
-function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
+function createSupabaseServer({ supabaseUrl, publishableKey, createClientImpl = createClient } = {}) {
   if (!supabaseUrl || !publishableKey) throw new Error("Supabase URL and publishable key are required.");
 
   function tokenFrom(req) {
@@ -12,7 +12,7 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
   }
 
   function clientFor(token) {
-    return createClient(supabaseUrl, publishableKey, {
+    return createClientImpl(supabaseUrl, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
@@ -52,6 +52,8 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
       color: row.color,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      sync_revision: row.sync_revision,
+      deleted_at: row.deleted_at,
       paper_count: Number(row.paper_count?.[0]?.count ?? row.library_items?.[0]?.count) || 0,
     };
   }
@@ -86,15 +88,19 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
       state_updated_at: state?.updated_at || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      membership_revision: item.sync_revision,
+      membership_deleted_at: item.deleted_at,
+      mutation_id: item.mutation_id,
     };
   }
 
   async function listLibraryPapers(supabase, libraryId, userId) {
     const { data: items, error } = await supabase
       .from("library_items")
-      .select("item_id, note, added_at")
+      .select("item_id, note, added_at, sync_revision, deleted_at, mutation_id")
       .eq("library_id", libraryId)
       .eq("item_type", "paper")
+      .is("deleted_at", null)
       .order("added_at", { ascending: false });
     if (error) throw apiError(error);
     const ids = (items || []).map((item) => item.item_id);
@@ -186,14 +192,21 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
         return send(res, 201, { project: await projectResponse(supabase, projectId, user.id) });
       }
 
+      const librarySyncMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/library-sync$/);
+      if (librarySyncMatch && method === 'GET') {
+        const { data, error } = await supabase.rpc('library_sync_snapshot', { p_project: librarySyncMatch[1] });
+        if (error) throw apiError(error);
+        return send(res, 200, data);
+      }
       const projectLibrariesMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/libraries$/);
       if (projectLibrariesMatch) {
         const projectId = projectLibrariesMatch[1];
         if (method === "GET") {
           const { data, error } = await supabase
             .from("libraries")
-            .select("id, project_id, name, description, color, created_at, updated_at, paper_count:library_items(count)")
+            .select("id, project_id, name, description, color, created_at, updated_at, sync_revision, deleted_at, paper_count:library_items(count)")
             .eq("project_id", projectId)
+            .is("deleted_at", null)
             .order("updated_at", { ascending: false });
           if (error) throw apiError(error);
           return send(res, 200, { libraries: (data || []).map(libraryResponse) });
@@ -202,12 +215,13 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
           const body = await readBody(req);
           const name = String(body.name || "").trim();
           if (!name || name.length > 100) throw Object.assign(new Error("A library name of at most 100 characters is required."), { status: 400 });
-          const { data, error } = await supabase.from("libraries").insert({
+          const { data, error } = await supabase.from("libraries").upsert({
+            id: body.id || randomUUID(),
             project_id: projectId,
             name,
             description: String(body.description || "").slice(0, 500),
             color: String(body.color || "#3973c8").slice(0, 32),
-          }).select("id, project_id, name, description, color, created_at, updated_at").single();
+          }, { onConflict: 'id' }).select("id, project_id, name, description, color, created_at, updated_at, sync_revision, deleted_at").single();
           if (error) throw apiError(error);
           return send(res, 201, { library: { ...data, paper_count: 0 } });
         }
@@ -226,15 +240,15 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
           if (typeof body.description === "string") patch.description = body.description.slice(0, 500);
           if (typeof body.color === "string") patch.color = body.color.slice(0, 32);
           patch.updated_at = new Date().toISOString();
-          const { data, error } = await supabase.from("libraries").update(patch).eq("id", libraryId)
+          const { data, error } = await supabase.from("libraries").update(patch).eq("id", libraryId).is('deleted_at', null)
             .select("id, project_id, name, description, color, created_at, updated_at").single();
           if (error) throw apiError(error);
           return send(res, 200, { library: { ...data, paper_count: 0 } });
         }
         if (method === "DELETE") {
-          const { error } = await supabase.from("libraries").delete().eq("id", libraryId);
+          const { data, error } = await supabase.rpc('delete_synced_library', { p_library: libraryId });
           if (error) throw apiError(error);
-          return send(res, 200, { deleted: true });
+          return send(res, 200, { deleted: true, ...data });
         }
       }
 
@@ -271,18 +285,22 @@ function createSupabaseServer({ supabaseUrl, publishableKey } = {}) {
               github_stars: Number(paper.github_stars) || 0,
               conference_json: paper.conference || paper.conference_json || null,
               note: String(paper.note || ""),
+              restore_revision: paper.restore_revision,
+              mutation_id: paper.mutation_id,
             },
           });
           if (error) throw apiError(error);
           const { data: row, error: readError } = await supabase.from("papers").select("*").eq("id", newPaperId).single();
           if (readError) throw apiError(readError);
-          return send(res, 201, { paper: paperResponse(row) });
+          const { data: item, error: itemError } = await supabase.from('library_items').select('*')
+            .eq('library_id', libraryId).eq('item_type', 'paper').eq('item_id', newPaperId).single();
+          if (itemError) throw apiError(itemError);
+          return send(res, 201, { paper: paperResponse(row, item) });
         }
         if (paperId && method === "DELETE") {
-          const { error } = await supabase.from("library_items").delete()
-            .eq("library_id", libraryId).eq("item_type", "paper").eq("item_id", paperId);
+          const { data, error } = await supabase.rpc('remove_synced_library_paper', { p_library: libraryId, p_paper: paperId });
           if (error) throw apiError(error);
-          return send(res, 200, { removed: true });
+          return send(res, 200, { removed: true, ...data });
         }
       }
 

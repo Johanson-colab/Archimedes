@@ -128,9 +128,9 @@ test("a failing command cannot prove that a step passed", async () => {
   assert.equal(brain.prompts[2].includes("Refused"), false);
 });
 
-test("the agent can revise the runbook, and a kept id keeps its verdict", async () => {
+test("rewording a runbook step preserves its verdict when its execution and checks are unchanged", async () => {
   const { result, brain } = await pilot({
-    steps: [step("install"), step("run")],
+    steps: [step("install", { command: "make install" }), step("run")],
     script: { "make install": { output: "installed into /workspace/.venv\n" } },
     decisions: [
       { action: "run", command: "make install" },
@@ -166,6 +166,154 @@ test("a person is asked rather than guessed at", async () => {
   });
   assert.equal(result.status, "manual");
   assert.match(result.summary, /CL-bench is behind a login/);
+});
+
+test("a changed command cannot inherit a verdict or reuse output from before its revision", async () => {
+  const { result, fake, brain } = await pilot({
+    steps: [step("run", { command: "old-check" })],
+    script: { "old-check": { output: "Old configuration passed\n" }, "new-check": { output: "New configuration passed\n" } },
+    decisions: [
+      { action: "run", command: "old-check" },
+      { action: "advance", step: "run", verdict: "passed", evidence: "Old configuration passed" },
+      { action: "revise", steps: [{ id: "run", title: "New experiment", command: "new-check" }] },
+      { action: "done" },
+      // Acceptance and display revisions must not make the earlier output eligible again.
+      { action: "revise", steps: [{ id: "run", title: "Reworded new experiment", checkpoint: "New conditions pass", source: "README" }] },
+      { action: "advance", step: "run", verdict: "passed", evidence: "Old configuration passed" },
+      { action: "run", command: "new-check" },
+      { action: "advance", step: "run", verdict: "passed", evidence: "New configuration passed" },
+      { action: "done" },
+    ],
+  });
+  assert.match(brain.prompts[4], /still has no verdict/);
+  assert.match(brain.prompts[6], /execution conditions changed/);
+  assert.equal(result.status, "verified");
+  assert.equal(result.runbook[0].command, "new-check");
+  assert.equal(result.steps[0].evidence, "New configuration passed");
+  assert.deepEqual(fake.calls, ["old-check", "new-check"]);
+  assert.match(result.log, /Old configuration passed/, "the original observation stays in the history");
+});
+
+test("changed acceptance criteria need a new verdict but can re-evaluate the same execution output", async () => {
+  const { result, fake, brain } = await pilot({
+    steps: [step("run", { command: "evaluate", checkpoint: "Score at least 0.8", check: { kind: "manual", reason: "Compare score with 0.8" } })],
+    script: { evaluate: { output: "Evaluation score: 0.95\n" } },
+    decisions: [
+      { action: "run", command: "evaluate" },
+      { action: "advance", step: "run", verdict: "passed", evidence: "Evaluation score: 0.95" },
+      { action: "revise", steps: [{ id: "run", title: "run", checkpoint: "Score at least 0.9", check: { kind: "manual", reason: "Compare score with 0.9" } }] },
+      { action: "done" },
+      { action: "advance", step: "run", verdict: "passed", evidence: "Evaluation score: 0.95", note: "The recorded score also meets 0.9." },
+      { action: "done" },
+    ],
+  });
+  assert.match(brain.prompts[4], /still has no verdict/);
+  assert.equal(result.status, "verified");
+  assert.equal(result.runbook[0].checkpoint, "Score at least 0.9");
+  assert.deepEqual(fake.calls, ["evaluate"], "changing a threshold does not force an expensive experiment to rerun");
+  assert.equal(result.steps[0].detail, "The recorded score also meets 0.9.");
+});
+
+test("reordering and changing only titles or source labels retains unchanged receipts", async () => {
+  const { result, fake } = await pilot({
+    steps: [step("a", { command: "check-a" }), step("b", { command: "check-b" })],
+    script: { "check-a": { output: "Check alpha passed\n" }, "check-b": { output: "Check beta passed\n" } },
+    decisions: [
+      { action: "run", command: "check-a" },
+      { action: "advance", step: "a", verdict: "passed", evidence: "Check alpha passed" },
+      { action: "run", command: "check-b" },
+      { action: "advance", step: "b", verdict: "passed", evidence: "Check beta passed" },
+      { action: "revise", steps: [{ id: "b", title: "Beta" }, { id: "a", title: "Alpha", source: "README section 2" }] },
+      { action: "done" },
+    ],
+  });
+  assert.equal(result.status, "verified");
+  assert.deepEqual(result.steps.map(entry => [entry.id, entry.status, entry.evidence]), [["b", "passed", "Check beta passed"], ["a", "passed", "Check alpha passed"]]);
+  assert.deepEqual(fake.calls, ["check-a", "check-b"]);
+});
+
+test("changing one step's execution does not clear an unrelated step's result", async () => {
+  const { result, fake } = await pilot({
+    steps: [step("a", { command: "check-a" }), step("b", { command: "check-b" })],
+    script: { "check-a": { output: "Original alpha passed\n" }, "check-b": { output: "Independent beta passed\n" }, "check-new-a": { output: "Revised alpha passed\n" } },
+    decisions: [
+      { action: "run", command: "check-a" },
+      { action: "advance", step: "a", verdict: "passed", evidence: "Original alpha passed" },
+      { action: "run", command: "check-b" },
+      { action: "advance", step: "b", verdict: "passed", evidence: "Independent beta passed" },
+      { action: "revise", steps: [{ id: "a", title: "New alpha", command: "check-new-a" }, { id: "b", title: "b" }] },
+      { action: "run", command: "check-new-a" },
+      { action: "advance", step: "a", verdict: "passed", evidence: "Revised alpha passed" },
+      { action: "done" },
+    ],
+  });
+  assert.equal(result.status, "verified");
+  assert.equal(result.steps[1].evidence, "Independent beta passed");
+  assert.deepEqual(fake.calls, ["check-a", "check-b", "check-new-a"]);
+});
+
+test("an explicit replacement command must have produced the cited output", async () => {
+  const { result, brain } = await pilot({
+    steps: [step("run", { command: "old-check" })],
+    script: { "old-check": { output: "Original configuration passed\n" } },
+    decisions: [
+      { action: "run", command: "old-check" },
+      { action: "advance", step: "run", verdict: "passed", evidence: "Original configuration passed", command: "new-check" },
+      { action: "done" },
+      { action: "ask", question: "Need to execute the replacement command." },
+    ],
+  });
+  assert.match(brain.prompts[2], /stated command must be the command that produced/);
+  assert.equal(result.status, "manual");
+  assert.equal(result.runbook[0].command, "old-check");
+  assert.equal(result.steps[0].status, "pending");
+  assert.equal(result.steps[0].evidence, "");
+});
+
+test("historical errors can explain a manual handoff but cannot fail changed execution conditions", async () => {
+  const { result, fake, brain } = await pilot({
+    steps: [step("run", { command: "evaluate", detail: "Read the old dataset" })],
+    script: { evaluate: { output: "ERROR: old dataset is unavailable\n", exitCode: 1 } },
+    decisions: [
+      { action: "run", command: "evaluate" },
+      { action: "advance", step: "run", verdict: "failed", evidence: "ERROR: old dataset is unavailable" },
+      { action: "revise", steps: [{ id: "run", title: "run", detail: "Read the replacement dataset" }] },
+      { action: "advance", step: "run", verdict: "failed", evidence: "ERROR: old dataset is unavailable" },
+      { action: "advance", step: "run", verdict: "manual", evidence: "ERROR: old dataset is unavailable", note: "Provide the replacement dataset before running again." },
+      { action: "done" },
+    ],
+  });
+  assert.match(brain.prompts[4], /execution conditions changed/);
+  assert.equal(result.status, "manual");
+  assert.equal(result.steps[0].status, "manual");
+  assert.equal(result.steps[0].detail, "Provide the replacement dataset before running again.");
+  assert.deepEqual(fake.calls, ["evaluate"]);
+});
+
+test("command receipts preserve meaningful quoted whitespace when matching or revising execution", async () => {
+  const original = "printf '%s' 'dataset  alpha'";
+  const different = "printf '%s' 'dataset alpha'";
+  const { result, fake, brain } = await pilot({
+    steps: [step("run", { command: original })],
+    script: { [original]: { output: "Selected dataset  alpha\n" }, [different]: { output: "Selected dataset alpha\n" } },
+    decisions: [
+      { action: "run", command: original },
+      { action: "advance", step: "run", verdict: "passed", evidence: "Selected dataset  alpha", command: different },
+      { action: "advance", step: "run", verdict: "passed", evidence: "Selected dataset  alpha", command: original },
+      { action: "revise", steps: [{ id: "run", title: "Renamed", source: "README" }] },
+      { action: "revise", steps: [{ id: "run", title: "run", command: different }] },
+      { action: "done" },
+      { action: "run", command: different },
+      { action: "advance", step: "run", verdict: "passed", evidence: "Selected dataset alpha", command: different },
+      { action: "done" },
+    ],
+  });
+  assert.match(brain.prompts[2], /stated command must be the command that produced/);
+  assert.match(brain.prompts[4], /dataset  alpha/, "a title-only revision must not rewrite the executed shell command");
+  assert.match(brain.prompts[6], /still has no verdict/, "changing whitespace inside a quoted argument changes execution");
+  assert.deepEqual(fake.calls, [original, different]);
+  assert.equal(result.status, "verified");
+  assert.equal(result.runbook[0].command, different);
 });
 
 test("destructive commands never reach the machine", () => {

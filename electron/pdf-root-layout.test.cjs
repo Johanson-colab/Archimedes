@@ -54,7 +54,7 @@ test("PDF.js measuring canvases cannot resize the desktop or create root scrollb
   `);
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  await promisify(execFile)(require("electron"), [path.join(directory, "audit.cjs")], { env, timeout: 25000 });
+  await promisify(execFile)(require("../scripts/electron-runtime.cjs").electronBinary(), [path.join(directory, "audit.cjs")], { env, timeout: 25000 });
   const samples = JSON.parse(fs.readFileSync(path.join(directory, "report.json"), "utf8"));
   assert.ok(samples.every(sample => sample.width === samples[0].width), `PDF font measurement changed app width: ${JSON.stringify(samples)}`);
   assert.ok(samples.every(sample => sample.rootHeight <= sample.viewportHeight), "PDF font measurement introduced document scrolling");

@@ -5,10 +5,12 @@ module.exports = {
   artifactName: "${productName}-${version}-${os}-${arch}.${ext}",
   directories: { output: "release", buildResources: "electron/assets" },
   asar: true,
-  beforePack: "./scripts/prepare-latex-engine.cjs",
+  beforePack: "./scripts/prepare-desktop-package.cjs",
   npmRebuild: true,
   files: [
-    "dist/**/*", "electron/**/*", "shared/**/*", "server/**/*", "scripts/**/*", "package.json",
+    "dist/**/*", "electron/**/*", "shared/**/*", "server/**/*", "scripts/**/*", "package.json", ".archimedes/build-info.json",
+    // FigureForge executes the bundled browser/WASM worker, never the Node ONNX backend.
+    "!node_modules/onnxruntime-node{,/**/*}",
     "!electron/**/*.test.cjs", "!electron/figure-forge-upstream-*.mjs", "!server/**/*.test.cjs",
     "!**/.env", "!**/.env.*", "!**/*.log",
   ],

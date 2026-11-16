@@ -194,6 +194,14 @@
 .library-workspace .paper-inspector .library-note-editor header p { display: none; }
 .library-workspace .paper-inspector .library-note-editor textarea { min-height: 135px; padding: 10px; border: 1px solid var(--border-soft); border-radius: 5px; background: var(--surface-control); }
 .library-remove-paper { margin-top: 18px; }
+.daily-create-library { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-block: 10px; }
+.daily-create-library label, .paper-project-context label { display: grid; gap: 5px; }
+.daily-create-library input, .daily-paper-content > label input { min-width: 0; padding: 7px 9px; color: var(--text-primary); background: var(--surface-control); border: 1px solid var(--border-soft); border-radius: 5px; }
+.paper-project-context { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border-soft); }
+.paper-project-context p { color: var(--text-muted); font-size: 12px; }
+.paper-project-context textarea { width: 100%; min-height: 80px; padding: 8px; color: var(--text-primary); background: var(--surface-control); border: 1px solid var(--border-soft); border-radius: 5px; }
+.paper-project-context pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.daily-paper-content > label { display: grid; gap: 4px; margin-block: 8px; font-size: 12px; color: var(--text-muted); }
 @media (max-width: 800px) {
   .library-browser-split { display: flex; flex-direction: column; overflow-y: auto; }
   .library-workspace-paper-list { flex: 0 0 auto; max-height: 55%; min-height: 160px; }

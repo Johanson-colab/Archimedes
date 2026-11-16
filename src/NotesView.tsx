@@ -7,11 +7,12 @@ type NotesViewProps = {
   loading: boolean;
   saveState: "idle" | "saving" | "saved";
   contextLabel: string;
+  chatTargetLabel?: string;
   onChange: (value: string) => void;
   onSend: (text: string, mode: "append" | "replace") => void;
 };
 
-export default function NotesView({ value, loading, saveState, contextLabel, onChange, onSend }: NotesViewProps) {
+export default function NotesView({ value, loading, saveState, contextLabel, chatTargetLabel, onChange, onSend }: NotesViewProps) {
   const { t } = useUISettings();
   const [selection, setSelection] = useState("");
   const canSend = Boolean(value.trim());
@@ -46,6 +47,7 @@ export default function NotesView({ value, loading, saveState, contextLabel, onC
       spellCheck
     />}
 
+    {chatTargetLabel && <div className="notes-meta">{t("Chat target: {name}", { name: chatTargetLabel })}</div>}
     <footer className="notes-footer">
       <span className="notes-meta">{value.length.toLocaleString()} {t("characters")}</span>
       <div className="notes-actions">

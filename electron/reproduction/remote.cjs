@@ -17,7 +17,13 @@
 
 const { spawn } = require("node:child_process");
 const path = require("node:path");
-const { createHash } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
+const { runProcess, terminateProcess } = require("./process-runner.cjs");
+const { remotePathChecks } = require("./structured-paths.cjs");
+const { loggedCommand, writeOutputCommand } = require("./target-log.cjs");
+const { outputPathFor } = require("./paths.cjs");
+const { ownedCommand, cleanupCommand } = require("./remote-owner.cjs");
+const { shellQuote, quoteRemotePath } = require("./remote-quotes.cjs");
 const { isOutputPath } = require("./paths.cjs");
 const { envFileContent, envPrelude } = require("./env-file.cjs");
 
@@ -35,22 +41,6 @@ const PY_PROBE = [
   "except Exception:",
   "    print(0)",
 ].join("\n");
-
-/** POSIX single-quote escaping for a command that goes through a remote shell. */
-function shellQuote(value) {
-  return `'${String(value ?? "").replace(/'/g, `'\\''`)}'`;
-}
-
-/**
- * Quotes a remote path so the server expands `~`. Single quotes would stop the
- * expansion and create a directory literally named "~" in the home folder.
- */
-function quoteRemotePath(value) {
-  const text = String(value ?? "");
-  if (text === "~") return '"$HOME"';
-  if (text.startsWith("~/")) return `"$HOME"/${shellQuote(text.slice(2))}`;
-  return shellQuote(text);
-}
 
 /**
  * Where one reproduction lives on the server. Derived from the repository and
@@ -114,21 +104,20 @@ function probeCommand() {
   ].join("; ");
 }
 
-function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {}, secrets = {} }) {
+function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", branch = "", copyFrom = "", emit = () => {}, secrets = {}, signal, runId = randomUUID(), ownerToken = randomUUID(), execute = runProcess, resourceRoot, resourceEnvPath }) {
   const { target, password, env } = authFor(server);
-  const root = remoteRoot(target.workspace || workspace, repoUrl, branch);
+  const root = resourceRoot || remoteRoot(target.workspace || workspace, repoUrl, branch);
   const repo = `${root}/repo`;
-  const envPath = Object.keys(secrets || {}).length
-    ? `/tmp/archimedes/${Math.random().toString(36).slice(2, 10)}/env`
-    : "";
-  let prepared = false;
+  const expectedEnvPath = `/tmp/archimedes/${runId.replace(/[^a-z0-9]/gi, "").slice(0, 32)}/env`;
+  const envPath = resourceEnvPath === undefined ? Object.keys(secrets || {}).length ? expectedEnvPath : "" : resourceEnvPath;
+  if (envPath && envPath !== expectedEnvPath) throw new Error("The environment file does not belong to this run.");
+  let disposed = false, disposal, commandIndex = 0;
 
   /** Keeps a command's full output where the agent can grep it later. */
   const writeFile = async (absolutePath, content) => {
     if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
-    const dir = absolutePath.replace(/\/[^/]+$/, "");
     const result = await run(
-      `umask 077; mkdir -p ${quoteRemotePath(dir)} && cat > ${quoteRemotePath(absolutePath)}`,
+      writeOutputCommand(absolutePath),
       { timeoutMs: 120_000, login: false, stdin: content },
     );
     if (result.code !== 0) {
@@ -137,48 +126,37 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     return absolutePath;
   };
 
-  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true, stdin } = {}) => new Promise((resolve) => {
-    const args = connectionArgs(target, login ? loginCommand(command) : command, { allowPassword: Boolean(password) });
-    const child = spawn("ssh", args, { windowsHide: true, env: { ...process.env, ...env } });
-    const out = [];
-    if (stdin !== undefined) {
-      // ssh forwards stdin over the channel; a command that exits early closes it.
-      child.stdin.on("error", () => {});
-      child.stdin.end(String(stdin));
-    }
-    let settled = false;
-    const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
-    child.stdout.on("data", (chunk) => { out.push(chunk); onData?.(chunk.toString()); });
-    child.stderr.on("data", (chunk) => { out.push(chunk); onData?.(chunk.toString()); });
-    child.once("error", (error) => finish({ code: null, output: out.join(""), error: error?.message || "ssh failed" }));
-    child.once("close", (code) => finish({ code, output: out.join("") }));
-    const timer = setTimeout(() => { child.kill("SIGKILL"); finish({ code: null, output: out.join(""), timedOut: true }); }, Math.max(1_000, timeoutMs));
-    if (timer.unref) timer.unref();
-    if (signal) {
-      if (signal.aborted) child.kill("SIGKILL");
-      else signal.addEventListener("abort", () => child.kill("SIGKILL"), { once: true });
-    }
-  });
+  const run = async (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal: operationSignal = signal, login = true, stdin, stdinStream, owned = true, captureChars } = {}) => {
+    const managed = owned ? ownedCommand(command, { root, runId, ownerToken }) : command;
+    const args = connectionArgs(target, login ? loginCommand(managed) : `bash -c ${shellQuote(managed)}`, { allowPassword: Boolean(password) });
+    const result = await execute("ssh", args, { env: { ...process.env, ...env }, timeoutMs, onData, signal: operationSignal, stdin, stdinStream, captureChars });
+    return { ...result, code: result.exitCode };
+  };
+  let processControlChecked = false;
+  const requireProcessControl = async () => {
+    if (processControlChecked) return;
+    const check = await run("command -v bash >/dev/null 2>&1 && command -v ps >/dev/null 2>&1", { owned: false, login: false, timeoutMs: 10_000 });
+    if (check.code !== 0) throw new Error("The SSH target needs bash and ps to start and safely stop managed runs. No remote tools were installed.");
+    processControlChecked = true;
+  };
 
   /** Ships a checkout that already exists here instead of cloning it there. */
-  const copyLocalCheckout = (localDir) => new Promise((resolve, reject) => {
+  const copyLocalCheckout = async (localDir) => {
     emit({ type: "preparing", detail: `Copying the checkout to ${target.host}…` });
-    const remoteCommand = `mkdir -p ${quoteRemotePath(repo)} && tar -xzf - -C ${quoteRemotePath(repo)}`;
-    const sshArgs = connectionArgs(target, remoteCommand, { allowPassword: Boolean(password) });
-    const pack = spawn("tar", ["-czf", "-", "-C", localDir, "."]);
-    const pipe = spawn("ssh", sshArgs, { windowsHide: true, env: { ...process.env, ...env } });
-    let stderr = "";
-    let sent = 0;
-    pack.stdout.on("data", (chunk) => { sent += chunk.length; });
-    pack.stdout.pipe(pipe.stdin);
-    pack.once("error", reject);
-    pipe.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    pipe.once("error", reject);
-    pipe.once("close", (code) => {
-      if (code === 0) resolve({ bytes: sent });
-      else reject(new Error(stderr.trim().slice(0, 300) || `tar exited with ${code}`));
-    });
-  });
+    if (signal?.aborted) throw new Error("Stopped before copying the checkout.");
+    const pack = spawn("tar", ["-czf", "-", "-C", localDir, "."], { detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
+    let bytes = 0, packError = "";
+    pack.stdout.on("data", chunk => { bytes += chunk.length; });
+    pack.stderr.on("data", chunk => { packError = (packError + chunk.toString()).slice(-1000); });
+    pack.on("error", error => { packError = error.message; });
+    const abort = () => terminateProcess(pack, "SIGKILL");
+    signal?.addEventListener("abort", abort, { once: true });
+    try {
+      const result = await run(`mkdir -p ${quoteRemotePath(repo)} && tar -xzf - -C ${quoteRemotePath(repo)}`, { stdinStream: pack.stdout });
+      if (result.code !== 0 || signal?.aborted) throw new Error(packError || result.error || result.output.trim().slice(-300) || "Checkout copying stopped.");
+      return { bytes };
+    } finally { signal?.removeEventListener("abort", abort); abort(); }
+  };
 
   return {
     kind: "ssh",
@@ -186,15 +164,19 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     container: "",
     describe: () => `SSH · ${target.user}@${target.host}`,
     remoteRoot: root,
+    resource: () => ({ kind: "ssh", serverId: target.id || server.id, host: target.host, user: target.user, port: target.port, root, runId, ownerToken, envPath }),
     copyCheckout: copyLocalCheckout,
 
     /** What the machine can offer, before anything is cloned. */
     async probe() {
+      await requireProcessControl();
       const result = await run(probeCommand(), { timeoutMs: 60_000 });
       return { ...parseProbe(result.output), ok: result.code === 0 };
     },
 
     async prepare() {
+      if (disposed || signal?.aborted) throw new Error("This run was stopped before preparation.");
+      await requireProcessControl();
       emit({ type: "preparing", detail: `Creating ${root} on ${target.host}…` });
       const mkdir = await run(`mkdir -p ${quoteRemotePath(root)} ${quoteRemotePath(`${root}/logs`)} && echo ok`, { timeoutMs: 60_000 });
       if (mkdir.code !== 0) throw new Error(`Could not create ${root}: ${mkdir.output.trim().slice(0, 300)}`);
@@ -227,50 +209,41 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
 
       const rev = await run(`git -C ${quoteRemotePath(repo)} rev-parse HEAD`, { timeoutMs: 60_000 });
       const commit = rev.output.trim().slice(0, 40);
+      const status = await run(`git -C ${quoteRemotePath(repo)} status --porcelain --untracked-files=normal`, { timeoutMs: 10_000 });
       await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${quoteRemotePath(`${root}/${MARKER_FILE}`)}`, { timeoutMs: 60_000 });
-      prepared = true;
       if (envPath) await writeFile(envPath, envFileContent(secrets));
       emit({ type: "started", detail: `${target.user}@${target.host} · ${commit.slice(0, 7)}` });
-      return { root, repo, commit, branch, host: target.host, user: target.user };
+      return { root, repo, commit, branch, dirty: status.code === 0 ? Boolean(status.output.trim()) : null, host: target.host, user: target.user };
     },
 
-    async exec(command, { timeoutMs, onData, signal } = {}) {
+    async exec(command, { timeoutMs, onData, signal: commandSignal = signal, outputPath = outputPathFor(runId, ++commandIndex) } = {}) {
       // `cd ... || exit 1` keeps the working directory from silently falling back
       // to $HOME; the keys are sourced, so they never enter the command line.
-      const result = await run(`cd ${quoteRemotePath(repo)} || exit 1; ${envPrelude(envPath)}${command}`, { timeoutMs, onData, signal });
-      return { exitCode: result.code, timedOut: Boolean(result.timedOut), error: result.error };
+      const log = remotePathChecks(root, `logs/${runId}/${path.posix.basename(outputPath)}`, { quote: quoteRemotePath, write: true });
+      const logged = loggedCommand(command, outputPath, { mirrorPath: log.path, mirrorQuote: quoteRemotePath, mirrorChecks: log.commands });
+      const result = await run(`cd ${quoteRemotePath(repo)} || exit 1; ${envPrelude(envPath)}${logged}`, { timeoutMs, onData, signal: commandSignal });
+      return { ...result, outputPath, logReference: { storage: "ssh", serverId: target.id || server.id, path: log.path } };
     },
 
     writeFile,
 
-    /** Writes a file inside the checkout. Used by the structured write/edit actions. */
+    /** Structured file methods refuse links rather than inherit arbitrary shell access. */
     async writeRepoFile(relativePath, content) {
-      const relative = String(relativePath || "");
-      const absolute = path.posix.join(repo, relative);
-      if (absolute.includes("..") || absolute.split("/").includes(".git")) {
-        throw new Error("The path is outside the checkout.");
-      }
-      const dir = path.posix.dirname(absolute);
+      const checked = remotePathChecks(repo, relativePath, { quote: quoteRemotePath, write: true });
       const payload = String(content ?? "");
-      const result = await run(
-        `umask 022; mkdir -p ${quoteRemotePath(dir)} && cat > ${quoteRemotePath(absolute)}`,
-        { timeoutMs: 120_000, login: false, stdin: payload },
-      );
-      if (result.code !== 0) {
-        throw new Error(`Could not write ${relative}: ${String(result.output || "").trim().slice(0, 200)}`);
-      }
-      return { path: relative, bytes: Buffer.byteLength(payload, "utf8") };
+      const result = await run(`${checked.commands}; cat > ${quoteRemotePath(checked.path)}`, { timeoutMs: 120_000, login: false, stdin: payload });
+      if (result.code !== 0) throw new Error(`Could not write ${relativePath}: ${String(result.output || result.error || "Operation stopped").trim().slice(-300)}`);
+      return { path: String(relativePath), bytes: Buffer.byteLength(payload) };
     },
 
     async readFile(relativePath) {
-      const absolute = path.posix.join(repo, String(relativePath || ""));
-      if (absolute.includes("..")) throw new Error("The checked path is outside the checkout.");
-      const result = await run(`cat -- ${quoteRemotePath(absolute)}`, { timeoutMs: 60_000, login: false });
+      const checked = remotePathChecks(repo, relativePath, { quote: quoteRemotePath });
+      const result = await run(`${checked.commands}; cat -- ${quoteRemotePath(checked.path)}`, { timeoutMs: 60_000, login: false, captureChars: 2 * 1024 * 1024 });
       if (result.code !== 0) {
-        // A missing file is an answer, not a crash: the checkpoint reports it.
         if (/No such file|Not a directory|cannot open/i.test(result.output)) return null;
-        throw new Error(result.output.trim().slice(0, 300) || "The file could not be read.");
+        throw new Error(result.output.trim().slice(-300) || result.error || "The file could not be read.");
       }
+      if (result.outputTruncated) throw new Error("The file exceeds the complete structured-read limit. Use a paged shell command for large data.");
       return result.output;
     },
 
@@ -281,9 +254,14 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     },
 
     async dispose() {
-      // The checkout and its logs are the point; the key file is not.
-      if (envPath) await run(`rm -f ${quoteRemotePath(envPath)}`, { timeoutMs: 30_000 }).catch(() => {});
-      prepared = false;
+      if (disposal) return disposal;
+      disposed = true;
+      disposal = (async () => {
+        // Use a fresh signal: the run's signal is normally already cancelled.
+        const result = await run(cleanupCommand({ root, runId, ownerToken, envPath }), { timeoutMs: 10_000, signal: AbortSignal.timeout(10_000), login: false, owned: false });
+        if (result.code !== 0) throw new Error(result.output.trim().slice(-300) || result.error || "Owned remote resources could not be cleaned up.");
+      })();
+      return disposal;
     },
   };
 }

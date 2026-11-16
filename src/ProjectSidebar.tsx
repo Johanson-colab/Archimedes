@@ -7,7 +7,7 @@ import { workspaceName } from "./workspace-name";
 import WorkspaceMenuActions from "./WorkspaceMenuActions";
 import { orderSidebarIds, type SidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
 
-export default function ProjectSidebar({ projects, archivedProjects, workspaces, order, onReorder, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
+export default function ProjectSidebar({ projects, archivedProjects, workspaces, order, onReorder, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onTransferProject, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
   projects: ResearchProject[];
   archivedProjects: ResearchProject[];
   workspaces: ProjectWorkspace[];
@@ -22,6 +22,7 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
   onArchiveProject: (project: ResearchProject, archived: boolean) => void;
   onRemoveProject: (project: ResearchProject) => void;
   onChangeProjectWorkspace: (project: ResearchProject) => void;
+  onTransferProject?: (project: ResearchProject) => void;
   onOpenWorkspace: (workspace: ProjectWorkspace) => void;
   onRenameWorkspace: (workspace: ProjectWorkspace) => void;
   onDeleteWorkspace: (workspace: ProjectWorkspace) => void;
@@ -171,6 +172,7 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
               <MenuSurface open={menuOpen} onClose={() => setProjectMenu(null)} anchorRef={projectAnchorRef} cursor={projectMenu?.cursor} placement="bottom-end" width={300} className="project-more-menu" ariaLabel={t("Project actions")}>
                 <MenuItem icon={<Plus size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onNewWorkspace(project.id); }} disabled={disabled}>{t("New workspace")}</MenuItem>
                 <MenuItem icon={<FolderOpen size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onChangeProjectWorkspace(project); }} disabled={disabled}>{t("Change project folder")}</MenuItem>
+                {onTransferProject && <MenuItem icon={<FolderOpen size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onTransferProject(project); }} disabled={disabled}>{t("Transfer project…")}</MenuItem>}
                 <MenuItem icon={<Pencil size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}>{t("Rename")}</MenuItem>
                 <MenuItem icon={<Archive size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}>{t("Archive")}</MenuItem>
                 <MenuDivider />

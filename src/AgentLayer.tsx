@@ -10,17 +10,18 @@ const MIN_WIDTH = 340;
 const MIN_HEIGHT = 220;
 const EDGE = 12;
 const DEFAULT_PROACTIVE = { w: 440, h: 300 };
-const DEFAULT_RESEARCH = { w: 560, h: 220 };
+const DEFAULT_RESEARCH = { w: 560, h: 144 };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function clampLayout(layout: PanelLayout, size: { width: number; height: number }): PanelLayout {
+function clampLayout(layout: PanelLayout, size: { width: number; height: number }, id: AgentPanelId = "proactive"): PanelLayout {
+  const minHeight = id === "research" ? 140 : MIN_HEIGHT;
   const maxWidth = Math.max(MIN_WIDTH, size.width - EDGE * 2);
-  const maxHeight = Math.max(MIN_HEIGHT, size.height - EDGE * 2);
+  const maxHeight = Math.max(minHeight, size.height - EDGE * 2);
   const w = clamp(layout.w, MIN_WIDTH, maxWidth);
-  const h = clamp(layout.h, MIN_HEIGHT, maxHeight);
+  const h = clamp(layout.h, minHeight, maxHeight);
   return {
     x: clamp(layout.x, EDGE, Math.max(EDGE, size.width - w - EDGE)),
     y: clamp(layout.y, EDGE, Math.max(EDGE, size.height - h - EDGE)),
@@ -31,7 +32,7 @@ function clampLayout(layout: PanelLayout, size: { width: number; height: number 
 
 function defaultLayout(id: AgentPanelId, size: { width: number; height: number }): PanelLayout {
   if (id === "research") {
-    return clampLayout({ x: EDGE + 4, y: EDGE, ...DEFAULT_RESEARCH }, size);
+    return clampLayout({ x: EDGE + 4, y: EDGE, ...DEFAULT_RESEARCH }, size, id);
   }
   return clampLayout({
     x: size.width - DEFAULT_PROACTIVE.w - 20,
@@ -55,7 +56,7 @@ function readLayout(): LayerLayout {
           next[id] = { x: panel.x, y: panel.y, ...DEFAULT_PROACTIVE };
           continue;
         }
-        next[id] = { x: panel.x, y: panel.y, w: panel.w, h: panel.h };
+        next[id] = { x: panel.x, y: panel.y, w: panel.w, h: id === "research" && panel.h === 220 ? DEFAULT_RESEARCH.h : panel.h };
       }
     }
     return next;
@@ -96,7 +97,7 @@ export default function AgentLayer({
     setLayout((current) => {
       const next: LayerLayout = {};
       for (const id of ["proactive", "research"] as const) {
-        next[id] = clampLayout(current[id] ?? defaultLayout(id, size), size);
+        next[id] = clampLayout(current[id] ?? defaultLayout(id, size), size, id);
       }
       return next;
     });
@@ -130,7 +131,7 @@ export default function AgentLayer({
           ...start,
           x: start.x + moveEvent.clientX - startX,
           y: start.y + moveEvent.clientY - startY,
-        }, size),
+        }, size, id),
       }));
     };
     const end = () => {
@@ -161,7 +162,7 @@ export default function AgentLayer({
           ...start,
           w: start.w + moveEvent.clientX - startX,
           h: start.h + moveEvent.clientY - startY,
-        }, size),
+        }, size, id),
       }));
     };
     const end = () => {
@@ -193,12 +194,12 @@ export default function AgentLayer({
     } else if (event.key === "ArrowDown") {
       if (event.shiftKey) next.h += step; else next.y += step;
     }
-    setLayout((layer) => ({ ...layer, [id]: clampLayout(next, size) }));
+    setLayout((layer) => ({ ...layer, [id]: clampLayout(next, size, id) }));
   }
 
   const ready = size.width > 0 && size.height > 0;
   const panels: Array<{ id: AgentPanelId; open: boolean; content: ReactNode; label: string }> = [
-    { id: "research", open: researchOpen, content: research, label: "Research path" },
+    { id: "research", open: researchOpen, content: research, label: "Work modes" },
     { id: "proactive", open: proactiveOpen, content: proactive, label: "Proactive agent" },
   ];
 

@@ -218,7 +218,7 @@ function initialRunTitle(input = {}) {
   return "";
 }
 
-async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
+async function createRun(input = {}, { emit = () => {}, workspace = "", dataStore } = {}) {
   const settings = settingsStore.getPrivateSettings();
   const venue = venues.getVenue(input.venueId || settings.defaultVenueId);
   if (!venue) throw new Error("Choose a valid venue pack.");
@@ -227,9 +227,21 @@ async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
   const reviewModel = model.resolveReviewModel(settings);
 
   const startedAt = Date.now();
+  const lease = dataStore?.captureStore();
+  const runId = randomUUID();
+  let retained;
   // The run row exists before ingestion so the History panel can show it and
   // the Cancel button can abort a slow PDF download or index.
-  const runId = store.createRun({
+  try {
+    if (input.manuscript) {
+      if (!dataStore) throw new Error("A manuscript review needs its data workspace.");
+      retained = require("./manuscript-handoff.cjs").retainManuscript(dataStore, input.manuscript, { kind: "paper-review", run_id: runId });
+      if (input.projectId && input.projectId !== retained.origin.projectId) throw new Error("The review belongs to another project.");
+      input = { ...input, manuscript: retained.origin, projectId: retained.origin.projectId, source: { kind: "pdf", filePath: retained.pdfPath } };
+      workspace = retained.origin.workspace;
+    }
+    store.createRun({
+    id: runId,
     documentId: "",
     projectId: input.projectId || "",
     sourceKind: input.source?.kind || "library",
@@ -240,7 +252,13 @@ async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
     modelProvider: reviewModel.provider,
     modelBaseUrl: reviewModel.baseUrl,
     modelId: reviewModel.model,
+    manuscript: retained?.origin,
+    ownerDataRoot: dataStore?.workspace || "",
   });
+  } catch (error) {
+    try { retained?.rollback(); } finally { lease?.release(); }
+    throw error;
+  }
   const controller = new AbortController();
   const emitForRun = (payload) => {
     try { emit({ runId, ...payload }); } catch { /* the window may have closed */ }
@@ -308,6 +326,7 @@ async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
       emitForRun({ type: cancelled ? "cancelled" : "error", stage: cancelled ? "cancelled" : "error", progress: 100, detail: message });
     } finally {
       activeRuns.delete(runId);
+      lease?.release();
     }
   })();
 
@@ -316,6 +335,7 @@ async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
     document: null,
     venue: { id: venue.id, displayName: venue.displayName, version: venue.version },
     model: model.buildModelLabel(reviewModel),
+    manuscript: retained?.origin || null,
   };
 }
 
@@ -331,8 +351,8 @@ function getRun(runId) {
   return store.getRun(String(runId));
 }
 
-function listRuns({ projectId = "", limit = 50 } = {}) {
-  return store.listRuns({ projectId, limit });
+function listRuns({ projectId = "", limit = 50, ownerDataRoot = "" } = {}) {
+  return store.listRuns({ projectId, limit, ownerDataRoot });
 }
 
 function deleteRun(runId) {

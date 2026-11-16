@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -52,6 +52,8 @@ const { repoNameFromUrl } = require("./reproduction/paths.cjs");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
 const { findRepository, githubSearchCandidates } = require("./reproduction/find-repository.cjs");
 const { runPilot } = require("./reproduction/pilot.cjs");
+const { createReproductionRunManager } = require("./reproduction/run-manager.cjs");
+const { localCheckoutSnapshot, snapshotApplicability } = require("./reproduction/run-snapshot.cjs");
 const { completeJson } = require("./paper-review-model.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const { createSshBackend } = require("./reproduction/remote.cjs");
@@ -69,6 +71,10 @@ const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
 const store = require("./store.cjs");
+const { createWorkspaceIpc, resolveResearchContext } = require("./workspace-context.cjs");
+const { registerProjectResultCommands } = require("./project-result-commands.cjs");
+const { registerProjectTransferCommands } = require("./project-transfer-commands.cjs");
+const { registerMetricComparisonCommands } = require("./metric-comparison-commands.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
@@ -79,6 +85,8 @@ const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");
 const extensionMarketplace = require("./extensions-marketplace.cjs");
 const sidebarPlugins = require("./sidebar-plugins.cjs");
 
+let shutdownReproductionRuns = async () => {};
+let quitting = false, readyToQuit = false;
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
 const windowWorkspaces = new Map();
@@ -331,8 +339,8 @@ function resolveWorkspace(value) {
   const expanded = requested === "~" || requested.startsWith("~/")
     ? path.join(app.getPath("home"), requested.slice(2))
     : requested;
-  if (!expanded) return app.getPath("home");
-  if (fs.existsSync(expanded) && fs.statSync(expanded).isDirectory()) return expanded;
+  if (!expanded) return fs.realpathSync(app.getPath("home"));
+  if (fs.existsSync(expanded) && fs.statSync(expanded).isDirectory()) return fs.realpathSync(expanded);
   // Do not silently fall back to the home folder when a project folder was
   // deleted or moved; the user needs to rebind the project instead.
   throw new Error(`The folder "${expanded}" is no longer available. Rebind the project folder and try again.`);
@@ -640,6 +648,10 @@ if (!singleInstanceLock) {
 app.whenReady().then(async () => {
   configureAppIcon(app);
   if (!singleInstanceLock) return;
+  const ipcMain = createWorkspaceIpc({ ipcMain: electronIpcMain, store,
+    workspaceForEvent: (event, channel, args) => channel === "workspace:open"
+      ? resolveWorkspace(args[0]) : windowWorkspaces.get(event.sender.id),
+  });
   loadLocalAgentEnvironment();
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
   modelConfig.initializeModelConfig(app.getPath("userData"));
@@ -740,6 +752,10 @@ app.whenReady().then(async () => {
       return new Response("Plugin file unavailable.", { status: 404 });
     }
   });
+
+  ipcMain.handle("app:build-info", () => require("./build-info.cjs").getBuildInfo({
+    isPackaged: app.isPackaged, appPath: app.getAppPath(), platform: process.platform, arch: process.arch,
+  }));
 
   ipcMain.handle("window:initial-workspace", (event) => {
     return windowWorkspaces.get(event.sender.id) ?? null;
@@ -874,14 +890,14 @@ app.whenReady().then(async () => {
   ipcMain.handle("paper-review-app:save-settings", (_event, patch = {}) => paperReview.saveSettings(patch));
   ipcMain.handle("paper-review-app:list-venues", () => paperReview.listVenues());
   ipcMain.handle("paper-review-app:list-papers", (event, input = {}) => {
-    const resolvedWorkspace = resolveWorkspace(input?.workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
     return paperReview.listPapers({ projectId: String(input?.projectId || "") });
   });
   ipcMain.handle("paper-to-slides:stage", (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace || windowWorkspaces.get(event.sender.id));
+    if (input.manuscript) return require("./paper-to-slides.cjs").stageManuscriptPdf(store.currentStore(), workspace, input.path, { manuscript: input.manuscript, threadId: input.threadId });
     return require("./paper-to-slides.cjs").stagePdf(workspace, input.path);
   });
+  ipcMain.handle("paper-to-slides:setup", (_event, input = {}) => require("./paper-to-slides-setup.cjs").checkPaperToSlidesSetup(input));
   ipcMain.handle("paper-review-app:choose-pdf", async (event) => {
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
     const options = {
@@ -894,20 +910,33 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("paper-review-app:create", async (event, input = {}) => {
     const resolvedWorkspace = resolveWorkspace(input?.workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
+    if (!input.manuscript) {
+      const context = resolveResearchContext(store.currentStore(), { projectId: input.projectId, workspace: resolvedWorkspace });
+      input = { ...input, projectId: context.projectId };
+    }
     const sender = event.sender;
     return paperReview.createRun(input, {
       workspace: resolvedWorkspace,
+      dataStore: store.currentStore(),
       emit: (payload) => {
         if (!sender.isDestroyed()) sender.send("paper-review-app:progress", payload);
       },
     });
   });
-  ipcMain.handle("paper-review-app:get-run", (_event, input = {}) => paperReview.getRun(String(input?.runId || "")));
-  ipcMain.handle("paper-review-app:list-runs", (_event, input = {}) => paperReview.listRuns({ projectId: String(input?.projectId || ""), limit: Number(input?.limit) || 50 }));
-  ipcMain.handle("paper-review-app:cancel-run", (_event, input = {}) => paperReview.cancelRun(String(input?.runId || "")));
-  ipcMain.handle("paper-review-app:delete-run", (_event, input = {}) => paperReview.deleteRun(String(input?.runId || "")));
+  const reviewVisible = (run, role = "viewer") => Boolean(run && (!run.ownerDataRoot || run.ownerDataRoot === store.currentStore().workspace)
+    && (!run.projectId || store.canAccessProject(run.projectId, role)));
+  const requireReview = (runId, role = "viewer") => {
+    const run = paperReview.getRun(runId);
+    if (!reviewVisible(run, role)) throw new Error("This review is not available in the current project workspace.");
+    return run;
+  };
+  ipcMain.handle("paper-review-app:get-run", (_event, input = {}) => requireReview(String(input?.runId || "")));
+  ipcMain.handle("paper-review-app:list-runs", (_event, input = {}) => paperReview.listRuns({ projectId: String(input?.projectId || ""), limit: Number(input?.limit) || 50,
+    ownerDataRoot: store.currentStore().workspace }).filter(run => reviewVisible(run)));
+  ipcMain.handle("paper-review-app:cancel-run", (_event, input = {}) => { requireReview(String(input?.runId || ""), "editor"); return paperReview.cancelRun(String(input?.runId || "")); });
+  ipcMain.handle("paper-review-app:delete-run", (_event, input = {}) => { requireReview(String(input?.runId || ""), "editor"); return paperReview.deleteRun(String(input?.runId || "")); });
   ipcMain.handle("paper-review-app:export-run", async (event, input = {}) => {
+    requireReview(String(input?.runId || ""));
     const exported = paperReview.exportRun(String(input?.runId || ""));
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
     const options = {
@@ -934,7 +963,9 @@ app.whenReady().then(async () => {
     setWindowWorkspace(event.sender.id, workspace);
     rememberWorkspace(workspace);
     watchWorkspace(event.sender, workspace);
-    return store.openWorkspace(workspace);
+    const snapshot = store.openWorkspace(workspace);
+    void reproductionRuns.recoverWorkspace(store.currentStore()).catch(() => {});
+    return snapshot;
   });
 
   ipcMain.handle("workspace:list-files", (_event, input = {}) => {
@@ -1018,10 +1049,16 @@ app.whenReady().then(async () => {
     fetchImpl: (...args) => net.fetch(...args),
   });
 
+  ipcMain.handle("paper:build-snapshot", (_event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    return require("./manuscript-snapshot.cjs").readManuscriptSnapshot(workspace, input.manifestPath);
+  });
+
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    const requestId = typeof input.requestId === "string" ? input.requestId.slice(0, 200) : undefined;
     const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { path: input.path, stage, log });
+      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { workspace, requestId, path: input.path, stage, log });
     });
     if (!result.ok || !result.pdf_path) return result;
     const token = createPreviewToken(event.sender.id, workspace);
@@ -1046,9 +1083,12 @@ app.whenReady().then(async () => {
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
-    nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeAgent.compactNative(input) },
+    nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeAgent.compactNative({ ...input, runtimeId: store.runtimeThreadId(input.thread.id) }) },
   });
-  registerNativeAgentCommands({ ipcMain, store, native: nativeAgent,
+  registerNativeAgentCommands({ ipcMain, store, native: {
+    steerNative: (id, text) => nativeAgent.steerNative(store.runtimeThreadId(id), text),
+    answerNativeQuestion: (id, questionId, answers) => nativeAgent.answerNativeQuestion(store.runtimeThreadId(id), questionId, answers),
+  },
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
   });
 
@@ -1175,6 +1215,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));
 
+  registerProjectResultCommands({ ipcMain, store });
+  registerProjectTransferCommands({ ipcMain, store, dialog, BrowserWindow, reviewDbPath: path.join(app.getPath("userData"), "paper-review.sqlite") });
+  registerMetricComparisonCommands({ ipcMain, store, dialog, BrowserWindow });
+
   ipcMain.handle("library:list", (_event, input = {}) => store.listLibraries(input.projectId ?? null));
 
   ipcMain.handle("library:create", (_event, input) => {
@@ -1261,12 +1305,26 @@ app.whenReady().then(async () => {
     }
   };
 
-  ipcMain.handle("reproduction:list", () => store.listReproductions().map(presentReproduction));
+  const presentReproductionRun = (run) => {
+    if (!run) return null;
+    const record = store.getReproduction(run.reproduction_id);
+    if (!record) throw new Error("That reproduction does not exist.");
+    return { ...run, snapshot_state: snapshotApplicability(run.snapshot, record,
+      record.paper_id ? store.getPaperReader(record.paper_id, record.project_id) : null) };
+  };
+  ipcMain.handle("reproduction:list", (_event, input = {}) => store.listReproductions(input).map(presentReproduction));
+  ipcMain.handle("reproduction:list-runs", (_event, { reproductionId, limit } = {}) => {
+    if (!store.getReproduction(reproductionId)) throw new Error("That reproduction does not exist.");
+    return store.listReproductionRuns(reproductionId, limit).map(presentReproductionRun);
+  });
+  ipcMain.handle("reproduction:get-run", (_event, { runId } = {}) => presentReproductionRun(store.getReproductionRun(runId)));
 
   ipcMain.handle("reproduction:create", (_event, input = {}) => {
     const paperId = typeof input.paperId === "string" && input.paperId ? input.paperId : null;
     if (paperId && !store.getPaper(paperId)) throw new Error("That paper does not exist in this workspace.");
     return store.createReproduction({
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
       paperId,
       repoUrl: typeof input.repoUrl === "string" ? input.repoUrl : "",
       title: typeof input.title === "string" ? input.title : "",
@@ -1280,7 +1338,7 @@ app.whenReady().then(async () => {
     const record = presentReproduction(store.getReproduction(id));
     if (!record) return record;
     const run = store.getLatestReproductionRun(record.id);
-    return { ...record, run, attempts: run ? store.listReproductionAttempts(run.id) : [] };
+    return { ...record, run: presentReproductionRun(run), attempts: run ? store.listReproductionAttempts(run.id) : [] };
   });
 
   ipcMain.handle("reproduction:update", (_event, { id, patch } = {}) => {
@@ -1297,8 +1355,8 @@ app.whenReady().then(async () => {
    * Requirements come from the plan; values come from the encrypted store. The
    * renderer only ever sees whether a name is set, never what it is set to.
    */
-  const reproductionEnvItems = (id) => {
-    const record = presentReproduction(store.getReproduction(id));
+  const reproductionEnvItems = (id, owner = store.currentStore()) => {
+    const record = presentReproduction(owner.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
     const stored = reproductionEnv.list(record.id);
     const has = new Map(stored.map((entry) => [entry.name, entry.hasValue]));
@@ -1372,8 +1430,6 @@ app.whenReady().then(async () => {
     });
   });
 
-  const activeReproductionRuns = new Map();
-
   const notifyRunFinished = (record, summary) => {
     // The user is told when they are not looking; a run that finishes while the
     // window is focused already shows its result on screen.
@@ -1386,18 +1442,6 @@ app.whenReady().then(async () => {
     }
   };
 
-  const stopSession = async (reproductionId) => {
-    const session = activeReproductionRuns.get(reproductionId);
-    if (!session) return null;
-    activeReproductionRuns.delete(reproductionId);
-    if (session.backend) await session.backend.dispose().catch(() => {});
-    return session;
-  };
-
-  /**
-   * The model that drives the run. It is the same agent model configured for
-   * the rest of the app: the executor is an agent, so it uses the agent's model.
-   */
   const reproductionModel = () => {
     const active = modelConfig.getActiveModelConfig("agent");
     if (!active.apiKey && active.provider !== "openrouter") {
@@ -1406,230 +1450,100 @@ app.whenReady().then(async () => {
     return active;
   };
 
-  /**
-   * Hands the runbook to the pilot. There is no step loop and no repair table:
-   * the agent decides what to run next, reads the result, and records a verdict
-   * only when it can quote the output that proves it.
-   */
-  const executeRun = async (session) => {
-    const { record, send, run } = session;
-    if (!session.backend) throw new Error("The environment is no longer running.");
-    session.controller = new AbortController();
-    send({ type: "attempt", attempt: 1 });
-    send({ type: "started", detail: session.backend.describe?.() || "" });
+  const reproductionRuns = createReproductionRunManager({ store, runPilot, notify: notifyRunFinished,
+    environmentItems: reproductionEnvItems,
+    recoverResource: async (resource, owner) => {
+      if (resource.kind === "docker") {
+        await createDockerBackend({ checkoutDir: owner.workspace, name: resource.container, runId: resource.runId, ownerToken: resource.ownerToken }).dispose();
+      } else if (resource.kind === "ssh") {
+        const server = sshServers.listServers().find(entry => entry.id === resource.serverId);
+        if (!server) throw new Error("This run's SSH server is no longer configured. No remote resources were touched.");
+        if (server.host !== resource.host || server.user !== resource.user || Number(server.port) !== Number(resource.port)) throw new Error("The SSH connection changed after this run. Its old resources were left untouched.");
+        await createSshBackend({ server, runId: resource.runId, ownerToken: resource.ownerToken, resourceRoot: resource.root, resourceEnvPath: resource.envPath || "" }).dispose();
+      } else throw new Error("Unknown resource type. It was left untouched.");
+    },
+  });
+  shutdownReproductionRuns = () => reproductionRuns.shutdown();
 
-    let outcome = { status: "failed", steps: [], runbook: [], findings: [], changes: [], log: "", summary: "The run could not start." };
-    try {
-      outcome = await runPilot({
-        title: record.title,
-        summary: session.contract.summary,
-        claims: session.contract.claims,
-        repo: session.contract.repo,
-        notes: session.contract.notes,
-        steps: session.contract.steps,
-        findings: session.contract.findings || [],
-        paper: {
-          title: record.title,
-          // The executor keeps the paper text outside the prompt and pages through
-          // it only when read_paper asks; a 57-page paper must not ride every turn.
-          text: (() => {
-            const reader = record.paper_id ? store.getPaperReader(record.paper_id) : null;
-            return (reader?.pages || [])
-              .map((page) => `[page ${page.page_number}]\n${page.text || ""}`)
-              .join("\n\n")
-              .slice(0, 400_000);
-          })(),
-        },
-        repoName: session.repoName,
-        env: reproductionEnvItems(record.id).map(({ name, required, reason, hasValue }) => ({ name, required, reason, hasValue })),
-        backend: session.backend,
-        target: session.backend.describe?.() || "",
-        complete: ({ system, prompt, signal }) => completeJson(reproductionModel(), {
-          system,
-          prompt,
-          signal,
-          maxTokens: 2_400,
-          // One decision is short; a slow answer is a stalled run, not a long one.
-          timeoutMs: 180_000,
-        }),
-        emit: send,
-        signal: session.controller.signal,
-        budgetMs: Math.max(1, Number(record.budget?.wallClockMin) || 45) * 60_000,
-        onRunbook: (steps, findings) => {
-          // Revisions and findings are written as they happen: a crash mid-run
-          // should still leave the runbook the agent had learned.
-          session.contract = { ...session.contract, steps, findings };
-          store.updateReproduction(record.id, { contract: session.contract });
-        },
-      });
-    } catch (error) {
-      outcome = { ...outcome, status: "failed", summary: error instanceof Error ? error.message : "The run failed." };
-    }
-
-    const runStatus = outcome.status || "failed";
-    const contract = {
-      ...session.contract,
-      steps: outcome.runbook?.length ? outcome.runbook : session.contract.steps,
-      findings: outcome.findings?.length ? outcome.findings : (session.contract.findings || []),
-    };
-    session.contract = contract;
-    store.updateReproductionRun(run.id, {
-      status: runStatus,
-      steps: outcome.steps || [],
-      log: outcome.log || "",
-      error: runStatus === "verified" ? "" : (outcome.summary || ""),
-      finishedAt: new Date().toISOString(),
-    });
-
-    if (runStatus === "verified") {
-      await stopSession(record.id);
-      store.updateReproduction(record.id, { contract, status: "checks-passed", error: "" });
-      send({ type: "finished", status: runStatus, summary: outcome.summary || "" });
-      notifyRunFinished(record, outcome.summary || "Every runbook step passed.");
-      return;
-    }
-
-    await stopSession(record.id);
-    if (runStatus === "stopped") {
-      store.updateReproduction(record.id, { contract, status: "cancelled", error: "Stopped by the user." });
-      send({ type: "finished", status: runStatus, summary: "Stopped by the user." });
-      return;
-    }
-
-    const summary = outcome.summary || "The run stopped.";
-    // "manual" is the agent asking a person something. It is still a stop, but
-    // the question is the useful part and must not be buried in a log.
-    store.updateReproduction(record.id, { contract, status: "blocked", error: summary });
-    send({
-      type: "finished",
-      status: runStatus,
-      summary,
-      question: runStatus === "manual" ? summary : "",
-    });
-    notifyRunFinished(record, summary);
-  };
-
-  ipcMain.handle("reproduction:run", async (event, { id, workspace, backend: backendKind = "docker", serverId = "" } = {}) => {
-    const record = presentReproduction(store.getReproduction(id));
+  ipcMain.handle("reproduction:run", async (event, { id, workspace, projectId, workspaceId, backend: backendKind = "docker", serverId = "" } = {}) => {
+    const owner = store.currentStore();
+    await reproductionRuns.recoverWorkspace(owner);
+    let record = presentReproduction(owner.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
+    if (!record.project_id) {
+      if (!projectId || !workspaceId) throw new Error("Select a project workspace before running this older reproduction.");
+      record = presentReproduction(owner.bindReproductionContext(id, { projectId, workspaceId }));
+    } else if ((projectId && projectId !== record.project_id) || (workspaceId && workspaceId !== record.workspace_id)) throw new Error("This reproduction belongs to a different project workspace.");
+    if (!owner.canAccessProject(record.project_id, "editor")) throw new Error("You do not have permission to run this reproduction.");
     if (!record.contract) throw new Error("Generate a plan before running it.");
-    // Fail before cloning or starting a container: an executor with no model
-    // cannot decide anything, and provisioning costs minutes.
-    reproductionModel();
-    if (activeReproductionRuns.has(record.id)) throw new Error("This reproduction is already running.");
+    const config = reproductionModel(); // Capture the selected model for this run.
     const repoUrl = record.contract.repo?.url || record.repo_url;
     if (!repoUrl) throw new Error("This reproduction has no repository to run against.");
-
-    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
-    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
-    store.openWorkspace(dataWorkspace);
-
+    const dataWorkspace = owner.workspace;
     const wantsSsh = backendKind === "ssh";
-    const server = wantsSsh ? sshServers.listServers().find((entry) => entry.id === serverId) : null;
+    if (!["docker", "ssh"].includes(backendKind)) throw new Error("Unknown reproduction backend.");
+    const server = wantsSsh ? sshServers.listServers().find(entry => entry.id === serverId) : null;
     if (wantsSsh && !server) throw new Error("Choose an SSH server before running this reproduction.");
     const secrets = reproductionEnv.values(record.id);
-    const run = store.createReproductionRun({ reproductionId: record.id, backend: wantsSsh ? "ssh" : "docker" });
-    const session = {
-      reproductionId: record.id,
-      record,
-      run,
-      contract: record.contract,
-      workspace: dataWorkspace,
-      repoName: repoNameFromUrl(repoUrl),
-      backend: null,
-      controller: null,
-      send: (payload) => {
-        if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
-      },
-    };
-    activeReproductionRuns.set(record.id, session);
-    store.updateReproduction(record.id, { status: "provisioning", error: "" });
-
-    // Detached on purpose: the renderer gets progress events, the main process
-    // owns the run, and closing the reproduction view does not stop it.
-    void (async () => {
-      try {
+    const session = reproductionRuns.start({ record, backendKind: wantsSsh ? "ssh" : "docker", repoName: repoNameFromUrl(repoUrl),
+      send: payload => { if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { ...payload,
+        dataRoot: dataWorkspace, projectId: record.project_id, workspaceId: record.workspace_id, reproductionId: record.id }); },
+      completion: ({ system, prompt, signal }) => completeJson(config, { system, prompt, signal, maxTokens: 2400, timeoutMs: 180_000 }),
+      prepare: async (session, signal) => {
         const branch = session.contract.repo?.branch || "";
+        const backendOptions = { signal, runId: session.run.id, ownerToken: session.ownerToken, secrets };
         if (server) {
-          // The server clones for itself when it can reach GitHub. The local
-          // checkout is passed along as a fallback for machines that cannot,
-          // which is the normal case on an intranet.
           let copyFrom = "";
-          const local = await getRepositoryCheckout(dataWorkspace, repoUrl, { branch }).catch(() => null);
-          if (local) {
-            copyFrom = (await resolveAuditPath(dataWorkspace, repoUrl, "", branch).catch(() => ({ root: "" }))).root;
-          }
-          const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send, secrets });
-          session.backend = backend;
-          store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });
+          const local = await session.stage(() => getRepositoryCheckout(dataWorkspace, repoUrl, { branch }).catch(() => null));
+          if (local) copyFrom = (await session.stage(() => resolveAuditPath(dataWorkspace, repoUrl, "", branch))).root;
+          const backend = session.adoptBackend(() => createSshBackend({ ...backendOptions, server, repoUrl, branch, copyFrom, emit: session.send }));
+          owner.updateReproductionRun(session.run.id, { backend: backend.describe(), image: "" });
           session.send({ type: "preparing", detail: `Checking ${server.host}…` });
-          const probe = await backend.probe();
-          session.send({
-            type: "preparing",
-            detail: [probe.os || server.host, `${probe.diskFreeGb} GB free`, probe.docker ? "docker" : "", probe.gpu].filter(Boolean).join(" · "),
-          });
-          if (probe.diskFreeGb > 0 && probe.diskFreeGb < 5) {
-            throw new Error(`${server.host} has only ${probe.diskFreeGb} GB free. Free some space before running.`);
-          }
-          await backend.prepare();
-          store.updateReproduction(record.id, { status: "running" });
-          await executeRun(session);
-          return;
+          const probe = await session.stage(() => backend.probe());
+          session.send({ type: "preparing", detail: [probe.os || server.host, `${probe.diskFreeGb} GB free`, probe.docker ? "docker" : "", probe.gpu].filter(Boolean).join(" · ") });
+          if (probe.diskFreeGb > 0 && probe.diskFreeGb < 5) throw new Error(`${server.host} has only ${probe.diskFreeGb} GB free. Free some space before running.`);
+          const prepared = await session.stage(() => backend.prepare());
+          return { checkout: { url: repoUrl, branch: prepared.branch || branch, commit: prepared.commit || null,
+            dirty: prepared.dirty ?? null, location: prepared.repo || null, storage: "remote" } };
         }
-
         session.send({ type: "preparing", detail: "Getting the repository checkout…" });
-        const checkoutOptions = { branch };
-        const existing = await getRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions).catch(() => null);
+        const existing = await session.stage(() => getRepositoryCheckout(dataWorkspace, repoUrl, { branch }).catch(() => null));
         if (!existing) {
           session.send({ type: "preparing", detail: branch ? `Cloning ${branch}…` : "Cloning the repository…" });
-          await cloneRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions);
+          await session.stage(() => cloneRepositoryCheckout(dataWorkspace, repoUrl, { branch, signal }));
         }
-        const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "", branch);
-        const backend = createDockerBackend({ checkoutDir: root, environment: session.contract.environment, secrets });
-        session.backend = backend;
-        store.updateReproductionRun(run.id, { image: backend.image, backend: backend.describe() });
+        const { root } = await session.stage(() => resolveAuditPath(dataWorkspace, repoUrl, "", branch));
+        const backend = session.adoptBackend(() => createDockerBackend({ ...backendOptions, checkoutDir: root, dataRoot: dataWorkspace, environment: session.contract.environment }));
+        owner.updateReproductionRun(session.run.id, { image: backend.image, backend: backend.describe() });
         session.send({ type: "preparing", detail: `Starting ${backend.image}…` });
-        await backend.prepare();
-        store.updateReproduction(record.id, { status: "running" });
-        session.send({ type: "started", detail: backend.describe() });
-        await executeRun(session);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "The run could not start.";
-        await stopSession(record.id);
-        store.updateReproductionRun(run.id, { status: "failed", error: message, finishedAt: new Date().toISOString() });
-        store.updateReproduction(record.id, { status: "blocked", error: message });
-        session.send({ type: "error", detail: message });
-        session.send({ type: "finished", status: "failed", summary: message });
-        notifyRunFinished(record, message);
-      }
-    })();
-
-    return { ...presentReproduction(store.getReproduction(record.id)), run };
+        await session.stage(() => backend.prepare());
+        return { checkout: await session.stage(() => localCheckoutSnapshot(root, { url: repoUrl, branch, signal })) };
+      },
+    });
+    return { ...presentReproduction(owner.getReproduction(record.id)), run: session.run };
   });
 
-  ipcMain.handle("reproduction:stop", async (_event, { id } = {}) => {
-    const session = activeReproductionRuns.get(String(id || ""));
-    // Stopping something that already finished is not an error: the button and
-    // the run can disagree for a moment, and shouting at the user helps nobody.
-    if (!session) return false;
-    session.controller?.abort();
-    return true;
-  });
+  ipcMain.handle("reproduction:stop", (_event, { id } = {}) => reproductionRuns.stop(String(id || "")));
 
-  ipcMain.handle("reproduction:plan", async (event, { id, workspace } = {}) => {
-    const reproduction = store.getReproduction(id);
+  ipcMain.handle("reproduction:plan", async (event, { id, workspace, projectId, workspaceId } = {}) => {
+    let reproduction = store.getReproduction(id);
     if (!reproduction) throw new Error("That reproduction does not exist.");
+    if (!reproduction.project_id) {
+      if (!projectId || !workspaceId) throw new Error("Select a project workspace before planning this older reproduction.");
+      reproduction = store.bindReproductionContext(id, { projectId, workspaceId });
+    } else if ((projectId && projectId !== reproduction.project_id) || (workspaceId && workspaceId !== reproduction.workspace_id)) throw new Error("This reproduction belongs to a different project workspace.");
     if (!reproduction.paper_id) throw new Error("Reproduction planning is only available for papers.");
     const paper = store.getPaper(reproduction.paper_id);
     if (!paper) throw new Error("The paper for this reproduction is missing.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
-    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
+    const dataWorkspace = store.currentStore().workspace;
     store.openWorkspace(dataWorkspace);
-    const reader = store.getPaperReader(reproduction.paper_id);
-    const review = store.getPaperReview(reproduction.paper_id);
+    const reader = store.getPaperReader(reproduction.paper_id, reproduction.project_id);
+    const review = store.getPaperReview(reproduction.paper_id, reproduction.project_id);
     store.updateReproduction(id, { status: "draft", error: "" });
     const emit = (payload) => {
-      if (!event.sender.isDestroyed()) event.sender.send("reproduction:plan-event", { paperId: reproduction.paper_id, ...payload });
+      if (!event.sender.isDestroyed()) event.sender.send("reproduction:plan-event", { ...payload, reproductionId: id, paperId: reproduction.paper_id,
+        dataRoot: dataWorkspace, projectId: reproduction.project_id, workspaceId: reproduction.workspace_id });
     };
     try {
       // A record made from a paper carries the paper's URL (usually arXiv). The
@@ -1699,13 +1613,19 @@ app.whenReady().then(async () => {
     seedPath: path.join(__dirname, "assets", "benchmark-radar", "public-index.json"),
   }));
 
-  ipcMain.handle("library:add-paper", (_event, { libraryId, paper }) => {
+  ipcMain.handle("library:add-paper", (_event, { libraryId, paper, selection }) => {
     if (typeof libraryId !== "string" || !paper || typeof paper.title !== "string" || !paper.title.trim()) {
       throw new Error("Choose a library and a valid paper before importing.");
     }
     if (paper.title.length > 1000 || String(paper.abstract || "").length > 100_000) throw new Error("Paper metadata is too large.");
-    return store.addPaper(libraryId, paper);
+    return store.addPaper(libraryId, paper, selection);
   });
+
+  ipcMain.handle("library:get-project-selection", (_event, { paperId, projectId }) => store.getProjectPaperSelection(paperId, projectId));
+  ipcMain.handle("library:save-project-selection", (_event, { paperId, projectId, patch }) => store.saveProjectPaperSelection(paperId, projectId, patch));
+  ipcMain.handle("library:get-bibliography", (_event, { paperId }) => store.getPaperBibliography(paperId));
+  ipcMain.handle("library:set-bibliography", (_event, { paperId, patch }) => store.setPaperBibliography(paperId, patch));
+  ipcMain.handle("library:repair-metadata", (_event, { paperId, patch }) => store.repairLibraryPaperMetadata(paperId, patch));
 
   ipcMain.handle("library:import-local-pdf", async (event, { libraryId, workspace } = {}) => {
     if (typeof libraryId !== "string") throw new Error("Choose a library before importing a paper.");
@@ -1896,7 +1816,9 @@ app.whenReady().then(async () => {
     // operates inside the project/session folder.
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
     store.openWorkspace(dataWorkspace);
-    const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
+    const owner = store.currentStore();
+    const context = resolveResearchContext(owner, { ...input, workspace });
+    const contextItems = await sanitizeAgentContext(input.contextItems, context.workspace);
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
     const configuredBackend = agentBackendConfig.get();
     const selectedBackend = input.backend || configuredBackend.backend;
@@ -1913,14 +1835,15 @@ app.whenReady().then(async () => {
     if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
     return runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
       externalBackend,
+      dataStore: owner,
       researchSkill: input.researchSkill,
       mineruToken: input.mineruToken || undefined,
       externalSignal,
       prompt: input.prompt.trim(),
-      workspace,
+      workspace: context.workspace,
       threadId: typeof input.threadId === "string" && input.threadId ? input.threadId : undefined,
-      projectId: typeof input.projectId === "string" && input.projectId ? input.projectId : undefined,
-      workspaceId: typeof input.workspaceId === "string" && input.workspaceId ? input.workspaceId : undefined,
+      projectId: context.projectId,
+      workspaceId: context.workspaceId,
       visibility: input.visibility === "private" ? "private" : "project",
       mode,
       reasoningEffort,
@@ -2327,20 +2250,18 @@ app.whenReady().then(async () => {
     }
 
     const workspace = resolveWorkspace(cwd);
-    store.openWorkspace(workspace);
     const beforeSnapshot = typeof actionId === "string" ? workspaceFiles.snapshotWorkspace(workspace) : null;
     const sessionId = randomUUID();
-    const commandRun = store.startCommand({ command, cwd: workspace });
+    const owner = store.currentStore();
+    const commandRun = owner.startCommand({ command, cwd: workspace });
     const shell = process.platform === "win32" ? "cmd.exe" : "/bin/zsh";
     const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
-    const child = spawn(shell, args, {
-      cwd: workspace,
-      env: process.env,
-    });
+    const child = spawn(shell, args, { cwd: workspace, env: process.env });
+    const captured = owner.captureStore();
 
     commandSessions.set(sessionId, { process: child, senderId: event.sender.id });
     const send = (data) => {
-      store.appendCommandOutput(commandRun.id, data);
+      owner.appendCommandOutput(commandRun.id, data);
       if (!event.sender.isDestroyed()) {
         event.sender.send("terminal:data", { sessionId, commandRunId: commandRun.id, data });
       }
@@ -2349,26 +2270,30 @@ app.whenReady().then(async () => {
     child.stderr.on("data", (chunk) => send(chunk.toString()));
     child.on("error", (error) => send(`\n[process error] ${error.message}\n`));
     child.on("close", (code) => {
-      send(`\n[process exited with code ${code ?? "unknown"}]\n`);
-      store.finishCommand(commandRun.id, code, code === 0 ? "completed" : "failed");
-      if (beforeSnapshot && typeof actionId === "string") {
-        const changes = workspaceFiles.compareWorkspaceSnapshots(beforeSnapshot, workspaceFiles.snapshotWorkspace(workspace));
-        if (changes.length) {
-          const action = store.updateActionPayload(actionId, { changes });
-          if (!event.sender.isDestroyed()) {
-            event.sender.send("workspace:change-set", {
-              id: action.id,
-              actionId: action.id,
-              taskId: action.task_id,
-              threadId: store.getResearchThreadIdForTask(action.task_id),
-              kind: action.kind,
-              changes,
-              createdAt: action.created_at,
-            });
+      try {
+        send(`\n[process exited with code ${code ?? "unknown"}]\n`);
+        owner.finishCommand(commandRun.id, code, code === 0 ? "completed" : "failed");
+        if (beforeSnapshot && typeof actionId === "string") {
+          const changes = workspaceFiles.compareWorkspaceSnapshots(beforeSnapshot, workspaceFiles.snapshotWorkspace(workspace));
+          if (changes.length) {
+            const action = owner.updateActionPayload(actionId, { changes });
+            if (!event.sender.isDestroyed()) {
+              event.sender.send("workspace:change-set", {
+                id: action.id,
+                actionId: action.id,
+                taskId: action.task_id,
+                threadId: owner.getResearchThreadIdForTask(action.task_id),
+                kind: action.kind,
+                changes,
+                createdAt: action.created_at,
+              });
+            }
           }
         }
+      } finally {
+        commandSessions.delete(sessionId);
+        captured.release();
       }
-      commandSessions.delete(sessionId);
     });
     return { sessionId, commandRunId: commandRun.id, workspace };
   });
@@ -2586,9 +2511,18 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (readyToQuit) return;
+  event.preventDefault();
+  if (quitting) return;
+  quitting = true;
   closeAllNativeClients();
   closeAllTerminals();
-  collaborationServer?.close?.();
-  void presence?.closeAll();
+  void Promise.resolve().then(() => Promise.allSettled([shutdownReproductionRuns(), agent.shutdownAgents()])).finally(() => {
+    collaborationServer?.close?.();
+    void presence?.closeAll();
+    store.closeAllWorkspaces();
+    readyToQuit = true;
+    app.quit();
+  });
 });

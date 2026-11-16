@@ -14,9 +14,9 @@
     "extensions": { "category": "evidence", "defaultEnabled": false, "order": 80, "description": "Find skills and MCP tools that support your research apps." },
     "reproduce": { "category": "experiments", "defaultEnabled": false, "beta": true, "order": 30, "description": "Turn a paper into a reproducible experiment." },
     "writing": { "category": "writing", "defaultEnabled": true, "order": 50, "description": "Draft and revise papers with research context." },
-    "image-creation": { "category": "analysis", "defaultEnabled": false, "beta": true, "order": 40, "description": "Browse figure references and create images with FigureForge." },
-    "data-charts": { "category": "analysis", "defaultEnabled": false, "beta": true, "order": 45, "description": "Explore data charts and tables from research papers." },
-    "data-analysis": { "category": "analysis", "defaultEnabled": true, "order": 46, "description": "Explore local datasets, summary statistics and charts." },
+    "image-creation": { "legacyLabel": "Image creation", "category": "analysis", "defaultEnabled": false, "beta": true, "order": 40, "description": "Create scientific figure drafts; use published diagrams as references." },
+    "data-charts": { "legacyLabel": "Data charts", "category": "evidence", "defaultEnabled": false, "beta": true, "order": 45, "description": "Published charts and tables for reference, not analysis of your own dataset." },
+    "data-analysis": { "legacyLabel": "Data analysis", "category": "analysis", "defaultEnabled": true, "order": 46, "description": "Explore local datasets, summary statistics and charts." },
     "paper-to-slides": { "category": "writing", "defaultEnabled": false, "beta": true, "order": 55, "description": "Turn research papers into presentations with Codex or Claude Code." },
     "paper-review": { "category": "writing", "defaultEnabled": false, "order": 90, "description": "Review manuscripts and prioritize revisions." }
   },

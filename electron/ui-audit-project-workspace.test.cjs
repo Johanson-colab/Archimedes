@@ -36,12 +36,15 @@ test("live running and review states refresh without reopening the data workspac
   assert.match(preload, /getResearchSnapshot: \(\) => ipcRenderer\.invoke\("research:snapshot"\)/);
   assert.match(app, /getResearchSnapshot\?\.\(\)/);
   assert.match(app, /pending_actions: \(thread\.pending_actions \?\? 0\) \+ 1/);
-  assert.match(app, /clearThreadPendingAction\(\);/);
+  assert.match(app, /clearThreadPendingAction\(ownerThreadId\);/);
 });
 
 test("the renderer resolves session → project → primary workspace for tools", () => {
-  assert.match(app, /const executionWorkspace = activeThread\?\.workspace_path \|\| activeWorkspace\?\.root \|\| activeProject\?\.workspace_path \|\| workspace;/);
-  assert.match(app, /runAgent\(\{ prompt: requestPrompt, workspace: executionWorkspace/);
+  assert.match(app, /const executionWorkspace = taskSelection\.executionRoot;/);
+  const selection = fs.readFileSync(path.join(root, "src/task-selection.ts"), "utf8");
+  assert.match(selection, /executionRoot: thread\.workspace_path \|\| selected!\.root/);
+  assert.match(selection, /selected\?\.root \|\| project\?\.workspace_path \|\| dataRoot/);
+  assert.match(app, /runAgent\(\{ prompt: requestPrompt, workspace: owner\.executionRoot/);
   assert.match(app, /runTerminal\(\{ command: trimmedCommand, cwd: executionWorkspace/);
   assert.match(app, /writeWorkspaceFile\(executionWorkspace/);
   assert.match(app, /workspace=\{executionWorkspace\}/);

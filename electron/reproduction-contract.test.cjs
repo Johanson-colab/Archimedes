@@ -58,6 +58,21 @@ test("entries, environment and budget are normalised", () => {
   assert.deepEqual(contract.notes, ["Needs two GPUs"]);
 });
 
+test("serialized runbooks preserve quoted whitespace and multiline shell commands when read back", () => {
+  const command = "printf '%s' 'dataset  alpha'\nprintf '%s' 'line  two'";
+  const contract = normalizeContract({
+    claims: [{ statement: "Result holds" }],
+    entrypoint: { command: `  ${command}  ` },
+    steps: [{ id: "run", title: "Evaluate", command: `  ${command}  `, check: { kind: "command", command: `  ${command}  ` }, status: "passed", evidence: "dataset  alpha" }],
+  });
+  // main presents persisted JSON through normalizeContract again on get/list.
+  const reopened = normalizeContract(JSON.parse(JSON.stringify(contract)));
+  assert.equal(reopened.entrypoint.command, command);
+  assert.equal(reopened.steps[0].command, command);
+  assert.equal(reopened.steps[0].check.command, command);
+  assert.equal(reopened.steps[0].status, "passed");
+});
+
 test("the page digest prefers result pages and keeps page markers", () => {
   const pages = Array.from({ length: 10 }, (_, index) => ({
     page_number: index + 1,

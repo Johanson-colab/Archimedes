@@ -106,10 +106,11 @@ test("composer drafts are persisted per thread and restored after a failed send"
   assert.match(app, /const COMPOSER_DRAFT_STORAGE_PREFIX = "archimedes-composer-draft:"/);
   assert.match(app, /function readComposerDraft\(key: string\)/);
   assert.match(app, /writeComposerDraft\(draftKey/);
-  assert.match(app, /const composerDraftKey = activeThreadId \?\?/);
+  assert.match(app, /const composerDraftKey = taskDraftKey\(taskSelection\)/);
   assert.match(app, /draftKey=\{composerDraftKey\}/);
   assert.match(app, /const sent = await onSubmit\(/);
-  assert.match(app, /setPrompt\(\(current\) => current\.trim\(\) \? current : draft\)/);
+  assert.match(app, /const restored = laterText === draft \? draft : appendComposerText\(draft, laterText\)/);
+  assert.match(app, /writeComposerDraft\(draftKey, \{ text: restored/);
 });
 
 test("composer accepts dropped and pasted files through the existing bridge", () => {
@@ -134,7 +135,8 @@ test("composer exposes history recall, focus shortcut and disabled-send reason",
 
 test("composer queues follow-ups while the agent is busy", () => {
   assert.match(app, /type QueuedPrompt =/);
-  assert.match(app, /const \[queuedPrompts, setQueuedPrompts\] = useState<QueuedPrompt\[\]>\(\[\]\)/);
+  assert.match(app, /queuedPromptScopes, setQueuedPromptScopes\] = useState<Record<string, QueuedPrompt\[\]>>/);
+  assert.match(app, /queuedPrompts=\{queuedPromptScopes\[composerDraftKey\] \?\? \[\]\}/);
   assert.match(app, /if \(agentBusy\) \{[\s\S]*?if \(nativeBackend\) \{[\s\S]*?await onNativeSteer\(prompt\)[\s\S]*?queueCurrentPrompt\(\);/);
   assert.match(app, /up to five follow-ups can be queued at a time/i);
   assert.match(app, /className="composer-queue"/);

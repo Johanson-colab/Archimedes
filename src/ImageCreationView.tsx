@@ -17,6 +17,8 @@ import { reconstructWithTopConf } from "./figureforge/reconstruction-workflow.mj
 import { exportFigureScene } from "./figureforge/export";
 import { selectRelevantPdfPages } from "./figureforge/pdf-sections.mjs";
 import { verifyImageRatio, verifyImageResolution } from "./figureforge/vendor/aspect-ratio.mjs";
+import { figurePng } from "./figure-image";
+import type { ProjectResultOpenRequest, ProjectResultDetail, ProjectResultFile, ProjectResultOwner, ProjectResultsBridge, ProjectResultSummary } from "./project-results";
 const GALLERY_ROOT = "https://qwdwqfwq.github.io/topconf-paper-figure-gallery/";
 const CATALOG_URL = `${GALLERY_ROOT}data/figures.json`;
 const PAGE_SIZE = 48;
@@ -49,6 +51,7 @@ type Figure = {
   source?: "official-proceedings";
   w?: number;
   h?: number;
+  savedSourceUrl?: string;
 };
 type Filters = { venue: string; year: number | "all"; tier: string; pattern: string };
 const INITIAL_FILTERS: Filters = { venue: "all", year: "all", tier: "all", pattern: "all" };
@@ -161,7 +164,19 @@ function FigureDialog({ figure, index, total, onClose, onStep }: {
   </Dialog>;
 }
 
-export default function ImageCreationView({ active, onBrowseProceedings }: { active: boolean; onBrowseProceedings: () => void }) {
+type ImageCreationProps = { active: boolean; ownerKey?: string; owner?: ProjectResultOwner; bridge?: ProjectResultsBridge; mainModel?: PublicModelConfig | null; openRequest?: ProjectResultOpenRequest; onUseInManuscript?: (result: ProjectResultDetail, fileName: string) => Promise<void>; onOpenModelSettings?: () => void; onBrowseProceedings: () => void; onBrowseChartReferences?: () => void };
+
+export default function ImageCreationView(props: ImageCreationProps) {
+  const key = props.ownerKey ?? "preview";
+  const [visited, setVisited] = useState<Record<string, ProjectResultOwner | undefined>>({});
+  useEffect(() => { setVisited((current) => current[key] === props.owner && key in current ? current : { ...current, [key]: props.owner }); }, [key, props.owner?.projectId, props.owner?.workspaceId, props.owner?.executionRoot]);
+  const owners = { ...visited, [key]: props.owner };
+  // Keep each project's unsaved working draft alive. Changing owners never
+  // retargets another draft's uploads or delayed generation result.
+  return <>{Object.entries(owners).map(([ownerKey, owner]) => <div key={ownerKey} hidden={ownerKey !== key || !props.active} className="figure-owner-workspace"><ImageCreationWorkspace {...props} ownerKey={ownerKey} owner={owner} active={props.active && ownerKey === key} /></div>)}</>;
+}
+
+function ImageCreationWorkspace({ active, owner, bridge, mainModel, onOpenModelSettings, onUseInManuscript, openRequest, onBrowseProceedings, onBrowseChartReferences }: ImageCreationProps) {
   const { t, language } = useUISettings();
   const [figures, setFigures] = useState<Figure[]>([]);
   const [error, setError] = useState("");
@@ -176,7 +191,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [uploadedReferences, setUploadedReferences] = useState<Array<{ id: string; name: string; file: File; url: string }>>([]);
   const [uploadingReferences, setUploadingReferences] = useState(false);
   const uploadedReferencesRef = useRef(uploadedReferences);
-  const [forgeOpen, setForgeOpen] = useState(false);
+  const [forgeOpen, setForgeOpen] = useState(true);
   const [paperTitle, setPaperTitle] = useState("");
   const [paperContent, setPaperContent] = useState("");
   const [pdfName, setPdfName] = useState("");
@@ -206,6 +221,10 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [imageModel, setImageModel] = useState("");
   const [imageResolution, setImageResolution] = useState("1K");
   const [generatedSvg, setGeneratedSvg] = useState("");
+  const [paperInputId, setPaperInputId] = useState<string>(() => crypto.randomUUID());
+  const [outputOrigin, setOutputOrigin] = useState<{ signature: string; source: Record<string, unknown> } | null>(null);
+  const [sceneOrigin, setSceneOrigin] = useState<{ signature: string } | { file: File } | null>(null);
+  const restoredOutputPending = useRef(false);
   const [svgWarnings, setSvgWarnings] = useState<string[]>([]);
   const [generatedBitmap, setGeneratedBitmap] = useState("");
   const [generationBusy, setGenerationBusy] = useState(false);
@@ -224,10 +243,192 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [figurePlan, setFigurePlan] = useState("");
   const [composerText, setComposerText] = useState("");
   const [aspect, setAspect] = useState<Aspect>("1:1");
+  const [savedResults, setSavedResults] = useState<ProjectResultSummary[]>([]);
+  const [resultId, setResultId] = useState<string | null>(null);
+  const [chosenResult, setChosenResult] = useState("");
+  const [resultBusy, setResultBusy] = useState(false);
+  const [resultNotice, setResultNotice] = useState("");
+  const activeRef = useRef(active); activeRef.current = active;
+  const referenceBlobs = useRef(new Map<string, Promise<Blob>>());
   const pageRef = useRef<HTMLElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  const modelSettingsRef = useRef<HTMLDetailsElement>(null);
   const connection = forgeProvider === "configured" ? undefined : { provider: forgeProvider, baseUrl: forgeBaseUrl, apiKey: forgeApiKey, model: parseModel };
+  const inputSource = {
+    inputId: paperInputId, paper: { title: paperTitle, sourceName: pdfName }, requirements: composerText, plan: figurePlan,
+    figureType, aspect, outputMode, method: forgeMethod,
+    model: { provider: forgeProvider, baseUrl: safeBaseUrl(forgeBaseUrl), parseModel, visionModel, imageModel, resolution: imageResolution,
+      ...(forgeProvider === "configured" && mainModel ? { configured: { provider: mainModel.provider, model: mainModel.model, baseUrl: safeBaseUrl(mainModel.baseUrl) } } : {}) },
+    references: [...references.map((item) => ({ id: item.id, sourceUrl: item.savedSourceUrl || imageUrl(item) })), ...uploadedReferences.map((item) => ({ id: item.id, name: item.name, size: item.file.size }))],
+    designContract, designPicks,
+  };
+  const inputSignature = JSON.stringify({ source: inputSource, paperContent, pages: pdfPages.current });
+  const liveInput = useRef(inputSignature); liveInput.current = inputSignature;
+  const outputIsCurrent = Boolean(outputOrigin && outputOrigin.signature === inputSignature);
+  const sceneIsCurrent = Boolean(sceneOrigin && ("file" in sceneOrigin ? sceneOrigin.file === reconstructionFile : sceneOrigin.signature === inputSignature));
+  const liveReconstructionFile = useRef(reconstructionFile); liveReconstructionFile.current = reconstructionFile;
+  const liveGeneratedBitmap = useRef(generatedBitmap); liveGeneratedBitmap.current = generatedBitmap;
+  const draftSignature = JSON.stringify([inputSignature, generatedSvg, generatedBitmap, reconstructedScene, exportSource, exportFormat, exportFont]);
+  const liveDraft = useRef(draftSignature); liveDraft.current = draftSignature;
+  useEffect(() => {
+    if (!restoredOutputPending.current) return;
+    restoredOutputPending.current = false;
+    if (generatedSvg || generatedBitmap) setOutputOrigin({ signature: inputSignature, source: inputSource });
+    if (reconstructedScene && !reconstructionFile) setSceneOrigin({ signature: inputSignature });
+  }, [inputSignature]);
+  async function refreshSavedResults() {
+    if (!owner || !bridge || !activeRef.current) return;
+    setSavedResults(await bridge.listProjectResults({ projectId: owner.projectId, workspaceId: owner.workspaceId, kind: "figure" }));
+  }
+  useEffect(() => { if (active) void refreshSavedResults().catch((reason) => setForgeError(String(reason))); }, [active, bridge]);
 
+  async function referenceBlob(figure: Figure) {
+    const key = `${figure.id}:${figure.image}`;
+    let pending = referenceBlobs.current.get(key);
+    if (!pending) {
+      pending = fetch(imageUrl(figure), { signal: AbortSignal.timeout(30_000) }).then(async (response) => {
+        if (!response.ok) throw new Error(`Reference image HTTP ${response.status}`);
+        const blob = await response.blob();
+        if (blob.size > 20_000_000 || !/^image\/(jpeg|png|webp)$/.test(blob.type)) throw new Error("Invalid or oversized reference image.");
+        return blob;
+      }).catch((error) => { referenceBlobs.current.delete(key); throw error; });
+      referenceBlobs.current.set(key, pending);
+    }
+    return pending;
+  }
+  async function encodedFile(blob: Blob, name: string, role: ProjectResultFile["role"]): Promise<ProjectResultFile> {
+    if (blob.size > 20_000_000) throw new Error(t("Choose PNG, JPEG or WebP images under 20 MB."));
+    const content = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1]); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
+    return { name, role, encoding: "base64", content };
+  }
+  function safeBaseUrl(value: string) {
+    if (!value.trim()) return "";
+    let url: URL; try { url = new URL(value); } catch { return ""; }
+    url.username = ""; url.password = ""; url.hash = "";
+    for (const key of [...url.searchParams.keys()]) if (/key|token|secret|password|authorization/i.test(key)) url.searchParams.delete(key);
+    return url.href;
+  }
+  async function saveFigureResult(manuscriptImage = false) {
+    if (!owner || !bridge || !activeRef.current) return;
+    const capturedDraft = liveDraft.current, capturedId = resultId;
+    const pages = [...pdfPages.current], source = structuredClone(inputSource);
+    const currentOutput = outputIsCurrent, currentScene = sceneIsCurrent;
+    const includedScene = currentScene ? reconstructedScene : null;
+    const reconstructionSource = currentScene && sceneOrigin && "file" in sceneOrigin ? sceneOrigin.file : null;
+    setResultBusy(true); setForgeError(""); setResultNotice("");
+    try {
+      const files: ProjectResultFile[] = [{ name: "paper.txt", role: "source", encoding: "utf8", content: paperContent }];
+      if (pages.length) files.push({ name: "paper-pages.json", role: "source", encoding: "utf8", content: JSON.stringify(pages) });
+      const savedReferences: Array<Record<string, unknown>> = [];
+      for (const [index, figure] of references.entries()) {
+        const blob = await referenceBlob(figure);
+        const file = `reference-${index + 1}.${blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg"}`;
+        const sourceUrl = figure.savedSourceUrl || imageUrl(figure);
+        files.push(await encodedFile(blob, file, "reference")); savedReferences.push({ id: figure.id, origin: "catalog", file, figure: { ...figure, image: sourceUrl }, name: figure.title, sourceUrl, paperUrl: paperUrl(figure) });
+      }
+      for (const item of uploadedReferences) {
+        const file = `reference-${savedReferences.length + 1}.${item.file.type === "image/png" ? "png" : item.file.type === "image/webp" ? "webp" : "jpg"}`;
+        files.push(await encodedFile(item.file, file, "reference")); savedReferences.push({ id: item.id, origin: "upload", name: item.name, file, mimeType: item.file.type });
+      }
+      let output: { file: string; kind: "svg" | "bitmap" } | null = null;
+      if (currentOutput && generatedSvg && manuscriptImage) files.push({ name: "figure.png", role: "output", encoding: "base64", content: await figurePng(sanitizeFigureSvg(generatedSvg)) });
+      if (currentOutput && generatedSvg) { files.push({ name: "figure.svg", role: "output", encoding: "utf8", content: sanitizeFigureSvg(generatedSvg) }); output = { file: "figure.svg", kind: "svg" }; }
+      if (currentOutput && generatedBitmap) {
+        const response = await fetch(generatedBitmap); if (!response.ok) throw new Error(t("Could not read the generated image."));
+        const blob = await response.blob(), file = `figure.${blob.type === "image/jpeg" ? "jpg" : blob.type === "image/webp" ? "webp" : "png"}`;
+        files.push(await encodedFile(blob, file, "output")); output = { file, kind: "bitmap" };
+      }
+      if (includedScene) files.push({ name: "scene.json", role: "output", encoding: "utf8", content: JSON.stringify(includedScene) });
+      let reconstruction: { file: string; name: string; mimeType: string } | undefined;
+      if (reconstructionSource) { const file = "reconstruction-source" + (reconstructionSource.type === "image/png" ? ".png" : reconstructionSource.type === "image/webp" ? ".webp" : ".jpg"); files.push(await encodedFile(reconstructionSource, file, "source")); reconstruction = { file, name: reconstructionSource.name, mimeType: reconstructionSource.type }; }
+      if (!activeRef.current) { setResultNotice(t("Figure was not saved. Return to this project and save its draft.")); return; }
+      const saved = await bridge.saveProjectResult({ id: capturedId || undefined, projectId: owner.projectId, workspaceId: owner.workspaceId, threadId: null, kind: "figure", title: paperTitle || pdfName || t("Figure draft"), manifest: {
+        version: 1, inputId: paperInputId, paper: { title: paperTitle, file: "paper.txt", sourceName: pdfName, ...(pages.length ? { pagesFile: "paper-pages.json" } : {}) },
+        requirements: composerText, plan: figurePlan, figureType, aspect, outputMode, method: forgeMethod, export: { source: exportSource, format: exportFormat, font: exportFont },
+        model: source.model, references: savedReferences, designContract, designPicks, output,
+        ...(output && outputOrigin ? { generatedFrom: outputOrigin.source } : {}), ...(includedScene ? { sceneFile: "scene.json" } : {}), ...(reconstruction ? { reconstruction } : {}),
+      }, files });
+      if (liveDraft.current === capturedDraft) {
+        setResultId(saved.id);
+        setResultNotice(!currentOutput && (generatedSvg || generatedBitmap) ? t("Figure inputs saved. The earlier output was excluded because its inputs have changed.") : t("Figure snapshot saved to this project."));
+      }
+      await refreshSavedResults(); return saved;
+    } catch (reason) { if (liveDraft.current === capturedDraft) setForgeError(String(reason)); }
+    finally { setResultBusy(false); }
+  }
+  const restoredUrls = useRef<string[]>([]);
+  useEffect(() => () => { restoredUrls.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
+  async function openFigureResult(id = chosenResult) {
+    if (!owner || !bridge || !id || !activeRef.current) return;
+    const capturedDraft = liveDraft.current;
+    setResultBusy(true); setForgeError(""); setResultNotice("");
+    const urls: string[] = [];
+    try {
+      const saved: ProjectResultDetail = await bridge.getProjectResult(id);
+      if (!activeRef.current) return;
+      if (saved.kind !== "figure" || saved.projectId !== owner.projectId || saved.workspaceId !== owner.workspaceId) throw new Error(t("This figure belongs to a different project workspace."));
+      if (saved.fileState !== "ready") throw new Error(t("Saved figure files have changed or are missing. Restore the files before reopening this snapshot."));
+      async function read(name: string) {
+        if (!activeRef.current) throw new Error(t("Return to this project to reopen its figure."));
+        const item = await bridge!.readProjectResultFile(saved.id, name);
+        if (item.fileState !== "ready" || item.sha256 !== saved.files.find((file) => file.name === name)?.sha256) throw new Error(t("The figure files changed while reopening. Try again."));
+        return item;
+      }
+      function restoredBlob(content: string, mime: string) { return new Blob([Uint8Array.from(atob(content), (character) => character.charCodeAt(0))], { type: mime }); }
+      const manifest = saved.manifest, paper = manifest.paper as { title: string; file: string; sourceName: string; pagesFile?: string };
+      const text = await read(paper.file), pages = paper.pagesFile ? JSON.parse((await read(paper.pagesFile)).content) as string[] : [];
+      const refs = manifest.references as Array<{ id: string; file: string; name: string; origin: string; figure?: Figure; mimeType?: string; sourceUrl?: string }>;
+      const catalog: Figure[] = [], uploads: typeof uploadedReferences = [];
+      for (const ref of refs) {
+        const receipt = await read(ref.file), mime = ref.mimeType || (ref.file.endsWith("png") ? "image/png" : ref.file.endsWith("webp") ? "image/webp" : "image/jpeg");
+        const blob = restoredBlob(receipt.content, mime), url = URL.createObjectURL(blob); urls.push(url);
+        if (ref.origin === "catalog" && ref.figure) { const figure = { ...ref.figure, image: url, savedSourceUrl: ref.sourceUrl || imageUrl(ref.figure) }; catalog.push(figure); referenceBlobs.current.set(`${figure.id}:${figure.image}`, Promise.resolve(blob)); }
+        else uploads.push({ id: ref.id, name: ref.name, file: new File([blob], ref.name, { type: mime }), url });
+      }
+      const output = manifest.output as { file: string; kind: string } | null;
+      let svg = "", bitmap = "";
+      if (output) {
+        const file = await read(output.file);
+        if (output.kind === "svg") svg = sanitizeFigureSvg(file.content);
+        else { const mime = output.file.endsWith("jpg") ? "image/jpeg" : output.file.endsWith("webp") ? "image/webp" : "image/png"; bitmap = `data:${mime};base64,${file.content}`; }
+      }
+      const reconstruction = manifest.reconstruction as { file: string; name: string; mimeType: string } | undefined;
+      const reconstructionSource = reconstruction ? new File([restoredBlob((await read(reconstruction.file)).content, reconstruction.mimeType)], reconstruction.name, { type: reconstruction.mimeType }) : null;
+      const scene = typeof manifest.sceneFile === "string" ? JSON.parse((await read(manifest.sceneFile)).content) as FigureScene : null;
+      if (!activeRef.current || liveDraft.current !== capturedDraft) return;
+      restoredUrls.current.forEach((url) => URL.revokeObjectURL(url)); restoredUrls.current = urls.splice(0);
+      uploadedReferencesRef.current.forEach((item) => URL.revokeObjectURL(item.url));
+      ++pdfSequence.current; setPaperInputId(typeof manifest.inputId === "string" ? manifest.inputId : crypto.randomUUID());
+      setOutputOrigin(null); setSceneOrigin(null); restoredOutputPending.current = true;
+      setReconstructionFile(reconstructionSource);
+      if (reconstructionSource && scene) setSceneOrigin({ file: reconstructionSource });
+      setPaperTitle(paper.title); setPaperContent(text.content); setPdfName(paper.sourceName); setPdfFile(null); pdfPages.current = pages;
+      setComposerText(String(manifest.requirements || "")); setFigurePlan(String(manifest.plan || "")); setFigureType(String(manifest.figureType || "framework")); setAspect(manifest.aspect as Aspect);
+      setOutputMode(manifest.outputMode as "svg" | "bitmap"); setForgeMethod(manifest.method as "direct" | "two-stage");
+      const exportOptions = manifest.export as { source?: "svg" | "bitmap"; format?: typeof exportFormat; font?: string } | undefined;
+      setExportSource(exportOptions?.source || "bitmap"); setExportFormat(exportOptions?.format || "svg"); setExportFont(exportOptions?.font || "");
+      const model = manifest.model as { provider: string; baseUrl: string; parseModel: string; visionModel: string; imageModel: string; resolution: string };
+      setForgeProvider(model.provider); setForgeBaseUrl(model.baseUrl); setForgeApiKey(""); setParseModel(model.parseModel); setVisionModel(model.visionModel); setImageModel(model.imageModel); setImageResolution(model.resolution);
+      setReferences(catalog); setUploadedReferences(uploads); setGeneratedSvg(svg); setGeneratedBitmap(bitmap); setReconstructedScene(scene); setForgeOpen(true);
+      designSignature.current = `${String(manifest.plan || "")}\u0000${catalog.map((item) => item.id).join("|")}#${uploads.map((item) => item.id).join("|")}`;
+      setDesignContract(manifest.designContract as DesignContract | null); setDesignPicks(manifest.designPicks as typeof designPicks);
+      setResultId(saved.id); setResultNotice(t("Saved figure reopened. Model credentials are not stored in the result."));
+    } catch (reason) { setForgeError(String(reason)); }
+    finally { urls.forEach((url) => URL.revokeObjectURL(url)); setResultBusy(false); }
+  }
+
+  const consumedResultRequest = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active || !openRequest || consumedResultRequest.current === openRequest.token) return;
+    consumedResultRequest.current = openRequest.token; void openFigureResult(openRequest.id);
+  }, [active, openRequest]);
+  async function useInManuscript() {
+    const version = liveDraft.current;
+    const saved = await saveFigureResult(true);
+    if (!saved || !activeRef.current || liveDraft.current !== version) return;
+    const file = saved.files.find((item) => item.role === "output" && /\.(png|jpe?g|pdf)$/i.test(item.name));
+    if (file) try { await onUseInManuscript?.(saved, file.name); } catch (reason) { setForgeError(String(reason)); }
+  }
   async function refresh(force = false) {
     setLoading(true); setError("");
     try { setFigures(await loadCatalog(force)); }
@@ -288,9 +489,10 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   }
   async function importPaper(file: File | undefined) {
     if (!file) return;
-    const sequence = ++pdfSequence.current;
-    pdfPages.current = []; setPaperContent(""); setPaperTitle(""); setPdfName(""); setPdfFile(null); setPdfStatus(""); setForgeError(""); setFigurePlan("");
     if (!file.name.toLowerCase().endsWith(".pdf") || file.size > 25 * 1024 * 1024) { setForgeError(t("Choose a PDF smaller than 25 MB.")); return; }
+    const sequence = ++pdfSequence.current;
+    setPaperInputId(crypto.randomUUID()); setResultId(null); setResultNotice("");
+    pdfPages.current = []; setPaperContent(""); setPaperTitle(""); setPdfName(""); setPdfFile(null); setPdfStatus(""); setForgeError(""); setFigurePlan("");
     setPdfBusy(true);
     try {
       const { pdfjs } = await import("./pdf-runtime");
@@ -382,11 +584,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     } finally { if (retrievalSequence.current === sequence) setSearchBusy(false); }
   }
   async function referenceDataUrls() {
-    const remote = references.map(async (figure) => {
-      const response = await fetch(imageUrl(figure), { signal: AbortSignal.timeout(30_000) });
-      if (!response.ok) throw new Error(`Reference image HTTP ${response.status}`);
-      return response.blob();
-    });
+    const remote = references.map(referenceBlob);
     const blobs = await Promise.all([...remote, ...uploadedReferences.map(async (item) => item.file)]);
     return Promise.all(blobs.map(async (blob) => {
       if (blob.size > 20_000_000 || !/^image\/(jpeg|png|webp)$/.test(blob.type)) throw new Error("Invalid or oversized reference image.");
@@ -453,7 +651,8 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   }
   async function generateFigure() {
     if (!window.researchDesk?.generateFigureSvg || !window.researchDesk?.generateFigureBitmap) { setForgeError(t("Figure generation requires the desktop app after restarting it.")); return; }
-    setGenerationBusy(true); setForgeError(""); setGeneratedSvg(""); setSvgWarnings([]); setGeneratedBitmap(""); setReconstructedScene(null); setReconstructionStatus("");
+    const capturedInput = inputSignature, capturedSource = structuredClone(inputSource);
+    setGenerationBusy(true); setForgeError(""); setOutputOrigin(null); setSceneOrigin(null); setGeneratedSvg(""); setSvgWarnings([]); setGeneratedBitmap(""); setReconstructedScene(null); setReconstructionStatus("");
     try {
       const images = await referenceDataUrls();
       let guide = "";
@@ -469,11 +668,12 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
       if (outputMode === "svg") {
         const output = await window.researchDesk.generateFigureSvg({ references: selectedImages, plan: figurePlan, guide, method: forgeMethod, model: visionModel.trim() || undefined, aspect, connection });
         const svg = sanitizeFigureSvg(output.svg);
+        setOutputOrigin({ signature: capturedInput, source: capturedSource });
         setGeneratedSvg(svg);
         const scene = parseSvgScene(svg);
         setSvgWarnings(scene.warnings);
         if (!scene.nodes.length) throw new Error("The generated SVG contains no exportable editable objects.");
-        setReconstructedScene({ ...scene, svgSource: true } as FigureScene); setExportSource("svg");
+        setReconstructedScene({ ...scene, svgSource: true } as FigureScene); setSceneOrigin({ signature: capturedInput }); setExportSource("svg");
       } else {
         const output = await window.researchDesk.generateFigureBitmap({ references: selectedImages, plan: figurePlan, guide, method: forgeMethod, model: imageModel.trim(), aspect, resolution: imageResolution, connection });
         const imageResponse = await fetch(output.image, { signal: AbortSignal.timeout(30_000) });
@@ -482,7 +682,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
         try {
           if (!verifyImageRatio(bitmap.width, bitmap.height, aspect) || !verifyImageResolution(bitmap.width, bitmap.height, imageResolution, output.requestedSize)) throw new Error(`Generated image ${bitmap.width}×${bitmap.height} does not match the requested ${aspect} ${imageResolution}.`);
         } finally { bitmap.close(); }
-        setGeneratedBitmap(output.image);
+        setOutputOrigin({ signature: capturedInput, source: capturedSource }); setGeneratedBitmap(output.image);
       }
     } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
     finally { setGenerationBusy(false); }
@@ -495,6 +695,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   }
   async function reconstructBitmap() {
     if (!window.researchDesk?.requestReconstructionEvidence) { setForgeError(t("Figure generation requires the desktop app after restarting it.")); return; }
+    const capturedInput = inputSignature, capturedFile = reconstructionFile, capturedBitmap = generatedBitmap;
     setReconstructionBusy(true); setForgeError(""); setReconstructionStatus(""); setReconstructedScene(null);
     try {
       let blob: Blob;
@@ -513,7 +714,8 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
         context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
         const result = await reconstructWithTopConf(canvas, dataUrl, (input) => window.researchDesk.requestReconstructionEvidence({ ...input, model: visionModel.trim() || undefined, connection }), () => setReconstructionStatus(t("Recognizing and checking editable objects…")));
-        setReconstructedScene(result.scene); setExportSource("bitmap");
+        if (capturedFile ? liveReconstructionFile.current !== capturedFile : liveInput.current !== capturedInput || liveGeneratedBitmap.current !== capturedBitmap) return;
+        setReconstructedScene(result.scene); setSceneOrigin(capturedFile ? { file: capturedFile } : { signature: outputOrigin?.signature || capturedInput }); setExportSource("bitmap");
         setReconstructionStatus(result.audit.finalValidation?.state === "passed" && result.audit.tilePassComplete ? t("Reconstruction checks passed. Review the result before use.") : t("Reconstruction could not be fully verified. Check for missing or misplaced objects before use."));
       } finally { image.close(); }
     } catch (error) { setForgeError(error instanceof Error ? error.message : String(error)); }
@@ -540,20 +742,21 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const referenceFloor = forgeMethod === "two-stage" ? 4 : 2;
   const referenceCeiling = forgeMethod === "two-stage" ? 10 : 4;
   const hasPaperInput = Boolean(pdfFile) || paperContent.trim().length >= 100;
-  const analyzeBlockedReason = hasPaperInput ? "" : t("Add a PDF, or at least 100 characters of paper text.");
+  const modelSetupMessage = forgeProvider === "configured" ? mainModel && !mainModel.hasApiKey ? t("Configure an API model to use AI planning and generation. Local reference browsing remains available.") : "" : !forgeApiKey.trim() || !parseModel.trim() ? t("Add an API key and a paper-analysis model in Model settings to use AI planning and generation.") : "";
+  const analyzeBlockedReason = modelSetupMessage || (hasPaperInput ? "" : t("Add a PDF, or at least 100 characters of paper text."));
   const currentSearchQuery = (figurePlan || paperContent || composerText).slice(0, 10_000);
   const resultsStale = searchedQuery !== null && searchedQuery !== currentSearchQuery && recommendations.length > 0;
   const needsContract = forgeMethod === "two-stage" && !(designContract && contractIsUsable(designContract));
   const analyzeReferencesBlockedReason =
-    selectedReferenceCount < referenceFloor ? t("Select at least {n} references in step 2.", { n: referenceFloor })
-      : !figurePlan.trim() ? t("Draft a figure plan in step 1 first.") : "";
+    modelSetupMessage || (selectedReferenceCount < referenceFloor ? t("Select at least {n} references in step 2.", { n: referenceFloor })
+      : !figurePlan.trim() ? t("Draft a figure plan in step 1 first.") : "");
   const generateBlockedReason =
-    !figurePlan.trim() ? t("Draft a figure plan in step 1 first.")
+    modelSetupMessage || (!figurePlan.trim() ? t("Draft a figure plan in step 1 first.")
       : selectedReferenceCount < referenceFloor ? t("Select at least {n} references in step 2.", { n: referenceFloor })
         : selectedReferenceCount > referenceCeiling ? t("This mode accepts at most {n} references.", { n: referenceCeiling })
           : needsContract ? t("Analyze the references first.")
             : outputMode === "bitmap" && !imageModel.trim() ? t("Enter an image model for bitmap output.")
-              : "";
+              : "");
   const generateReady = !generationBusy && !reconstructionBusy && !uploadingReferences && !contractBusy && !generateBlockedReason;
   const forgeSteps = [
     { index: 1, label: t("Paper content"), detail: figurePlan.trim() ? t("Plan drafted") : t("Not analyzed"), tone: figurePlan.trim() ? "done" : "idle" },
@@ -566,8 +769,9 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   };
 
   return <main ref={pageRef} className="image-creation-page">
+    {owner && bridge && <div className="figure-project-results"><button className="forge-secondary" disabled={resultBusy || analysisBusy || generationBusy || reconstructionBusy || !(paperContent.trim() || figurePlan.trim() || generatedSvg || generatedBitmap)} onClick={() => void saveFigureResult()}>{t("Save figure to project")}</button>{onUseInManuscript && <button className="forge-secondary" disabled={resultBusy || generationBusy || reconstructionBusy || !outputIsCurrent || !(generatedSvg || generatedBitmap)} onClick={() => void useInManuscript()}>{t("Use in manuscript")}</button>}<select aria-label={t("Saved figures")} value={chosenResult} onChange={(event) => setChosenResult(event.target.value)}><option value="">{t("Saved figures")}</option>{savedResults.map((result) => <option key={result.id} value={result.id}>{result.title}</option>)}</select><button className="forge-secondary" disabled={resultBusy || !chosenResult || analysisBusy || generationBusy || reconstructionBusy} onClick={() => void openFigureResult()}>{t("Open saved figure")}</button>{resultNotice && <span role="status">{resultNotice}</span>}</div>}
     {!forgeOpen && <div className="image-creation-tabs">
-      <h2 className="image-creation-heading">Paper diagrams</h2>
+      <h2 className="image-creation-heading">{t("Diagram references")}</h2>
       <div className="image-creation-actions">
         <label className="image-creation-sort">
           <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort paper diagrams">
@@ -582,7 +786,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
       </div>
     </div>}
 
-    {!forgeOpen && <section className="image-creation-panel" aria-label="Paper diagrams">
+    {!forgeOpen && <section className="image-creation-panel" aria-label={t("Diagram references")}>
       <div className="image-creation-controls">
         <label className="gallery-search image-creation-search"><Search size={17} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a published diagram, author, or topic" aria-label="Search paper diagrams" /></label>
         <div className="image-creation-filter">
@@ -612,10 +816,10 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
     {active && forgeOpen && <section className="figure-forge-page" aria-label={t("FigureForge planning workspace")}>
       <div className="forge-topbar">
-        <button type="button" className="figure-forge-back" onClick={() => showForge(false)}><ArrowLeft size={15} />{t("Back to gallery")}</button>
+        <button type="button" className="figure-forge-back" onClick={() => showForge(false)}><ArrowLeft size={15} />{t("Diagram references")}</button>{onBrowseChartReferences && <button type="button" className="figure-forge-back" onClick={onBrowseChartReferences}><GraduationCap size={15} />{t("Paper chart references")}</button>}
         <div className="forge-title"><strong>FigureForge</strong><span>{t("Plan a paper figure with references")}</span></div>
       </div>
-
+      {modelSetupMessage && <InlineNotice tone="info" action={<button className="forge-secondary" onClick={() => { if (forgeProvider === "configured" && onOpenModelSettings) onOpenModelSettings(); else if (modelSettingsRef.current) modelSettingsRef.current.open = true; }}>{t("Configure model")}</button>}>{modelSetupMessage}</InlineNotice>}
       <nav className="forge-steps" aria-label={t("FigureForge steps")}>
         {forgeSteps.map((step) => <button type="button" key={step.index} className={`forge-steps-item is-${step.tone}`} onClick={() => goToStep(step.index)}>
           <span className="forge-steps-index" aria-hidden="true">{step.index}</span>
@@ -676,7 +880,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
               <textarea rows={2} value={composerText} disabled={analysisBusy} onChange={(event) => { setComposerText(event.target.value); }} placeholder={t("Optional: layout wishes, must-have modules, terms to use.")} />
             </label>
 
-            <details className="forge-disclosure">
+            <details className="forge-disclosure" ref={modelSettingsRef}>
               <summary>{t("Model settings")}<span className="forge-disclosure-value">{forgeProvider === "configured" ? t("Archimedes main model") : forgeProvider}</span></summary>
               <div className="forge-disclosure-body">
                 <label className="forge-field">
@@ -722,7 +926,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
             </div>
             <span className={`forge-pill${selectedReferenceCount >= referenceFloor ? " is-ready" : ""}`}>{selectedReferenceCount} / {referenceFloor}–{referenceCeiling}</span>
             <div className="forge-step-actions">
-              <button type="button" className="forge-secondary" onClick={() => showForge(false)}>{t("Browse gallery")}</button>
+              <button type="button" className="forge-secondary" onClick={() => showForge(false)}>{t("Diagram references")}</button>
               <button type="button" className="forge-primary" disabled={searchBusy} onClick={() => void findReferences()}>{searchBusy ? t("Searching…") : t("Search references")}</button>
             </div>
           </header>
@@ -849,6 +1053,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
                 </details>
               </div>}
             </div>}
+            {(generatedSvg || generatedBitmap) && !outputIsCurrent && <InlineNotice tone="warning">{t("This output was generated from earlier inputs. It remains available to preview and download; generate again before saving it with the current inputs.")}</InlineNotice>}
             {generatedSvg && <div className="figure-forge-output"><img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(generatedSvg)}`} alt={t("Generated figure preview")} /><button type="button" className="forge-secondary" onClick={downloadSvg}>{t("Download SVG")}</button></div>}
             {svgWarnings.length > 0 && <p role="status" className="forge-field-hint">{svgWarnings.join("; ")}</p>}
             {generatedBitmap && <div className="figure-forge-output"><img src={generatedBitmap} alt={t("Generated figure preview")} /><a href={generatedBitmap} download="figure.png" target="_blank" rel="noreferrer">{t("Download bitmap")}</a></div>}
@@ -877,7 +1082,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
               </span>
             </label>
             <div className="forge-inline-actions">
-              <button type="button" className="forge-secondary" disabled={reconstructionBusy || generationBusy || (!reconstructionFile && !generatedBitmap)} onClick={() => void reconstructBitmap()}>{reconstructionBusy ? t("Reconstructing…") : t("Reconstruct editable objects")}</button>
+              <button type="button" className="forge-secondary" disabled={reconstructionBusy || generationBusy || Boolean(modelSetupMessage) || (!reconstructionFile && !generatedBitmap)} onClick={() => void reconstructBitmap()}>{reconstructionBusy ? t("Reconstructing…") : t("Reconstruct editable objects")}</button>
               {!reconstructionFile && !generatedBitmap && <span>{t("Generate a bitmap draft first, or upload one.")}</span>}
             </div>
             {reconstructionStatus && <p role="status" className="forge-field-hint">{reconstructionStatus}</p>}

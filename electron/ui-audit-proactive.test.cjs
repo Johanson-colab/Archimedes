@@ -57,19 +57,20 @@ test("research path keeps the thread state and drops the old chrome", () => {
   assert.doesNotMatch(researchPath, /Review checkpoint/);
   assert.doesNotMatch(researchPath, /research-path-heading/);
   assert.match(researchPath, /agent-path-project/);
-  assert.match(researchPath, /agent-path-checkpoint/);
+  assert.match(researchPath, /work-mode-description/);
   assert.match(researchPath, /onTogglePin/);
-  assert.match(researchPath, /t\("Accept & advance"\)/);
+  assert.match(researchPath, /onChangeMode/);
+  assert.doesNotMatch(researchPath, /Accept & advance|acceptedStages|staleStages/);
   assert.match(researchPath, /research-path-stage/);
   assert.match(researchPath, /research-path-label/);
   assert.match(researchPath, /onCollapse/);
 });
 
 test("the research path state is lifted to the thread owner", () => {
-  assert.match(app, /const \[acceptedStages, setAcceptedStages\]/);
-  assert.match(app, /const \[staleStages, setStaleStages\]/);
-  assert.match(app, /const \[selectedStage, setSelectedStage\]/);
-  assert.match(app, /useEffect\(\(\) => \{[\s\S]*?setAcceptedStages\(researchStages\.slice/);
+  assert.match(app, /function changeWorkMode/);
+  assert.match(app, /if \(pathThreadInactive\) return;/);
+  assert.match(app, /setResearchMode\(stage\.mode\)/);
+  assert.doesNotMatch(app, /setAcceptedStages|setStaleStages/);
   assert.match(app, /<ResearchPathPanel/);
   assert.match(app, /stages=\{researchStages\}/);
   assert.doesNotMatch(app, /className=\{welcomeVisible \? "conversation-layout has-welcome" : "conversation-layout has-journey"\}/);

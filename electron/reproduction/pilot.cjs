@@ -260,6 +260,14 @@ function statePrompt({ title, summary, claims, repo, notes, steps, findings, obs
   ].filter(Boolean).join("\n");
 }
 
+function stepSignatures(step) {
+  const normalized = normalizeStep(step, 0);
+  return {
+    execution: JSON.stringify([normalized.command, normalized.detail, normalized.blocked]),
+    acceptance: JSON.stringify([normalized.checkpoint, normalized.check]),
+  };
+}
+
 function normalizeSteps(input, previous) {
   const list = Array.isArray(input) ? input : [];
   const kept = new Map((previous || []).map((step) => [step.id, step]));
@@ -269,19 +277,22 @@ function normalizeSteps(input, previous) {
     if (!raw || typeof raw !== "object") return;
     const id = String(raw.id || "").trim();
     const existing = id ? kept.get(id) : null;
-    // A revision that only rewords a step should not silently drop the verdict
-    // and the receipt that were already earned for it.
     const merged = normalizeStep({ ...(existing || {}), ...raw }, index);
     if (!merged) return;
+    const before = existing ? stepSignatures(existing) : null;
+    const after = stepSignatures(merged);
+    // Titles and source labels can change without changing what was executed
+    // or accepted. A new command, condition or check needs a new verdict.
+    const unchanged = before && before.execution === after.execution && before.acceptance === after.acceptance;
     if (seen.has(merged.id)) merged.id = `${merged.id}-${index + 1}`;
     seen.add(merged.id);
     next.push({
       ...merged,
-      status: existing?.status || "pending",
-      evidence: existing?.evidence || "",
-      note: existing?.note || "",
-      exit_code: existing?.exit_code ?? null,
-      duration_ms: existing?.duration_ms || 0,
+      status: unchanged ? existing.status || "pending" : "pending",
+      evidence: unchanged ? existing.evidence || "" : "",
+      note: unchanged ? existing.note || "" : "",
+      exit_code: unchanged ? existing.exit_code ?? null : null,
+      duration_ms: unchanged ? existing.duration_ms || 0 : 0,
     });
   });
   return next.length ? next : null;
@@ -301,6 +312,7 @@ async function askModel(complete, { system, prompt, signal }) {
     } catch (error) {
       lastError = error;
       if (signal?.aborted) throw new Error("Stopped by the user.");
+      if (error?.code === "MODEL_RESPONSE_INCOMPLETE") throw error;
     }
   }
   throw new Error(`The agent could not be reached: ${lastError?.message || "no answer from the model"}`);
@@ -334,6 +346,7 @@ async function runPilot({
   now = () => Date.now(),
   sleep = defaultSleep,
   onRunbook = () => {},
+  outputToken: runOutputToken,
 }) {
   if (!backend) throw new Error("A reproduction agent needs an execution backend.");
   if (typeof complete !== "function") throw new Error("A reproduction agent needs a model.");
@@ -351,9 +364,12 @@ async function runPilot({
   if (!steps.length) throw new Error("The runbook has no steps to execute.");
   const findings = (Array.isArray(inputFindings) ? inputFindings : []).slice(-20);
   const observations = [];
+  // This run's old output remains inspectable, but cannot certify execution
+  // conditions introduced later. Acceptance-only changes can re-evaluate it.
+  const evidenceAfter = new Map();
   const readings = [];
   const changes = [];
-  const outputToken = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const outputToken = runOutputToken || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   let log = "";
   let turn = 0;
   let index = 0;
@@ -403,7 +419,7 @@ async function runPilot({
         signal,
       });
     } catch (error) {
-      finish(status === "stopped" ? "stopped" : "failed", error?.message || "The agent stopped answering.");
+      finish(signal?.aborted ? "stopped" : "failed", error?.message || "The agent stopped answering.");
       break;
     }
     turnHint = "";
@@ -446,6 +462,7 @@ async function runPilot({
         const executed = await backend.exec(command, {
           timeoutMs,
           signal,
+          outputPath: outputPathFor(outputToken, index),
           onData: (chunk) => {
             const text = stripAnsi(chunk);
             result.output = `${result.output}${text}`.slice(-MAX_CAPTURE_CHARS);
@@ -460,9 +477,9 @@ async function runPilot({
       // The prompt only ever shows a tail. Keep the whole thing on the target so
       // a resolver conflict can be read with grep instead of re-run.
       const captured = result.output;
-      let outputPath = "";
-      let outputLines = 0;
-      if (captured.length > OBSERVATION_TAIL && typeof backend.writeFile === "function") {
+      let outputPath = result.outputPath || "";
+      let outputLines = result.outputLines || 0;
+      if (!outputPath && captured.length > OBSERVATION_TAIL && typeof backend.writeFile === "function") {
         const tail = captured.slice(-MAX_FILE_CHARS);
         const target = outputPathFor(outputToken, index);
         outputLines = tail.split("\n").length;
@@ -483,8 +500,9 @@ async function runPilot({
         output: captured.slice(-OBSERVATION_STORE_CHARS),
         normalized: flatten(captured.slice(-OBSERVATION_STORE_CHARS)),
         outputPath,
+        logReference: result.logReference || null,
         outputLines,
-        outputBytes: captured.length,
+        outputBytes: result.outputBytes || Buffer.byteLength(captured),
         durationMs: now() - startedAtCommand,
         at: new Date().toISOString(),
       };
@@ -525,8 +543,17 @@ async function runPilot({
         step.evidence = "";
         step.exit_code = null;
       } else {
-        const cited = cite(observations, quote, verdict);
-        if (cited.error) { turnHint = `The ${verdict} verdict was not recorded: ${cited.error}`; continue; }
+        // Passed/failed describe the current execution conditions. A historical
+        // error can still explain a manual handoff without claiming a new run.
+        const floor = verdict === "manual" ? 0 : evidenceAfter.get(step.id) || 0;
+        const actual = String(decision.command || "").trim();
+        const eligible = observations.filter((entry) => entry.index > floor &&
+          (!actual || String(entry.command || "").trim() === actual));
+        const cited = cite(eligible, quote, verdict);
+        if (cited.error) {
+          turnHint = `The ${verdict} verdict was not recorded: ${cited.error}${floor ? " Its execution conditions changed; cite output from a command run after the revision." : ""}${actual ? " The stated command must be the command that produced the quoted output." : ""}`;
+          continue;
+        }
         step.status = verdict;
         step.evidence = flatten(quote).slice(0, 600);
         step.note = flatten(decision.note || "").slice(0, 400);
@@ -535,10 +562,9 @@ async function runPilot({
         // A command that needed three flags to work is the truth about this
         // machine. Keeping the planner's guess would make the next run learn it
         // all over again.
-        const actual = String(decision.command || "").replace(/\s+/g, " ").trim().slice(0, 2_000);
         if (actual && actual !== step.command) {
           emit({ type: "pilot-thought", text: `Recorded the command that worked for "${step.title}".` });
-          step.command = actual;
+          step.command = actual.slice(0, 2_000);
         }
       }
       stalled = 0;
@@ -551,6 +577,12 @@ async function runPilot({
       const next = normalizeSteps(decision.steps, steps);
       if (!next) { turnHint = "The revised runbook had no readable steps."; continue; }
       const missing = steps.filter((step) => terminal(step.status) && !next.some((entry) => entry.id === step.id));
+      for (const step of next) {
+        const previous = steps.find((entry) => entry.id === step.id);
+        if (previous && stepSignatures(previous).execution !== stepSignatures(step).execution) {
+          evidenceAfter.set(step.id, index);
+        }
+      }
       steps = next;
       stalled = 0;
       emit({
@@ -721,6 +753,7 @@ async function runPilot({
     started_at: new Date(startedAt).toISOString(),
     finished_at: new Date(finishedAt).toISOString(),
     duration_ms: finishedAt - startedAt,
+    logs: observations.filter(observation => observation.logReference).map(observation => ({ index: observation.index, command: observation.command, ...observation.logReference, bytes: observation.outputBytes, lines: observation.outputLines })),
   };
 }
 

@@ -21,6 +21,11 @@ function text(value, limit = 2_000) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
+function commandText(value, limit = 2_000) {
+  // Shell whitespace inside quotes and between lines is executable content.
+  return String(value ?? "").trim().slice(0, limit);
+}
+
 function boundedNumber(value, fallback, min, max) {
   const parsed = typeof value === "string" ? Number(value.replace(/[^0-9.eE+-]/g, "")) : Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -66,7 +71,7 @@ function normalizeClaim(input, index) {
 function normalizeEntrypoint(input) {
   const entry = input && typeof input === "object" ? input : {};
   return {
-    command: text(entry.command, 2_000),
+    command: commandText(entry.command, 2_000),
     cwd: text(entry.cwd, 400) || ".",
     outputs: Array.isArray(entry.outputs)
       ? entry.outputs.filter((item) => typeof item === "string").map((item) => text(item, 400)).filter(Boolean).slice(0, 10)
@@ -144,7 +149,7 @@ function normalizeCheck(input) {
     return path && pattern ? { kind, path, pattern } : { kind: "manual", reason: "No path or pattern was given for this check." };
   }
   if (kind === "command") {
-    const command = text(check.command, 1_000);
+    const command = commandText(check.command, 1_000);
     return command ? { kind, command, expect: "exit_zero" } : { kind: "manual", reason: "No command was given for this check." };
   }
   if (kind === "http") {
@@ -167,7 +172,7 @@ function normalizeStep(input, index) {
     id: text(step.id, 80) || `step-${index + 1}`,
     title,
     detail: text(step.detail, 600),
-    command: text(step.command, 2_000),
+    command: commandText(step.command, 2_000),
     checkpoint: text(step.checkpoint, 400),
     check: normalizeCheck(step.check),
     source: text(step.source, 400),

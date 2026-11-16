@@ -46,7 +46,7 @@ test("opening an existing database attaches projects and sessions to a shared wo
     assert.ok(shared);
     assert.equal(shared.kind, "shared");
     assert.ok(nameLibrary.some((entry) => entry.name === shared.name));
-    assert.equal(shared.root, path.resolve(projectFolder));
+    assert.equal(shared.root, fs.realpathSync(projectFolder));
     assert.equal(shared.is_default, true);
     assert.equal(store.getResearchThread(thread.id).workspace_id, shared.id);
 
@@ -212,6 +212,32 @@ test("projects without git cannot create a worktree", () => {
     const project = store.createResearchProject({ name: "No git", workspacePath: projectFolder });
     assert.equal(store.getResearchProject(project.id).git_state, "none");
     assert.throws(() => store.createProjectWorkspace({ projectId: project.id, kind: "worktree" }), /commit/i);
+  } finally {
+    closeStore();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a Git project opened through a directory alias can create and remove a worktree", () => {
+  const { root, primary, projectFolder } = makeRoots("alias-worktree");
+  const alias = path.join(root, "project-alias");
+  try {
+    initRepo(projectFolder);
+    fs.symlinkSync(projectFolder, alias, process.platform === "win32" ? "junction" : "dir");
+    store.openWorkspace(primary);
+    const project = store.createResearchProject({ name: "Alias project", workspacePath: alias });
+    assert.equal(store.getResearchProject(project.id).git_state, "ready");
+    const worktree = store.createProjectWorkspace({ projectId: project.id, kind: "worktree" });
+    assert.equal(fs.readFileSync(path.join(worktree.root, "README.md"), "utf8"), "# Project\n");
+    const listed = spawnSync("git", ["-C", fs.realpathSync(projectFolder), "worktree", "list", "--porcelain", "-z"], { encoding: "utf8", windowsHide: true });
+    assert.equal(listed.status, 0, listed.stderr);
+    const registeredRoots = listed.stdout.split("\0").filter((line) => line.startsWith("worktree ")).map((line) => fs.realpathSync(line.slice("worktree ".length)));
+    assert.ok(registeredRoots.includes(fs.realpathSync(worktree.root)));
+    store.deleteProjectWorkspace(worktree.id);
+    assert.equal(fs.existsSync(worktree.root), false);
+    const remaining = spawnSync("git", ["-C", fs.realpathSync(projectFolder), "worktree", "list", "--porcelain"], { encoding: "utf8", windowsHide: true });
+    assert.equal(remaining.status, 0, remaining.stderr);
+    assert.equal(remaining.stdout.split("\n").filter((line) => line.startsWith("worktree ")).length, 1);
   } finally {
     closeStore();
     fs.rmSync(root, { recursive: true, force: true });

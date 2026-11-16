@@ -17,62 +17,48 @@ Archimedes 不是套着论文列表的通用聊天壳。它的重心是研究闭
 
 ## 安装与运行
 
-**从这里开始。** 推荐让编码智能体负责安装和首次启动。
+### 桌面安装包（推荐）
 
-### 推荐：让编码智能体安装
+从[发布页](https://github.com/Johanson-colab/Archimedes/releases)下载 Windows x64 或对应的 macOS Apple Silicon/Intel 安装包。使用安装包不需要 Git、Node.js、npm 或全局 Electron。首次启动请按所选版本的发布说明操作；v0.1.0 安装包尚未签名。
 
-**复制给智能体。** 将下面的内容粘贴到 Claude Code、Codex、Cursor 或其他能操作文件和终端的编码智能体中。
+发布版和开发主线可能同显 0.1.0，却开放不同功能。v0.1.0 隐藏账户和云端入口，`main` 继续开发这些能力。源码构建可在 **设置 → 关于 → 构建诊断** 查看 commit、通道、源码指纹、运行平台/架构和功能范围；这些信息用于识别构建，不表示科研结果已经验证。
 
-```text
-在这台机器上从 https://github.com/Johanson-colab/Archimedes 安装 Archimedes。
-目标是得到可用的本地 Electron 桌面安装，而不仅是网页预览。
+### 从源码开发
 
-1. 确认 Git 和 Node.js 20+ 可用。
-2. 将仓库克隆到合适的本地目录，并进入该目录。
-3. 运行 `npm install`，等待原生终端模块重新构建完成。
-4. 使用适合当前平台的命令，从 `.env.example` 创建 `.env.local`。
-   不要要求我在聊天中粘贴 API key。暂停并让我直接填写模型配置，然后继续。
-5. 运行 `npm run dev` 启动应用。确认 Electron 窗口已打开。
-   仅有 127.0.0.1:5173 的渲染进程页面不算完成。
-6. 如果终端原生模块失败，运行 `npm run rebuild:native` 后重试。
-7. 汇报执行过的命令、应用位置，以及仍然存在的具体错误。
-```
-
-这是非开发者最快的路径：智能体可以检查前置条件、执行安装、诊断原生模块错误，并确认 Electron 窗口成功打开。
-
-### 手动安装
-
-前置条件：[Git](https://git-scm.com/downloads) 和当前 Node.js LTS（建议 Node 20 或更高版本）。`npm` 随 Node 一起安装。不需要 Python 服务、数据库服务或全局 Electron。
+需要 [Git](https://git-scm.com/downloads)、**Node.js 22.18+（22.x）或 24+**，以及 **npm 10.9+（10.x）或 11.x**。`.node-version` 和 `packageManager` 固定复现组合为 **Node 26.13.0 / npm 11.20.0**；声明的兼容范围比该实测组合更宽。Node 下限也满足仓库直接运行 TypeScript 测试的需要。原生终端模块重建可能需要本平台的 C++ 构建工具。
 
 ```bash
 git clone https://github.com/Johanson-colab/Archimedes.git
 cd Archimedes
-npm install
+node scripts/check-toolchain.cjs
+npm ci
+npm run prepare:desktop
 cp .env.example .env.local    # macOS / Linux
 npm run dev
 ```
 
-在 Windows PowerShell 中，用以下命令复制环境变量模板：
+Windows PowerShell 用 `Copy-Item .env.example .env.local` 复制模板。
 
-```powershell
-Copy-Item .env.example .env.local
-```
+`npm ci` 使用锁文件并重建原生终端模块。`prepare:desktop` 显式准备 Electron 二进制，三分钟超时；慢网络可将 `ARCHIMEDES_DESKTOP_PREPARE_TIMEOUT_MS` 设置到最多 600000。测试和启动预检发现二进制缺失会立即提示，不再隐式开始下载。`npm run dev` 必须打开 Electron 桌面窗口，仅有 127.0.0.1:5173 网页预览不算完成。
 
-在启动前，将 OpenAI 兼容端点填入 `.env.local`，或稍后在 **Settings → Models** 中配置：
+没有模型 key 也能打开应用。稍后在 **设置 → 模型** 配置 OpenAI 兼容提供商，或直接编辑 `.env.local`：
 
 ```bash
 ARCHIMEDES_LLM_API_KEY=your-api-key
 ARCHIMEDES_LLM_BASE_URL=https://api.openai.com/v1
-ARCHIMEDES_LLM_MODEL=gpt-6.1 Terra
+ARCHIMEDES_LLM_MODEL=your-provider-model-id
 ```
 
-应用即使没有模型 key 也能打开，但聊天和智能体操作无法运行。网页搜索是可选项，使用单独的 key。
+不要将凭据粘贴进智能体对话。本地文件、PDF 阅读和统计在无模型时仍可用；模型和网页搜索操作需要各自的配置。
 
-| 首次运行问题 | 修复 |
+| 首次运行问题 | 下一步 |
 | --- | --- |
-| `npm install` 后原生终端模块报错 | 运行 `npm run rebuild:native`，然后再次运行 `npm run dev`。 |
-| Vite 启动后 Electron 未打开 | 检查终端输出中的端口或 Electron 错误，按 `Ctrl+C` 停止后重试。 |
-| 聊天无法回答 | 检查 `.env.local` 或 Settings → Models 中的三个模型值，然后重启。 |
+| Node/npm 版本不支持 | 运行 `npm run check:env`，使用兼容版本或固定的复现组合。 |
+| Electron 二进制缺失 | 运行 `npm run prepare:desktop`，再运行 `npm run check:desktop`；准备超时时检查网络/代理。 |
+| 原生终端模块报错 | 运行 `npm run rebuild:native` 后重试。 |
+| 聊天无法回答 | 在设置 → 模型中核对提供商端点、准确模型 ID 和 key。 |
+
+让编码智能体安装时，请它遵循上面的源码安装命令，凭据由你直接输入，并核实真正的 Electron 窗口与准确错误。只想使用 Archimedes 时优先选发布安装包。
 
 ## 功能
 
@@ -84,7 +70,7 @@ ARCHIMEDES_LLM_MODEL=gpt-6.1 Terra
 - **研究上下文与来源** —— 保留项目对话、论文和来源引用，让研究者回到工作背后的上下文。实验谱系和更广泛的证据溯源仍在开发中。
 - **研究记忆与协作** —— 长期经验保留和共享研究项目是持续探索的方向。
 
-Research App 自定义，以及 Skills、MCP 工具、模型和后端的自动组合，属于产品方向；并非所有组合目前都受支持。图像生成尚未接通：Image creation 目前提供会议图表库和带脚手架的组合面板。
+Research App 自定义，以及 Skills、MCP 工具、模型和后端的自动组合，属于产品方向；并非所有组合目前都受支持。Image creation 已包含 FigureForge 参考图库、设计/重建工作流、可编辑 SVG 生成，以及通过已配置图像端点生成位图；该 beta 应用默认关闭。语义检索下载索引和模型权重后在浏览器 WASM worker 中本地运行，加载失败仍可用关键词检索。模型生成需要兼容提供商，并可能产生其服务费用。
 
 ## 研究闭环
 
@@ -117,10 +103,15 @@ Research App 自定义，以及 Skills、MCP 工具、模型和后端的自动�
 ## 验证
 
 ```bash
+npm run check:env
+npm run prepare:desktop
 npm run lint
-npm run build
 npm test
+npm run build
+npm run check:theme
 ```
+
+`npm test` 包含两个真实 Electron 布局回归，需要桌面显示环境（无头 Linux 可用 `xvfb-run npm test`）。`npm run test:core` 是单独的非桌面迭代命令，不能替代 PR 的完整检查。依赖外部服务或指定 fixture 的测试会明确报告条件，不冒充通过；见[开发与发布验收](docs/development-validation.md)。
 
 ## 更多
 

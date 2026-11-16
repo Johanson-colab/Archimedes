@@ -1,0 +1,18 @@
+.project-transfer-dialog { display: flex; flex-direction: column; gap: 16px; }
+.project-transfer-dialog h2, .project-transfer-dialog p { margin: 0 0 10px; }
+.project-transfer-tabs, .project-transfer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.project-transfer-dialog fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; border: 1px solid var(--border-default); border-radius: 8px; margin: 12px 0; padding: 12px; }
+.project-transfer-dialog fieldset label { display: flex; align-items: center; gap: 8px; }
+.project-transfer-preview { border-top: 1px solid var(--border-default); margin-top: 16px; padding-top: 12px; }
+.project-transfer-preview dl { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+.project-transfer-preview dl div { display: flex; gap: 8px; }
+.project-transfer-preview dd { margin: 0; font-variant-numeric: tabular-nums; }
+.project-transfer-dialog details ul { max-height: 180px; overflow: auto; padding-left: 20px; }
+.project-transfer-preview details li { display: flex; justify-content: space-between; gap: 12px; overflow-wrap: anywhere; }
+.project-transfer-preview code { color: var(--text-muted); white-space: nowrap; }
+.project-transfer-note { color: var(--text-muted); font-size: 12px; }
+.project-transfer-name { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
+.project-transfer-unavailable { padding: 12px; border: 1px solid var(--border-default); border-radius: 8px; }
+.project-transfer-error { color: var(--state-danger); }
+.project-transfer-dialog footer { display: flex; align-items: center; justify-content: space-between; }
+@media (max-width: 600px) { .project-transfer-dialog fieldset { grid-template-columns: 1fr; } }

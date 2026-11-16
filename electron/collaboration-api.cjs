@@ -61,10 +61,13 @@ function createCollaborationApi({ baseUrl, getToken, fetchImpl = globalThis.fetc
     async listLibraries(projectId) {
       return (await request(`/v1/projects/${encodeURIComponent(projectId)}/libraries`)).libraries || [];
     },
-    async createLibrary(projectId, { name, description = "", color = "#3973c8" } = {}) {
+    async librarySyncSnapshot(projectId) {
+      return request(`/v1/projects/${encodeURIComponent(projectId)}/library-sync`);
+    },
+    async createLibrary(projectId, { id, name, description = "", color = "#3973c8" } = {}) {
       return (await request(`/v1/projects/${encodeURIComponent(projectId)}/libraries`, {
         method: "POST",
-        body: { name, description, color },
+        body: { id, name, description, color },
       })).library;
     },
     async updateLibrary(libraryId, patch) {

@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { projectTransfer as projectTransferStrings } from "./i18n/translations/projectTransfer";
+import { metricComparison as metricComparisonStrings } from "./i18n/translations/metricComparison";
 import { app as appStrings } from "./i18n/translations/app";
 import { library as libraryStrings } from "./i18n/translations/library";
 import { gallery as galleryStrings } from "./i18n/translations/gallery";
@@ -51,6 +53,8 @@ export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 
 const translations: Record<string, string> = {
   ...sessionCommentsStrings,
   ...sessionSnapshotStrings,
+  ...projectTransferStrings,
+  ...metricComparisonStrings,
   ...appStrings,
   ...libraryStrings,
   ...galleryStrings,

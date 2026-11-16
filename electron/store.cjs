@@ -6,18 +6,84 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const { AsyncLocalStorage } = require("node:async_hooks");
 const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
 const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles.cjs");
 const { applyApprovedWrite } = require("./agent/workspace-tools.cjs");
+const libraryRecords = require("./library-records.cjs");
+const cloudLibraryState = require("./cloud-sync-store.cjs");
+const { mergeCloudThread } = require("../shared/cloud-sync.cjs");
 
 const OUTPUT_LIMIT = 200_000;
 const GIT_STATES = new Set(["none", "empty", "ready", "nested", "suspicious"]);
 const WORKSPACE_KINDS = new Set(["shared", "worktree", "sandbox"]);
 /** Sandboxes are an isolated copy; never copy caches, VCS data, or the app DB. */
 const SANDBOX_SKIP = new Set([".git", ".archimedes", "node_modules", "dist", "build", ".next"]);
-let database;
-let activeWorkspace;
+// SQL functions stay shared; each bound facade selects its own state. A run
+// captures the facade/lease, so opening another window cannot redirect it.
+const workspaceContext = new AsyncLocalStorage();
+const workspaceStates = new Map();
+let defaultState = { workspace: null, database: null, leases: 0, managed: false, closing: false };
+
+function currentState() { return workspaceContext.getStore() || defaultState; }
+function activeWorkspace() { return currentState().workspace; }
+
+function closeState(state) {
+  state.closing = true;
+  if (state.leases) return;
+  state.database?.close();
+  state.database = null;
+  if (workspaceStates.get(state.workspace) === state) workspaceStates.delete(state.workspace);
+}
+
+function currentStore() {
+  const state = currentState();
+  if (state.facade) return state.facade;
+  const facade = {};
+  for (const [name, method] of Object.entries(module.exports)) {
+    if (typeof method === "function") facade[name] = (...args) => workspaceContext.run(state, () => method(...args));
+  }
+  facade.run = (callback) => workspaceContext.run(state, callback);
+  facade.close = () => closeState(state);
+  Object.defineProperty(facade, "workspace", { get: () => state.workspace });
+  state.facade = facade;
+  return facade;
+}
+
+function captureStore() {
+  const state = currentState();
+  const store = currentStore();
+  state.leases += 1;
+  let released = false;
+  return { store, release() {
+    if (released) return;
+    released = true;
+    state.leases -= 1;
+    if (state.closing) closeState(state);
+  } };
+}
+
+function createWorkspaceStore(workspace) {
+  const root = normalizeWorkspacePath(workspace);
+  if (!root) throw new Error("A data workspace is required.");
+  let state = workspaceStates.get(root);
+  if (!state) state = { workspace: root, database: null, leases: 0, managed: true, closing: false };
+  state.managed = true;
+  return workspaceContext.run(state, () => {
+    if (!state.database) openWorkspace(root);
+    state.closing = false;
+    return currentStore();
+  });
+}
+
+function closeAllWorkspaces() {
+  for (const state of workspaceStates.values()) closeState(state);
+}
+
+function runtimeThreadId(threadId) {
+  return JSON.stringify([activeWorkspace() || "", threadId]);
+}
 let localIdentity = {
   userId: "local-user",
   displayName: "Local user",
@@ -342,6 +408,36 @@ function schema(db) {
       PRIMARY KEY (library_id, paper_id)
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS project_paper_selections (
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL DEFAULT '',
+      discovery_json TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, paper_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS paper_bibliography (
+      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      citekey TEXT NOT NULL DEFAULT '',
+      entry_type TEXT NOT NULL DEFAULT 'article',
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS project_results (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL REFERENCES project_workspaces(id) ON DELETE CASCADE,
+      thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
+      execution_root TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK(kind IN ('analysis', 'figure')),
+      title TEXT NOT NULL,
+      manifest_path TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS project_results_owner ON project_results(project_id, workspace_id, updated_at);
+
     CREATE TABLE IF NOT EXISTS paper_reader_assets (
       paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
       source_url TEXT NOT NULL DEFAULT '',
@@ -554,10 +650,17 @@ function schema(db) {
   ensureColumn(db, "research_threads", "pinned", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "research_threads", "last_viewed_at", "TEXT");
   ensureColumn(db, "research_threads", "unread_count", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "research_threads", "based_on_thread_id", "TEXT REFERENCES research_threads(id) ON DELETE SET NULL");
+  ensureColumn(db, "research_threads", "based_on_result_id", "TEXT REFERENCES project_results(id) ON DELETE SET NULL");
   // Artifact metadata records where a produced file lives without moving it.
   ensureColumn(db, "research_artifacts", "project_id", "TEXT");
   ensureColumn(db, "research_artifacts", "storage", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "research_artifacts", "sha256", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "reproduction_runs", "resource_json", "TEXT NOT NULL DEFAULT '{}'");
+  ensureColumn(db, "reproduction_runs", "snapshot_json", "TEXT");
+  ensureColumn(db, "reproductions", "project_id", "TEXT REFERENCES research_projects(id) ON DELETE CASCADE");
+  ensureColumn(db, "reproductions", "workspace_id", "TEXT REFERENCES project_workspaces(id) ON DELETE SET NULL");
+  ensureColumn(db, "reproductions", "execution_root", "TEXT");
   ensureColumn(db, "project_workspaces", "name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
@@ -756,7 +859,7 @@ function setLocalIdentity(identity) {
     deviceId: String(identity.deviceId || ""),
     deviceName: String(identity.deviceName || ""),
   };
-  if (database) ensureLocalUser(database);
+  for (const state of workspaceStates.values()) if (state.database) ensureLocalUser(state.database);
   return localIdentity;
 }
 
@@ -836,12 +939,17 @@ function ensureDefaultProject(db) {
   db.prepare(`
     INSERT INTO research_projects (id, owner_id, name, description, workspace_path, created_at, updated_at)
     VALUES (?, ?, 'General', 'Default research project', ?, ?, ?)
-  `).run(id, localIdentity.userId, activeWorkspace ?? null, now, now);
+  `).run(id, localIdentity.userId, activeWorkspace() ?? null, now, now);
   ensureProjectMember(db, id, localIdentity.userId, "owner");
   return id;
 }
 
+function defaultResearchProject() {
+  return getResearchProject(ensureDefaultProject(requireDatabase()));
+}
+
 function requireDatabase() {
+  const database = currentState().database;
   if (!database) throw new Error("Open a workspace before accessing its research data.");
   return database;
 }
@@ -852,7 +960,7 @@ function normalizeWorkspacePath(value) {
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
     throw new Error("The project folder does not exist or is not a directory.");
   }
-  return resolved;
+  return fs.realpathSync(resolved);
 }
 
 /**
@@ -892,10 +1000,79 @@ function reconcileInterruptedReproductions(db) {
   return stuck.length;
 }
 
-function openWorkspace(workspacePath) {
-  if (activeWorkspace === workspacePath && database) return getSnapshot();
+function reconcileInterruptedResearch(db) {
+  // A non-null local task identifies execution owned by this desktop process.
+  // Cloud-imported turns have no local task and may still be running elsewhere.
+  const turns = db.prepare(`SELECT t.id, t.thread_id, t.task_id, t.assistant_message,
+      r.status AS task_status, r.response AS task_response
+    FROM research_turns t JOIN task_runs r ON r.id = t.task_id
+    WHERE t.status = 'running'`).all();
+  const now = timestamp();
+  const message = "The app closed while this turn was running. You can continue in this chat. Check any partial changes before continuing.";
+  db.exec("BEGIN");
+  try {
+    for (const turn of turns) {
+      // finishTask may have been persisted just before an unexpected exit.
+      const status = turn.task_status === "running" ? "interrupted" : turn.task_status;
+      const response = turn.task_response || turn.assistant_message || message;
+      db.prepare("UPDATE research_turns SET status = ?, assistant_message = ?, completed_at = ? WHERE id = ?").run(status, response, now, turn.id);
+      db.prepare("UPDATE task_runs SET status = ?, response = ? WHERE id = ?").run(status, response, turn.task_id);
+      const sequence = db.prepare("SELECT COALESCE(MAX(sequence), 0) + 1 AS value FROM research_events WHERE turn_id = ?").get(turn.id).value;
+      db.prepare("INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at) VALUES (?, ?, ?, ?, 'run_recovered', ?, ?)")
+        .run(randomUUID(), turn.thread_id, turn.id, sequence, JSON.stringify({ status, reason: "owning_process_exited" }), now);
+    }
+    for (const threadId of new Set(turns.map(turn => turn.thread_id))) {
+      // Sync can add a cloud-owned running turn to the same conversation. Only
+      // the orphaned local turns were ended; summarize the remaining history.
+      const running = db.prepare("SELECT 1 FROM research_turns WHERE thread_id = ? AND status = 'running' LIMIT 1").get(threadId);
+      const latest = db.prepare("SELECT status FROM research_turns WHERE thread_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(threadId);
+      const status = running ? "running" : ["failed", "incomplete"].includes(latest?.status) ? "error" : "idle";
+      db.prepare("UPDATE research_threads SET status = ?, updated_at = ? WHERE id = ?").run(status, now, threadId);
+    }
+    db.prepare("UPDATE task_runs SET status = 'interrupted', response = CASE WHEN response = '' THEN ? ELSE response END WHERE status = 'running'").run(message);
+    db.prepare("UPDATE agent_actions SET status = 'rejected', resolved_at = ? WHERE status = 'pending'").run(now);
+    db.prepare("UPDATE command_runs SET status = 'interrupted', completed_at = ? WHERE status = 'running'").run(now);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
 
-  database?.close();
+function canonicalizeStoredWorkspacePaths(db) {
+  for (const [table, column] of [["research_projects", "workspace_path"], ["research_threads", "workspace_path"], ["project_workspaces", "root"]]) {
+    const rows = db.prepare(`SELECT id, ${column} AS root FROM ${table} WHERE ${column} IS NOT NULL AND ${column} <> ''`).all();
+    const update = db.prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`);
+    for (const row of rows) {
+      try { const root = normalizeWorkspacePath(row.root); if (root !== row.root) update.run(root, row.id); }
+      catch { /* Keep missing historical locations visible; never move their files. */ }
+    }
+  }
+}
+
+function openWorkspace(workspacePath) {
+  workspacePath = normalizeWorkspacePath(workspacePath);
+  if (!workspacePath) throw new Error("A data workspace is required.");
+  let state = currentState();
+  if (state.database && state.workspace === workspacePath) {
+    if (!workspaceContext.getStore()) state.closing = false;
+    return getSnapshot();
+  }
+  if (workspaceContext.getStore()) {
+    if (state.workspace && state.workspace !== workspacePath) throw new Error("This operation belongs to a different data workspace.");
+  } else {
+    if (!state.managed) closeState(state);
+    state = workspaceStates.get(workspacePath) || { workspace: workspacePath, database: null, leases: 0, managed: false, closing: false };
+    defaultState = state;
+    if (state.database) { state.closing = false; return getSnapshot(); }
+  }
+  return workspaceContext.run(state, () => {
+    try { return initializeWorkspace(state, workspacePath); }
+    catch (error) { closeState(state); throw error; }
+  });
+}
+
+function initializeWorkspace(state, workspacePath) {
   const dataDir = path.join(workspacePath, ".archimedes");
   const databasePath = path.join(dataDir, "archimedes.db");
   const legacyName = ["ax", "iom"].join("");
@@ -910,11 +1087,17 @@ function openWorkspace(workspacePath) {
     }
     try { fs.rmdirSync(legacyDir); } catch { /* Preserve non-database legacy files. */ }
   }
-  database = new DatabaseSync(databasePath);
-  activeWorkspace = workspacePath;
+  const database = new DatabaseSync(databasePath);
+  state.database = database;
+  state.workspace = workspacePath;
+  state.closing = false;
+  workspaceStates.set(workspacePath, state);
   schema(database);
+  cloudLibraryState.initialize(database);
+  canonicalizeStoredWorkspacePaths(database);
   backfillPaperRepositories(database);
   reconcileInterruptedReproductions(database);
+  reconcileInterruptedResearch(database);
   migrateLegacyTasks(database);
   seedLibraries(database);
   ensureProjectLibraries(database);
@@ -938,7 +1121,7 @@ function openWorkspace(workspacePath) {
 function getSnapshot() {
   const db = requireDatabase();
   return {
-    workspace: activeWorkspace,
+    workspace: activeWorkspace(),
     tasks: db.prepare("SELECT id, prompt, response, status, created_at FROM task_runs ORDER BY created_at DESC LIMIT 24").all(),
     projects: listResearchProjects(),
     archivedProjects: listResearchProjects({ archived: true }),
@@ -986,11 +1169,11 @@ function hydrateAction(row) {
 }
 
 function canonicalPaperKey(paper) {
-  if (paper.s2_id) return `s2:${paper.s2_id}`;
-  if (paper.arxiv_id) return `arxiv:${paper.arxiv_id.toLowerCase()}`;
-  if (paper.doi) return `doi:${paper.doi.toLowerCase()}`;
-  const normalizedTitle = String(paper.title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  return `title:${normalizedTitle}`;
+  for (const key of ["s2_id", "arxiv_id", "doi"]) {
+    const value = libraryRecords.identifier[key](paper[key]);
+    if (value) return `${key === "s2_id" ? "s2" : key === "arxiv_id" ? "arxiv" : "doi"}:${value}`;
+  }
+  return `title:${libraryRecords.titleIdentity(paper.title)}`;
 }
 
 function seedLibraries(db) {
@@ -1049,6 +1232,7 @@ function paperUserState(paperId, userId = localIdentity.userId) {
 
 function hydratePaper(row) {
   const state = paperUserState(row.id);
+  const bibliography = libraryRecords.bibliography(requireDatabase(), row.id);
   return {
     ...row,
     authors: JSON.parse(row.authors_json || "[]"),
@@ -1058,6 +1242,8 @@ function hydratePaper(row) {
     starred: Boolean(state?.starred ?? row.starred),
     notes: state?.notes ?? row.notes,
     state_updated_at: state?.updated_at ?? null,
+    citekey: bibliography.citekey,
+    entry_type: bibliography.entryType,
   };
 }
 
@@ -1106,10 +1292,10 @@ function listLibraryProjects() {
   }));
 }
 
-function createLibrary({ projectId = null, name, description = "", color = "#3973c8" }) {
+function createLibrary({ projectId = null, name, description = "", color = "#3973c8" }, { cloudImport = false } = {}) {
   const db = requireDatabase();
   const resolvedProject = resolveLibraryProject(projectId);
-  if (!canAccessProject(resolvedProject, "editor")) throw new Error("You do not have permission to add libraries to this project.");
+  if (!canAccessProject(resolvedProject, cloudImport ? "viewer" : "editor")) throw new Error("You do not have permission to add libraries to this project.");
   const createdAt = timestamp();
   const library = { id: randomUUID(), project_id: resolvedProject, name: name.trim(), description: description.trim(), color, cloud_library_id: null, created_at: createdAt, updated_at: createdAt, paper_count: 0 };
   db.prepare("INSERT INTO libraries (id, project_id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -1142,10 +1328,15 @@ function deleteLibrary(id) {
   if (!canAccessProject(current.project_id, "editor")) throw new Error("You do not have permission to delete this library.");
   const count = db.prepare("SELECT COUNT(*) AS count FROM libraries WHERE project_id = ?").get(current.project_id);
   if (Number(count?.count) <= 1) throw new Error("A project needs at least one library.");
-  const result = db.prepare("DELETE FROM libraries WHERE id = ?").run(id);
-  db.prepare("DELETE FROM papers WHERE id NOT IN (SELECT paper_id FROM library_papers)").run();
-  recordAuditEvent(db, { projectId: current.project_id, action: "library.deleted", targetType: "library", targetId: id });
-  return { deleted: result.changes > 0 };
+  db.exec("SAVEPOINT delete_library");
+  try {
+    cloudLibraryState.queueLibraryDelete(db, id);
+    const result = db.prepare("DELETE FROM libraries WHERE id = ?").run(id);
+    db.prepare("DELETE FROM papers WHERE id NOT IN (SELECT paper_id FROM library_papers)").run();
+    recordAuditEvent(db, { projectId: current.project_id, action: "library.deleted", targetType: "library", targetId: id });
+    db.exec("RELEASE delete_library");
+    return { deleted: result.changes > 0 };
+  } catch (error) { db.exec("ROLLBACK TO delete_library"); db.exec("RELEASE delete_library"); throw error; }
 }
 
 function listPapers(libraryId, query = "") {
@@ -1643,16 +1834,32 @@ function setPaperChatThread(paperId, threadId, projectId = null) {
   return getPaperChatThread(paperId, resolvedProject);
 }
 
-function addPaper(libraryId, paper) {
+function addPaper(libraryId, paper, selection, { cloudImport = false } = {}) {
+  const db = requireDatabase();
+  const nested = db.isTransaction;
+  if (!nested) db.exec("BEGIN");
+  try {
+    const result = addPaperRecord(libraryId, paper, { cloudImport });
+    if (!cloudImport) cloudLibraryState.markPaperAdded(db, libraryId, result.id);
+    if (selection !== undefined) {
+      const library = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(libraryId);
+      saveProjectPaperSelection(result.id, library.project_id, selection);
+    }
+    if (!nested) db.exec("COMMIT");
+    return result;
+  } catch (error) { if (!nested) db.exec("ROLLBACK"); throw error; }
+}
+
+function addPaperRecord(libraryId, paper, { cloudImport = false } = {}) {
   const db = requireDatabase();
   const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Choose a valid library before importing a paper.");
-  if (!canAccessProject(library.project_id, "editor")) throw new Error("You do not have permission to add papers to this library.");
+  if (!canAccessProject(library.project_id, cloudImport ? "viewer" : "editor")) throw new Error("You do not have permission to add papers to this library.");
   const conferenceJson = paper.conference && typeof paper.conference === "object" ? JSON.stringify(paper.conference) : null;
   if (conferenceJson && conferenceJson.length > 10000) throw new Error("Conference metadata is too large.");
   const now = timestamp();
   const key = String(paper.canonical_key || "").trim() || canonicalPaperKey(paper);
-  const existing = db.prepare("SELECT id FROM papers WHERE canonical_key = ?").get(key);
+  const existing = libraryRecords.findImportMatch(db, paper, key, { libraryId: library.id, projectId: library.project_id });
   const paperId = existing?.id || randomUUID();
 
   if (!existing) {
@@ -1667,6 +1874,13 @@ function addPaper(libraryId, paper) {
       paper.arxiv_id || "", paper.s2_id || "", paper.source || "manual", paper.citation_count || 0,
       paper.github_url || "", Number(paper.github_stars) || 0, now, now,
     );
+  } else {
+    const fields = ["venue", "abstract", "url", "pdf_url", "doi", "arxiv_id", "s2_id"];
+    const assignments = fields.map(field => `${field} = CASE WHEN ${field} = '' THEN ? ELSE ${field} END`);
+    db.prepare(`UPDATE papers SET ${assignments.join(", ")},
+      authors_json = CASE WHEN authors_json = '[]' THEN ? ELSE authors_json END,
+      year = COALESCE(year, ?), updated_at = ? WHERE id = ?`)
+      .run(...fields.map(field => paper[field] || ""), JSON.stringify(paper.authors || []), paper.year || null, now, paperId);
   }
   db.prepare(`
     INSERT OR IGNORE INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
@@ -1677,12 +1891,24 @@ function addPaper(libraryId, paper) {
       .run(paper.github_url, Number(paper.github_stars) || 0, now, paperId);
   }
   if (conferenceJson) {
-    db.prepare(`UPDATE papers SET conference_json = ?, venue = ?, year = ?,
+    db.prepare(`UPDATE papers SET conference_json = CASE WHEN conference_json IS NULL OR conference_json IN ('', 'null') THEN ? ELSE conference_json END, venue = CASE WHEN venue = '' THEN ? ELSE venue END, year = COALESCE(year, ?),
       pdf_url = CASE WHEN pdf_url = '' THEN ? ELSE pdf_url END, updated_at = ? WHERE id = ?`)
       .run(conferenceJson, paper.venue || "", paper.year || null, paper.pdf_url || "", now, paperId);
   }
   db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, paperId, now);
   db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(now, libraryId);
+  return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
+}
+
+function getProjectPaperSelection(paperId, projectId) { return libraryRecords.getSelection(requireDatabase(), paperId, projectId, canAccessProject); }
+function saveProjectPaperSelection(paperId, projectId, patch = {}) { return libraryRecords.saveSelection(requireDatabase(), paperId, projectId, patch, canAccessProject); }
+function getPaperBibliography(paperId) {
+  const db = requireDatabase(); libraryRecords.assertPaperAccess(db, paperId, canAccessProject);
+  return libraryRecords.bibliography(db, paperId);
+}
+function setPaperBibliography(paperId, patch = {}) { return libraryRecords.setBibliography(requireDatabase(), paperId, patch, canAccessProject); }
+function repairLibraryPaperMetadata(paperId, patch = {}) {
+  const db = requireDatabase(); libraryRecords.repairMetadata(db, paperId, patch, canAccessProject);
   return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
 }
 
@@ -1697,16 +1923,20 @@ function linkLibraryToCloud(libraryId, cloudLibraryId) {
   return listLibraries(library.project_id).find((candidate) => candidate.id === libraryId) || null;
 }
 
-function importCloudLibrary(projectId, { cloudLibraryId, name, description = "", color = "#3973c8" } = {}) {
+function importCloudLibrary(projectId, { cloudLibraryId, name, description = "", color = "#3973c8" } = {}, { cloudImport = false } = {}) {
   const db = requireDatabase();
   const normalized = String(cloudLibraryId || "").trim();
   if (!normalized) throw new Error("A cloud library is required.");
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  if (cloudLibraryState.isDeleted(db, normalized)) return null;
   const existing = db.prepare("SELECT id, project_id FROM libraries WHERE cloud_library_id = ?").get(normalized);
   if (existing) {
+    if (existing.project_id !== projectId) throw new Error("This cloud library belongs to another project.");
     return listLibraries(existing.project_id).find((candidate) => candidate.id === existing.id) || null;
   }
-  const library = createLibrary({ projectId, name: String(name || "Shared library"), description, color });
-  return linkLibraryToCloud(library.id, normalized);
+  const library = createLibrary({ projectId, name: String(name || "Shared library"), description, color }, { cloudImport });
+  db.prepare("UPDATE libraries SET cloud_library_id = ? WHERE id = ?").run(normalized, library.id);
+  return listLibraries(projectId).find((candidate) => candidate.id === library.id);
 }
 
 function linkPaperToCloud(paperId, cloudPaperId) {
@@ -1717,12 +1947,14 @@ function linkPaperToCloud(paperId, cloudPaperId) {
   return getPaper(paperId);
 }
 
-function syncPaperFromCloud(libraryId, cloudPaper) {
+function syncPaperFromCloud(libraryId, cloudPaper, { cloudImport = false } = {}) {
   const db = requireDatabase();
-  const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
+  const library = db.prepare("SELECT id, project_id, cloud_library_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Library not found.");
-  if (!canAccessProject(library.project_id, "editor")) throw new Error("You do not have permission to add papers to this library.");
+  if (!canAccessProject(library.project_id, cloudImport ? "viewer" : "editor")) throw new Error("You do not have permission to add papers to this library.");
   const cloudPaperId = String(cloudPaper.id || "").trim();
+  if (library.cloud_library_id && (cloudLibraryState.isDeleted(db, library.cloud_library_id)
+    || cloudLibraryState.isDeleted(db, library.cloud_library_id, cloudPaperId))) return null;
   const canonicalKey = String(cloudPaper.canonical_key || "").trim() || canonicalPaperKey(cloudPaper);
   let existing = cloudPaperId
     ? db.prepare("SELECT * FROM papers WHERE cloud_paper_id = ?").get(cloudPaperId)
@@ -1734,7 +1966,7 @@ function syncPaperFromCloud(libraryId, cloudPaper) {
       canonical_key: canonicalKey,
       authors: Array.isArray(cloudPaper.authors) ? cloudPaper.authors : [],
       conference: cloudPaper.conference || undefined,
-    });
+    }, undefined, { cloudImport: true });
     const linked = linkPaperToCloud(local.id, cloudPaperId || local.id);
     return applyCloudPaperState(local.id, cloudPaper) || linked;
   }
@@ -1800,10 +2032,60 @@ function removePaper(libraryId, paperId) {
   const library = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Library not found.");
   if (!canAccessProject(library.project_id, "editor")) throw new Error("You do not have permission to remove papers from this library.");
-  const result = db.prepare("DELETE FROM library_papers WHERE library_id = ? AND paper_id = ?").run(libraryId, paperId);
-  db.prepare("DELETE FROM papers WHERE id = ? AND id NOT IN (SELECT paper_id FROM library_papers)").run(paperId);
-  db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(timestamp(), libraryId);
-  return { removed: result.changes > 0 };
+  db.exec("SAVEPOINT remove_library_paper");
+  try {
+    cloudLibraryState.queuePaperRemove(db, libraryId, paperId);
+    const result = db.prepare("DELETE FROM library_papers WHERE library_id = ? AND paper_id = ?").run(libraryId, paperId);
+    db.prepare("DELETE FROM papers WHERE id = ? AND id NOT IN (SELECT paper_id FROM library_papers)").run(paperId);
+    db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(timestamp(), libraryId);
+    db.exec("RELEASE remove_library_paper");
+    return { removed: result.changes > 0 };
+  } catch (error) { db.exec("ROLLBACK TO remove_library_paper"); db.exec("RELEASE remove_library_paper"); throw error; }
+}
+
+function listCloudLibraryChanges(projectId) {
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  return cloudLibraryState.listChanges(requireDatabase(), projectId);
+}
+
+function applyCloudLibrarySnapshot(projectId, snapshot) {
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  return cloudLibraryState.applySnapshot(requireDatabase(), projectId, snapshot);
+}
+
+function ackCloudLibraryChange(change, result) {
+  const db = requireDatabase();
+  const current = db.prepare("SELECT * FROM cloud_library_changes WHERE cloud_library_id = ? AND cloud_paper_id = ?")
+    .get(change.cloud_library_id, change.cloud_paper_id || "");
+  if (!current || current.project_id !== change.project_id || !canAccessProject(current.project_id, "editor")) {
+    throw new Error("You do not have permission to acknowledge this cloud change.");
+  }
+  return cloudLibraryState.ackChange(db, change, result);
+}
+
+function cloudLibraryIsDeleted(cloudLibraryId, cloudPaperId = "") {
+  return cloudLibraryState.isDeleted(requireDatabase(), cloudLibraryId, cloudPaperId);
+}
+
+function prepareCloudLibraryUpload(libraryId) {
+  const db = requireDatabase();
+  const library = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(libraryId);
+  if (!library || !canAccessProject(library.project_id, "editor")) throw new Error("You do not have permission to share this library.");
+  return cloudLibraryState.prepareLibraryUpload(db, libraryId);
+}
+
+function previewProjectTransfer(projectId, options = {}) {
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to export this project.");
+  return require("./project-transfer.cjs").previewProject(requireDatabase(), projectId, { ...options, dataRoot: activeWorkspace(), userId: localIdentity.userId });
+}
+
+function exportProjectTransfer(projectId, options = {}) {
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to export this project.");
+  return require("./project-transfer.cjs").exportProject(requireDatabase(), projectId, { ...options, dataRoot: activeWorkspace(), userId: localIdentity.userId });
+}
+
+function importProjectTransfer(packagePath, options = {}) {
+  return require("./project-transfer.cjs").importProject(requireDatabase(), packagePath, { ...options, dataRoot: activeWorkspace(), userId: localIdentity.userId });
 }
 
 function getDailyFeedCache(cacheKey, maxAgeMs = Number.POSITIVE_INFINITY) {
@@ -1833,7 +2115,7 @@ function normalizeGitState(value) {
 function resolveProjectRoot(project) {
   const candidate = String(project?.workspace_path || "").trim();
   if (candidate) return path.resolve(candidate);
-  return activeWorkspace ? path.resolve(activeWorkspace) : "";
+  return activeWorkspace() ? path.resolve(activeWorkspace()) : "";
 }
 
 function refreshProjectGitState(db, projectId) {
@@ -2182,7 +2464,7 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
   const normalizedName = String(name || "").replace(/\s+/g, " ").trim();
   if (!normalizedName || normalizedName.length > 100) throw new Error("A project name of at most 100 characters is required.");
   const now = timestamp();
-  const resolvedWorkspace = normalizeWorkspacePath(workspacePath) || activeWorkspace;
+  const resolvedWorkspace = normalizeWorkspacePath(workspacePath) || activeWorkspace();
   const project = {
     id: randomUUID(),
     owner_id: localIdentity.userId,
@@ -2390,8 +2672,24 @@ function createResearchThread({
   title,
   parentId = null,
   forkId = null,
+  basedOnThreadId = null,
+  basedOnResultId = null,
 } = {}) {
   const db = requireDatabase();
+  if (basedOnThreadId && basedOnResultId) throw new Error("Choose one source conversation or project result for the new conversation.");
+  const basedOn = basedOnThreadId ? getResearchThread(basedOnThreadId) : null;
+  const basedOnResult = basedOnResultId ? getProjectResultRecord(basedOnResultId) : null;
+  if (basedOnResultId && !basedOnResult) throw new Error("The source project result does not exist in this data workspace.");
+  if (basedOnResult) {
+    if ((projectId && projectId !== basedOnResult.projectId) || (workspaceId && workspaceId !== basedOnResult.workspaceId)) throw new Error("The source result does not belong to this project workspace.");
+    if (workspacePath && normalizeWorkspacePath(workspacePath) !== normalizeWorkspacePath(basedOnResult.executionRoot)) throw new Error("The execution folder does not match the source project result.");
+    projectId = basedOnResult.projectId; workspaceId = basedOnResult.workspaceId; workspacePath = basedOnResult.executionRoot;
+  }
+  if (basedOn) {
+    if ((projectId && projectId !== basedOn.project_id) || (workspaceId && workspaceId !== basedOn.workspace_id)) throw new Error("The source conversation does not belong to this project workspace.");
+    if (workspacePath && normalizeWorkspacePath(workspacePath) !== normalizeWorkspacePath(basedOn.workspace_path)) throw new Error("The execution folder does not match the source conversation.");
+    projectId = basedOn.project_id; workspaceId = basedOn.workspace_id; workspacePath = basedOn.workspace_path;
+  }
   const selectedProject = projectId
     ? db.prepare("SELECT id, workspace_path FROM research_projects WHERE id = ? AND archived_at IS NULL").get(projectId)
     : null;
@@ -2411,7 +2709,7 @@ function createResearchThread({
   const resolvedWorkspace = normalizeWorkspacePath(workspacePath)
     || workspace?.root
     || projectWorkspace
-    || activeWorkspace;
+    || activeWorkspace();
   const now = timestamp();
   const thread = {
     id: randomUUID(),
@@ -2433,14 +2731,16 @@ function createResearchThread({
     created_at: now,
     updated_at: now,
     archived_at: null,
+    based_on_thread_id: basedOn?.id || null,
+    based_on_result_id: basedOnResult?.id || null,
   };
   db.prepare(`
-    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, workspace_path, workspace_id, parent_id, fork_id, pinned, last_viewed_at, unread_count, created_at, updated_at, kind)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, ?, ?)
+    INSERT INTO research_threads (id, project_id, owner_id, visibility, title, mode, status, context_summary, workspace_path, workspace_id, parent_id, fork_id, pinned, last_viewed_at, unread_count, created_at, updated_at, kind, based_on_thread_id, based_on_result_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, ?, ?, ?, ?)
   `).run(
     thread.id, thread.project_id, thread.owner_id, thread.visibility, thread.title, thread.mode,
     thread.status, thread.context_summary, thread.workspace_path, thread.workspace_id,
-    thread.parent_id, thread.fork_id, thread.created_at, thread.updated_at, thread.kind,
+    thread.parent_id, thread.fork_id, thread.created_at, thread.updated_at, thread.kind, thread.based_on_thread_id, thread.based_on_result_id,
   );
   db.prepare("UPDATE research_projects SET updated_at = ? WHERE id = ?").run(now, resolvedProjectId);
   if (workspace?.id) setWorkspaceLastSession(workspace.id, thread.id);
@@ -2461,6 +2761,19 @@ function bindResearchThreadHarness(id, harness) {
   if (bound && bound !== harness) throw new Error("This conversation uses a different harness. Start a new chat to use this agent.");
   db.prepare("UPDATE research_threads SET harness = ? WHERE id = ? AND harness IS NULL").run(harness, id);
   return harness;
+}
+
+function bindResearchThreadWorkspace(id, workspaceId, workspacePath) {
+  const db = requireDatabase();
+  const thread = getResearchThread(id);
+  if (!canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
+  const workspace = db.prepare("SELECT * FROM project_workspaces WHERE id = ? AND project_id = ?").get(workspaceId, thread.project_id);
+  if (!workspace) throw new Error("That workspace does not belong to this project.");
+  // Imported conversations acquire a local execution location on first use.
+  // Existing historical sessions keep the directory in which they ran.
+  db.prepare("UPDATE research_threads SET workspace_id = COALESCE(workspace_id, ?), workspace_path = COALESCE(NULLIF(workspace_path, ''), ?) WHERE id = ?")
+    .run(workspaceId, normalizeWorkspacePath(workspacePath), id);
+  return getResearchThread(id);
 }
 
 function setResearchThreadVisibility(id, visibility) {
@@ -2645,8 +2958,17 @@ function listProjectComments(projectId, { resourceType = "", resourceId = "" } =
 function applyCloudThread(projectId, detail, { currentCloudUserId = "", localUserId = "" } = {}) {
   const db = requireDatabase();
   if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  if (!detail.thread) throw new Error("Cloud thread is missing.");
+  const existing = db.prepare("SELECT project_id FROM research_threads WHERE id = ?").get(detail.thread.id);
+  if (existing && existing.project_id !== projectId) throw new Error("This research thread belongs to a different project.");
+  detail = mergeCloudThread(existing ? getResearchThread(detail.thread.id) : null, detail);
   const thread = detail.thread;
-  if (!thread) throw new Error("Cloud thread is missing.");
+  for (const turn of detail.turns || []) {
+    const previous = db.prepare("SELECT thread_id FROM research_turns WHERE id = ?").get(turn.id);
+    if ((turn.thread_id && turn.thread_id !== thread.id) || (previous && previous.thread_id !== thread.id)) {
+      throw new Error("A synced turn cannot move to another conversation.");
+    }
+  }
   const ownerId = !thread.owner_id || thread.owner_id === currentCloudUserId ? localUserId : thread.owner_id;
   const now = timestamp();
   db.prepare(`
@@ -2677,8 +2999,7 @@ function applyCloudThread(projectId, detail, { currentCloudUserId = "", localUse
     db.prepare(`
       INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET sequence = excluded.sequence, type = excluded.type,
-        payload_json = excluded.payload_json, created_at = excluded.created_at
+      ON CONFLICT(id) DO NOTHING
     `).run(
       event.id, thread.id, event.turn_id, Number(event.sequence) || 1, String(event.type || "event"),
       typeof event.payload_json === "string" ? event.payload_json : JSON.stringify(event.payload_json || event.payload || {}),
@@ -2709,12 +3030,35 @@ function applyCloudComment(projectId, comment, { currentCloudUserId = "", localU
   return db.prepare("SELECT * FROM comments WHERE id = ?").get(comment.id);
 }
 
+function hydrateResearchThreadWorkspace(db, thread) {
+  if (thread.workspace_id && thread.workspace_path) return thread;
+  const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(thread.project_id);
+  if (!project) return thread;
+  const workspace = (thread.workspace_id
+    ? db.prepare("SELECT * FROM project_workspaces WHERE id = ? AND project_id = ?").get(thread.workspace_id, project.id)
+    : null) || ensureProjectSharedWorkspace(db, project);
+  if (!workspace) return thread;
+  let root = thread.workspace_path || workspace.root;
+  // Keep missing historical folders readable. Execution will require the
+  // actual directory, but opening a conversation must still show its history.
+  if (!thread.workspace_path) {
+    try { root = normalizeWorkspacePath(root); }
+    catch { root = path.resolve(root); }
+  }
+  // This is local execution metadata, not a cloud content edit: viewers can
+  // open imported history, while the run resolver separately requires editor.
+  db.prepare(`UPDATE research_threads SET workspace_id = COALESCE(NULLIF(workspace_id, ''), ?),
+    workspace_path = COALESCE(NULLIF(workspace_path, ''), ?) WHERE id = ?`).run(workspace.id, root, thread.id);
+  return db.prepare("SELECT * FROM research_threads WHERE id = ?").get(thread.id);
+}
+
 function getResearchThread(id) {
   const db = requireDatabase();
-  const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
+  let thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
   if (!thread) throw new Error("Research thread not found.");
   if (thread.project_id && !canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this research thread.");
   if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
+  thread = hydrateResearchThreadWorkspace(db, thread);
   const turns = db.prepare(`
     SELECT id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at
     FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC
@@ -3000,7 +3344,7 @@ function finishResearchTurn(id, { response, status = "completed" }) {
   if (!turn) throw new Error("Research turn not found.");
   db.prepare("UPDATE research_turns SET assistant_message = ?, status = ?, completed_at = ? WHERE id = ?")
     .run(response, status, completedAt, id);
-  const threadStatus = status === "failed" ? "error" : "idle";
+  const threadStatus = ["failed", "incomplete"].includes(status) ? "error" : "idle";
   db.prepare("UPDATE research_threads SET status = ?, updated_at = ? WHERE id = ?")
     .run(threadStatus, completedAt, turn.thread_id);
   appendResearchEvent({ threadId: turn.thread_id, turnId: id, type: "assistant_message", payload: { text: response, status } });
@@ -3092,7 +3436,7 @@ function approveAction(id) {
   if (action.status !== "pending") throw new Error("Only pending Agent actions can be approved.");
 
   if (action.kind === "write") {
-    applyApprovedWrite(action.payload, activeWorkspace);
+    applyApprovedWrite(action.payload, activeWorkspace());
   }
   return resolveAction(id, "approved");
 }
@@ -3176,6 +3520,64 @@ function artifactSha256(thread, normalizedPath) {
   }
 }
 
+function projectResultSummary(row) {
+  return row && { id: row.id, projectId: row.project_id, workspaceId: row.workspace_id, threadId: row.thread_id,
+    executionRoot: row.execution_root, kind: row.kind, title: row.title, manifestPath: row.manifest_path,
+    createdAt: row.created_at, updatedAt: row.updated_at };
+}
+
+function getProjectResultRecord(id) {
+  const row = requireDatabase().prepare("SELECT * FROM project_results WHERE id = ?").get(id);
+  if (!row) return null;
+  if (!canAccessProject(row.project_id, "viewer")) throw new Error("You do not have access to this project result.");
+  return projectResultSummary(row);
+}
+
+function listProjectResultRecords({ projectId, workspaceId, kind } = {}) {
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  if (kind && !["analysis", "figure"].includes(kind)) throw new Error("Choose an analysis or figure result.");
+  if (workspaceId && getProjectWorkspace(workspaceId)?.project_id !== projectId) throw new Error("The result workspace does not belong to this project.");
+  return requireDatabase().prepare(`SELECT * FROM project_results WHERE project_id = ?
+    AND (? IS NULL OR workspace_id = ?) AND (? IS NULL OR kind = ?) ORDER BY updated_at DESC, id`)
+    .all(projectId, workspaceId || null, workspaceId || null, kind || null, kind || null).map(projectResultSummary);
+}
+
+function registerProjectResult(record) {
+  const db = requireDatabase();
+  if (!canAccessProject(record.projectId, "editor")) throw new Error("You do not have permission to save a project result.");
+  const workspace = getProjectWorkspace(record.workspaceId);
+  if (!workspace || workspace.project_id !== record.projectId) throw new Error("The result workspace does not belong to this project.");
+  const existing = getProjectResultRecord(record.id);
+  const root = normalizeWorkspacePath(record.executionRoot);
+  if (existing && ["projectId", "workspaceId", "kind", "executionRoot", "manifestPath"].some(key => existing[key] !== record[key])) {
+    throw new Error("A project result cannot change its owner or storage path.");
+  }
+  if (!existing && normalizeWorkspacePath(workspace.root) !== root) throw new Error("The result does not belong to this execution folder.");
+  if (record.threadId) {
+    const thread = getResearchThread(record.threadId);
+    if (thread.project_id !== record.projectId || thread.workspace_id !== record.workspaceId || normalizeWorkspacePath(thread.workspace_path) !== root) {
+      throw new Error("The linked session does not belong to this project result.");
+    }
+  }
+  if (!["analysis", "figure"].includes(record.kind) || record.manifestPath !== `research-results/${record.kind}/${record.id}/manifest.json`) throw new Error("Invalid project result path.");
+  db.exec("SAVEPOINT register_project_result");
+  try {
+    db.prepare(`INSERT INTO project_results (id, project_id, workspace_id, thread_id, execution_root, kind, title, manifest_path, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET thread_id = excluded.thread_id,
+      title = excluded.title, updated_at = excluded.updated_at`).run(record.id, record.projectId, record.workspaceId, record.threadId || null,
+        root, record.kind, String(record.title || ""), record.manifestPath, existing?.createdAt || record.createdAt || timestamp(), record.updatedAt || timestamp());
+    if (record.threadId) for (const file of record.files || []) {
+      if (!["source", "output"].includes(file.role)) continue;
+      const extension = path.extname(file.name).slice(1).toLowerCase();
+      upsertArtifact({ threadId: record.threadId, path: file.path, title: `${record.title}: ${file.name}`,
+        kind: extension === "csv" || extension === "tsv" ? "csv" : extension === "svg" ? "svg" : ["png", "jpg", "jpeg", "webp"].includes(extension) ? "image" : extension === "json" ? "json" : "other",
+        sizeBytes: file.sizeBytes, sha256: file.sha256, modifiedAt: record.updatedAt, source: `project-${record.kind}` });
+    }
+    db.exec("RELEASE register_project_result");
+  } catch (error) { db.exec("ROLLBACK TO register_project_result"); db.exec("RELEASE register_project_result"); throw error; }
+  return getProjectResultRecord(record.id);
+}
+
 function upsertArtifact({ threadId, turnId = null, path: artifactPath, title = "", kind = "other", sizeBytes = 0, modifiedAt = timestamp(), source = "agent", storage = "local", sha256 = "" } = {}) {
   const db = requireDatabase();
   if (!threadId) throw new Error("An artifact needs a research thread.");
@@ -3252,6 +3654,9 @@ function reproductionRow(row) {
   return {
     id: row.id,
     paper_id: row.paper_id || null,
+    project_id: row.project_id || null,
+    workspace_id: row.workspace_id || null,
+    execution_root: row.execution_root || null,
     repo_url: row.repo_url || "",
     title: row.title,
     status: REPRODUCTION_STATUSES.has(row.status) ? row.status : "draft",
@@ -3266,37 +3671,67 @@ function reproductionRow(row) {
 
 function createReproduction(input = {}) {
   const db = requireDatabase();
+  const projectId = input.projectId || ensureDefaultProject(db);
+  if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to create a reproduction in this project.");
+  const workspace = input.workspaceId ? getProjectWorkspace(input.workspaceId) : defaultProjectWorkspace(projectId);
+  if (!workspace || workspace.project_id !== projectId) throw new Error("The reproduction workspace does not belong to this project.");
   const now = timestamp();
   const id = randomUUID();
   const paperId = typeof input.paperId === "string" && input.paperId ? input.paperId : null;
+  if (paperId && !db.prepare(`SELECT 1 FROM library_papers lp JOIN libraries l ON l.id = lp.library_id
+    WHERE lp.paper_id = ? AND l.project_id = ?`).get(paperId, projectId)) throw new Error("The reproduction paper does not belong to this project.");
   const source = input.source && typeof input.source === "object" ? input.source : {};
   const paper = paperId ? db.prepare("SELECT title FROM papers WHERE id = ?").get(paperId) : null;
   const title = String(input.title || paper?.title || source.repo_url || "Untitled reproduction").slice(0, 300);
   const status = REPRODUCTION_STATUSES.has(input.status) ? input.status : "draft";
   db.prepare(`INSERT INTO reproductions
-      (id, paper_id, repo_url, title, status, source_json, contract_json, budget_json, error, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, '', ?, ?)`).run(
+      (id, paper_id, repo_url, title, status, source_json, contract_json, budget_json, error, created_at, updated_at, project_id, workspace_id, execution_root)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, '', ?, ?, ?, ?, ?)`).run(
     id, paperId, String(input.repoUrl || "").slice(0, 2_000), title, status,
-    JSON.stringify(source), JSON.stringify(normalizeReproductionBudget(input.budget)), now, now,
+    JSON.stringify(source), JSON.stringify(normalizeReproductionBudget(input.budget)), now, now, projectId, workspace.id, normalizeWorkspacePath(workspace.root),
   );
   return getReproduction(id);
 }
 
 function getReproduction(id) {
   const db = requireDatabase();
-  return reproductionRow(db.prepare("SELECT * FROM reproductions WHERE id = ?").get(String(id || "")));
+  const row = db.prepare("SELECT * FROM reproductions WHERE id = ?").get(String(id || ""));
+  if (row?.project_id && !canAccessProject(row.project_id, "viewer")) throw new Error("You do not have access to this reproduction.");
+  return reproductionRow(row);
 }
 
 function listReproductions(limit = 100) {
   const db = requireDatabase();
+  const scope = limit && typeof limit === "object" ? limit : {};
+  if (scope.projectId && !canAccessProject(scope.projectId, "viewer")) throw new Error("You do not have access to this project.");
+  if (typeof limit === "object") limit = scope.limit || 100;
   const bound = Math.min(500, Math.max(1, Math.trunc(Number(limit) || 100)));
-  return db.prepare("SELECT * FROM reproductions ORDER BY updated_at DESC LIMIT ?").all(bound).map(reproductionRow);
+  return db.prepare(`SELECT * FROM reproductions WHERE (? IS NULL OR project_id = ? OR (? = 1 AND project_id IS NULL))
+    AND (? IS NULL OR workspace_id = ? OR (? = 1 AND workspace_id IS NULL)) ORDER BY updated_at DESC LIMIT ?`)
+    .all(scope.projectId || null, scope.projectId || null, scope.includeUnassigned ? 1 : 0,
+      scope.workspaceId || null, scope.workspaceId || null, scope.includeUnassigned ? 1 : 0, bound)
+    .filter(row => !row.project_id || canAccessProject(row.project_id, "viewer")).map(reproductionRow);
+}
+
+function bindReproductionContext(id, { projectId, workspaceId } = {}) {
+  const db = requireDatabase(), record = getReproduction(id);
+  if (!record) throw new Error("That reproduction does not exist.");
+  if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to bind this reproduction.");
+  const workspace = getProjectWorkspace(workspaceId);
+  if (!workspace || workspace.project_id !== projectId) throw new Error("The reproduction workspace does not belong to this project.");
+  if (record.paper_id && !db.prepare(`SELECT 1 FROM library_papers lp JOIN libraries l ON l.id = lp.library_id
+    WHERE lp.paper_id = ? AND l.project_id = ?`).get(record.paper_id, projectId)) throw new Error("The reproduction paper does not belong to this project.");
+  if (record.project_id && (record.project_id !== projectId || record.workspace_id !== workspaceId)) throw new Error("This reproduction already belongs to another project workspace.");
+  if (!record.project_id) db.prepare("UPDATE reproductions SET project_id = ?, workspace_id = ?, execution_root = ? WHERE id = ?")
+    .run(projectId, workspaceId, normalizeWorkspacePath(workspace.root), id);
+  return getReproduction(id);
 }
 
 function updateReproduction(id, patch = {}) {
   const db = requireDatabase();
   const current = getReproduction(id);
   if (!current) throw new Error("That reproduction does not exist.");
+  if (current.project_id && !canAccessProject(current.project_id, "editor")) throw new Error("You do not have permission to edit this reproduction.");
   const next = {
     title: typeof patch.title === "string" && patch.title.trim() ? patch.title.trim().slice(0, 300) : current.title,
     status: REPRODUCTION_STATUSES.has(patch.status) ? patch.status : current.status,
@@ -3317,6 +3752,8 @@ function updateReproduction(id, patch = {}) {
 
 function deleteReproduction(id) {
   const db = requireDatabase();
+  const current = getReproduction(id);
+  if (current?.project_id && !canAccessProject(current.project_id, "editor")) throw new Error("You do not have permission to delete this reproduction.");
   db.prepare("DELETE FROM reproductions WHERE id = ?").run(String(id || ""));
   return true;
 }
@@ -3329,6 +3766,8 @@ function reproductionRunRow(row) {
   if (!row) return null;
   let steps = [];
   try { steps = JSON.parse(row.steps_json || "[]"); } catch { steps = []; }
+  let snapshot = null;
+  try { snapshot = JSON.parse(row.snapshot_json || "null"); } catch { /* Legacy runs have no snapshot. */ }
   return {
     id: row.id,
     reproduction_id: row.reproduction_id,
@@ -3336,6 +3775,7 @@ function reproductionRunRow(row) {
     backend: row.backend || "",
     image: row.image || "",
     steps: Array.isArray(steps) ? steps : [],
+    snapshot,
     log: row.log || "",
     error: row.error || "",
     started_at: row.started_at,
@@ -3362,6 +3802,19 @@ function createReproductionRun(input = {}) {
     now,
     now,
   );
+  if (input.snapshot) db.prepare("UPDATE reproduction_runs SET snapshot_json = ? WHERE id = ?").run(JSON.stringify({ ...input.snapshot, runId: id }), id);
+  return getReproductionRun(id);
+}
+
+function updateReproductionRunSnapshot(id, patch = {}) {
+  const db = requireDatabase(), run = getReproductionRun(id);
+  if (!run?.snapshot) throw new Error("This run has no recorded input snapshot.");
+  const next = { ...run.snapshot };
+  for (const field of ["prepared", "final"]) if (patch[field] !== undefined) {
+    if (next[field] && JSON.stringify(next[field]) !== JSON.stringify(patch[field])) throw new Error("A recorded run snapshot cannot be rewritten.");
+    next[field] = patch[field];
+  }
+  db.prepare("UPDATE reproduction_runs SET snapshot_json = ? WHERE id = ?").run(JSON.stringify(next), id);
   return getReproductionRun(id);
 }
 
@@ -3394,6 +3847,44 @@ function updateReproductionRun(id, patch = {}) {
 function getLatestReproductionRun(reproductionId) {
   const db = requireDatabase();
   return reproductionRunRow(db.prepare("SELECT * FROM reproduction_runs WHERE reproduction_id = ? ORDER BY created_at DESC LIMIT 1").get(String(reproductionId || "")));
+}
+
+function reproductionResourceOwner() {
+  const db = requireDatabase();
+  const existing = db.prepare("SELECT value FROM workspace_meta WHERE key = 'reproduction_resource_owner'").get();
+  if (existing) return existing.value;
+  const value = randomUUID();
+  db.prepare("INSERT INTO workspace_meta (key, value, updated_at) VALUES ('reproduction_resource_owner', ?, ?)").run(value, timestamp());
+  return value;
+}
+
+function startReproductionRun(input) {
+  const db = requireDatabase(), nested = db.isTransaction;
+  if (!nested) db.exec("BEGIN");
+  try {
+    const run = createReproductionRun(input);
+    const ownerToken = reproductionResourceOwner();
+    updateReproduction(input.reproductionId, { status: "provisioning", error: "", ...(input.contract ? { contract: input.contract } : {}) });
+    if (!nested) db.exec("COMMIT");
+    return { run, ownerToken };
+  } catch (error) { if (!nested) db.exec("ROLLBACK"); throw error; }
+}
+
+function setReproductionResource(runId, resource) {
+  const db = requireDatabase();
+  db.prepare("UPDATE reproduction_runs SET resource_json = ? WHERE id = ?").run(JSON.stringify(resource), runId);
+  if (resource.cleanupError) {
+    const message = `Resource cleanup: ${String(resource.cleanupError).slice(0, 2_000)}`;
+    const current = db.prepare("SELECT error FROM reproduction_runs WHERE id = ?").get(runId);
+    if (current && !current.error.includes(message)) db.prepare("UPDATE reproduction_runs SET error = ? WHERE id = ?")
+      .run([current.error, message].filter(Boolean).join("\n").slice(-4_000), runId);
+  }
+}
+
+function listUnreleasedReproductionResources() {
+  return requireDatabase().prepare("SELECT id, reproduction_id, resource_json FROM reproduction_runs WHERE status <> 'running' AND resource_json <> '{}'").all()
+    .map(row => ({ runId: row.id, reproductionId: row.reproduction_id, resource: JSON.parse(row.resource_json) }))
+    .filter(row => !row.resource.releasedAt);
 }
 
 function listReproductionRuns(reproductionId, limit = 20) {
@@ -3469,6 +3960,35 @@ function listReproductionAttempts(runId) {
 }
 
 module.exports = {
+  previewProjectTransfer,
+  exportProjectTransfer,
+  importProjectTransfer,
+  bindReproductionContext,
+  updateReproductionRunSnapshot,
+  registerProjectResult,
+  getProjectResultRecord,
+  listProjectResultRecords,
+  listCloudLibraryChanges,
+  applyCloudLibrarySnapshot,
+  ackCloudLibraryChange,
+  cloudLibraryIsDeleted,
+  prepareCloudLibraryUpload,
+  startReproductionRun,
+  reproductionResourceOwner,
+  setReproductionResource,
+  listUnreleasedReproductionResources,
+  getProjectPaperSelection,
+  saveProjectPaperSelection,
+  getPaperBibliography,
+  setPaperBibliography,
+  repairLibraryPaperMetadata,
+  createWorkspaceStore,
+  currentStore,
+  captureStore,
+  closeAllWorkspaces,
+  runtimeThreadId,
+  defaultResearchProject,
+  bindResearchThreadWorkspace,
   nativeAgentBindings,
   bindResearchThreadHarness,
   compactResearchThread,

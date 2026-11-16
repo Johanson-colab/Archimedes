@@ -17,62 +17,48 @@ Archimedes is not a generic chat shell with a paper list attached. Its center of
 
 ## Install and Run
 
-**Start here.** The recommended path is to let a coding agent handle the install and first launch.
+### Desktop installers (recommended)
 
-### Recommended: let your coding agent install it
+Download the Windows x64 or matching macOS Apple Silicon/Intel installer from the [published releases](https://github.com/Johanson-colab/Archimedes/releases). A desktop installer does not require Git, Node.js, npm, or a global Electron installation. Follow the selected release's first-launch instructions; the v0.1.0 builds are unsigned.
 
-**Copy to agent.** Paste the block below into Claude Code, Codex, Cursor, or another coding agent that can work with files and a terminal.
+A release and the development branch can expose different features even when both show version 0.1.0. The v0.1.0 release hides account/cloud entry points; `main` continues their development. In source builds, **Settings → About → Build diagnostics** shows the commit, channel, source fingerprint, platform/architecture and feature policy. These fields identify a build; they do not claim a scientific result was verified.
 
-```text
-Install Archimedes on this machine from https://github.com/Johanson-colab/Archimedes.
-The goal is a working local Electron desktop install, not just the web preview.
+### Develop from source
 
-1. Verify that Git and Node.js 20+ are available.
-2. Clone the repository into a sensible local folder and cd into it.
-3. Run `npm install` and let the native terminal-module rebuild finish.
-4. Create `.env.local` from `.env.example` using the platform-appropriate command.
-   Do not ask me to paste API keys into chat. Pause and let me fill in the model configuration directly, then continue.
-5. Start the app with `npm run dev`. Confirm that the Electron window opens.
-   The renderer at 127.0.0.1:5173 alone is not sufficient.
-6. If the terminal native module fails, run `npm run rebuild:native` and retry.
-7. Report the commands you ran, the app location, and any exact remaining error.
-```
-
-This is the fastest path for non-developers: the agent can check prerequisites, run the install, diagnose native-module errors, and confirm the Electron window opens.
-
-### Manual install
-
-Prerequisites: [Git](https://git-scm.com/downloads) and a current Node.js LTS release (Node 20 or newer recommended). `npm` ships with Node. No Python service, database server, or global Electron installation is required.
+Use [Git](https://git-scm.com/downloads), Node.js **22.18+ within 22.x, or 24+**, and npm **10.9+ within 10.x, or 11.x**. The reproduction toolchain is pinned in `.node-version` and `packageManager`: **Node 26.13.0 / npm 11.20.0**. The declared compatibility range is broader than that tested combination. The Node floor also covers the repository's native TypeScript tests. Native terminal rebuilding may require the platform's C++ build tools.
 
 ```bash
 git clone https://github.com/Johanson-colab/Archimedes.git
 cd Archimedes
-npm install
+node scripts/check-toolchain.cjs
+npm ci
+npm run prepare:desktop
 cp .env.example .env.local    # macOS / Linux
 npm run dev
 ```
 
-On Windows PowerShell, copy the environment template with:
+On Windows PowerShell, copy the template with `Copy-Item .env.example .env.local`.
 
-```powershell
-Copy-Item .env.example .env.local
-```
+`npm ci` uses the lockfile and rebuilds the native terminal module. `prepare:desktop` explicitly prepares the Electron binary, with a three-minute timeout; set `ARCHIMEDES_DESKTOP_PREPARE_TIMEOUT_MS` up to 600000 for a slow connection. Tests and startup checks report a missing binary without silently starting a download. `npm run dev` must open an Electron window; the renderer at 127.0.0.1:5173 alone is a preview.
 
-Fill `.env.local` with an OpenAI-compatible endpoint before starting, or configure it later in **Settings → Models**:
+The app opens without a model key. Configure an OpenAI-compatible provider later in **Settings → Models**, or edit `.env.local` directly:
 
 ```bash
 ARCHIMEDES_LLM_API_KEY=your-api-key
 ARCHIMEDES_LLM_BASE_URL=https://api.openai.com/v1
-ARCHIMEDES_LLM_MODEL=gpt-6.1 Terra
+ARCHIMEDES_LLM_MODEL=your-provider-model-id
 ```
 
-The app opens without a model key, but chat and agent actions will not run. Web search is optional and uses a separate key.
+Do not paste credentials into an agent conversation. Local files, PDF reading and statistics remain available without a model; model and web-search actions need their respective configuration.
 
-| First-run issue | Fix |
+| First-run issue | Next step |
 | --- | --- |
-| Native terminal module error after `npm install` | Run `npm run rebuild:native`, then `npm run dev` again. |
-| Electron does not open after Vite starts | Check the terminal output for a port or Electron error, stop with `Ctrl+C`, then retry. |
-| Chat cannot answer | Verify the three model values in `.env.local` or Settings → Models, then restart. |
+| Unsupported Node/npm | Run `npm run check:env`; use a compatible version or the pinned reproduction toolchain. |
+| Missing Electron binary | Run `npm run prepare:desktop`, then `npm run check:desktop`. Check network/proxy access if preparation times out. |
+| Native terminal module error | Run `npm run rebuild:native`, then retry. |
+| Chat cannot answer | Check the provider's endpoint, exact model ID and key in Settings → Models. |
+
+For a coding agent, ask it to follow these source-install commands, leave credentials for you to enter directly, and verify the actual Electron window and exact remaining errors. Prefer the released installer when you want to use Archimedes rather than develop it.
 
 ## What It Does
 
@@ -84,7 +70,7 @@ The app opens without a model key, but chat and agent actions will not run. Web 
 - **Research context and provenance** — preserve project conversations, papers, and source references so researchers can return to the context behind their work. Experiment lineage and broader evidence provenance are in development.
 - **Research memory and collaboration** — long-term experience retention and shared research projects are areas of ongoing exploration.
 
-Research App customization and automatic composition of Skills, MCP tools, models, and backends are part of the product direction; not every combination is supported today. Image generation is not wired up yet: Image creation currently provides a conference-figure gallery and a scaffolded compose dock.
+Research App customization and automatic composition of Skills, MCP tools, models, and backends are part of the product direction; not every combination is supported today. Image creation includes the FigureForge reference gallery, design/reconstruction workflow, editable SVG generation, and bitmap generation through a configured image-capable endpoint. It is a beta app, off by default. Reference semantic search runs locally in a browser/WASM worker after downloading its index and model weights; keyword search remains available if semantic loading fails. Model generation requires a compatible provider and may incur its charges.
 
 ## The Research Loop
 
@@ -118,10 +104,15 @@ Model providers and search providers are independent. Configure models in the in
 ## Validate
 
 ```bash
+npm run check:env
+npm run prepare:desktop
 npm run lint
-npm run build
 npm test
+npm run build
+npm run check:theme
 ```
+
+`npm test` includes both real Electron layout regressions and requires a desktop display (use `xvfb-run npm test` on headless Linux). `npm run test:core` is a separate non-desktop iteration command, not a replacement for the full PR gate. Conditional external-service/fixture tests report their requirements rather than claiming a pass; see [development and release validation](docs/development-validation.md).
 
 ## More
 

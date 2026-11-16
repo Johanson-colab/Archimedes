@@ -1,5 +1,5 @@
 const { createHash } = require("node:crypto");
-const { spawn } = require("node:child_process");
+const { runProcess } = require("./reproduction/process-runner.cjs");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
@@ -22,21 +22,12 @@ function checkoutDirectory(workspace, url, branch = "") {
   return { target, root: path.join(workspace, ...AUDIT_ROOT, `${target.owner}--${target.repo}--${suffix}`) };
 }
 
-function run(command, args, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, shell: false, windowsHide: true });
-    const chunks = [];
-    const errors = [];
-    child.stdout.on("data", (chunk) => chunks.push(chunk));
-    child.stderr.on("data", (chunk) => errors.push(chunk));
-    child.once("error", reject);
-    child.once("close", (code) => {
-      const stdout = Buffer.concat(chunks).toString("utf8").trim();
-      const stderr = Buffer.concat(errors).toString("utf8").trim();
-      if (code === 0) resolve(stdout);
-      else reject(new Error(stderr || stdout || `${command} exited with status ${code}.`));
-    });
-  });
+async function run(command, args, cwd, { signal } = {}) {
+  const result = await runProcess(command, args, { cwd, signal, timeoutMs: 15 * 60_000, captureChars: 2 * 1024 * 1024, separateOutput: true });
+  if (result.aborted) throw Object.assign(new Error("Repository preparation was stopped."), { name: "AbortError" });
+  if (result.outputTruncated) throw new Error("Repository command output exceeds its complete-read limit.");
+  if (result.exitCode === 0) return String(result.stdout || "").trim();
+  throw new Error(String(result.stderr || result.stdout || result.error || `${command} exited with status ${result.exitCode}.`).trim());
 }
 
 function isWithin(root, target) {
@@ -90,7 +81,8 @@ async function getRepositoryCheckout(workspace, url, { branch = "" } = {}) {
   }
 }
 
-async function cloneRepositoryCheckout(workspace, url, { branch = "", branchCandidates = [] } = {}) {
+async function cloneRepositoryCheckout(workspace, url, { branch = "", branchCandidates = [], signal } = {}) {
+  if (signal?.aborted) throw Object.assign(new Error("Repository preparation was stopped."), { name: "AbortError" });
   const target = normalizeGithubRepositoryUrl(url);
   const candidates = [...new Set([branch, ...branchCandidates].filter(Boolean))];
   const attempts = candidates.length ? candidates : [""];
@@ -104,10 +96,11 @@ async function cloneRepositoryCheckout(workspace, url, { branch = "", branchCand
     if (candidate) args.push("--branch", candidate);
     args.push(target.url, root);
     try {
-      await run("git", args);
+      await run("git", args, undefined, { signal });
       return await checkoutMetadata(workspace, target.url, candidate);
     } catch (error) {
       await fsp.rm(root, { recursive: true, force: true });
+      if (signal?.aborted || error.name === "AbortError") throw error;
       failures.push(`${candidate || "default"}: ${error.message || error}`);
     }
   }

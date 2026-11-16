@@ -37,11 +37,11 @@ test('page opens a PDF, switches example and sends the selected harness and sett
   const scope = { React, ...React, ...icons, useUISettings: () => ({ t: key => key }), cover: 'cover.webp', motivation: 'motivation.webp', architecture: 'architecture.webp', collaboration: 'collaboration.webp', results: 'results.webp', examples: 'examples.webp', training: 'training.webp', evaluation: 'evaluation.webp' };
   const source = fs.readFileSync(path.join(__dirname, '../src/PaperToSlidesView.tsx'), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export default /g, '');
   const { transformWithOxc } = await import('vite'); const { code } = await transformWithOxc(source, 'PaperToSlidesView.tsx', { jsx: { runtime: 'classic' } });
-  const { PaperToSlidesView } = new Function(...Object.keys(scope), `${code}\nreturn {PaperToSlidesView};`)(...Object.values(scope));
-  const root = createRoot(document.getElementById('root')); let submitted;
+  const { PaperToSlidesView } = new Function(...Object.keys(scope), `${code.replace(/^export \{\};?$/gm, '')}\nreturn {PaperToSlidesView};`)(...Object.values(scope));
+  const root = createRoot(document.getElementById('root')); let submitted; const checked = [];
   const click = node => React.act(async () => { assert.ok(node); node.click(); });
   try {
-    await React.act(async () => root.render(React.createElement(PaperToSlidesView, { bridge: { choosePaperReviewPdf: async () => '/papers/a.pdf' }, workspace: '/work', busy: false, onStart: async input => { submitted = input; } })));
+    await React.act(async () => root.render(React.createElement(PaperToSlidesView, { bridge: { choosePaperReviewPdf: async () => '/papers/a.pdf', getAgentBackendConfig: async () => ({ backend: 'codex', binary: 'codex', model: '' }), checkAgentBackend: async profile => { checked.push(profile.backend); return { ready: true, models: [], message: 'Local test CLI' }; }, checkPaperToSlidesSetup: async input => { checked.push(input); return { canStart: true, checks: [] }; } }, workspace: '/work', busy: false, onStart: async input => { submitted = input; } })));
     assert.ok(document.querySelector('.slides-primary').disabled);
     await click(document.querySelector('[aria-label="Next slide"]')); assert.match(document.querySelector('.slides-gallery-frame img').src, /motivation/);
     await click(document.querySelector('.slides-secondary')); assert.match(document.querySelector('.slides-file-name').textContent, /a.pdf/);
@@ -49,5 +49,6 @@ test('page opens a PDF, switches example and sends the selected harness and sett
     await React.act(async () => { select.value = 'claude'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })); });
     await click(document.querySelector('.slides-primary'));
     assert.equal(submitted.backend, 'claude'); assert.equal(submitted.pdfPath, '/papers/a.pdf'); assert.equal(submitted.length, 'auto');
+    assert.deepEqual(checked, ['claude', { backend: 'claude', hasTaskToken: false }], 'the selected harness and dependency presence are checked before starting');
   } finally { await React.act(async () => root.unmount()); dom.window.close(); for (const [key, value] of Object.entries(saved)) value === undefined ? delete global[key] : global[key] = value; }
 });

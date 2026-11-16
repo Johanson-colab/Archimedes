@@ -23,8 +23,8 @@ function resolveTerminalShell(options = {}) {
     const programFiles = env.ProgramFiles || env.ProgramW6432 || "C:\\Program Files";
     const localAppData = env.LOCALAPPDATA || "";
     const systemRoot = env.SystemRoot || "C:\\Windows";
-    const pwsh = [path.join(programFiles, "PowerShell", "7", "pwsh.exe"), localAppData && path.join(localAppData, "Microsoft", "WindowsApps", "pwsh.exe")];
-    const powershell = [path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")];
+    const pwsh = [path.win32.join(programFiles, "PowerShell", "7", "pwsh.exe"), localAppData && path.win32.join(localAppData, "Microsoft", "WindowsApps", "pwsh.exe")];
+    const powershell = [path.win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")];
     const cmd = [env.COMSPEC, "cmd.exe"];
     const candidates = profile === "pwsh" ? pwsh
       : profile === "powershell" ? powershell

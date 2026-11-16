@@ -6,6 +6,7 @@ import { SettingsChoiceGroup, SettingsRow, SettingsSection } from "./SettingsPri
 import { Tab, Tabs } from "./Tabs";
 import { StateView } from "./StateView";
 import { useUISettings } from "./i18n";
+import type { ManuscriptOpenRequest, ManuscriptOrigin } from "./manuscript-handoff";
 
 type ReviewTab = "review" | "reviewers" | "evidence";
 type SourceKind = "library" | "arxiv" | "pdf";
@@ -35,7 +36,8 @@ function decisionLabel(t: (key: string) => string, value: string) {
   return key ? t(key) : "";
 }
 
-function FindingList({ items, empty }: { items: PaperReviewFinding[]; empty: string }) {
+function FindingList({ items, empty, onDraft }: { items: PaperReviewFinding[]; empty: string; onDraft?: (item: PaperReviewFinding) => void }) {
+  const { t } = useUISettings();
   if (!items.length) return <p className="pra-muted">{empty}</p>;
   return <ul className="pra-list">
     {items.map((item, index) => <li key={`${item.text}-${index}`}>
@@ -43,6 +45,7 @@ function FindingList({ items, empty }: { items: PaperReviewFinding[]; empty: str
       {item.page ? <span className="pra-page-badge">p. {item.page}</span> : null}
       {item.severity ? <span className={`pra-severity ${item.severity}`}>{item.severity}</span> : null}
       {item.quote ? <q className="pra-quote">{item.quote}</q> : null}
+      {onDraft && <button type="button" className="secondary-button" onClick={() => onDraft(item)}>{t("Add to revision draft")}</button>}
     </li>)}
   </ul>;
 }
@@ -112,12 +115,26 @@ function HistoryList({ runs, selectedId, onSelect, onDelete }: {
   </section>;
 }
 
-export default function PaperReviewView({ bridge, workspace, projectId, active }: {
+type PaperReviewViewProps = {
   bridge: ResearchDeskBridge;
   workspace: string;
   projectId: string | null;
   active: boolean;
-}) {
+  dataRoot?: string;
+  manuscriptRequest?: ManuscriptOpenRequest;
+  onReturnToManuscript?: (origin: ManuscriptOrigin) => Promise<void>;
+  onDraftRevision?: (run: PaperReviewRunSummary, findings: PaperReviewFinding[]) => Promise<void>;
+  mainModel?: PublicModelConfig | null;
+  onOpenModelSettings?: () => void;
+};
+export default function PaperReviewView(props: PaperReviewViewProps) {
+  const key = JSON.stringify([props.dataRoot ?? props.workspace, props.projectId, props.workspace]);
+  const [visited, setVisited] = useState<Record<string, Pick<PaperReviewViewProps, "dataRoot" | "workspace" | "projectId">>>({});
+  useEffect(() => { setVisited((current) => ({ ...current, [key]: { dataRoot: props.dataRoot, workspace: props.workspace, projectId: props.projectId } })); }, [key]);
+  return <>{Object.entries({ ...visited, [key]: { dataRoot: props.dataRoot, workspace: props.workspace, projectId: props.projectId } }).map(([ownerKey, owner]) => <div key={ownerKey} className="manuscript-owner-workspace" hidden={ownerKey !== key || !props.active}><PaperReviewWorkspace {...props} {...owner} active={ownerKey === key && props.active} manuscriptRequest={ownerKey === key ? props.manuscriptRequest : undefined} /></div>)}</>;
+}
+
+function PaperReviewWorkspace({ bridge, workspace, projectId, dataRoot, active, manuscriptRequest, onReturnToManuscript, onDraftRevision, mainModel, onOpenModelSettings }: PaperReviewViewProps) {
   const { t, language } = useUISettings();
   const confirm = useConfirm();
   const [settings, setSettings] = useState<PublicPaperReviewSettings | null>(null);
@@ -125,10 +142,16 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
   const [papers, setPapers] = useState<PaperReviewPaperSummary[]>([]);
   const [runs, setRuns] = useState<PaperReviewRunSummary[]>([]);
   const [selectedRun, setSelectedRun] = useState<PaperReviewRunSummary | null>(null);
+  const selectedRunRef = useRef(selectedRun); selectedRunRef.current = selectedRun;
+  const activeRef = useRef(active); activeRef.current = active;
+  const requestRef = useRef(manuscriptRequest); requestRef.current = manuscriptRequest;
+  const runLoadSequence = useRef(0);
   const [sourceKind, setSourceKind] = useState<SourceKind>("library");
   const [paperId, setPaperId] = useState("");
   const [arxivInput, setArxivInput] = useState("");
   const [pdfPath, setPdfPath] = useState("");
+  const [manuscript, setManuscript] = useState<ManuscriptOrigin | null>(null);
+  const appliedRequest = useRef("");
   const [venueId, setVenueId] = useState("");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<PaperReviewProgress | null>(null);
@@ -141,16 +164,29 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
   const [exporting, setExporting] = useState(false);
   const activeRunRef = useRef("");
   const runningRef = useRef(false);
+  useEffect(() => {
+    if (!manuscriptRequest || manuscriptRequest.token === appliedRequest.current || !active) return;
+    const { origin } = manuscriptRequest;
+    if (origin.dataRoot !== (dataRoot ?? workspace) || origin.projectId !== projectId || origin.workspace !== workspace) return;
+    if (running) { setNotice(t("A review is running. The manuscript will be ready here when it finishes.")); return; }
+    appliedRequest.current = manuscriptRequest.token;
+    runLoadSequence.current += 1;
+    setManuscript(origin); setSourceKind("pdf"); setPdfPath(`${origin.workspace}/${origin.pdfPath}`); setSelectedRun(null); setError(""); setTab("review");
+    setNotice(t("The current manuscript PDF is ready. Choose a venue and start a separate review."));
+  }, [manuscriptRequest?.token, active, running]);
 
   const refreshRuns = useCallback(async () => {
+    if (!activeRef.current) return [];
     const rows = await bridge.listPaperReviewRuns({ projectId: projectId ?? undefined, limit: 60 });
     setRuns(rows);
     return rows;
   }, [bridge, projectId]);
 
   const loadRun = useCallback(async (runId: string) => {
+    if (!activeRef.current) return null;
+    const request = ++runLoadSequence.current;
     const full = await bridge.getPaperReviewRun(runId);
-    if (!full) return null;
+    if (!full || !activeRef.current || request !== runLoadSequence.current) return null;
     setSelectedRun(full);
     return full;
   }, [bridge]);
@@ -171,7 +207,10 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
       setVenueId((current) => current || nextSettings.defaultVenueId || nextVenues[0]?.id || "");
       setPaperId((current) => current || nextPapers[0]?.id || "");
       const first = nextRuns[0];
-      if (first) await loadRun(first.id);
+      if (selectedRunRef.current && activeRef.current) await loadRun(selectedRunRef.current.id);
+      else if (first && !requestRef.current && activeRef.current) await loadRun(first.id);
+      const tracked = nextRuns.find((run) => run.id === activeRunRef.current);
+      if (tracked) { runningRef.current = tracked.status === "running"; setRunning(runningRef.current); }
       setError("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -193,10 +232,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
 
   useEffect(() => {
     const unsubscribe = bridge.onPaperReviewProgress((payload) => {
-      if (payload.runId) {
-        if (!activeRunRef.current) activeRunRef.current = payload.runId;
-        if (payload.runId !== activeRunRef.current) return;
-      }
+      if (!activeRef.current || !payload.runId || payload.runId !== activeRunRef.current) return;
       if (!runningRef.current && payload.type !== "complete" && payload.type !== "error" && payload.type !== "cancelled") return;
       setProgress(payload);
       if (payload.type === "prepared") void refreshRuns();
@@ -207,7 +243,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
         if (payload.type === "error") setError(payload.detail || "The review failed.");
         if (payload.type === "cancelled") setNotice(t("The review was cancelled."));
         if (runId) {
-          void loadRun(runId);
+          if (!selectedRunRef.current || selectedRunRef.current.id === runId) void loadRun(runId);
           void refreshRuns();
         }
       }
@@ -218,6 +254,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
   async function choosePdf() {
     try {
       const chosen = await bridge.choosePaperReviewPdf();
+      if (chosen) setManuscript(null);
       if (chosen) {
         setPdfPath(chosen);
         setSourceKind("pdf");
@@ -255,11 +292,13 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
     setRunning(true);
     setTab("review");
     try {
-      const created = await bridge.createPaperReviewRun({ source, venueId, workspace, projectId: projectId ?? undefined });
+      const created = await bridge.createPaperReviewRun({ source, venueId, workspace, projectId: projectId ?? undefined, ...(manuscript && sourceKind === "pdf" ? { manuscript } : {}) });
       if (!activeRunRef.current) {
         activeRunRef.current = created.runId;
         setProgress({ runId: created.runId, type: "progress", stage: "started", progress: 2, detail: t("Preparing the paper…") });
       }
+      const full = await loadRun(created.runId);
+      if (full) { runningRef.current = full.status === "running"; setRunning(runningRef.current); }
       void refreshRuns();
     } catch (cause) {
       runningRef.current = false;
@@ -334,12 +373,16 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
   const venue = useMemo(() => venues.find((entry) => entry.id === (selectedRun?.venueId || venueId)), [selectedRun?.venueId, venueId, venues]);
   const result = selectedRun?.result || null;
   const review = result?.review || null;
+  const reviewedManuscript = selectedRun?.manuscript || null;
+  const draftFinding = reviewedManuscript && selectedRun && onDraftRevision ? (finding: PaperReviewFinding) => { void onDraftRevision(selectedRun, [finding]).catch((cause) => setError(String(cause))); } : undefined;
   const activeModel = settings?.model.mode === "custom"
     ? `${settings.model.provider}/${settings.model.model || "—"}`
     : settings?.agentModel
       ? `${settings.agentModel.provider}/${settings.agentModel.model}`
       : "—";
-  const canRun = !running && Boolean(venueId) && (
+  const inheritedModel = mainModel || settings?.agentModel;
+  const modelReady = settings?.model.mode === "custom" ? Boolean(settings.model.configured && settings.model.model) : Boolean(inheritedModel && (inheritedModel.hasApiKey || inheritedModel.provider === "openrouter"));
+  const canRun = !running && modelReady && Boolean(venueId) && (
     (sourceKind === "library" && Boolean(paperId)) ||
     (sourceKind === "arxiv" && Boolean(arxivInput.trim())) ||
     (sourceKind === "pdf" && Boolean(pdfPath))
@@ -360,8 +403,9 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
     </header>
 
     <section className="pra-compose">
+      {!modelReady && <div className="manuscript-source-receipt"><span>{t("Configure an API model before starting a simulated review.")}</span><button className="secondary-button" onClick={settings?.model.mode === "custom" || !onOpenModelSettings ? openSettings : onOpenModelSettings}>{t("Configure review model")}</button></div>}
       <div className="pra-compose-row">
-        <Tabs value={sourceKind} onChange={(value) => setSourceKind(value as SourceKind)} label={t("Paper source")} variant="segmented" className="pra-source-tabs">
+        <Tabs value={sourceKind} onChange={(value) => { if (value !== sourceKind) { setSourceKind(value as SourceKind); setManuscript(null); } }} label={t("Paper source")} variant="segmented" className="pra-source-tabs">
           <Tab value="library">{t("Library")}</Tab>
           <Tab value="arxiv">arXiv</Tab>
           <Tab value="pdf">PDF</Tab>
@@ -383,6 +427,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
           {running ? t("Reviewing…") : t("Run simulated review")}
         </button>
       </div>
+      {manuscript && sourceKind === "pdf" && <div className="manuscript-source-receipt"><strong>{manuscript.mainPath}</strong><span>{t("Source version")}: <code title={manuscript.sourceVersion}>{manuscript.sourceVersion.slice(0, 12)}</code> · PDF <code title={manuscript.pdfSha256}>{manuscript.pdfSha256.slice(0, 12)}</code></span>{onReturnToManuscript && <button className="secondary-button" onClick={() => void onReturnToManuscript(manuscript).catch((cause) => setError(String(cause)))}>{t("Return to source manuscript")}</button>}</div>}
       <div className="pra-compose-foot">
         <span>{t("Model")}: <b>{activeModel}</b></span>
         <span className="pra-muted">{t("Text is sent only to the selected provider.")}</span>
@@ -420,6 +465,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
       </div> : null}
 
       {result && review ? <>
+        {reviewedManuscript && <div className="manuscript-source-receipt"><strong>{reviewedManuscript.mainPath}</strong><span>{t("Reviewed source version")}: <code title={reviewedManuscript.sourceVersion}>{reviewedManuscript.sourceVersion.slice(0, 12)}</code> · PDF <code title={reviewedManuscript.pdfSha256}>{reviewedManuscript.pdfSha256.slice(0, 12)}</code></span>{onReturnToManuscript && <button className="secondary-button" onClick={() => void onReturnToManuscript(reviewedManuscript).catch((cause) => setError(String(cause)))}>{t("Return to source manuscript")}</button>}</div>}
         <ScoreSummary review={review} venue={venue} />
         <div className="pra-dimensions">
           {review.subdimensions.map((dimension) => <div key={dimension.id} className="pra-dimension-row">
@@ -438,10 +484,10 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
 
         {tab === "review" ? <div className="pra-doc-body">
           <section className="pra-doc-section"><h3>{t("Summary")}</h3><p>{review.summary || t("No summary recorded.")}</p></section>
-          <section className="pra-doc-section"><h3>{t("Strengths")}</h3><FindingList items={review.strengths} empty={t("No strengths recorded.")} /></section>
-          <section className="pra-doc-section"><h3>{t("Weaknesses")}</h3><FindingList items={review.weaknesses} empty={t("No weaknesses recorded.")} /></section>
-          <section className="pra-doc-section"><h3>{t("Questions")}</h3><FindingList items={review.questions} empty={t("No questions recorded.")} /></section>
-          <section className="pra-doc-section"><h3>{t("Limitations")}</h3><FindingList items={review.limitations} empty={t("No limitations recorded.")} /></section>
+          <section className="pra-doc-section"><h3>{t("Strengths")}</h3><FindingList items={review.strengths} empty={t("No strengths recorded.")} onDraft={draftFinding} /></section>
+          <section className="pra-doc-section"><h3>{t("Weaknesses")}</h3><FindingList items={review.weaknesses} empty={t("No weaknesses recorded.")} onDraft={draftFinding} /></section>
+          <section className="pra-doc-section"><h3>{t("Questions")}</h3><FindingList items={review.questions} empty={t("No questions recorded.")} onDraft={draftFinding} /></section>
+          <section className="pra-doc-section"><h3>{t("Limitations")}</h3><FindingList items={review.limitations} empty={t("No limitations recorded.")} onDraft={draftFinding} /></section>
           {review.metaReview ? <section className="pra-doc-section"><h3>{t("Meta-review")}</h3><p>{review.metaReview}</p></section> : null}
           {review.reviewerDisagreement.length ? <section className="pra-doc-section"><h3>{t("Reviewer disagreement")}</h3><ul className="pra-list">{review.reviewerDisagreement.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}
           {review.consistencyNotes.length ? <section className="pra-doc-section"><h3>{t("Calibration notes")}</h3><ul className="pra-list">{review.consistencyNotes.map((entry) => <li key={entry}>{entry}</li>)}</ul></section> : null}

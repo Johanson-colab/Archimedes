@@ -3,7 +3,8 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { workspacePath, fileChangeForContent } = require('../workspace-files.cjs');
 
-const MAX_READ_BYTES = 8 * 1024 * 1024;
+// Match the application's existing CSV source limit; output remains paged/64k.
+const MAX_READ_BYTES = 10 * 1024 * 1024;
 const MAX_OUTPUT_CHARS = 64_000;
 const MAX_WRITE_BYTES = 200_000;
 const IGNORE = new Set(['node_modules', 'dist', 'build', '.next', '__pycache__']);

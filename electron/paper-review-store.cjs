@@ -85,6 +85,9 @@ function initialize(userDataPath) {
       PRIMARY KEY (run_id, dimension_id)
     );
   `);
+  const columns = new Set(database.prepare("PRAGMA table_info(paper_review_runs)").all().map(column => column.name));
+  if (!columns.has("manuscript_json")) database.exec("ALTER TABLE paper_review_runs ADD COLUMN manuscript_json TEXT NOT NULL DEFAULT ''");
+  if (!columns.has("owner_data_root")) database.exec("ALTER TABLE paper_review_runs ADD COLUMN owner_data_root TEXT NOT NULL DEFAULT ''");
   return { path: databasePath };
 }
 
@@ -134,18 +137,17 @@ function getDocument(id) {
   };
 }
 
-function createRun({ documentId, projectId, sourceKind, sourceRef, paperTitle, venueId, venueVersion, modelProvider, modelBaseUrl, modelId }) {
-  const id = randomUUID();
+function createRun({ id = randomUUID(), documentId, projectId, sourceKind, sourceRef, paperTitle, venueId, venueVersion, modelProvider, modelBaseUrl, modelId, manuscript, ownerDataRoot = "" }) {
   const now = new Date().toISOString();
   db().prepare(`
     INSERT INTO paper_review_runs (
       id, document_id, project_id, source_kind, source_ref, paper_title, venue_id, venue_version,
-      model_provider, model_base_url, model_id, status, stage, progress, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', 'queued', 0, ?)
+      model_provider, model_base_url, model_id, status, stage, progress, created_at, manuscript_json, owner_data_root
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', 'queued', 0, ?, ?, ?)
   `).run(
     id, String(documentId || ""), String(projectId || ""), String(sourceKind || ""), String(sourceRef || ""),
     String(paperTitle || ""), String(venueId || ""), String(venueVersion || ""), String(modelProvider || ""),
-    String(modelBaseUrl || ""), String(modelId || ""), now,
+    String(modelBaseUrl || ""), String(modelId || ""), now, manuscript ? JSON.stringify(manuscript) : "", ownerDataRoot,
   );
   return id;
 }
@@ -261,6 +263,8 @@ function hydrateRun(row, { includeResult = true } = {}) {
     id: row.id,
     documentId: row.document_id,
     projectId: row.project_id,
+    ownerDataRoot: row.owner_data_root || "",
+    manuscript: parseJson(row.manuscript_json, null),
     sourceKind: row.source_kind,
     sourceRef: row.source_ref,
     paperTitle: row.paper_title,
@@ -290,10 +294,10 @@ function getRun(id) {
   return hydrateRun(getRunRow(id));
 }
 
-function listRuns({ projectId = "", limit = 50 } = {}) {
-  const rows = projectId
-    ? db().prepare("SELECT * FROM paper_review_runs WHERE project_id = ? ORDER BY created_at DESC LIMIT ?").all(String(projectId), Math.min(Math.max(Number(limit) || 50, 1), 200))
-    : db().prepare("SELECT * FROM paper_review_runs ORDER BY created_at DESC LIMIT ?").all(Math.min(Math.max(Number(limit) || 50, 1), 200));
+function listRuns({ projectId = "", limit = 50, ownerDataRoot = "" } = {}) {
+  const rows = db().prepare(`SELECT * FROM paper_review_runs WHERE (? = '' OR project_id = ?)
+    AND (? = '' OR owner_data_root = '' OR owner_data_root = ?) ORDER BY created_at DESC LIMIT ?`)
+    .all(String(projectId), String(projectId), ownerDataRoot, ownerDataRoot, Math.min(Math.max(Number(limit) || 50, 1), 200));
   return rows.map((row) => hydrateRun(row, { includeResult: false }));
 }
 

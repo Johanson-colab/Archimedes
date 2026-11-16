@@ -1,16 +1,19 @@
-function createThreadSync({ store, api } = {}) {
-  if (!store || !api) throw new Error("Store and collaboration API are required.");
+const { mergeTurn, mergeCloudThread, turnRevision } = require('../shared/cloud-sync.cjs');
+
+function createThreadSync({ store: providedStore, api } = {}) {
+  if (!providedStore || !api) throw new Error("Store and collaboration API are required.");
 
   function parsePayload(value) {
     if (value && typeof value === "object") return value;
     try { return JSON.parse(value || "{}"); } catch { return {}; }
   }
 
-  async function syncProjectThreads(projectId, { currentCloudUserId = "", localUserId = "" } = {}) {
+  async function syncInStore(store, projectId, { currentCloudUserId = "", localUserId = "" } = {}) {
     const project = store.getResearchProject(projectId);
     if (!project) throw new Error("Research project not found.");
     if (!project.cloud_project_id) throw new Error("Share this project before syncing threads.");
     const warnings = [];
+    let warnedLegacyTurns = false;
     let localThreads = store.listProjectThreadsForSync(projectId);
 
     // Local -> cloud for threads owned by this local identity.
@@ -25,13 +28,16 @@ function createThreadSync({ store, api } = {}) {
           context_summary: thread.context_summary,
           visibility: thread.visibility,
           archived_at: thread.archived_at,
+          created_at: thread.created_at,
+          updated_at: thread.updated_at,
         });
         const detail = store.getResearchThread(thread.id);
         const remote = await api.getThread(thread.id);
-        const remoteTurnIds = new Set((remote.turns || []).map((turn) => turn.id));
+        const remoteTurns = new Map((remote.turns || []).map((turn) => [turn.id, turn]));
         for (const turn of detail.turns || []) {
-          if (remoteTurnIds.has(turn.id)) continue;
-          await api.saveTurn(thread.id, {
+          const previous = remoteTurns.get(turn.id);
+          if (previous && mergeTurn(previous, { ...turn, thread_id: thread.id }) === previous) continue;
+          const saved = await api.saveTurn(thread.id, {
             id: turn.id,
             mode: turn.mode,
             user_message: turn.user_message,
@@ -39,7 +45,12 @@ function createThreadSync({ store, api } = {}) {
             status: turn.status,
             created_at: turn.created_at,
             completed_at: turn.completed_at,
+            sync_revision: turnRevision(turn),
           });
+          if (saved && !saved.sync_revision && !warnedLegacyTurns) {
+            warnedLegacyTurns = true;
+            warnings.push('The cloud server needs sync migration 0013 to prevent older clients from overwriting final turns. This desktop keeps its local final turns.');
+          }
         }
         const remoteEvents = await api.getThread(thread.id);
         const remoteEventIds = new Set((remoteEvents.events || []).map((event) => event.id));
@@ -90,10 +101,11 @@ function createThreadSync({ store, api } = {}) {
     for (const remoteThread of remoteThreads) {
       try {
         const local = localById.get(remoteThread.id);
-        if (!local || Date.parse(remoteThread.updated_at || "") > Date.parse(local.updated_at || "")) {
-          const detail = await api.getThread(remoteThread.id);
-          store.applyCloudThread(projectId, detail, { currentCloudUserId, localUserId });
-        }
+        // A turn can finish without changing a previously fetched thread list.
+        // Merge every detail by execution revision, not by the list timestamp.
+        const detail = await api.getThread(remoteThread.id);
+        const current = local ? store.getResearchThread(local.id) : null;
+        store.applyCloudThread(projectId, mergeCloudThread(current, detail), { currentCloudUserId, localUserId });
         const remoteComments = await api.listComments(project.cloud_project_id, { resourceType: "thread", resourceId: remoteThread.id });
         for (const comment of remoteComments) {
           store.applyCloudComment(projectId, comment, { currentCloudUserId, localUserId });
@@ -103,6 +115,13 @@ function createThreadSync({ store, api } = {}) {
       }
     }
     return { project: store.getResearchProject(projectId), warnings };
+  }
+
+  async function syncProjectThreads(projectId, options) {
+    const captured = providedStore.captureStore?.();
+    const owner = captured?.store || providedStore;
+    try { return await (owner.run ? owner.run(() => syncInStore(owner, projectId, options)) : syncInStore(owner, projectId, options)); }
+    finally { captured?.release(); }
   }
 
   return { syncProjectThreads };

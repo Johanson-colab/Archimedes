@@ -11,14 +11,15 @@ test("session sync pushes position anchors, pulls peer anchors, and updates reso
   const store = {
     getResearchProject: () => ({ id: "project", cloud_project_id: "cloud" }),
     listProjectThreadsForSync: () => [session],
-    getResearchThread: () => ({ turns: [] }),
+    getResearchThread: () => ({ ...session, turns: [] }),
+    applyCloudThread: () => {},
     listResearchThreadEvents: () => [],
     listProjectComments: () => [local],
     applyCloudComment: (_project, comment) => imported.push(comment),
   };
   const api = {
     saveThread: async () => session,
-    getThread: async () => ({ turns: [], events: [] }),
+    getThread: async () => ({ thread: session, turns: [], events: [] }),
     listThreads: async () => [session],
     listComments: async () => remote,
     saveComment: async (_project, comment) => remote.push({ ...comment, updated_at: "2026-11-12T10:00:00Z" }),
