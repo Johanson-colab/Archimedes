@@ -92,7 +92,7 @@ export default function BenchmarkRadarView() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RadarTab>("radar");
   const [windowName, setWindowName] = useState<TimeWindow>("latest");
-  const [radarSort, setRadarSort] = useState<RadarSort>("attention");
+  const [radarSort, setRadarSort] = useState<RadarSort>("newest");
   const [librarySort, setLibrarySort] = useState<LibrarySort>("attention");
   const [query, setQuery] = useState("");
   const [direction, setDirection] = useState("");

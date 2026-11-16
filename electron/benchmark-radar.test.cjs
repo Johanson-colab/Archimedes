@@ -36,7 +36,7 @@ function fixture(files) {
 }
 
 function index(overrides = {}) {
-  return { schema: 1, updatedAt: "2026-11-01", records: [record({ id: "public-benchmark", name: "Public Benchmark" })], directions: [], ...overrides };
+  return { schema: 2, sourceUrl: "https://benchmark-radar.com/data/benchmarks_index.json", updatedAt: "2026-11-01", records: [record({ id: "public-benchmark", name: "Public Benchmark" })], directions: [], ...overrides };
 }
 
 function writeIndex(filePath, payload) {
