@@ -1020,8 +1020,9 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    const requestId = typeof input.requestId === "string" ? input.requestId.slice(0, 200) : undefined;
     const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { path: input.path, stage, log });
+      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { workspace, requestId, path: input.path, stage, log });
     });
     if (!result.ok || !result.pdf_path) return result;
     const token = createPreviewToken(event.sender.id, workspace);
