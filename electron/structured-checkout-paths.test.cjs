@@ -47,3 +47,21 @@ test("SSH production file scripts preserve stdin/quoting, refuse linked paths an
   await assert.rejects(backend.readFile("large.json"), /complete structured-read limit/);
   await backend.dispose();
 });
+
+test("the real pilot never falls back to another file after a structured read-limit error", async t => {
+  const f = fixture(t), { runPilot } = require("./reproduction/pilot.cjs");
+  fs.mkdirSync(path.join(f.checkout, "demo"));
+  const requested = path.join(f.checkout, "demo/config.json"), fallback = path.join(f.checkout, "config.json");
+  const large = '"value":"old"\n' + "x".repeat(2 * 1024 * 1024);
+  fs.writeFileSync(requested, large);
+  const backend = createDockerBackend({ checkoutDir: f.checkout });
+  for (const action of ["edit_file", "read_file"]) {
+    fs.writeFileSync(fallback, '"value":"old"\n');
+    const decisions = [{ action, path: "demo/config.json", old: '"old"', new: '"new"' }, { action: "ask", question: "stop" }];
+    await assert.rejects(runPilot({ repoName: "demo", steps: [{ id: "edit", title: "Edit config" }], backend,
+      complete: async () => ({ json: decisions.shift() }),
+    }), /structured-read limit/);
+    assert.equal(fs.readFileSync(fallback, "utf8"), '"value":"old"\n');
+    assert.equal(fs.readFileSync(requested, "utf8"), large);
+  }
+});

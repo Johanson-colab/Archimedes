@@ -602,10 +602,8 @@ async function runPilot({
       let used = "";
       let content = null;
       for (const candidate of candidatePaths(requested, repoName)) {
-        try {
-          const value = await backend.readFile(candidate);
-          if (value !== null && value !== undefined) { content = value; used = candidate; break; }
-        } catch { /* try the next candidate */ }
+        const value = await backend.readFile(candidate);
+        if (value !== null && value !== undefined) { content = value; used = candidate; break; }
       }
       if (content === null) { turnHint = `${requested} does not exist in the checkout. Try ls first.`; continue; }
       const lines = String(content).split("\n");
@@ -645,10 +643,8 @@ async function runPilot({
       let used = "";
       let content = null;
       for (const candidate of candidatePaths(relative, repoName)) {
-        try {
-          const value = await backend.readFile(candidate);
-          if (value !== null && value !== undefined) { content = value; used = candidate; break; }
-        } catch { /* try the next candidate */ }
+        const value = await backend.readFile(candidate);
+        if (value !== null && value !== undefined) { content = value; used = candidate; break; }
       }
       if (content === null) { turnHint = `${relative} does not exist in the checkout.`; continue; }
       const first = content.indexOf(oldText);
