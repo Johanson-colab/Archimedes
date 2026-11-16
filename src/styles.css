@@ -7742,6 +7742,19 @@ html[data-menu-style="glass"] .menu-surface {
   background: color-mix(in srgb, var(--state-danger) 7%, var(--surface-panel));
   border-color: color-mix(in srgb, var(--state-danger) 24%, var(--border-default));
 }
+/* Research-app entry errors float above whichever full-height view is active. */
+.app-entry-notice {
+  position: absolute;
+  top: 16px;
+  right: 0;
+  left: 0;
+  z-index: 40;
+  width: min(560px, calc(100% - 32px));
+  max-height: min(45vh, 320px);
+  margin-inline: auto;
+  overflow-y: auto;
+  box-shadow: var(--dialog-shadow-md);
+}
 
 /* Composer controls: status, model options and context estimate. */
 .composer-model-controls { display: inline-flex; min-width: 0; align-items: center; gap: 2px; }

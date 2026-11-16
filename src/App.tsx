@@ -1340,6 +1340,20 @@ function readContextLength(): ContextLength {
   return window.localStorage.getItem("archimedes-context-length") === "extra-long" ? "extra-long" : "standard";
 }
 
+type AgentHarness = AgentBackendConfig["backend"];
+
+function effectiveResearchHarness(bound: AgentHarness | null, configured: AgentHarness | null | undefined): AgentHarness {
+  return bound || configured || "api";
+}
+
+function researchModelSetupNeeded(harness: AgentHarness, config: PublicModelConfig | null): boolean {
+  return harness === "api" && config !== null && !config.hasApiKey;
+}
+
+function ResearchAppEntryNotice({ message, onDismiss, dismissLabel }: { message: string; onDismiss: () => void; dismissLabel: string }) {
+  return <InlineNotice tone="danger" className="app-entry-notice" onDismiss={onDismiss} dismissLabel={dismissLabel}>{message}</InlineNotice>;
+}
+
 function App() {
   const confirm = useConfirm();
   const { t } = useUISettings();
@@ -1453,7 +1467,7 @@ function App() {
   const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities>(previewModelCapabilities);
   const [nativeBackend, setNativeBackend] = useState<AgentBackendConfig | null>(null);
   const [boundHarness, setBoundHarness] = useState<AgentBackendConfig["backend"] | null>(null);
-  const selectedHarness = boundHarness || nativeBackend?.backend || "api";
+  const selectedHarness = effectiveResearchHarness(boundHarness, nativeBackend?.backend);
   const selectedNativeBackend = selectedHarness !== "api"
     ? { binary: selectedHarness, model: "", ...nativeBackend, ...nativeBackend?.profiles?.[selectedHarness], backend: selectedHarness }
     : null;
@@ -3573,7 +3587,7 @@ function App() {
               onResearchMode={setResearchMode}
               reasoningEffort={reasoningEffort}
               contextLength={contextLength}
-              modelSetupHint={(!nativeBackend || nativeBackend.backend === "api") && activeModelConfig && !activeModelConfig.hasApiKey ? t("Configure an API model to send research messages. Local files, PDF reading and data analysis remain available.") : undefined}
+              modelSetupHint={researchModelSetupNeeded(selectedHarness, activeModelConfig) ? t("Configure an API model to send research messages. Local files, PDF reading and data analysis remain available.") : undefined}
               modelCapabilities={modelCapabilities}
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
@@ -3593,7 +3607,7 @@ function App() {
             />
           )}
           {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
-          {appEntryError && <div className="composer-attachment-error" role="alert">{appEntryError}<button className="quiet-button" onClick={() => setAppEntryError("")}>{t("Dismiss")}</button></div>}
+          {appEntryError && <ResearchAppEntryNotice message={appEntryError} onDismiss={() => setAppEntryError("")} dismissLabel={t("Dismiss")} />}
           <Suspense fallback={null}>
             {/* View host sidebar-modules: one looping projection, semantics derived from the module registry (keepMounted/cacheClass/requiresWorkspace/open gate). */}
             {(Object.entries(sidebarModuleContent) as [string, ReactNode][]).map(([id, content]) => {
