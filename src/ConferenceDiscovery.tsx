@@ -8,6 +8,8 @@ import { FilterGroup, FilterButton } from "./Tabs";
 
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
+import { useUISettings } from "./i18n";
+import { discoveryPaperKey, discoveryPaperFields } from "./discovery-state";
 const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }> = [
   { id: "all", label: "All" }, { id: "oral", label: "Oral" }, { id: "spotlight", label: "Spotlight" },
   { id: "poster", label: "Poster" }, { id: "unknown", label: "Unclassified" },
@@ -17,34 +19,61 @@ function errorMessage(error: unknown) {
   return String(error).replace(/^Error:\s*/, "").replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, "");
 }
 
-export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, onImported }: {
-  bridge: ResearchDeskBridge; targetLibraryId: string; topic: DailyDiscoveryTopic; onImported: () => Promise<void>;
+export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryId, topic, onImported }: {
+  storageKey?: string; bridge: ResearchDeskBridge; targetLibraryId: string; topic: DailyDiscoveryTopic; onImported: () => Promise<void>;
 }) {
-  const [conference, setConference] = useState<ConferenceId>("icml");
-  const [year, setYear] = useState(2026);
-  const [presentation, setPresentation] = useState<ConferencePresentation | "all">("all");
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [response, setResponse] = useState<ConferenceSearchResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { t } = useUISettings();
+  const [saved] = useState(() => {
+    try {
+      const value = JSON.parse(window.localStorage.getItem(storageKey || "") || "null");
+      return value && conferenceCatalog.some((item) => item.id === value.conference) && Array.isArray(value.response?.papers) ? value : null;
+    } catch { return null; }
+  });
+  const [conference, setConference] = useState<ConferenceId>(saved?.conference ?? "icml");
+  const [year, setYear] = useState<number>(saved?.year ?? 2026);
+  const [presentation, setPresentation] = useState<ConferencePresentation | "all">(saved?.presentation ?? "all");
+  const [query, setQuery] = useState(saved?.query ?? "");
+  const [submittedQuery, setSubmittedQuery] = useState(saved?.submittedQuery ?? "");
+  const [offset, setOffset] = useState<number>(saved?.offset ?? 0);
+  const [response, setResponse] = useState<ConferenceSearchResponse | null>(saved?.response ?? null);
+  const [loading, setLoading] = useState(!saved?.response);
   const [error, setError] = useState("");
   const [adding, setAdding] = useState<string | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
+  const [storageError, setStorageError] = useState("");
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const requestRef = useRef(0);
+  useEffect(() => {
+    let active = true;
+    setAdded(new Set());
+    if (targetLibraryId && bridge.listLibraryPapers) void bridge.listLibraryPapers(targetLibraryId).then((papers) => {
+      if (active) setAdded(new Set(papers.map((paper) => `${targetLibraryId}:${discoveryPaperKey(paper)}`)));
+    }).catch((cause) => { if (active) setError(errorMessage(cause)); });
+    return () => { active = false; };
+  }, [bridge, targetLibraryId]);
+  const cachedKey = useRef(saved?.response ? JSON.stringify([saved.conference, saved.year, saved.presentation, saved.topic, saved.submittedQuery, saved.offset]) : "");
+  useEffect(() => {
+    if (!storageKey) return;
+    try { window.localStorage.setItem(storageKey, JSON.stringify({ conference, year, presentation, topic, query, submittedQuery, offset, response: response && { ...response, papers: response.papers.map((paper) => ({ ...discoveryPaperFields(paper), published_at: paper.published_at, discovered_at: paper.discovered_at, categories: paper.categories, upvotes: paper.upvotes, github_url: paper.github_url, github_stars: paper.github_stars, conference: paper.conference })) } })); setStorageError(""); }
+    catch { setStorageError(t("Discovery could not be saved on this device. Keep this page open or free storage before leaving.")); }
+  }, [storageKey, conference, year, presentation, topic, query, submittedQuery, offset, response, t]);
   const selected = conferenceCatalog.find((entry) => entry.id === conference)!;
   const load = useCallback(async (forceRefresh = false) => {
+    const key = JSON.stringify([conference, year, presentation, topic, submittedQuery, offset]);
+    if (!forceRefresh && cachedKey.current === key) return;
     const request = ++requestRef.current;
     setLoading(true); setError(""); setResponse(null);
     try {
       const next = await bridge.searchConferencePapers({ conference, year, presentation, topic, query: submittedQuery, offset, limit: PAGE_SIZE, forceRefresh });
-      if (request === requestRef.current) setResponse(next);
+      if (request === requestRef.current) { cachedKey.current = key; setResponse(next); }
     } catch (failure) {
       if (request === requestRef.current) setError(errorMessage(failure));
     } finally { if (request === requestRef.current) setLoading(false); }
   }, [bridge, conference, year, presentation, topic, submittedQuery, offset]);
   useEffect(() => { void load(); return () => { requestRef.current += 1; }; }, [load]);
-  useEffect(() => { setOffset(0); }, [topic]);
+  const previousTopic = useRef(topic);
+  useEffect(() => { if (previousTopic.current !== topic) setOffset(0); previousTopic.current = topic; }, [topic]);
   function search() {
     setOffset(0);
     if (submittedQuery === query.trim() && offset === 0) void load();
@@ -52,16 +81,18 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
   }
   async function save(paper: DailyPaper) {
     if (!targetLibraryId || adding) return;
-    const key = `${targetLibraryId}:${paper.external_id}`;
+    const key = `${targetLibraryId}:${discoveryPaperKey(paper)}`;
     setAdding(key);
     try {
       await bridge.addLibraryPaper(targetLibraryId, paper);
+      if (!alive.current) return;
       setAdded((current) => new Set(current).add(key));
       await onImported();
     } catch (failure) { setError(errorMessage(failure)); }
     finally { setAdding(null); }
   }
   return <div className="conference-discovery">
+    {storageError && <InlineNotice tone="warning">{storageError}</InlineNotice>}
     <div className="conference-filter-row">
       <label>Conference<select aria-label="Conference" value={conference} onChange={(event) => { setConference(event.target.value as ConferenceId); setOffset(0); }}>
         {conferenceCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -91,7 +122,7 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
       : !response.papers.length ? <StateView className="daily-empty" icon={<BookOpen size={24} />} title={response.status === "not_held" ? "No edition was held that year" : response.status === "not_published" ? "The official paper catalog is not public yet" : "No papers match these filters"} description={response.status === "not_published" ? `The official ${selected.label} ${year} accepted-paper catalog is not available yet. Choose another year or try again later.` : "Try another conference, year, or presentation format."} />
       : <div className="daily-paper-list">{response.papers.map((paper) => {
         const metadata = paper.conference!;
-        const key = `${targetLibraryId}:${paper.external_id}`;
+        const key = `${targetLibraryId}:${discoveryPaperKey(paper)}`;
         const saved = added.has(key);
         const presentationLabel = PRESENTATIONS.find((item) => item.id === metadata.presentation)?.label || "Unclassified";
         const authors = `${paper.authors.slice(0, 5).join(", ")}${paper.authors.length > 5 ? " et al." : ""}`;

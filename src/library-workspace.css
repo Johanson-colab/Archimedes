@@ -199,3 +199,7 @@
   .library-workspace-paper-list { flex: 0 0 auto; max-height: 55%; min-height: 160px; }
   .library-browser-split > .paper-inspector { flex: 1 0 270px; border-left: 0; border-top: 1px solid var(--border-soft); }
 }
+
+.daily-create-library { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-block: 10px; }
+.daily-create-library label { display: grid; gap: 5px; }
+.daily-create-library input { min-width: 0; padding: 7px 9px; color: var(--text-primary); background: var(--surface-control); border: 1px solid var(--border-soft); border-radius: 5px; }
