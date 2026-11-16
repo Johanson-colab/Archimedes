@@ -1,19 +1,26 @@
-.metric-comparison-panel { border: 1px solid var(--border-default); background: var(--surface-panel); border-radius: 12px; padding: 20px; margin: 20px 0; }
-.metric-comparison-panel h2, .metric-comparison-panel h3 { margin: 0 0 12px; }
-.metric-comparison-panel p { color: var(--text-secondary); overflow-wrap: anywhere; }
-.metric-comparison-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
-.metric-comparison-note { font-size: 12px; }
+.metric-comparison-panel { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--border-soft); background: var(--surface-panel); border-radius: 10px; font-size: 12.5px; line-height: 1.6; }
+.metric-comparison-panel h3, .metric-comparison-panel h4 { margin: 0; font-size: 13px; font-weight: 600; }
+.metric-comparison-panel p { margin: 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.metric-comparison-panel :is(button, input, select) { font: inherit; }
+.metric-comparison-panel button { min-height: 30px; padding: 5px 10px; border-width: 1px; border-style: solid; font-size: 12px; cursor: pointer; }
+.metric-comparison-panel button:disabled { opacity: .5; cursor: default; }
+.metric-comparison-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .metric-comparison-input { border-top: 1px solid var(--border-soft); padding-top: 12px; }
 .metric-comparison-panel label { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
-.metric-comparison-panel input:not([type="checkbox"]), .metric-comparison-panel select { min-width: 0; padding: 7px 9px; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); background: var(--surface-control); }
+.metric-comparison-panel input:not([type="checkbox"]), .metric-comparison-panel select { min-width: 0; min-height: 30px; padding: 5px 9px; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); background: var(--surface-control); font-size: 12px; }
 .metric-comparison-mapping { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 .metric-comparison-panel .metric-comparison-confirm { flex-direction: row; align-items: flex-start; gap: 10px; }
 .metric-comparison-table { overflow: auto; max-height: 480px; margin: 12px 0; }
 .metric-comparison-table table { border-collapse: collapse; width: 100%; text-align: left; }
 .metric-comparison-table th, .metric-comparison-table td { border-bottom: 1px solid var(--border-soft); padding: 10px; vertical-align: top; }
 .metric-comparison-table small { display: block; margin-top: 4px; color: var(--text-muted); }
-.metric-comparison-history { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; }
-.metric-comparison-counts { display: flex; flex-wrap: wrap; gap: 16px; }
+.metric-comparison-history { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.metric-comparison-history h4 { color: var(--text-muted); font-size: 10.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.metric-comparison-history button { text-align: left; }
+.metric-comparison-result { display: grid; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.metric-comparison-result > button { justify-self: start; }
+.metric-comparison-panel summary { cursor: pointer; }
+.metric-comparison-counts { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; }
 .metric-comparison-counts div { display: flex; gap: 6px; }
 .metric-comparison-counts dd { margin: 0; font-variant-numeric: tabular-nums; }
 .metric-comparison-warning { padding: 12px; border: 1px solid var(--state-warning); border-radius: 8px; }
