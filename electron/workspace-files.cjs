@@ -16,7 +16,8 @@ const MAX_SNAPSHOT_ENTRIES = 5_000;
 const MAX_TEXT_BYTES = 2_000_000;
 const MAX_SNAPSHOT_TEXT_BYTES = 1_000_000;
 const MAX_SNAPSHOT_TOTAL_TEXT_BYTES = 8_000_000;
-const SNAPSHOT_IGNORED_NAMES = new Set([...IGNORED_NAMES, ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".nox"]);
+const SNAPSHOT_GENERATED_DIRECTORY_NAMES = new Set([".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".nox"]);
+const SNAPSHOT_IGNORED_NAMES = new Set([...IGNORED_NAMES, ...SNAPSHOT_GENERATED_DIRECTORY_NAMES]);
 
 function normalizeRelative(value = "") {
   return String(value || "").replaceAll("\\", "/").replace(/^\/+/, "");
@@ -156,7 +157,7 @@ function writeWorkspaceTextFile(root, relative, content) {
 function snapshotWorkspace(root) {
   const files = new Map();
   let retainedTextBytes = 0;
-  const coverage = { entries: 0, textBytesRead: 0, metadataOnly: 0, ignoredDirectories: 0, byteBudgetReached: false, entryLimitReached: false };
+  const coverage = { entries: 0, textBytesRead: 0, metadataOnly: 0, ignoredDirectories: 0, generatedDirectories: 0, byteBudgetReached: false, entryLimitReached: false };
 
   function visit(directory) {
     let entries;
@@ -168,7 +169,10 @@ function snapshotWorkspace(root) {
     for (const entry of entries) {
       if (files.size >= MAX_SNAPSHOT_ENTRIES) { coverage.entryLimitReached = true; break; }
       if (SNAPSHOT_IGNORED_NAMES.has(entry.name) || entry.isSymbolicLink()) {
-        if (entry.isDirectory()) coverage.ignoredDirectories += 1;
+        if (entry.isDirectory()) {
+          coverage.ignoredDirectories += 1;
+          if (SNAPSHOT_GENERATED_DIRECTORY_NAMES.has(entry.name)) coverage.generatedDirectories += 1;
+        }
         continue;
       }
       const target = path.join(directory, entry.name);
