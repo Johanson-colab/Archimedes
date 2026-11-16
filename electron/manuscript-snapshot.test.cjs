@@ -36,6 +36,23 @@ function compilerFixture(onStart = () => {}, delay = 0) {
   };
 }
 
+function transientCompilerFixture(relativePath) {
+  return (_command, args, options) => {
+    const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => {};
+    const text = fs.readFileSync(path.join(options.cwd, "section.tex"), "utf8");
+    const out = args[args.indexOf("--outdir") + 1];
+    fs.writeFileSync(path.join(out, "main.pdf"), `%PDF-controlled-fixture ${text}`);
+    setImmediate(() => {
+      const transient = path.join(options.cwd, relativePath);
+      fs.writeFileSync(transient, "Generated while the compiler ran");
+      fs.unlinkSync(transient);
+      child.stdout.emit("data", `Controlled compiler: ${text}\n`);
+      child.emit("close", 0, null);
+    });
+    return child;
+  };
+}
+
 test("manuscript version covers sections, bibliography and images while excluding generated/environment caches", t => {
   const root = fixture(t), first = captureManuscriptSources(root, "paper/main.tex");
   assert.equal(first.files.length, 4);
@@ -84,6 +101,60 @@ test("removing a source while compiling retains an inspectable stale build", asy
   assert.equal(result.ok, false);
   assert.equal(result.source_snapshot.status, "stale");
   assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("a manuscript input created and removed during compilation never certifies the PDF as current", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("generated.tex") });
+  assert.equal(result.ok, true, "the compiler preview remains available");
+  assert.match(result.pdf_path, /main\.pdf$/);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(result.source_snapshot.source_changed, false);
+  assert.deepEqual(result.source_snapshot.transient_inputs, ["paper/generated.tex"]);
+  assert.match(result.diagnostics[0].message, /paper\/generated\.tex/);
+  assert.equal(fs.existsSync(path.join(root, "paper/generated.tex")), false, "the input is gone when the receipt is written");
+  const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
+  assert.equal(checked.source_matches, true);
+  assert.equal(checked.pdf_matches, true);
+  assert.equal(checked.current, false, "a vanished input cannot be certified by matching hashes");
+  assert.match(checked.verification_reason, /paper\/generated\.tex/);
+});
+
+test("compiler intermediates written and removed during compilation do not invalidate the receipt", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("main.aux") });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "current");
+  assert.deepEqual(result.source_snapshot.transient_inputs, []);
+  assert.equal(result.source_snapshot.observation.available, true);
+  const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
+  assert.equal(checked.current, true);
+  assert.equal(checked.verification_reason, "");
+});
+
+test("a normal compile remains current and records no transient inputs", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: compilerFixture() });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "current");
+  assert.deepEqual(result.source_snapshot.transient_inputs, []);
+  assert.equal(result.source_snapshot.observation.available, true);
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, true);
+});
+
+test("an unavailable watcher keeps the preview but marks the receipt unverified", async t => {
+  const root = fixture(t), watch = fs.watch;
+  fs.watch = () => { throw new Error("directory observation unavailable"); };
+  try {
+    const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: compilerFixture() });
+    assert.equal(result.ok, true);
+    assert.equal(result.source_snapshot.status, "unverified");
+    assert.deepEqual(result.source_snapshot.observation, { available: false, error: "directory observation unavailable" });
+    assert.match(result.diagnostics[0].message, /could not be observed/);
+    const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
+    assert.equal(checked.current, false);
+    assert.match(checked.verification_reason, /could not be observed/);
+  } finally { fs.watch = watch; }
 });
 
 test("untracked symbolic-link inputs cannot be handed off as a verified current build", async t => {

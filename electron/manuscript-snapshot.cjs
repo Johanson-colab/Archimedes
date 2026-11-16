@@ -6,8 +6,104 @@ const { workspacePath } = require("./workspace-files.cjs");
 const EXCLUDED_DIRECTORIES = new Set([".archimedes", ".git", "node_modules", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".cache"]);
 const MAX_FILES = 10000;
 const MAX_BYTES = 500 * 1024 * 1024;
+// The watcher needs a bounded settle window: file events are delivered by the
+// OS asynchronously (macOS FSEvents batches them), so the compiler can exit
+// before the last create/delete pair reaches the callback.
+const OBSERVATION_SETTLE_MS = 100;
+// Files LaTeX engines and helper tools regenerate next to the document.  They
+// are outputs, not manuscript inputs.  Keep this list to compound suffixes so
+// real inputs such as .tex, .bib, .sty, .cls, .png or .jpg are never excluded.
+const COMPILER_INTERMEDIATE_SUFFIXES = Object.freeze([
+  ".synctex.gz", ".synctex", ".run.xml", ".fdb_latexmk",
+  ".aux", ".log", ".toc", ".out", ".fls", ".bbl", ".blg", ".nav", ".snm",
+  ".vrb", ".idx", ".ind", ".ilg", ".lof", ".lot", ".bcf", ".xdv", ".dvi", ".pdf",
+]);
+const OS_METADATA_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini", ".localized"]);
 const hash = data => createHash("sha256").update(data).digest("hex");
 const relative = (root, file) => path.relative(root, file).split(path.sep).join("/") || ".";
+
+function isIgnoredObservationPath(relativePath) {
+  const parts = relativePath.split("/"), name = parts.at(-1).toLowerCase();
+  if (parts.some((part) => EXCLUDED_DIRECTORIES.has(part))) return true;
+  if (OS_METADATA_NAMES.has(name) || name.startsWith("._")) return true;
+  return COMPILER_INTERMEDIATE_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
+
+function normalizeObservedPath(filename, directory) {
+  const observed = String(filename).replaceAll("\\", "/");
+  // A recursive watcher reports the watched directory's own name for metadata
+  // changes on the root, which is not a manuscript entry.
+  if (!observed || observed === "." || observed === path.basename(directory)) return "";
+  if (path.posix.isAbsolute(observed) || path.win32.isAbsolute(observed)) return "";
+  if (observed.split("/").some((part) => !part || part === "." || part === "..")) return "";
+  return observed;
+}
+
+function pathStillExists(workspace, relativePath) {
+  try { fs.lstatSync(workspacePath(workspace, relativePath, { mustExist: false })); return true; }
+  catch (error) { return error.code !== "ENOENT"; }
+}
+
+// Yield to the event loop for a bounded real-time window so late OS events
+// arrive.  Deliberately avoid setTimeout: compiler timeout tests replace it
+// with a fake clock, while this window measures I/O delivery, not compiler time.
+async function settleObservationWindow(ms) {
+  const deadline = process.hrtime.bigint() + BigInt(ms) * 1_000_000n;
+  while (process.hrtime.bigint() < deadline) await new Promise((resolve) => setImmediate(resolve));
+}
+
+/**
+ * Watch the manuscript directory while a compiler runs.  The observer only
+ * reports paths; contents are not copied because transient files may already
+ * be gone when the build finishes.
+ */
+function watchManuscriptDirectory(root, projectPath, { knownInputs = [], settleMs = OBSERVATION_SETTLE_MS } = {}) {
+  let workspace, directory;
+  try {
+    workspace = workspacePath(root);
+    directory = workspacePath(workspace, projectPath);
+  } catch (error) {
+    return { finish: async () => ({ available: false, error: error.message, transient_inputs: [] }), close: () => {} };
+  }
+  const changedPaths = new Set();
+  let watcher, unavailable = "", unidentified = false, closed = false;
+  const fail = (error) => { if (!unavailable) unavailable = error?.message || String(error); };
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    try { watcher?.close(); } catch (error) { fail(error); }
+  };
+  const absolute = (observed) => projectPath && projectPath !== "." ? `${projectPath}/${observed}` : observed;
+
+  try {
+    watcher = fs.watch(directory, { recursive: true, persistent: false }, (_event, filename) => {
+      if (!filename) { unidentified = true; return; }
+      const observed = normalizeObservedPath(filename, directory);
+      if (observed && !isIgnoredObservationPath(observed)) changedPaths.add(observed);
+    });
+    watcher.on("error", (error) => { fail(error); close(); });
+  } catch (error) { fail(error); }
+
+  async function finish() {
+    if (unavailable) return { available: false, error: unavailable, transient_inputs: [] };
+    try {
+      if (settleMs > 0) await settleObservationWindow(settleMs);
+      close();
+      if (unavailable) return { available: false, error: unavailable, transient_inputs: [] };
+      if (unidentified) return { available: false, error: "The manuscript directory watcher reported a change without a path.", transient_inputs: [] };
+      const known = new Set(knownInputs);
+      const transientInputs = [...changedPaths]
+        .map(absolute)
+        .filter((relativePath) => !known.has(relativePath) && !pathStillExists(workspace, relativePath))
+        .sort();
+      return { available: true, error: "", transient_inputs: transientInputs };
+    } catch (error) {
+      return { available: false, error: error.message, transient_inputs: [] };
+    } finally { close(); }
+  }
+
+  return { finish, close };
+}
 
 function fileDigest(file) {
   const digest = createHash("sha256"), buffer = Buffer.allocUnsafe(64 * 1024);
@@ -52,8 +148,10 @@ function artifact(root, file) {
   return { path: relative(root, file), bytes: digest.bytes, sha256: digest.sha256 };
 }
 
-function writeManuscriptSnapshot({ root, buildDirectory, buildId, requested, started, finished, pdfPath, log, compiled, engine }) {
+function writeManuscriptSnapshot({ root, buildDirectory, buildId, requested, started, finished, pdfPath, log, compiled, engine, observation = {} }) {
   const sourceChanged = requested.source_version !== started.source_version || started.source_version !== finished.source_version || started.observation_version !== finished.observation_version;
+  const transientInputs = Array.isArray(observation.transient_inputs) ? observation.transient_inputs : [];
+  const observationAvailable = observation.available !== false;
   const logFile = path.join(buildDirectory, "build-output.log");
   fs.writeFileSync(logFile, log);
   const pdf = pdfPath && fs.existsSync(pdfPath) ? artifact(root, pdfPath) : null;
@@ -62,7 +160,15 @@ function writeManuscriptSnapshot({ root, buildDirectory, buildId, requested, sta
     created_at: new Date().toISOString(), engine, requested_source: requested,
     started_source_version: started.source_version, finished_source_version: finished.source_version,
     source_changed: sourceChanged,
-    status: sourceChanged ? "stale" : !compiled || !pdf ? "failed" : requested.untracked_inputs.length ? "unverified" : "current",
+    // A transient manuscript input means the compiler may have read bytes that
+    // no longer exist, so the finished hashes cannot certify the artifact even
+    // when the build itself succeeded.  Untracked inputs and an unavailable
+    // watcher have the same effect: the preview exists but is not certifiable.
+    status: sourceChanged ? "stale"
+      : !compiled || !pdf ? "failed"
+        : transientInputs.length || !observationAvailable || requested.untracked_inputs.length ? "unverified" : "current",
+    transient_inputs: transientInputs,
+    observation: { available: observationAvailable, error: observation.error || "" },
     pdf, log: { ...artifact(root, logFile), retention: "bounded compiler output" },
     manifest_path: relative(root, path.join(buildDirectory, "source-snapshot.json")),
   };
@@ -81,7 +187,20 @@ function readManuscriptSnapshot(root, manifestPath) {
   let pdfMatches = false;
   try { pdfMatches = Boolean(snapshot.pdf && fileDigest(workspacePath(workspace, snapshot.pdf.path)).sha256 === snapshot.pdf.sha256); } catch (error) { verificationError ||= error.message; }
   const sourceMatches = Boolean(current && current.source_version === snapshot.requested_source.source_version);
-  return { ...snapshot, current_source_version: current?.source_version || null, source_matches: sourceMatches, pdf_matches: pdfMatches, verification_error: verificationError, current: snapshot.status === "current" && sourceMatches && pdfMatches };
+  const transientInputs = Array.isArray(snapshot.transient_inputs) ? snapshot.transient_inputs : [];
+  const observationAvailable = snapshot.observation?.available !== false;
+  const reasons = [];
+  if (verificationError) reasons.push(verificationError);
+  if (transientInputs.length) reasons.push(`Compilation created and removed manuscript inputs: ${transientInputs.join(", ")}. The saved PDF cannot be certified against the current sources; compile again.`);
+  else if (!observationAvailable) reasons.push(`The manuscript directory could not be observed during compilation${snapshot.observation.error ? `: ${snapshot.observation.error}` : ""}. The saved PDF cannot be certified against the current sources; compile again.`);
+  if (!sourceMatches) reasons.push("The manuscript sources no longer match the saved build.");
+  if (!pdfMatches) reasons.push("The saved PDF is missing or its bytes changed after compilation.");
+  const isCurrent = snapshot.status === "current" && sourceMatches && pdfMatches && !transientInputs.length && observationAvailable;
+  return {
+    ...snapshot, current_source_version: current?.source_version || null, source_matches: sourceMatches, pdf_matches: pdfMatches,
+    verification_error: verificationError, verification_reason: isCurrent ? "" : reasons.join(" ") || `This build is not current (${snapshot.status}).`,
+    current: isCurrent,
+  };
 }
 
 /** Retain five completed previews per document; never active builds. */
@@ -107,4 +226,4 @@ function pruneManuscriptPreviews(root, manifestPath, keep = 5) {
   return { removed, errors };
 }
 
-module.exports = { captureManuscriptSources, fileDigest, writeManuscriptSnapshot, readManuscriptSnapshot, pruneManuscriptPreviews };
+module.exports = { captureManuscriptSources, fileDigest, writeManuscriptSnapshot, readManuscriptSnapshot, pruneManuscriptPreviews, watchManuscriptDirectory };

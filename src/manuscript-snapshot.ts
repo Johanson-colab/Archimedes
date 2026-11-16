@@ -29,6 +29,10 @@ export interface ManuscriptBuildSnapshot {
   started_source_version: string;
   finished_source_version: string | null;
   source_changed: boolean;
+  /** Manuscript paths observed to appear and disappear while the compiler ran. */
+  transient_inputs: string[];
+  /** Whether the manuscript directory could be watched for the whole build. */
+  observation: { available: boolean; error: string };
   status: 'current' | 'stale' | 'failed' | 'unverified';
   pdf: ManuscriptSourceFile | null;
   log: ManuscriptSourceFile & { retention: 'bounded compiler output' };
@@ -41,5 +45,7 @@ export interface ManuscriptBuildVerification extends ManuscriptBuildSnapshot {
   source_matches: boolean;
   pdf_matches: boolean;
   verification_error: string;
+  /** Human-readable reason the saved build cannot be handed off; empty when current. */
+  verification_reason: string;
   current: boolean;
 }

@@ -5,7 +5,7 @@ const { spawn } = require("node:child_process");
 const { StringDecoder } = require("node:string_decoder");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexTemplates = require("../shared/latex-templates.json");
-const { captureManuscriptSources, writeManuscriptSnapshot, pruneManuscriptPreviews } = require("./manuscript-snapshot.cjs");
+const { captureManuscriptSources, writeManuscriptSnapshot, pruneManuscriptPreviews, watchManuscriptDirectory } = require("./manuscript-snapshot.cjs");
 
 const PAPER_EXTENSIONS = new Set([".tex", ".bib", ".bst", ".cls", ".sty", ".cfg"]);
 const SKIPPED_DIRECTORIES = new Set([".archimedes", ".git", "node_modules", "dist", "build", ".next"]);
@@ -316,10 +316,20 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   // Tectonic may download its package bundle on the first run, which can take
   // longer than a local TeX distribution's compile.
   const runOptions = engineKind === "tectonic" && !options.timeoutMs ? { ...options, timeoutMs: 180_000 } : options;
-  let run = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
-  if (engineKind === "pdflatex" && run.code === 0) {
-    const secondPass = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
-    run = { ...secondPass, output: `${run.output}\n${secondPass.output}` };
+  // Observe the manuscript tree before spawn: a helper can create and remove
+  // an input (for example a generated .tex section) while the compiler runs,
+  // and the finished byte capture alone would never see it.
+  const observation = watchManuscriptDirectory(root, startedSource.project_path, { knownInputs: startedSource.files.map((file) => file.path) });
+  let run, manuscriptObservation;
+  try {
+    run = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
+    if (engineKind === "pdflatex" && run.code === 0) {
+      const secondPass = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
+      run = { ...secondPass, output: `${run.output}\n${secondPass.output}` };
+    }
+    manuscriptObservation = await observation.finish();
+  } finally {
+    observation.close();
   }
   const absolutePdf = path.join(buildDirectory, `${documentName}.pdf`);
   const hasPdf = fs.existsSync(absolutePdf) && fs.statSync(absolutePdf).isFile();
@@ -331,12 +341,20 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   let finishedSource;
   try { finishedSource = captureManuscriptSources(root, sourcePath); }
   catch (error) { finishedSource = { ...startedSource, source_version: null, observation_version: null, verification_error: error.message }; }
-  const snapshot = writeManuscriptSnapshot({ root, buildDirectory, buildId, requested: requestedSource, started: startedSource, finished: finishedSource, pdfPath: hasPdf ? absolutePdf : null, log: String(run.output || log), compiled: ok, engine: path.basename(executable) });
+  const snapshot = writeManuscriptSnapshot({ root, buildDirectory, buildId, requested: requestedSource, started: startedSource, finished: finishedSource, pdfPath: hasPdf ? absolutePdf : null, log: String(run.output || log), compiled: ok, engine: path.basename(executable), observation: manuscriptObservation });
   const previewCleanup = pruneManuscriptPreviews(root, snapshot.manifest_path);
+  if (snapshot.transient_inputs.length) diagnostics.unshift({
+    line: null,
+    message: `The compiler created and removed manuscript files during this build: ${snapshot.transient_inputs.join(", ")}. The PDF preview is available, but the build cannot be certified as current because those files may have supplied inputs. Compile again before using it as the final PDF.`,
+  });
   if (snapshot.source_changed) {
     ok = false;
     diagnostics.unshift({ line: null, message: "The manuscript sources changed during compilation. Compile again before using this PDF." });
   }
+  if (!snapshot.observation.available && snapshot.status === "unverified") diagnostics.unshift({
+    line: null,
+    message: `The manuscript directory could not be observed during compilation${snapshot.observation.error ? `: ${snapshot.observation.error}` : "."} The PDF preview is available but cannot be certified as current.`,
+  });
   if (run.timedOut) diagnostics.unshift({
     line: null, message: "LaTeX compilation timed out.",
     help: run.timeoutReason === "idle"
