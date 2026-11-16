@@ -1,22 +1,16 @@
-# Research App entry comparison
+# Research-app entry notice evidence
 
-All images use the actual renderer at 1440 × 1000 CSS pixels, charcoal, English,
-default text size and the same deterministic bundled preview project. Before is
-upstream `1f4b375`; after shows this PR's feature code.
+Both images use the actual `.main-workspace` grid with a full-height research-app
+view at 980×620, Charcoal and English. The message and the synthetic catalog
+content are identical.
 
-| Entry | Before | After |
-| --- | --- | --- |
-| Home: choose Reproduce with the default hidden-app preferences | ![Home route before](home-before.png) | ![Reproduce opens after](home-after.png) |
-| FigureForge: empty input and unconfigured API model, same enabled apps | ![Figure setup before](configure-before.png) | ![Visible model setup route](configure-after.png) |
-| Existing chart gallery, same default filters and catalogue-loading state | ![Data charts label](references-before.png) | ![Paper chart references label](references-after.png) |
+- `before.png` uses the previous markup from `6ade07b`: the entry error is a
+  normal second grid child using `.composer-attachment-error`, rendered as 9px
+  text at the bottom edge of the workspace.
+- `after.png` uses `ResearchAppEntryNotice` (the real `InlineNotice` with
+  `app-entry-notice`): a bounded, centered danger alert at the top of the
+  workspace with a dismiss control, independent of the full-height view.
 
-The baseline home action returns to chat because Reproduce is hidden. The new
-route first saves the enabled preference and opens the real empty Reproduce
-view. FigureForge's after notice has an actual **Configure model** action; it was
-clicked and opened Settings → Models. The chart pair shows the entry rename;
-gallery data behavior is verified separately with its existing component tests.
-
-The actual preview journey also opened **Browse extensions** from the command
-palette on the Available tab and followed FigureForge's **Paper chart
-references** link, enabling that previously hidden app. No model task or
-reproduction execution was started.
+The screenshots do not exercise MinerU authentication. They show presentation
+of an entry failure only. The effective-harness behavior of the model setup hint
+is covered by `electron/research-app-entry-notice.test.cjs`.
