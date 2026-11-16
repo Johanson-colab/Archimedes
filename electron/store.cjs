@@ -6,6 +6,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const bibliographyRecords = require("./bibliography-records.cjs");
 const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
 const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles.cjs");
@@ -340,6 +341,13 @@ function schema(db) {
       paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
       added_at TEXT NOT NULL,
       PRIMARY KEY (library_id, paper_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS paper_bibliography (
+      paper_id TEXT PRIMARY KEY NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      citekey TEXT NOT NULL DEFAULT '',
+      entry_type TEXT NOT NULL DEFAULT 'article',
+      updated_at TEXT NOT NULL
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS paper_reader_assets (
@@ -986,11 +994,11 @@ function hydrateAction(row) {
 }
 
 function canonicalPaperKey(paper) {
-  if (paper.s2_id) return `s2:${paper.s2_id}`;
-  if (paper.arxiv_id) return `arxiv:${paper.arxiv_id.toLowerCase()}`;
-  if (paper.doi) return `doi:${paper.doi.toLowerCase()}`;
-  const normalizedTitle = String(paper.title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  return `title:${normalizedTitle}`;
+  for (const key of ["s2_id", "arxiv_id", "doi"]) {
+    const value = bibliographyRecords.identifier[key](paper[key]);
+    if (value) return `${key === "s2_id" ? "s2" : key === "arxiv_id" ? "arxiv" : "doi"}:${value}`;
+  }
+  return `title:${bibliographyRecords.titleIdentity(paper.title)}`;
 }
 
 function seedLibraries(db) {
@@ -1049,6 +1057,7 @@ function paperUserState(paperId, userId = localIdentity.userId) {
 
 function hydratePaper(row) {
   const state = paperUserState(row.id);
+  const bibliography = bibliographyRecords.bibliography(requireDatabase(), row.id);
   return {
     ...row,
     authors: JSON.parse(row.authors_json || "[]"),
@@ -1058,6 +1067,8 @@ function hydratePaper(row) {
     starred: Boolean(state?.starred ?? row.starred),
     notes: state?.notes ?? row.notes,
     state_updated_at: state?.updated_at ?? null,
+    citekey: bibliography.citekey,
+    entry_type: bibliography.entryType,
   };
 }
 
@@ -1652,7 +1663,7 @@ function addPaper(libraryId, paper) {
   if (conferenceJson && conferenceJson.length > 10000) throw new Error("Conference metadata is too large.");
   const now = timestamp();
   const key = String(paper.canonical_key || "").trim() || canonicalPaperKey(paper);
-  const existing = db.prepare("SELECT id FROM papers WHERE canonical_key = ?").get(key);
+  const existing = bibliographyRecords.findImportMatch(db, paper, key, { libraryId: library.id, projectId: library.project_id });
   const paperId = existing?.id || randomUUID();
 
   if (!existing) {
@@ -1667,6 +1678,13 @@ function addPaper(libraryId, paper) {
       paper.arxiv_id || "", paper.s2_id || "", paper.source || "manual", paper.citation_count || 0,
       paper.github_url || "", Number(paper.github_stars) || 0, now, now,
     );
+  } else {
+    const fields = ["venue", "abstract", "url", "pdf_url", "doi", "arxiv_id", "s2_id"];
+    const assignments = fields.map(field => `${field} = CASE WHEN ${field} = '' THEN ? ELSE ${field} END`);
+    db.prepare(`UPDATE papers SET ${assignments.join(", ")},
+      authors_json = CASE WHEN authors_json = '[]' THEN ? ELSE authors_json END,
+      year = COALESCE(year, ?), updated_at = ? WHERE id = ?`)
+      .run(...fields.map(field => paper[field] || ""), JSON.stringify(paper.authors || []), paper.year || null, now, paperId);
   }
   db.prepare(`
     INSERT OR IGNORE INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
@@ -1677,12 +1695,22 @@ function addPaper(libraryId, paper) {
       .run(paper.github_url, Number(paper.github_stars) || 0, now, paperId);
   }
   if (conferenceJson) {
-    db.prepare(`UPDATE papers SET conference_json = ?, venue = ?, year = ?,
+    db.prepare(`UPDATE papers SET conference_json = CASE WHEN conference_json IS NULL OR conference_json IN ('', 'null') THEN ? ELSE conference_json END, venue = CASE WHEN venue = '' THEN ? ELSE venue END, year = COALESCE(year, ?),
       pdf_url = CASE WHEN pdf_url = '' THEN ? ELSE pdf_url END, updated_at = ? WHERE id = ?`)
       .run(conferenceJson, paper.venue || "", paper.year || null, paper.pdf_url || "", now, paperId);
   }
   db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, paperId, now);
   db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(now, libraryId);
+  return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
+}
+
+function getPaperBibliography(paperId) {
+  const db = requireDatabase(); bibliographyRecords.assertPaperAccess(db, paperId, canAccessProject);
+  return bibliographyRecords.bibliography(db, paperId);
+}
+function setPaperBibliography(paperId, patch = {}) { return bibliographyRecords.setBibliography(requireDatabase(), paperId, patch, canAccessProject); }
+function repairLibraryPaperMetadata(paperId, patch = {}) {
+  const db = requireDatabase(); bibliographyRecords.repairMetadata(db, paperId, patch, canAccessProject);
   return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
 }
 
@@ -3469,6 +3497,9 @@ function listReproductionAttempts(runId) {
 }
 
 module.exports = {
+  getPaperBibliography,
+  setPaperBibliography,
+  repairLibraryPaperMetadata,
   nativeAgentBindings,
   bindResearchThreadHarness,
   compactResearchThread,
