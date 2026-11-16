@@ -79,7 +79,7 @@ import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
 import ProactiveAgentPanel from "./ProactiveAgentPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
-import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
+import { researchStages, stageForMode, type ResearchStage } from "./research-path";
 import { useProactiveAgent } from "./useProactiveAgent";
 import type { ProactiveSuggestion } from "./proactive-types";
 import CopyButton from "./CopyButton";
@@ -1436,13 +1436,6 @@ function App() {
   const [interrupting, setInterrupting] = useState(false);
   const [chatViewNonce, setChatViewNonce] = useState(0);
   const [researchMode, setResearchMode] = useState<ResearchMode>("standard");
-  const [acceptedStages, setAcceptedStages] = useState<ResearchStageId[]>(() => {
-    const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
-    return researchStages.slice(0, activeIndex).map((stage) => stage.id);
-  });
-  const [staleStages, setStaleStages] = useState<ResearchStageId[]>([]);
-  const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
-  const [journeyNotice, setJourneyNotice] = useState("");
   const [researchPanelOpen, setResearchPanelOpen] = useState(readResearchPanelOpen);
   const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
   const [proactiveNotice, setProactiveNotice] = useState("");
@@ -1576,14 +1569,10 @@ function App() {
   noteValuesRef.current = noteValues;
   threadsRef.current = threads;
 
-  const activeStage = stageForMode(researchMode as ResearchMode);
   const pinnedPathThread = pinnedPathThreadId ? threads.find((thread) => thread.id === pinnedPathThreadId) ?? null : null;
   const pathThread = pinnedPathThread ?? activeThread;
   const pathThreadIsActive = Boolean(pathThread && pathThread.id === activeThreadId);
   const pathStage = stageForMode((pathThreadIsActive || !pathThread ? researchMode : pathThread.mode) as ResearchMode);
-  const pathStageIndex = Math.max(0, researchStages.findIndex((stage) => stage.id === pathStage.id));
-  const pathAcceptedStages = pathThreadIsActive ? acceptedStages : researchStages.slice(0, pathStageIndex).map((stage) => stage.id);
-  const pathStaleStages = pathThreadIsActive ? staleStages : [];
   const pathProject = projects.find((project) => project.id === (pathThread?.project_id ?? activeProjectId)) ?? null;
   const pathIsPinned = Boolean(pinnedPathThreadId);
   const pathThreadInactive = Boolean(pinnedPathThreadId && !pathThreadIsActive);
@@ -1604,17 +1593,6 @@ function App() {
     const timer = window.setTimeout(() => setProactiveNotice(""), 4200);
     return () => window.clearTimeout(timer);
   }, [proactiveNotice]);
-
-  useEffect(() => {
-    const activeIndex = Math.max(0, researchStages.findIndex((stage) => stage.mode === researchMode));
-    setAcceptedStages(researchStages.slice(0, activeIndex).map((stage) => stage.id));
-    setStaleStages([]);
-    setSelectedStage(null);
-    setJourneyNotice("");
-    // A thread owns its research path. The UI state resets when the thread
-    // changes, matching the previous conversation-local behavior.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeThreadId, chatViewNonce]);
 
   useEffect(() => {
     applyAppearance(document.documentElement, appearance, theme);
@@ -3235,31 +3213,8 @@ function App() {
     if (target) void openResearchThread(target);
   }
 
-  function acceptCurrentCheckpoint() {
-    const currentIndex = researchStages.findIndex((stage) => stage.id === activeStage.id);
-    const nextStage = researchStages[currentIndex + 1];
-    setAcceptedStages((current) => current.includes(activeStage.id) ? current : [...current, activeStage.id]);
-    setStaleStages((current) => current.filter((id) => id !== activeStage.id));
-    setJourneyNotice(`${activeStage.checkpoint} accepted${nextStage ? `. Archimedes will route new work toward ${nextStage.label}.` : ". Research cycle complete."}`);
-    setSelectedStage(null);
-    if (nextStage) setResearchMode(nextStage.mode);
-  }
-
-  function requestCheckpointChanges() {
-    setMainSection("chat");
-    setComposerRequest({
-      id: `checkpoint-${Date.now()}`,
-      text: `Revise the current ${activeStage.checkpoint.toLowerCase()}. Preserve the accepted evidence, explain what changed, and prepare a new checkpoint for review.`,
-    });
-    setSelectedStage(null);
-  }
-
-  function returnToStage(stage: ResearchStage) {
-    const targetIndex = researchStages.findIndex((candidate) => candidate.id === stage.id);
-    const downstream = researchStages.slice(targetIndex + 1).map((candidate) => candidate.id);
-    setStaleStages((current) => Array.from(new Set([...current, ...downstream.filter((id) => acceptedStages.includes(id))])));
-    setJourneyNotice(`Returned to ${stage.label}. Downstream accepted work is preserved and marked stale until revalidated.`);
-    setSelectedStage(null);
+  function changeWorkMode(stage: ResearchStage) {
+    if (pathThreadInactive) return;
     setResearchMode(stage.mode);
   }
 
@@ -3347,7 +3302,7 @@ function App() {
     { id: "new-research", group: t("Work"), label: t("New research task"), detail: t("Start a chat in the current project"), shortcut: "Ctrl N", icon: <Plus size={15} />, run: () => startNewTask() },
     { id: "new-project", group: t("Work"), label: t("New project"), detail: t("Bind a folder for related chats"), icon: <FolderOpen size={15} />, run: openNewProject },
     { id: "open-chat", group: t("Work"), label: t("Open current chat"), icon: <MessageCircle size={15} />, run: () => setMainSection("chat") },
-    { id: "research-path", group: t("Panels"), label: t("Research path"), detail: researchPanelOpen ? t("Hide the Research path panel") : t("Show the Research path panel"), icon: <Route size={15} />, run: () => setResearchPanelOpen((open) => !open) },
+    { id: "research-path", group: t("Panels"), label: t("Work modes"), detail: researchPanelOpen ? t("Hide Work modes") : t("Show Work modes"), icon: <Route size={15} />, run: () => setResearchPanelOpen((open) => !open) },
     { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? (proactive.modelReady ? t("Start proactive suggestions") : t("Set up proactive suggestions")) : t("Review suggestions"), icon: <Sparkle size={15} />, run: toggleProactiveDock },
     { id: "proactive-settings", group: t("System"), label: t("Proactive settings"), icon: <Shield size={15} />, run: () => { setSettingsSection("proactive"); setSettingsOpen(true); } },
     ...moduleCommands,
@@ -3496,8 +3451,8 @@ function App() {
             <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={() => setResearchPanelOpen((open) => !open)}
-              title={researchPanelOpen ? t("Hide Research path") : t("Show Research path")}
-              aria-label={researchPanelOpen ? t("Hide Research path") : t("Show Research path")}
+              title={researchPanelOpen ? t("Hide Work modes") : t("Show Work modes")}
+              aria-label={researchPanelOpen ? t("Hide Work modes") : t("Show Work modes")}
               aria-pressed={researchPanelOpen}
             >
               <Route size={16} />
@@ -3615,20 +3570,13 @@ function App() {
           research={<ResearchPathPanel
             stages={researchStages}
             activeStage={pathStage}
-            acceptedStages={pathAcceptedStages}
-            staleStages={pathStaleStages}
-            selectedStage={selectedStage}
             agentBusy={agentBusy && Boolean(pathThread) && runningThreadId === pathThread?.id}
-            notice={pathThreadIsActive ? journeyNotice : ""}
             projectName={pathProject?.name ?? t("No project")}
             threadTitle={pathThread?.title ?? t("No active session")}
             pinned={pathIsPinned}
             threadInactive={pathThreadInactive}
             hasThread={Boolean(pathThread)}
-            onSelectStage={setSelectedStage}
-            onAccept={acceptCurrentCheckpoint}
-            onRequestChanges={requestCheckpointChanges}
-            onReturn={returnToStage}
+            onChangeMode={changeWorkMode}
             onTogglePin={togglePathPin}
             onOpenThread={openPathThread}
             onCollapse={() => setResearchPanelOpen(false)}

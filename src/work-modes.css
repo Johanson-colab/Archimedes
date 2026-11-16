@@ -1,0 +1,7 @@
+.work-mode-panel .work-mode-heading { color: var(--text-secondary); font-size: 11px; }
+.work-mode-panel .agent-path-rail { flex: 0 0 auto; padding: 8px 12px; gap: 4px; }
+.work-mode-panel .research-path-stage { padding: 5px 8px; color: var(--text-secondary); }
+.work-mode-panel .research-path-stage.active, .work-mode-panel .research-path-stage.running { color: var(--text-primary); background: var(--surface-control-active); }
+.work-mode-panel .work-mode-description { padding: 0 12px 10px; }
+.work-mode-panel .work-mode-description p { margin: 0 0 5px; color: var(--text-primary); font-size: 11px; }
+.work-mode-panel .work-mode-description small { color: var(--text-secondary); font-size: 10px; }

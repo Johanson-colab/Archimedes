@@ -1,136 +1,42 @@
-import { ArrowUpRight, Check, Pin, RefreshCw, X } from "lucide-react";
+import { ArrowUpRight, Pin, X } from "lucide-react";
 import { useUISettings } from "./i18n";
-import type { ResearchStage, ResearchStageId } from "./research-path";
+import type { ResearchStage } from "./research-path";
+import "./work-modes.css";
 
-type ResearchPathPanelProps = {
+type Props = {
   stages: ResearchStage[];
   activeStage: ResearchStage;
-  acceptedStages: ResearchStageId[];
-  staleStages: ResearchStageId[];
-  selectedStage: ResearchStageId | null;
   agentBusy: boolean;
-  notice: string;
   projectName: string;
   threadTitle: string;
   pinned: boolean;
   threadInactive: boolean;
   hasThread: boolean;
-  onSelectStage: (stage: ResearchStageId | null) => void;
-  onAccept: () => void;
-  onRequestChanges: () => void;
-  onReturn: (stage: ResearchStage) => void;
+  onChangeMode: (stage: ResearchStage) => void;
   onTogglePin: () => void;
   onOpenThread: () => void;
   onCollapse: () => void;
 };
 
-/**
- * The research path is thread state. It stays in the global dock, follows the
- * active thread by default, and can be pinned to a specific thread so it keeps
- * showing while the user is in Library, Files, or Paper writing.
- */
-export default function ResearchPathPanel({
-  stages,
-  activeStage,
-  acceptedStages,
-  staleStages,
-  selectedStage,
-  agentBusy,
-  notice,
-  projectName,
-  threadTitle,
-  pinned,
-  threadInactive,
-  hasThread,
-  onSelectStage,
-  onAccept,
-  onRequestChanges,
-  onReturn,
-  onTogglePin,
-  onOpenThread,
-  onCollapse,
-}: ResearchPathPanelProps) {
+/** A message mode is a routing choice, not evidence that research is complete. */
+export default function ResearchPathPanel({ stages, activeStage, agentBusy, projectName, threadTitle, pinned, threadInactive, hasThread, onChangeMode, onTogglePin, onOpenThread, onCollapse }: Props) {
   const { t } = useUISettings();
-  const activeIndex = Math.max(0, stages.findIndex((stage) => stage.id === activeStage.id));
-  const shownStage = selectedStage ? stages.find((stage) => stage.id === selectedStage) ?? activeStage : activeStage;
-  const shownIsActive = shownStage.id === activeStage.id;
-  const canAct = hasThread && !threadInactive && shownIsActive;
-
-  return <div className="agent-path-panel dock-panel">
+  return <div className="agent-path-panel dock-panel work-mode-panel">
     <header className="agent-path-head dock-panel-head">
-      <span className="agent-path-project" title={threadTitle}>
-        <i aria-hidden="true" />
-        {projectName}
-      </span>
-      {pinned && threadInactive && <span className="agent-path-pin-state inactive">{t("Pinned")}</span>}
-      <span className="agent-path-count">{activeIndex + 1} / {stages.length}</span>
+      <span className="agent-path-project" title={threadTitle}><i aria-hidden="true" />{projectName}</span>
+      <span className="work-mode-heading">{t("Work modes")}</span>
       <div className="agent-path-actions">
-        {notice && <span className="agent-path-notice" title={notice}>{notice}</span>}
-        <button
-          className={pinned ? "agent-path-icon on" : "agent-path-icon"}
-          onClick={onTogglePin}
-          title={pinned ? t("Unpin this session") : t("Pin this session")}
-          aria-label={pinned ? t("Unpin this session") : t("Pin this session")}
-          aria-pressed={pinned}
-          disabled={!hasThread && !pinned}
-        >
-          <Pin size={12} />
-        </button>
-        <button
-          className="agent-path-icon"
-          onClick={onOpenThread}
-          title={t("Open session")}
-          aria-label={t("Open session")}
-          disabled={!hasThread}
-        >
-          <ArrowUpRight size={12} />
-        </button>
-        <button className="agent-path-icon" onClick={onCollapse} title={t("Close Research path")} aria-label={t("Close Research path")}>
-          <X size={12} />
-        </button>
+        <button className={pinned ? "agent-path-icon on" : "agent-path-icon"} onClick={onTogglePin} title={pinned ? t("Unpin this session") : t("Pin this session")} aria-label={pinned ? t("Unpin this session") : t("Pin this session")} aria-pressed={pinned} disabled={!hasThread && !pinned}><Pin size={12} /></button>
+        <button className="agent-path-icon" onClick={onOpenThread} title={t("Open session")} aria-label={t("Open session")} disabled={!hasThread}><ArrowUpRight size={12} /></button>
+        <button className="agent-path-icon" onClick={onCollapse} title={t("Close Work modes")} aria-label={t("Close Work modes")}><X size={12} /></button>
       </div>
     </header>
-
-    <div className="research-path-track agent-path-rail" role="list" aria-label="Research stages">
-      {stages.map((stage, index) => {
-        const accepted = acceptedStages.includes(stage.id);
-        const stale = staleStages.includes(stage.id);
-        const active = stage.id === activeStage.id;
-        const state = stale ? "stale" : active ? (agentBusy ? "running" : "active") : accepted ? "accepted" : "planned";
-        return <div className="research-path-segment" role="listitem" key={stage.id}>
-          <button
-            className={`research-path-stage ${state} ${selectedStage === stage.id ? "selected" : ""}`}
-            onClick={() => onSelectStage(selectedStage === stage.id ? null : stage.id)}
-            aria-current={active ? "step" : undefined}
-            title={t(stage.checkpoint)}
-          >
-            <span className="research-path-node" aria-hidden="true">
-              {accepted && !stale ? <Check size={11} /> : index + 1}
-            </span>
-            <span className="research-path-label">{t(stage.label)}</span>
-          </button>
-          {index < stages.length - 1 && <span className={`research-path-line ${accepted && !stale ? "complete" : ""}`} aria-hidden="true" />}
-        </div>;
-      })}
+    <div className="research-path-track agent-path-rail" role="group" aria-label={t("Work modes")}>
+      {stages.map((stage) => <button key={stage.id} className={`research-path-stage ${stage.id === activeStage.id ? agentBusy ? "running" : "active" : ""}`} onClick={() => onChangeMode(stage)} disabled={threadInactive} aria-pressed={stage.id === activeStage.id} title={t(stage.description)}><span className="research-path-label">{t(stage.label)}</span></button>)}
     </div>
-
-    <div className="agent-path-checkpoint">
-      <div className="agent-path-checkpoint-copy">
-        <span>{shownIsActive ? t("Next checkpoint") : t(shownStage.label)}</span>
-        <strong>{t(shownStage.checkpoint)}</strong>
-        <p>{t(shownStage.description)}</p>
-      </div>
-      <div className="agent-path-checkpoint-actions">
-        {canAct && <>
-          <button className="agent-path-primary" onClick={onAccept}><Check size={11} />{t("Accept & advance")}</button>
-          <button onClick={onRequestChanges}><RefreshCw size={11} />{t("Request changes")}</button>
-        </>}
-        {shownIsActive && !canAct && <button onClick={onOpenThread} disabled={!hasThread}>
-          <ArrowUpRight size={11} />
-          {threadInactive ? t("Open pinned session") : hasThread ? t("Open session") : t("Start a research session")}
-        </button>}
-        {!shownIsActive && !threadInactive && <button onClick={() => onReturn(shownStage)}><RefreshCw size={11} />{t("Return here")}</button>}
-      </div>
+    <div className="work-mode-description">
+      <p>{t(activeStage.description)}</p>
+      {threadInactive ? <button className="quiet-button" onClick={onOpenThread}>{t("Open pinned session")}</button> : <small>{t("Sets the mode for your next message.")}</small>}
     </div>
   </div>;
 }
