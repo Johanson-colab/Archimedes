@@ -1,7 +1,7 @@
 # Existing manuscript entry
 
-The two captures use the same Chrome renderer window, Charcoal theme and
-3,968 × 2,622 capture bounds. Both point at the same synthetic execution
+The two captures use the same 1,440 × 1,000 renderer viewport and Charcoal theme.
+They are direct browser content screenshots without browser chrome. Both point at the same synthetic execution
 folder containing `paper/main.tex`, a section file and `references.bib`.
 The renderer mounts the branch's actual `PaperWritingView`; its local desktop
 bridge reads the fixture through the existing filesystem helpers.
