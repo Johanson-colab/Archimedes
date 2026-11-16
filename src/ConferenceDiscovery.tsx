@@ -18,6 +18,10 @@ const PAGE_SIZE = 40;
 function errorMessage(error: unknown) {
   return String(error).replace(/^Error:\s*/, "").replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, "");
 }
+function feedKey(value: { conference: ConferenceId; year: number; presentation: ConferencePresentation | "all"; topic: DailyDiscoveryTopic; submittedQuery: string; offset: number }) {
+  return JSON.stringify([value.conference, value.year, value.presentation, value.topic, value.submittedQuery, value.offset]);
+}
+type ConferenceFeed = { key: string; response: ConferenceSearchResponse | null; error: string; loading: boolean };
 
 export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryId, topic, onImported }: {
   storageKey?: string; bridge: ResearchDeskBridge; targetLibraryId: string; topic: DailyDiscoveryTopic; onImported: () => Promise<void>;
@@ -35,8 +39,17 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   const [query, setQuery] = useState(saved?.query ?? "");
   const [submittedQuery, setSubmittedQuery] = useState(saved?.submittedQuery ?? "");
   const [offset, setOffset] = useState<number>(saved?.offset ?? 0);
-  const [response, setResponse] = useState<ConferenceSearchResponse | null>(saved?.response ?? null);
-  const [loading, setLoading] = useState(!saved?.response);
+  const savedKey = saved?.response ? feedKey(saved) : "";
+  const responseCache = useRef(new Map<string, ConferenceSearchResponse>());
+  const [feed, setFeed] = useState<ConferenceFeed>(() => {
+    if (savedKey && saved?.response) responseCache.current.set(savedKey, saved.response);
+    return { key: savedKey, response: saved?.response ?? null, error: "", loading: !saved?.response };
+  });
+  const currentKey = feedKey({ conference, year, presentation, topic, submittedQuery, offset });
+  const visibleFeed = feed.key === currentKey ? feed : null;
+  const response = visibleFeed?.response ?? null;
+  const loadError = visibleFeed?.error ?? "";
+  const loading = visibleFeed ? visibleFeed.loading : true;
   const [error, setError] = useState("");
   const [adding, setAdding] = useState<string | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
@@ -52,7 +65,6 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
     }).catch((cause) => { if (active) setError(errorMessage(cause)); });
     return () => { active = false; };
   }, [bridge, targetLibraryId]);
-  const cachedKey = useRef(saved?.response ? JSON.stringify([saved.conference, saved.year, saved.presentation, saved.topic, saved.submittedQuery, saved.offset]) : "");
   useEffect(() => {
     if (!storageKey) return;
     try { window.localStorage.setItem(storageKey, JSON.stringify({ conference, year, presentation, topic, query, submittedQuery, offset, response: response && { ...response, papers: response.papers.map((paper) => ({ ...discoveryPaperFields(paper), published_at: paper.published_at, discovered_at: paper.discovered_at, categories: paper.categories, upvotes: paper.upvotes, github_url: paper.github_url, github_stars: paper.github_stars, conference: paper.conference })) } })); setStorageError(""); }
@@ -60,16 +72,20 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   }, [storageKey, conference, year, presentation, topic, query, submittedQuery, offset, response, t]);
   const selected = conferenceCatalog.find((entry) => entry.id === conference)!;
   const load = useCallback(async (forceRefresh = false) => {
-    const key = JSON.stringify([conference, year, presentation, topic, submittedQuery, offset]);
-    if (!forceRefresh && cachedKey.current === key) return;
+    const key = feedKey({ conference, year, presentation, topic, submittedQuery, offset });
+    const cached = responseCache.current.get(key);
+    if (!forceRefresh && cached) { setFeed({ key, response: cached, error: "", loading: false }); return; }
     const request = ++requestRef.current;
-    setLoading(true); setError(""); setResponse(null);
+    setFeed({ key, response: null, error: "", loading: true });
     try {
       const next = await bridge.searchConferencePapers({ conference, year, presentation, topic, query: submittedQuery, offset, limit: PAGE_SIZE, forceRefresh });
-      if (request === requestRef.current) { cachedKey.current = key; setResponse(next); }
+      if (request !== requestRef.current) return;
+      responseCache.current.set(key, next);
+      setFeed({ key, response: next, error: "", loading: false });
     } catch (failure) {
-      if (request === requestRef.current) setError(errorMessage(failure));
-    } finally { if (request === requestRef.current) setLoading(false); }
+      if (request !== requestRef.current) return;
+      setFeed({ key, response: null, error: errorMessage(failure), loading: false });
+    }
   }, [bridge, conference, year, presentation, topic, submittedQuery, offset]);
   useEffect(() => { void load(); return () => { requestRef.current += 1; }; }, [load]);
   const previousTopic = useRef(topic);
@@ -111,6 +127,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
       <div className="external-search-box"><Search size={16} /><input aria-label="Search conference papers" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && search()} placeholder="Search by title, author, abstract, or keyword" /><button className="primary-button" disabled={loading} onClick={search}><Search size={14} />Search</button></div>
       <span>{response ? `${response.total.toLocaleString()} papers` : `${selected.label} ${year}`}</span>
     </div>
+    {loadError && <InlineNotice tone="danger" className="library-error">{loadError}</InlineNotice>}
     {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
     {response && <div className="conference-catalog-status">
       <span><GraduationCap size={14} />{selected.label} {year} · {response.catalog_total.toLocaleString()} papers · {response.status === "not_held" ? "No edition" : response.status === "not_published" ? "Awaiting official publication" : response.stale ? "Cached, refresh pending" : response.cached ? "Cached" : "Official catalog"}</span>

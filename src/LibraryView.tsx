@@ -2550,7 +2550,8 @@ function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: Research
 function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { storageKey: string; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
   const { t } = useUISettings();
   const [saved] = useState(() => readDiscoverySnapshot(window.localStorage, storageKey));
-  const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(saved?.mode || initialMode);
+  const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode === "conference" ? "conference" : saved?.mode || initialMode);
+  useEffect(() => { if (initialMode === "conference") setMode("conference"); }, [initialMode]);
   const [range, setRange] = useState<DailyDiscoveryRange>(saved?.range || "7d");
   const [topic, setTopic] = useState<DailyDiscoveryTopic>(saved?.topic || "all");
   const [searchKind, setSearchKind] = useState<"quick" | "deep">(saved?.searchKind || "quick");
@@ -2561,11 +2562,13 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const targetLibraryIdRef = useRef(targetLibraryId);
   targetLibraryIdRef.current = targetLibraryId;
   const [response, setResponse] = useState<DailyDiscoveryResponse | null>(saved?.response || null);
+  const [responseKey, setResponseKey] = useState(() => saved?.response ? dailyFeedKey(saved) : "");
+  const [feedError, setFeedError] = useState<{ key: string; message: string } | null>(() => saved?.response?.warning ? { key: dailyFeedKey(saved), message: saved.response.warning } : null);
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<string | null>(null);
   const [previewPaper, setPreviewPaper] = useState<DailyPaper | null>(null);
-  const [error, setError] = useState(saved?.deepResponse?.warning || saved?.response?.warning || "");
+  const [error, setError] = useState(saved?.deepResponse?.warning || "");
   const [newLibraryName, setNewLibraryName] = useState("");
   const [newLibraryOpen, setNewLibraryOpen] = useState(false);
   const [creatingLibrary, setCreatingLibrary] = useState(false);
@@ -2576,13 +2579,18 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const feedRequestId = useRef(0);
   const deepRequestId = useRef(0);
   const responseRef = useRef<DailyDiscoveryResponse | null>(saved?.response || null);
-  const cachedFeedKey = useRef(saved?.response ? JSON.stringify([saved.mode, saved.range, saved.topic, saved.searchKind, saved.submittedQuery]) : "");
+  const responseKeyRef = useRef(responseKey);
+  const cachedFeedKey = useRef(saved?.response ? responseKey : "");
+  const currentFeedKey = dailyFeedKey({ mode, range, topic, searchKind, submittedQuery });
+  const displayedResponse = responseKey === currentFeedKey ? response : null;
+  const displayedFeedError = feedError?.key === currentFeedKey ? feedError.message : "";
+  const feedPending = !displayedFeedError && (loading || responseKey !== currentFeedKey);
   useEffect(() => {
     try {
-      writeDiscoverySnapshot(window.localStorage, storageKey, { mode, range, topic, searchKind, query, submittedQuery, targetLibraryId, response, deepResponse });
+      writeDiscoverySnapshot(window.localStorage, storageKey, { mode, range, topic, searchKind, query, submittedQuery, targetLibraryId, response: displayedResponse, deepResponse });
       setPersistenceError("");
     } catch { setPersistenceError(t("Discovery could not be saved on this device. Keep this page open or free storage before leaving.")); }
-  }, [storageKey, mode, range, topic, searchKind, query, submittedQuery, targetLibraryId, response, deepResponse, t]);
+  }, [storageKey, mode, range, topic, searchKind, query, submittedQuery, targetLibraryId, displayedResponse, deepResponse, t]);
   useEffect(() => () => { deepRequestId.current += 1; }, []);
   useEffect(() => { if (!libraries.some((item) => item.id === targetLibraryId) && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
   const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
@@ -2598,22 +2606,32 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const searchActive = Boolean(submittedQuery);
   const loadFeed = useCallback(async (forceRefresh = false) => {
     if (mode === "conference" || (searchKind === "deep" && submittedQuery)) return;
-    const cacheKey = JSON.stringify([mode, range, topic, searchKind, submittedQuery]);
-    if (!forceRefresh && cachedFeedKey.current === cacheKey && responseRef.current) return;
+    const cacheKey = dailyFeedKey({ mode, range, topic, searchKind, submittedQuery });
+    if (!forceRefresh && cachedFeedKey.current === cacheKey && responseRef.current) {
+      responseKeyRef.current = cacheKey;
+      setResponseKey(cacheKey);
+      setResponse(responseRef.current);
+      setLoading(false);
+      setFeedError(responseRef.current.warning ? { key: cacheKey, message: responseRef.current.warning } : null);
+      return;
+    }
     const requestId = ++feedRequestId.current;
     setLoading(true);
-    setError("");
+    setFeedError(null);
     try {
       const nextResponse = await bridge.discoverDailyPapers({ mode, range, topic, query: searchKind === "quick" ? submittedQuery : "", limit: 60, forceRefresh });
       if (requestId !== feedRequestId.current) return;
       cachedFeedKey.current = cacheKey;
       responseRef.current = nextResponse;
+      responseKeyRef.current = cacheKey;
+      setResponseKey(cacheKey);
       setResponse(nextResponse);
-      if (nextResponse.warning) setError(nextResponse.warning);
+      setFeedError(nextResponse.warning ? { key: cacheKey, message: nextResponse.warning } : null);
     } catch (discoverError) {
       if (requestId !== feedRequestId.current) return;
       const message = readableError(discoverError, "The daily paper feed could not be refreshed.");
-      setError(responseRef.current ? `${message} Showing the previous results.` : message);
+      const previous = responseKeyRef.current === cacheKey ? responseRef.current : null;
+      setFeedError({ key: cacheKey, message: previous ? `${message} Showing the previous results.` : message });
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
@@ -2624,7 +2642,7 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
     return () => { feedRequestId.current += 1; };
   }, [loadFeed]);
 
-  const visiblePapers = response?.papers ?? [];
+  const visiblePapers = displayedResponse?.papers ?? [];
 
   async function submitSearch() {
     const nextQuery = query.trim();
@@ -2742,10 +2760,11 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
       <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
         <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title={searchKind === "deep" ? "Deep search" : "Search"} aria-label={searchKind === "deep" ? "Deep search" : "Search"}>{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
       </div>
-      {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}{searchKind === "quick" && searchActive && response?.options?.topic === "all" && topic !== "all" ? " · title search across all topics" : ""}</span></div>}
+      {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && displayedResponse ? ` · ${displayedResponse.cached ? "cached" : "live"} · updated ${formatFeedTime(displayedResponse.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}{searchKind === "quick" && searchActive && displayedResponse?.options?.topic === "all" && topic !== "all" ? " · title search across all topics" : ""}</span></div>}
     </div>
+    {displayedFeedError && <InlineNotice tone="danger" className="library-error">{displayedFeedError}</InlineNotice>}
     {error && <InlineNotice tone={deepResponse ? "warning" : "danger"} className={deepResponse ? "daily-search-warning" : "library-error"}>{error}</InlineNotice>}
-    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : feedPending && !displayedResponse ? <LoadingState /> : displayedFeedError && !displayedResponse ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = discoveryPaperKey(paper);
       const isAdded = added.has(key);
       const isAdding = adding === key;
@@ -2788,6 +2807,10 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
     />}
     </>}
   </section>;
+}
+
+function dailyFeedKey(value: { mode: DailyDiscoveryMode | "conference"; range: DailyDiscoveryRange; topic: DailyDiscoveryTopic; searchKind: "quick" | "deep"; submittedQuery: string }) {
+  return JSON.stringify([value.mode, value.range, value.topic, value.searchKind, value.submittedQuery]);
 }
 
 function DailyPaperPreview({ paper, bridge, canSave, isAdded, isAdding, onAdd, onClose }: {

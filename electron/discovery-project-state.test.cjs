@@ -20,12 +20,13 @@ before(async () => {
     Dialog: ({ open, children }) => open ? element("section", { role: "dialog" }, children) : null,
     InlineNotice: ({ children }) => element("p", { role: "alert" }, children),
     StateView: ({ title, action }) => element("section", null, title, action),
+    readableError: (error, fallback) => (error instanceof Error ? error.message : String(error || fallback)).replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, "").trim() || fallback,
     DailyThumbnail: () => null, DailyPaperPreview: ({ paper, onClose }) => element("section", null, paper.title, element("button", { onClick: onClose }, "Close preview")),
-    DAILY_RANGES: [{ id: "7d", label: "7 days" }], DAILY_TOPICS: [{ id: "all", label: "All" }],
+    DAILY_RANGES: [{ id: "7d", label: "7 days" }], DAILY_TOPICS: [{ id: "all", label: "All" }, { id: "coding_agents", label: "Coding agents" }],
     ConferenceDiscovery: () => null,
   };
   const icons = require("lucide-react");
-  for (const name of ["Clock3", "Flame", "GraduationCap", "LoaderCircle", "RefreshCw", "Search", "Sparkle", "ArrowUp", "Plus", "Check", "Calendar", "ExternalLink", "Code2", "FileText"]) scope[name] = icons[name];
+  for (const name of ["Clock3", "Flame", "GraduationCap", "LoaderCircle", "RefreshCw", "Search", "Sparkle", "ArrowUp", "Plus", "Check", "Calendar", "ExternalLink", "Code2", "FileText", "BookOpen", "ChevronLeft", "ChevronRight"]) scope[name] = icons[name];
   const { transformWithOxc } = await import("vite");
   async function load(file, names, part) {
     let source = fs.readFileSync(path.join(__dirname, "../src", file), "utf8");
@@ -61,6 +62,19 @@ async function input(node, value) {
     Object.getOwnPropertyDescriptor(prototype, "value").set.call(node, value);
     node.dispatchEvent(new dom.window.Event("input", { bubbles: true })); await tick();
   });
+}
+async function choose(node, value) {
+  assert.ok(node);
+  await React.act(async () => {
+    node.value = value;
+    node.dispatchEvent(new dom.window.Event("change", { bubbles: true })); await tick();
+  });
+}
+function conferencePaper(title, year = 2026) {
+  return { ...fixture.paper, title, conference: { id: "icml", year, presentation: "oral", decision: "Accepted", track: "Main", source_url: "https://example.invalid/catalog", presentation_source_url: "", retrieved_at: "2026-11-16" } };
+}
+function conferenceResponse(options, papers = []) {
+  return { papers, total: papers.length, catalog_total: papers.length, presentation_counts: { oral: 0, poster: 0, spotlight: 0, unknown: 0 }, options, sources: ["https://example.invalid/catalog"], status: "available", warnings: [], fetched_at: "2026-11-16", cached: false, stale: false, has_more: false };
 }
 function database(name) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-discovery-")), idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-discovery-idle-"));
@@ -135,5 +149,99 @@ test("a delayed save into library A does not mark an unsaved candidate in newly 
     assert.equal(data.db.listPapers(first.id).length, 1); assert.equal(data.db.listPapers(second.id).length, 0);
     assert.ok([...document.querySelectorAll("button")].some(button => button.textContent.trim() === "Save" && !button.disabled), "B's candidate stays available to save");
     assert.ok(![...document.querySelectorAll("button")].some(button => button.textContent.trim() === "Saved"));
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("switching back to a cached conference key clears loading and restores that response", async () => {
+  window.localStorage.clear();
+  const data = database("Conference cache"), library = data.db.listLibraries(data.project.id)[0];
+  let releaseIclr, unmount;
+  data.bridge.searchConferencePapers = (options) => {
+    if (options.conference === "iclr") return new Promise((resolve) => { releaseIclr = () => resolve(conferenceResponse(options, [conferencePaper("ICLR delayed fixture")])); });
+    return Promise.resolve(conferenceResponse(options, [conferencePaper("ICML cached fixture")]));
+  };
+  try {
+    unmount = await mount(scope.ConferenceDiscovery, { storageKey: scope.discoveryStorageKey(data.root, data.project.id) + ":conference", bridge: data.bridge, projectId: data.project.id, targetLibraryId: library.id, topic: "all", onImported: async () => {} });
+    assert.ok(document.body.textContent.includes("ICML cached fixture"));
+    await choose(document.querySelector('[aria-label="Conference"]'), "iclr");
+    assert.ok(document.body.textContent.includes("Loading the official ICLR 2026 catalog"), "the new key is loading");
+    await choose(document.querySelector('[aria-label="Conference"]'), "icml");
+    assert.ok(!document.body.textContent.includes("Loading the official"), "switching back clears loading");
+    assert.ok(document.body.textContent.includes("ICML cached fixture"), "the cached response is restored");
+    assert.ok(!document.body.textContent.includes("ICLR delayed fixture"));
+    await React.act(async () => { releaseIclr(); await tick(); await tick(); });
+    assert.ok(document.body.textContent.includes("ICML cached fixture"));
+    assert.ok(!document.body.textContent.includes("ICLR delayed fixture"), "the abandoned request cannot replace the current response");
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("a failed conference query hides the previous response and retry loads the new filters", async () => {
+  window.localStorage.clear();
+  const data = database("Conference retry"), library = data.db.listLibraries(data.project.id)[0];
+  let fail2025 = true, unmount;
+  data.bridge.searchConferencePapers = async (options) => {
+    if (options.year === 2025 && fail2025) throw new Error("Fixture catalog offline");
+    return conferenceResponse(options, [conferencePaper(options.year === 2025 ? "ICML 2025 fixture" : "ICML 2026 fixture", options.year)]);
+  };
+  try {
+    unmount = await mount(scope.ConferenceDiscovery, { storageKey: scope.discoveryStorageKey(data.root, data.project.id) + ":conference", bridge: data.bridge, projectId: data.project.id, targetLibraryId: library.id, topic: "all", onImported: async () => {} });
+    assert.ok(document.body.textContent.includes("ICML 2026 fixture"));
+    await choose(document.querySelector('[aria-label="Conference year"]'), "2025");
+    assert.ok(!document.body.textContent.includes("ICML 2026 fixture"), "the old response is hidden under the new filters");
+    assert.ok(document.body.textContent.includes("Fixture catalog offline"));
+    fail2025 = false;
+    await click("Retry");
+    assert.ok(document.body.textContent.includes("ICML 2025 fixture"));
+    assert.ok(!document.body.textContent.includes("Fixture catalog offline"));
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("a failed daily query does not show results from the previous topic", async () => {
+  window.localStorage.clear();
+  const data = database("Daily failure"), library = data.db.listLibraries(data.project.id)[0];
+  let failTopic = true, unmount;
+  data.bridge.discoverDailyPapers = async (options) => {
+    if (options.topic === "coding_agents" && failTopic) throw new Error("Fixture feed offline");
+    return { ...fixture.feed(options), papers: [{ ...fixture.paper, title: options.topic === "coding_agents" ? "Daily current fixture" : "Daily previous fixture" }] };
+  };
+  try {
+    unmount = await mount(scope.DailyDiscovery, { storageKey: scope.discoveryStorageKey(data.root, data.project.id), projectId: data.project.id, bridge: data.bridge, libraries: [library], loadingLibraries: false, onImported: async () => {} });
+    assert.ok(document.body.textContent.includes("Daily previous fixture"));
+    await click("Coding agents");
+    assert.ok(!document.body.textContent.includes("Daily previous fixture"), "old results are hidden under the new topic");
+    assert.ok(document.body.textContent.includes("Could not load the live feed"));
+    assert.ok(document.body.textContent.includes("Fixture feed offline"));
+    assert.ok(!document.body.textContent.includes("Showing the previous results."), "the fallback is not claimed when it no longer matches");
+    failTopic = false;
+    await click("Retry");
+    assert.ok(document.body.textContent.includes("Daily current fixture"));
+    assert.ok(!document.body.textContent.includes("Fixture feed offline"));
+    failTopic = true;
+    await click("Refresh");
+    assert.ok(document.body.textContent.includes("Daily current fixture"), "matching results remain visible on a failed refresh");
+    assert.ok(document.body.textContent.includes("Showing the previous results."), "the fallback is labeled when results still match the controls");
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("an explicit conference open beats saved daily mode without breaking normal restore", async () => {
+  window.localStorage.clear();
+  const data = database("Explicit conference"), library = data.db.listLibraries(data.project.id)[0];
+  const storageKey = scope.discoveryStorageKey(data.root, data.project.id);
+  const saved = JSON.stringify({ mode: "trending", range: "7d", topic: "all", searchKind: "quick", query: "", submittedQuery: "", targetLibraryId: library.id, response: fixture.feed({ mode: "trending" }), deepResponse: null });
+  let feeds = 0, unmount;
+  data.bridge.discoverDailyPapers = async (options) => { feeds += 1; return fixture.feed(options); };
+  data.bridge.searchConferencePapers = async (options) => conferenceResponse(options);
+  try {
+    window.localStorage.setItem(storageKey, saved);
+    unmount = await mount(scope.DailyDiscovery, { storageKey, projectId: data.project.id, initialMode: "conference", bridge: data.bridge, libraries: [library], loadingLibraries: false, onImported: async () => {} });
+    assert.equal(document.querySelector('.conference-mode-button').getAttribute('aria-pressed'), "true", "an explicit conference open wins over the saved mode");
+    assert.ok(document.querySelector('[aria-label="Conference"]'), "the conference catalog is mounted");
+    await unmount(); unmount = null;
+    window.localStorage.setItem(storageKey, saved);
+    unmount = await mount(scope.DailyDiscovery, { storageKey, projectId: data.project.id, bridge: data.bridge, libraries: [library], loadingLibraries: false, onImported: async () => {} });
+    assert.equal(document.querySelector('.conference-mode-button').getAttribute('aria-pressed'), "false", "a normal restore keeps the saved daily mode");
+    assert.ok(document.querySelector('.daily-mode-tabs [aria-selected="true"]').textContent.includes("Trending"));
+    assert.ok(document.body.textContent.includes("Evidence handoff fixture"));
+    assert.equal(feeds, 0, "restoring the matching snapshot does not re-query");
   } finally { if (unmount) await unmount(); data.close(); }
 });
