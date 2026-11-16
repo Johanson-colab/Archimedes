@@ -2205,6 +2205,7 @@ function App() {
         }
       }
       if (event.type === "artifact") setArtifactsVersion((current) => current + 1);
+      if (event.experimentRun) setGraphVersion((current) => current + 1);
       if (event.type === "graph_update") {
         setGraphVersion((current) => current + 1);
         if (event.graph) setGraphUpdate(event.graph);

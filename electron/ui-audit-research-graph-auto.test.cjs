@@ -63,8 +63,7 @@ test("Agent turns schedule a background graph build for Research mode", () => {
   assert.match(auto, /allowResults: mode === "experiment-setup"/);
 });
 
-test("the experiment inspector is read-only and shows plan and run evidence", () => {
-  const inspector = read("src", "research-graph", "ExperimentInspector.tsx");
+test("the experiment inspector is read-only and shows plan and run evidence", () => {  const inspector = read("src", "research-graph", "ExperimentInspector.tsx");
   const nodeInspector = read("src", "research-graph", "NodeInspector.tsx");
   const view = read("src", "research-graph", "ResearchGraphView.tsx");
   const main = read("electron", "main.cjs");
@@ -88,4 +87,20 @@ test("the experiment inspector is read-only and shows plan and run evidence", ()
   assert.match(css, /\.experiment-plan-row \{/);
   assert.match(css, /\.experiment-run-log \{/);
   assert.match(css, /\.research-graph-node-runs \{/);
+});
+
+test("the agent can create and run experiments from the conversation", () => {
+  const agent = read("electron", "agent.cjs");
+  const directives = read("electron", "agent", "experiment-directives.cjs");
+  const codex = read("electron", "agent", "codex-backend.cjs");
+  assert.match(agent, /name: "create_idea"/);
+  assert.match(agent, /name: "create_experiment"/);
+  assert.match(agent, /name: "run_experiment"/);
+  assert.match(agent, /name: "wait_experiment"/);
+  assert.match(agent, /name: "read_experiment_log"/);
+  assert.match(agent, /name: "create_experiment_result"/);
+  assert.match(agent, /executeExperimentDirectives/);
+  assert.match(directives, /function experimentPrompt/);
+  assert.match(directives, /function extractExperimentDirectives/);
+  assert.match(codex, /experimentPrompt\(\)/);
 });

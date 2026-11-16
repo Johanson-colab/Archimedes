@@ -26,6 +26,10 @@ const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const graphAutoBuild = require("./research-graph/auto-build.cjs");
+const researchGraph = require("./research-graph/service.cjs");
+const experimentRunner = require("./research-graph/experiment-runner.cjs");
+const experimentRuns = require("./research-graph/experiment-runs.cjs");
+const experimentDirectives = require("./agent/experiment-directives.cjs");
 const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, searchRepositoryCheckout } = require("./repository-checkout.cjs");
 
 const MAX_FILE_BYTES = 64_000;
@@ -357,6 +361,111 @@ const tools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "create_idea",
+      description: "Create a testable idea under the research question. Use when the conversation has produced a concrete hypothesis and the graph does not contain it yet.",
+      parameters: {
+        type: "object",
+        properties: {
+          question: { type: "string", description: "Optional exact question node id or title. Defaults to the session's first question." },
+          title: { type: "string", description: "A short idea title." },
+          hypothesis: { type: "string", description: "The testable hypothesis." },
+          prediction: { type: "string", description: "What should be observed if the hypothesis holds." },
+        },
+        required: ["title"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_experiment",
+      description: "Create an experiment node under an existing idea in this Research session. Use when the conversation has produced a concrete experiment plan and the graph does not contain it yet. Prefer this over waiting for background extraction when the user asks to run the experiment now.",
+      parameters: {
+        type: "object",
+        properties: {
+          idea: { type: "string", description: "The exact idea node id or title in this session." },
+          title: { type: "string", description: "A short experiment title." },
+          hypothesis: { type: "string", description: "The specific hypothesis this experiment tests." },
+          baseline: { type: "string", description: "The baseline or control condition." },
+          method: { type: "string", description: "The experimental method and the change being tested." },
+          metrics: { type: "array", items: { type: "string" }, description: "The measurements that decide the outcome." },
+          stop_criteria: { type: "string", description: "When to stop or declare the experiment inconclusive." },
+        },
+        required: ["idea", "title"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "run_experiment",
+      description: "Start a recorded local experiment run for an existing experiment node in this Research session. Use only when the user asks to run an experiment or the experiment plan is ready. The app records the command, log, exit code, and commit in the experiment graph. Returns immediately with a run id; use wait_experiment and read_experiment_log to inspect it.",
+      parameters: {
+        type: "object",
+        properties: {
+          experiment: { type: "string", description: "The exact experiment node id or title in this session." },
+          command: { type: "string", description: "The exact shell command to run for this experiment." },
+          cwd: { type: "string", description: "Optional workspace-relative working folder. Defaults to the workspace root." },
+        },
+        required: ["experiment", "command"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "wait_experiment",
+      description: "Wait up to 30 seconds for a recorded experiment run to finish. Returns the current status, exit code, and a short log tail. Call again if the run is still starting or running.",
+      parameters: {
+        type: "object",
+        properties: {
+          run_id: { type: "string", description: "The run id returned by run_experiment." },
+          timeout_seconds: { type: "number", description: "Optional wait in seconds, from 1 to 30. Defaults to 20." },
+        },
+        required: ["run_id"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_experiment_log",
+      description: "Read the tail of a recorded experiment run log. Never infer a measurement from run status alone; read the log before reporting a result.",
+      parameters: {
+        type: "object",
+        properties: {
+          run_id: { type: "string", description: "The run id returned by run_experiment." },
+          max_bytes: { type: "number", description: "Optional tail size in bytes, from 1000 to 120000. Defaults to 12000." },
+        },
+        required: ["run_id"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_experiment_result",
+      description: "Create a result node from a succeeded experiment run. The result records the run id, command, exit code, commit, and log tail as evidence. Only use after reading the log and deciding what the run shows.",
+      parameters: {
+        type: "object",
+        properties: {
+          run_id: { type: "string", description: "A succeeded run id from run_experiment." },
+          verdict: { type: "string", enum: ["supports", "contradicts", "inconclusive"], description: "How the measured result bears on the experiment hypothesis." },
+          reasoning: { type: "string", description: "A short interpretation grounded in the run log." },
+        },
+        required: ["run_id", "verdict", "reasoning"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 tools.push(
@@ -558,6 +667,71 @@ function attachedContextManifest(items) {
 function parseArguments(serialized) {
   try { return JSON.parse(serialized || "{}"); }
   catch { throw new Error("The model returned invalid tool arguments."); }
+}
+
+function sessionExperiment({ threadId, experiment }) {  if (!threadId) throw new Error("Experiments require an active Research session.");
+  const thread = store.getResearchThread(threadId);
+  const listed = store.listResearchGraph({ projectId: thread.project_id, threadId });
+  const key = String(experiment || "").trim();
+  if (!key) throw new Error("An experiment id or title is required.");
+  const node = listed.nodes.find((item) => item.id === key)
+    || listed.nodes.find((item) => item.kind === "experiment" && item.title === key)
+    || listed.nodes.find((item) => item.kind === "experiment" && item.title.toLowerCase() === key.toLowerCase());
+  if (!node) throw new Error(`Experiment not found in this session: ${key}`);
+  if (node.kind !== "experiment") throw new Error("The selected node is not an experiment.");
+  return { thread, experiment: node };
+}
+
+function sessionIdea({ threadId, idea }) {
+  if (!threadId) throw new Error("Experiments require an active Research session.");
+  const thread = store.getResearchThread(threadId);
+  const listed = store.listResearchGraph({ projectId: thread.project_id, threadId });
+  const key = String(idea || "").trim();
+  if (!key) throw new Error("An idea id or title is required.");
+  const node = listed.nodes.find((item) => item.id === key)
+    || listed.nodes.find((item) => item.kind === "idea" && item.title === key)
+    || listed.nodes.find((item) => item.kind === "idea" && item.title.toLowerCase() === key.toLowerCase());
+  if (!node) throw new Error(`Idea not found in this session: ${key}`);
+  if (node.kind !== "idea") throw new Error("The selected node is not an idea.");
+  return { thread, idea: node };
+}
+
+function sessionExperimentRun({ threadId, runId }) {
+  const run = store.getExperimentRun(String(runId || "").trim());
+  if (!run) throw new Error("Experiment run not found.");
+  if (run.thread_id !== threadId) throw new Error("The experiment run does not belong to this session.");
+  return run;
+}
+
+function graphUpdateEvent({ thread, turnId, nodeIds = [], edgeIds = [], nodeCount = 0, edgeCount = 0 }) {
+  return {
+    type: "graph_update",
+    title: "Research graph updated",
+    graph: {
+      projectId: thread.project_id,
+      threadId: thread.id,
+      turnId,
+      createdNodeIds: nodeIds,
+      createdEdgeIds: edgeIds,
+      superseded: [],
+      nodeCount,
+      edgeCount,
+    },
+  };
+}
+
+async function waitForExperimentRun(runId, timeoutSeconds = 20) {
+  const seconds = Math.max(1, Math.min(30, Number(timeoutSeconds) || 20));
+  const deadline = Date.now() + seconds * 1000;
+  let run = store.getExperimentRun(runId);
+  if (!run) throw new Error("Experiment run not found.");
+  while (!["succeeded", "failed", "cancelled"].includes(run.status) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    run = store.getExperimentRun(runId);
+    if (!run) throw new Error("Experiment run not found.");
+  }
+  const log = experimentRuns.readExperimentRunLog({ runId, maxBytes: 4_000 });
+  return { ...run, log_tail: log.text };
 }
 
 async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort }, args) {
@@ -845,6 +1019,165 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       } catch (error) { emit({ type: "tool", title: "Workspace changes unavailable", detail: String(error.message || error) }); }
     }
   }
+  if (name === "create_idea") {
+    if (!threadId) throw new Error("Ideas require an active Research session.");
+    const thread = store.getResearchThread(threadId);
+    const listed = store.listResearchGraph({ projectId: thread.project_id, threadId });
+    const questionKey = String(args.question || "").trim();
+    let question = questionKey
+      ? listed.nodes.find((item) => item.id === questionKey)
+        || listed.nodes.find((item) => item.kind === "question" && item.title === questionKey)
+        || listed.nodes.find((item) => item.kind === "question" && item.title.toLowerCase() === questionKey.toLowerCase())
+      : listed.nodes.find((item) => item.kind === "question");
+    if (questionKey && !question) throw new Error(`Question not found in this session: ${questionKey}`);
+    if (question && question.kind !== "question") throw new Error("The selected node is not a question.");
+    if (!question) {
+      const prompt = String(thread.title || "Research question").slice(0, 200);
+      question = researchGraph.createNode({
+        projectId: thread.project_id,
+        threadId,
+        kind: "question",
+        status: "active",
+        title: prompt,
+        content: { question: prompt },
+        sourceTurnId: turnId,
+      });
+    }
+    const title = String(args.title || "").trim();
+    if (!title) throw new Error("An idea title is required.");
+    const existing = listed.nodes.find((item) => item.kind === "idea" && item.title.toLowerCase() === title.toLowerCase());
+    if (existing) return { content: JSON.stringify({ idea_id: existing.id, title: existing.title, existing: true }) };
+    const idea = researchGraph.createNode({
+      projectId: thread.project_id,
+      threadId,
+      kind: "idea",
+      status: "active",
+      title,
+      summary: String(args.hypothesis || "").slice(0, 500),
+      content: {
+        hypothesis: String(args.hypothesis || "").trim(),
+        prediction: String(args.prediction || "").trim(),
+      },
+      parents: [{ nodeId: question.id, kind: "generates" }],
+      sourceTurnId: turnId,
+    });
+    emit(graphUpdateEvent({ thread, turnId, nodeIds: [idea.id], nodeCount: 1, edgeCount: 1 }));
+    return { content: JSON.stringify({ idea_id: idea.id, title: idea.title, question_id: question.id }) };
+  }
+
+  if (name === "create_experiment") {
+    const { thread, idea } = sessionIdea({ threadId, idea: args.idea });
+    const title = String(args.title || "").trim();
+    if (!title) throw new Error("An experiment title is required.");
+    const existing = store.listResearchGraph({ projectId: thread.project_id, threadId }).nodes.find(
+      (item) => item.kind === "experiment" && item.title.toLowerCase() === title.toLowerCase(),
+    );
+    if (existing) return { content: JSON.stringify({ experiment_id: existing.id, title: existing.title, existing: true }) };
+    const metrics = Array.isArray(args.metrics)
+      ? args.metrics.map((item) => String(item).trim()).filter(Boolean).slice(0, 20)
+      : [];
+    const experiment = researchGraph.createNode({
+      projectId: thread.project_id,
+      threadId,
+      kind: "experiment",
+      status: "active",
+      title,
+      summary: String(args.hypothesis || "").slice(0, 500),
+      content: {
+        hypothesis: String(args.hypothesis || "").trim(),
+        baseline: String(args.baseline || "").trim(),
+        method: String(args.method || "").trim(),
+        metrics,
+        stopCriteria: String(args.stop_criteria || "").trim(),
+      },
+      parents: [{ nodeId: idea.id, kind: "tests" }],
+      sourceTurnId: turnId,
+    });
+    emit(graphUpdateEvent({ thread, turnId, nodeIds: [experiment.id], nodeCount: 1, edgeCount: 1 }));
+    return { content: JSON.stringify({ experiment_id: experiment.id, title: experiment.title }) };
+  }
+
+  if (name === "run_experiment") {
+    if (capabilities.command !== "ask") throw new Error("Command execution is disabled in this conversation. Ask the user to run the experiment in chat.");
+    const { thread, experiment } = sessionExperiment({ threadId, experiment: args.experiment });
+    const command = String(args.command || "").trim();
+    if (!command) throw new Error("A run command is required.");
+    if (command.length > 4_000) throw new Error("The experiment command is too long.");
+    const workingDirectory = existingWorkspacePath(root, args.cwd || "");
+    if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The run working directory is not a directory.");
+    const action = store.createAction({
+      taskId,
+      kind: "command",
+      payload: { command, cwd: workingDirectory, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true },
+    });
+    const waiting = waitForApproval(action.id, signal, threadId);
+    emit({ type: "approval", title: "Approval required", detail: command, action });
+    let decision;
+    try {
+      decision = await waiting;
+    } catch (error) {
+      if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+      throw error;
+    }
+    if (!decision.approved && store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+    if (!decision.approved) {
+      return { action: store.getAction(action.id), content: JSON.stringify({ approved: false, reason: decision.reason, action_id: action.id, kind: "experiment_run" }) };
+    }
+    if (signal?.aborted) throw new Error("The research turn was interrupted before the experiment started.");
+    const started = experimentRunner.startExperimentRun({
+      projectId: thread.project_id,
+      threadId,
+      nodeId: experiment.id,
+      command,
+      cwd: workingDirectory,
+      workspace: root,
+      onUpdate: (run) => {
+        emit({ type: "tool", title: "Experiment run", detail: `${run.status} · ${experiment.title}`, experimentRun: run });
+        recordEvent({ type: "experiment_run", payload: { run } });
+      },
+    });
+    store.updateActionPayload(action.id, { experimentRunId: started.run.id, commandLog: started.run.log_path });
+    void started.completion.then((run) => {
+      recordEvent({ type: "experiment_run", payload: { run } });
+      emit({ type: "tool", title: "Experiment run finished", detail: `${run.status} · exit ${run.exit_code ?? "unknown"} · ${experiment.title}`, experimentRun: run });
+    }).catch((error) => {
+      recordEvent({ type: "experiment_run_error", payload: { experimentId: experiment.id, error: error.message || String(error) } });
+    });
+    return {
+      action: store.getAction(action.id),
+      content: JSON.stringify({
+        approved: true,
+        run_id: started.run.id,
+        experiment_id: experiment.id,
+        status: started.run.status,
+        log_path: started.run.log_path,
+      }),
+    };
+  }
+
+  if (name === "wait_experiment") {
+    sessionExperimentRun({ threadId, runId: args.run_id });
+    const run = await waitForExperimentRun(args.run_id, args.timeout_seconds);
+    return { content: JSON.stringify(run) };
+  }
+
+  if (name === "read_experiment_log") {
+    sessionExperimentRun({ threadId, runId: args.run_id });
+    const log = experimentRuns.readExperimentRunLog({ runId: args.run_id, maxBytes: args.max_bytes });
+    return { content: JSON.stringify({ run_id: args.run_id, ...log }) };
+  }
+
+  if (name === "create_experiment_result") {
+    const run = sessionExperimentRun({ threadId, runId: args.run_id });
+    const result = researchGraph.createResultFromRun({
+      runId: args.run_id,
+      verdict: args.verdict,
+      reasoning: args.reasoning,
+    });
+    emit(graphUpdateEvent({ thread: store.getResearchThread(run.thread_id), turnId, nodeIds: [result.id], nodeCount: 1, edgeCount: 1 }));
+    recordEvent({ type: "experiment_result_created", payload: { result_id: result.id, source_run_id: result.source_run_id } });
+    return { content: JSON.stringify({ result_id: result.id, title: result.title, source_run_id: result.source_run_id }) };
+  }
   throw new Error(`Unsupported Agent tool: ${name}`);
 }
 
@@ -1062,25 +1395,44 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       return finish(response, "needs_configuration");
     }
     if (externalBackend) {
-      const response = await runNative({
+      const approveNative = async (payload) => {
+        if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;
+        const { signal: approvalSignal, ...actionPayload } = payload;
+        const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: externalBackend.backend } });
+        actions.push(action);
+        // Register before exposing the card, so an immediate click cannot be lost.
+        const waiting = waitForApproval(action.id, approvalSignal || controller.signal, thread.id);
+        emitTurn({ type: "approval", title: "Native approval required", detail: payload.command, action });
+        try { return (await waiting).approved; }
+        finally {
+          if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+          Object.assign(action, store.getAction(action.id));
+          emitTurn({ type: "native_approval_resolved", title: "Native approval resolved", detail: "The native request is no longer pending", action: { ...action } });
+        }
+      };
+      const nativeResponse = await runNative({
         config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken,
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
-        approve: async (payload) => {
-          if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;
-          const { signal: approvalSignal, ...actionPayload } = payload;
-          const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: externalBackend.backend } });
-          actions.push(action);
-          // Register before exposing the card, so an immediate click cannot be lost.
-          const waiting = waitForApproval(action.id, approvalSignal || controller.signal, thread.id);
-          emitTurn({ type: "approval", title: "Native approval required", detail: payload.command, action });
-          try { return (await waiting).approved; }
-          finally {
-            if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
-            Object.assign(action, store.getAction(action.id));
-            emitTurn({ type: "native_approval_resolved", title: "Native approval resolved", detail: "The native request is no longer pending", action: { ...action } });
-          }
-        },
+        approve: approveNative,
       });
+      let response = nativeResponse;
+      if (mode === "experiment-setup") {
+        const extracted = experimentDirectives.extractExperimentDirectives(nativeResponse);
+        response = extracted.text;
+        if (extracted.directives.length) {
+          const notes = await experimentDirectives.executeExperimentDirectives({
+            directives: extracted.directives,
+            threadId: thread.id,
+            workspace,
+            mode,
+            turnId: turn.id,
+            emit: emitTurn,
+            recordEvent,
+            approve: approveNative,
+          });
+          if (notes.length) response = [response, ...notes].filter(Boolean).join("\n\n");
+        }
+      }
       recordEvent({ type: "assistant_step", payload: { content: response, backend: externalBackend.backend } });
       emitTurn({ type: "complete", title: "Native turn complete", detail: "Native execution finished" });
       const completed = finish(response, "completed");
@@ -1129,7 +1481,8 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       }
       const availableTools = toolRegistry.definitions().filter((tool) =>
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
-        !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches));
+        !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
+        (mode === "experiment-setup" || !["create_experiment", "run_experiment"].includes(tool.function.name)));
       const message = await complete(config, messages, {
         signal: controller.signal,
         availableTools,

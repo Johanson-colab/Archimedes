@@ -1910,7 +1910,7 @@ interface AgentRunResult {
 }
 
 interface AgentEvent {
-  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer" | "graph_update" | "graph_update_pending";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer" | "graph_update" | "graph_update_pending" | "experiment_run";
   title: string;
   detail: string;
   threadId?: string;
@@ -1927,6 +1927,7 @@ interface AgentEvent {
   question?: NativeAgentQuestion;
   questionId?: string;
   graph?: ResearchGraphUpdate;
+  experimentRun?: ExperimentRun;
 }
 
 interface PaperReviewInput {

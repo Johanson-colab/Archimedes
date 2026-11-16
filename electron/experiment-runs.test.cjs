@@ -7,6 +7,7 @@ const test = require("node:test");
 const store = require("./store.cjs");
 const graph = require("./research-graph/service.cjs");
 const runner = require("./research-graph/experiment-runner.cjs");
+const agent = require("./agent.cjs");
 
 function withWorkspace(run) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-runs-"));
@@ -249,5 +250,170 @@ test("the local runner can cancel an active run", async () => {
     runner.cancelExperimentRun(started.run.id);
     const final = await started.completion;
     assert.equal(final.status, "cancelled");
+  });
+});
+
+test("the API experiment tool creates an experiment under an idea", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const thread = threadFor(project.id);
+    const task = store.startTask({ prompt: "Create the experiment." });
+    const turn = store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt: "Create the experiment.", mode: "experiment-setup" });
+    const registry = agent.createToolRegistry();
+    const ideaResult = await agent.executeTool({
+      registry,
+      call: {
+        id: "call-create-idea",
+        function: {
+          name: "create_idea",
+          arguments: JSON.stringify({
+            title: "Tool-created idea",
+            hypothesis: "The tool records the hypothesis.",
+            prediction: "A measurable improvement appears.",
+          }),
+        },
+      },
+      root,
+      threadId: thread.id,
+      taskId: task.id,
+      turnId: turn.id,
+      capabilities: { write: "deny", command: "deny" },
+      emit: () => {},
+      recordEvent: () => {},
+      signal: new AbortController().signal,
+    });
+    const parsedIdea = JSON.parse(ideaResult.content);
+    assert.ok(parsedIdea.idea_id);
+    const listedWithIdea = store.listResearchGraph({ projectId: project.id, threadId: thread.id });
+    const createdIdea = listedWithIdea.nodes.find((node) => node.id === parsedIdea.idea_id);
+    assert.equal(createdIdea.kind, "idea");
+    assert.equal(createdIdea.current_revision.content.hypothesis, "The tool records the hypothesis.");
+    const idea = createdIdea;
+    const events = [];
+    const result = await agent.executeTool({
+      registry,
+      call: {
+        id: "call-create-experiment",
+        function: {
+          name: "create_experiment",
+          arguments: JSON.stringify({
+            idea: idea.title,
+            title: "Tool-created experiment",
+            hypothesis: "The tool records the plan.",
+            baseline: "no change",
+            method: "run the baseline",
+            metrics: ["loss"],
+            stop_criteria: "one run",
+          }),
+        },
+      },
+      root,
+      threadId: thread.id,
+      taskId: task.id,
+      turnId: turn.id,
+      capabilities: { write: "deny", command: "deny" },
+      emit: (event) => events.push(event),
+      recordEvent: () => {},
+      signal: new AbortController().signal,
+    });
+    const parsed = JSON.parse(result.content);
+    assert.ok(parsed.experiment_id);
+    const listed = store.listResearchGraph({ projectId: project.id, threadId: thread.id });
+    const created = listed.nodes.find((node) => node.id === parsed.experiment_id);
+    assert.equal(created.title, "Tool-created experiment");
+    assert.equal(created.current_revision.content.baseline, "no change");
+    assert.deepEqual(created.current_revision.content.metrics, ["loss"]);
+    assert.ok(listed.edges.some((edge) => edge.kind === "tests" && edge.to_node === created.id));
+  });
+});
+
+test("the API run tool waits for approval and starts a recorded run", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const thread = threadFor(project.id);
+    const { experiment } = experimentFor(project.id, thread.id);
+    const task = store.startTask({ prompt: "Run the experiment." });
+    const turn = store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt: "Run the experiment.", mode: "experiment-setup" });
+    const registry = agent.createToolRegistry();
+    let action = null;
+    agent.setApprovalSurface(thread.id, true);
+    try {
+      const pending = agent.executeTool({
+        registry,
+        call: {
+          id: "call-run-experiment",
+          function: {
+            name: "run_experiment",
+            arguments: JSON.stringify({
+              experiment: experiment.title,
+              command: `${JSON.stringify(process.execPath)} -e "console.log('tool-run')"`,
+            }),
+          },
+        },
+        root,
+        threadId: thread.id,
+        taskId: task.id,
+        turnId: turn.id,
+        capabilities: { write: "deny", command: "ask" },
+        emit: (event) => {
+          if (event.type === "approval" && event.action) action = event.action;
+        },
+        recordEvent: () => {},
+        signal: new AbortController().signal,
+      });
+      const deadline = Date.now() + 2_000;
+      while (!action && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.ok(action, "the run tool should request approval");
+      agent.resolveApproval(action.id, true);
+      const result = await pending;
+      const parsed = JSON.parse(result.content);
+      assert.equal(parsed.approved, true);
+      assert.ok(parsed.run_id);
+      const runDeadline = Date.now() + 6_000;
+      let final = store.getExperimentRun(parsed.run_id);
+      while (final && !["succeeded", "failed", "cancelled"].includes(final.status) && Date.now() < runDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        final = store.getExperimentRun(parsed.run_id);
+      }
+      assert.equal(final.status, "succeeded");
+      assert.match(fs.readFileSync(final.log_path, "utf8"), /tool-run/);
+
+      const logResult = await agent.executeTool({
+        registry,
+        call: { id: "call-read-log", function: { name: "read_experiment_log", arguments: JSON.stringify({ run_id: parsed.run_id }) } },
+        root,
+        threadId: thread.id,
+        taskId: task.id,
+        turnId: turn.id,
+        capabilities: { write: "deny", command: "ask" },
+        emit: () => {},
+        recordEvent: () => {},
+        signal: new AbortController().signal,
+      });
+      assert.match(JSON.parse(logResult.content).text, /tool-run/);
+
+      const resultTool = await agent.executeTool({
+        registry,
+        call: {
+          id: "call-create-result",
+          function: {
+            name: "create_experiment_result",
+            arguments: JSON.stringify({ run_id: parsed.run_id, verdict: "supports", reasoning: "The tool ran." }),
+          },
+        },
+        root,
+        threadId: thread.id,
+        taskId: task.id,
+        turnId: turn.id,
+        capabilities: { write: "deny", command: "ask" },
+        emit: () => {},
+        recordEvent: () => {},
+        signal: new AbortController().signal,
+      });
+      const resultNode = JSON.parse(resultTool.content);
+      assert.ok(resultNode.result_id);
+      const listed = store.listResearchGraph({ projectId: project.id, threadId: thread.id });
+      assert.ok(listed.nodes.some((node) => node.id === resultNode.result_id && node.kind === "result"));
+    } finally {
+      agent.setApprovalSurface(thread.id, false);
+    }
   });
 });

@@ -211,6 +211,62 @@ experiment with both an `extends` edge to the previous experiment and the
 `tests` edge(s) of its parent idea, so the new round stays attached to the idea
 while descending from the winner.
 
+## Agent-driven experiment loop
+
+The graph panel is read-only; the model drives the loop from the main
+conversation. Both transports below use the same `experiment_runs` store and
+result gate.
+
+### API harness
+
+Five built-in tools are available in the Experiment setup stage:
+
+| Tool | Effect |
+| --- | --- |
+| `create_experiment` | Create an experiment node under an idea with a structured plan. |
+| `run_experiment` | Request command approval, then start a recorded local run. |
+| `wait_experiment` | Wait up to 30 seconds for a run to finish; return status, exit code, and a log tail. |
+| `read_experiment_log` | Read the log tail. Status alone is not evidence. |
+| `create_experiment_result` | Create a run-backed result from a succeeded run. |
+
+`create_experiment` and `run_experiment` are hidden outside Experiment setup;
+log and result tools remain available for analyzing a recorded run. Every run
+still uses the same fixed-command and frozen-plan rules.
+
+### Native harnesses
+
+Codex, Claude Code, and OpenCode receive a small fenced directive instruction
+during Experiment setup. The app strips the block from the visible answer and
+executes it:
+
+````text
+```experiment
+{"action":"create","idea":"...","title":"...","hypothesis":"...","baseline":"...","method":"...","metrics":["..."],"stopCriteria":"..."}
+```
+
+```experiment
+{"action":"run","experiment":"...","command":"..."}
+```
+
+```experiment
+{"action":"log","runId":"..."}
+```
+
+```experiment
+{"action":"result","runId":"...","verdict":"supports|contradicts|inconclusive","reasoning":"..."}
+```
+````
+
+Native `run` directives go through the same approval card as native commands.
+The app appends a short note with the created node or run id to the answer, and
+the next native turn receives a `Recent experiment runs` summary so the model
+can read the log and record a result.
+
+This is a directive bridge rather than a separate MCP process. The native
+harness already owns the turn and the one-time approval surface, so the app only
+needs a bounded JSON channel; the store, runner, and result gate are identical
+to the API path.
+
 ## Service API
 
 `electron/research-graph/service.cjs` exposes:
@@ -276,6 +332,7 @@ node --test electron/research-graph.test.cjs
 node --test electron/research-graph-layout.test.cjs
 node --test electron/research-graph-auto-build.test.cjs
 node --test electron/experiment-runs.test.cjs
+node --test electron/experiment-directives.test.cjs
 node --test electron/ui-audit-research-graph-auto.test.cjs
 node --test electron/store-schema-order.test.cjs
 npm run lint
