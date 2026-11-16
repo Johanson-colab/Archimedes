@@ -69,7 +69,7 @@ const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
 const store = require("./store.cjs");
-const { createWorkspaceIpc } = require("./workspace-context.cjs");
+const { createWorkspaceIpc, isWorkspaceDataChannel } = require("./workspace-context.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
@@ -159,24 +159,18 @@ function stopWorkspaceWatcher(senderId) {
 
 function setWindowWorkspace(senderId, workspace) {
   windowWorkspaces.set(senderId, workspace);
-  let token = windowPreviewTokens.get(senderId);
-  if (!token) {
-    token = randomUUID();
-    windowPreviewTokens.set(senderId, token);
-  }
-  previewTokenWorkspaces.set(token, workspace);
-  return token;
+  return createPreviewToken(senderId, workspace);
 }
 
 function createPreviewToken(senderId, workspace) {
-  // Execution folders (project directories) can differ from the window's data
-  // workspace. Preview tokens must not move the window's primary workspace.
-  let token = windowPreviewTokens.get(senderId);
+  let tokens = windowPreviewTokens.get(senderId);
+  if (!tokens) { tokens = new Map(); windowPreviewTokens.set(senderId, tokens); }
+  let token = tokens.get(workspace);
   if (!token) {
     token = randomUUID();
-    windowPreviewTokens.set(senderId, token);
+    tokens.set(workspace, token);
+    previewTokenWorkspaces.set(token, workspace);
   }
-  previewTokenWorkspaces.set(token, workspace);
   return token;
 }
 
@@ -318,8 +312,7 @@ function createWindow(workspace) {
     closeWindowTerminals(senderId);
     stopWorkspaceWatcher(senderId);
     void presence?.leave(String(senderId));
-    const token = windowPreviewTokens.get(senderId);
-    if (token) previewTokenWorkspaces.delete(token);
+    for (const token of windowPreviewTokens.get(senderId)?.values() ?? []) previewTokenWorkspaces.delete(token);
     windowPreviewTokens.delete(senderId);
     windowWorkspaces.delete(senderId);
   });
@@ -391,7 +384,7 @@ function readerStateForWindow(senderId, workspace, paperId, projectId = null) {
   try {
     const target = workspaceFiles.workspacePath(workspace, reader.asset.relative_path);
     if (!fs.statSync(target).isFile()) return { ...reader, asset: { ...reader.asset, status: "missing", error: "The cached PDF is no longer available." } };
-    const token = setWindowWorkspace(senderId, workspace);
+    const token = createPreviewToken(senderId, workspace);
     return { ...reader, asset: { ...reader.asset, preview_url: `archimedes-file://${token}/${encodeURIComponent(reader.asset.relative_path)}` } };
   } catch {
     return { ...reader, asset: { ...reader.asset, status: "missing", error: "The cached PDF is no longer available." } };
@@ -415,8 +408,6 @@ async function openFolderFromMenu() {
   if (!browserWindow) return;
   const workspace = await chooseFolderForWindow(browserWindow);
   if (!workspace || browserWindow.isDestroyed()) return;
-  setWindowWorkspace(browserWindow.webContents.id, workspace);
-  rememberWorkspace(workspace);
   browserWindow.webContents.send("menu:open-folder", workspace);
 }
 
@@ -643,7 +634,7 @@ app.whenReady().then(async () => {
   if (!singleInstanceLock) return;
   const ipcMain = createWorkspaceIpc({ ipcMain: electronIpcMain, store,
     workspaceForEvent: (event, channel, args) => channel === "workspace:open"
-      ? resolveWorkspace(args[0]) : windowWorkspaces.get(event.sender.id),
+      ? resolveWorkspace(args[0]) : isWorkspaceDataChannel(channel) ? windowWorkspaces.get(event.sender.id) : null,
   });
   loadLocalAgentEnvironment();
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
@@ -933,10 +924,11 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("workspace:open", (event, requestedWorkspace) => {
     const workspace = resolveWorkspace(requestedWorkspace);
-    setWindowWorkspace(event.sender.id, workspace);
+    const snapshot = store.getSnapshot();
     rememberWorkspace(workspace);
     watchWorkspace(event.sender, workspace);
-    return store.getSnapshot();
+    setWindowWorkspace(event.sender.id, workspace);
+    return snapshot;
   });
 
   ipcMain.handle("workspace:list-files", (_event, input = {}) => {
