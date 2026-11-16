@@ -227,15 +227,18 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     }
   }, [bridge, owner, refreshScope]);
 
-  const openFile = useCallback(async (path: string) => {
+  const openFile = useCallback(async (path: string, refreshClean = false) => {
     if (!editable(path)) return;
+    const cached = owner.documents.get(path);
+    if (refreshClean && (!cached || cached.draft !== cached.savedDraft || cached.saveState !== "saved")) return;
     const request = ++owner.openSequence;
-    owner.compileTarget = "";
-    ++owner.compileSequence;
-    owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
+    if (!refreshClean) {
+      owner.compileTarget = "";
+      ++owner.compileSequence;
+      owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
+    }
     const previous = owner.documents.get(owner.selectedPath);
     if (previous && previous.draft !== previous.savedDraft) void saveWritingDocument(previous, bridge.writeWorkspaceFile, refreshScope).catch(() => {});
-    const cached = owner.documents.get(path);
     const version = cached?.version;
     if (cached) owner.selectedPath = path;
     refreshScope();
@@ -245,7 +248,13 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
       let opened = owner.documents.get(path);
       if (!opened) { opened = createWritingDocument(owner.workspace, next); owner.documents.set(path, opened); }
       else if (opened.version === version && opened.draft === opened.savedDraft) {
-        opened.file = next; opened.draft = next.content || ""; opened.savedDraft = opened.draft; opened.version += 1;
+        const changed = opened.savedDraft !== (next.content || "");
+        opened.file = next; opened.draft = next.content || ""; opened.savedDraft = opened.draft;
+        if (!refreshClean || changed) opened.version += 1;
+        if (refreshClean && changed) {
+          ++owner.compileSequence; owner.compileTarget = "";
+          owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
+        }
       }
       owner.selectedPath = path;
       owner.activeProblem = null; owner.error = ""; owner.activeDirectory = projectRoot(path);
@@ -258,17 +267,33 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
   }, [bridge, owner, refreshScope]);
 
   const activateProject = useCallback(async (path: string) => {
-    const root = projectRoot(path) || ".";
     const request = ++owner.activationSequence;
+    let projects: LatexProjectSummary[];
+    try { projects = await bridge.listLatexProjects(owner.workspace); }
+    catch (error) {
+      if (request === owner.activationSequence) { owner.error = error instanceof Error ? error.message : String(error); refreshScope(); }
+      return;
+    }
+    if (request !== owner.activationSequence) return;
+    owner.projects = projects;
+    const contains = (main: string) => {
+      const directory = projectRoot(main);
+      return !directory || path.startsWith(`${directory}/`);
+    };
+    const main = projects.find(item => item.path === path && item.main)?.path
+      || (owner.mainPath && contains(owner.mainPath) ? owner.mainPath : "")
+      || projects.filter(item => item.main && contains(item.path)).sort((a, b) => projectRoot(b.path).length - projectRoot(a.path).length)[0]?.path
+      || (ext(path) === "tex" ? path : "");
+    const root = projectRoot(main || path) || ".";
     owner.compileTarget = "";
     ++owner.compileSequence;
     setCompileResult(null); setCompileLog(""); setCompileState("idle");
-    owner.mainPath = path;
+    owner.mainPath = main;
     setActiveProject(root); setActiveDirectory(root); setExpanded(new Set([root])); setChooserOpen(false); setError("");
     await loadDirectory(root, true);
     if (request !== owner.activationSequence) return;
     await openFile(path);
-  }, [loadDirectory, openFile, owner]);
+  }, [bridge, loadDirectory, openFile, owner, refreshScope]);
 
   const refreshProjects = useCallback(async () => {
     const request = ++owner.projectListSequence;
@@ -301,7 +326,11 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     }
   }, [activateProject, bridge, openFile, owner, projectId, refreshScope]);
 
-  useEffect(() => { if (active) void refreshProjects(); }, [active, refreshProjects]);
+  useEffect(() => {
+    if (!active) return;
+    void refreshProjects();
+    if (owner.selectedPath) void openFile(owner.selectedPath, true);
+  }, [active, openFile, owner, refreshProjects]);
   useEffect(() => {
     if (!activeProject || !mainPath || !file?.path) return;
     rememberWritingLocation(window.localStorage, owner.workspace, projectId, { projectPath: activeProject, mainPath, selectedPath: file.path });

@@ -333,3 +333,34 @@ test("projects sharing one execution folder restore their own manuscript selecti
   assert.equal(document.querySelector('.paper-main-document select').value, "paper/main.tex");
   assert.equal(document.querySelector('.latex-editor-textarea').value, source("A edit remains owned by the original file"));
 });
+
+test("returning to a clean cached manuscript reloads external edits before the next save", async t => {
+  const f = await fixture(t);
+  await f.render(f.a); await autoCompileOff();
+  await f.render(f.b);
+  const external = source("Added by an external editor while A was away");
+  fs.writeFileSync(path.join(f.a, "paper/main.tex"), external);
+  await f.render(f.a);
+  assert.equal(document.querySelector('.latex-editor-textarea').value, external);
+  const latest = external.replace("while A was away", "while A was away, then continued here");
+  await edit(latest);
+  await f.render(f.b);
+  assert.equal(f.disk(f.a), latest);
+});
+
+test("opening supporting sources preserves or resolves the actual manuscript compile target", async t => {
+  const f = await fixture(t);
+  fs.mkdirSync(path.join(f.a, "paper/sections"));
+  fs.writeFileSync(path.join(f.a, "paper/sections/part.tex"), "A section body\n");
+  fs.writeFileSync(path.join(f.a, "paper/references.bib"), "@book{manual,title={Reference}}\n");
+  fs.writeFileSync(path.join(f.a, "paper/local.sty"), "\\ProvidesPackage{local}\n");
+  await f.render(f.a, 1, "paper/references.bib"); await autoCompileOff();
+  assert.equal(document.querySelector('.paper-main-document select').value, "paper/main.tex");
+  for (const [index, name] of ["paper/sections/part.tex", "paper/local.sty"].entries()) {
+    await f.render(f.a, index + 2, name);
+    assert.ok(document.querySelector(`[aria-label="Edit ${name}"]`));
+    assert.equal(document.querySelector('.paper-main-document select').value, "paper/main.tex");
+    await click("Recompile"); await settle();
+    assert.equal(f.compiles.at(-1).name, "paper/main.tex");
+  }
+});
