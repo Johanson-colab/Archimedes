@@ -27,7 +27,8 @@
     "server:start": "node server/index.cjs",
     "server:test": "node --test server/*.test.cjs",
     "server:supabase": "node server/index-supabase.cjs",
-    "server:lan": "node server/index-lan.cjs"
+    "server:lan": "node server/index-lan.cjs",
+    "check:env": "node scripts/check-toolchain.cjs"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
@@ -76,5 +77,10 @@
     "postcss": "^8.5.26",
     "typescript": "latest",
     "wait-on": "latest"
-  }
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.0.0",
+    "npm": "^10.9.0 || ^11.0.0"
+  },
+  "packageManager": "npm@11.20.0"
 }

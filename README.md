@@ -27,9 +27,9 @@ Archimedes is not a generic chat shell with a paper list attached. Its center of
 Install Archimedes on this machine from https://github.com/Johanson-colab/Archimedes.
 The goal is a working local Electron desktop install, not just the web preview.
 
-1. Verify that Git and Node.js 20+ are available.
+1. Verify Git, Node.js 22.18+ (22.x) or 24+, and npm 10.9+ (10.x) or 11.x.
 2. Clone the repository into a sensible local folder and cd into it.
-3. Run `npm install` and let the native terminal-module rebuild finish.
+3. Run `npm run check:env`, then `npm ci`, and let the native terminal-module rebuild finish.
 4. Create `.env.local` from `.env.example` using the platform-appropriate command.
    Do not ask me to paste API keys into chat. Pause and let me fill in the model configuration directly, then continue.
 5. Start the app with `npm run dev`. Confirm that the Electron window opens.
@@ -42,12 +42,13 @@ This is the fastest path for non-developers: the agent can check prerequisites, 
 
 ### Manual install
 
-Prerequisites: [Git](https://git-scm.com/downloads) and a current Node.js LTS release (Node 20 or newer recommended). `npm` ships with Node. No Python service, database server, or global Electron installation is required.
+Prerequisites: [Git](https://git-scm.com/downloads), Node.js **22.18+ within 22.x, or 24+**, and npm **10.9+ within 10.x, or 11.x**. The development toolchain is pinned to **Node 26.13.0 / npm 11.20.0** in `.node-version` and `packageManager`; the compatibility range is broader than that tested combination. No Python service, database server, or global Electron installation is required.
 
 ```bash
 git clone https://github.com/Johanson-colab/Archimedes.git
 cd Archimedes
-npm install
+npm run check:env
+npm ci
 cp .env.example .env.local    # macOS / Linux
 npm run dev
 ```

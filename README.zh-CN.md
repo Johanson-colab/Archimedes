@@ -27,9 +27,9 @@ Archimedes 不是套着论文列表的通用聊天壳。它的重心是研究闭
 在这台机器上从 https://github.com/Johanson-colab/Archimedes 安装 Archimedes。
 目标是得到可用的本地 Electron 桌面安装，而不仅是网页预览。
 
-1. 确认 Git 和 Node.js 20+ 可用。
+1. 确认 Git、Node.js 22.18+（22.x）或 24+，以及 npm 10.9+（10.x）或 11.x 可用。
 2. 将仓库克隆到合适的本地目录，并进入该目录。
-3. 运行 `npm install`，等待原生终端模块重新构建完成。
+3. 运行 `npm run check:env`，然后运行 `npm ci`，等待原生终端模块重新构建完成。
 4. 使用适合当前平台的命令，从 `.env.example` 创建 `.env.local`。
    不要要求我在聊天中粘贴 API key。暂停并让我直接填写模型配置，然后继续。
 5. 运行 `npm run dev` 启动应用。确认 Electron 窗口已打开。
@@ -42,12 +42,13 @@ Archimedes 不是套着论文列表的通用聊天壳。它的重心是研究闭
 
 ### 手动安装
 
-前置条件：[Git](https://git-scm.com/downloads) 和当前 Node.js LTS（建议 Node 20 或更高版本）。`npm` 随 Node 一起安装。不需要 Python 服务、数据库服务或全局 Electron。
+前置条件：[Git](https://git-scm.com/downloads)、**Node.js 22.18+（22.x）或 24+**，以及 **npm 10.9+（10.x）或 11.x**。`.node-version` 和 `packageManager` 固定实测开发工具链为 **Node 26.13.0 / npm 11.20.0**；声明兼容范围比该实测组合更宽。不需要 Python 服务、数据库服务或全局 Electron。
 
 ```bash
 git clone https://github.com/Johanson-colab/Archimedes.git
 cd Archimedes
-npm install
+npm run check:env
+npm ci
 cp .env.example .env.local    # macOS / Linux
 npm run dev
 ```
