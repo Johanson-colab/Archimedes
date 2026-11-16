@@ -209,8 +209,9 @@ const previewModelCapabilities: ModelCapabilities = {
   contextCharacterLimits: { standard: 500_000, "extra-long": 1_000_000 },
 };
 
-function chatModeFromThread(mode: ResearchMode, events: ResearchEvent[] = []): NewChatMode {
-  if (mode === "standard" || mode === "research" || mode === "create") return mode;
+
+function chatModeFromThread(mode: ResearchMode, events: ResearchEvent[] = []): ResearchMode {
+  if (mode === "standard" || mode === "research" || mode === "create" || mode === "experiment-setup" || mode === "paper-generation" || mode === "paper-review") return mode;
   if (mode === "idea-spark") return "research";
   return events.some((event) => event.type === "research_skill" && (event.payload as { skill?: string } | null)?.skill === "idea-spark") ? "research" : "standard";
 }
@@ -242,7 +243,7 @@ const COMPOSER_DRAFT_STORAGE_PREFIX = "archimedes-composer-draft:";
 const COMPOSER_HISTORY_STORAGE_KEY = "archimedes-composer-history";
 const COMPOSER_HISTORY_LIMIT = 30;
 
-type ComposerDraft = { text: string; selectionStart: number; selectionEnd: number; newChatMode?: NewChatMode };
+type ComposerDraft = { text: string; selectionStart: number; selectionEnd: number; newChatMode?: ResearchMode };
 type QueuedPrompt = { id: string; draft: string; mode: ResearchMode; reasoningEffort: ReasoningEffort; contextLength: ContextLength; contextItems: ContextAttachment[]; researchSkill?: "idea-spark" };
 type ComposerSlashCommand = {
   id: string;
@@ -263,7 +264,7 @@ function readComposerDraft(key: string): ComposerDraft | null {
       text: value.text,
       selectionStart: typeof value.selectionStart === "number" ? value.selectionStart : value.text.length,
       selectionEnd: typeof value.selectionEnd === "number" ? value.selectionEnd : value.text.length,
-      newChatMode: value.newChatMode === "research" || value.newChatMode === "create" ? value.newChatMode : "standard",
+      newChatMode: researchModes.some(mode => mode.id === value.newChatMode) || value.newChatMode === "deep-research" ? value.newChatMode as ResearchMode : "standard",
     };
   } catch {
     return null;
@@ -3216,6 +3217,8 @@ function App() {
   function changeWorkMode(stage: ResearchStage) {
     if (pathThreadInactive) return;
     setResearchMode(stage.mode);
+    const draft = readComposerDraft(composerDraftKey);
+    writeComposerDraft(composerDraftKey, { text: draft?.text ?? "", selectionStart: draft?.selectionStart ?? 0, selectionEnd: draft?.selectionEnd ?? 0, newChatMode: stage.mode });
   }
 
   function toggleProactiveDock() {
@@ -4086,7 +4089,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const rejectHistoryAction = useCallback(() => historyHandlersRef.current.onReject(), []);
   const openHistoryFile = useCallback((path: string) => historyHandlersRef.current.onOpenFile(path), []);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
-  const [newChatMode, setNewChatMode] = useState<NewChatMode>(storedDraftRef.current?.newChatMode ?? "standard");
+  const newChatMode = researchMode;
+  const setNewChatMode = onResearchMode;
   const welcomeVisible = showWelcome && !welcomeDismissed;
 
   useEffect(() => {
@@ -4104,7 +4108,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     if (composerRequest && appliedComposerRequestRef.current === composerRequest.id) return;
     const stored = readComposerDraft(draftKey);
     storedDraftRef.current = stored;
-    setNewChatMode(stored?.newChatMode ?? "standard");
+    setNewChatMode(stored?.newChatMode ?? researchMode);
     setPrompt(stored?.text ?? "");
     setPendingResearchSkill(null);
     setCommandNotice("");
@@ -4148,7 +4152,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [prompt]);
 
-  const predictedMode: NewChatMode = showWelcome ? newChatMode : chatModeFromThread(researchMode, trajectoryEvents);
+  const predictedMode: ResearchMode = researchMode;
   useEffect(() => {
     if (showWelcome) setPendingResearchSkill(null);
   }, [showWelcome]);
@@ -4508,7 +4512,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
-      {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
+      {showWelcome && <NewChatModePicker value={newChatMode} currentMode={{ label: t(activeMode.label), icon: activeMode.icon }} onChange={(mode) => {
         setNewChatMode(mode);
         setPrompt((current) => draftForNewChatMode(current, mode));
       }} />}

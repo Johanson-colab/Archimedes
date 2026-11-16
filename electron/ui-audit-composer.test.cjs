@@ -186,9 +186,11 @@ test("chat modes retain explicit choices and map legacy conversations using skil
   assert.equal(mode("research", []), "research");
   assert.equal(mode("create", []), "create");
   assert.equal(mode("idea-spark", []), "research");
-  assert.equal(mode("experiment-setup", []), "standard");
+  assert.equal(mode("experiment-setup", []), "experiment-setup");
   assert.equal(mode("idea-spark", [{ type: "research_skill", payload: { skill: "idea-spark" } }]), "research");
-  assert.match(app, /showWelcome \? newChatMode : chatModeFromThread\(researchMode, trajectoryEvents\)/);
+  assert.equal(mode("paper-generation", []), "paper-generation");
+  assert.equal(mode("paper-review", []), "paper-review");
+  assert.match(app, /const predictedMode: ResearchMode = researchMode/);
   assert.doesNotMatch(app, /inferResearchMode\(prompt/);
 });
 

@@ -14,7 +14,7 @@ export function draftForNewChatMode(current: string, next: NewChatMode): string 
   return current;
 }
 
-export default function NewChatModePicker({ value, onChange }: { value: NewChatMode; onChange: (mode: NewChatMode) => void }) {
+export default function NewChatModePicker({ value, onChange, currentMode }: { value: ResearchMode; onChange: (mode: NewChatMode) => void; currentMode?: { label: string; icon: React.ReactNode } }) {
   const { t } = useUISettings();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -23,7 +23,7 @@ export default function NewChatModePicker({ value, onChange }: { value: NewChatM
     { id: "research" as const, label: t("Research"), description: t("Explore a research question and plan experiments."), icon: <FlaskConical size={15} /> },
     { id: "create" as const, label: t("Create"), description: t("Describe a Research App you want to create."), icon: <Puzzle size={15} /> },
   ];
-  const selected = modes.find((mode) => mode.id === value) ?? modes[0];
+  const selected = modes.find((mode) => mode.id === value) ?? currentMode ?? modes[0];
   return <div className="new-chat-mode-picker">
     <button ref={trigger} type="button" className="new-chat-mode-trigger" aria-label={`${t("Conversation mode")}: ${selected.label}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
       {selected.icon}<span>{selected.label}</span><ChevronDown size={14} />
