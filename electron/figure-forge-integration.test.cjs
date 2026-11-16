@@ -26,7 +26,7 @@ test("paper to references, SVG and editable scene uses the real model transport 
     });
     if (system.includes("standalone editable SVG")) response = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="100" height="40"/></svg>';
     if (system.includes("reconstruct editable")) response = JSON.stringify({ nodes: Array.from({ length: 6 }, (_, i) => ({ type: "rect", x: i * 10, y: 0, w: 8, h: 10 })) });
-    return res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: response } }] }));
+    return res.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { role: "assistant", content: response } }] }));
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
