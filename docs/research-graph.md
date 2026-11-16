@@ -79,6 +79,10 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
   are indented rows, and experiments sit under the idea they primarily test.
   Additional idea→experiment tests edges are shown as faint secondary lines.
   This keeps the default canvas narrow and readable.
+- The panel is read-only. The model creates and updates nodes from the main
+  conversation; the inspector only shows the current revision, experiment plan,
+  runs, and logs. There is no manual question form, add-child form, experiment
+  plan form, or run button.
 - Clicking a node opens the inspector and shows its current revision content.
 - A selected node exposes its allowed child kinds. Creating a child writes the
   node and its typed edge; creating writing from a result creates the writing
@@ -112,10 +116,17 @@ released first. Extraction is stage-aware:
   idea content; no experiment nodes are created.
 - **Experiment setup:** experiment nodes are allowed, but every experiment must
   have at least one `tests` edge from an idea. Experiments never attach directly
-  to a question, and one idea may have multiple experiments. Automatic
-  extraction uses only `generates`, `refines`, and `tests`; extension and
-  feedback edges remain available in the data model but are not drawn in this
-  stage.
+  to a question, and one idea may have multiple experiments. A result node is
+  allowed only when the answer reports a measured outcome (a number, metric,
+  table, or observed result); proposals and promises to run do not create
+  results. The stage uses `generates`, `refines`, `tests`, `extends`,
+  `replicates`, and `produces`; feedback edges remain in the data model but are
+  not drawn in this stage.
+- **Result provenance:** a result extracted from the conversation records
+  `evidence.source = "conversation"`. A result created by
+  `createResultFromRun` records `evidence.source = "run"` plus the run id,
+  command, exit code, commit, and log tail. Both are visible as result nodes;
+  the inspector shows which evidence backed the result.
 
 - **API harness:** the extractor reuses the active Agent model with a JSON-only
   prompt and JSON response mode. It never exposes tools and is capped at a short
@@ -143,13 +154,13 @@ released first. Extraction is stage-aware:
 - The graph panel listens for `graph_update` events, refreshes in place, and
   shows a compact "Research graph updated" bar with an Undo action. Undo
   archives only the nodes created by that patch and restores any superseded
-  nodes to their previous status, so user-created nodes and earlier graph
-  history remain intact.
+  nodes to their previous status, so earlier graph history remains intact.
 - If extraction fails, times out, or returns no research object, the graph is
   unchanged and the failure is not treated as a turn failure.
-- Automatic extraction never creates `result` nodes. A result is created only
-  from a completed run, so its evidence can be traced to a real command, log,
-  exit code, and commit.
+- Result nodes are created only when the answer reports a measured outcome, or
+  by `createResultFromRun` from a completed run. Conversation-extracted results
+  are marked with `evidence.source = "conversation"`; run-backed results carry
+  the run id, command, exit code, commit, and log tail.
 
 ## Experiment runs
 
@@ -186,19 +197,19 @@ Two rules keep run evidence comparable:
   while a run is active and after a successful run. Title and summary edits do
   not change the plan.
 
-`createResultFromRun` is the only path that creates a result from measured
-output. It requires a `succeeded` run, records `source_run_id` on the result
-node, and copies the run id, command, exit code, commit, log path, log tail, and
-metrics into `content.evidence`. The result also gets a `produces` edge from its
-experiment. A run can produce at most one result; the unique index on
+`createResultFromRun` is the run-backed result path. It requires a `succeeded`
+run, records `source_run_id` on the result node, and copies the run id, command,
+exit code, commit, log path, log tail, and metrics into `content.evidence`. The
+result also gets a `produces` edge from its experiment. A run can produce at
+most one run-backed result; the unique index on
 `research_nodes(source_run_id)` enforces this.
 
 The Experiments view shows experiment lineage (`extends`/`replicates`), the
-latest run status on each node, and an inspector for the plan, runs, log, and
-result form. The **Next round** action creates a child experiment with both an
-`extends` edge to the selected experiment and the `tests` edge(s) of its parent
-idea, so the new round stays attached to the idea while descending from the
-winner.
+latest run status on each node, and a read-only inspector for the plan, runs,
+and log. When a conversation moves to a new round, the model creates a child
+experiment with both an `extends` edge to the previous experiment and the
+`tests` edge(s) of its parent idea, so the new round stays attached to the idea
+while descending from the winner.
 
 ## Service API
 

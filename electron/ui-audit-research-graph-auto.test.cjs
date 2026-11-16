@@ -17,7 +17,6 @@ test("Research mode refreshes the graph from automatic graph-update events", () 
   assert.match(app, /update=\{graphUpdate\}/);
   assert.match(app, /threadId=\{pathThread\?\.id \?\? null\}/);
   assert.match(app, /mode=\{pathMode\}/);
-  assert.match(app, /workspace=\{executionWorkspace\}/);
   assert.match(app, /researchMode === "experiment-setup"/);
   assert.match(panel, /const \[viewStage, setViewStage\] = useState<"ideas" \| "experiments">/);
   assert.match(panel, /const ideaStage = viewStage === "ideas"/);
@@ -25,12 +24,11 @@ test("Research mode refreshes the graph from automatic graph-update events", () 
   assert.match(panel, /className="research-graph-stage-switch"/);
   assert.match(panel, /setViewStage\("experiments"\)/);
   assert.match(panel, /const IDEA_STAGE_EDGES = new Set\(\["generates", "refines"\]\)/);
-  assert.match(panel, /const IDEA_STAGE_CHILD_OPTIONS[\s\S]*?idea: \[\{ kind: "idea", edge: "refines", label: "Idea" \}\]/);
   assert.match(panel, /const EXPERIMENT_STAGE_EDGES = new Set\(\["generates", "refines", "tests", "extends", "replicates", "produces"\]\)/);
   assert.match(panel, /listExperimentRuns\(\{ projectId, threadId \}\)/);
   assert.match(panel, /onExperimentRunUpdate/);
-  assert.match(panel, /startExperimentRun\(/);
-  assert.match(panel, /createResultFromRun\(\{ runId: run\.id, verdict, reasoning \}\)/);
+  assert.doesNotMatch(panel, /createQuestion|createChild|updateNodePlan|startExperiment\(|createResult\(/);
+  assert.match(panel, /The graph builds automatically from the conversation/);
   assert.match(panel, /includeArchived: false/);
   assert.match(panel, /listResearchGraph\(\{ projectId, threadId, includeArchived: false \}\)/);
   assert.match(panel, /update\.threadId === threadId/);
@@ -62,10 +60,10 @@ test("Agent turns schedule a background graph build for Research mode", () => {
   assert.match(auto, /extractWithNative/);
   assert.match(auto, /graph_update_pending/);
   assert.match(auto, /graph_applied/);
-  assert.match(auto, /allowResults: false/);
+  assert.match(auto, /allowResults: mode === "experiment-setup"/);
 });
 
-test("the experiment inspector wires plans, runs, logs, and the result gate", () => {
+test("the experiment inspector is read-only and shows plan and run evidence", () => {
   const inspector = read("src", "research-graph", "ExperimentInspector.tsx");
   const nodeInspector = read("src", "research-graph", "NodeInspector.tsx");
   const view = read("src", "research-graph", "ResearchGraphView.tsx");
@@ -76,17 +74,18 @@ test("the experiment inspector wires plans, runs, logs, and the result gate", ()
   assert.match(inspector, /Experiment baseline/);
   assert.match(inspector, /Experiment metrics/);
   assert.match(inspector, /Experiment stop criteria/);
-  assert.match(inspector, /onStartRun/);
-  assert.match(inspector, /onCancelRun/);
-  assert.match(inspector, /onCreateResult/);
-  assert.match(inspector, /Create result from run/);
+  assert.match(inspector, /The agent will fill this plan from the conversation/);
+  assert.match(inspector, /The agent has not run this experiment yet/);
+  assert.doesNotMatch(inspector, /onStartRun|onCancelRun|onCreateResult|Save plan|Run experiment|Create result from run/);
   assert.match(nodeInspector, /ExperimentInspector/);
+  assert.doesNotMatch(nodeInspector, /onCreateChild|Add child/);
   assert.match(view, /runsByNode/);
   assert.match(main, /experiment-run:start/);
   assert.match(main, /experiment-run:result/);
   assert.match(preload, /startExperimentRun/);
   assert.match(preload, /createResultFromRun/);
   assert.match(css, /\.experiment-section \{/);
+  assert.match(css, /\.experiment-plan-row \{/);
   assert.match(css, /\.experiment-run-log \{/);
   assert.match(css, /\.research-graph-node-runs \{/);
 });

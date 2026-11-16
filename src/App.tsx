@@ -3645,7 +3645,6 @@ function App() {
             threadTitle={pathThread?.title ?? t("No active session")}
             hasThread={Boolean(pathThread)}
             mode={pathMode}
-            workspace={executionWorkspace}
             version={graphVersion}
             update={graphUpdate}
             onOpenThread={openPathThread}

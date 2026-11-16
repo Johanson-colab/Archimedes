@@ -1,30 +1,15 @@
-import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
 import { useUISettings } from "../i18n";
 import ExperimentInspector from "./ExperimentInspector";
-import type { ExperimentRun, ExperimentVerdict, ResearchEdgeKind, ResearchNode, ResearchNodeKind } from "./types";
-
-export type ChildOption = {
-  kind: ResearchNodeKind;
-  edge: ResearchEdgeKind | "cite-after-create";
-  label: string;
-};
+import type { ExperimentRun, ResearchNode } from "./types";
 
 export type ExperimentInspectorActions = {
   runs: ExperimentRun[];
-  onSavePlan: (content: Record<string, unknown>) => Promise<void>;
-  onStartRun: (command: string) => Promise<void>;
-  onCancelRun: (runId: string) => Promise<void>;
-  onCreateResult: (run: ExperimentRun, verdict: ExperimentVerdict, reasoning: string) => Promise<void>;
   onReadLog: (runId: string) => Promise<string>;
 };
 
 type Props = {
   node: ResearchNode;
-  childOptions: ChildOption[];
-  busy: boolean;
   experiment?: ExperimentInspectorActions;
-  onCreateChild: (option: ChildOption, title: string) => Promise<void>;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -33,17 +18,12 @@ const STATUS_LABELS: Record<string, string> = {
   retracted: "Retracted",
 };
 
-export default function NodeInspector({ node, childOptions, busy, experiment, onCreateChild }: Props) {
+/**
+ * Read-only node view. The model creates and updates graph nodes from the main
+ * conversation; this inspector never asks the user to author graph content.
+ */
+export default function NodeInspector({ node, experiment }: Props) {
   const { t } = useUISettings();
-  const [childKind, setChildKind] = useState(childOptions[0]?.kind ?? "");
-  const [title, setTitle] = useState("");
-
-  useEffect(() => {
-    setChildKind(childOptions[0]?.kind ?? "");
-    setTitle("");
-  }, [node.id, childOptions]);
-
-  const option = childOptions.find((item) => item.kind === childKind) || childOptions[0] || null;
   const content = node.current_revision?.content ?? {};
 
   return <div className={`research-graph-inspector${node.kind === "experiment" ? " experiment" : ""}`}>
@@ -53,42 +33,10 @@ export default function NodeInspector({ node, childOptions, busy, experiment, on
     </div>
     {node.summary && <p className="research-graph-summary">{node.summary}</p>}
     {node.kind === "experiment" && experiment
-      ? <ExperimentInspector node={node} busy={busy} {...experiment} />
+      ? <ExperimentInspector node={node} runs={experiment.runs} onReadLog={experiment.onReadLog} />
       : <details className="research-graph-content-details" open>
         <summary>{t("Content")}</summary>
         <pre className="research-graph-content-json">{JSON.stringify(content, null, 2)}</pre>
       </details>}
-    {option && <form
-      className="research-graph-add-child"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const nextTitle = title.trim();
-        if (!nextTitle || busy) return;
-        void onCreateChild(option, nextTitle).then(() => setTitle(""));
-      }}
-    >
-      <span className="research-graph-add-label">{t("Add child")}</span>
-      <div className="research-graph-add-row">
-        <select
-          value={childKind}
-          onChange={(event) => setChildKind(event.target.value as ResearchNodeKind)}
-          aria-label={t("Add child")}
-          disabled={busy}
-        >
-          {childOptions.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
-        </select>
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder={t("Child title")}
-          aria-label={t("Child title")}
-          maxLength={200}
-          disabled={busy}
-        />
-        <button type="submit" disabled={busy || !title.trim()} aria-label={t("Create")}>
-          <Plus size={12} />
-        </button>
-      </div>
-    </form>}
   </div>;
 }

@@ -76,6 +76,49 @@ test("applyPatch creates a typed chain and records the source turn", () => {
   });
 });
 
+test("applyPatch enriches an existing node with later plan fields", () => {
+  withWorkspace(({ project }) => {
+    const question = graph.createNode({
+      projectId: project.id,
+      kind: "question",
+      title: "Does calibration track accuracy?",
+      content: { question: "Does calibration track accuracy under shift?" },
+    });
+    const idea = graph.createNode({
+      projectId: project.id,
+      kind: "idea",
+      title: "Calibration degrades first",
+      content: { hypothesis: "Calibration degrades first." },
+      parents: [{ nodeId: question.id }],
+    });
+    const experiment = graph.createNode({
+      projectId: project.id,
+      kind: "experiment",
+      title: "Severity sweep",
+      content: { plan: "Sweep corruption severity." },
+      parents: [{ nodeId: idea.id }],
+    });
+    graph.applyPatch({
+      projectId: project.id,
+      patch: {
+        nodes: [{
+          id: "n1",
+          kind: "experiment",
+          title: "Severity sweep",
+          content: { hypothesis: "ECE rises before accuracy.", baseline: "clean", metrics: ["ECE", "accuracy"] },
+        }],
+        edges: [],
+        reason: "enrich the plan",
+      },
+    });
+    const updated = store.getResearchNode(experiment.id);
+    assert.equal(updated.current_revision.content.plan, "Sweep corruption severity.");
+    assert.equal(updated.current_revision.content.hypothesis, "ECE rises before accuracy.");
+    assert.equal(updated.current_revision.content.baseline, "clean");
+    assert.deepEqual(updated.current_revision.content.metrics, ["ECE", "accuracy"]);
+  });
+});
+
 test("applyPatch reuses an existing node with the same kind and title", () => {
   withWorkspace(({ project }) => {
     const question = graph.createNode({
@@ -212,6 +255,52 @@ test("maybeAutoBuild applies an API patch once and emits a graph update", async 
     });
     assert.equal(again, null);
     assert.equal(graph.listGraph({ projectId: project.id }).nodes.length, 3);
+  });
+});
+
+test("experiment setup auto-build records a measured result, while idea stage cannot", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const { thread, turn } = threadFor(project.id);
+    const result = await auto.maybeAutoBuild({
+      projectId: project.id,
+      threadId: thread.id,
+      turnId: turn.id,
+      mode: "experiment-setup",
+      origin: "research",
+      backend: "api",
+      config: { apiKey: "test", model: "fixture" },
+      workspace: root,
+      userPrompt: "Run the severity sweep and report the measured outcome.",
+      assistantResponse: "The sweep finished: ECE rose from 0.08 to 0.21 while accuracy stayed at 0.88.",
+      emit: () => {},
+      recordEvent: () => {},
+      complete: async () => ({ content: JSON.stringify(chainPatch) }),
+    });
+    assert.equal(result.createdNodes.length, 4);
+    const measured = result.createdNodes.find((node) => node.kind === "result");
+    assert.equal(measured.current_revision.content.evidence.source, "conversation");
+  });
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const { thread, turn } = threadFor(project.id);
+    const records = [];
+    const result = await auto.maybeAutoBuild({
+      projectId: project.id,
+      threadId: thread.id,
+      turnId: turn.id,
+      mode: "research",
+      origin: "research",
+      backend: "api",
+      config: { apiKey: "test", model: "fixture" },
+      workspace: root,
+      userPrompt: "Does calibration track accuracy under shift?",
+      assistantResponse: "The answer proposes a severity sweep.",
+      emit: () => {},
+      recordEvent: (event) => records.push(event),
+      complete: async () => ({ content: JSON.stringify(chainPatch) }),
+    });
+    assert.equal(result, null);
+    assert.ok(records.some((event) => event.type === "graph_failed"));
+    assert.equal(store.listResearchGraph({ projectId: project.id }).nodes.length, 0);
   });
 });
 
@@ -538,6 +627,9 @@ test("extraction prompts separate idea discussion from experiment setup", () => 
   assert.match(experimentPrompt, /Experiment setup stage/i);
   assert.match(experimentPrompt, /Every experiment must have at least one tests edge from an idea/i);
   assert.match(experimentPrompt, /One idea may have multiple experiments/i);
+  assert.match(experimentPrompt, /Create result nodes only when the answer reports a measured outcome/i);
+  assert.match(experimentPrompt, /experiment->result/);
+  assert.match(experimentPrompt, /result: \{ evidence, interpretation: \{ verdict, reasoning \} \}/);
   assert.match(experimentPrompt, /experiment: \{ hypothesis, baseline, method, metrics, stopCriteria \}/);
 });
 

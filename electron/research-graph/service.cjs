@@ -237,6 +237,7 @@ function createResultFromRun({
     summary: normalizeSummary(text),
     content: {
       evidence: {
+        source: "run",
         runId: run.id,
         command: run.command,
         cwd: run.cwd,
@@ -312,6 +313,10 @@ function normalizePatch(patch) {
     const status = node.status || "draft";
     if (!isNodeStatus(status)) throw new Error(`Unknown research node status: ${status}`);
     const content = node.content && typeof node.content === "object" && !Array.isArray(node.content) ? node.content : {};
+    if (node.kind === "result") {
+      const evidence = content.evidence && typeof content.evidence === "object" && !Array.isArray(content.evidence) ? content.evidence : {};
+      content.evidence = { ...evidence, source: "conversation" };
+    }
     serializeContent(content);
     return {
       tempId,
@@ -352,6 +357,23 @@ function normalizePatch(patch) {
 
 function titleKey(kind, title) {
   return `${kind}|${String(title || "").normalize("NFKC").toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, " ").trim()}`;
+}
+
+function mergeExtractedContent(existing, incoming) {
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return existing;
+  const merged = { ...existing };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value == null) continue;
+    if (typeof value === "string" && !value.trim()) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const current = existing[key] && typeof existing[key] === "object" && !Array.isArray(existing[key]) ? existing[key] : {};
+      merged[key] = { ...current, ...value };
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
 }
 
 function edgeEndpoint(edge, key) {
@@ -410,6 +432,17 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author, 
   for (const node of normalized.nodes) {
     const duplicateId = existingKeys.get(titleKey(node.kind, node.title));
     if (duplicateId) {
+      const duplicate = existingById.get(duplicateId);
+      const current = duplicate?.current_revision?.content ?? {};
+      const merged = mergeExtractedContent(current, node.content);
+      if (duplicate && JSON.stringify(merged) !== JSON.stringify(current)) {
+        try {
+          reviseNode({ nodeId: duplicateId, content: merged, sourceTurnId: turnId, author });
+        } catch (error) {
+          // A frozen experiment keeps the plan that produced its measured run.
+          if (!/successful run|active run/.test(error?.message || "")) throw error;
+        }
+      }
       resolved.set(node.tempId, duplicateId);
       skippedNodes.push({ tempId: node.tempId, nodeId: duplicateId, reason: "duplicate" });
       continue;

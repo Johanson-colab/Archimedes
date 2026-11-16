@@ -37,13 +37,14 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
       "- question: the research question this session is trying to answer.",
       "- idea: a testable hypothesis.",
       "- experiment: a concrete plan that tests one or more ideas.",
+      "- result: a measured outcome with interpretation. Create it only when the answer reports an actual measurement, not a plan or a promise to run.",
     ]
     : [
       "- question: the research question this session is trying to answer.",
       "- idea: a testable hypothesis. Use status draft unless the answer clearly establishes it.",
     ];
   const allowedEdgeKinds = experimentStage
-    ? ["generates", "refines", "tests", "extends", "replicates"]
+    ? ["generates", "refines", "tests", "extends", "replicates", "produces"]
     : ["generates", "refines"];
   const edgeRules = allowedEdgeKinds
     .map((kind) => `${kind}: ${EDGE_RULES[kind].map(([from, to]) => `${from}->${to}`).join(", ")}`)
@@ -53,8 +54,9 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
       "This is the Experiment setup stage. Create experiment nodes only when the answer contains a concrete experiment plan.",
       "Every experiment must have at least one tests edge from an idea. Never link an experiment directly to a question.",
       "One idea may have multiple experiments. Attach each experiment to every idea it actually tests.",
-      "Do not create result or writing nodes in this stage.",
-      "Allowed edges are only generates, refines, tests, extends, and replicates. Do not create feedback, produces, merges, or cites edges.",
+      "Create result nodes only when the answer reports a measured outcome (a number, metric, table, or observed result). Put the measurement in content.evidence and the interpretation in content.interpretation. Never create a result from a proposed plan or a promise to run.",
+      "Do not create writing nodes in this stage.",
+      "Allowed edges are only generates, refines, tests, extends, replicates, and produces. Do not create feedback, merges, or cites edges.",
       "When the plan builds on an existing experiment, link it with an extends edge as well as the idea tests edge.",
     ]
     : [
@@ -68,10 +70,12 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
         { id: "n1", kind: "question", title: "...", summary: "...", content: { question: "..." } },
         { id: "n2", kind: "idea", title: "...", summary: "...", content: { hypothesis: "...", prediction: "..." } },
         { id: "n3", kind: "experiment", title: "...", summary: "...", content: { hypothesis: "...", baseline: "...", method: "...", metrics: ["..."], stopCriteria: "..." } },
+        { id: "n4", kind: "result", title: "...", summary: "...", content: { evidence: { metrics: {}, note: "..." }, interpretation: { verdict: "supports", reasoning: "..." } } },
       ],
       edges: [
         { from: "n1", to: "n2", kind: "generates" },
         { from: "n2", to: "n3", kind: "tests" },
+        { from: "n3", to: "n4", kind: "produces" },
       ],
       supersede: [{ nodeId: "existing-idea-id", reason: "Superseded by the new idea round" }],
       reason: "short explanation",
@@ -118,7 +122,7 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
     "- content must be a compact JSON object. Suggested fields:",
     "  question: { question }",
     "  idea: { hypothesis, prediction }",
-    ...(experimentStage ? ["  experiment: { hypothesis, baseline, method, metrics, stopCriteria }"] : []),
+    ...(experimentStage ? ["  experiment: { hypothesis, baseline, method, metrics, stopCriteria }", "  result: { evidence, interpretation: { verdict, reasoning } }"] : []),
     "- If the answer contains no new research object, return {\"nodes\":[],\"edges\":[],\"reason\":\"no_new_objects\"}.",
     "",
     "Required JSON shape:",
@@ -283,14 +287,14 @@ async function maybeAutoBuild({
         ? await extractWithApi({ complete, config, prompt: nextPrompt, signal: controller.signal })
         : await extractWithNative({ runNative, config, workspace, prompt: nextPrompt, signal: controller.signal });
       if (controller.signal.aborted) throw new Error("Graph extraction timed out.");
-      return graph.applyPatch({ projectId, threadId, turnId, patch: parseGraphPatch(text), allowResults: false });
+      return graph.applyPatch({ projectId, threadId, turnId, patch: parseGraphPatch(text), allowResults: mode === "experiment-setup" });
     };
     let applied;
     try {
       applied = await runExtraction(prompt);
     } catch (firstError) {
       if (backend !== "api" || controller.signal.aborted || /No API model|unavailable/i.test(firstError?.message || "")) throw firstError;
-      const retryPrompt = `${prompt}\n\nYour previous graph patch could not be applied: ${firstError?.message || String(firstError)}\nReturn ONLY a valid JSON object with at most 3 new nodes and 4 new edges. Do not include Markdown or commentary. Do not create result nodes; results come from completed runs. Create experiment nodes only when the answer reports a concrete experiment plan.`;
+      const retryPrompt = `${prompt}\n\nYour previous graph patch could not be applied: ${firstError?.message || String(firstError)}\nReturn ONLY a valid JSON object with at most 3 new nodes and 4 new edges. Do not include Markdown or commentary. Do not create result nodes unless this is the Experiment setup stage and the answer reports a measured outcome. Create experiment nodes only when the answer reports a concrete experiment plan.`;
       applied = await runExtraction(retryPrompt);
     }
     const createdNodeIds = applied.createdNodes.map((node) => node.id);
