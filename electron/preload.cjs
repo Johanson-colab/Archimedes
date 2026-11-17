@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   restoreResearchNode: (nodeId) => ipcRenderer.invoke("research-graph:restore", { nodeId }),
   setResearchNodeStatus: (nodeId, status, reason = "") => ipcRenderer.invoke("research-graph:set-status", { nodeId, status, reason }),
   validateResearchGraph: (projectId, threadId = null) => ipcRenderer.invoke("research-graph:validate", { projectId, threadId }),
+  listExperimentActivities: (input) => ipcRenderer.invoke("experiment-activity:list", input),
   listExperimentRuns: (input) => ipcRenderer.invoke("experiment-run:list", input),
   startExperimentRun: (input) => ipcRenderer.invoke("experiment-run:start", input),
   cancelExperimentRun: (runId) => ipcRenderer.invoke("experiment-run:cancel", runId),

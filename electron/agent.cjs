@@ -463,6 +463,20 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "record_experiment_activity",
+      description: "Record a specific observed preparation, reproduction, baseline, implementation, execution, repair or observation step within an existing experiment. Do not invent steps or claim execution success without evidence. This creates a reported activity, not a managed run.",
+      parameters: { type: "object", properties: {
+        experiment: { type: "string", description: "Experiment id or exact title in this session." },
+        category: { type: "string", enum: ["preparation", "reproduction", "baseline", "implementation", "execution", "repair", "observation"] },
+        status: { type: "string", enum: ["started", "completed", "failed", "note"] },
+        title: { type: "string", maxLength: 200 },
+        run_id: { type: "string", description: "Optional run id for this experiment." },
+      }, required: ["experiment", "category", "status", "title"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "record_experiment_evidence",
       description: "Record explicitly observed numerical metrics and/or output file paths for a finished experiment run. Read the run log or output files first; never invent metrics. Artifacts are references with a hash, not copied files. Paths are relative to the run workspace.",
       parameters: { type: "object", properties: {
@@ -1234,6 +1248,14 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     sessionExperimentRun({ threadId, runId: args.run_id });
     const log = experimentRuns.readExperimentRunLog({ runId: args.run_id, maxBytes: args.max_bytes });
     return { content: JSON.stringify({ run_id: args.run_id, ...log }) };
+  }
+
+  if (name === "record_experiment_activity") {
+    const { thread, experiment } = sessionExperiment({ threadId, experiment: args.experiment });
+    const activity = store.recordExperimentActivity({ projectId: thread.project_id, threadId, nodeId: experiment.id, runId: args.run_id || null, turnId, category: args.category, status: args.status, title: args.title });
+    recordEvent({ type: "experiment_activity", payload: { activity } });
+    emit(graphUpdateEvent({ thread, turnId }));
+    return { content: JSON.stringify({ activity, notice: "Agent-reported activity, not a managed run." }) };
   }
 
   if (name === "record_experiment_evidence") {

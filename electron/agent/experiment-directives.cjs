@@ -85,7 +85,12 @@ function experimentPrompt() {
     "```experiment",
     '{"action":"evidence","runId":"...","metrics":{"accuracy":0.91},"artifacts":["results/plot.png"]}',
     "```",
-    "Paths are relative to the run workspace and are references, not copies. Report only observed values. Then use:",
+    "Paths are relative to the run workspace and are references, not copies. Report only observed values.",
+    "To record an observed preparation, reproduction, baseline, implementation, execution, repair or observation step within the experiment (not a new graph node), use:",
+    "```experiment",
+    '{"action":"activity","experiment":"...","category":"baseline","status":"completed","title":"..."}',
+    "```",
+    "Record only observed activities, and never treat an activity as a managed run. Then use:",
     "```experiment",
     '{"action":"result","runId":"...","verdict":"supports|contradicts|inconclusive","reasoning":"..."}',
     "```",
@@ -241,6 +246,15 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
         resolveRun({ thread, runId });
         const log = runs.readExperimentRunLog({ runId, maxBytes: 4_000 });
         notes.push(`Experiment run ${runId} log:\n\`\`\`text\n${log.text || "(no output yet)"}\n\`\`\``);
+        continue;
+      }
+
+      if (action === "activity") {
+        const experiment = resolveNode({ thread, value: directive.experiment, kind: "experiment", label: "Experiment" });
+        const activity = store.recordExperimentActivity({ projectId: thread.project_id, threadId: thread.id, nodeId: experiment.id, runId: directive.runId || null, turnId, category: directive.category, status: directive.status, title: directive.title });
+        recordEvent({ type: "experiment_activity", payload: { activity } });
+        emit(graphUpdateEvent({ thread, turnId }));
+        notes.push(`Experiment activity recorded: ${activity.title} (agent-reported, not a managed run).`);
         continue;
       }
 

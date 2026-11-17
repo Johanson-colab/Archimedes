@@ -9,6 +9,7 @@ type ResearchGraphNodeKind = import("./research-graph/types").ResearchNodeKind;
 type ResearchGraphEdgeKind = import("./research-graph/types").ResearchEdgeKind;
 type ResearchGraphStatus = import("./research-graph/types").ResearchNodeStatus;
 type ExperimentRun = import("./research-graph/types").ExperimentRun;
+type ExperimentActivity = import("./research-graph/types").ExperimentActivity;
 type ExperimentVerdict = import("./research-graph/types").ExperimentVerdict;
 type ResearchGraphParent = { nodeId: string; revisionId?: string; kind?: ResearchGraphEdgeKind; metadata?: Record<string, unknown> };
 
@@ -128,6 +129,7 @@ interface ResearchDeskBridge {
     restoreResearchNode: (nodeId: string) => Promise<ResearchGraphNode>;
     setResearchNodeStatus: (nodeId: string, status: ResearchGraphStatus, reason?: string) => Promise<ResearchGraphNode>;
     validateResearchGraph: (projectId: string, threadId?: string | null) => Promise<{ projectId: string; ok: boolean; issues: ResearchGraphIssue[] }>;
+    listExperimentActivities?: (input: { projectId: string; threadId: string }) => Promise<ExperimentActivity[]>;
     listExperimentRuns: (input: { projectId?: string; threadId?: string | null; nodeId?: string }) => Promise<ExperimentRun[]>;
     startExperimentRun: (input: { projectId: string; threadId: string; nodeId: string; command: string; workspace: string; cwd?: string }) => Promise<ExperimentRun>;
     cancelExperimentRun: (runId: string) => Promise<ExperimentRun>;

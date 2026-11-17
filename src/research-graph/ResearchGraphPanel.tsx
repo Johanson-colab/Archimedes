@@ -6,7 +6,7 @@ import { layoutLineage } from "./graphLayout";
 import NodeInspector from "./NodeInspector";
 import ResearchGraphView from "./ResearchGraphView";
 import type { RunPathEvent } from "./ResearchGraphView";
-import type { ExperimentRun, ResearchGraph, ResearchGraphUpdate } from "./types";
+import type { ExperimentActivity, ExperimentRun, ResearchGraph, ResearchGraphUpdate } from "./types";
 
 type Props = {
   projectId: string | null;
@@ -44,6 +44,7 @@ export default function ResearchGraphPanel({
   const { t } = useUISettings();
   const [graph, setGraph] = useState<ResearchGraph | null>(null);
   const [runs, setRuns] = useState<ExperimentRun[]>([]);
+  const [activities, setActivities] = useState<ExperimentActivity[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -56,7 +57,7 @@ export default function ResearchGraphPanel({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [viewStage, setViewStage] = useState<"ideas" | "experiments" | "all">(mode === "experiment-setup" ? "experiments" : "ideas");
 
-  useEffect(() => { setGraph(null); setRuns([]); setSelectedId(null); setFocusedId(null); setInspectorOpen(false); }, [projectId, threadId]);
+  useEffect(() => { setGraph(null); setRuns([]); setActivities([]); setSelectedId(null); setFocusedId(null); setInspectorOpen(false); }, [projectId, threadId]);
 
   useEffect(() => {
     setViewStage(mode === "experiment-setup" ? "experiments" : "ideas");
@@ -120,6 +121,15 @@ export default function ResearchGraphPanel({
   }, [projectId, threadId, refreshKey, version]);
 
   useEffect(() => {
+    if (!projectId || !threadId || !window.researchDesk?.listExperimentActivities) { setActivities([]); return; }
+    let cancelled = false;
+    window.researchDesk.listExperimentActivities({ projectId, threadId })
+      .then((next) => { if (!cancelled) setActivities(next); })
+      .catch((cause: unknown) => { if (!cancelled) { setActivities([]); setError(cause instanceof Error ? cause.message : t("Could not load experiment activity.")); } });
+    return () => { cancelled = true; };
+  }, [projectId, threadId, refreshKey, version, t]);
+
+  useEffect(() => {
     if (!threadId) return;
     const unsubscribe = window.researchDesk?.onExperimentRunUpdate?.((run) => {
       if (run.thread_id !== threadId) return;
@@ -151,7 +161,7 @@ export default function ResearchGraphPanel({
   const pathEvents = useMemo<RunPathEvent[]>(() => {
     if (!focusedId || !graph?.nodes.some((node) => node.id === focusedId && node.kind === "experiment")) return [];
     const all = runsByNode.get(focusedId) || [];
-    return all.slice(-5).flatMap((run, index) => {
+    const runEvents = all.slice(-5).flatMap((run, index) => {
       const number = all.length - Math.min(all.length, 5) + index + 1;
       const events: RunPathEvent[] = [];
       if (run.started_at) events.push({ id: `${run.id}-start`, runId: run.id, number, status: "started", time: run.started_at });
@@ -159,7 +169,12 @@ export default function ResearchGraphPanel({
       if (!events.length) events.push({ id: `${run.id}-pending`, runId: run.id, number, status: run.status, time: run.created_at });
       return events;
     });
-  }, [focusedId, graph, runsByNode]);
+    const reported: RunPathEvent[] = activities.filter((item) => item.node_id === focusedId).map((item) => ({ id: item.id, status: item.status, time: item.created_at, title: item.title, source: "agent_reported" }));
+    const combined = [...runEvents, ...reported].sort((left, right) => left.time.localeCompare(right.time));
+    const truncated = all.length > 5 || combined.length > 20;
+    const recent = combined.slice(-20);
+    return truncated ? [{ id: "older-hidden", status: "note", time: recent[0]?.time || "", source: "summary" as const }, ...recent] : recent;
+  }, [focusedId, graph, runsByNode, activities]);
   const layout = useMemo(() => {
     if (!graph) return null;
     const nodes = showHistory ? stageNodes : stageNodes.filter((node) => node.status !== "retracted" && !node.archived);

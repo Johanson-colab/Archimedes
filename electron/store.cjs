@@ -580,6 +580,21 @@ function schema(db) {
     ) STRICT;
     CREATE INDEX IF NOT EXISTS idx_experiment_evidence_run ON experiment_evidence(run_id, created_at);
 
+    CREATE TABLE IF NOT EXISTS experiment_activities (
+      id TEXT PRIMARY KEY NOT NULL,
+      project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
+      thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
+      node_id TEXT NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
+      run_id TEXT REFERENCES experiment_runs(id) ON DELETE CASCADE,
+      turn_id TEXT REFERENCES research_turns(id) ON DELETE SET NULL,
+      category TEXT NOT NULL,
+      status TEXT NOT NULL,
+      title TEXT NOT NULL,
+      source TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_experiment_activities_thread ON experiment_activities(thread_id, created_at);
+
     CREATE TABLE IF NOT EXISTS experiment_workspaces (
       node_id TEXT PRIMARY KEY NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
       workspace_id TEXT NOT NULL UNIQUE REFERENCES project_workspaces(id),
@@ -3361,6 +3376,38 @@ function createExperimentRun({
   return getExperimentRun(id);
 }
 
+function listExperimentActivities({ projectId, threadId } = {}) {
+  if (!projectId || !threadId) throw new Error("A project and session are required.");
+  if (!canAccessProject(projectId, "viewer")) throw new Error("You do not have access to this project.");
+  const db = requireDatabase();
+  const thread = db.prepare("SELECT project_id FROM research_threads WHERE id = ?").get(threadId);
+  if (!thread || thread.project_id !== projectId) throw new Error("The research session does not belong to this project.");
+  return db.prepare("SELECT * FROM experiment_activities WHERE project_id = ? AND thread_id = ? ORDER BY created_at ASC, rowid ASC").all(projectId, threadId);
+}
+
+function recordExperimentActivity({ projectId, threadId, nodeId, runId = null, turnId = null, category, status, title } = {}) {
+  if (!projectId || !threadId || !nodeId) throw new Error("A project, session and experiment are required.");
+  if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to record experiment activity.");
+  const node = getResearchNode(nodeId);
+  if (!node || node.kind !== "experiment" || node.project_id !== projectId || node.thread_id !== threadId) throw new Error("Experiment not found in this session.");
+  if (node.archived || node.status === "retracted") throw new Error("Restore the experiment before recording activity.");
+  if (!["preparation", "reproduction", "baseline", "implementation", "execution", "repair", "observation"].includes(category)) throw new Error("Unknown experiment activity category.");
+  if (!["started", "completed", "failed", "note"].includes(status)) throw new Error("Unknown experiment activity status.");
+  const normalizedTitle = String(title || "").replace(/\s+/g, " ").trim();
+  if (!normalizedTitle || normalizedTitle.length > 200) throw new Error("An activity title of at most 200 characters is required.");
+  const db = requireDatabase();
+  if (runId) {
+    const run = getExperimentRun(runId);
+    if (!run || run.node_id !== nodeId || run.thread_id !== threadId) throw new Error("Run does not belong to this experiment.");
+  }
+  if (turnId && !db.prepare("SELECT 1 FROM research_turns WHERE id = ? AND thread_id = ?").get(turnId, threadId)) throw new Error("Turn does not belong to this session.");
+  const id = randomUUID();
+  db.prepare("INSERT INTO experiment_activities (id, project_id, thread_id, node_id, run_id, turn_id, category, status, title, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'agent_reported', ?)")
+    .run(id, projectId, threadId, nodeId, runId || null, turnId || null, category, status, normalizedTitle, timestamp());
+  recordAuditEvent(db, { projectId, action: "experiment.activity_recorded", targetType: "experiment", targetId: nodeId, metadata: { activityId: id, category, status, runId } });
+  return db.prepare("SELECT * FROM experiment_activities WHERE id = ?").get(id);
+}
+
 function addExperimentEvidence({ runId, turnId = null, metrics = {}, artifacts = [] } = {}) {
   const run = getExperimentRun(runId);
   if (!run) throw new Error("Experiment run not found.");
@@ -4461,6 +4508,8 @@ module.exports = {
   restoreResearchNode,
   setResearchNodeStatus,
   createExperimentRun,
+  listExperimentActivities,
+  recordExperimentActivity,
   addExperimentEvidence,
   getExperimentWorkspace,
   experimentWorkspaceBase,

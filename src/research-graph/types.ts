@@ -119,6 +119,12 @@ export type ExperimentRunStatus = (typeof EXPERIMENT_RUN_STATUSES)[number];
 
 export type ExperimentVerdict = "supports" | "contradicts" | "inconclusive";
 
+export interface ExperimentActivity {
+  id: string; project_id: string; thread_id: string; node_id: string;
+  run_id: string | null; turn_id: string | null;
+  category: string; status: string; title: string; source: "agent_reported"; created_at: string;
+}
+
 export interface ExperimentRun {
   id: string;
   project_id: string;

@@ -7,10 +7,11 @@ import type { ExperimentRun, ResearchNode, ResearchNodeKind } from "./types";
 const KIND_ICONS: Record<ResearchNodeKind, LucideIcon> = { question: HelpCircle, idea: Lightbulb, experiment: FlaskConical, result: Activity, writing: FileText };
 const KIND_LABELS: Record<ResearchNodeKind, string> = { question: "Question", idea: "Idea", experiment: "Experiment", result: "Result", writing: "Writing" };
 const RUN_LABELS: Record<string, string> = { started: "Run started", starting: "Run starting", running: "Run running", succeeded: "Run succeeded", failed: "Run failed", cancelled: "Run cancelled" };
+const ACTIVITY_LABELS: Record<string, string> = { started: "Activity started", completed: "Activity completed", failed: "Activity failed", note: "Activity note" };
 const TONES = ["var(--accent)", "var(--analysis-series-3)", "var(--analysis-series-1)", "var(--analysis-series-5)", "var(--analysis-series-2)"];
 const tone = (lane: number) => TONES[lane % TONES.length];
 
-export type RunPathEvent = { id: string; runId: string; number: number; status: string; time: string };
+export type RunPathEvent = { id: string; runId?: string; number?: number; status: string; time: string; title?: string; source?: "agent_reported" | "summary" };
 type Props = { pathEvents?: RunPathEvent[]; layout: LineageLayout; selectedId: string | null; focusedId: string | null; runsByNode: Map<string, ExperimentRun[]>; onSelect: (nodeId: string) => void };
 
 export function lineageAncestors(layout: LineageLayout, selectedId: string | null): Set<string> {
@@ -90,9 +91,8 @@ export default function ResearchGraphView({ layout, selectedId, focusedId, runsB
     })}
     {focusedNode && pathEvents.map((event, index) => <div key={event.id} className={`research-path-event status-${event.status}`}
       style={{ top: focusedNode.y + LINEAGE_ROW_HEIGHT + index * LINEAGE_EVENT_HEIGHT, height: LINEAGE_EVENT_HEIGHT, paddingLeft: layout.railWidth + 8 }}>
-      {index === 0 && (runsByNode.get(focusedNode.node.id)?.length || 0) > 5 && <span>{t("Recent 5 runs")} ·</span>}
-      <span>{t("Run")} {event.number}</span><span>{t(RUN_LABELS[event.status] || event.status)}</span>
-      <time>{new Date(event.time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
+      {event.source === "summary" ? <span>{t("Older activity hidden")}</span> : event.source === "agent_reported" ? <><span className="research-path-event-title" title={event.title}>{event.title}</span><span className="research-path-event-source">{t(ACTIVITY_LABELS[event.status] || event.status)} · {t("Agent-reported")}</span></> : <><span>{t("Run")} {event.number}</span><span>{t(RUN_LABELS[event.status] || event.status)}</span></>}
+      {event.source !== "summary" && <time>{new Date(event.time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time>}
     </div>)}
     <svg className="research-graph-edges" width={layout.railWidth} height={layout.height} viewBox={`0 0 ${layout.railWidth} ${layout.height}`} aria-hidden="true">
       {layout.edges.filter(item => !edgeOnPath(item)).map(renderEdge)}
