@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const store = require("../store.cjs");
+const { inspectCodeState, createCodeSnapshot } = require("./code-snapshot.cjs");
 
 const activeRuns = new Map();
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
@@ -78,25 +79,35 @@ function startExperimentRun({
     throw new Error("The run command is fixed after a successful run. Create a next round to change it.");
   }
 
+  if (experimentWorkspaceId) inspectCodeState(runWorkspace);
+
   const runId = randomUUID();
   const directory = runDirectory(runWorkspace, runId);
   fs.mkdirSync(directory, { recursive: true });
   const logPath = path.join(directory, "run.log");
   fs.writeFileSync(logPath, `$ ${text}\n\n`);
 
-  let run = store.createExperimentRun({
-    id: runId,
-    projectId,
-    threadId,
-    nodeId,
-    status: "starting",
-    backend: "local",
-    command: text,
-    cwd: runCwd,
-    commitSha: readCommit(runCwd),
-    experimentWorkspaceId,
-    logPath,
-  });
+  let run;
+  try {
+    const codeSnapshot = experimentWorkspaceId ? createCodeSnapshot(runWorkspace, directory) : null;
+    run = store.createExperimentRun({
+      id: runId,
+      projectId,
+      threadId,
+      nodeId,
+      status: "starting",
+      backend: "local",
+      command: text,
+      cwd: runCwd,
+      commitSha: codeSnapshot?.commit || readCommit(runCwd),
+      experimentWorkspaceId,
+      codeSnapshot,
+      logPath,
+    });
+  } catch (error) {
+    fs.rmSync(directory, { recursive: true, force: true });
+    throw error;
+  }
   onUpdate(run);
 
   const stream = fs.createWriteStream(logPath, { flags: "a" });

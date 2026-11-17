@@ -412,7 +412,7 @@ const tools = [
     type: "function",
     function: {
       name: "run_experiment",
-      description: "Start a recorded local experiment run for an existing experiment node in this Research session. Use only when the user asks to run an experiment or the experiment plan is ready. The app records the command, log, exit code, and commit in the experiment graph. Returns immediately with a run id; use wait_experiment and read_experiment_log to inspect it.",
+      description: "Start a recorded local experiment run for an existing experiment node in this Research session. Use only when the user asks to run an experiment or the experiment plan is ready. The app records the command, log, exit code, and commit in the experiment graph. Isolated worktrees must be clean and committed; their Git code archive is saved before execution. Ignored files, data, and the runtime environment are not captured. Returns immediately with a run id; use wait_experiment and read_experiment_log to inspect it.",
       parameters: {
         type: "object",
         properties: {
@@ -1149,6 +1149,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       if (!preparedRoot.startsWith(`${activeRoot}${path.sep}`)) throw new Error("The experiment workspace is outside the active workspace.");
     }
     const runRoot = prepared ? prepared.root : root;
+    if (prepared) require("./research-graph/code-snapshot.cjs").inspectCodeState(runRoot);
     const workingDirectory = existingWorkspacePath(runRoot, args.cwd || "");
     if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The run working directory is not a directory.");
     const action = store.createAction({
@@ -1198,6 +1199,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
         experiment_id: experiment.id,
         status: started.run.status,
         log_path: started.run.log_path,
+        code_snapshot: started.run.provenance?.codeSnapshot || null,
       }),
     };
   }

@@ -70,7 +70,7 @@ function experimentPrompt() {
     "```experiment",
     '{"action":"prepare_workspace","experiment":"<exact experiment title>"}',
     "```",
-    "The worktree does not contain uncommitted or untracked changes. Prepare the experiment code in that returned path. Then run it with:",
+    "The worktree starts with committed code only. Prepare and commit the experiment code there before running; uncommitted or untracked files block the run. The app saves a Git archive, excluding ignored files, submodule contents and LFS objects. Then run it with:",
     "```experiment",
     '{"action":"run","experiment":"<exact experiment title>","command":"<shell command>","useExperimentWorkspace":true}',
     "```",
@@ -182,6 +182,7 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
           if (!isolatedRoot.startsWith(`${activeRoot}${path.sep}`)) throw new Error("The experiment workspace is outside the active workspace.");
         }
         const runRoot = isolated ? isolated.root : workspace;
+        if (isolated) require("../research-graph/code-snapshot.cjs").inspectCodeState(runRoot);
         const cwd = directive.cwd ? path.resolve(runRoot, String(directive.cwd)) : runRoot;
         if (cwd !== runRoot && !cwd.startsWith(`${runRoot}${path.sep}`)) throw new Error("The run folder is outside the workspace.");
         if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error("The run folder is no longer available.");
@@ -219,7 +220,8 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
         }).catch((error) => {
           recordEvent({ type: "experiment_run_error", payload: { experimentId: experiment.id, error: error.message || String(error) } });
         });
-        notes.push(`Experiment run started: ${experiment.title} (run ${started.run.id}). The log will be recorded when it finishes.`);
+        const snapshot = started.run.provenance?.codeSnapshot;
+        notes.push(`Experiment run started: ${experiment.title} (run ${started.run.id}). The log will be recorded when it finishes.${snapshot ? ` Code archive: ${snapshot.path} (commit ${snapshot.commit}, SHA-256 ${snapshot.sha256}). ${snapshot.limitations}` : " No code snapshot was created for this run."}`);
         continue;
       }
 

@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { createHash } = require("node:crypto");
 const test = require("node:test");
 const store = require("./store.cjs");
 const graph = require("./research-graph/service.cjs");
@@ -46,6 +47,16 @@ test("experiment worktree keeps uncommitted files safe and ties runs to the isol
     assert.equal(fs.existsSync(path.join(isolated.root, "untracked.txt")), false);
     assert.equal(store.createExperimentWorkspace(experiment.id).existing, true);
     assert.throws(() => store.deleteProjectWorkspace(isolated.id), /linked to an experiment/);
+    const runArgs = { projectId: project.id, threadId: thread.id, nodeId: experiment.id, workspace: isolated.root, cwd: isolated.root, experimentWorkspaceId: isolated.id, command: `${JSON.stringify(process.execPath)} -e "console.log('isolated')"` };
+    fs.writeFileSync(path.join(isolated.root, "code.txt"), "not committed\n");
+    assert.throws(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
+    git(isolated.root, "checkout", "--", "code.txt");
+    fs.writeFileSync(path.join(isolated.root, "new.txt"), "not committed\n");
+    assert.throws(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
+    git(isolated.root, "add", "new.txt");
+    assert.throws(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
+    git(isolated.root, "reset", "HEAD", "--", "new.txt");
+    fs.unlinkSync(path.join(isolated.root, "new.txt"));
     const started = runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, workspace: isolated.root, cwd: isolated.root, experimentWorkspaceId: isolated.id, command: `${JSON.stringify(process.execPath)} -e "console.log('isolated')"` });
     const finished = await started.completion;
     assert.equal(finished.status, "succeeded");
@@ -53,6 +64,11 @@ test("experiment worktree keeps uncommitted files safe and ties runs to the isol
     assert.equal(finished.provenance.workspace.id, isolated.id);
     assert.equal(finished.provenance.workspace.baseCommit, base);
     assert.equal(finished.provenance.workspace.branchName, isolated.branch_name);
+    const snapshot = finished.provenance.codeSnapshot;
+    assert.equal(snapshot.commit, base);
+    assert.equal(snapshot.sha256, createHash("sha256").update(fs.readFileSync(snapshot.path)).digest("hex"));
+    assert.equal(execFileSync("tar", ["-xOf", snapshot.path, "code.txt"], { encoding: "utf8" }), "committed\n");
+    assert.match(snapshot.limitations, /ignored files/);
     assert.throws(() => store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: root, command: "true", experimentWorkspaceId: isolated.id }), /outside the experiment workspace/);
     const directiveCommand = `${JSON.stringify(process.execPath)} -e "console.log('isolated')"`;
     const runNotes = await directives.executeExperimentDirectives({

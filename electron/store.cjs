@@ -3236,6 +3236,7 @@ function createExperimentRun({
   logPath = "",
   metricsJson = "{}",
   experimentWorkspaceId = null,
+  codeSnapshot = null,
 } = {}) {
   if (!projectId || !threadId || !nodeId) throw new Error("A project, session, and experiment node are required to start a run.");
   if (!["starting", "running"].includes(status)) throw new Error("A new experiment run must start or run.");
@@ -3293,7 +3294,7 @@ function createExperimentRun({
     if (realCwd !== realRoot && !realCwd.startsWith(`${realRoot}${path.sep}`)) throw new Error("The run folder is outside the experiment workspace.");
     workspaceProvenance = { id: linked.id, root: linked.root, branchName: linked.branch_name, baseCommit: linked.base_commit };
   }
-  const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry, workspace: workspaceProvenance });
+  const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry, workspace: workspaceProvenance, codeSnapshot });
   const now = timestamp();
   db.prepare(`
     INSERT INTO experiment_runs (
