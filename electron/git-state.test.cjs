@@ -60,3 +60,25 @@ test("a broken .git entry is suspicious", () => {
   assert.equal(detectGitState(folderPath), "suspicious");
   fs.rmSync(folderPath, { recursive: true, force: true });
 });
+
+
+test("a symlink to a repository root is recognized without accepting a subdirectory", () => {
+  const parent = folder("git-symlink");
+  const repo = path.join(parent, "repo");
+  const alias = path.join(parent, "alias");
+  fs.mkdirSync(repo);
+  try {
+    runGit(repo, "init");
+    runGit(repo, "config", "user.email", "test@example.com");
+    runGit(repo, "config", "user.name", "Test");
+    fs.writeFileSync(path.join(repo, "file"), "test");
+    runGit(repo, "add", "file");
+    runGit(repo, "commit", "-m", "Initial commit");
+    fs.symlinkSync(repo, alias, "dir");
+    assert.equal(detectGitState(alias), "ready");
+    fs.mkdirSync(path.join(repo, "child"));
+    assert.equal(detectGitState(path.join(alias, "child")), "none");
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
