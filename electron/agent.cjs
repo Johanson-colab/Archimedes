@@ -1493,7 +1493,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
         approve: approveNative,
       });
       let response = nativeResponse;
-      if (mode === "experiment-setup") {
+      if (["research", "experiment-setup"].includes(mode)) {
         const extracted = experimentDirectives.extractExperimentDirectives(nativeResponse);
         response = extracted.text;
         if (extracted.directives.length) {
@@ -1559,7 +1559,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       const availableTools = toolRegistry.definitions().filter((tool) =>
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
         !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
-        (mode === "experiment-setup" || !["create_experiment", "prepare_experiment_workspace", "run_experiment"].includes(tool.function.name)));
+        (["research", "experiment-setup"].includes(mode) || !["create_experiment", "prepare_experiment_workspace", "run_experiment"].includes(tool.function.name)));
       const message = await complete(config, messages, {
         signal: controller.signal,
         availableTools,

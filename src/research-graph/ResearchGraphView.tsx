@@ -1,16 +1,17 @@
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Activity, FileText, FlaskConical, HelpCircle, Lightbulb, GitMerge, type LucideIcon } from "lucide-react";
 import { useUISettings } from "../i18n";
-import { LINEAGE_MARKER_Y, LINEAGE_ROW_HEIGHT, type LineageLayout } from "./graphLayout";
+import { LINEAGE_EVENT_HEIGHT, LINEAGE_MARKER_Y, LINEAGE_ROW_HEIGHT, type LineageLayout } from "./graphLayout";
 import type { ExperimentRun, ResearchNode, ResearchNodeKind } from "./types";
 
 const KIND_ICONS: Record<ResearchNodeKind, LucideIcon> = { question: HelpCircle, idea: Lightbulb, experiment: FlaskConical, result: Activity, writing: FileText };
 const KIND_LABELS: Record<ResearchNodeKind, string> = { question: "Question", idea: "Idea", experiment: "Experiment", result: "Result", writing: "Writing" };
-const RUN_LABELS: Record<string, string> = { starting: "Run starting", running: "Run running", succeeded: "Run succeeded", failed: "Run failed", cancelled: "Run cancelled" };
+const RUN_LABELS: Record<string, string> = { started: "Run started", starting: "Run starting", running: "Run running", succeeded: "Run succeeded", failed: "Run failed", cancelled: "Run cancelled" };
 const TONES = ["var(--accent)", "var(--analysis-series-3)", "var(--analysis-series-1)", "var(--analysis-series-5)", "var(--analysis-series-2)"];
 const tone = (lane: number) => TONES[lane % TONES.length];
 
-type Props = { layout: LineageLayout; selectedId: string | null; focusedId: string | null; runsByNode: Map<string, ExperimentRun[]>; onSelect: (nodeId: string) => void };
+export type RunPathEvent = { id: string; runId: string; number: number; status: string; time: string };
+type Props = { pathEvents?: RunPathEvent[]; layout: LineageLayout; selectedId: string | null; focusedId: string | null; runsByNode: Map<string, ExperimentRun[]>; onSelect: (nodeId: string) => void };
 
 export function lineageAncestors(layout: LineageLayout, selectedId: string | null): Set<string> {
   const ancestors = new Set<string>();
@@ -30,7 +31,7 @@ function nodeState(node: ResearchNode, latest?: ExperimentRun) {
   return node.status;
 }
 
-export default function ResearchGraphView({ layout, selectedId, focusedId, runsByNode, onSelect }: Props) {
+export default function ResearchGraphView({ layout, selectedId, focusedId, runsByNode, pathEvents = [], onSelect }: Props) {
   const { t } = useUISettings();
   const ancestors = lineageAncestors(layout, focusedId);
   const focused = Boolean(focusedId && layout.nodes.some(({ node }) => node.id === focusedId));
@@ -54,6 +55,7 @@ export default function ResearchGraphView({ layout, selectedId, focusedId, runsB
       {state === "succeeded" && <path className="research-lineage-glyph" d="M -2 0 L 0 2 L 3 -2" />}
     </g>;
   };
+  const focusedNode = layout.nodes.find(({ node }) => node.id === focusedId && node.kind === "experiment");
   const navigate = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -86,10 +88,20 @@ export default function ResearchGraphView({ layout, selectedId, focusedId, runsB
         <span className={`research-lineage-state state-${state}`}>{t(label)}</span>
       </button>;
     })}
+    {focusedNode && pathEvents.map((event, index) => <div key={event.id} className={`research-path-event status-${event.status}`}
+      style={{ top: focusedNode.y + LINEAGE_ROW_HEIGHT + index * LINEAGE_EVENT_HEIGHT, height: LINEAGE_EVENT_HEIGHT, paddingLeft: layout.railWidth + 8 }}>
+      {index === 0 && (runsByNode.get(focusedNode.node.id)?.length || 0) > 5 && <span>{t("Recent 5 runs")} ·</span>}
+      <span>{t("Run")} {event.number}</span><span>{t(RUN_LABELS[event.status] || event.status)}</span>
+      <time>{new Date(event.time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
+    </div>)}
     <svg className="research-graph-edges" width={layout.railWidth} height={layout.height} viewBox={`0 0 ${layout.railWidth} ${layout.height}`} aria-hidden="true">
       {layout.edges.filter(item => !edgeOnPath(item)).map(renderEdge)}
       {layout.nodes.filter(({ node }) => !ancestors.has(node.id)).map(renderMarker)}
       {layout.edges.filter(edgeOnPath).map(renderEdge)}
+      {focusedNode && pathEvents.length > 0 && <g className="research-path-events" style={{ "--branch-color": tone(focusedNode.lane) } as CSSProperties}>
+        <path d={`M ${focusedNode.x} ${focusedNode.y + LINEAGE_MARKER_Y + 6} L ${focusedNode.x} ${focusedNode.y + LINEAGE_ROW_HEIGHT + (pathEvents.length - 1) * LINEAGE_EVENT_HEIGHT + LINEAGE_EVENT_HEIGHT / 2}`} />
+        {pathEvents.map((event, index) => <circle key={event.id} className={`research-path-event-dot status-${event.status}`} cx={focusedNode.x} cy={focusedNode.y + LINEAGE_ROW_HEIGHT + index * LINEAGE_EVENT_HEIGHT + LINEAGE_EVENT_HEIGHT / 2} r={4} />)}
+      </g>}
       {layout.nodes.filter(({ node }) => ancestors.has(node.id)).map(renderMarker)}
     </svg>
   </div>;

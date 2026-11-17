@@ -21,7 +21,7 @@ before(async () => {
     const result = new Function(...Object.keys(scope), `${code.replace(/^export \{\};?$/gm, '')}\nreturn {${names.join(',')}};`)(...Object.values(scope));
     Object.assign(scope, result); return result;
   }
-  await load('graphLayout.ts', ['layoutLineage', 'LINEAGE_ROW_HEIGHT', 'LINEAGE_MARKER_Y']);
+  await load('graphLayout.ts', ['layoutLineage', 'LINEAGE_ROW_HEIGHT', 'LINEAGE_MARKER_Y', 'LINEAGE_EVENT_HEIGHT']);
   await load('ExperimentInspector.tsx', ['ExperimentInspector']);
   ({ NodeInspector: Inspector } = await load('NodeInspector.tsx', ['NodeInspector']));
   await load('ResearchGraphView.tsx', ['ResearchGraphView']);
@@ -204,5 +204,26 @@ test('experiment runs expose their own provenance, snapshots and logs without in
     await click(button);
     assert.equal(entries[0].querySelector('pre').textContent, 'log for new');
     assert.equal(entries[1].querySelector('pre'), null);
+  });
+});
+
+test('selected experiment shows recorded run milestones on its path without turning them into graph nodes', async () => {
+  const { bridge } = fixture();
+  const runs = [{ id: 'run-1', node_id: 'exp', thread_id: 't', status: 'succeeded', started_at: '2026-11-16T09:01:00Z', ended_at: '2026-11-16T09:02:00Z', created_at: '2026-11-16T09:00:00Z', command: 'python train.py', cwd: '/work', commit_sha: null }];
+  window.researchDesk = { ...bridge, listExperimentRuns: async () => runs };
+  await mounted(Panel, props, async () => {
+    const experiment = document.querySelector('[title="exp"].research-graph-node');
+    const result = document.querySelector('[title="result"].research-graph-node');
+    const before = parseFloat(result.style.top);
+    await click(experiment);
+    const events = [...document.querySelectorAll('.research-path-event')];
+    assert.equal(events.length, 2);
+    assert.match(events[0].textContent, /Run started/);
+    assert.match(events[1].textContent, /Run succeeded/);
+    assert.equal(document.querySelectorAll('.research-graph-node').length, 4);
+    assert.ok(parseFloat(result.style.top) >= before + 60);
+    await click(experiment);
+    assert.equal(document.querySelectorAll('.research-path-event').length, 0);
+    assert.equal(parseFloat(result.style.top), before);
   });
 });

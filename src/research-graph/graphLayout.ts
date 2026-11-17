@@ -54,6 +54,7 @@ export type GraphLayoutEdge = {
 };
 
 export const LINEAGE_ROW_HEIGHT = 64;
+export const LINEAGE_EVENT_HEIGHT = 30;
 export const LINEAGE_LANE_WIDTH = 20;
 export const LINEAGE_PAD = 18;
 export const LINEAGE_MARKER_Y = 25;
@@ -62,7 +63,7 @@ export type LineageLayout = GraphLayout & { railWidth: number };
 /** A Git-style rail, ordered so every structural parent precedes its children.
  * Citations are stored writing -> evidence; visually evidence precedes writing.
  * Feedback keeps its true direction and never changes the structural order. */
-export function layoutLineage(graph: LayoutInput): LineageLayout {
+export function layoutLineage(graph: LayoutInput, activityRows: ReadonlyMap<string, number> = new Map()): LineageLayout {
   const byId = new Map(graph.nodes.map(node => [node.id, node]));
   const relations = graph.edges.filter(edge => byId.has(edge.from_node) && byId.has(edge.to_node)).map(edge => ({
     edge,
@@ -79,6 +80,7 @@ export function layoutLineage(graph: LayoutInput): LineageLayout {
   const placed: GraphLayoutNode[] = [];
   const positions = new Map<string, GraphLayoutNode>();
   let nextLane = 0;
+  let offset = 0;
   while (remaining.size) {
     const ready = [...remaining].filter(id => incoming.get(id)!.every(item => !remaining.has(item.from))).sort(order);
     // Malformed legacy cycles are still inspectable; the service validates new graphs.
@@ -87,10 +89,11 @@ export function layoutLineage(graph: LayoutInput): LineageLayout {
     const continuation = parents.filter(item => firstChild.get(item.from) === id)
       .sort((a, b) => positions.get(a.from)!.lane - positions.get(b.from)!.lane)[0];
     const lane = continuation ? positions.get(continuation.from)!.lane : nextLane++;
-    const position = { node: byId.get(id)!, lane, row: placed.length, x: LINEAGE_PAD + lane * LINEAGE_LANE_WIDTH, y: LINEAGE_PAD + placed.length * LINEAGE_ROW_HEIGHT };
+    const position = { node: byId.get(id)!, lane, row: placed.length, x: LINEAGE_PAD + lane * LINEAGE_LANE_WIDTH, y: LINEAGE_PAD + placed.length * LINEAGE_ROW_HEIGHT + offset };
     remaining.delete(id);
     positions.set(id, position);
     placed.push(position);
+    offset += Math.max(0, activityRows.get(id) || 0) * LINEAGE_EVENT_HEIGHT;
   }
   const laneCount = Math.max(1, nextLane);
   const railWidth = LINEAGE_PAD * 2 + laneCount * LINEAGE_LANE_WIDTH;
@@ -109,7 +112,7 @@ export function layoutLineage(graph: LayoutInput): LineageLayout {
       : `M ${a.x} ${y1} L ${a.x} ${y2 - direction * bend} Q ${a.x} ${y2} ${(a.x + b.x) / 2} ${y2} L ${b.x} ${y2}`;
     return { edge, fromId: from, toId: to, path, feedback, lane: b.lane };
   });
-  return { nodes: placed, edges, railWidth, width: railWidth + 240, height: LINEAGE_PAD * 2 + Math.max(1, placed.length) * LINEAGE_ROW_HEIGHT, laneCount, rowCount: placed.length };
+  return { nodes: placed, edges, railWidth, width: railWidth + 240, height: LINEAGE_PAD * 2 + Math.max(1, placed.length) * LINEAGE_ROW_HEIGHT + offset, laneCount, rowCount: placed.length };
 }
 
 export type GraphLayout = {

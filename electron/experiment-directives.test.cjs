@@ -170,16 +170,27 @@ test("a rejected native run directive does not start a run", async () => {
   });
 });
 
-test("experiment directives are rejected outside the experiment setup stage", async () => {
+test("experiment directives are rejected outside Research or Experiment setup", async () => {
   await withWorkspace(async ({ root, project }) => {
-    const thread = threadFor(project.id, "research");
+    const thread = threadFor(project.id, "standard");
     await assert.rejects(
       () => directives.executeExperimentDirectives({
         directives: [{ action: "create", idea: "Idea", title: "Experiment" }],
         threadId: thread.id,
         workspace: root,
       }),
-      /Experiment setup stage/,
+      /Research or Experiment setup mode/,
     );
+  });
+});
+
+
+test("Research mode can explicitly create an experiment under an idea", async () => {
+  await withWorkspace(async ({ root, project }) => {
+    const thread = threadFor(project.id, "research");
+    const idea = ideaFor(project.id, thread.id);
+    const notes = await directives.executeExperimentDirectives({ directives: [{ action: "create", idea: idea.id, title: "Research experiment" }], threadId: thread.id, workspace: root, mode: "research" });
+    assert.match(notes[0], /Experiment created/);
+    assert.ok(store.listResearchGraph({ projectId: project.id, threadId: thread.id }).nodes.some((node) => node.kind === "experiment" && node.title === "Research experiment"));
   });
 });

@@ -5,6 +5,7 @@ import { Dialog } from "../Dialog";
 import { layoutLineage } from "./graphLayout";
 import NodeInspector from "./NodeInspector";
 import ResearchGraphView from "./ResearchGraphView";
+import type { RunPathEvent } from "./ResearchGraphView";
 import type { ExperimentRun, ResearchGraph, ResearchGraphUpdate } from "./types";
 
 type Props = {
@@ -147,6 +148,18 @@ export default function ResearchGraphPanel({
     for (const list of map.values()) list.sort((left, right) => left.created_at.localeCompare(right.created_at));
     return map;
   }, [runs]);
+  const pathEvents = useMemo<RunPathEvent[]>(() => {
+    if (!focusedId || !graph?.nodes.some((node) => node.id === focusedId && node.kind === "experiment")) return [];
+    const all = runsByNode.get(focusedId) || [];
+    return all.slice(-5).flatMap((run, index) => {
+      const number = all.length - Math.min(all.length, 5) + index + 1;
+      const events: RunPathEvent[] = [];
+      if (run.started_at) events.push({ id: `${run.id}-start`, runId: run.id, number, status: "started", time: run.started_at });
+      if (["succeeded", "failed", "cancelled"].includes(run.status)) events.push({ id: `${run.id}-end`, runId: run.id, number, status: run.status, time: run.ended_at || run.created_at });
+      if (!events.length) events.push({ id: `${run.id}-pending`, runId: run.id, number, status: run.status, time: run.created_at });
+      return events;
+    });
+  }, [focusedId, graph, runsByNode]);
   const layout = useMemo(() => {
     if (!graph) return null;
     const nodes = showHistory ? stageNodes : stageNodes.filter((node) => node.status !== "retracted" && !node.archived);
@@ -158,8 +171,8 @@ export default function ResearchGraphPanel({
         (!ideaStage || IDEA_STAGE_EDGES.has(edge.kind))
         && visibleIds.has(edge.from_node)
         && visibleIds.has(edge.to_node)),
-    });
-  }, [graph, stageNodes, showHistory, ideaStage]);
+    }, focusedId && pathEvents.length ? new Map([[focusedId, pathEvents.length]]) : new Map());
+  }, [graph, stageNodes, showHistory, ideaStage, focusedId, pathEvents]);
   const selectedNode = layout?.nodes.find(({ node }) => node.id === selectedId)?.node ?? layout?.nodes[0]?.node ?? null;
   const visibleFocusId = layout?.nodes.some(({ node }) => node.id === focusedId) ? focusedId : null;
   const retractedCount = stageNodes.filter((node) => node.status === "retracted" || node.archived).length;
@@ -261,6 +274,7 @@ export default function ResearchGraphPanel({
     {update && update.projectId === projectId && update.threadId === threadId && update.nodeCount + update.edgeCount + (update.superseded?.length ?? 0) > 0 && dismissedUpdate !== update.turnId && (
       <div className="research-graph-update" role="status" aria-live="polite">
         <span>{t("Research graph updated")} · +{update.nodeCount} {t("nodes")} · +{update.edgeCount} {t("edges")}{update.superseded?.length ? ` · ${update.superseded.length} ${t("previous ideas moved to history")}` : ""}</span>
+        {ideaStage && update.createdNodeIds.some((id) => graph?.nodes.some((node) => node.id === id && (node.kind === "experiment" || node.kind === "result"))) && <button type="button" onClick={() => setViewStage("experiments")}>{t("View experiments")}</button>}
         {(update.createdNodeIds.length > 0 || (update.superseded?.length ?? 0) > 0) && <button type="button" disabled={undoing} onClick={() => void undoUpdate()}>{t(undoing ? "Undoing…" : "Undo")}</button>}
         <button type="button" className="research-graph-update-dismiss" onClick={() => setDismissedUpdate(update.turnId)} aria-label={t("Dismiss")} title={t("Dismiss")}><X size={11} /></button>
       </div>
@@ -279,7 +293,7 @@ export default function ResearchGraphPanel({
       <div className={`research-graph-workspace${inspectorOpen && selectedNode ? " has-inspector" : ""}`}>
       <div className="research-graph-body">
         {loading && !graph ? <span className="research-graph-loading">{t("Refresh graph")}…</span> : null}
-        {layout ? <ResearchGraphView layout={layout} selectedId={selectedNode?.id ?? null} focusedId={visibleFocusId} runsByNode={runsByNode} onSelect={(id) => { setSelectedId(id); setFocusedId(current => current === id ? null : id); setInspectorOpen(true); }} /> : null}
+        {layout ? <ResearchGraphView layout={layout} selectedId={selectedNode?.id ?? null} focusedId={visibleFocusId} runsByNode={runsByNode} pathEvents={pathEvents} onSelect={(id) => { setSelectedId(id); setFocusedId(current => current === id ? null : id); setInspectorOpen(true); }} /> : null}
       </div>
       {selectedNode && inspectorOpen ? <NodeInspector
         key={selectedNode.id}

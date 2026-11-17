@@ -62,7 +62,8 @@ function graphUpdateEvent({ thread, turnId, nodeIds = [], edgeIds = [], nodeCoun
 
 function experimentPrompt() {
   return [
-    "Experiment recording directive (Experiment setup only):",
+    "Experiment recording directive (Research or Experiment setup):",
+    "Use these directives only when the user explicitly asks to undertake or run a specific experiment. Do not repeat an already completed run. Keep setup and baseline work inside the experiment.",
     "When you are ready to create or run an experiment, emit one fenced block at the very end of your response:",
     "```experiment",
     '{"action":"create","idea":"<exact idea title>","title":"...","hypothesis":"...","baseline":"...","method":"...","metrics":["..."],"stopCriteria":"...","parentExperiment":"<optional parent title>"}',
@@ -112,7 +113,7 @@ function recentExperimentRuns(threadId, limit = 3) {
 async function executeExperimentDirectives({ directives = [], threadId, workspace, mode = null, turnId = null, emit = () => {}, recordEvent = () => {}, approve = null } = {}) {
   if (!directives.length) return [];
   const thread = store.getResearchThread(threadId);
-  if ((mode || thread.mode) !== "experiment-setup") throw new Error("Experiment directives are only allowed in the Experiment setup stage.");
+  if (!["research", "experiment-setup"].includes(mode || thread.mode)) throw new Error("Experiment directives are only allowed in Research or Experiment setup mode.");
   const notes = [];
   for (const directive of directives) {
     const action = String(directive.action || "").toLowerCase();

@@ -62,7 +62,7 @@ test("Agent turns schedule a background graph build for Research mode", () => {
   assert.match(auto, /extractWithNative/);
   assert.match(auto, /graph_update_pending/);
   assert.match(auto, /graph_applied/);
-  assert.match(auto, /allowResults: mode === "experiment-setup"/);
+  assert.match(auto, /allowResults: true/);
 });
 
 test("the experiment inspector is read-only and shows plan and run evidence", () => {  const inspector = read("src", "research-graph", "ExperimentInspector.tsx");

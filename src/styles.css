@@ -6224,6 +6224,12 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .research-graph-update > button:disabled { opacity: .45; }
 .research-graph-update > .research-graph-update-dismiss { display: grid; width: 18px; height: 18px; place-items: center; padding: 0; color: var(--text-faint); }
 .research-graph-canvas { position: relative; width: 100%; }
+.research-path-event { position: absolute; left: 0; width: 100%; display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 11px; pointer-events: none; }
+.research-path-event time { color: var(--text-faint); font-size: 10px; }
+.research-path-events path { fill: none; stroke: var(--branch-color); stroke-width: 1.5; }
+.research-path-event-dot { fill: var(--surface-panel); stroke: var(--branch-color); stroke-width: 1.5; }
+.research-path-event-dot.status-failed { fill: var(--state-danger); }
+.research-path-event-dot.status-succeeded { fill: var(--state-success); }
 .research-graph-edges { position: absolute; z-index: 1; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .research-graph-edge { fill: none; stroke: var(--branch-color, var(--border-strong)); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: .4; }
 .research-graph-edge.on-path { stroke-width: 2; opacity: .95; }
