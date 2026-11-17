@@ -16,6 +16,8 @@ test("Research mode refreshes the graph from automatic graph-update events", () 
   assert.match(app, /version=\{graphVersion\}/);
   assert.match(app, /update=\{graphUpdate\}/);
   assert.match(app, /threadId=\{pathThread\?\.id \?\? null\}/);
+  assert.match(app, /pinned=\{pathIsPinned\}/);
+  assert.match(app, /onTogglePin=\{togglePathPin\}/);
   assert.match(app, /mode=\{pathMode\}/);
   assert.match(app, /researchMode === "experiment-setup"/);
   assert.match(panel, /const \[viewStage, setViewStage\] = useState<"ideas" \| "experiments" \| "all">/);

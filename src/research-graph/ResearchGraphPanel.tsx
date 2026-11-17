@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, History, Maximize2, Minimize2, PanelRight, RefreshCw, X } from "lucide-react";
+import { ArrowUpRight, History, Maximize2, Minimize2, PanelRight, Pin, RefreshCw, X } from "lucide-react";
 import { useUISettings } from "../i18n";
 import { Dialog } from "../Dialog";
 import { layoutLineage } from "./graphLayout";
@@ -16,6 +16,9 @@ type Props = {
   mode: string;
   version?: number;
   update?: ResearchGraphUpdate | null;
+  pinned?: boolean;
+  threadInactive?: boolean;
+  onTogglePin?: () => void;
   onOpenThread: () => void;
   onCollapse: () => void;
 };
@@ -31,6 +34,9 @@ export default function ResearchGraphPanel({
   mode,
   version = 0,
   update = null,
+  pinned = false,
+  threadInactive = false,
+  onTogglePin,
   onOpenThread,
   onCollapse,
 }: Props) {
@@ -199,6 +205,14 @@ export default function ResearchGraphPanel({
       <button type="button" className={viewStage === "experiments" ? "active" : ""} aria-pressed={viewStage === "experiments"} onClick={() => setViewStage("experiments")}>{t("Experiments")}</button>
       <button type="button" className={viewStage === "all" ? "active" : ""} aria-pressed={viewStage === "all"} onClick={() => setViewStage("all")}>{t("All activity")}</button>
     </div> : null}
+    {onTogglePin && <button
+      className={pinned ? "agent-path-icon on" : "agent-path-icon"}
+      onClick={onTogglePin}
+      title={t(pinned ? "Unpin this session" : "Pin this session")}
+      aria-label={t(pinned ? "Unpin this session" : "Pin this session")}
+      aria-pressed={pinned}
+      disabled={!hasThread && !pinned}
+    ><Pin size={12} /></button>}
     <button className={inspectorOpen ? "agent-path-icon on" : "agent-path-icon"} onClick={() => setInspectorOpen(value => !value)} aria-label={t(inspectorOpen ? "Hide node details" : "Show node details")} title={t(inspectorOpen ? "Hide node details" : "Show node details")} aria-pressed={inspectorOpen}><PanelRight size={13} /></button>
     {retractedCount > 0 && <button
       className={showHistory ? "agent-path-icon on" : "agent-path-icon"}
@@ -296,6 +310,8 @@ export default function ResearchGraphPanel({
           {t("Research graph")}
         </span>
         <span className="agent-path-project" title={threadTitle}>{projectName}</span>
+        {hasThread && <span className="research-graph-session" title={threadTitle}>{threadTitle}</span>}
+        {pinned && <span className="agent-path-pin-state inactive" title={threadInactive ? threadTitle : undefined}>{t("Pinned")}</span>}
         <span className="agent-path-count">{visibleNodeCount}</span>
         <div className="agent-path-actions">{actions}</div>
       </header>
@@ -309,6 +325,8 @@ export default function ResearchGraphPanel({
         <i aria-hidden="true" />
         {projectName}
       </span>
+      {hasThread && <span className="research-graph-session" title={threadTitle}>{threadTitle}</span>}
+      {pinned && <span className="agent-path-pin-state inactive" title={threadInactive ? threadTitle : undefined}>{t("Pinned")}</span>}
       <span className="agent-path-count">{visibleNodeCount}</span>
       <div className="agent-path-actions">{actions}</div>
     </header>

@@ -100,8 +100,12 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
 - The panel is read-only: the model creates research objects from the main chat.
   The inspector shows readable content, provenance, related nodes, immutable
   revision history, experiment plans, runs and logs. Raw JSON is collapsed.
-- Graph data remains scoped to the active session. Late responses from a previous
-  session cannot replace the current graph.
+- Graph data remains scoped to one session. By default the panel follows the
+  active session; a pin intentionally keeps a selected session visible across
+  navigation and is saved locally. The header shows that session's title and
+  pinned state. Click the pin again to follow the active session. An unsent new
+  chat has no saved graph yet. Late responses from a previous session cannot
+  replace the current graph.
 - Ideas shows questions and hypotheses; Experiments adds experiments and results;
   All activity also includes existing writing nodes and citation edges. Stored
   merge and feedback relationships are visible. The extractor does not yet create
@@ -128,6 +132,11 @@ The marker update is shown with the same fixture and dark theme
 [before](./assets/research-graph/markers-before.png) and
 [after](./assets/research-graph/markers-after.png); also see the
 [Paper theme](./assets/research-graph/markers-paper.png).
+
+The pinned-session indicator and control are shown with the same fixture and
+viewport [before](./assets/research-graph/session-pin-before.png) and
+[after](./assets/research-graph/session-pin-after.png); a
+[narrow-window check](./assets/research-graph/session-pin-narrow.png) is also included.
 
 ## Automatic graph building
 

@@ -12,7 +12,7 @@ before(async () => {
   React = require('react'); ({ createRoot } = require('react-dom/client'));
   const translate = key => key;
   const scope = { React, ...React, useUISettings: () => ({ t: translate }), Dialog: ({ open, children }) => open ? React.createElement('section', { role: 'dialog' }, children) : null };
-  for (const name of ["Activity", "FileText", "FlaskConical", "HelpCircle", "Lightbulb", "GitMerge", "GitCommitHorizontal", "History", "ArrowUpRight", "Maximize2", "Minimize2", "PanelRight", "RefreshCw", "X"]) scope[name] = require("lucide-react")[name];
+  for (const name of ["Activity", "FileText", "FlaskConical", "HelpCircle", "Lightbulb", "GitMerge", "GitCommitHorizontal", "History", "ArrowUpRight", "Maximize2", "Minimize2", "PanelRight", "Pin", "RefreshCw", "X"]) scope[name] = require("lucide-react")[name];
   const { transformWithOxc } = await import('vite');
   async function load(file, names) {
     const source = fs.readFileSync(path.join(__dirname, '../src/research-graph', file), 'utf8')
@@ -105,6 +105,26 @@ test('a late graph response from the previous session cannot replace the new ses
     await React.act(async () => { resolvePrevious(graph); await tick(); });
     assert.ok(document.querySelector('[title="new-question"].research-graph-node'));
     assert.equal(document.querySelector('[title="q"].research-graph-node'), null);
+  });
+});
+
+test('a pinned graph identifies its session and unpinning follows the active session', async () => {
+  const { graph, bridge } = fixture();
+  window.researchDesk = { ...bridge, listResearchGraph: async ({ threadId }) => threadId === 't'
+    ? graph : { projectId: 'p', threadId, nodes: [node('new-question', 'question')], edges: [] } };
+  function PinnedGraph() {
+    const [pinned, setPinned] = React.useState(true);
+    return React.createElement(Panel, { ...props, threadId: pinned ? 't' : 'new-thread', threadTitle: pinned ? 'Previous research' : 'New research', pinned, threadInactive: pinned, onTogglePin: () => setPinned(value => !value) });
+  }
+  await mounted(PinnedGraph, {}, async () => {
+    assert.match(document.querySelector('.research-graph-panel').textContent, /Previous research/);
+    assert.match(document.querySelector('.research-graph-panel').textContent, /Pinned/);
+    assert.ok(document.querySelector('[title="q"].research-graph-node'));
+    await click(document.querySelector('[aria-label="Unpin this session"]'));
+    assert.ok(document.querySelector('[title="new-question"].research-graph-node'));
+    assert.equal(document.querySelector('[title="q"].research-graph-node'), null);
+    assert.match(document.querySelector('.research-graph-panel').textContent, /New research/);
+    assert.ok(document.querySelector('[aria-label="Pin this session"]'));
   });
 });
 

@@ -3648,6 +3648,9 @@ function App() {
             mode={pathMode}
             version={graphVersion}
             update={graphUpdate}
+            pinned={pathIsPinned}
+            threadInactive={pathThreadInactive}
+            onTogglePin={togglePathPin}
             onOpenThread={openPathThread}
             onCollapse={() => setResearchPanelOpen(false)}
           /> : <ResearchPathPanel

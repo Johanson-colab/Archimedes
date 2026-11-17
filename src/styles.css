@@ -6206,6 +6206,8 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .research-graph-expanded-title { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; color: var(--text-primary); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .research-graph-expanded-title i { width: 2px; height: 14px; background: var(--accent); border-radius: 1px; }
 .research-graph-expanded-head .agent-path-project { color: var(--text-muted); }
+.research-graph-session { min-width: 0; overflow: hidden; color: var(--text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.research-graph-panel .agent-path-pin-state, .research-graph-expanded-head .agent-path-pin-state { height: 18px; flex: 0 0 auto; font-size: 9px; }
 .research-graph-expanded-head .agent-path-actions { margin-left: auto; }
 .research-graph-panel .agent-path-actions > *, .research-graph-expanded-head .agent-path-actions > * { flex-shrink: 0; }
 .research-graph-workspace { position: relative; display: grid; min-width: 0; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1fr); }
