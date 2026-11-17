@@ -179,3 +179,24 @@ test('an outdated revision history request cannot populate a newly updated node'
     assert.equal(document.querySelectorAll('.research-node-history > button').length, 0);
   });
 });
+
+test('experiment runs expose their own provenance, snapshots and logs without inventing legacy data', async () => {
+  const experiment = node('exp', 'experiment', { hypothesis: 'A test' });
+  const run = (id, provenance) => ({ id, node_id: 'exp', status: 'succeeded', command: `python ${id}.py`, cwd: '/workspace', commit_sha: 'abc123', exit_code: 0, log_path: `/${id}.log`, created_at: '2026-11-16T09:00:00Z', provenance });
+  const newer = run('new', { experimentRevisionId: 'revision-1', ideas: [{ nodeId: 'idea', revisionId: 'idea-revision-1' }], workspace: { branchName: 'archimedes/test' }, codeSnapshot: { path: '/tmp/code.tar', sha256: 'digest' } });
+  const older = run('old', undefined);
+  window.researchDesk = {};
+  await mounted(Inspector, { node: experiment, connections: [{ nodeId: 'idea', title: 'Research idea', relation: 'tests', revisionId: 'idea-revision-1', incoming: true }], experiment: { runs: [older, newer], onReadLog: async id => `log for ${id}` } }, async () => {
+    const entries = [...document.querySelectorAll('.experiment-run-entry')];
+    assert.equal(entries.length, 2);
+    assert.match(entries[0].textContent, /Research idea/);
+    assert.match(entries[0].textContent, /archimedes\/test/);
+    assert.match(entries[0].textContent, /Snapshot recorded/);
+    assert.match(entries[0].textContent, /\/tmp\/code.tar/);
+    assert.match(entries[1].textContent, /Not recorded/);
+    const button = entries[0].querySelector('.experiment-run-link');
+    await click(button);
+    assert.equal(entries[0].querySelector('pre').textContent, 'log for new');
+    assert.equal(entries[1].querySelector('pre'), null);
+  });
+});

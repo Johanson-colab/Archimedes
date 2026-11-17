@@ -52,7 +52,7 @@ export default function NodeInspector({ node, experiment, connections = [], onSe
       {shown?.git_commit && <span>{t("Git commit")} <code>{shown.git_commit.slice(0, 7)}</code></span>}
       {typeof source === "string" && <span className={`research-evidence-source source-${source}`}>{t(source === "run" ? "Recorded run evidence" : source === "conversation" ? "Reported in conversation" : "Source")}</span>}
     </div>
-    {node.kind === "experiment" && experiment && !historical ? <ExperimentInspector key={node.id} node={node} runs={experiment.runs} onReadLog={experiment.onReadLog} /> : <ContentFields value={content} />}
+    {node.kind === "experiment" && experiment && !historical ? <ExperimentInspector key={node.id} node={node} runs={experiment.runs} onReadLog={experiment.onReadLog} connections={connections} /> : <ContentFields value={content} />}
     {connections.length > 0 && <section className="research-node-connections" aria-label={t("Connections")}>
       <h3>{t("Connections")}</h3>
       {connections.map((item, index) => <button key={`${item.nodeId}:${item.relation}:${index}`} type="button" onClick={() => onSelectNode?.(item.nodeId)} disabled={!onSelectNode}>

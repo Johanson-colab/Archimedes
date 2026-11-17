@@ -7,6 +7,7 @@ type Props = {
   node: ResearchNode;
   runs: ExperimentRun[];
   onReadLog: (runId: string) => Promise<string>;
+  connections?: Array<{ nodeId: string; title: string }>;
 };
 
 const RUN_STATUS_LABELS: Record<ExperimentRunStatus, string> = {
@@ -37,7 +38,7 @@ function timeLabel(run: ExperimentRun): string {
  * conversation; this inspector only shows what the model recorded and the
  * evidence it produced.
  */
-export default function ExperimentInspector({ node, runs, onReadLog }: Props) {
+export default function ExperimentInspector({ node, runs, onReadLog, connections = [] }: Props) {
   const { t } = useUISettings();
   const content = node.current_revision?.content ?? {};
   const [log, setLog] = useState<{ runId: string; text: string } | null>(null);
@@ -80,21 +81,40 @@ export default function ExperimentInspector({ node, runs, onReadLog }: Props) {
       {runs.length === 0
         ? <p className="experiment-hint">{t("The agent has not run this experiment yet.")}</p>
         : <div className="experiment-run-list">
-          {runs.slice().reverse().map((run) => <div
-            className={`experiment-run-row status-${run.status}`}
-            key={run.id}
-            title={`${run.command}${run.commit_sha ? `\ncommit ${run.commit_sha.slice(0, 7)}` : ""}`}
-          >
-            <span className="experiment-run-status">{t(RUN_STATUS_LABELS[run.status])}</span>
-            <span className="experiment-run-time">{timeLabel(run)}</span>
-            {run.exit_code != null && <span className="experiment-run-exit">exit {run.exit_code}</span>}
-            <button type="button" className="experiment-run-link" onClick={() => void readLog(run.id)} disabled={readingLog === run.id}>
-              <FileText size={10} />
-              {t("Run log")}
-            </button>
-          </div>)}
+          {runs.slice().reverse().map((run, index) => {
+            const source = run.provenance;
+            const snapshot = source?.codeSnapshot;
+            return <details className="experiment-run-entry" key={run.id}>
+              <summary className={`experiment-run-row status-${run.status}`}>
+                <span className="experiment-run-number">{t("Run")} {runs.length - index}</span>
+                <span className="experiment-run-status">{t(RUN_STATUS_LABELS[run.status])}</span>
+                <span className="experiment-run-time">{timeLabel(run)}</span>
+                {run.exit_code != null && <span className="experiment-run-exit">{t("Exit code")} {run.exit_code}</span>}
+              </summary>
+              <div className="experiment-run-details">
+                <div className="experiment-plan-row"><span>{t("Command")}</span><p className="experiment-run-code">{run.command}</p></div>
+                <div className="experiment-plan-row"><span>{t("Working directory")}</span><p className="experiment-run-code">{run.cwd}</p></div>
+                <div className="experiment-plan-row"><span>{t("Experiment revision")}</span><p className="experiment-run-code">{source?.experimentRevisionId || t("Not recorded")}</p></div>
+                <div className="experiment-plan-row"><span>{t("Source ideas")}</span>{source?.ideas?.length
+                  ? source.ideas.map((idea, ideaIndex) => <p key={`${idea.nodeId}-${idea.revisionId}-${ideaIndex}`}>{connections.find(item => item.nodeId === idea.nodeId)?.title || idea.nodeId} <code title={idea.revisionId}>{idea.revisionId?.slice(0, 8) || "—"}</code></p>)
+                  : <p>{t("Not recorded")}</p>}</div>
+                <div className="experiment-plan-row"><span>{t("Git branch")}</span><p className="experiment-run-code">{source?.workspace?.branchName || t("Not recorded")}</p></div>
+                <div className="experiment-plan-row"><span>{t("Git commit")}</span><p className="experiment-run-code">{run.commit_sha || t("Not recorded")}</p></div>
+                <div className="experiment-plan-row"><span>{t("Code snapshot")}</span><p>{snapshot ? t("Snapshot recorded") : t("Not recorded")}</p></div>
+                {snapshot && <>
+                  <div className="experiment-plan-row"><span>{t("Snapshot path")}</span><p className="experiment-run-code">{snapshot.path}</p></div>
+                  <div className="experiment-plan-row"><span>SHA-256</span><p className="experiment-run-code">{snapshot.sha256}</p></div>
+                  <p className="experiment-hint">{t("Snapshot excludes ignored files, submodule contents, export-ignored files, data and runtime environment; Git LFS files may be pointers.")}</p>
+                </>}
+                {run.error && <div className="experiment-plan-row"><span>{t("Run error")}</span><p>{run.error}</p></div>}
+                <button type="button" className="experiment-run-link" onClick={() => void readLog(run.id)} disabled={readingLog === run.id}>
+                  <FileText size={12} />{t("Run log")}
+                </button>
+                {log?.runId === run.id && <pre className="experiment-run-log" title={run.log_path || ""}>{log.text}</pre>}
+              </div>
+            </details>;
+          })}
         </div>}
-      {log && <pre className="experiment-run-log" title={runs.find((run) => run.id === log.runId)?.log_path || ""}>{log.text}</pre>}
     </details>
   </>;
 }

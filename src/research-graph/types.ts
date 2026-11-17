@@ -133,6 +133,12 @@ export interface ExperimentRun {
   pid: number | null;
   exit_code: number | null;
   metrics: Record<string, unknown>;
+  provenance?: {
+    experimentRevisionId?: string;
+    ideas?: Array<{ nodeId: string; revisionId: string; experimentRevisionId?: string }>;
+    workspace?: { id: string; root: string; branchName: string; baseCommit: string } | null;
+    codeSnapshot?: { kind: string; commit: string; path: string; sha256: string; sizeBytes: number; limitations: string } | null;
+  } | null;
   error: string;
   started_at: string | null;
   ended_at: string | null;
