@@ -1,0 +1,31 @@
+Research Graph atomicity verification (2026-11-17)
+
+Before: commit 3826127, same regression cases, isolated temporary workspace.
+Command:
+node --test --test-name-pattern="invalid edges|a failure after|a retirement failure" electron/research-graph-atomic.test.cjs
+
+FAIL invalid edges leave existing node enrichment and revision history untouched
+FAIL a failure after writing a link rolls back new nodes, edges, revisions and audit events
+FAIL a retirement failure rolls back the whole round and retry commits exactly once
+3 failures; no code or test assertions weakened.
+
+After: synchronous outer savepoint plus nested node/revision/edge savepoints.
+Command:
+node --test electron/research-graph-atomic.test.cjs
+
+PASS invalid edges leave existing node enrichment and revision history untouched
+PASS a failure after writing a link rolls back new nodes, edges, revisions and audit events
+PASS a retirement failure rolls back the whole round and retry commits exactly once
+PASS a failed inner write can be handled without committing or discarding its outer transaction
+
+These compare the complete persisted graph (including archived objects), revision
+histories, project metadata and audit events before/after each injected failure.
+The retry case additionally checks exactly one enrichment revision, expected
+node/edge counts, retirement statuses and graph validity.
+
+Focused Research Graph/run/directive/UI/schema suite: 69 pass, 0 fail.
+Full npm test: 1328 total, 1315 pass, 8 fail, 5 skipped.
+The same eight pre-existing environment failures remain: Windows shell (3),
+neighboring Benchmark Radar checkout discovery (3), LaTeX font phvr7t (1),
+library.ts translation ordering (1).
+Lint, build and theme checks passed.

@@ -2863,6 +2863,26 @@ function getResearchNodeHistory(nodeId) {
     .map(hydrateResearchRevision);
 }
 
+let researchGraphSavepoint = 0;
+
+// Savepoints let individual writes compose into one synchronous graph update.
+// Releasing an inner savepoint does not commit its enclosing patch.
+function withResearchGraphTransaction(write) {
+  const db = requireDatabase();
+  const savepoint = `research_graph_${++researchGraphSavepoint}`;
+  db.exec(`SAVEPOINT ${savepoint}`);
+  try {
+    const result = write();
+    if (result && typeof result.then === "function") throw new Error("Research graph transactions must be synchronous.");
+    db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+    return result;
+  } catch (error) {
+    db.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+    db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+    throw error;
+  }
+}
+
 function createResearchNode({
   projectId,
   threadId = null,
@@ -2899,8 +2919,7 @@ function createResearchNode({
   const now = timestamp();
   const nodeId = randomUUID();
   const revisionId = randomUUID();
-  db.exec("BEGIN");
-  try {
+  return withResearchGraphTransaction(() => {
     db.prepare(`
       INSERT INTO research_nodes (id, project_id, thread_id, kind, status, title, summary, current_revision_id, source_run_id, created_by, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
@@ -2929,12 +2948,8 @@ function createResearchNode({
       targetId: nodeId,
       metadata: { kind, parentCount: parents.length },
     });
-    db.exec("COMMIT");
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
-  return getResearchNode(nodeId);
+    return getResearchNode(nodeId);
+  });
 }
 
 function reviseResearchNode({
@@ -2956,8 +2971,7 @@ function reviseResearchNode({
   const db = requireDatabase();
   const now = timestamp();
   const revisionId = randomUUID();
-  db.exec("BEGIN");
-  try {
+  return withResearchGraphTransaction(() => {
     db.prepare(`
       INSERT INTO research_node_revisions (id, node_id, parent_revision_id, content_json, content_hash, source_turn_id, source_event_id, git_commit, created_by, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2975,12 +2989,8 @@ function reviseResearchNode({
       targetId: nodeId,
       metadata: { revisionId, parentRevisionId: node.current_revision_id },
     });
-    db.exec("COMMIT");
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
-  return getResearchNode(nodeId);
+    return getResearchNode(nodeId);
+  });
 }
 
 function linkResearchNodes({
@@ -3010,8 +3020,7 @@ function linkResearchNodes({
   if (findResearchEdge({ fromNodeId, toNodeId, kind })) throw new Error("This research edge already exists.");
   const now = timestamp();
   const edgeId = randomUUID();
-  db.exec("BEGIN");
-  try {
+  return withResearchGraphTransaction(() => {
     db.prepare(`
       INSERT INTO research_edges (id, project_id, thread_id, from_node, from_revision, to_node, to_revision, kind, metadata_json, created_by, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -3024,12 +3033,8 @@ function linkResearchNodes({
       targetId: edgeId,
       metadata: { from: fromNodeId, to: toNodeId, kind },
     });
-    db.exec("COMMIT");
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
-  return hydrateResearchEdge(db.prepare("SELECT * FROM research_edges WHERE id = ?").get(edgeId));
+    return hydrateResearchEdge(db.prepare("SELECT * FROM research_edges WHERE id = ?").get(edgeId));
+  });
 }
 
 function archiveResearchNode({ nodeId, reason = "", createdBy = localIdentity.userId } = {}) {
@@ -4293,6 +4298,7 @@ function listReproductionAttempts(runId) {
 }
 
 module.exports = {
+  withResearchGraphTransaction,
   nativeAgentBindings,
   createResearchNode,
   getResearchNode,

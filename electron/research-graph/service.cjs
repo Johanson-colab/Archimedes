@@ -406,9 +406,12 @@ function setNodeStatus({ nodeId, status, reason = "", author } = {}) {
   return store.setResearchNodeStatus({ nodeId, status, reason, createdBy: author || undefined });
 }
 
-// Apply a bounded extractor patch in one logical operation. The whole patch is
-// validated before writing; a failed write archives any nodes it already made.
-function applyPatch({ projectId, threadId = null, turnId = null, patch, author, allowResults = true } = {}) {
+// Validation, enrichment, new objects and retirement share one atomic commit.
+function applyPatch(input = {}) {
+  return store.withResearchGraphTransaction(() => applyPatchInTransaction(input));
+}
+
+function applyPatchInTransaction({ projectId, threadId = null, turnId = null, patch, author, allowResults = true } = {}) {
   if (!projectId) throw new Error("A project is required to apply a graph patch.");
   const normalized = normalizePatch(patch);
   if (!allowResults && normalized.nodes.some((node) => node.kind === "result")) {
@@ -544,71 +547,57 @@ function applyPatch({ projectId, threadId = null, turnId = null, patch, author, 
 
   const createdNodes = [];
   const appliedEdges = new Set();
-  try {
-    for (const tempId of order) {
-      const node = newNodes.find((candidate) => candidate.tempId === tempId);
-      const parents = (incoming.get(tempId) || []).map((edge) => {
-        const fromId = resolved.get(edge.from) || (existingById.has(edge.from) ? edge.from : null);
-        if (!fromId) throw new Error(`Parent research node has not been created: ${edge.from}`);
-        return { nodeId: fromId, kind: edge.kind, metadata: edge.metadata };
-      });
-      const created = createNode({
-        projectId,
-        threadId,
-        kind: node.kind,
-        status: node.status,
-        title: node.title,
-        summary: node.summary,
-        content: node.content,
-        parents,
-        sourceTurnId: turnId,
-        sourceEventId: null,
-        author,
-      });
-      resolved.set(tempId, created.id);
-      createdNodes.push(created);
-      for (const edge of incoming.get(tempId) || []) appliedEdges.add(edge);
-    }
-    for (const edge of edges) {
-      if (appliedEdges.has(edge)) continue;
+  for (const tempId of order) {
+    const node = newNodes.find((candidate) => candidate.tempId === tempId);
+    const parents = (incoming.get(tempId) || []).map((edge) => {
       const fromId = resolved.get(edge.from) || (existingById.has(edge.from) ? edge.from : null);
-      const toId = resolved.get(edge.to) || (existingById.has(edge.to) ? edge.to : null);
-      if (!fromId || !toId) throw new Error("Graph patch edge references an unknown node.");
-      if (fromId === toId) { skippedEdges.push({ ...edge, reason: "duplicate-node" }); continue; }
-      if (store.findResearchEdge({ fromNodeId: fromId, toNodeId: toId, kind: edge.kind })) {
-        skippedEdges.push({ ...edge, reason: "duplicate-edge" });
-        continue;
-      }
-      linkNodes({
-        fromNodeId: fromId,
-        toNodeId: toId,
-        kind: edge.kind,
-        metadata: { ...edge.metadata, sourceTurnId: turnId },
-        author,
-      });
-    }
-    const createdEdges = store.listResearchEdges({ projectId, threadId }).filter((edge) => !existingEdgeIds.has(edge.id));
-    const supersededNodes = [];
-    try {
-      for (const entry of supersede) {
-        const node = existingById.get(entry.nodeId);
-        if (!node || node.status === "retracted") continue;
-        setNodeStatus({ nodeId: node.id, status: "retracted", reason: entry.reason, author });
-        supersededNodes.push({ nodeId: node.id, previousStatus: node.status, reason: entry.reason });
-      }
-    } catch (error) {
-      for (const item of supersededNodes) {
-        try { setNodeStatus({ nodeId: item.nodeId, status: item.previousStatus, reason: "Graph patch rollback", author }); } catch { /* best effort */ }
-      }
-      throw error;
-    }
-    return { projectId, threadId, turnId, createdNodes, createdEdges, skippedNodes, skippedEdges, supersededNodes, reason: normalized.reason };
-  } catch (error) {
-    for (const node of createdNodes) {
-      try { store.archiveResearchNode({ nodeId: node.id, reason: "Automatic graph patch rollback", createdBy: author || undefined }); } catch { /* best effort */ }
-    }
-    throw error;
+      if (!fromId) throw new Error(`Parent research node has not been created: ${edge.from}`);
+      return { nodeId: fromId, kind: edge.kind, metadata: edge.metadata };
+    });
+    const created = createNode({
+      projectId,
+      threadId,
+      kind: node.kind,
+      status: node.status,
+      title: node.title,
+      summary: node.summary,
+      content: node.content,
+      parents,
+      sourceTurnId: turnId,
+      sourceEventId: null,
+      author,
+    });
+    resolved.set(tempId, created.id);
+    createdNodes.push(created);
+    for (const edge of incoming.get(tempId) || []) appliedEdges.add(edge);
   }
+  for (const edge of edges) {
+    if (appliedEdges.has(edge)) continue;
+    const fromId = resolved.get(edge.from) || (existingById.has(edge.from) ? edge.from : null);
+    const toId = resolved.get(edge.to) || (existingById.has(edge.to) ? edge.to : null);
+    if (!fromId || !toId) throw new Error("Graph patch edge references an unknown node.");
+    if (fromId === toId) { skippedEdges.push({ ...edge, reason: "duplicate-node" }); continue; }
+    if (store.findResearchEdge({ fromNodeId: fromId, toNodeId: toId, kind: edge.kind })) {
+      skippedEdges.push({ ...edge, reason: "duplicate-edge" });
+      continue;
+    }
+    linkNodes({
+      fromNodeId: fromId,
+      toNodeId: toId,
+      kind: edge.kind,
+      metadata: { ...edge.metadata, sourceTurnId: turnId },
+      author,
+    });
+  }
+  const createdEdges = store.listResearchEdges({ projectId, threadId }).filter((edge) => !existingEdgeIds.has(edge.id));
+  const supersededNodes = [];
+  for (const entry of supersede) {
+    const node = existingById.get(entry.nodeId);
+    if (!node || node.status === "retracted") continue;
+    setNodeStatus({ nodeId: node.id, status: "retracted", reason: entry.reason, author });
+    supersededNodes.push({ nodeId: node.id, previousStatus: node.status, reason: entry.reason });
+  }
+  return { projectId, threadId, turnId, createdNodes, createdEdges, skippedNodes, skippedEdges, supersededNodes, reason: normalized.reason };
 }
 
 function listGraph({ projectId, threadId = null, includeArchived = false } = {}) {

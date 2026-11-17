@@ -27,12 +27,12 @@ OpenResearch 的实验谱系也不是完整的科研知识图谱：不能根据�
 
 ## 还需要优先处理的数据正确性问题
 
-- `service.cjs:applyPatch` 在完成全量边校验前，可能先对重名已有节点调用 `reviseNode`。后续校验失败时，这次 revision 并不会随整个 patch 回滚。现有失败处理主要归档新节点，不是完整事务。自动建图的错误不能悄悄改变旧假设；执行链路扩展前应补事务与故障回归测试。
+- **已修复：自动建图的事务回滚。** 检查时发现 `applyPatch` 会先修改已有节点，后续失败时仅归档新节点。现已使用可嵌套的 SQLite savepoint 把整个 patch 纳入一个同步事务；既有内容与 revision、新节点与边、撤回状态、项目时间戳及本次产生的审计记录一起回滚。失败节点不会再作为归档记录残留在 History。故障回归测试和前后结果见 [atomicity-tests.txt](./assets/research-graph/atomicity-tests.txt)。
 - revision 固定的是 `content`；title、summary 和 status 不构成完整历史快照。查看旧内容时仍可能看到当前标题，不能把它描述为整个研究对象的完整 Git commit。
 - 退出码 0 表示命令成功，不代表假设得到证实。`createResultFromRun` 记录来源和 interpretation，但仍需要结构化测量、指标校验和评审。
 - 对话提取出的 result 与真实 run 的 result 必须保留区别。本次详情明确显示“对话中报告的结果”或“来自实际运行的证据”。
 
-这些是审查发现，当前 UI 改造没有声称修复上述存储与执行问题。
+除已标明修复的事务问题外，其余存储与执行问题仍待后续开发。
 
 ## 本次完成的界面改造
 

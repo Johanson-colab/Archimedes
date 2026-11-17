@@ -71,6 +71,20 @@ attached to a node revision without changing their current ownership:
 A SQLite trigger rejects updates to revision content, content hashes, node ids,
 and parent revision ids.
 
+## Atomic graph updates
+
+`applyPatch` uses a synchronous SQLite savepoint around the entire extraction
+update. Individual node/revision/edge writes use nested savepoints so releasing
+one write cannot commit part of the patch. Validation errors, link failures, and
+retirement failures roll back content enrichment, new objects, statuses, project
+timestamps, and their audit records. Failed patches leave no archived debris.
+Existing supersede rules are unchanged; a valid retry commits normally.
+
+Fault-injection coverage lives in `electron/research-graph-atomic.test.cjs`.
+The [before/after evidence](./assets/research-graph/atomicity-tests.txt) reproduces
+three failures against the preceding commit and passes all four regression cases
+with the fix.
+
 ## UI slice
 
 Research mode now renders `ResearchGraphPanel` instead of the linear
