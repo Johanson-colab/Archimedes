@@ -178,3 +178,13 @@ test('Paper to Slides sends the official Claude skill and token through the nati
  assert.doesNotMatch(JSON.stringify(launch.args)+JSON.stringify(o.events)+JSON.stringify(records),/test-private-token/);
  assert.equal(fs.existsSync(path.join(o.workspace,'.claude/skills/archimedes-paper2slides/scripts/audit_deck.py')),false);
 });
+
+test('Claude and OpenCode receive the per-turn live experiment entry', async () => {
+ for (const backend of ['claude','opencode']) {
+  const o=options(backend);if(backend==='opencode')o.Client=ACPFixture;
+  o.turn.mode='research';o.experimentBridgeInstructions='LIVE_EXPERIMENT_BRIDGE_MARKER';
+  await runNative(o);
+  const sent=backend==='claude'?Fixture.last.sent.find(message=>message.type==='user'):Fixture.last.sent.find(message=>message.method==='session/prompt');
+  assert.match(JSON.stringify(sent),/LIVE_EXPERIMENT_BRIDGE_MARKER/);
+ }
+});

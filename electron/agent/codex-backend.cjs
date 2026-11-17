@@ -78,7 +78,7 @@ function* visibleMessages(thread, turn) {
     if (previous.assistant_message) yield { role: 'assistant', content: previous.assistant_message };
   }
 }
-function userPrompt(thread, turn, resume, attachments) {
+function userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions = "") {
   let prompt = String(turn.user_message ?? turn.prompt ?? '');
   const tooLarge = 'The visible history exceeds the native import limit. This chat was preserved; no history was summarized or replayed. Continue an existing native chat or start a smaller chat.';
   if (!resume) {
@@ -96,7 +96,7 @@ function userPrompt(thread, turn, resume, attachments) {
   if (attachments.length) prompt += `\n\nUser-attached context (metadata only):\n${JSON.stringify(attachments)}`;
   if (["research", "experiment-setup"].includes(turn.mode)) {
     const directives = require("./experiment-directives.cjs");
-    prompt += `\n\n${directives.experimentPrompt()}`;
+    prompt += `\n\n${experimentBridgeInstructions || directives.experimentPrompt()}`;
     const recent = directives.recentExperimentRuns(thread.id);
     if (recent) prompt += `\n\nRecent experiment runs:\n${recent}`;
   }
@@ -135,7 +135,7 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   return { answered: true };
 }
 
-async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
+async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, experimentBridgeInstructions = "", experimentDynamicTools = [], invokeExperimentTool = null, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
   const root = fs.realpathSync(workspace);
   const policy = nativePolicy(config, root);
   const attachments = nativeContext(contextItems);
@@ -144,7 +144,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   const resume = canResume(binding, { workspace: root, model: config.model, previousTurnId });
   if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
   if (thread.id && activeNativeRuns.has(thread.id)) throw new Error('This chat already has an active native Codex operation.');
-  const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments);
+  const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
   if (signal.aborted) throw new Error('Codex turn interrupted before skill setup.');
   if (nativeSkill && (nativeSkill !== 'paper-deep-reading' || researchSkill)) throw new Error('Unsupported native skill.');
   const skill = compaction ? null : nativeSkill === 'paper-deep-reading'
@@ -187,6 +187,18 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     if (client.closed || active.resolvedRequests.has(id)) return;
     if (active.settled || signal.aborted || compaction) return client.unsupported(id);
     if (params.threadId !== active.nativeThreadId || !active.nativeTurnId || params.turnId !== active.nativeTurnId) return client.unsupported(id);
+    if (method === 'item/tool/call' && typeof invokeExperimentTool === 'function' && Array.isArray(experimentDynamicTools)) {
+      const allowed = experimentDynamicTools.some(tool => tool.name === params.tool);
+      if (!allowed || params.namespace != null || !params.arguments || typeof params.arguments !== 'object' || Array.isArray(params.arguments)) return client.unsupported(id);
+      const expectedTurnId = active.nativeTurnId;
+      try {
+        const result = await invokeExperimentTool(params.tool, params.arguments, signal);
+        if (!active.settled && !signal.aborted && active.nativeTurnId === expectedTurnId && !client.closed) client.respond(id, { success: true, contentItems: [{ type: 'inputText', text: JSON.stringify(result) }] });
+      } catch (error) {
+        if (!active.settled && !signal.aborted && active.nativeTurnId === expectedTurnId && !client.closed) client.respond(id, { success: false, contentItems: [{ type: 'inputText', text: String(error?.message || error).slice(0, 2000) }] });
+      }
+      return;
+    }
     if (method === 'item/tool/requestUserInput' && nativeSkill === 'paper-deep-reading') {
       emit({ type: 'status', title: 'Codex question unavailable', detail: 'Questions cannot be answered in this reading; continue with the supplied paper.' });
       return client.unsupported(id);
@@ -275,7 +287,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     const account = await client.request('account/read', { refreshToken: false });
     if (!account?.account) throw new Error('Codex is not signed in. Run codex login, then retry.');
     await validateNativeChoice(client, config, root);
-    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : {}) });
+    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : experimentDynamicTools.length ? { dynamicTools: experimentDynamicTools } : {}) });
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');
     if (resume && active.nativeThreadId !== binding.native_thread_id) throw new Error('Codex returned a different native thread while resuming. No request was replayed.');

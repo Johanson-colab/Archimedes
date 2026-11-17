@@ -6,7 +6,7 @@ const store = require("../store.cjs");
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_ARTIFACTS = 12;
 
-async function describeFile(root, input) {
+async function describeFile(root, input, signal) {
   if (typeof input !== "string" || !input.trim() || path.isAbsolute(input)) throw new Error("Artifact paths must be relative to the run workspace.");
   const parts = input.replaceAll("\\", "/").split("/");
   if (parts.some((part) => part === ".." || part.startsWith("."))) throw new Error("Artifact paths cannot contain hidden folders or parent traversal.");
@@ -17,13 +17,13 @@ async function describeFile(root, input) {
   if (!before.isFile()) throw new Error("An experiment artifact must be a file.");
   if (before.size > MAX_FILE_BYTES) throw new Error("Experiment artifacts are limited to 2 GiB for hashing.");
   const hash = createHash("sha256");
-  for await (const chunk of fs.createReadStream(target)) hash.update(chunk);
+  for await (const chunk of fs.createReadStream(target, signal ? { signal } : {})) hash.update(chunk);
   const after = fs.statSync(target);
   if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino) throw new Error("An artifact changed while it was being recorded; try again.");
   return { path: path.relative(realRoot, target).split(path.sep).join("/"), sha256: hash.digest("hex"), sizeBytes: after.size };
 }
 
-async function recordExperimentEvidence({ runId, threadId, workspace, metrics = {}, artifacts = [], turnId = null } = {}) {
+async function recordExperimentEvidence({ runId, threadId, workspace, metrics = {}, artifacts = [], turnId = null, signal = null } = {}) {
   const run = store.getExperimentRun(runId);
   if (!run || run.thread_id !== threadId) throw new Error("Experiment run not found in this session.");
   if (!store.canAccessProject(run.project_id, "editor")) throw new Error("You do not have permission to record experiment evidence.");
@@ -39,7 +39,8 @@ async function recordExperimentEvidence({ runId, threadId, workspace, metrics = 
   const runRoot = fs.realpathSync(root);
   if (runRoot !== activeRoot && !runRoot.startsWith(`${activeRoot}${path.sep}`)) throw new Error("The run workspace is outside the active workspace.");
   const files = [];
-  for (const file of artifacts) files.push(await describeFile(runRoot, file));
+  for (const file of artifacts) files.push(await describeFile(runRoot, file, signal));
+  if (signal?.aborted) throw new Error("Experiment evidence recording was interrupted.");
   return store.addExperimentEvidence({ runId, turnId, metrics, artifacts: files });
 }
 
