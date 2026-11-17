@@ -74,7 +74,11 @@ export default function ResearchGraphView({ layout, selectedId, runsByNode, onSe
         const state = nodeState(node, runsByNode.get(node.id)?.at(-1));
         return <g key={node.id} className={`research-lineage-marker kind-${node.kind} state-${state}${selected ? " selected" : ""}`} style={{ "--branch-color": tone(lane) } as CSSProperties} transform={`translate(${x},${y + LINEAGE_MARKER_Y})`}>
           {selected && <circle className="research-lineage-halo" r={11} />}
-          {node.kind === "result" ? <path className="research-lineage-dot" d="M 0 -6 L 6 0 L 0 6 L -6 0 Z" /> : node.kind === "writing" ? <rect className="research-lineage-dot" x={-5} y={-5} width={10} height={10} rx={2} /> : <circle className="research-lineage-dot" r={node.kind === "question" ? 6 : 5} />}
+          {node.kind === "question" && <circle className="research-lineage-dot" r={6} />}
+          {node.kind === "idea" && <path className="research-lineage-dot" d="M 0 -6 L 6 0 L 0 6 L -6 0 Z" />}
+          {node.kind === "experiment" && <rect className="research-lineage-dot" x={-5.5} y={-5.5} width={11} height={11} rx={2} />}
+          {node.kind === "result" && <path className="research-lineage-dot" d="M -3 -5.5 L 3 -5.5 L 6 0 L 3 5.5 L -3 5.5 L -6 0 Z" />}
+          {node.kind === "writing" && <path className="research-lineage-dot" d="M -5 -6 L 2 -6 L 5 -3 L 5 6 L -5 6 Z" />}
           {state === "failed" && <path className="research-lineage-glyph" d="M -2 -2 L 2 2 M 2 -2 L -2 2" />}
           {state === "succeeded" && <path className="research-lineage-glyph" d="M -2 0 L 0 2 L 3 -2" />}
         </g>;

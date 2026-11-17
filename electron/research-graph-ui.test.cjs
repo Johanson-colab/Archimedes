@@ -57,6 +57,12 @@ test('full activity retains citations and feedback; History reveals retracted an
     assert.ok(document.querySelector('.research-graph-edge.kind-cites'));
     assert.ok(document.querySelector('.research-graph-edge.kind-supports.feedback'));
     assert.ok(document.querySelector('[title="draft"].research-graph-node'));
+    const markerShapes = ['question', 'idea', 'experiment', 'result', 'writing'].map(kind => {
+      const shape = document.querySelector(`.research-lineage-marker.kind-${kind} .research-lineage-dot`);
+      assert.ok(shape, `the ${kind} marker is visible`);
+      return `${shape.tagName}:${shape.getAttribute('d') || ''}`;
+    });
+    assert.equal(new Set(markerShapes).size, markerShapes.length, 'research kinds have distinct marker shapes');
     const rows = [...document.querySelectorAll('.research-graph-node')];
     rows[0].focus();
     rows[0].dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));

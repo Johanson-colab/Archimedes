@@ -80,6 +80,9 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
   precede children, merges retain both incoming connections, and selected ancestry
   is highlighted. The original stored citation direction remains unchanged while
   the visual flow leads from evidence to writing.
+- Marker shapes distinguish questions (circle), ideas (diamond), experiments
+  (rounded square), results (hexagon), and writing (page). Experiment success and
+  failure continue to use check and cross symbols, as well as status text.
 - The panel is read-only: the model creates research objects from the main chat.
   The inspector shows readable content, provenance, related nodes, immutable
   revision history, experiment plans, runs and logs. Raw JSON is collapsed.
@@ -106,6 +109,11 @@ Additional checks: [full activity and evidence](./assets/research-graph/lineage-
 [dark theme](./assets/research-graph/lineage-dark.png), and
 [narrow window](./assets/research-graph/lineage-narrow.png). These use illustrative
 renderer fixtures, not real experiment results or a claim of completed replay.
+
+The marker update is shown with the same fixture and dark theme
+[before](./assets/research-graph/markers-before.png) and
+[after](./assets/research-graph/markers-after.png); also see the
+[Paper theme](./assets/research-graph/markers-paper.png).
 
 ## Automatic graph building
 
