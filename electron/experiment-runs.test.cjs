@@ -98,6 +98,28 @@ test("experiment runs move through a one-way terminal lifecycle", () => {
   });
 });
 
+test("runs retain the experiment and source idea revisions after later edits", () => {
+  withWorkspace(({ root, project }) => {
+    const thread = threadFor(project.id);
+    const { question, idea, experiment } = experimentFor(project.id, thread.id);
+    const originalIdeaRevision = idea.current_revision_id;
+    const originalExperimentRevision = experiment.current_revision_id;
+    graph.reviseNode({ nodeId: idea.id, content: { hypothesis: "Later idea" } });
+    const first = createRun({ root, project, thread, experiment });
+    assert.equal(first.provenance.experimentRevisionId, originalExperimentRevision);
+    assert.deepEqual(first.provenance.ideas, [{
+      nodeId: idea.id, revisionId: originalIdeaRevision, experimentRevisionId: originalExperimentRevision,
+    }]);
+    assert.ok(first.provenance.ancestry.some((item) => item.nodeId === question.id && item.revisionId === question.current_revision_id));
+    store.updateExperimentRun({ runId: first.id, status: "failed", exitCode: 1 });
+    const revised = graph.reviseNode({ nodeId: experiment.id, content: { hypothesis: "Repaired plan" } });
+    const second = createRun({ root, project, thread, experiment });
+    assert.equal(second.provenance.experimentRevisionId, revised.current_revision_id);
+    assert.equal(second.provenance.ideas[0].revisionId, originalIdeaRevision);
+    assert.equal(store.getExperimentRun(first.id).provenance.experimentRevisionId, originalExperimentRevision);
+  });
+});
+
 test("an experiment cannot have two active runs", () => {
   withWorkspace(({ root, project }) => {
     const thread = threadFor(project.id);
@@ -138,6 +160,7 @@ test("only a successful run can produce an evidence-backed result", () => {
     assert.equal(result.status, "active");
     assert.equal(result.source_run_id, succeeded.id);
     assert.equal(result.current_revision.content.evidence.runId, succeeded.id);
+    assert.equal(result.current_revision.content.evidence.provenance.experimentRevisionId, experiment.current_revision_id);
     assert.match(result.current_revision.content.evidence.logTail, /loss=0\.25/);
     assert.equal(result.current_revision.content.interpretation.verdict, "supports");
     const listed = graph.listGraph({ projectId: project.id, threadId: thread.id });

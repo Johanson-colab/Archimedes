@@ -659,6 +659,7 @@ function schema(db) {
   // A result records the completed run that produced its evidence.
   ensureColumn(db, "research_nodes", "source_run_id", "TEXT");
   ensureColumn(db, "experiment_runs", "pid", "INTEGER");
+  ensureColumn(db, "experiment_runs", "provenance_json", "TEXT NOT NULL DEFAULT '{}'");
   ensureColumn(db, "project_workspaces", "name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
@@ -3115,6 +3116,9 @@ function hydrateExperimentRun(row) {
     pid: row.pid == null ? null : Number(row.pid),
     exit_code: row.exit_code == null ? null : row.exit_code,
     metrics,
+    provenance: (() => {
+      try { return JSON.parse(row.provenance_json || "{}"); } catch { return {}; }
+    })(),
     error: row.error || "",
     started_at: row.started_at || null,
     ended_at: row.ended_at || null,
@@ -3205,16 +3209,39 @@ function createExperimentRun({
     normalizedMetrics = "{}";
   }
   const db = requireDatabase();
+  // Capture the revisions named by the original tests edges, not an idea’s
+  // potentially newer current revision. Legacy runs remain explicitly empty.
+  const edges = listResearchEdges({ projectId, threadId });
+  const ideas = edges.filter((edge) => edge.to_node === nodeId && edge.kind === "tests")
+    .map((edge) => ({ nodeId: edge.from_node, revisionId: edge.from_revision, experimentRevisionId: edge.to_revision }));
+  const ancestry = [];
+  const pending = ideas.map((idea) => ({ nodeId: idea.nodeId, revisionId: idea.revisionId }));
+  const visited = new Set();
+  while (pending.length) {
+    const current = pending.pop();
+    const key = `${current.nodeId}:${current.revisionId}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    for (const edge of edges) {
+      if (edge.to_node !== current.nodeId || edge.to_revision !== current.revisionId) continue;
+      const parent = getResearchNode(edge.from_node);
+      if (!parent || !["question", "idea"].includes(parent.kind)) continue;
+      ancestry.push({ nodeId: parent.id, kind: parent.kind, revisionId: edge.from_revision,
+        childNodeId: current.nodeId, childRevisionId: current.revisionId, relationship: edge.kind });
+      pending.push({ nodeId: parent.id, revisionId: edge.from_revision });
+    }
+  }
+  const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry });
   const now = timestamp();
   db.prepare(`
     INSERT INTO experiment_runs (
       id, project_id, thread_id, node_id, status, backend, command, cwd,
       commit_sha, log_path, exit_code, metrics_json, error, started_at, ended_at,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, '', NULL, NULL, ?, ?)
+      created_at, updated_at, provenance_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, '', NULL, NULL, ?, ?, ?)
   `).run(
     id, projectId, threadId, nodeId, status, String(backend || "local"), text, runCwd,
-    commitSha || null, String(logPath || ""), normalizedMetrics, now, now,
+    commitSha || null, String(logPath || ""), normalizedMetrics, now, now, provenance,
   );
   recordAuditEvent(db, {
     projectId,
