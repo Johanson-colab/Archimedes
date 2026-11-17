@@ -1710,6 +1710,10 @@ app.whenReady().then(async () => {
     return store.addPaper(libraryId, paper);
   });
 
+  ipcMain.handle("library:get-bibliography", (_event, { paperId }) => store.getPaperBibliography(paperId));
+  ipcMain.handle("library:set-bibliography", (_event, { paperId, patch }) => store.setPaperBibliography(paperId, patch));
+  ipcMain.handle("library:repair-metadata", (_event, { paperId, patch }) => store.repairLibraryPaperMetadata(paperId, patch));
+
   ipcMain.handle("library:import-local-pdf", async (event, { libraryId, workspace } = {}) => {
     if (typeof libraryId !== "string") throw new Error("Choose a library before importing a paper.");
     const resolvedWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(workspace);

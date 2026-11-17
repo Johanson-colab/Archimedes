@@ -205,6 +205,9 @@ interface ResearchDeskBridge {
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
     importLocalLibraryPaper: (libraryId: string, workspace?: string) => Promise<LibraryPaper | null>;
     addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
+    getPaperBibliography: (paperId: string) => Promise<{ paper_id: string; citekey: string; entryType: string; updated_at: string | null }>;
+    setPaperBibliography: (paperId: string, patch: { citekey?: string; entryType?: string }) => Promise<{ paper_id: string; citekey: string; entryType: string; updated_at: string | null }>;
+    repairLibraryPaperMetadata: (paperId: string, patch: import("./bibliography").MetadataPatch) => Promise<LibraryPaper>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     getLibraryPaperReader: (paperId: string, workspace?: string, projectId?: string | null) => Promise<PaperReaderState>;
@@ -1418,6 +1421,8 @@ interface LibraryPaper extends AcademicSearchResult {
   updated_at: string;
   github_url: string;
   github_stars: number;
+  citekey?: string;
+  entry_type?: string;
 }
 
 interface PaperReaderAsset {
