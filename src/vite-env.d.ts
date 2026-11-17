@@ -123,6 +123,7 @@ interface ResearchDeskBridge {
     reviseResearchNode: (input: { nodeId: string; title?: string; summary?: string; content: Record<string, unknown>; sourceTurnId?: string | null; sourceEventId?: string | null; gitCommit?: string | null; author?: string }) => Promise<ResearchGraphNode>;
     linkResearchNodes: (input: { fromNodeId: string; toNodeId: string; kind: ResearchGraphEdgeKind; fromRevisionId?: string | null; toRevisionId?: string | null; metadata?: Record<string, unknown>; author?: string }) => Promise<ResearchGraphEdge>;
     listResearchGraph: (input: { projectId: string; threadId?: string | null; includeArchived?: boolean }) => Promise<ResearchGraph>;
+    openResearchNodeConversation: (input: { nodeId: string; revisionId: string }) => Promise<ResearchThreadDetail>;
     getResearchNodeHistory: (nodeId: string) => Promise<import("./research-graph/types").ResearchRevision[]>;
     archiveResearchNode: (nodeId: string, reason?: string) => Promise<ResearchGraphNode>;
     restoreResearchNode: (nodeId: string) => Promise<ResearchGraphNode>;
@@ -1749,6 +1750,9 @@ interface ResearchComment {
 
 interface ResearchThread {
   id: string;
+  node_id?: string | null;
+  node_revision_id?: string | null;
+  node_context_characters?: number;
   kind?: "research" | "paper";
   harness?: "api" | "codex" | "claude" | "opencode" | null;
   project_id: string;

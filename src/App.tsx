@@ -2570,6 +2570,18 @@ function App() {
     }
   }
 
+  async function openNodeConversation(nodeId: string, revisionId: string) {
+    if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
+    if (!desktopBridge.openResearchNodeConversation) throw new Error(t("Node conversations are available in the desktop app."));
+    const requestId = ++threadOpenRequestRef.current;
+    const thread = await desktopBridge.openResearchNodeConversation({ nodeId, revisionId });
+    if (requestId !== threadOpenRequestRef.current) return;
+    setThreads(current => [thread, ...current.filter(item => item.id !== thread.id)]);
+    if (thread.parent_id) setPinnedPathThreadId(thread.parent_id);
+    setContextItems([]);
+    await openResearchThread(thread);
+  }
+
   function openNewProject() {
     if (agentBusy) return;
     setNewProjectName("");
@@ -3576,6 +3588,7 @@ function App() {
               onOpenWorkspaceSettings={() => { setSettingsSection("workspace"); setSettingsOpen(true); }}
               onCommand={runConversationCommand}
               contextSummary={threads.find((thread) => thread.id === activeThreadId)?.context_summary}
+              nodeContextCharacters={activeThread?.node_context_characters ?? 0}
               compactedThroughTurnId={threads.find((thread) => thread.id === activeThreadId)?.context_summary_through_turn_id}
               agentBusy={agentBusy}
               interrupting={interrupting}
@@ -3649,6 +3662,7 @@ function App() {
             version={graphVersion}
             update={graphUpdate}
             onOpenThread={openPathThread}
+            onOpenNodeConversation={openNodeConversation}
             onCollapse={() => setResearchPanelOpen(false)}
           /> : <ResearchPathPanel
             stages={researchStages}
@@ -4095,7 +4109,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, nodeContextCharacters = 0, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4124,6 +4138,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   onOpenWorkspaceSettings: () => void;
   onCommand: (command: ConversationCommand) => Promise<ConversationCommandResult>;
   contextSummary?: string;
+  nodeContextCharacters?: number;
   compactedThroughTurnId?: string | null;
   onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength, contextItems?: ContextAttachment[], researchSkill?: "idea-spark") => Promise<boolean>;
   onInterrupt: () => void;
@@ -4254,8 +4269,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     [messages, contextSummary, compactedThroughTurnId],
   );
   const attachedContextCharacters = useMemo(
-    () => contextItems.reduce((total, item) => total + estimateAttachmentContextCharacters(item), 0),
-    [contextItems],
+    () => nodeContextCharacters + contextItems.reduce((total, item) => total + estimateAttachmentContextCharacters(item), 0),
+    [contextItems, nodeContextCharacters],
   );
   const contextCharacterLimit = modelCapabilities.contextCharacterLimits[contextLength] || 500_000;
   const estimatedContextCharacters = Math.min(
@@ -4264,7 +4279,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   );
   const contextUsage = estimatedContextCharacters / contextCharacterLimit;
   const contextUsageState = contextUsage >= 0.9 ? "critical" : contextUsage >= 0.7 ? "warning" : "normal";
-  const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${contextCharacterLimit.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, and attachment metadata; the final request can differ after automatic context compaction.`;
+  const contextUsageTitle = `Estimated context usage: ${estimatedContextCharacters.toLocaleString()} of ${contextCharacterLimit.toLocaleString()} characters (${Math.round(contextUsage * 100)}%). Includes chat, draft, attachment metadata, and pinned research context; the final request can differ after automatic context compaction.`;
   const contextUsageLabel = `${Math.round(contextUsage * 100)}%`;
   const contextUsagePercent = Math.round(contextUsage * 100);
   const formatContextCharacters = (value: number) => value >= 10_000 ? `${Math.round(value / 1_000)}k` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : String(value);

@@ -1039,6 +1039,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("research-graph:link", (_event, input = {}) => researchGraph.linkNodes(input));
   ipcMain.handle("research-graph:list", (_event, input = {}) => researchGraph.listGraph(input));
   ipcMain.handle("research-graph:history", (_event, input = {}) => researchGraph.getNodeHistory(input.nodeId));
+  ipcMain.handle("research-graph:open-conversation", (_event, input = {}) => require("./research-graph/node-context.cjs").openNodeConversation(input));
   ipcMain.handle("research-graph:archive", (_event, input = {}) => researchGraph.archiveNode(input));
   ipcMain.handle("research-graph:restore", (_event, input = {}) => researchGraph.restoreNode(input));
   ipcMain.handle("research-graph:set-status", (_event, input = {}) => researchGraph.setNodeStatus(input));

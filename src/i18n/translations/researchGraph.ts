@@ -2,6 +2,7 @@
 // Keys stay sorted so concurrent changes do not collide.
 
 export const researchGraph: Record<string, string> = {
+  "A private conversation with this version and its research context. Graph changes stay in the source session.": "围绕此版本及相关研究背景开启私人对话。研究图的修改仍在原会话中进行。",
   "All activity": "全部活动",
   "cites": "引用",
   "Collapse graph": "收起研究图",
@@ -9,10 +10,12 @@ export const researchGraph: Record<string, string> = {
   "contradicts": "反驳",
   "Could not load node history.": "无法加载节点历史。",
   "Could not load the research graph.": "无法加载研究图。",
+  "Could not open the node conversation.": "无法打开节点对话。",
   "Could not read the run log.": "无法读取运行日志。",
   "Could not undo the research graph update.": "无法撤销研究图更新。",
   "Current revision": "当前版本",
   "decides": "决定后续方向",
+  "Discuss this revision": "讨论此版本",
   "edges": "条边",
   "Exit code": "退出码",
   "Expand graph": "展开研究图",
@@ -39,9 +42,11 @@ export const researchGraph: Record<string, string> = {
   "merges": "合并",
   "No project selected": "未选择项目",
   "No research graph yet": "还没有研究图",
+  "Node conversations are available in the desktop app.": "节点对话需要在桌面应用中使用。",
   "Node details": "节点详情",
   "nodes": "个节点",
   "Not run": "尚未运行",
+  "Opening node conversation…": "正在打开节点对话……",
   "Pinned revision": "关联时的版本",
   "Prediction": "可验证预测",
   "previous ideas moved to history": "个旧想法已移入历史",

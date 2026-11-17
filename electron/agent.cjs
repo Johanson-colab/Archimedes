@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const store = require("./store.cjs");
+const nodeContexts = require("./research-graph/node-context.cjs");
 const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { searchWeb } = require("./web-search.cjs");
@@ -1327,6 +1328,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null, turn_count: 0, last_turn_at: new Date().toISOString(),
   };
   const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace, workspaceId, visibility, kind: origin === "paper" ? "paper" : "research", title });
+  const nodeContextPrompt = !transient && thread.node_id ? nodeContexts.promptForThread(thread.id) : "";
   if (!transient && origin !== "paper") store.bindResearchThreadHarness(thread.id, externalBackend?.backend || "api");
   if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
   const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });
@@ -1367,7 +1369,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     return { threadId: thread.id, turnId: turn.id, taskId: task.id, response, status, actions, thread: transient ? { ...thread, status: "idle" } : store.getResearchThread(thread.id) };
   };
   const scheduleGraphAutoBuild = (response) => {
-    if (!autoBuildGraph || transient || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !thread.project_id) return;
+    if (!autoBuildGraph || transient || thread.node_id || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !thread.project_id) return;
     void graphAutoBuild.maybeAutoBuild({
       projectId: thread.project_id,
       threadId: thread.id,
@@ -1411,12 +1413,12 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
         }
       };
       const nativeResponse = await runNative({
-        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken,
+        config: externalBackend, workspace, thread: { ...store.getResearchThread(thread.id), node_context_prompt: nodeContextPrompt }, turn, contextItems, researchSkill, mineruToken,
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: approveNative,
       });
       let response = nativeResponse;
-      if (mode === "experiment-setup") {
+      if (mode === "experiment-setup" && !thread.node_id) {
         const extracted = experimentDirectives.extractExperimentDirectives(nativeResponse);
         response = extracted.text;
         if (extracted.directives.length) {
@@ -1445,7 +1447,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       // active turn still has to be present for the normal context builder.
       thread: transient ? { id: thread.id, title: thread.title, mode, context_summary: "", turns: [turn] } : store.getResearchThreadContext(thread.id),
       currentTurnId: turn.id,
-      attachmentManifest: externalBackend ? "" : attachedContextManifest(contextItems),
+      attachmentManifest: attachedContextManifest(contextItems) + nodeContextPrompt,
       mode,
       reasoningInstruction: policy.instruction,
       projectInstructions: workspaceInstructions(workspace),
@@ -1480,6 +1482,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
         emitTurn({ type: "status", title: "Context adjusted", detail: "Older tool output was removed from the active model context; saved events remain available." });
       }
       const availableTools = toolRegistry.definitions().filter((tool) =>
+        !(thread.node_id && nodeContexts.GRAPH_TOOLS.has(tool.function.name)) &&
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
         !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
         (mode === "experiment-setup" || !["create_experiment", "run_experiment"].includes(tool.function.name)));
@@ -1502,6 +1505,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       for (const call of message.tool_calls) {
         try {
           const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
+            if (thread.node_id && nodeContexts.GRAPH_TOOLS.has(name)) throw new Error("Return to the source Research session for graph updates and recorded experiments.");
             if (name === "search_academic_papers") {
               if (academicSearches >= policy.maxAcademicSearches) throw new Error("The academic search budget is exhausted. Synthesize the findings already collected.");
               academicSearches += 1;

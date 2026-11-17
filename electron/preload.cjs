@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   reviseResearchNode: (input) => ipcRenderer.invoke("research-graph:revise-node", input),
   linkResearchNodes: (input) => ipcRenderer.invoke("research-graph:link", input),
   listResearchGraph: (input) => ipcRenderer.invoke("research-graph:list", input),
+  openResearchNodeConversation: (input) => ipcRenderer.invoke("research-graph:open-conversation", input),
   getResearchNodeHistory: (nodeId) => ipcRenderer.invoke("research-graph:history", { nodeId }),
   archiveResearchNode: (nodeId, reason = "") => ipcRenderer.invoke("research-graph:archive", { nodeId, reason }),
   restoreResearchNode: (nodeId) => ipcRenderer.invoke("research-graph:restore", { nodeId }),
