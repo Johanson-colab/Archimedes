@@ -3000,7 +3000,7 @@ function finishResearchTurn(id, { response, status = "completed" }) {
   if (!turn) throw new Error("Research turn not found.");
   db.prepare("UPDATE research_turns SET assistant_message = ?, status = ?, completed_at = ? WHERE id = ?")
     .run(response, status, completedAt, id);
-  const threadStatus = status === "failed" ? "error" : "idle";
+  const threadStatus = ["failed", "incomplete"].includes(status) ? "error" : "idle";
   db.prepare("UPDATE research_threads SET status = ?, updated_at = ? WHERE id = ?")
     .run(threadStatus, completedAt, turn.thread_id);
   appendResearchEvent({ threadId: turn.thread_id, turnId: id, type: "assistant_message", payload: { text: response, status } });

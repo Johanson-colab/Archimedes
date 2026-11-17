@@ -1,4 +1,5 @@
 const { fetchModelWithRetry } = require("./model-retry.cjs");
+const { ModelIncompleteError, assertModelCompletion } = require("./model-completion.cjs");
 
 function parseArguments(value) {
   try { return JSON.parse(value || "{}"); } catch { return {}; }
@@ -64,9 +65,9 @@ async function completeAnthropic(config, messages, { signal, onTextDelta = () =>
   if (!response.ok) throw new Error(`Model request failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
   if (!(response.headers.get("content-type") || "").includes("text/event-stream") || !response.body) {
     const body = await response.json();
-    if (requireComplete && body?.stop_reason === "max_tokens") throw new Error("Model output was truncated; reconstruction cannot safely use it.");
     if (!Array.isArray(body?.content)) throw new Error("Anthropic response did not contain content blocks.");
     const normalized = normalizeBlocks(body.content);
+    assertModelCompletion({ provider: "anthropic", finishReason: body.stop_reason, partialResponse: normalized.content, toolCalls: normalized.tool_calls });
     if (normalized.content) onTextDelta(normalized.content);
     return normalized;
   }
@@ -75,30 +76,50 @@ async function completeAnthropic(config, messages, { signal, onTextDelta = () =>
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const frames = buffer.split(/\r?\n\r?\n/);
-    buffer = frames.pop() || "";
-    for (const frame of frames) {
-      const data = frame.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
-      if (!data) continue;
-      let event;
-      try { event = JSON.parse(data); } catch { continue; }
-      if (requireComplete && event.type === "message_delta" && event.delta?.stop_reason === "max_tokens") throw new Error("Model output was truncated; reconstruction cannot safely use it.");
-      if (event.type === "error") throw new Error(`Anthropic stream error: ${event.error?.message || "Unknown error"}`);
-      if (event.type === "content_block_start") blocks[event.index] = { ...event.content_block, text: event.content_block?.text || "", partialInput: "" };
-      if (event.type === "content_block_delta" && blocks[event.index]) {
-        if (event.delta?.type === "text_delta") { blocks[event.index].text += event.delta.text || ""; onTextDelta(event.delta.text || ""); }
-        if (event.delta?.type === "input_json_delta") blocks[event.index].partialInput += event.delta.partial_json || "";
+  let terminalSeen = false, finishReason = null;
+  const openBlocks = new Set();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() || "";
+      if (done && buffer.trim()) { frames.push(buffer); buffer = ""; }
+      for (const frame of frames) {
+        const data = frame.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
+        if (!data) continue;
+        let event;
+        try { event = JSON.parse(data); }
+        catch { throw new ModelIncompleteError({ provider: "anthropic", reason: "malformed_frame" }); }
+        if (event.type === "message_delta" && event.delta?.stop_reason) finishReason = event.delta.stop_reason;
+        if (event.type === "message_stop") terminalSeen = true;
+        if (event.type === "error") throw new Error(`Anthropic stream error: ${event.error?.message || "Unknown error"}`);
+        if (event.type === "content_block_start") {
+          blocks[event.index] = { ...event.content_block, text: event.content_block?.text || "", partialInput: "" };
+          openBlocks.add(event.index);
+        }
+        if (event.type === "content_block_delta" && blocks[event.index]) {
+          if (event.delta?.type === "text_delta") { blocks[event.index].text += event.delta.text || ""; onTextDelta(event.delta.text || ""); }
+          if (event.delta?.type === "input_json_delta") blocks[event.index].partialInput += event.delta.partial_json || "";
+        }
+        if (event.type === "content_block_stop" && blocks[event.index]?.type === "tool_use" && blocks[event.index].partialInput) {
+          try { blocks[event.index].input = JSON.parse(blocks[event.index].partialInput); }
+          catch { throw new ModelIncompleteError({ provider: "anthropic", reason: "malformed_tool_arguments" }); }
+        }
+        if (event.type === "content_block_stop") openBlocks.delete(event.index);
       }
-      if (event.type === "content_block_stop" && blocks[event.index]?.type === "tool_use" && blocks[event.index].partialInput) {
-        blocks[event.index].input = parseArguments(blocks[event.index].partialInput);
-      }
+      if (done) break;
     }
-    if (done) break;
-  }
+  } catch (error) {
+    const partialResponse = normalizeBlocks(blocks.filter(Boolean)).content;
+    try { await reader.cancel(); } catch { /* Preserve the actual stream error. */ }
+    if (signal?.aborted || error?.name === "AbortError") { error.partialResponse = partialResponse; throw error; }
+    if (error.code === "MODEL_RESPONSE_INCOMPLETE") { error.partialResponse = partialResponse; throw error; }
+    throw new ModelIncompleteError({ provider: "anthropic", reason: "stream_error", partialResponse, detail: error.message });
+  } finally { reader.releaseLock(); }
   const normalized = normalizeBlocks(blocks.filter(Boolean));
+  assertModelCompletion({ provider: "anthropic", finishReason, terminalSeen, partialResponse: normalized.content, toolCalls: normalized.tool_calls });
+  if (openBlocks.size) throw new ModelIncompleteError({ provider: "anthropic", reason: "unfinished_content_block", finishReason, partialResponse: normalized.content });
   if (!normalized.content && !normalized.tool_calls.length) throw new Error("Anthropic stream did not contain a message.");
   return normalized;
 }
