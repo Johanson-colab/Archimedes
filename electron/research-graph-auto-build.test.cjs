@@ -222,8 +222,8 @@ test("maybeAutoBuild applies an API patch once and emits a graph update", async 
       backend: "api",
       config: { apiKey: "test", model: "fixture" },
       workspace: root,
-      userPrompt: "Does calibration track accuracy under shift?",
-      assistantResponse: "The answer proposes a severity sweep.",
+      userPrompt: "Run the severity sweep and report the measured outcome.",
+      assistantResponse: "The sweep finished: ECE rose from 0.08 to 0.21 while accuracy stayed at 0.88.",
       emit: (event) => events.push(event),
       recordEvent: (event) => store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, ...event }),
       complete: async (_config, _messages, options) => {
@@ -258,7 +258,7 @@ test("maybeAutoBuild applies an API patch once and emits a graph update", async 
   });
 });
 
-test("experiment setup auto-build records a measured result, while idea stage cannot", async () => {
+test("experiment setup and Research mode record reported results without creating runs", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
     const { thread, turn } = threadFor(project.id);
     const result = await auto.maybeAutoBuild({
@@ -298,9 +298,10 @@ test("experiment setup auto-build records a measured result, while idea stage ca
       recordEvent: (event) => records.push(event),
       complete: async () => ({ content: JSON.stringify(chainPatch) }),
     });
-    assert.equal(result, null);
-    assert.ok(records.some((event) => event.type === "graph_failed"));
-    assert.equal(store.listResearchGraph({ projectId: project.id }).nodes.length, 0);
+    assert.equal(result.createdNodes.length, 4);
+    assert.equal(result.createdNodes.find((node) => node.kind === "result").current_revision.content.evidence.source, "conversation");
+    assert.equal(store.listExperimentRuns({ threadId: thread.id }).length, 0);
+    assert.ok(records.some((event) => event.type === "graph_applied"));
   });
 });
 
@@ -616,18 +617,18 @@ test("graphs are isolated per session and reject cross-session edges", () => {
   });
 });
 
-test("extraction prompts separate idea discussion from experiment setup", () => {
+test("extraction prompts support experiments in Research without promoting preparation to nodes", () => {
   const empty = { nodes: [], edges: [] };
   const ideaPrompt = auto.buildExtractionPrompt({ userPrompt: "prompt", assistantResponse: "answer", graph: empty, stage: "research" });
-  assert.match(ideaPrompt, /idea discussion stage/i);
-  assert.match(ideaPrompt, /Do not create experiment, result, or writing nodes/i);
-  assert.doesNotMatch(ideaPrompt, /experiment: \{ plan \}/);
-  assert.match(ideaPrompt, /Allowed edges are only generates and refines/i);
+  assert.match(ideaPrompt, /Research conversation.*actual experimentation/i);
+  assert.match(ideaPrompt, /hypothetical suggestion alone is not an experiment/i);
+  assert.match(ideaPrompt, /Do not create separate experiment nodes merely for those steps/i);
+  assert.match(ideaPrompt, /not a managed Run/i);
   const experimentPrompt = auto.buildExtractionPrompt({ userPrompt: "prompt", assistantResponse: "answer", graph: empty, stage: "experiment-setup" });
   assert.match(experimentPrompt, /Experiment setup stage/i);
   assert.match(experimentPrompt, /Every experiment must have at least one tests edge from an idea/i);
   assert.match(experimentPrompt, /One idea may have multiple experiments/i);
-  assert.match(experimentPrompt, /Create result nodes only when the answer reports a measured outcome/i);
+  assert.match(experimentPrompt, /Create result nodes only when the answer reports an actual outcome/i);
   assert.match(experimentPrompt, /experiment->result/);
   assert.match(experimentPrompt, /result: \{ evidence, interpretation: \{ verdict, reasoning \} \}/);
   assert.match(experimentPrompt, /experiment: \{ hypothesis, baseline, method, metrics, stopCriteria \}/);
