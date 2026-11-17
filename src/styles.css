@@ -6264,12 +6264,6 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .research-node-provenance { display: grid; gap: 7px; margin: 14px 0 20px; padding-bottom: 16px; color: var(--text-muted); border-bottom: 1px solid var(--border-soft); font-size: 10.5px; }
 .research-node-provenance > span { display: flex; align-items: center; gap: 6px; }
 .research-node-provenance code { color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px; }
-.research-node-discussion { margin: -4px 0 20px; }
-.research-node-discussion > button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; color: var(--text-primary); background: var(--surface-soft); border: 1px solid var(--border-default); border-radius: 5px; font: inherit; font-size: 11px; }
-.research-node-discussion > button:hover:not(:disabled) { border-color: var(--accent); }
-.research-node-discussion > button:disabled { opacity: .5; }
-.research-node-discussion > p { margin: 7px 0 0; color: var(--text-muted); font-size: 10.5px; line-height: 1.6; }
-.research-node-discussion > p[role="alert"] { color: var(--state-danger); }
 .research-evidence-source.source-run { color: var(--state-success); }
 .research-evidence-source.source-conversation { color: var(--state-warning); }
 .research-node-fields { margin: 0; }

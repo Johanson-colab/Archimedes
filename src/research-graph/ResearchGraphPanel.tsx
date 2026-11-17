@@ -18,7 +18,6 @@ type Props = {
   update?: ResearchGraphUpdate | null;
   onOpenThread: () => void;
   onCollapse: () => void;
-  onOpenNodeConversation?: (nodeId: string, revisionId: string) => Promise<void>;
 };
 
 const IDEA_STAGE_EDGES = new Set(["generates", "refines", "merges"]);
@@ -34,7 +33,6 @@ export default function ResearchGraphPanel({
   update = null,
   onOpenThread,
   onCollapse,
-  onOpenNodeConversation,
 }: Props) {
   const { t } = useUISettings();
   const [graph, setGraph] = useState<ResearchGraph | null>(null);
@@ -269,10 +267,6 @@ export default function ResearchGraphPanel({
       {selectedNode && inspectorOpen ? <NodeInspector
         key={selectedNode.id}
         node={selectedNode}
-        onDiscussRevision={onOpenNodeConversation ? async (nodeId, revisionId) => {
-          await onOpenNodeConversation(nodeId, revisionId);
-          setExpanded(false);
-        } : undefined}
         connections={(graph?.edges ?? []).flatMap(edge => {
           const incoming = edge.to_node === selectedNode.id;
           if (!incoming && edge.from_node !== selectedNode.id) return [];

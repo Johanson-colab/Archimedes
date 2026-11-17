@@ -12,7 +12,7 @@ before(async () => {
   React = require('react'); ({ createRoot } = require('react-dom/client'));
   const translate = key => key;
   const scope = { React, ...React, useUISettings: () => ({ t: translate }), Dialog: ({ open, children }) => open ? React.createElement('section', { role: 'dialog' }, children) : null };
-  for (const name of ["Activity", "FileText", "FlaskConical", "HelpCircle", "Lightbulb", "GitMerge", "GitCommitHorizontal", "History", "MessageSquare", "ArrowUpRight", "Maximize2", "Minimize2", "PanelRight", "RefreshCw", "X"]) scope[name] = require("lucide-react")[name];
+  for (const name of ["Activity", "FileText", "FlaskConical", "HelpCircle", "Lightbulb", "GitMerge", "GitCommitHorizontal", "History", "ArrowUpRight", "Maximize2", "Minimize2", "PanelRight", "RefreshCw", "X"]) scope[name] = require("lucide-react")[name];
   const { transformWithOxc } = await import('vite');
   async function load(file, names) {
     const source = fs.readFileSync(path.join(__dirname, '../src/research-graph', file), 'utf8')
@@ -83,9 +83,8 @@ test('revision history is fetched on demand and selecting an older version chang
   const current = node('idea', 'idea', { hypothesis: 'Current hypothesis' });
   const old = { ...current.current_revision, id: 'old-revision', content: { hypothesis: 'Original hypothesis' }, created_at: '2026-11-15T09:00:00Z' };
   let calls = 0;
-  let discussed;
   window.researchDesk = { getResearchNodeHistory: async () => { calls++; return [old, current.current_revision]; } };
-  await mounted(Inspector, { node: current, onDiscussRevision: async (nodeId, revisionId) => { discussed = { nodeId, revisionId }; } }, async () => {
+  await mounted(Inspector, { node: current }, async () => {
     assert.equal(calls, 0);
     assert.match(document.querySelector('.research-node-fields').textContent, /Current hypothesis/);
     const details = document.querySelector('.research-node-history');
@@ -94,8 +93,6 @@ test('revision history is fetched on demand and selecting an older version chang
     await click([...details.querySelectorAll('button')].find(button => button.textContent.includes('old-revi')));
     assert.match(document.querySelector('.research-node-fields').textContent, /Original hypothesis/);
     assert.match(document.querySelector('.research-node-provenance').textContent, /Historical revision/);
-    await click(byText('Discuss this revision'));
-    assert.deepEqual(discussed, { nodeId: current.id, revisionId: old.id }, 'discussion is bound to the displayed historical version');
     assert.equal(document.querySelector('.research-graph-content-details').open, false, 'raw JSON stays secondary');
   });
 });

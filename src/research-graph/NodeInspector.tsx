@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { GitCommitHorizontal, History, MessageSquare } from "lucide-react";
+import { GitCommitHorizontal, History } from "lucide-react";
 import { useUISettings } from "../i18n";
 import ExperimentInspector from "./ExperimentInspector";
 import type { ExperimentRun, ResearchNode, ResearchRevision } from "./types";
 
 export type ExperimentInspectorActions = { runs: ExperimentRun[]; onReadLog: (runId: string) => Promise<string> };
 export type NodeConnection = { nodeId: string; title: string; relation: string; revisionId: string; incoming: boolean };
-type Props = { node: ResearchNode; experiment?: ExperimentInspectorActions; connections?: NodeConnection[]; onSelectNode?: (id: string) => void; onDiscussRevision?: (nodeId: string, revisionId: string) => Promise<void> };
+type Props = { node: ResearchNode; experiment?: ExperimentInspectorActions; connections?: NodeConnection[]; onSelectNode?: (id: string) => void };
 const STATUS_LABELS: Record<string, string> = { draft: "Draft", active: "Active", retracted: "Retracted" };
 const FIELD_LABELS: Record<string, string> = {
   question: "Question", hypothesis: "Hypothesis", prediction: "Prediction", falsification: "Falsification", evidence: "Evidence", interpretation: "Interpretation", reasoning: "Reasoning", verdict: "Verdict", metrics: "Experiment metrics", source: "Source", text: "Writing", content: "Content", baseline: "Experiment baseline", method: "Experiment method", stopCriteria: "Experiment stop criteria", runId: "Run", command: "Command", exitCode: "Exit code", commitSha: "Git commit", commit: "Git commit", logPath: "Log path", logTail: "Run log", note: "Notes", plan: "Experiment plan",
@@ -20,29 +20,19 @@ function ContentFields({ value, depth = 0 }: { value: unknown; depth?: number })
 }
 
 /** Readable, read-only research content, with genuine persisted revision history. */
-export default function NodeInspector({ node, experiment, connections = [], onSelectNode, onDiscussRevision }: Props) {
+export default function NodeInspector({ node, experiment, connections = [], onSelectNode }: Props) {
   const { t } = useUISettings();
   const [history, setHistory] = useState<ResearchRevision[] | null>(null);
   const [revision, setRevision] = useState<ResearchRevision | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [openingConversation, setOpeningConversation] = useState(false);
-  const [conversationError, setConversationError] = useState("");
   const identity = useRef("");
   identity.current = `${node.id}:${node.current_revision_id}`;
-  useEffect(() => { setRevision(null); setHistory(null); setError(""); setLoading(false); setOpeningConversation(false); setConversationError(""); }, [node.id, node.current_revision_id]);
+  useEffect(() => { setRevision(null); setHistory(null); setError(""); setLoading(false); }, [node.id, node.current_revision_id]);
   const shown = revision ?? node.current_revision;
   const historical = shown?.id !== node.current_revision_id;
   const content = shown?.content ?? {};
   const source = (content.evidence as { source?: unknown } | undefined)?.source;
-  const discussRevision = async () => {
-    if (!onDiscussRevision || !shown || openingConversation) return;
-    const expected = identity.current;
-    setOpeningConversation(true); setConversationError("");
-    try { await onDiscussRevision(node.id, shown.id); }
-    catch (cause) { if (expected === identity.current) setConversationError(cause instanceof Error ? cause.message : t("Could not open the node conversation.")); }
-    finally { if (expected === identity.current) setOpeningConversation(false); }
-  };
   const loadHistory = async () => {
     if (loading || history) return;
     setLoading(true); setError("");
@@ -62,11 +52,6 @@ export default function NodeInspector({ node, experiment, connections = [], onSe
       {shown?.git_commit && <span>{t("Git commit")} <code>{shown.git_commit.slice(0, 7)}</code></span>}
       {typeof source === "string" && <span className={`research-evidence-source source-${source}`}>{t(source === "run" ? "Recorded run evidence" : source === "conversation" ? "Reported in conversation" : "Source")}</span>}
     </div>
-    {onDiscussRevision && shown && <div className="research-node-discussion">
-      <button type="button" onClick={() => void discussRevision()} disabled={openingConversation}><MessageSquare size={13} />{t(openingConversation ? "Opening node conversation…" : "Discuss this revision")}</button>
-      <p>{t("A private conversation with this version and its research context. Graph changes stay in the source session.")}</p>
-      {conversationError && <p role="alert">{conversationError}</p>}
-    </div>}
     {node.kind === "experiment" && experiment && !historical ? <ExperimentInspector key={node.id} node={node} runs={experiment.runs} onReadLog={experiment.onReadLog} /> : <ContentFields value={content} />}
     {connections.length > 0 && <section className="research-node-connections" aria-label={t("Connections")}>
       <h3>{t("Connections")}</h3>
@@ -79,7 +64,7 @@ export default function NodeInspector({ node, experiment, connections = [], onSe
       <summary><History size={13} />{t("Revision history")}{history && <span>{history.length}</span>}</summary>
       {loading && <p className="experiment-hint">{t("Loading…")}</p>}
       {error && <p role="alert">{error}</p>}
-      {history?.map((item, index) => <button key={item.id} type="button" disabled={openingConversation} className={shown?.id === item.id ? "active" : ""} aria-pressed={shown?.id === item.id} onClick={() => setRevision(item)}>
+      {history?.map((item, index) => <button key={item.id} type="button" className={shown?.id === item.id ? "active" : ""} aria-pressed={shown?.id === item.id} onClick={() => setRevision(item)}>
         <span>{t("Revision")} {history.length - index}</span><code>{item.id.slice(0, 8)}</code><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleDateString()}</time>
       </button>)}
     </details>

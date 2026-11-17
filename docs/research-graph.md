@@ -1,16 +1,14 @@
 # Research graph foundation
 
 This change adds the storage and service layer for a versioned research object
-graph, automatic extraction, a lineage view, recorded local experiment runs, and
-revision-scoped discussion contexts. Git worktrees, remote experiment backends, and graph
+graph, automatic extraction, a lineage view, and recorded local experiment runs.
+Git worktrees, node-scoped context packs, remote experiment backends, and graph
 collaboration sync are not implemented yet. See [the current implementation review](./research-graph-review.md) for the gap analysis and development sequence.
 
 ## Object model
 
 Each Research session owns an independent graph. A project can contain many
 sessions, but nodes and edges never cross session boundaries.
-Node conversations reference a source session's node and revision; they do not
-create a second graph or copy the source conversation.
 
 The graph has five node kinds:
 
@@ -86,42 +84,6 @@ Fault-injection coverage lives in `electron/research-graph-atomic.test.cjs`.
 The [before/after evidence](./assets/research-graph/atomicity-tests.txt) reproduces
 three failures against the preceding commit and passes all four regression cases
 with the fix.
-
-## Node conversations: first slice
-
-Select a graph node and click **Discuss this revision**. Selecting a historical
-content revision first opens discussion of that exact revision. The first click
-creates a private conversation; later clicks by the same user on that revision
-resume its unarchived discussion. A new revision gets its own conversation.
-The source graph stays pinned while the main chat switches to the node discussion.
-
-`research_node_contexts` stores an immutable, bounded context snapshot. Existing
-`research_threads.node_id` / `node_revision_id` bind the conversation to its focus.
-The snapshot includes focus content, direct parent revisions, ancestor questions,
-content hashes and source references. Writing can carry the result revisions it
-cites. Dependencies attached only to a later revision do not enter an older chat.
-Titles are metadata captured at context creation, not historical title versions.
-
-Snapshots contain at most 24,000 characters, with explicitly marked content
-excerpts. They contain no source chat transcript, unrelated sibling branches,
-paper binaries or automatically read files. Source-session access is checked when
-creating or using a discussion, without loading its full message history.
-Fork/undo copies retain their snapshot; compaction cannot overwrite it.
-The API context estimate includes the saved snapshot in its attached context size.
-
-API, Codex, Claude Code and OpenCode receive the same pinned snapshot on each
-turn through their existing prompt paths. Native resume/import limits and harness
-permissions continue to apply. These are local discussion contexts: automatic
-graph extraction and formal graph/run tools remain in the source Research session.
-Native filesystem commands are not automatically converted into formal run records.
-Graph writeback, node-driven execution, project-wide graph scope, and cloud sync
-of context snapshots remain follow-up work.
-
-| Before | After |
-| --- | --- |
-| ![Node inspector before](./assets/research-graph/node-context-before.png) | ![Discuss a pinned revision](./assets/research-graph/node-context-after.png) |
-
-Both screenshots use the same illustrative node, viewport and Paper theme.
 
 ## UI slice
 
@@ -203,7 +165,7 @@ released first. Extraction is stage-aware:
   summary of the existing project graph. It returns a patch of at most six new
   nodes and eight new edges.
 - `applyPatch` validates node kinds, edge pairs, duplicate edges, parent rules,
-  cycles, and ownership before committing the transaction. Nodes that match an existing node by
+  cycles, and ownership before writing. Nodes that match an existing node by
   kind and normalized title are reused instead of duplicated.
 - New nodes and edges are applied automatically. Each new revision records the
   source `turn_id`; the thread receives a `graph_applied` event (or
@@ -352,11 +314,6 @@ The matching IPC channels are `research-graph:create-node`,
 `research-graph:history`, `research-graph:archive`, `research-graph:restore`,
 and `research-graph:validate`.
 
-`research-graph:open-conversation` accepts `{ nodeId, revisionId }` and returns the
-private discussion thread. The preload bridge exposes it as
-`openResearchNodeConversation`. Restart Electron after updating the main process
-and preload; a renderer-only hot reload cannot register the new IPC handler.
-
 Experiment runs are exposed separately:
 
 ```text
@@ -385,7 +342,7 @@ Status changes are pushed to the renderer as `experiment-run:update`.
 
 ## Intentionally out of scope
 
-- Node-driven execution and reviewed writeback from node conversations.
+- Node Chat and context packs.
 - Git worktrees and per-experiment branches.
 - Remote run backends, detached supervisors that survive app exit, and
   structured metric ingestion.
@@ -396,8 +353,6 @@ Status changes are pushed to the renderer as `experiment-run:update`.
 
 ```sh
 node --test electron/research-graph.test.cjs
-node --test electron/research-graph-atomic.test.cjs
-node --test electron/research-node-context.test.cjs
 node --test electron/research-graph-layout.test.cjs
 node --test electron/research-graph-auto-build.test.cjs
 node --test electron/experiment-runs.test.cjs

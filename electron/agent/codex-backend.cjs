@@ -79,7 +79,7 @@ function* visibleMessages(thread, turn) {
   }
 }
 function userPrompt(thread, turn, resume, attachments) {
-  let prompt = String(turn.user_message ?? turn.prompt ?? '') + (thread.node_context_prompt || '');
+  let prompt = String(turn.user_message ?? turn.prompt ?? '');
   const tooLarge = 'The visible history exceeds the native import limit. This chat was preserved; no history was summarized or replayed. Continue an existing native chat or start a smaller chat.';
   if (!resume) {
     // Preflight before allocating the all-history array or serialized history.
@@ -94,7 +94,7 @@ function userPrompt(thread, turn, resume, attachments) {
     assertJsonSize(attachments, VISIBLE_IMPORT_LIMIT, 'The attached context exceeds the native request limit. No request was sent or replayed.');
   }
   if (attachments.length) prompt += `\n\nUser-attached context (metadata only):\n${JSON.stringify(attachments)}`;
-  if (turn.mode === "experiment-setup" && !thread.node_id) {
+  if (turn.mode === "experiment-setup") {
     const directives = require("./experiment-directives.cjs");
     prompt += `\n\n${directives.experimentPrompt()}`;
     const recent = directives.recentExperimentRuns(thread.id);

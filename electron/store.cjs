@@ -548,20 +548,6 @@ function schema(db) {
       ))
     ) STRICT;
 
-    CREATE TABLE IF NOT EXISTS research_node_contexts (
-      thread_id TEXT PRIMARY KEY NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
-      node_id TEXT NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
-      revision_id TEXT NOT NULL REFERENCES research_node_revisions(id) ON DELETE CASCADE,
-      context_json TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    ) STRICT;
-
-    CREATE TRIGGER IF NOT EXISTS research_node_contexts_immutable
-    BEFORE UPDATE ON research_node_contexts
-    BEGIN
-      SELECT RAISE(ABORT, 'research node contexts are immutable');
-    END;
-
     CREATE TABLE IF NOT EXISTS experiment_runs (
       id TEXT PRIMARY KEY NOT NULL,
       project_id TEXT NOT NULL REFERENCES research_projects(id) ON DELETE CASCADE,
@@ -2591,7 +2577,6 @@ function listResearchThreads({ archived = false, projectId = null, workspaceId =
   const db = requireDatabase();
   return db.prepare(`
     SELECT research_threads.*,
-      COALESCE((SELECT length(context_json) FROM research_node_contexts WHERE thread_id = research_threads.id), 0) AS node_context_characters,
       COUNT(research_turns.id) AS turn_count,
       COALESCE(MAX(research_turns.created_at), research_threads.created_at) AS last_turn_at,
       (SELECT COUNT(*) FROM agent_actions
@@ -2876,47 +2861,6 @@ function getResearchNodeHistory(nodeId) {
   return db.prepare("SELECT * FROM research_node_revisions WHERE node_id = ? ORDER BY created_at ASC, rowid ASC")
     .all(nodeId)
     .map(hydrateResearchRevision);
-}
-
-function findResearchNodeConversation(nodeId, revisionId) {
-  const row = requireDatabase().prepare(`
-    SELECT t.id FROM research_threads t
-    JOIN research_node_contexts c ON c.thread_id = t.id
-    WHERE c.node_id = ? AND c.revision_id = ? AND t.owner_id = ?
-      AND t.archived_at IS NULL AND t.fork_id IS NULL
-    ORDER BY t.created_at DESC, t.rowid DESC LIMIT 1
-  `).get(nodeId, revisionId, localIdentity.userId);
-  return row ? getResearchThread(row.id) : null;
-}
-
-function bindResearchNodeConversation({ threadId, nodeId, revisionId, context }) {
-  const thread = getResearchThread(threadId);
-  const node = getResearchNode(nodeId);
-  if (!node || node.project_id !== thread.project_id) throw new Error("The node conversation must belong to the same project.");
-  if (!canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to create a node conversation.");
-  if (!getResearchNodeHistory(nodeId).some(revision => revision.id === revisionId)) throw new Error("The revision does not belong to this node.");
-  const source = getResearchThreadMetadata(context.sourceThreadId);
-  if (source.project_id !== node.project_id || source.id !== node.thread_id) throw new Error("The research source does not match the node.");
-  const serialized = JSON.stringify(context);
-  if (serialized.length > 24_000) throw new Error("The research node context is too large.");
-  return withResearchGraphTransaction(() => {
-    const db = requireDatabase();
-    db.prepare(`INSERT INTO research_node_contexts (thread_id, node_id, revision_id, context_json, created_at)
-      VALUES (?, ?, ?, ?, ?)`).run(threadId, nodeId, revisionId, serialized, timestamp());
-    db.prepare("UPDATE research_threads SET node_id = ?, node_revision_id = ? WHERE id = ?").run(nodeId, revisionId, threadId);
-    return getResearchThread(threadId);
-  });
-}
-
-function getResearchNodeContext(threadId) {
-  const thread = getResearchThreadMetadata(threadId);
-  if (!thread.node_id) return null;
-  const row = requireDatabase().prepare("SELECT context_json FROM research_node_contexts WHERE thread_id = ?").get(threadId);
-  if (!row) throw new Error("The node conversation has no saved context snapshot.");
-  const context = JSON.parse(row.context_json);
-  // A copied conversation cannot bypass the original source's private access.
-  getResearchThreadMetadata(context.sourceThreadId);
-  return context;
 }
 
 let researchGraphSavepoint = 0;
@@ -3594,18 +3538,12 @@ function applyCloudComment(projectId, comment, { currentCloudUserId = "", localU
   return db.prepare("SELECT * FROM comments WHERE id = ?").get(comment.id);
 }
 
-function getResearchThreadMetadata(id) {
+function getResearchThread(id) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
   if (!thread) throw new Error("Research thread not found.");
   if (thread.project_id && !canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this research thread.");
   if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
-  return thread;
-}
-
-function getResearchThread(id) {
-  const db = requireDatabase();
-  const thread = getResearchThreadMetadata(id);
   const turns = db.prepare(`
     SELECT id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at
     FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC
@@ -3711,7 +3649,6 @@ function getResearchThread(id) {
   `).get(id).count;
   return {
     ...thread,
-    node_context_characters: thread.node_id ? db.prepare("SELECT length(context_json) AS size FROM research_node_contexts WHERE thread_id = ?").get(id)?.size || 0 : 0,
     pending_actions: pendingActions,
     turn_count: turns.length,
     last_turn_at: turns.at(-1)?.created_at || thread.created_at,
@@ -3801,12 +3738,6 @@ function copyResearchThread(source, { title, visibility = source.visibility, tur
   }
   db.prepare("UPDATE research_threads SET context_summary = ?, context_summary_through_turn_id = ?, harness = ? WHERE id = ?")
     .run(source.context_summary, turnIds.get(source.context_summary_through_turn_id) || null, turns.length ? source.harness : null, copy.id);
-  if (source.node_id) {
-    db.prepare(`INSERT INTO research_node_contexts (thread_id, node_id, revision_id, context_json, created_at)
-      SELECT ?, node_id, revision_id, context_json, created_at FROM research_node_contexts WHERE thread_id = ?`).run(copy.id, source.id);
-    db.prepare("UPDATE research_threads SET node_id = ?, node_revision_id = ? WHERE id = ?")
-      .run(source.node_id, source.node_revision_id, copy.id);
-  }
   return getResearchThread(copy.id);
 }
 
@@ -4367,10 +4298,6 @@ function listReproductionAttempts(runId) {
 }
 
 module.exports = {
-  getResearchThreadMetadata,
-  findResearchNodeConversation,
-  bindResearchNodeConversation,
-  getResearchNodeContext,
   withResearchGraphTransaction,
   nativeAgentBindings,
   createResearchNode,
