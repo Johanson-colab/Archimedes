@@ -44,6 +44,7 @@ export default function ResearchGraphPanel({
   const [graph, setGraph] = useState<ResearchGraph | null>(null);
   const [runs, setRuns] = useState<ExperimentRun[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -54,7 +55,7 @@ export default function ResearchGraphPanel({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [viewStage, setViewStage] = useState<"ideas" | "experiments" | "all">(mode === "experiment-setup" ? "experiments" : "ideas");
 
-  useEffect(() => { setGraph(null); setRuns([]); setSelectedId(null); setInspectorOpen(false); }, [projectId, threadId]);
+  useEffect(() => { setGraph(null); setRuns([]); setSelectedId(null); setFocusedId(null); setInspectorOpen(false); }, [projectId, threadId]);
 
   useEffect(() => {
     setViewStage(mode === "experiment-setup" ? "experiments" : "ideas");
@@ -160,6 +161,7 @@ export default function ResearchGraphPanel({
     });
   }, [graph, stageNodes, showHistory, ideaStage]);
   const selectedNode = layout?.nodes.find(({ node }) => node.id === selectedId)?.node ?? layout?.nodes[0]?.node ?? null;
+  const visibleFocusId = layout?.nodes.some(({ node }) => node.id === focusedId) ? focusedId : null;
   const retractedCount = stageNodes.filter((node) => node.status === "retracted" || node.archived).length;
   const visibleNodeCount = showHistory ? stageNodes.length : stageNodes.length - retractedCount;
   const hasExperiments = graph?.nodes.some((node) => node.kind === "experiment") ?? false;
@@ -178,6 +180,7 @@ export default function ResearchGraphPanel({
         await window.researchDesk.setResearchNodeStatus?.(item.nodeId, item.previousStatus, "Undo automatic research graph update");
       }
       setSelectedId(null);
+      setFocusedId(null);
       setDismissedUpdate(update.turnId);
       refresh();
     } catch (cause) {
@@ -276,7 +279,7 @@ export default function ResearchGraphPanel({
       <div className={`research-graph-workspace${inspectorOpen && selectedNode ? " has-inspector" : ""}`}>
       <div className="research-graph-body">
         {loading && !graph ? <span className="research-graph-loading">{t("Refresh graph")}…</span> : null}
-        {layout ? <ResearchGraphView layout={layout} selectedId={selectedNode?.id ?? null} runsByNode={runsByNode} onSelect={(id) => { setSelectedId(id); setInspectorOpen(true); }} /> : null}
+        {layout ? <ResearchGraphView layout={layout} selectedId={selectedNode?.id ?? null} focusedId={visibleFocusId} runsByNode={runsByNode} onSelect={(id) => { setSelectedId(id); setFocusedId(current => current === id ? null : id); setInspectorOpen(true); }} /> : null}
       </div>
       {selectedNode && inspectorOpen ? <NodeInspector
         key={selectedNode.id}
@@ -291,6 +294,7 @@ export default function ResearchGraphPanel({
           setViewStage("all");
           if (graph?.nodes.some(node => node.id === id && (node.archived || node.status === "retracted"))) setShowHistory(true);
           setSelectedId(id);
+          setFocusedId(id);
         }}
         experiment={selectedNode.kind === "experiment" ? {
           runs: runsByNode.get(selectedNode.id) ?? [],

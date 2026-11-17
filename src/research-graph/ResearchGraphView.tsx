@@ -10,7 +10,7 @@ const RUN_LABELS: Record<string, string> = { starting: "Run starting", running: 
 const TONES = ["var(--accent)", "var(--analysis-series-3)", "var(--analysis-series-1)", "var(--analysis-series-5)", "var(--analysis-series-2)"];
 const tone = (lane: number) => TONES[lane % TONES.length];
 
-type Props = { layout: LineageLayout; selectedId: string | null; runsByNode: Map<string, ExperimentRun[]>; onSelect: (nodeId: string) => void };
+type Props = { layout: LineageLayout; selectedId: string | null; focusedId: string | null; runsByNode: Map<string, ExperimentRun[]>; onSelect: (nodeId: string) => void };
 
 export function lineageAncestors(layout: LineageLayout, selectedId: string | null): Set<string> {
   const ancestors = new Set<string>();
@@ -30,9 +30,30 @@ function nodeState(node: ResearchNode, latest?: ExperimentRun) {
   return node.status;
 }
 
-export default function ResearchGraphView({ layout, selectedId, runsByNode, onSelect }: Props) {
+export default function ResearchGraphView({ layout, selectedId, focusedId, runsByNode, onSelect }: Props) {
   const { t } = useUISettings();
-  const ancestors = lineageAncestors(layout, selectedId);
+  const ancestors = lineageAncestors(layout, focusedId);
+  const focused = Boolean(focusedId && layout.nodes.some(({ node }) => node.id === focusedId));
+  const edgeOnPath = (item: LineageLayout["edges"][number]) => !item.feedback && Boolean(item.fromId && item.toId && ancestors.has(item.fromId) && ancestors.has(item.toId));
+  const renderEdge = ({ edge, path, feedback, fromId, toId, lane = 0 }: LineageLayout["edges"][number]) => {
+    const onPath = !feedback && Boolean(fromId && toId && ancestors.has(fromId) && ancestors.has(toId));
+    return <path key={edge.id} d={path} className={`research-graph-edge kind-${edge.kind}${feedback ? " feedback" : ""}${onPath ? " on-path" : focused ? " unrelated" : ""}`}
+      style={{ "--branch-color": tone(lane) } as CSSProperties} />;
+  };
+  const renderMarker = ({ node, x, y, lane }: LineageLayout["nodes"][number]) => {
+    const selected = node.id === selectedId;
+    const state = nodeState(node, runsByNode.get(node.id)?.at(-1));
+    return <g key={node.id} className={`research-lineage-marker kind-${node.kind} state-${state}${selected ? " selected" : ""}${focused ? ancestors.has(node.id) ? " on-path" : " unrelated" : ""}`} style={{ "--branch-color": tone(lane) } as CSSProperties} transform={`translate(${x},${y + LINEAGE_MARKER_Y})`}>
+      {selected && <circle className="research-lineage-halo" r={11} />}
+      {node.kind === "question" && <circle className="research-lineage-dot" r={6} />}
+      {node.kind === "idea" && <path className="research-lineage-dot" d="M 0 -6 L 6 0 L 0 6 L -6 0 Z" />}
+      {node.kind === "experiment" && <rect className="research-lineage-dot" x={-5.5} y={-5.5} width={11} height={11} rx={2} />}
+      {node.kind === "result" && <path className="research-lineage-dot" d="M -3 -5.5 L 3 -5.5 L 6 0 L 3 5.5 L -3 5.5 L -6 0 Z" />}
+      {node.kind === "writing" && <path className="research-lineage-dot" d="M -5 -6 L 2 -6 L 5 -3 L 5 6 L -5 6 Z" />}
+      {state === "failed" && <path className="research-lineage-glyph" d="M -2 -2 L 2 2 M 2 -2 L -2 2" />}
+      {state === "succeeded" && <path className="research-lineage-glyph" d="M -2 0 L 0 2 L 3 -2" />}
+    </g>;
+  };
   const navigate = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -50,7 +71,7 @@ export default function ResearchGraphView({ layout, selectedId, runsByNode, onSe
       const state = nodeState(node, latest);
       const mergeCount = layout.edges.filter(item => item.edge.kind === "merges" && item.toId === node.id).length;
       const label = node.archived ? "Archived" : node.status === "retracted" ? "Retracted" : latest ? RUN_LABELS[latest.status] : node.kind === "experiment" ? "Not run" : node.status === "active" ? "Active" : "Draft";
-      return <button key={node.id} type="button" className={`research-graph-node kind-${node.kind} state-${state}${selected ? " selected" : ""}${ancestors.has(node.id) ? " on-path" : ""}${node.archived ? " archived" : ""}${node.status === "retracted" ? " status-retracted" : ""}`}
+      return <button key={node.id} type="button" className={`research-graph-node kind-${node.kind} state-${state}${selected ? " selected" : ""}${focused ? ancestors.has(node.id) ? " on-path" : " unrelated" : ""}${node.archived ? " archived" : ""}${node.status === "retracted" ? " status-retracted" : ""}`}
         style={{ top: y, height: LINEAGE_ROW_HEIGHT, paddingLeft: layout.railWidth + 8, "--branch-color": tone(lane) } as CSSProperties}
         onClick={() => onSelect(node.id)} onKeyDown={navigate} aria-pressed={selected} title={node.title}>
         <span className="research-graph-node-copy">
@@ -66,23 +87,10 @@ export default function ResearchGraphView({ layout, selectedId, runsByNode, onSe
       </button>;
     })}
     <svg className="research-graph-edges" width={layout.railWidth} height={layout.height} viewBox={`0 0 ${layout.railWidth} ${layout.height}`} aria-hidden="true">
-      {layout.edges.map(({ edge, path, feedback, fromId, toId, lane = 0 }) => <path key={edge.id} d={path}
-        className={`research-graph-edge kind-${edge.kind}${feedback ? " feedback" : ""}${!feedback && ancestors.has(fromId!) && ancestors.has(toId!) ? " on-path" : ""}`}
-        style={{ "--branch-color": tone(lane) } as CSSProperties} />)}
-      {layout.nodes.map(({ node, x, y, lane }) => {
-        const selected = node.id === selectedId;
-        const state = nodeState(node, runsByNode.get(node.id)?.at(-1));
-        return <g key={node.id} className={`research-lineage-marker kind-${node.kind} state-${state}${selected ? " selected" : ""}`} style={{ "--branch-color": tone(lane) } as CSSProperties} transform={`translate(${x},${y + LINEAGE_MARKER_Y})`}>
-          {selected && <circle className="research-lineage-halo" r={11} />}
-          {node.kind === "question" && <circle className="research-lineage-dot" r={6} />}
-          {node.kind === "idea" && <path className="research-lineage-dot" d="M 0 -6 L 6 0 L 0 6 L -6 0 Z" />}
-          {node.kind === "experiment" && <rect className="research-lineage-dot" x={-5.5} y={-5.5} width={11} height={11} rx={2} />}
-          {node.kind === "result" && <path className="research-lineage-dot" d="M -3 -5.5 L 3 -5.5 L 6 0 L 3 5.5 L -3 5.5 L -6 0 Z" />}
-          {node.kind === "writing" && <path className="research-lineage-dot" d="M -5 -6 L 2 -6 L 5 -3 L 5 6 L -5 6 Z" />}
-          {state === "failed" && <path className="research-lineage-glyph" d="M -2 -2 L 2 2 M 2 -2 L -2 2" />}
-          {state === "succeeded" && <path className="research-lineage-glyph" d="M -2 0 L 0 2 L 3 -2" />}
-        </g>;
-      })}
+      {layout.edges.filter(item => !edgeOnPath(item)).map(renderEdge)}
+      {layout.nodes.filter(({ node }) => !ancestors.has(node.id)).map(renderMarker)}
+      {layout.edges.filter(edgeOnPath).map(renderEdge)}
+      {layout.nodes.filter(({ node }) => ancestors.has(node.id)).map(renderMarker)}
     </svg>
   </div>;
 }

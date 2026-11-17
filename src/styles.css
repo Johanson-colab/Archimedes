@@ -6232,6 +6232,7 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .research-graph-edge.kind-supports { stroke: var(--state-success); }
 .research-graph-edge.kind-contradicts { stroke: var(--state-danger); }
 .research-graph-edge.kind-cites { stroke-dasharray: 2 3; }
+.research-graph-edge.unrelated { stroke: var(--text-faint); stroke-dasharray: 2 4; opacity: .5; }
 .research-graph-node { position: absolute; left: 0; display: flex; width: 100%; align-items: center; gap: 14px; padding: 8px 14px 8px 0; color: var(--text-primary); background: transparent; border: 0; border-radius: 6px; text-align: left; cursor: pointer; }
 .research-graph-node:hover { background: var(--surface-soft); }
 .research-graph-node.selected { background: color-mix(in srgb, var(--branch-color) 7%, var(--surface-panel)); }
@@ -6239,6 +6240,8 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .research-graph-node:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .research-graph-node-copy { display: grid; min-width: 0; flex: 1; gap: 5px; }
 .research-graph-node-title { display: block; overflow: hidden; font-size: 13px; font-weight: 550; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.research-graph-node.unrelated .research-graph-node-title { color: var(--text-muted); }
+.research-graph-node.unrelated .research-lineage-state { color: var(--text-faint); }
 .research-lineage-meta { display: flex; min-width: 0; align-items: center; gap: 7px; overflow: hidden; color: var(--text-muted); font-size: 10.5px; white-space: nowrap; }
 .research-lineage-meta > svg { flex: 0 0 auto; }
 .research-lineage-meta code { color: var(--text-faint); font-family: var(--font-mono); font-size: 10px; }
@@ -6258,6 +6261,9 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .research-lineage-marker.state-retired .research-lineage-dot { stroke-dasharray: 2 2; }
 .research-lineage-halo { fill: currentColor; opacity: .14; }
 .research-lineage-glyph { fill: none; stroke: var(--surface-panel); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.research-lineage-marker.unrelated { color: var(--text-faint); }
+.research-lineage-marker.unrelated .research-lineage-dot { fill: var(--surface-panel); stroke: var(--text-faint); stroke-dasharray: 2 2; }
+.research-lineage-marker.unrelated .research-lineage-glyph { stroke: var(--text-faint); }
 .research-graph-inspector { min-width: 0; min-height: 0; overflow: auto; padding: 18px; border-left: 1px solid var(--border-soft); }
 .research-graph-inspector-head { display: flex; align-items: start; gap: 12px; }
 .research-graph-inspector-head strong { min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }

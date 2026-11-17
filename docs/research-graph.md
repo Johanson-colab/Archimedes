@@ -94,6 +94,11 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
   precede children, merges retain both incoming connections, and selected ancestry
   is highlighted. The original stored citation direction remains unchanged while
   the visual flow leads from evidence to writing.
+- Clicking a node emphasizes its structural ancestor paths. Unrelated nodes and
+  edges become gray and dashed; the highlighted paths render above unrelated
+  markers so crossings do not obscure them. Merges show all actual parents.
+  Click the selected node again to return to the full-color overview. Feedback
+  edges remain distinct from structural ancestry; graph data is unchanged.
 - Marker shapes distinguish questions (circle), ideas (diamond), experiments
   (rounded square), results (hexagon), and writing (page). Experiment success and
   failure continue to use check and cross symbols, as well as status text.
@@ -137,6 +142,11 @@ The pinned-session indicator and control are shown with the same fixture and
 viewport [before](./assets/research-graph/session-pin-before.png) and
 [after](./assets/research-graph/session-pin-after.png); a
 [narrow-window check](./assets/research-graph/session-pin-narrow.png) is also included.
+
+Path emphasis is shown with the same selected experiment and fixture
+[before](./assets/research-graph/path-focus-before.png) and
+[after](./assets/research-graph/path-focus-after.png); also see the
+[dark-theme check](./assets/research-graph/path-focus-dark.png).
 
 ## Automatic graph building
 

@@ -128,6 +128,42 @@ test('a pinned graph identifies its session and unpinning follows the active ses
   });
 });
 
+test('selection highlights only actual ancestors, and clicking again restores the overview', async () => {
+  const nodes = [node('q', 'question'), node('a', 'idea'), node('b', 'idea'), node('e', 'experiment')];
+  const link = (from, to, kind) => ({ id: `${from}-${to}`, from_node: from, to_node: to, from_revision: `rev-${from}`, to_revision: `rev-${to}`, kind });
+  const edges = [link('q', 'a', 'generates'), link('q', 'b', 'generates'), link('b', 'e', 'tests')];
+  window.researchDesk = { listResearchGraph: async () => ({ projectId: 'p', threadId: 't', nodes, edges }), listExperimentRuns: async () => [], onExperimentRunUpdate: () => () => {} };
+  await mounted(Panel, props, async () => {
+    assert.equal(document.querySelectorAll('.research-lineage-marker.unrelated').length, 0, 'the initial overview is not dimmed');
+    await click(document.querySelector('[title="e"].research-graph-node'));
+    assert.equal(document.querySelectorAll('.research-lineage-marker.on-path').length, 3);
+    assert.ok(document.querySelector('.research-graph-node[title="a"].unrelated'));
+    assert.ok(document.querySelector('.research-lineage-marker.kind-idea.unrelated'));
+    assert.equal(document.querySelectorAll('.research-graph-edge.on-path').length, 2);
+    assert.equal(document.querySelectorAll('.research-graph-edge.unrelated').length, 1);
+    const svg = document.querySelector('.research-graph-edges');
+    const marker = svg.querySelector('.research-lineage-marker.unrelated');
+    const activeEdge = svg.querySelector('.research-graph-edge.on-path');
+    assert.ok(marker.compareDocumentPosition(activeEdge) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'selected paths are drawn above unrelated markers');
+    await click(document.querySelector('[title="e"].research-graph-node'));
+    assert.equal(document.querySelectorAll('.research-lineage-marker.unrelated, .research-graph-edge.unrelated').length, 0);
+  });
+});
+
+test('merged branches keep both actual parents highlighted and exclude feedback', async () => {
+  const nodes = [node('q', 'question'), node('a', 'idea'), node('b', 'idea'), node('other', 'idea'), node('merged', 'idea'), node('result', 'result')];
+  const link = (from, to, kind) => ({ id: `${from}-${to}`, from_node: from, to_node: to, from_revision: `rev-${from}`, to_revision: `rev-${to}`, kind });
+  const edges = [link('q', 'a', 'generates'), link('q', 'b', 'generates'), link('q', 'other', 'generates'), link('a', 'merged', 'merges'), link('b', 'merged', 'merges'), link('result', 'a', 'supports')];
+  window.researchDesk = { listResearchGraph: async () => ({ projectId: 'p', threadId: 't', nodes, edges }), listExperimentRuns: async () => [], onExperimentRunUpdate: () => () => {} };
+  await mounted(Panel, props, async () => {
+    await click(document.querySelector('[title="merged"].research-graph-node'));
+    for (const id of ['q', 'a', 'b', 'merged']) assert.ok(document.querySelector(`.research-graph-node[title="${id}"].on-path`));
+    assert.ok(document.querySelector('.research-graph-node[title="other"].unrelated'));
+    assert.equal(document.querySelectorAll('.research-graph-edge.kind-merges.on-path').length, 2);
+    assert.ok(document.querySelector('.research-graph-edge.kind-supports.feedback.unrelated'));
+  });
+});
+
 test('an outdated revision history request cannot populate a newly updated node', async () => {
   const current = node('idea', 'idea', { hypothesis: 'First version' });
   let resolveHistory;
