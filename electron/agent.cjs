@@ -403,6 +403,14 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "prepare_experiment_workspace",
+      description: "Create or find an isolated Git worktree for an experiment, with user approval. It starts from the project’s committed HEAD; uncommitted and untracked files are not copied. Use its returned workspace-relative path to prepare code there before running.",
+      parameters: { type: "object", properties: { experiment: { type: "string", description: "Experiment id or exact title." } }, required: ["experiment"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "run_experiment",
       description: "Start a recorded local experiment run for an existing experiment node in this Research session. Use only when the user asks to run an experiment or the experiment plan is ready. The app records the command, log, exit code, and commit in the experiment graph. Returns immediately with a run id; use wait_experiment and read_experiment_log to inspect it.",
       parameters: {
@@ -410,7 +418,8 @@ const tools = [
         properties: {
           experiment: { type: "string", description: "The exact experiment node id or title in this session." },
           command: { type: "string", description: "The exact shell command to run for this experiment." },
-          cwd: { type: "string", description: "Optional workspace-relative working folder. Defaults to the workspace root." },
+          cwd: { type: "string", description: "Optional folder relative to the chosen workspace." },
+          use_experiment_workspace: { type: "boolean", description: "Run inside the prepared experiment worktree instead of the active workspace." },
         },
         required: ["experiment", "command"],
         additionalProperties: false,
@@ -1097,13 +1106,50 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     return { content: JSON.stringify({ experiment_id: experiment.id, title: experiment.title }) };
   }
 
+  if (name === "prepare_experiment_workspace") {
+    if (capabilities.command !== "ask") throw new Error("Creating an experiment worktree requires command approval.");
+    const { thread, experiment } = sessionExperiment({ threadId, experiment: args.experiment });
+    const projectRoot = store.getResearchProject(thread.project_id)?.workspace_path;
+    if (!projectRoot || fs.realpathSync(projectRoot) !== fs.realpathSync(root)) {
+      throw new Error("Open the project’s shared workspace before preparing an experiment worktree.");
+    }
+    const existing = store.getExperimentWorkspace(experiment.id);
+    if (existing) return { content: JSON.stringify({ existing: true, workspace: existing, relative_path: relativePath(root, existing.root) }) };
+    const action = store.createAction({ taskId, kind: "command", payload: {
+      command: "Create an isolated Git worktree from the committed project HEAD",
+      cwd: root, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true,
+    } });
+    const waiting = waitForApproval(action.id, signal, threadId);
+    emit({ type: "approval", title: "Approval required", detail: "Create an experiment worktree from committed code; uncommitted files are not copied.", action });
+    let decision;
+    try { decision = await waiting; } catch (error) {
+      if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+      throw error;
+    }
+    if (!decision.approved) {
+      if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+      return { content: JSON.stringify({ approved: false }) };
+    }
+    if (signal?.aborted) throw new Error("The research turn was interrupted before creating the worktree.");
+    const result = store.createExperimentWorkspace(experiment.id);
+    return { content: JSON.stringify({ approved: true, ...result, relative_path: relativePath(root, result.workspace.root), notice: "Only committed code is present; uncommitted and untracked files were not copied." }) };
+  }
+
   if (name === "run_experiment") {
     if (capabilities.command !== "ask") throw new Error("Command execution is disabled in this conversation. Ask the user to run the experiment in chat.");
     const { thread, experiment } = sessionExperiment({ threadId, experiment: args.experiment });
     const command = String(args.command || "").trim();
     if (!command) throw new Error("A run command is required.");
     if (command.length > 4_000) throw new Error("The experiment command is too long.");
-    const workingDirectory = existingWorkspacePath(root, args.cwd || "");
+    const prepared = args.use_experiment_workspace ? store.getExperimentWorkspace(experiment.id) : null;
+    if (args.use_experiment_workspace && !prepared) throw new Error("Prepare the experiment workspace before running in it.");
+    if (prepared) {
+      const activeRoot = fs.realpathSync(root);
+      const preparedRoot = fs.realpathSync(prepared.root);
+      if (!preparedRoot.startsWith(`${activeRoot}${path.sep}`)) throw new Error("The experiment workspace is outside the active workspace.");
+    }
+    const runRoot = prepared ? prepared.root : root;
+    const workingDirectory = existingWorkspacePath(runRoot, args.cwd || "");
     if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The run working directory is not a directory.");
     const action = store.createAction({
       taskId,
@@ -1130,7 +1176,8 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       nodeId: experiment.id,
       command,
       cwd: workingDirectory,
-      workspace: root,
+      workspace: runRoot,
+      experimentWorkspaceId: prepared?.id || null,
       onUpdate: (run) => {
         emit({ type: "tool", title: "Experiment run", detail: `${run.status} · ${experiment.title}`, experimentRun: run });
         recordEvent({ type: "experiment_run", payload: { run } });
@@ -1482,7 +1529,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       const availableTools = toolRegistry.definitions().filter((tool) =>
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
         !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
-        (mode === "experiment-setup" || !["create_experiment", "run_experiment"].includes(tool.function.name)));
+        (mode === "experiment-setup" || !["create_experiment", "prepare_experiment_workspace", "run_experiment"].includes(tool.function.name)));
       const message = await complete(config, messages, {
         signal: controller.signal,
         availableTools,

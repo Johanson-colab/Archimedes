@@ -570,6 +570,14 @@ function schema(db) {
       CHECK (status IN ('starting', 'running', 'succeeded', 'failed', 'cancelled'))
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS experiment_workspaces (
+      node_id TEXT PRIMARY KEY NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
+      workspace_id TEXT NOT NULL UNIQUE REFERENCES project_workspaces(id),
+      base_commit TEXT NOT NULL,
+      branch_name TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TRIGGER IF NOT EXISTS research_node_revisions_immutable
     BEFORE UPDATE OF content_json, content_hash, node_id, parent_revision_id
     ON research_node_revisions
@@ -2302,6 +2310,43 @@ function createProjectWorkspace({ projectId, kind = "shared", name = "" } = {}) 
   return getProjectWorkspace(id);
 }
 
+// An experiment worktree is created only on explicit request. It starts at the
+// committed project HEAD; uncommitted and untracked files remain untouched.
+function getExperimentWorkspace(nodeId) {
+  const node = getResearchNode(nodeId);
+  if (!node || node.kind !== "experiment") throw new Error("Experiment not found.");
+  const row = requireDatabase().prepare("SELECT * FROM experiment_workspaces WHERE node_id = ?").get(nodeId);
+  if (!row) return null;
+  const workspace = getProjectWorkspace(row.workspace_id);
+  if (!workspace || workspace.project_id !== node.project_id || workspace.kind !== "worktree") {
+    throw new Error("The linked experiment workspace is unavailable.");
+  }
+  return { ...workspace, base_commit: row.base_commit, branch_name: row.branch_name };
+}
+
+function createExperimentWorkspace(nodeId) {
+  const node = getResearchNode(nodeId);
+  if (!node || node.kind !== "experiment") throw new Error("Experiment not found.");
+  if (node.archived || node.status === "retracted") throw new Error("Restore the experiment before preparing its workspace.");
+  if (!canAccessProject(node.project_id, "editor")) throw new Error("You do not have permission to change this experiment.");
+  const existing = getExperimentWorkspace(nodeId);
+  if (existing) return { workspace: existing, existing: true };
+  const workspace = createProjectWorkspace({ projectId: node.project_id, kind: "worktree" });
+  const commit = spawnSync("git", ["-C", workspace.root, "rev-parse", "--verify", "HEAD"], { encoding: "utf8", timeout: 5000, windowsHide: true });
+  if (commit.error || commit.status !== 0 || !String(commit.stdout || "").trim()) {
+    deleteProjectWorkspace(workspace.id);
+    throw new Error("Could not read the experiment workspace base commit.");
+  }
+  try {
+    requireDatabase().prepare("INSERT INTO experiment_workspaces (node_id, workspace_id, base_commit, branch_name, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(nodeId, workspace.id, String(commit.stdout).trim(), `archimedes/${workspace.id.slice(0, 8)}`, timestamp());
+  } catch (error) {
+    deleteProjectWorkspace(workspace.id);
+    throw error;
+  }
+  return { workspace: getExperimentWorkspace(nodeId), existing: false };
+}
+
 function suggestProjectWorkspaceName() {
   const db = requireDatabase();
   return suggestWorkspaceName(db);
@@ -2335,6 +2380,9 @@ function deleteProjectWorkspace(id) {
   if (!workspace) throw new Error("Workspace not found.");
   if (!canAccessProject(workspace.project_id, "editor")) throw new Error("You do not have permission to change this project.");
   if (workspace.kind === "shared") throw new Error("The shared workspace cannot be deleted.");
+  if (db.prepare("SELECT 1 FROM experiment_workspaces WHERE workspace_id = ?").get(id)) {
+    throw new Error("This workspace is linked to an experiment and cannot be deleted here.");
+  }
   const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(workspace.project_id);
   const fallback = ensureProjectSharedWorkspace(db, project);
   if (workspace.kind === "worktree") {
@@ -3187,6 +3235,7 @@ function createExperimentRun({
   commitSha = null,
   logPath = "",
   metricsJson = "{}",
+  experimentWorkspaceId = null,
 } = {}) {
   if (!projectId || !threadId || !nodeId) throw new Error("A project, session, and experiment node are required to start a run.");
   if (!["starting", "running"].includes(status)) throw new Error("A new experiment run must start or run.");
@@ -3231,7 +3280,20 @@ function createExperimentRun({
       pending.push({ nodeId: parent.id, revisionId: edge.from_revision });
     }
   }
-  const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry });
+  let workspaceProvenance = null;
+  if (experimentWorkspaceId) {
+    const linked = getExperimentWorkspace(nodeId);
+    if (!linked || linked.id !== experimentWorkspaceId) throw new Error("The experiment workspace does not match this run.");
+    const branch = spawnSync("git", ["-C", linked.root, "symbolic-ref", "--quiet", "--short", "HEAD"], { encoding: "utf8", timeout: 5000, windowsHide: true });
+    if (branch.error || branch.status !== 0 || String(branch.stdout || "").trim() !== linked.branch_name) {
+      throw new Error("The experiment worktree is no longer on its recorded branch.");
+    }
+    const realRoot = fs.realpathSync(linked.root);
+    const realCwd = fs.realpathSync(runCwd);
+    if (realCwd !== realRoot && !realCwd.startsWith(`${realRoot}${path.sep}`)) throw new Error("The run folder is outside the experiment workspace.");
+    workspaceProvenance = { id: linked.id, root: linked.root, branchName: linked.branch_name, baseCommit: linked.base_commit };
+  }
+  const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry, workspace: workspaceProvenance });
   const now = timestamp();
   db.prepare(`
     INSERT INTO experiment_runs (
@@ -4340,6 +4402,8 @@ module.exports = {
   restoreResearchNode,
   setResearchNodeStatus,
   createExperimentRun,
+  getExperimentWorkspace,
+  createExperimentWorkspace,
   getExperimentRun,
   listExperimentRuns,
   updateExperimentRun,

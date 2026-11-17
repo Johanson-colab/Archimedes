@@ -66,9 +66,13 @@ function experimentPrompt() {
     "```experiment",
     '{"action":"create","idea":"<exact idea title>","title":"...","hypothesis":"...","baseline":"...","method":"...","metrics":["..."],"stopCriteria":"..."}',
     "```",
-    "or",
+    "To prepare an isolated worktree from committed project code, request approval with:",
     "```experiment",
-    '{"action":"run","experiment":"<exact experiment title>","command":"<shell command>"}',
+    '{"action":"prepare_workspace","experiment":"<exact experiment title>"}',
+    "```",
+    "The worktree does not contain uncommitted or untracked changes. Prepare the experiment code in that returned path. Then run it with:",
+    "```experiment",
+    '{"action":"run","experiment":"<exact experiment title>","command":"<shell command>","useExperimentWorkspace":true}',
     "```",
     "The app strips the block, creates the experiment or starts the run, and records its log. Do not claim the run finished in this turn.",
     "On a later turn, recorded runs appear under 'Recent experiment runs'. Use:",
@@ -141,14 +145,49 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
         continue;
       }
 
+      if (action === "prepare_workspace") {
+        const experiment = resolveNode({ thread, value: directive.experiment, kind: "experiment", label: "Experiment" });
+        const projectRoot = store.getResearchProject(thread.project_id)?.workspace_path;
+        if (!projectRoot || fs.realpathSync(projectRoot) !== fs.realpathSync(workspace)) {
+          throw new Error("Open the project’s shared workspace before preparing an experiment worktree.");
+        }
+        const existing = store.getExperimentWorkspace(experiment.id);
+        if (existing) {
+          notes.push(`Experiment workspace already exists: ${existing.root} (branch ${existing.branch_name}, base ${existing.base_commit}).`);
+          continue;
+        }
+        if (!approve) throw new Error("Creating an experiment worktree requires approval.");
+        const allowed = await approve({
+          command: "Create an isolated Git worktree from committed project HEAD",
+          cwd: workspace,
+          reason: `Experiment: ${experiment.title}. Uncommitted and untracked files are not copied.`,
+          nativeMethod: "archimedes/experiment",
+        });
+        if (!allowed) { notes.push(`Experiment workspace rejected: ${experiment.title}.`); continue; }
+        const result = store.createExperimentWorkspace(experiment.id);
+        notes.push(`Experiment workspace: ${result.workspace.root} (branch ${result.workspace.branch_name}, base ${result.workspace.base_commit}). Only committed code was copied; uncommitted and untracked files remain in the original workspace.`);
+        continue;
+      }
+
       if (action === "run") {
         const experiment = resolveNode({ thread, value: directive.experiment, kind: "experiment", label: "Experiment" });
         const command = String(directive.command || "").trim();
         if (!command) throw new Error("A run command is required.");
         if (command.length > MAX_COMMAND_CHARS) throw new Error("The experiment command is too long.");
-        const cwd = directive.cwd ? path.resolve(workspace, String(directive.cwd)) : workspace;
-        if (cwd !== workspace && !cwd.startsWith(`${workspace}${path.sep}`)) throw new Error("The run folder is outside the workspace.");
+        const isolated = directive.useExperimentWorkspace === true ? store.getExperimentWorkspace(experiment.id) : null;
+        if (directive.useExperimentWorkspace === true && !isolated) throw new Error("Prepare the experiment workspace before running in it.");
+        if (isolated) {
+          const activeRoot = fs.realpathSync(workspace);
+          const isolatedRoot = fs.realpathSync(isolated.root);
+          if (!isolatedRoot.startsWith(`${activeRoot}${path.sep}`)) throw new Error("The experiment workspace is outside the active workspace.");
+        }
+        const runRoot = isolated ? isolated.root : workspace;
+        const cwd = directive.cwd ? path.resolve(runRoot, String(directive.cwd)) : runRoot;
+        if (cwd !== runRoot && !cwd.startsWith(`${runRoot}${path.sep}`)) throw new Error("The run folder is outside the workspace.");
         if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error("The run folder is no longer available.");
+        const realRoot = fs.realpathSync(runRoot);
+        const realCwd = fs.realpathSync(cwd);
+        if (realCwd !== realRoot && !realCwd.startsWith(`${realRoot}${path.sep}`)) throw new Error("The run folder resolves outside the workspace.");
         if (approve) {
           const allowed = await approve({
             command,
@@ -167,7 +206,8 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
           nodeId: experiment.id,
           command,
           cwd,
-          workspace,
+          workspace: runRoot,
+          experimentWorkspaceId: isolated?.id || null,
           onUpdate: (run) => {
             emit({ type: "tool", title: "Experiment run", detail: `${run.status} · ${experiment.title}`, experimentRun: run });
             recordEvent({ type: "experiment_run", payload: { run } });

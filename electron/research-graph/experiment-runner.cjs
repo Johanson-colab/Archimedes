@@ -45,6 +45,7 @@ function startExperimentRun({
   command,
   cwd,
   workspace,
+  experimentWorkspaceId = null,
   onUpdate = () => {},
 } = {}) {
   const text = String(command || "").trim();
@@ -93,6 +94,7 @@ function startExperimentRun({
     command: text,
     cwd: runCwd,
     commitSha: readCommit(runCwd),
+    experimentWorkspaceId,
     logPath,
   });
   onUpdate(run);
