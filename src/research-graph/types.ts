@@ -133,6 +133,11 @@ export interface ExperimentRun {
   pid: number | null;
   exit_code: number | null;
   metrics: Record<string, unknown>;
+  evidence?: Array<{
+    id: string; turn_id: string | null; created_at: string;
+    metrics: Record<string, number>;
+    artifacts: Array<{ path: string; sha256: string; sizeBytes: number }>;
+  }>;
   provenance?: {
     experimentRevisionId?: string;
     ideas?: Array<{ nodeId: string; revisionId: string; experimentRevisionId?: string }>;

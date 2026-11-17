@@ -570,6 +570,16 @@ function schema(db) {
       CHECK (status IN ('starting', 'running', 'succeeded', 'failed', 'cancelled'))
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS experiment_evidence (
+      id TEXT PRIMARY KEY NOT NULL,
+      run_id TEXT NOT NULL REFERENCES experiment_runs(id) ON DELETE CASCADE,
+      turn_id TEXT,
+      metrics_json TEXT NOT NULL,
+      artifacts_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_experiment_evidence_run ON experiment_evidence(run_id, created_at);
+
     CREATE TABLE IF NOT EXISTS experiment_workspaces (
       node_id TEXT PRIMARY KEY NOT NULL REFERENCES research_nodes(id) ON DELETE CASCADE,
       workspace_id TEXT NOT NULL UNIQUE REFERENCES project_workspaces(id),
@@ -3196,6 +3206,9 @@ function hydrateExperimentRun(row) {
     pid: row.pid == null ? null : Number(row.pid),
     exit_code: row.exit_code == null ? null : row.exit_code,
     metrics,
+    evidence: requireDatabase().prepare("SELECT id, turn_id, metrics_json, artifacts_json, created_at FROM experiment_evidence WHERE run_id = ? ORDER BY created_at ASC, rowid ASC").all(row.id).map((entry) => ({
+      id: entry.id, turn_id: entry.turn_id, metrics: JSON.parse(entry.metrics_json), artifacts: JSON.parse(entry.artifacts_json), created_at: entry.created_at,
+    })),
     provenance: (() => {
       try { return JSON.parse(row.provenance_json || "{}"); } catch { return {}; }
     })(),
@@ -3346,6 +3359,19 @@ function createExperimentRun({
     metadata: { nodeId, command: text.slice(0, 500), backend },
   });
   return getExperimentRun(id);
+}
+
+function addExperimentEvidence({ runId, turnId = null, metrics = {}, artifacts = [] } = {}) {
+  const run = getExperimentRun(runId);
+  if (!run) throw new Error("Experiment run not found.");
+  if (!canAccessProject(run.project_id, "editor")) throw new Error("You do not have permission to record experiment evidence.");
+  if (!["succeeded", "failed", "cancelled"].includes(run.status)) throw new Error("Wait for the run to finish before recording evidence.");
+  const id = randomUUID();
+  const db = requireDatabase();
+  db.prepare("INSERT INTO experiment_evidence (id, run_id, turn_id, metrics_json, artifacts_json, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(id, runId, turnId || null, JSON.stringify(metrics), JSON.stringify(artifacts), timestamp());
+  recordAuditEvent(db, { projectId: run.project_id, action: "experiment.evidence_recorded", targetType: "experiment_run", targetId: runId, metadata: { evidenceId: id, metricCount: Object.keys(metrics).length, artifactCount: artifacts.length } });
+  return getExperimentRun(runId);
 }
 
 function updateExperimentRun({
@@ -4435,6 +4461,7 @@ module.exports = {
   restoreResearchNode,
   setResearchNodeStatus,
   createExperimentRun,
+  addExperimentEvidence,
   getExperimentWorkspace,
   experimentWorkspaceBase,
   createExperimentWorkspace,

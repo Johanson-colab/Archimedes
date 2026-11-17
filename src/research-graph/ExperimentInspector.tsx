@@ -107,6 +107,16 @@ export default function ExperimentInspector({ node, runs, onReadLog, connections
                   <div className="experiment-plan-row"><span>SHA-256</span><p className="experiment-run-code">{snapshot.sha256}</p></div>
                   <p className="experiment-hint">{t("Snapshot excludes ignored files, submodule contents, export-ignored files, data and runtime environment; Git LFS files may be pointers.")}</p>
                 </>}
+                {run.evidence?.map((report, reportIndex) => <details className="experiment-evidence-report" key={report.id}>
+                  <summary>{t("Reported evidence")} {reportIndex + 1}</summary>
+                  <p className="experiment-hint">{t("Values are agent-reported; file references may change after registration.")}</p>
+                  {Object.entries(report.metrics).map(([name, value]) => <div className="experiment-plan-row" key={name}><span>{name}</span><p className="experiment-run-code">{String(value)}</p></div>)}
+                  {report.artifacts.length > 0 && <div className="experiment-plan-row"><span>{t("Run workspace")}</span><p className="experiment-run-code">{run.provenance?.workspace?.root || run.cwd}</p></div>}
+                  {report.artifacts.map((file, fileIndex) => <div className="experiment-plan-row" key={`${file.path}-${fileIndex}`}>
+                    <span>{t("Referenced file")} · {file.sizeBytes} B</span><p className="experiment-run-code">{file.path}</p>
+                    <span>SHA-256</span><p className="experiment-run-code">{file.sha256}</p>
+                  </div>)}
+                </details>)}
                 {run.error && <div className="experiment-plan-row"><span>{t("Run error")}</span><p>{run.error}</p></div>}
                 <button type="button" className="experiment-run-link" onClick={() => void readLog(run.id)} disabled={readingLog === run.id}>
                   <FileText size={12} />{t("Run log")}

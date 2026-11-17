@@ -4,6 +4,7 @@ const store = require("../store.cjs");
 const graph = require("../research-graph/service.cjs");
 const runner = require("../research-graph/experiment-runner.cjs");
 const runs = require("../research-graph/experiment-runs.cjs");
+const evidence = require("../research-graph/experiment-evidence.cjs");
 
 const MAX_DIRECTIVES = 3;
 const MAX_COMMAND_CHARS = 4_000;
@@ -79,7 +80,11 @@ function experimentPrompt() {
     "```experiment",
     '{"action":"log","runId":"..."}',
     "```",
-    "to read a log, then",
+    "to read a log. After inspecting actual output, report numeric metrics or output paths with:",
+    "```experiment",
+    '{"action":"evidence","runId":"...","metrics":{"accuracy":0.91},"artifacts":["results/plot.png"]}',
+    "```",
+    "Paths are relative to the run workspace and are references, not copies. Report only observed values. Then use:",
     "```experiment",
     '{"action":"result","runId":"...","verdict":"supports|contradicts|inconclusive","reasoning":"..."}',
     "```",
@@ -235,6 +240,16 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
         resolveRun({ thread, runId });
         const log = runs.readExperimentRunLog({ runId, maxBytes: 4_000 });
         notes.push(`Experiment run ${runId} log:\n\`\`\`text\n${log.text || "(no output yet)"}\n\`\`\``);
+        continue;
+      }
+
+      if (action === "evidence") {
+        const runId = String(directive.runId || directive.run_id || "").trim();
+        resolveRun({ thread, runId });
+        const run = await evidence.recordExperimentEvidence({ runId, threadId, workspace, turnId, metrics: directive.metrics || {}, artifacts: directive.artifacts || [] });
+        emit({ type: "tool", title: "Experiment evidence recorded", detail: `Run ${run.id}`, experimentRun: run });
+        recordEvent({ type: "experiment_run", payload: { run } });
+        notes.push(`Evidence report recorded for run ${run.id}. Metrics are agent-reported; artifact files are referenced with hashes and may later change.`);
         continue;
       }
 

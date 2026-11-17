@@ -27,6 +27,7 @@ const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const graphAutoBuild = require("./research-graph/auto-build.cjs");
 const researchGraph = require("./research-graph/service.cjs");
+const experimentEvidence = require("./research-graph/experiment-evidence.cjs");
 const experimentRunner = require("./research-graph/experiment-runner.cjs");
 const experimentRuns = require("./research-graph/experiment-runs.cjs");
 const experimentDirectives = require("./agent/experiment-directives.cjs");
@@ -457,6 +458,18 @@ const tools = [
         required: ["run_id"],
         additionalProperties: false,
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "record_experiment_evidence",
+      description: "Record explicitly observed numerical metrics and/or output file paths for a finished experiment run. Read the run log or output files first; never invent metrics. Artifacts are references with a hash, not copied files. Paths are relative to the run workspace.",
+      parameters: { type: "object", properties: {
+        run_id: { type: "string", description: "Finished run ID in this session." },
+        metrics: { type: "object", additionalProperties: true, description: "Observed metric names and numerical values." },
+        artifacts: { type: "array", items: { type: "string" }, description: "Existing output file paths relative to the run workspace." },
+      }, required: ["run_id"], additionalProperties: false },
     },
   },
   {
@@ -1221,6 +1234,14 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     sessionExperimentRun({ threadId, runId: args.run_id });
     const log = experimentRuns.readExperimentRunLog({ runId: args.run_id, maxBytes: args.max_bytes });
     return { content: JSON.stringify({ run_id: args.run_id, ...log }) };
+  }
+
+  if (name === "record_experiment_evidence") {
+    sessionExperimentRun({ threadId, runId: args.run_id });
+    const run = await experimentEvidence.recordExperimentEvidence({ runId: args.run_id, threadId, workspace: root, turnId, metrics: args.metrics || {}, artifacts: args.artifacts || [] });
+    emit({ type: "tool", title: "Experiment evidence recorded", detail: `Run ${run.id}`, experimentRun: run });
+    recordEvent({ type: "experiment_run", payload: { run } });
+    return { content: JSON.stringify({ run_id: run.id, report: run.evidence.at(-1), notice: "Metrics and artifacts were reported by the agent; file paths and hashes are references and may change." }) };
   }
 
   if (name === "create_experiment_result") {

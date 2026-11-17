@@ -184,6 +184,7 @@ test('experiment runs expose their own provenance, snapshots and logs without in
   const experiment = node('exp', 'experiment', { hypothesis: 'A test' });
   const run = (id, provenance) => ({ id, node_id: 'exp', status: 'succeeded', command: `python ${id}.py`, cwd: '/workspace', commit_sha: 'abc123', exit_code: 0, log_path: `/${id}.log`, created_at: '2026-11-16T09:00:00Z', provenance });
   const newer = run('new', { experimentRevisionId: 'revision-1', ideas: [{ nodeId: 'idea', revisionId: 'idea-revision-1' }], workspace: { branchName: 'archimedes/test', parentRunId: 'parent-run-1' }, codeSnapshot: { path: '/tmp/code.tar', sha256: 'digest' } });
+  newer.evidence = [{ id: 'evidence-1', metrics: { accuracy: 0.91 }, artifacts: [{ path: 'results/chart.png', sizeBytes: 10, sha256: 'abc' }] }];
   const older = run('old', undefined);
   window.researchDesk = {};
   await mounted(Inspector, { node: experiment, connections: [{ nodeId: 'idea', title: 'Research idea', relation: 'tests', revisionId: 'idea-revision-1', incoming: true }], experiment: { runs: [older, newer], onReadLog: async id => `log for ${id}` } }, async () => {
@@ -195,6 +196,10 @@ test('experiment runs expose their own provenance, snapshots and logs without in
     assert.match(entries[0].textContent, /Snapshot recorded/);
     assert.match(entries[0].textContent, /\/tmp\/code.tar/);
     assert.match(entries[1].textContent, /Not recorded/);
+    assert.match(entries[0].textContent, /Reported evidence/);
+    assert.match(entries[0].textContent, /accuracy/);
+    assert.match(entries[0].textContent, /results\/chart.png/);
+    assert.doesNotMatch(entries[1].textContent, /Reported evidence/);
     const button = entries[0].querySelector('.experiment-run-link');
     await click(button);
     assert.equal(entries[0].querySelector('pre').textContent, 'log for new');

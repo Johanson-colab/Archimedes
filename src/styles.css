@@ -6304,6 +6304,8 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .experiment-plan-row > p { margin: 0; color: var(--text-primary); font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
 .experiment-run-list { display: grid; gap: 8px; margin-top: 12px; }
 .experiment-run-entry { min-width: 0; border-bottom: 1px solid var(--border-soft); }
+.experiment-evidence-report { margin-top: 14px; }
+.experiment-evidence-report > summary { cursor: pointer; color: var(--text-secondary); font-size: 11px; }
 .experiment-run-details { padding: 0 0 12px 12px; }
 .experiment-run-details .experiment-plan-row { margin-top: 10px; }
 .experiment-run-code { font-family: var(--font-mono); overflow-wrap: anywhere; }

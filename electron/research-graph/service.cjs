@@ -246,6 +246,7 @@ function createResultFromRun({
         logPath: run.log_path,
         logTail: log.text,
         metrics: run.metrics,
+        reports: run.evidence,
         provenance: run.provenance,
       },
       interpretation: {
