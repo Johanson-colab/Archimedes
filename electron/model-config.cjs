@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { buildModelRequestOptions, formatConnectionError, sanitizeHeaders, sanitizeSessionHeader } = require("./model-request-headers.cjs");
 
 const PROVIDERS = new Set(["openai", "anthropic", "gemini", "glm", "minimax", "deepseek", "qwen", "moonshot", "openrouter", "custom"]);
 const ROLES = new Set(["agent", "proactive"]);
@@ -113,8 +114,27 @@ function getActiveModelConfig(role = "agent") {
     baseUrl: saved.baseUrl || fallback.baseUrl,
     model: saved.model || fallback.model,
     apiKey: saved.apiKey || fallback.apiKey,
+    headers: sanitizeHeaders(saved.headers),
+    sessionHeader: sanitizeSessionHeader(saved.sessionHeader),
+    userAgent: typeof saved.userAgent === "string" ? saved.userAgent.slice(0, 300) : "",
     role: normalizedRole,
     inheritedFromAgent: Boolean(inherited),
+  };
+}
+
+function connectionSettings(input, current, provider, baseUrl) {
+  const saved = current.provider === provider && normalizeBaseUrl(current.baseUrl) === baseUrl ? current : {};
+  const sessionHeader = input.sessionHeader === undefined ? saved.sessionHeader : input.sessionHeader;
+  const fixedValue = saved.sessionHeader?.strategy === "fixed" &&
+    saved.sessionHeader.name.toLowerCase() === String(sessionHeader?.name || "").trim().toLowerCase()
+    ? saved.sessionHeader.value : "";
+  return {
+    apiKey: String(input.apiKey || "").trim() || saved.apiKey || "",
+    headers: sanitizeHeaders(input.headers === undefined ? saved.headers : input.headers),
+    sessionHeader: sanitizeSessionHeader(sessionHeader?.strategy === "fixed" && sessionHeader.value === undefined
+      ? { ...sessionHeader, value: fixedValue }
+      : sessionHeader),
+    userAgent: typeof input.userAgent === "string" ? input.userAgent.trim().slice(0, 300) : (saved.userAgent || ""),
   };
 }
 
@@ -122,22 +142,17 @@ async function listProviderModels(input = {}, role = "agent") {
   const current = getActiveModelConfig(role);
   const provider = PROVIDERS.has(input.provider) ? input.provider : current.provider;
   const baseUrl = normalizeBaseUrl(input.baseUrl || current.baseUrl);
-  const suppliedKey = String(input.apiKey || "").trim();
-  const canReuseSavedKey = current.provider === provider && normalizeBaseUrl(current.baseUrl) === baseUrl;
-  const apiKey = suppliedKey || (canReuseSavedKey ? current.apiKey : "");
-  if (!apiKey && provider !== "openrouter") throw new Error("Enter or save this provider's API key before refreshing its live model catalog.");
+  const config = connectionSettings(input, current, provider, baseUrl);
+  if (!config.apiKey && provider !== "openrouter") throw new Error("Enter or save this provider's API key before refreshing its live model catalog.");
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
   try {
-    const headers = { Accept: "application/json" };
-    if (provider === "anthropic") {
-      headers["x-api-key"] = apiKey;
-      headers["anthropic-version"] = "2023-06-01";
-    } else if (apiKey) {
-      headers.Authorization = `Bearer ${apiKey}`;
-    }
-    const response = await fetch(modelListUrl(provider, baseUrl), { headers, signal: controller.signal });
+    const requestOptions = buildModelRequestOptions(config, "archimedes-model-catalog", {
+      baseHeaders: { Accept: "application/json" },
+      anthropic: provider === "anthropic",
+    });
+    const response = await fetch(modelListUrl(provider, baseUrl), { ...requestOptions, signal: controller.signal });
     if (!response.ok) throw new Error(`Model catalog request failed (${response.status}).`);
     const models = extractModelIds(await response.json());
     if (!models.length) throw new Error("The provider returned no compatible chat models.");
@@ -160,6 +175,13 @@ function getPublicModelConfig(role = "agent") {
     baseUrl: config.baseUrl,
     model: config.model,
     hasApiKey: Boolean(config.apiKey),
+    hasCustomHeaders: Boolean(Object.keys(config.headers || {}).length),
+    sessionHeader: config.sessionHeader ? {
+      name: config.sessionHeader.name,
+      strategy: config.sessionHeader.strategy,
+      hasValue: Boolean(config.sessionHeader.value),
+    } : null,
+    userAgent: config.userAgent,
     source: own ? "saved" : inherited ? "agent" : "environment",
     role: normalizedRole,
     inheritedFromAgent: inherited,
@@ -179,22 +201,23 @@ function saveModelConfig(input = {}, role = "agent") {
   const provider = PROVIDERS.has(input.provider) ? input.provider : "custom";
   const baseUrl = normalizeBaseUrl(input.baseUrl);
   const model = validateModelId(baseUrl, input.model);
-  const apiKey = String(input.apiKey || "").trim() || (previous.provider === provider && previous.baseUrl === baseUrl ? previous.apiKey : "");
-  if (!apiKey || apiKey.length > 2_000) throw new Error("Enter a valid API key.");
-  const config = { provider, baseUrl, model, apiKey };
-  saved[normalizedRole] = config;
+  const connection = connectionSettings(input, previous, provider, baseUrl);
+  if (!connection.apiKey || connection.apiKey.length > 2_000) throw new Error("Enter a valid API key.");
+  saved[normalizedRole] = { provider, baseUrl, model, ...connection };
   writeSavedConfig(saved);
   return getPublicModelConfig(normalizedRole);
 }
 
 async function testModelConfig(input = null, role = "agent") {
   const current = getActiveModelConfig(role);
-  const candidate = input && typeof input === "object" ? {
-    provider: PROVIDERS.has(input.provider) ? input.provider : "custom",
-    baseUrl: normalizeBaseUrl(input.baseUrl || current.baseUrl),
-    model: validateModelId(input.baseUrl || current.baseUrl, input.model || current.model),
-    apiKey: String(input.apiKey || "").trim() || (current.provider === input.provider && current.baseUrl === normalizeBaseUrl(input.baseUrl || current.baseUrl) ? current.apiKey : ""),
-  } : current;
+  const provider = PROVIDERS.has(input?.provider) ? input.provider : current.provider;
+  const baseUrl = normalizeBaseUrl(input?.baseUrl || current.baseUrl);
+  const candidate = {
+    provider,
+    baseUrl,
+    model: validateModelId(baseUrl, input?.model || current.model),
+    ...connectionSettings(input || {}, current, provider, baseUrl),
+  };
   if (!candidate.apiKey) throw new Error("Add an API key before testing the connection.");
   if (!candidate.model) throw new Error("Add a model name before testing the connection.");
 
@@ -203,17 +226,18 @@ async function testModelConfig(input = null, role = "agent") {
   const timer = setTimeout(() => controller.abort(), 25_000);
   try {
     const anthropic = candidate.provider === "anthropic";
+    const requestOptions = buildModelRequestOptions(candidate, "archimedes-connection-test", {
+      anthropic,
+      baseHeaders: { "Content-Type": "application/json" },
+    });
     const response = await fetch(`${candidate.baseUrl.replace(/\/+$/, "")}/${anthropic ? "messages" : "chat/completions"}`, {
       method: "POST",
-      headers: anthropic
-        ? { "Content-Type": "application/json", "x-api-key": candidate.apiKey, "anthropic-version": "2023-06-01" }
-        : { "Content-Type": "application/json", Authorization: `Bearer ${candidate.apiKey}` },
+      ...requestOptions,
       body: JSON.stringify({ model: candidate.model, messages: [{ role: "user", content: "Reply with OK." }], stream: false, ...(anthropic ? { max_tokens: 32 } : {}) }),
       signal: controller.signal,
     });
     if (!response.ok) {
-      const detail = (await response.text()).slice(0, 500);
-      throw new Error(`Connection failed (${response.status}): ${detail}`);
+      throw new Error(formatConnectionError(response.status, await response.text(), candidate));
     }
     const body = await response.json();
     if (anthropic ? !Array.isArray(body?.content) : !body?.choices?.[0]?.message) throw new Error("The endpoint responded, but did not return a compatible message.");

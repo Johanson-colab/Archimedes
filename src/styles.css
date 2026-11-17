@@ -559,6 +559,13 @@ html[data-theme="charcoal"] .provider-brand-mono { filter: invert(1); }
 .model-catalog-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-security-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 17px; color: #8b8b85; font-size: 9px; line-height: 1.45; }
 .model-security-note svg { flex: 0 0 auto; color: #6f7b73; }
+.model-field-hint { color: var(--night-muted); font-size: 9px; font-weight: 500; line-height: 1.4; }
+.model-preset-button { justify-self: start; margin-top: 2px; }
+.model-headers-input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--night-line); border-radius: 4px; background: var(--night-panel); color: var(--night-ink); font: 10px/1.4 var(--mono-font, monospace); resize: vertical; }
+.model-session-header { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 10px; }
+.model-session-header label { margin-top: 12px; }
+.model-session-header input, .model-session-header select { width: 100%; min-width: 0; }
+.model-settings-panel > .model-feedback { margin: 4px 0 8px; overflow-wrap: anywhere; }
 .model-feedback { display: flex; align-items: flex-start; gap: 7px; margin-top: 16px; padding: 9px 10px; border-radius: 5px; font-size: 10px; line-height: 1.45; }
 .model-feedback.success { color: #286249; background: #edf6f0; border: 1px solid #cde3d5; }
 .model-feedback.error { color: #8f3f3b; background: #fff1ef; border: 1px solid #efcfca; }

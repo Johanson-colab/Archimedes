@@ -1758,11 +1758,20 @@ interface PublicWebSearchConfig { provider: WebSearchProviderId; hasApiKey: bool
 
 type ModelRole = "agent" | "proactive";
 
+interface ModelSessionHeaderConfig {
+  name: string;
+  strategy: "thread" | "fixed" | "disabled";
+  value?: string;
+}
+
 interface ModelConfigInput {
   provider: ModelProviderId;
   baseUrl: string;
   model: string;
   apiKey?: string;
+  headers?: Record<string, string>;
+  sessionHeader?: ModelSessionHeaderConfig | null;
+  userAgent?: string;
   /** Proactive only: drop the dedicated model and inherit the main Agent's. */
   useAgent?: boolean;
 }
@@ -1771,6 +1780,9 @@ interface ModelCatalogInput {
   provider: ModelProviderId;
   baseUrl: string;
   apiKey?: string;
+  headers?: Record<string, string>;
+  sessionHeader?: ModelSessionHeaderConfig | null;
+  userAgent?: string;
 }
 
 interface ModelCatalogResponse {
@@ -1783,6 +1795,9 @@ interface PublicModelConfig {
   baseUrl: string;
   model: string;
   hasApiKey: boolean;
+  hasCustomHeaders?: boolean;
+  sessionHeader?: Omit<ModelSessionHeaderConfig, "value"> & { hasValue: boolean } | null;
+  userAgent?: string;
   source: "saved" | "environment" | "agent";
   role?: ModelRole;
   inheritedFromAgent?: boolean;

@@ -1,5 +1,6 @@
 const { fetchModelWithRetry } = require("./model-retry.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./model-completion.cjs");
+const { buildModelRequestOptions, formatModelRequestError } = require("../model-request-headers.cjs");
 
 function parseArguments(value) {
   try { return JSON.parse(value || "{}"); } catch { return {}; }
@@ -55,14 +56,14 @@ function normalizeBlocks(blocks) {
   };
 }
 
-async function completeAnthropic(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = [], maxOutputTokens, allowLargeOutput = false, requireComplete = false }) {
+async function completeAnthropic(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = [], maxOutputTokens, allowLargeOutput = false, requireComplete = false, sessionId = "archimedes-internal" }) {
   const response = await fetchModelWithRetry(`${config.baseUrl.replace(/\/+$/, "")}/messages`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" },
+    ...buildModelRequestOptions(config, sessionId, { anthropic: true, baseHeaders: { "Content-Type": "application/json" } }),
     body: JSON.stringify(toAnthropicRequest(config, messages, { allowTools, availableTools, maxOutputTokens, allowLargeOutput })),
     signal,
   });
-  if (!response.ok) throw new Error(`Model request failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
+  if (!response.ok) throw new Error(formatModelRequestError(response.status, await response.text(), config));
   if (!(response.headers.get("content-type") || "").includes("text/event-stream") || !response.body) {
     const body = await response.json();
     if (!Array.isArray(body?.content)) throw new Error("Anthropic response did not contain content blocks.");

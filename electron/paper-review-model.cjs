@@ -1,5 +1,6 @@
 const modelConfig = require("./model-config.cjs");
 const { assertModelCompletion } = require("./agent/model-completion.cjs");
+const { buildModelRequestOptions, formatModelRequestError } = require("./model-request-headers.cjs");
 
 /**
  * Minimal text-completion adapter for Paper review.
@@ -95,11 +96,7 @@ function isAnthropic(model) {
 function anthropicRequest(model, { system, prompt, maxTokens }) {
   return {
     url: `${model.baseUrl.replace(/\/+$/, "")}/messages`,
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": model.apiKey,
-      "anthropic-version": "2023-06-01",
-    },
+    options: buildModelRequestOptions(model, "archimedes-paper-review", { anthropic: true, baseHeaders: { "Content-Type": "application/json" } }),
     body: {
       model: model.model,
       system,
@@ -113,10 +110,7 @@ function anthropicRequest(model, { system, prompt, maxTokens }) {
 function openAiRequest(model, { system, prompt, maxTokens }) {
   return {
     url: `${model.baseUrl.replace(/\/+$/, "")}/chat/completions`,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${model.apiKey}`,
-    },
+    options: buildModelRequestOptions(model, "archimedes-paper-review", { baseHeaders: { "Content-Type": "application/json" } }),
     body: {
       model: model.model,
       messages: [
@@ -164,7 +158,7 @@ async function requestJson(model, { system, prompt, maxTokens = DEFAULT_MAX_TOKE
   try {
     const response = await fetchImpl(request.url, {
       method: "POST",
-      headers: request.headers,
+      ...request.options,
       body: JSON.stringify(request.body),
       signal: controller.signal,
     });
@@ -176,7 +170,7 @@ async function requestJson(model, { system, prompt, maxTokens = DEFAULT_MAX_TOKE
         delete retry.body.temperature;
         const retryResponse = await fetchImpl(request.url, {
           method: "POST",
-          headers: request.headers,
+          ...request.options,
           body: JSON.stringify(retry.body),
           signal: controller.signal,
         });
@@ -185,9 +179,9 @@ async function requestJson(model, { system, prompt, maxTokens = DEFAULT_MAX_TOKE
           return completedPayload(payload, anthropic);
         }
         const retryDetail = (await retryResponse.text()).slice(0, 800);
-        throw new Error(`Model request failed (${retryResponse.status}): ${retryDetail}`);
+        throw new Error(formatModelRequestError(retryResponse.status, retryDetail, model));
       }
-      throw new Error(`Model request failed (${response.status}): ${detail}`);
+      throw new Error(formatModelRequestError(response.status, detail, model));
     }
     const payload = await response.json();
     return completedPayload(payload, anthropic);
