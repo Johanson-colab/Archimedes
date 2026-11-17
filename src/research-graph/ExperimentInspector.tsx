@@ -98,6 +98,7 @@ export default function ExperimentInspector({ node, runs, onReadLog, connections
                 <div className="experiment-plan-row"><span>{t("Source ideas")}</span>{source?.ideas?.length
                   ? source.ideas.map((idea, ideaIndex) => <p key={`${idea.nodeId}-${idea.revisionId}-${ideaIndex}`}>{connections.find(item => item.nodeId === idea.nodeId)?.title || idea.nodeId} <code title={idea.revisionId}>{idea.revisionId?.slice(0, 8) || "—"}</code></p>)
                   : <p>{t("Not recorded")}</p>}</div>
+                {source?.workspace?.parentRunId && <div className="experiment-plan-row"><span>{t("Parent run")}</span><p className="experiment-run-code">{source.workspace.parentRunId}</p></div>}
                 <div className="experiment-plan-row"><span>{t("Git branch")}</span><p className="experiment-run-code">{source?.workspace?.branchName || t("Not recorded")}</p></div>
                 <div className="experiment-plan-row"><span>{t("Git commit")}</span><p className="experiment-run-code">{run.commit_sha || t("Not recorded")}</p></div>
                 <div className="experiment-plan-row"><span>{t("Code snapshot")}</span><p>{snapshot ? t("Snapshot recorded") : t("Not recorded")}</p></div>

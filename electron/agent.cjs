@@ -394,6 +394,7 @@ const tools = [
           method: { type: "string", description: "The experimental method and the change being tested." },
           metrics: { type: "array", items: { type: "string" }, description: "The measurements that decide the outcome." },
           stop_criteria: { type: "string", description: "When to stop or declare the experiment inconclusive." },
+          parent_experiment: { type: "string", description: "Optional parent experiment id or title when this experiment extends its work." },
         },
         required: ["idea", "title"],
         additionalProperties: false,
@@ -404,8 +405,8 @@ const tools = [
     type: "function",
     function: {
       name: "prepare_experiment_workspace",
-      description: "Create or find an isolated Git worktree for an experiment, with user approval. It starts from the project’s committed HEAD; uncommitted and untracked files are not copied. Use its returned workspace-relative path to prepare code there before running.",
-      parameters: { type: "object", properties: { experiment: { type: "string", description: "Experiment id or exact title." } }, required: ["experiment"], additionalProperties: false },
+      description: "Create or find an isolated Git worktree, with user approval. A child experiment requires parent_run_id to branch from that recorded run. A root experiment starts at the project's committed HEAD. Uncommitted and untracked files are not copied.",
+      parameters: { type: "object", properties: { experiment: { type: "string", description: "Experiment id or exact title." }, parent_run_id: { type: "string", description: "For a child experiment, the exact id of the finished parent run to branch from." } }, required: ["experiment"], additionalProperties: false },
     },
   },
   {
@@ -1085,6 +1086,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const metrics = Array.isArray(args.metrics)
       ? args.metrics.map((item) => String(item).trim()).filter(Boolean).slice(0, 20)
       : [];
+    const parentExperiment = args.parent_experiment ? sessionExperiment({ threadId, experiment: args.parent_experiment }).experiment : null;
     const experiment = researchGraph.createNode({
       projectId: thread.project_id,
       threadId,
@@ -1099,11 +1101,11 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
         metrics,
         stopCriteria: String(args.stop_criteria || "").trim(),
       },
-      parents: [{ nodeId: idea.id, kind: "tests" }],
+      parents: [{ nodeId: idea.id, kind: "tests" }, ...(parentExperiment ? [{ nodeId: parentExperiment.id, kind: "extends" }] : [])],
       sourceTurnId: turnId,
     });
-    emit(graphUpdateEvent({ thread, turnId, nodeIds: [experiment.id], nodeCount: 1, edgeCount: 1 }));
-    return { content: JSON.stringify({ experiment_id: experiment.id, title: experiment.title }) };
+    emit(graphUpdateEvent({ thread, turnId, nodeIds: [experiment.id], nodeCount: 1, edgeCount: parentExperiment ? 2 : 1 }));
+    return { content: JSON.stringify({ experiment_id: experiment.id, title: experiment.title, parent_experiment_id: parentExperiment?.id || null }) };
   }
 
   if (name === "prepare_experiment_workspace") {
@@ -1114,9 +1116,14 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       throw new Error("Open the project’s shared workspace before preparing an experiment worktree.");
     }
     const existing = store.getExperimentWorkspace(experiment.id);
-    if (existing) return { content: JSON.stringify({ existing: true, workspace: existing, relative_path: relativePath(root, existing.root) }) };
+    if (existing) {
+      if (args.parent_run_id && args.parent_run_id !== existing.parent_run_id) throw new Error("This experiment workspace is already tied to a different base.");
+      return { content: JSON.stringify({ existing: true, workspace: existing, relative_path: relativePath(root, existing.root) }) };
+    }
+    const base = store.experimentWorkspaceBase(experiment.id, args.parent_run_id || null);
+    const baseDescription = base.parentRunId ? `parent run ${base.parentRunId} at commit ${base.baseCommit}` : "the committed project HEAD";
     const action = store.createAction({ taskId, kind: "command", payload: {
-      command: "Create an isolated Git worktree from the committed project HEAD",
+      command: `Create an isolated Git worktree from ${baseDescription}`,
       cwd: root, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true,
     } });
     const waiting = waitForApproval(action.id, signal, threadId);
@@ -1131,7 +1138,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       return { content: JSON.stringify({ approved: false }) };
     }
     if (signal?.aborted) throw new Error("The research turn was interrupted before creating the worktree.");
-    const result = store.createExperimentWorkspace(experiment.id);
+    const result = store.createExperimentWorkspace(experiment.id, { parentRunId: base.parentRunId });
     return { content: JSON.stringify({ approved: true, ...result, relative_path: relativePath(root, result.workspace.root), notice: "Only committed code is present; uncommitted and untracked files were not copied." }) };
   }
 

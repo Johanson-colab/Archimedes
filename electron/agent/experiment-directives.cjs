@@ -64,11 +64,11 @@ function experimentPrompt() {
     "Experiment recording directive (Experiment setup only):",
     "When you are ready to create or run an experiment, emit one fenced block at the very end of your response:",
     "```experiment",
-    '{"action":"create","idea":"<exact idea title>","title":"...","hypothesis":"...","baseline":"...","method":"...","metrics":["..."],"stopCriteria":"..."}',
+    '{"action":"create","idea":"<exact idea title>","title":"...","hypothesis":"...","baseline":"...","method":"...","metrics":["..."],"stopCriteria":"...","parentExperiment":"<optional parent title>"}',
     "```",
     "To prepare an isolated worktree from committed project code, request approval with:",
     "```experiment",
-    '{"action":"prepare_workspace","experiment":"<exact experiment title>"}',
+    '{"action":"prepare_workspace","experiment":"<exact experiment title>","parentRunId":"<required for a child experiment>"}',
     "```",
     "The worktree starts with committed code only. Prepare and commit the experiment code there before running; uncommitted or untracked files block the run. The app saves a Git archive, excluding ignored files, submodule contents and LFS objects. Then run it with:",
     "```experiment",
@@ -123,6 +123,7 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
           continue;
         }
         const metrics = Array.isArray(directive.metrics) ? directive.metrics.map((item) => String(item).trim()).filter(Boolean).slice(0, 20) : [];
+        const parentExperiment = directive.parentExperiment ? resolveNode({ thread, value: directive.parentExperiment, kind: "experiment", label: "Experiment" }) : null;
         const experiment = graph.createNode({
           projectId: thread.project_id,
           threadId: thread.id,
@@ -137,10 +138,10 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
             metrics,
             stopCriteria: String(directive.stopCriteria || "").trim(),
           },
-          parents: [{ nodeId: idea.id, kind: "tests" }],
+          parents: [{ nodeId: idea.id, kind: "tests" }, ...(parentExperiment ? [{ nodeId: parentExperiment.id, kind: "extends" }] : [])],
           sourceTurnId: turnId,
         });
-        emit(graphUpdateEvent({ thread, turnId, nodeIds: [experiment.id], nodeCount: 1, edgeCount: 1 }));
+        emit(graphUpdateEvent({ thread, turnId, nodeIds: [experiment.id], nodeCount: 1, edgeCount: parentExperiment ? 2 : 1 }));
         notes.push(`Experiment created: ${experiment.title} (${experiment.id}).`);
         continue;
       }
@@ -153,18 +154,21 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
         }
         const existing = store.getExperimentWorkspace(experiment.id);
         if (existing) {
+          if (directive.parentRunId && directive.parentRunId !== existing.parent_run_id) throw new Error("This experiment workspace is already tied to a different base.");
           notes.push(`Experiment workspace already exists: ${existing.root} (branch ${existing.branch_name}, base ${existing.base_commit}).`);
           continue;
         }
+        const base = store.experimentWorkspaceBase(experiment.id, directive.parentRunId || null);
+        const baseDescription = base.parentRunId ? `parent run ${base.parentRunId} at commit ${base.baseCommit}` : "committed project HEAD";
         if (!approve) throw new Error("Creating an experiment worktree requires approval.");
         const allowed = await approve({
-          command: "Create an isolated Git worktree from committed project HEAD",
+          command: `Create an isolated Git worktree from ${baseDescription}`,
           cwd: workspace,
           reason: `Experiment: ${experiment.title}. Uncommitted and untracked files are not copied.`,
           nativeMethod: "archimedes/experiment",
         });
         if (!allowed) { notes.push(`Experiment workspace rejected: ${experiment.title}.`); continue; }
-        const result = store.createExperimentWorkspace(experiment.id);
+        const result = store.createExperimentWorkspace(experiment.id, { parentRunId: base.parentRunId });
         notes.push(`Experiment workspace: ${result.workspace.root} (branch ${result.workspace.branch_name}, base ${result.workspace.base_commit}). Only committed code was copied; uncommitted and untracked files remain in the original workspace.`);
         continue;
       }

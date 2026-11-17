@@ -668,6 +668,7 @@ function schema(db) {
   ensureColumn(db, "research_nodes", "source_run_id", "TEXT");
   ensureColumn(db, "experiment_runs", "pid", "INTEGER");
   ensureColumn(db, "experiment_runs", "provenance_json", "TEXT NOT NULL DEFAULT '{}'");
+  ensureColumn(db, "experiment_workspaces", "parent_run_id", "TEXT");
   ensureColumn(db, "project_workspaces", "name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "project_members", "source", "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn(db, "libraries", "project_id", "TEXT");
@@ -2249,7 +2250,7 @@ function createSandboxCopy(source, destination) {
   copyDirectory(source, destination);
 }
 
-function createProjectWorkspace({ projectId, kind = "shared", name = "" } = {}) {
+function createProjectWorkspace({ projectId, kind = "shared", name = "", baseCommit = null } = {}) {
   const db = requireDatabase();
   if (typeof projectId !== "string" || !projectId) throw new Error("A project is required.");
   if (!WORKSPACE_KINDS.has(kind)) throw new Error("Unknown workspace kind.");
@@ -2276,7 +2277,8 @@ function createProjectWorkspace({ projectId, kind = "shared", name = "" } = {}) 
     if (refreshed?.git_state !== "ready") {
       throw new Error("Create a commit in the project repository before opening a worktree.");
     }
-    baseRef = refreshed.git_branch || "HEAD";
+    if (baseCommit && !/^[0-9a-f]{40,64}$/.test(baseCommit)) throw new Error("A full Git commit is required as the worktree base.");
+    baseRef = baseCommit || refreshed.git_branch || "HEAD";
     workspaceRoot = path.join(root, ".archimedes", "worktrees", shortId);
     fs.mkdirSync(path.dirname(workspaceRoot), { recursive: true });
     const branch = `archimedes/${shortId}`;
@@ -2321,25 +2323,55 @@ function getExperimentWorkspace(nodeId) {
   if (!workspace || workspace.project_id !== node.project_id || workspace.kind !== "worktree") {
     throw new Error("The linked experiment workspace is unavailable.");
   }
-  return { ...workspace, base_commit: row.base_commit, branch_name: row.branch_name };
+  return { ...workspace, base_commit: row.base_commit, branch_name: row.branch_name, parent_run_id: row.parent_run_id || null };
 }
 
-function createExperimentWorkspace(nodeId) {
+function experimentWorkspaceBase(nodeId, parentRunId = null) {
   const node = getResearchNode(nodeId);
   if (!node || node.kind !== "experiment") throw new Error("Experiment not found.");
   if (node.archived || node.status === "retracted") throw new Error("Restore the experiment before preparing its workspace.");
   if (!canAccessProject(node.project_id, "editor")) throw new Error("You do not have permission to change this experiment.");
+  const parents = listResearchEdges({ projectId: node.project_id, threadId: node.thread_id })
+    .filter((edge) => edge.to_node === nodeId && ["extends", "replicates", "merges"].includes(edge.kind));
+  if (!parentRunId) {
+    if (parents.length) throw new Error("Choose a recorded parent experiment run before preparing this workspace.");
+    return { parentRunId: null, baseCommit: null };
+  }
+  const run = getExperimentRun(parentRunId);
+  if (!run || run.project_id !== node.project_id || run.thread_id !== node.thread_id || !parents.some((edge) => edge.from_node === run.node_id)) {
+    throw new Error("The chosen run must belong to a parent experiment in this session.");
+  }
+  const parentEdge = parents.find((edge) => edge.from_node === run.node_id);
+  if (!parentEdge || parentEdge.from_revision !== run.provenance?.experimentRevisionId) {
+    throw new Error("The parent run must match the parent experiment revision linked to this child.");
+  }
+  if (!["succeeded", "failed", "cancelled"].includes(run.status) || !run.commit_sha || !/^[0-9a-f]{40,64}$/.test(run.commit_sha)) {
+    throw new Error("Choose a finished parent run with a recorded full Git commit.");
+  }
+  const parentWorkspace = getExperimentWorkspace(run.node_id);
+  if (!parentWorkspace || run.provenance?.workspace?.id !== parentWorkspace.id || run.provenance?.codeSnapshot?.commit !== run.commit_sha) {
+    throw new Error("The parent run must have a recorded experiment workspace and code snapshot.");
+  }
+  return { parentRunId: run.id, baseCommit: run.commit_sha };
+}
+
+function createExperimentWorkspace(nodeId, { parentRunId = null } = {}) {
+  const base = experimentWorkspaceBase(nodeId, parentRunId);
+  const node = getResearchNode(nodeId);
   const existing = getExperimentWorkspace(nodeId);
-  if (existing) return { workspace: existing, existing: true };
-  const workspace = createProjectWorkspace({ projectId: node.project_id, kind: "worktree" });
+  if (existing) {
+    if (existing.parent_run_id !== base.parentRunId) throw new Error("This experiment workspace is already tied to a different base.");
+    return { workspace: existing, existing: true };
+  }
+  const workspace = createProjectWorkspace({ projectId: node.project_id, kind: "worktree", baseCommit: base.baseCommit });
   const commit = spawnSync("git", ["-C", workspace.root, "rev-parse", "--verify", "HEAD"], { encoding: "utf8", timeout: 5000, windowsHide: true });
   if (commit.error || commit.status !== 0 || !String(commit.stdout || "").trim()) {
     deleteProjectWorkspace(workspace.id);
     throw new Error("Could not read the experiment workspace base commit.");
   }
   try {
-    requireDatabase().prepare("INSERT INTO experiment_workspaces (node_id, workspace_id, base_commit, branch_name, created_at) VALUES (?, ?, ?, ?, ?)")
-      .run(nodeId, workspace.id, String(commit.stdout).trim(), `archimedes/${workspace.id.slice(0, 8)}`, timestamp());
+    requireDatabase().prepare("INSERT INTO experiment_workspaces (node_id, workspace_id, base_commit, branch_name, created_at, parent_run_id) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(nodeId, workspace.id, String(commit.stdout).trim(), `archimedes/${workspace.id.slice(0, 8)}`, timestamp(), base.parentRunId);
   } catch (error) {
     deleteProjectWorkspace(workspace.id);
     throw error;
@@ -3292,7 +3324,7 @@ function createExperimentRun({
     const realRoot = fs.realpathSync(linked.root);
     const realCwd = fs.realpathSync(runCwd);
     if (realCwd !== realRoot && !realCwd.startsWith(`${realRoot}${path.sep}`)) throw new Error("The run folder is outside the experiment workspace.");
-    workspaceProvenance = { id: linked.id, root: linked.root, branchName: linked.branch_name, baseCommit: linked.base_commit };
+    workspaceProvenance = { id: linked.id, root: linked.root, branchName: linked.branch_name, baseCommit: linked.base_commit, parentRunId: linked.parent_run_id };
   }
   const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry, workspace: workspaceProvenance, codeSnapshot });
   const now = timestamp();
@@ -4404,6 +4436,7 @@ module.exports = {
   setResearchNodeStatus,
   createExperimentRun,
   getExperimentWorkspace,
+  experimentWorkspaceBase,
   createExperimentWorkspace,
   getExperimentRun,
   listExperimentRuns,

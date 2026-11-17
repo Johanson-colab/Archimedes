@@ -46,6 +46,7 @@ export const researchGraph: Record<string, string> = {
   "nodes": "个节点",
   "Not recorded": "未记录",
   "Not run": "尚未运行",
+  "Parent run": "父实验运行",
   "Pinned revision": "关联时的版本",
   "Prediction": "可验证预测",
   "previous ideas moved to history": "个旧想法已移入历史",

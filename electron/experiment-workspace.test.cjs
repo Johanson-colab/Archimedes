@@ -126,6 +126,58 @@ test("experiment worktree keeps uncommitted files safe and ties runs to the isol
       assert.equal(result.workspace.id, store.getExperimentWorkspace(secondExperiment.id).id);
       assert.notEqual(result.workspace.branch_name, isolated.branch_name);
     } finally { agent.setApprovalSurface(thread.id, false); }
+    const child = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "experiment", title: "Child experiment", content: {}, parents: [{ nodeId: idea.id, kind: "tests" }, { nodeId: experiment.id, kind: "extends" }] });
+    assert.throws(() => store.createExperimentWorkspace(child.id), /Choose a recorded parent experiment run/);
+    assert.throws(() => store.createExperimentWorkspace(child.id, { parentRunId: "missing" }), /must belong to a parent experiment/);
+    fs.writeFileSync(path.join(isolated.root, "code.txt"), "later parent change\n");
+    git(isolated.root, "add", "code.txt");
+    git(isolated.root, "commit", "-m", "later parent commit");
+    assert.notEqual(git(isolated.root, "rev-parse", "HEAD"), base);
+    const inherited = store.createExperimentWorkspace(child.id, { parentRunId: finished.id }).workspace;
+    assert.equal(inherited.base_commit, base);
+    assert.equal(inherited.parent_run_id, finished.id);
+    assert.equal(fs.readFileSync(path.join(inherited.root, "code.txt"), "utf8"), "committed\n");
+    assert.notEqual(inherited.branch_name, isolated.branch_name);
+    const childRun = runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: child.id, workspace: inherited.root, cwd: inherited.root, experimentWorkspaceId: inherited.id, command: `${JSON.stringify(process.execPath)} -e "console.log('child')"` });
+    const childFinished = await childRun.completion;
+    assert.equal(childFinished.provenance.workspace.parentRunId, finished.id);
+    assert.equal(childFinished.commit_sha, base);
+    const createdNotes = await directives.executeExperimentDirectives({
+      directives: [{ action: "create", idea: idea.id, title: "Native child", parentExperiment: experiment.id }],
+      threadId: thread.id, workspace: root, mode: "experiment-setup", approve: async () => true,
+    });
+    assert.match(createdNotes[0], /Experiment created/);
+    const nativeChild = store.listResearchGraph({ projectId: project.id, threadId: thread.id }).nodes.find((item) => item.title === "Native child");
+    let approvalCommand = "";
+    const childNotes = await directives.executeExperimentDirectives({
+      directives: [{ action: "prepare_workspace", experiment: nativeChild.id, parentRunId: finished.id }],
+      threadId: thread.id, workspace: root, mode: "experiment-setup", approve: async ({ command }) => { approvalCommand = command; return true; },
+    });
+    assert.match(approvalCommand, new RegExp(base));
+    assert.match(childNotes[0], /Experiment workspace:/);
+    assert.equal(store.getExperimentWorkspace(nativeChild.id).base_commit, base);
+    const apiChildResult = await agent.executeTool({
+      registry: agent.createToolRegistry(),
+      call: { id: "create-child", function: { name: "create_experiment", arguments: JSON.stringify({ idea: idea.id, title: "API child", parent_experiment: experiment.id }) } },
+      root, threadId: thread.id, taskId: task.id, turnId: turn.id,
+      capabilities: { write: "deny", command: "ask" }, emit: () => {}, recordEvent: () => {}, signal: new AbortController().signal,
+    });
+    const apiChildId = JSON.parse(apiChildResult.content).experiment_id;
+    assert.ok(store.listResearchEdges({ projectId: project.id, threadId: thread.id }).some((edge) => edge.from_node === experiment.id && edge.to_node === apiChildId && edge.kind === "extends"));
+    let forkApproval;
+    agent.setApprovalSurface(thread.id, true);
+    try {
+      const pending = agent.executeTool({
+        registry: agent.createToolRegistry(), call: { id: "fork-workspace", function: { name: "prepare_experiment_workspace", arguments: JSON.stringify({ experiment: apiChildId, parent_run_id: finished.id }) } },
+        root, threadId: thread.id, taskId: task.id, turnId: turn.id, capabilities: { write: "deny", command: "ask" },
+        emit: (event) => { if (event.type === "approval") forkApproval = event.action; }, recordEvent: () => {}, signal: new AbortController().signal,
+      });
+      for (let attempts = 0; attempts < 100 && !forkApproval; attempts++) await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.ok(forkApproval);
+      assert.match(forkApproval.payload.command, new RegExp(base));
+      agent.resolveApproval(forkApproval.id, true);
+      assert.equal(JSON.parse((await pending).content).workspace.base_commit, base);
+    } finally { agent.setApprovalSurface(thread.id, false); }
     git(isolated.root, "switch", "--detach");
     assert.throws(() => store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: isolated.root, command: "true", experimentWorkspaceId: isolated.id }), /no longer on its recorded branch/);
   } finally {
