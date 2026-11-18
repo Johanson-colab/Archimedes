@@ -37,3 +37,15 @@ Returning to Optics displayed the original diagnostics in both runs.
 ![Optics repair draft staged in the Materials chat](scope-before.png)
 
 ![Materials composer stays empty and the notice points to the source conversation](scope-after.png)
+
+## Reopening a source during manuscript discovery
+
+Both Electron captures use the Charcoal theme at 1,440 × 1,000. In a disposable workspace, Writing opened `paper/main.tex` and the user selected `paper/results.tex`. After the renderer reloaded, Writing began reopening the main file. The user switched to Library and back while that read was paused, and the manuscript list refreshed.
+
+Before (`4fbe6d9`), the editor stayed on the main file and remembered it as the last source.
+
+![Before, main.tex is active after returning to Writing](restore-before.png)
+
+After (`7043554`), the editor reopened and remembered `paper/results.tex`. The main document stayed `paper/main.tex`.
+
+![After, results.tex is active while main.tex remains the main document](restore-after.png)
