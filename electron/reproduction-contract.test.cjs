@@ -83,7 +83,7 @@ test("planning runs the agent and normalises its contract", async () => {
     workspace: "/tmp/workspace",
     runAgent: async (input) => {
       Object.assign(seen, input);
-      return { response: `Here you go:\n${reply}\n` };
+      return { response: `Here you go:\n${reply}\n`, status: "completed" };
     },
   });
   assert.equal(contract.claims[0].expected, 2.43);
@@ -98,7 +98,7 @@ test("planning fails loudly when the agent returns no contract", async () => {
     paper: { id: "p1", title: "Dream-RSI" },
     pages: [],
     workspace: "/tmp/workspace",
-    runAgent: async () => ({ response: "I could not find any tables." }),
+    runAgent: async () => ({ response: "I could not find any tables.", status: "completed" }),
   }), /stopped before finishing the contract/);
 });
 

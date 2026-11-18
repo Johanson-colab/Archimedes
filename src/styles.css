@@ -1613,6 +1613,7 @@ body.workbench-panes-resizing-column { cursor: row-resize; user-select: none; }
 .journey-scrubber-bars > button.done { background: var(--night-faint); }
 .journey-scrubber-bars > button.current { background: var(--accent); }
 .journey-scrubber-bars > button.error { background: var(--night-danger); }
+.journey-scrubber-bars > button.incomplete { background: var(--night-warning); }
 .journey-playhead { position: absolute; top: -3px; bottom: -3px; left: var(--journey-playhead, 50%); width: 2px; background: var(--accent); border-radius: 2px; }
 .journey-playhead::after { position: absolute; top: -3px; left: -2px; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; content: ""; }
 .journey-mark { position: absolute; top: -2px; width: 1px; height: 8px; }
@@ -1685,6 +1686,7 @@ body.workbench-panes-resizing-column { cursor: row-resize; user-select: none; }
 .journey-episode.waiting .journey-episode-dot,
 .journey-episode.open .journey-episode-dot { background: var(--accent); }
 .journey-episode.error .journey-episode-dot { background: var(--night-danger); }
+.journey-episode.incomplete .journey-episode-dot { background: var(--night-warning); }
 .journey-episode-title { min-width: 0; flex: 1; overflow: hidden; color: var(--night-ink-soft); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .journey-episode-meta { flex: 0 0 auto; color: var(--night-faint); font-family: var(--font-mono); font-size: 11px; }
 .journey-episode-outcome { overflow: hidden; margin-left: 13px; color: var(--night-muted); font-size: 11px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
@@ -1772,6 +1774,7 @@ body.workbench-panes-resizing-column { cursor: row-resize; user-select: none; }
 .journey-map-episode-dot.running,
 .journey-map-episode-dot.open { background: var(--accent); }
 .journey-map-episode-dot.error { background: var(--night-danger); }
+.journey-map-episode-dot.incomplete { background: var(--night-warning); }
 .journey-map-episode-list strong { min-width: 0; flex: 1; overflow: hidden; color: var(--night-ink-soft); font-size: 12px; font-weight: 450; text-overflow: ellipsis; white-space: nowrap; }
 .journey-map-episode-list small { color: var(--night-faint); font-family: var(--font-mono); font-size: 11px; }
 .journey-map-inspector { min-height: 0; overflow: auto; padding: 20px; border-left: 1px solid var(--night-line-soft); }
@@ -3932,6 +3935,23 @@ html[data-theme="paper"] .arch-pdf-text-layer ::selection,
 @media (max-width: 900px) { .benchmark-library-layout { grid-template-columns: 1fr; }.benchmark-directions { position: static; display: flex; gap: 5px; max-height: none; padding: 0 0 12px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--mono-border); }.benchmark-direction-head, .benchmark-directions section h2 { display: none; }.benchmark-directions section { display: contents; margin: 0; }.benchmark-directions > button, .benchmark-directions section > button { width: max-content; flex: 0 0 auto; white-space: nowrap; }.benchmark-library-toolbar { grid-template-columns: 1fr; }.benchmark-library-toolbar label:last-child { justify-self: start; } }
 @media (max-width: 620px) { .benchmark-header, .benchmark-intro { display: grid; }.benchmark-source { width: max-content; }.benchmark-controls { display: grid; gap: 12px; }.benchmark-row, .benchmark-row.radar { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }.benchmark-row.radar .benchmark-date { grid-column: 1 / -1; grid-row: auto; display: flex; gap: 7px; align-items: center; }.benchmark-row.radar .benchmark-row-main { grid-column: 1; }.benchmark-row.radar .benchmark-save { grid-column: 2; }.benchmark-row-heading { display: block; }.benchmark-row-heading span { display: block; margin-top: 4px; }.benchmark-header h1 { font-size: 25px; } }
 
+/* Benchmark data provenance and refresh controls. */
+.benchmark-header-actions { display: flex; margin-left: auto; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+.benchmark-header-actions > span { color: var(--mono-text-muted); font-size: 12px; }
+.benchmark-refresh { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; gap: 7px; padding: 6px 10px; color: var(--mono-text-strong); background: var(--mono-surface); border: 1px solid var(--mono-border); border-radius: 6px; font-size: 12px; }
+.benchmark-refresh:hover:not(:disabled) { background: var(--mono-surface-raised); }
+.benchmark-refresh:disabled { cursor: wait; opacity: .65; }
+.benchmark-data-status { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 18px; color: var(--mono-text-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.benchmark-update-warning { flex-basis: 100%; margin: 0; color: var(--mono-text-strong); }
+.benchmark-intro .benchmark-method-note { margin-top: 8px; font-size: 12px; }
+.benchmark-forecast { margin-top: 8px; color: var(--mono-text-muted); font-size: 12px; line-height: 1.6; }
+.benchmark-forecast summary { width: fit-content; cursor: pointer; color: var(--mono-text-strong); }
+.benchmark-row .benchmark-forecast p { margin: 6px 0 0; font-size: 12px; }
+@media (max-width: 620px) {
+  .benchmark-tabs-row { flex-wrap: wrap; gap: 12px; }
+  .benchmark-header-actions { gap: 8px; }
+}
+
 /* New-task research cabinet: Archimedes' instruments become four workflow entrances. */
 .conversation-layout.has-welcome {
   background: var(--welcome-ground);
@@ -4741,6 +4761,8 @@ html:not([data-theme="paper"]) .terminal-settings-button:hover { color: #f0f0f4;
 .chat-activity-footer strong { color: var(--night-ink-soft); font-weight: 500; }
 .chat-activity-footer.failed { color: var(--night-danger); }
 .chat-activity-footer.failed strong { color: var(--night-danger); }
+.chat-activity-footer.incomplete { color: var(--night-warning); }
+.chat-activity-footer.incomplete strong { color: var(--night-warning); }
 .chat-activity-footer-sep { color: var(--night-faint); }
 .chat-activity-low-summary { display: flex; align-items: center; gap: 6px; padding: 0; color: var(--night-muted); background: transparent; border: 0; font-family: var(--font-mono); font-size: 11px; text-align: left; cursor: pointer; }
 .chat-activity-low-summary:hover { color: var(--night-ink-soft); }

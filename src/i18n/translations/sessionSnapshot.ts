@@ -1,8 +1,8 @@
 export const sessionSnapshot: Record<string, string> = {
   "All turns": "全部轮次",
   "Choose turns": "选择轮次",
-  "Could not create the image.": "无法生成图片。",
   "Copy Markdown": "复制 Markdown",
+  "Could not create the image.": "无法生成图片。",
   "Create read-only guest link": "创建只读访客链接",
   "Diagnostic events may contain paths, commands, or other sensitive information.": "诊断事件可能包含路径、命令或其他敏感信息。",
   "Download image {number}": "下载第 {number} 张图",

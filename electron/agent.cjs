@@ -9,6 +9,7 @@ const { prepareConversation } = require("./agent/context.cjs");
 const { workspaceInstructions } = require("./thread-commands.cjs");
 const { hasApprovalSurface, resolveApproval, setApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
+const { ModelIncompleteError, assertModelCompletion } = require("./agent/model-completion.cjs");
 const { completeAnthropic } = require("./agent/anthropic.cjs");
 const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData } = require("./agent/pdf-reader.cjs");
 const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = require("./agent/remote-content.cjs");
@@ -888,10 +889,10 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     }
     const body = await fallback.json();
     const choice = body?.choices?.[0];
-    if (requireComplete && choice?.finish_reason === "length") throw new Error("Model output was truncated; reconstruction cannot safely use it.");
     const responseMessage = choice?.message || (typeof choice?.text === "string" ? { role: "assistant", content: choice.text } : null);
     if (!responseMessage) throw new Error("The model returned neither a compatible stream nor a complete response message.");
     const normalized = normalizeAssistantMessage(responseMessage);
+    assertModelCompletion({ provider: "openai", finishReason: choice.finish_reason, partialResponse: normalized.content, toolCalls: normalized.tool_calls });
     if (normalized.content) onTextDelta(normalized.content);
     return normalized;
   };
@@ -927,10 +928,10 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("text/event-stream") || !response.body) {
     const body = await response.json();
-    if (requireComplete && body?.choices?.[0]?.finish_reason === "length") throw new Error("Model output was truncated; reconstruction cannot safely use it.");
     const message = body?.choices?.[0]?.message;
     if (!message) throw new Error("The model response did not contain a message.");
     const normalized = normalizeAssistantMessage(message);
+    assertModelCompletion({ provider: "openai", finishReason: body.choices[0].finish_reason, partialResponse: normalized.content, toolCalls: normalized.tool_calls });
     if (normalized.content) onTextDelta(normalized.content);
     return normalized;
   }
@@ -940,23 +941,39 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
   const message = { content: "", tool_calls: [] };
   const contentGuard = new StreamContentGuard(onTextDelta);
   let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const frames = buffer.split(/\r?\n\r?\n/);
-    buffer = frames.pop() || "";
-    for (const frame of frames) {
-      const serialized = frame.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
-      if (!serialized || serialized === "[DONE]") continue;
-      let body;
-      try { body = JSON.parse(serialized); } catch { continue; }
-      if (requireComplete && body?.choices?.[0]?.finish_reason === "length") throw new Error("Model output was truncated; reconstruction cannot safely use it.");
-      applyDelta(message, body?.choices?.[0]?.delta || {}, (delta) => contentGuard.push(delta));
+  let finishReason = null;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() || "";
+      if (done && buffer.trim()) { frames.push(buffer); buffer = ""; }
+      for (const frame of frames) {
+        const serialized = frame.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
+        if (!serialized || serialized === "[DONE]") continue;
+        let body;
+        try { body = JSON.parse(serialized); }
+        catch { throw new ModelIncompleteError({ provider: "openai", reason: "malformed_frame" }); }
+        if (body.error) throw new Error(body.error.message || "Model stream error.");
+        if (body?.choices?.[0]?.finish_reason) finishReason = body.choices[0].finish_reason;
+        applyDelta(message, body?.choices?.[0]?.delta || {}, (delta) => contentGuard.push(delta));
+      }
+      if (done) break;
     }
-    if (done) break;
+  } catch (error) {
+    const partialResponse = message.content.trimStart().startsWith("<｜｜DSML｜｜") ? "" : message.content;
+    try { await reader.cancel(); } catch { /* Preserve the actual stream error. */ }
+    if (signal?.aborted || error?.name === "AbortError") { error.partialResponse = partialResponse; throw error; }
+    if (error.code === "MODEL_RESPONSE_INCOMPLETE") { error.partialResponse = partialResponse; throw error; }
+    throw new ModelIncompleteError({ provider: "openai", reason: "stream_error", partialResponse, detail: error.message });
+  } finally { reader.releaseLock(); }
+  if (!message.content && !message.tool_calls.length) {
+    if (finishReason) assertModelCompletion({ provider: "openai", finishReason, partialResponse: "" });
+    return completeWithoutStream();
   }
-  if (!message.content && !message.tool_calls.length) return completeWithoutStream();
   const normalized = normalizeAssistantMessage(message);
+  assertModelCompletion({ provider: "openai", finishReason, terminalSeen: Boolean(finishReason), partialResponse: normalized.content, toolCalls: normalized.tool_calls });
   contentGuard.finish(normalized);
   return normalized;
 }
@@ -1162,6 +1179,12 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     if (controller.signal.aborted || error?.name === "AbortError") {
       emitTurn({ type: "interrupted", title: "Research turn interrupted", detail: "Conversation history was preserved" });
       return finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This research turn was interrupted. You can continue in the same thread.${externalBackend ? " Check partial native changes before continuing." : ""}`, "interrupted");
+    }
+    if (error.code === "MODEL_RESPONSE_INCOMPLETE") {
+      const failure = { code: error.code, reason: error.reason, provider: error.provider, finishReason: error.finishReason };
+      recordEvent({ type: "model_incomplete", payload: failure });
+      emitTurn({ type: "incomplete", title: "Response incomplete", detail: "Partial text was kept. Continue in this chat to retry; no tool from the unfinished response was executed.", error: failure });
+      return { ...finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This model response is incomplete: ${error.message} Continue in this chat to retry.`, "incomplete"), error: failure };
     }
     const response = `${error.partialResponse ? `${error.partialResponse}\n\n` : ""}Archimedes could not complete this task: ${error.message || String(error)}`;
     emitTurn({ type: "failed", title: "Research turn failed", detail: "The turn record was saved for inspection" });
