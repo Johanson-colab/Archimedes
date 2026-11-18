@@ -15,6 +15,7 @@ const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }
   { id: "poster", label: "Poster" }, { id: "unknown", label: "Unclassified" },
 ];
 const PAGE_SIZE = 40;
+const CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // Keep in step with the official catalog cache in Electron.
 function errorMessage(error: unknown) {
   return String(error).replace(/^Error:\s*/, "").replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, "");
 }
@@ -47,6 +48,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   const savedResponse = Array.isArray(saved?.response?.papers) ? saved.response : null;
   const savedKey = savedResponse ? feedKey(saved) : "";
   const responseCache = useRef(new Map<string, ConferenceSearchResponse>());
+  const refreshRequests = useRef(new Map<string, Promise<ConferenceSearchResponse>>());
   const [feed, setFeed] = useState<ConferenceFeed>(() => {
     if (savedResponse) responseCache.current.set(savedKey, savedResponse);
     return { key: savedKey, response: savedResponse, error: "", loading: !savedResponse };
@@ -57,6 +59,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   const loadError = visibleFeed?.error ?? "";
   const loading = visibleFeed ? visibleFeed.loading : true;
   const [error, setError] = useState("");
+  const [membershipError, setMembershipError] = useState("");
   const [adding, setAdding] = useState<string | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [storageError, setStorageError] = useState("");
@@ -66,9 +69,10 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   useEffect(() => {
     let active = true;
     setAdded(new Set());
+    setMembershipError("");
     if (targetLibraryId && bridge.listLibraryPapers) void bridge.listLibraryPapers(targetLibraryId).then((papers) => {
       if (active) setAdded((current) => new Set([...current, ...papers.map((paper) => `${targetLibraryId}:${discoveryPaperKey(paper)}`)]));
-    }).catch((cause) => { if (active) setError(errorMessage(cause)); });
+    }).catch((cause) => { if (active) setMembershipError(errorMessage(cause)); });
     return () => { active = false; };
   }, [bridge, targetLibraryId]);
   useEffect(() => {
@@ -79,18 +83,40 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   const selected = conferenceCatalog.find((entry) => entry.id === conference)!;
   const load = useCallback(async (forceRefresh = false) => {
     const key = feedKey({ conference, year, presentation, topic, submittedQuery, offset });
-    const cached = responseCache.current.get(key);
-    if (!forceRefresh && cached) { setFeed({ key, response: cached, error: "", loading: false }); return; }
+    const catalogPrefix = JSON.stringify([conference, year]).slice(0, -1) + ",";
     const request = ++requestRef.current;
+    const pendingRefresh = !forceRefresh && refreshRequests.current.get(catalogPrefix);
+    if (pendingRefresh) {
+      setFeed({ key, response: null, error: "", loading: true });
+      await pendingRefresh.catch(() => {});
+      if (request !== requestRef.current) return;
+    }
+    const cached = responseCache.current.get(key);
+    const age = Date.now() - Date.parse(cached?.fetched_at ?? "");
+    if (!forceRefresh && cached && !cached.stale && age >= 0 && age < CACHE_MAX_AGE_MS) {
+      setFeed({ key, response: cached, error: "", loading: false });
+      return;
+    }
     setFeed({ key, response: null, error: "", loading: true });
+    let fetchRequest: Promise<ConferenceSearchResponse> | undefined;
     try {
-      const next = await bridge.searchConferencePapers({ conference, year, presentation, topic, query: submittedQuery, offset, limit: PAGE_SIZE, forceRefresh });
+      fetchRequest = bridge.searchConferencePapers({ conference, year, presentation, topic, query: submittedQuery, offset, limit: PAGE_SIZE, forceRefresh });
+      if (forceRefresh) refreshRequests.current.set(catalogPrefix, fetchRequest);
+      const next = await fetchRequest;
+      if (alive.current && forceRefresh && !next.stale) {
+        // The backend refreshes the catalog for the whole conference and year.
+        for (const queryKey of responseCache.current.keys()) {
+          if (queryKey.startsWith(catalogPrefix)) responseCache.current.delete(queryKey);
+        }
+      }
       if (request !== requestRef.current) return;
       responseCache.current.set(key, next);
       setFeed({ key, response: next, error: "", loading: false });
     } catch (failure) {
       if (request !== requestRef.current) return;
       setFeed({ key, response: null, error: errorMessage(failure), loading: false });
+    } finally {
+      if (forceRefresh && refreshRequests.current.get(catalogPrefix) === fetchRequest) refreshRequests.current.delete(catalogPrefix);
     }
   }, [bridge, conference, year, presentation, topic, submittedQuery, offset]);
   useEffect(() => { void load(); return () => { requestRef.current += 1; }; }, [load]);
@@ -131,6 +157,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
       <span>{response ? `${response.total.toLocaleString()} papers` : `${selected.label} ${year}`}</span>
     </div>
     {loadError && <InlineNotice tone="danger" className="library-error">{loadError}</InlineNotice>}
+    {membershipError && <InlineNotice tone="danger" className="library-error">{membershipError}</InlineNotice>}
     {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
     {response && <div className="conference-catalog-status">
       <span><GraduationCap size={14} />{selected.label} {year} · {response.catalog_total.toLocaleString()} papers · {response.status === "not_held" ? "No edition" : response.status === "not_published" ? "Awaiting official publication" : response.stale ? "Cached, refresh pending" : response.cached ? "Cached" : "Official catalog"}</span>

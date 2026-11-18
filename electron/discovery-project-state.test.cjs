@@ -75,7 +75,7 @@ function conferencePaper(title, year = 2026) {
   return { ...fixture.paper, title, conference: { id: "icml", year, presentation: "oral", decision: "Accepted", track: "Main", source_url: "https://example.invalid/catalog", presentation_source_url: "", retrieved_at: "2026-11-16" } };
 }
 function conferenceResponse(options, papers = []) {
-  return { papers, total: papers.length, catalog_total: papers.length, presentation_counts: { oral: 0, poster: 0, spotlight: 0, unknown: 0 }, options, sources: ["https://example.invalid/catalog"], status: "available", warnings: [], fetched_at: "2026-11-16", cached: false, stale: false, has_more: false };
+  return { papers, total: papers.length, catalog_total: papers.length, presentation_counts: { oral: 0, poster: 0, spotlight: 0, unknown: 0 }, options, sources: ["https://example.invalid/catalog"], status: "available", warnings: [], fetched_at: new Date().toISOString(), cached: false, stale: false, has_more: false };
 }
 function database(name) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-discovery-")), idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-discovery-idle-"));
@@ -121,7 +121,7 @@ test("conference discovery restores the candidate page without re-querying", asy
   const data = database("Conference"); let unmount, calls = 0;
   const library = data.db.listLibraries(data.project.id)[0];
   const paper = { ...fixture.paper, conference: { id: "icml", year: 2026, presentation: "oral", decision: "Accepted", track: "Main", source_url: "https://example.invalid/catalog", presentation_source_url: "", retrieved_at: "2026-11-16" } };
-  data.bridge.searchConferencePapers = async (options) => { calls++; return { papers: [paper], total: 1, catalog_total: 1, presentation_counts: { oral: 1, poster: 0, spotlight: 0, unknown: 0 }, options, sources: ["https://example.invalid/catalog"], status: "partial", warnings: ["Fixture partial catalog"], fetched_at: "2026-11-16", cached: false, stale: true, has_more: false }; };
+  data.bridge.searchConferencePapers = async (options) => { calls++; return { ...conferenceResponse(options, [paper]), status: "partial", warnings: ["Fixture partial catalog"] }; };
   const props = { storageKey: scope.discoveryStorageKey(data.root, data.project.id) + ":conference", bridge: data.bridge, projectId: data.project.id, targetLibraryId: library.id, topic: "all", onImported: async () => {} };
   try {
     unmount = await mount(scope.ConferenceDiscovery, props);
@@ -132,6 +132,92 @@ test("conference discovery restores the candidate page without re-querying", asy
     assert.equal(calls, before); assert.equal(document.querySelector('[aria-label="Search conference papers"]').value, "conference evidence");
     assert.ok(document.body.textContent.includes("Evidence handoff fixture"));
   } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("expired and stale conference snapshots revalidate with their saved controls", async () => {
+  const options = { conference: "icml", year: 2026, presentation: "oral", query: "saved query", offset: 0, topic: "all" };
+  for (const cache of [{ fetched_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString() }, { stale: true }]) {
+    const storageKey = "expired-conference";
+    let calls = 0;
+    const response = { ...conferenceResponse(options), status: "not_published", ...cache };
+    window.localStorage.setItem(storageKey, JSON.stringify({ ...options, submittedQuery: options.query, response }));
+    const bridge = { searchConferencePapers: async (input) => {
+      calls++;
+      assert.equal(input.forceRefresh, false);
+      assert.equal(input.presentation, "oral");
+      assert.equal(input.query, "saved query");
+      return conferenceResponse(input, [conferencePaper("Published oral paper")]);
+    } };
+    const unmount = await mount(scope.ConferenceDiscovery, { storageKey, bridge, targetLibraryId: "", topic: "all", onImported: async () => {} });
+    try {
+      assert.equal(calls, 1);
+      assert.match(document.body.textContent, /Published oral paper/);
+    } finally { await unmount(); }
+  }
+});
+
+test("conference filters use the refreshed catalog even when selected during the refresh", async () => {
+  const requests = [];
+  let finishRefresh;
+  let published = false;
+  const bridge = { searchConferencePapers(input) {
+    requests.push(input);
+    if (input.forceRefresh) return new Promise((resolve) => {
+      finishRefresh = () => {
+        published = true;
+        resolve(conferenceResponse(input, [conferencePaper("New oral paper")]));
+      };
+    });
+    return Promise.resolve(conferenceResponse(input, published ? [conferencePaper("New oral paper")] : []));
+  } };
+  const unmount = await mount(scope.ConferenceDiscovery, { bridge, targetLibraryId: "", topic: "all", onImported: async () => {} });
+  const view = async (name) => {
+    const tab = [...document.querySelectorAll(".conference-presentation-tabs button")].find((button) => button.textContent.startsWith(name));
+    assert.ok(tab);
+    await React.act(async () => { tab.click(); await tick(); });
+  };
+  try {
+    await view("Oral");
+    assert.match(document.body.textContent, /No papers match these filters/);
+    await view("All");
+    await click("Refresh");
+    await view("Oral");
+    assert.equal(requests.filter(({ presentation }) => presentation === "oral").length, 1);
+    assert.match(document.body.textContent, /Loading the official/);
+    await React.act(async () => { finishRefresh(); await tick(); });
+    assert.equal(requests.filter(({ presentation }) => presentation === "oral").length, 2);
+    assert.match(document.body.textContent, /New oral paper/);
+  } finally { await unmount(); }
+});
+
+test("invalid restored destinations wait for the loaded library and membership errors clear on replacement", async () => {
+  const storageKey = "deleted-collection";
+  window.localStorage.setItem(storageKey, JSON.stringify({ targetLibraryId: "deleted" }));
+  const requests = [];
+  const bridge = {
+    discoverDailyPapers: async (options) => fixture.feed(options),
+    listLibraryPapers: async (libraryId) => {
+      requests.push(libraryId);
+      if (libraryId === "unavailable") throw new Error("Library not found.");
+      return [fixture.paper];
+    },
+  };
+  let selectLibraries;
+  function Host() {
+    const [libraries, setLibraries] = React.useState([]);
+    selectLibraries = setLibraries;
+    return React.createElement(scope.DailyDiscovery, { storageKey, bridge, libraries, loadingLibraries: !libraries.length, onImported: async () => {} });
+  }
+  const unmount = await mount(Host, {});
+  try {
+    assert.deepEqual(requests, []);
+    await React.act(async () => { selectLibraries([{ id: "unavailable", name: "Removed collection" }]); await tick(); });
+    assert.match(document.body.textContent, /Library not found\./);
+    await React.act(async () => { selectLibraries([{ id: "replacement", name: "Replacement collection" }]); await tick(); });
+    assert.deepEqual(requests, ["unavailable", "replacement"]);
+    assert.doesNotMatch(document.body.textContent, /Library not found\./);
+    assert.match(document.querySelector(".daily-paper-list .imported").textContent, /Saved/);
+  } finally { await unmount(); }
 });
 
 
