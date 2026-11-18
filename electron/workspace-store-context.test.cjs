@@ -162,3 +162,35 @@ test("same imported thread id in two data stores has independent running/stop/ap
   assert.equal(resultB.thread.turns[0].assistant_message, "B completed independently");
   assert.equal(a.getResearchThread(threadId).turns[0].status, "interrupted");
 });
+
+test("a detached experiment persists its outcome to the original database after a folder replacement", async t => {
+  const { root, a, b } = fixture(t);
+  const original = store.createWorkspaceStore(a);
+  const record = original.createReproduction({ title: "Offline test", repoUrl: "https://example.com/research" });
+  original.updateReproduction(record.id, { contract: { repo: { url: record.repo_url } } });
+  store.createWorkspaceStore(b).close();
+  const handlers = new Map(), gate = deferred(), finished = deferred();
+  const ipcMain = createWorkspaceIpc({ ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, store, workspaceForEvent: () => a });
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const from = main.indexOf('  ipcMain.handle("reproduction:run",'), to = main.indexOf('  ipcMain.handle("reproduction:stop",', from);
+  new Function("scope", `with(scope) { ${main.slice(from, to)} }`)({
+    ipcMain, store, presentReproduction: value => value, reproductionModel() {},
+    activeReproductionRuns: new Map(), resolveWorkspace: fs.realpathSync,
+    workspaceForWindow: () => a, BrowserWindow: { fromWebContents: () => ({}) },
+    reproductionEnv: { values: () => ({}) }, repoNameFromUrl: () => "research",
+    getRepositoryCheckout: async () => { await gate.promise; return true; },
+    resolveAuditPath: async () => { throw new Error("Offline fixture finished provisioning"); },
+    stopSession: async () => {}, notifyRunFinished: () => finished.resolve(),
+  });
+  const result = await handlers.get("reproduction:run")({ sender: { id: 1, isDestroyed: () => true } }, { id: record.id, workspace: a });
+  const old = path.join(root, "before-restore");
+  fs.renameSync(a, old);
+  fs.renameSync(b, a);
+  assert.throws(() => store.createWorkspaceStore(a), /replaced while work was still running/);
+  gate.resolve();
+  await finished.promise;
+  assert.equal(store.createWorkspaceStore(a).getReproduction(record.id), null);
+  const saved = store.createWorkspaceStore(old).getReproductionRun(result.run.id);
+  assert.equal(saved.status, "failed");
+  assert.equal(saved.error, "Offline fixture finished provisioning");
+});

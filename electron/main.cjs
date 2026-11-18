@@ -1552,6 +1552,7 @@ app.whenReady().then(async () => {
 
     // Detached on purpose: the renderer gets progress events, the main process
     // owns the run, and closing the reproduction view does not stop it.
+    const lease = store.captureStore();
     void (async () => {
       try {
         const branch = session.contract.repo?.branch || "";
@@ -1606,6 +1607,8 @@ app.whenReady().then(async () => {
         session.send({ type: "error", detail: message });
         session.send({ type: "finished", status: "failed", summary: message });
         notifyRunFinished(record, message);
+      } finally {
+        lease.release();
       }
     })();
 
