@@ -20,3 +20,9 @@ The composer pair uses the full App renderer in Electron at 1440 × 1000, Charco
 | Before | After |
 | --- | --- |
 | ![Composer before model setup hint](composer-before.png) | ![Composer with model setup hint and action](composer-after.png) |
+
+The FigureForge pair reproduces a failed **Browse extensions** action from the command palette in the full App renderer. Both captures use 1100 × 720, Charcoal and English, with FigureForge scrolled 500 pixels. The fixture rejects the same preference save in both cases. The `e521093` layout positions the warning above the viewport. The updated layout keeps the warning visible and its dismiss button works.
+
+| Before | After |
+| --- | --- |
+| ![Scrolled FigureForge after an invisible failure](scroll-before.png) | ![Scrolled FigureForge with a visible warning](scroll-after.png) |
