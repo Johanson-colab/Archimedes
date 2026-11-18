@@ -232,16 +232,77 @@ test("an explicit conference open beats saved daily mode without breaking normal
   data.bridge.discoverDailyPapers = async (options) => { feeds += 1; return fixture.feed(options); };
   data.bridge.searchConferencePapers = async (options) => conferenceResponse(options);
   try {
-    window.localStorage.setItem(storageKey, saved);
+    window.localStorage.setItem(storageKey, JSON.stringify({ ...JSON.parse(saved), searchKind: "deep", query: "saved search", submittedQuery: "saved search" }));
     unmount = await mount(scope.DailyDiscovery, { storageKey, projectId: data.project.id, initialMode: "conference", bridge: data.bridge, libraries: [library], loadingLibraries: false, onImported: async () => {} });
     assert.equal(document.querySelector('.conference-mode-button').getAttribute('aria-pressed'), "true", "an explicit conference open wins over the saved mode");
     assert.ok(document.querySelector('[aria-label="Conference"]'), "the conference catalog is mounted");
+    await click("Latest");
+    assert.ok(document.querySelector('.daily-mode-tabs [aria-selected="true"]').textContent.includes("Latest"));
+    assert.equal(feeds, 1, "leaving conference opens a live feed without carrying over the old search lock");
     await unmount(); unmount = null;
     window.localStorage.setItem(storageKey, saved);
     unmount = await mount(scope.DailyDiscovery, { storageKey, projectId: data.project.id, bridge: data.bridge, libraries: [library], loadingLibraries: false, onImported: async () => {} });
     assert.equal(document.querySelector('.conference-mode-button').getAttribute('aria-pressed'), "false", "a normal restore keeps the saved daily mode");
     assert.ok(document.querySelector('.daily-mode-tabs [aria-selected="true"]').textContent.includes("Trending"));
     assert.ok(document.body.textContent.includes("Evidence handoff fixture"));
-    assert.equal(feeds, 0, "restoring the matching snapshot does not re-query");
+    assert.equal(feeds, 1, "restoring the matching snapshot does not re-query");
   } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("conference controls survive an uncached exit and pagination resets when the topic changes", async () => {
+  const storageKey = "conference-uncached";
+  const requests = [];
+  const bridge = {
+    searchConferencePapers: async (options) => {
+      requests.push(options);
+      return conferenceResponse(options, [conferencePaper("Restored selection", options.year)]);
+    },
+  };
+  function saveControls() {
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      conference: "iclr", year: 2025, presentation: "oral", topic: "all",
+      query: "restored query", submittedQuery: "restored query", offset: 40, response: null,
+    }));
+  }
+  const props = { storageKey, bridge, targetLibraryId: "", topic: "all", onImported: async () => {} };
+  saveControls();
+  let unmount = await mount(scope.ConferenceDiscovery, props);
+  try {
+    assert.deepEqual(requests.map(({ conference, year, presentation, query, offset }) => ({ conference, year, presentation, query, offset })), [
+      { conference: "iclr", year: 2025, presentation: "oral", query: "restored query", offset: 40 },
+    ]);
+    await unmount();
+    saveControls();
+    unmount = await mount(scope.ConferenceDiscovery, { ...props, topic: "coding_agents" });
+    assert.equal(requests.at(-1).offset, 0);
+    assert.equal(requests.at(-1).topic, "coding_agents");
+    assert.equal(document.querySelector('[aria-label="Search conference papers"]').value, "restored query");
+  } finally { await unmount(); }
+});
+
+test("conference shows the create-library error and repeated Enter starts one request", async () => {
+  let rejectCreation, attempts = 0;
+  const bridge = {
+    searchConferencePapers: async (options) => conferenceResponse(options),
+    createLibrary: () => { attempts += 1; return new Promise((resolve, reject) => { rejectCreation = reject; }); },
+  };
+  const unmount = await mount(scope.DailyDiscovery, { storageKey: "conference-create-library", initialMode: "conference", bridge, libraries: [], loadingLibraries: false, onImported: async () => {} });
+  try {
+    await click("New library");
+    const name = document.querySelector('[aria-label="New discovery library"]');
+    await input(name, "New collection");
+    await React.act(async () => {
+      name.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      name.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    assert.equal(attempts, 1);
+    await React.act(async () => { rejectCreation(new Error("Name is too long")); });
+    assert.equal(document.querySelector('[role="alert"]').textContent, "Name is too long");
+  } finally { await unmount(); }
+});
+
+test("the arXiv match remains saved when a different feed omits the DOI", () => {
+  const latest = { ...fixture.paper, doi: "10.5555/example", arxiv_id: "2611.12345v2" };
+  const trending = { ...latest, doi: "", arxiv_id: "2611.12345" };
+  assert.equal(scope.discoveryPaperKey(latest), scope.discoveryPaperKey(trending));
 });

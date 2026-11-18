@@ -11,8 +11,8 @@ export type DiscoverySnapshot = {
 };
 
 export function discoveryPaperKey(paper: AcademicSearchResult) {
-  if (paper.doi) return `doi:${paper.doi.trim().toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "").replace(/^doi:\s*/, "")}`;
   if (paper.arxiv_id) return `arxiv:${paper.arxiv_id.toLowerCase().replace(/v\d+$/, "")}`;
+  if (paper.doi) return `doi:${paper.doi.trim().toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "").replace(/^doi:\s*/, "")}`;
   if (paper.s2_id) return `s2:${paper.s2_id.toLowerCase()}`;
   return `title:${paper.title.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()}`;
 }

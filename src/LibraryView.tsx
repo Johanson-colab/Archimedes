@@ -2572,6 +2572,8 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const [newLibraryName, setNewLibraryName] = useState("");
   const [newLibraryOpen, setNewLibraryOpen] = useState(false);
   const [creatingLibrary, setCreatingLibrary] = useState(false);
+  const creatingLibraryRef = useRef(false);
+  const [libraryCreationError, setLibraryCreationError] = useState("");
   const [persistenceError, setPersistenceError] = useState("");
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -2603,7 +2605,7 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
     }).catch((cause) => { if (active) setError(readableError(cause, "Saved papers could not be checked.")); });
     return () => { active = false; };
   }, [bridge, targetLibraryId]);
-  const searchActive = Boolean(submittedQuery);
+  const searchActive = mode !== "conference" && Boolean(submittedQuery);
   const loadFeed = useCallback(async (forceRefresh = false) => {
     if (mode === "conference" || (searchKind === "deep" && submittedQuery)) return;
     const cacheKey = dailyFeedKey({ mode, range, topic, searchKind, submittedQuery });
@@ -2722,22 +2724,28 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   }
 
   async function createLibrary() {
-    if (!newLibraryName.trim()) return;
-    setCreatingLibrary(true); setError("");
+    const name = newLibraryName.trim();
+    if (!name || creatingLibraryRef.current) return;
+    creatingLibraryRef.current = true;
+    setCreatingLibrary(true);
+    setLibraryCreationError("");
     try {
-      const created = await bridge.createLibrary({ projectId, name: newLibraryName.trim() });
+      const created = await bridge.createLibrary({ projectId, name });
       if (!alive.current) return;
       await onImported();
       if (!alive.current) return;
       setTargetLibraryId(created.id); setNewLibraryName(""); setNewLibraryOpen(false);
-    } catch (cause) { setError(readableError(cause, "The library could not be created.")); }
-    finally { setCreatingLibrary(false); }
+    } catch (cause) { setLibraryCreationError(readableError(cause, "The library could not be created.")); }
+    finally { creatingLibraryRef.current = false; setCreatingLibrary(false); }
   }
 
   return <section className="library-page daily-page">
     <div className="daily-feed-toolbar daily-conference-toolbar">
       <div className="daily-live-controls">
-      <Tabs value={searchActive ? "" : mode} onChange={(value) => setMode(value as typeof mode)} label="Paper feed mode" variant="segmented" className="daily-mode-tabs">
+      <Tabs value={searchActive ? "" : mode} onChange={(value) => {
+        if (mode === "conference" && submittedQuery) clearSearch();
+        setMode(value as typeof mode);
+      }} label="Paper feed mode" variant="segmented" className="daily-mode-tabs">
         <Tab value="latest" icon={<Clock3 size={12} />} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Newest arXiv submissions"}>Latest</Tab>
         <Tab value="trending" icon={<Flame size={12} />} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Trending community papers"}>Trending</Tab>
       </Tabs>
@@ -2746,10 +2754,11 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
       <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} disabled={searchActive} title={searchActive ? "Clear search before switching discovery modes" : "Search official conference catalogs"} onClick={() => setMode("conference")}><GraduationCap size={16} />Top conference search</button>
       {mode !== "conference" && !searchActive && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
-      <button className="secondary-button" aria-expanded={newLibraryOpen} onClick={() => setNewLibraryOpen((current) => !current)}>{t("New library")}</button>
+      <button className="secondary-button" aria-expanded={newLibraryOpen} onClick={() => { setNewLibraryOpen((current) => !current); setLibraryCreationError(""); }}>{t("New library")}</button>
     </div>
     {persistenceError && <InlineNotice tone="warning">{persistenceError}</InlineNotice>}
     {newLibraryOpen && <div className="daily-create-library"><label>{t("New discovery library")}<input autoFocus aria-label={t("New discovery library")} value={newLibraryName} onChange={(event) => setNewLibraryName(event.target.value)} placeholder={t("Library name")} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) void createLibrary(); }} /></label><button className="secondary-button" disabled={creatingLibrary || !newLibraryName.trim()} onClick={() => void createLibrary()}>{t("Create library here")}</button></div>}
+    {newLibraryOpen && libraryCreationError && <InlineNotice tone="danger" className="library-error">{libraryCreationError}</InlineNotice>}
     <FilterGroup label="AI research topic" className="daily-topic-filter">{DAILY_TOPICS.map((item) => <FilterButton key={item.id} active={topic === item.id} disabled={searchActive && searchKind === "deep"} title={searchActive && searchKind === "deep" ? "Clear deep search to change its topic constraint" : item.description} onClick={() => setTopic(item.id)}>{item.label}</FilterButton>)}</FilterGroup>
     {mode === "conference" ? <ConferenceDiscovery storageKey={`${storageKey}:conference`} bridge={bridge} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /> : <>
     <div className={searchKind === "deep" ? "daily-search-panel deep" : "daily-search-panel"}>

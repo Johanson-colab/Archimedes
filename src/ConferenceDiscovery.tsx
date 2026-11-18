@@ -30,7 +30,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   const [saved] = useState(() => {
     try {
       const value = JSON.parse(window.localStorage.getItem(storageKey || "") || "null");
-      return value && conferenceCatalog.some((item) => item.id === value.conference) && Array.isArray(value.response?.papers) ? value : null;
+      return value && conferenceCatalog.some((item) => item.id === value.conference) ? value : null;
     } catch { return null; }
   });
   const [conference, setConference] = useState<ConferenceId>(saved?.conference ?? "icml");
@@ -38,12 +38,18 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   const [presentation, setPresentation] = useState<ConferencePresentation | "all">(saved?.presentation ?? "all");
   const [query, setQuery] = useState(saved?.query ?? "");
   const [submittedQuery, setSubmittedQuery] = useState(saved?.submittedQuery ?? "");
-  const [offset, setOffset] = useState<number>(saved?.offset ?? 0);
-  const savedKey = saved?.response ? feedKey(saved) : "";
+  const [offset, setOffset] = useState<number>(saved?.topic === topic ? saved.offset ?? 0 : 0);
+  const [paginationTopic, setPaginationTopic] = useState(topic);
+  if (paginationTopic !== topic) {
+    setPaginationTopic(topic);
+    setOffset(0);
+  }
+  const savedResponse = Array.isArray(saved?.response?.papers) ? saved.response : null;
+  const savedKey = savedResponse ? feedKey(saved) : "";
   const responseCache = useRef(new Map<string, ConferenceSearchResponse>());
   const [feed, setFeed] = useState<ConferenceFeed>(() => {
-    if (savedKey && saved?.response) responseCache.current.set(savedKey, saved.response);
-    return { key: savedKey, response: saved?.response ?? null, error: "", loading: !saved?.response };
+    if (savedResponse) responseCache.current.set(savedKey, savedResponse);
+    return { key: savedKey, response: savedResponse, error: "", loading: !savedResponse };
   });
   const currentKey = feedKey({ conference, year, presentation, topic, submittedQuery, offset });
   const visibleFeed = feed.key === currentKey ? feed : null;
@@ -88,8 +94,6 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
     }
   }, [bridge, conference, year, presentation, topic, submittedQuery, offset]);
   useEffect(() => { void load(); return () => { requestRef.current += 1; }; }, [load]);
-  const previousTopic = useRef(topic);
-  useEffect(() => { if (previousTopic.current !== topic) setOffset(0); previousTopic.current = topic; }, [topic]);
   function search() {
     setOffset(0);
     if (submittedQuery === query.trim() && offset === 0) void load();
