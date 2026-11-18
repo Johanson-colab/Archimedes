@@ -2306,18 +2306,7 @@ function App() {
       return null;
     });
     if (!snapshot) return;
-    flushSync(() => {
-      setWorkspaceOpenError("");
-      clearPendingAssistantDeltas();
-      setWorkspaceReady(false);
-      setSideThread(null);
-      setWorkspace(snapshot.workspace);
-      setProjects(snapshot.projects ?? []);
-      setArchivedProjects(snapshot.archivedProjects ?? []);
-      setThreads(snapshot.threads);
-      setArchivedThreads(snapshot.archivedThreads ?? []);
-      setWorkspaces(snapshot.workspaces ?? []);
-    });
+    flushSync(() => setWorkspaceReady(false));
     const readErrors: string[] = [];
     const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace).catch(error => {
       readErrors.push(errorMessage(error));
@@ -2353,6 +2342,18 @@ function App() {
       return null;
     }) : null;
     flushSync(() => {
+      clearPendingAssistantDeltas();
+      setSideThread(null);
+      setWorkspace(snapshot.workspace);
+      setProjects(snapshot.projects ?? []);
+      setArchivedProjects(snapshot.archivedProjects ?? []);
+      setThreads(snapshot.threads);
+      setArchivedThreads(snapshot.archivedThreads ?? []);
+      setWorkspaces(snapshot.workspaces ?? []);
+      if (snapshot.workspace !== workspace) {
+        setContextItems([]);
+        setComposerRequest(null);
+      }
       setFileTree(nextTree);
       setLoadingDirectories(new Set());
       openFilesRef.current = [];
