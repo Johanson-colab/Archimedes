@@ -901,7 +901,7 @@ app.whenReady().then(async () => {
     return result.canceled ? "" : result.filePaths[0] || "";
   });
   ipcMain.handle("paper-review-app:create", async (event, input = {}) => {
-    const resolvedWorkspace = input.source?.kind === "library"
+    const resolvedWorkspace = (input.source?.kind || "library") === "library"
       ? store.currentStore().workspace
       : resolveWorkspace(input.workspace || windowWorkspaces.get(event.sender.id));
     const sender = event.sender;

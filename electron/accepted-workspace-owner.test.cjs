@@ -62,6 +62,7 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   });
   const review = handlers.get("paper-review-app:create");
   assert.equal(await review(event, { workspace: b, source: { kind: "library" } }), a);
+  assert.equal(await review(event, { workspace: b, source: { paperId: "seed-react" } }), a);
   assert.equal(await review(event, { workspace: b, source: { kind: "pdf" } }), b);
 
   const runStart = source.indexOf('  ipcMain.handle("agent:run",');
