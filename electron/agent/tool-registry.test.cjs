@@ -100,10 +100,10 @@ test('registered external adapters are advertised and invoked through the actual
     if (count === 1) {
       assert.ok(request.tools.some(t => t.function.name === 'mcp'));
       assert.ok(request.tools.some(t => t.function.name === 'research_app'));
-      return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: '', tool_calls: [call('mcp', { value: 'one' }), call('research_app', { value: 'two' })] } }] }) };
+      return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ finish_reason: 'tool_calls', message: { role: 'assistant', content: '', tool_calls: [call('mcp', { value: 'one' }), call('research_app', { value: 'two' })] } }] }) };
     }
     second = request.messages.filter(m => m.role === 'tool');
-    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: 'done' } }] }) };
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'done' } }] }) };
   };
   const result = await runAgent({ prompt: 'Test registered tools', workspace: root, origin: 'research', mode: 'free-chat', capabilities: { command: 'ask', write: 'ask' }, toolRegistry: registry });
   assert.equal(result.status, 'completed');
@@ -135,7 +135,7 @@ test('API IdeaSpark invokes a fresh isolated model context and records correlate
       assert.equal(JSON.parse(request.messages.at(-1).content).status, 'finished');
       message = { role: 'assistant', content: 'Queries ready.' };
     }
-    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message }] }) };
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ finish_reason: message.tool_calls?.length ? 'tool_calls' : 'stop', message }] }) };
   };
   const result = await runAgent({ prompt: 'private main prompt', workspace: root, origin: 'research', researchSkill: 'idea-spark', mode: 'free-chat', capabilities: { command: 'ask', write: 'ask' } });
   assert.equal(result.status, 'completed');
@@ -153,7 +153,7 @@ test('an existing output is not proof that an isolated phase wrote it', async t 
   fs.writeFileSync(path.join(root, runRelative, 'phase1/output.json'), 'old');
   const previous = global.fetch;
   t.after(() => { global.fetch = previous; });
-  global.fetch = async () => ({ ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: 'done' } }] }) });
+  global.fetch = async () => ({ ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'done' } }] }) });
   const registry = createToolRegistry();
   const phaseCall = call('run_isolated_phase', { task: 'Write output', output_paths: [`${runRelative}/phase1/output.json`] });
   const result = await registry.invoke(phaseCall, {
@@ -172,7 +172,7 @@ test('API harness initializes IdeaSpark only when the user explicitly selects it
   t.after(() => { global.fetch = previous; });
   global.fetch = async (_url, options) => {
     requests.push(JSON.parse(options.body));
-    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: 'done' } }] }) };
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'done' } }] }) };
   };
   for (const mode of ['standard', 'create', 'research']) {
     const result = await runAgent({ prompt: 'Design an experiment', workspace: root, origin: 'research', mode, capabilities: { command: 'ask', write: 'ask' } });

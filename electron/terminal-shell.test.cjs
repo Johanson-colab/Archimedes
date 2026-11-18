@@ -92,3 +92,25 @@ test("missing POSIX shells fall back to /bin/sh", () => {
   });
   assert.equal(result.shell, "/bin/sh");
 });
+
+test("Windows shell candidates use target paths for store installs and alternate drives", () => {
+  const storeShell = "D:\\Users\\Researcher\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe";
+  const store = resolveTerminalShell({
+    platform: "win32",
+    env: { ProgramW6432: "D:\\Programs", LOCALAPPDATA: "D:\\Users\\Researcher\\AppData\\Local", SystemRoot: "D:\\Windows" },
+    exists: (candidate) => candidate === storeShell,
+    userShell: "",
+  });
+  assert.equal(store.shell, storeShell);
+  assert.deepEqual(store.args, []);
+
+  const installedShell = "D:\\Programs\\PowerShell\\7\\pwsh.exe";
+  const installed = resolveTerminalShell({
+    platform: "win32",
+    profile: "pwsh",
+    env: { ProgramW6432: "D:\\Programs", SystemRoot: "D:\\Windows" },
+    exists: (candidate) => candidate === installedShell,
+    userShell: "",
+  });
+  assert.equal(installed.shell, installedShell);
+});
