@@ -1,0 +1,14 @@
+{
+  "source": "https://benchmark-radar.com/data/benchmarks_index.json",
+  "checkedAt": "2026-11-16T15:21:19.911Z",
+  "dataAsOf": "2026-11-16",
+  "visibleRadar": 2351,
+  "visibleLibrary": 4009,
+  "visibleNovember": 164,
+  "newest": {
+    "name": "AscendGYM",
+    "releasedAt": "2026-11-13"
+  },
+  "migratedFromSchema": 1,
+  "cacheSchema": 2
+}

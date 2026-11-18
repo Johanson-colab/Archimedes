@@ -14,6 +14,7 @@ export const composer: Record<string, string> = {
   "File limit reached": "已达到文件数量上限",
   "Files: {entries} · Tracked by size and time: {metadataOnly} · Ignored directories: {ignoredDirectories}": "文件数：{entries} · 按大小和时间跟踪：{metadataOnly} · 忽略的目录数：{ignoredDirectories}",
   "Idea Spark": "Idea Spark",
+  "Incomplete": "未完成",
   "Plugins": "插件",
   "Reading research context": "正在读取研究上下文",
   "Remove Idea Spark": "移除 Idea Spark",

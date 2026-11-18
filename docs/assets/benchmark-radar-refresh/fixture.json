@@ -1,0 +1,271 @@
+{
+  "source": "remote",
+  "sourceRoot": "https://benchmark-radar.org/data/benchmark-index.json",
+  "updatedAt": "2026-10-15",
+  "fetchedAt": "2026-11-16T08:00:00Z",
+  "radar": [
+    {
+      "id": "bm_visualtrust_180fc6c5",
+      "name": "VisualTrust",
+      "title": "VisualTrust",
+      "description": "VisualTrust is a counterfactual video question-answering benchmark with 5,063 cases across 14 claim-fact classes, pairing each question with no-claim, accurate-claim, and misleading-claim versions of the same video.",
+      "oneLine": "VisualTrust is a counterfactual video question-answering benchmark with 5,063 cases across 14 claim-fact classes, pairing each question with no-claim, accurate-claim, and misleading-claim versions of the same video.",
+      "releasedAt": "2026-10-15",
+      "readiness": "Runnable",
+      "area": "Vision & 3D",
+      "primaryDomain": "General AI",
+      "topics": [
+        "Reasoning"
+      ],
+      "capabilities": [
+        "Reasoning"
+      ],
+      "capabilityGroups": [
+        "Multimodal Perception"
+      ],
+      "directions": [
+        "safety-alignment",
+        "video-understanding"
+      ],
+      "authors": [],
+      "publication": {
+        "status": "unverified",
+        "venue": ""
+      },
+      "links": {
+        "report": "https://arxiv.org/abs/2610.21159",
+        "pdf": "https://arxiv.org/pdf/2610.21159",
+        "code": "https://github.com/huachao0124/VisualTrust"
+      },
+      "attention": {
+        "githubStars": null,
+        "hfPaperUpvotes": null,
+        "datasetDownloads": null
+      },
+      "attentionScore": null,
+      "attentionRank": null,
+      "forecast": 45,
+      "forecastReason": "The counterfactual video setup and large model comparison are topical, but artifact readiness and standalone evaluation paths are not clearly established.",
+      "forecastConfidence": "Low",
+      "forecastHorizon": "7d"
+    },
+    {
+      "id": "bm_visual-sanad_19fdacb8",
+      "name": "Visual Sanad",
+      "title": "Visual Sanad",
+      "description": "Visual Sanad is a controlled benchmark of 2,400 rendered images built from 100 English Qur'an verses, four factual states per verse, and six visual conditions, used to test whether vision-language models falsely accept incorrect Qur'anic verse attributions.",
+      "oneLine": "Visual Sanad is a controlled benchmark of 2,400 rendered images built from 100 English Qur'an verses, four factual states per verse, and six visual conditions, used to test whether vision-language models falsely accept incorrect Qur'anic verse attributions.",
+      "releasedAt": "2026-10-15",
+      "readiness": "Runnable",
+      "area": "Multimodal",
+      "primaryDomain": "General AI",
+      "topics": [
+        "Multimodal"
+      ],
+      "capabilities": [],
+      "capabilityGroups": [
+        "Multimodal Perception"
+      ],
+      "directions": [
+        "factuality",
+        "visual-reasoning"
+      ],
+      "authors": [],
+      "publication": {
+        "status": "acceptance_claimed",
+        "venue": "poster presentation at the Muslims in Machine Learning (MusIML) Workshop at NeurIPS 2026"
+      },
+      "links": {
+        "report": "https://arxiv.org/abs/2610.22009",
+        "pdf": "https://arxiv.org/pdf/2610.22009",
+        "code": "https://github.com/NiazTahi/Visual-Sanad"
+      },
+      "attention": {
+        "githubStars": null,
+        "hfPaperUpvotes": null,
+        "datasetDownloads": null
+      },
+      "attentionScore": null,
+      "attentionRank": null,
+      "forecast": 30,
+      "forecastReason": "The domain is culturally specific and the artifact appears limited to a workshop paper snapshot, which constrains broad early attention.",
+      "forecastConfidence": "Low",
+      "forecastHorizon": "7d"
+    },
+    {
+      "id": "bm_valcon-benchmarking-and-enhancing-value-co_bc6d3a25",
+      "name": "VALCON",
+      "title": "VALCON",
+      "description": "VALCON is a benchmark suite with three suites (VAB-Consistency, VAB-Boundary, VAB-Challenge) that pairs an LLM's generation of value-conditioned question-answer samples with its own judgments under the same value principles, scoring self-reflective consistency across roles.",
+      "oneLine": "VALCON is a benchmark suite with three suites (VAB-Consistency, VAB-Boundary, VAB-Challenge) that pairs an LLM's generation of value-conditioned question-answer samples with its own judgments under the same value principles, scoring self-reflective consistency across roles.",
+      "releasedAt": "2026-10-15",
+      "readiness": "Runnable",
+      "area": "Language & Knowledge",
+      "primaryDomain": "General AI",
+      "topics": [
+        "cs.CL"
+      ],
+      "capabilities": [],
+      "capabilityGroups": [
+        "Knowledge & Reasoning"
+      ],
+      "directions": [
+        "safety-alignment"
+      ],
+      "authors": [],
+      "publication": {
+        "status": "acceptance_claimed",
+        "venue": "Findings of the Association for Computational Linguistics: EMNLP 2026"
+      },
+      "links": {
+        "report": "https://arxiv.org/abs/2610.21304",
+        "pdf": "https://arxiv.org/pdf/2610.21304",
+        "code": "https://github.com/tjunlp-lab/VALCON"
+      },
+      "attention": {
+        "githubStars": null,
+        "hfPaperUpvotes": null,
+        "datasetDownloads": null
+      },
+      "attentionScore": null,
+      "attentionRank": null,
+      "forecast": 52,
+      "forecastReason": "The suite covers a broad LLM alignment question with released bilingual data and code, which supports interest among alignment and evaluation researchers.",
+      "forecastConfidence": "Medium",
+      "forecastHorizon": "7d"
+    }
+  ],
+  "library": [
+    {
+      "id": "bm_visualtrust_180fc6c5",
+      "name": "VisualTrust",
+      "title": "VisualTrust",
+      "description": "VisualTrust is a counterfactual video question-answering benchmark with 5,063 cases across 14 claim-fact classes, pairing each question with no-claim, accurate-claim, and misleading-claim versions of the same video.",
+      "oneLine": "VisualTrust is a counterfactual video question-answering benchmark with 5,063 cases across 14 claim-fact classes, pairing each question with no-claim, accurate-claim, and misleading-claim versions of the same video.",
+      "releasedAt": "2026-10-15",
+      "readiness": "Runnable",
+      "area": "Vision & 3D",
+      "primaryDomain": "General AI",
+      "topics": [
+        "Reasoning"
+      ],
+      "capabilities": [
+        "Reasoning"
+      ],
+      "capabilityGroups": [
+        "Multimodal Perception"
+      ],
+      "directions": [
+        "safety-alignment",
+        "video-understanding"
+      ],
+      "authors": [],
+      "publication": {
+        "status": "unverified",
+        "venue": ""
+      },
+      "links": {
+        "report": "https://arxiv.org/abs/2610.21159",
+        "pdf": "https://arxiv.org/pdf/2610.21159",
+        "code": "https://github.com/huachao0124/VisualTrust"
+      },
+      "attention": {
+        "githubStars": null,
+        "hfPaperUpvotes": null,
+        "datasetDownloads": null
+      },
+      "attentionScore": null,
+      "attentionRank": null,
+      "forecast": 45,
+      "forecastReason": "The counterfactual video setup and large model comparison are topical, but artifact readiness and standalone evaluation paths are not clearly established.",
+      "forecastConfidence": "Low",
+      "forecastHorizon": "7d"
+    },
+    {
+      "id": "bm_visual-sanad_19fdacb8",
+      "name": "Visual Sanad",
+      "title": "Visual Sanad",
+      "description": "Visual Sanad is a controlled benchmark of 2,400 rendered images built from 100 English Qur'an verses, four factual states per verse, and six visual conditions, used to test whether vision-language models falsely accept incorrect Qur'anic verse attributions.",
+      "oneLine": "Visual Sanad is a controlled benchmark of 2,400 rendered images built from 100 English Qur'an verses, four factual states per verse, and six visual conditions, used to test whether vision-language models falsely accept incorrect Qur'anic verse attributions.",
+      "releasedAt": "2026-10-15",
+      "readiness": "Runnable",
+      "area": "Multimodal",
+      "primaryDomain": "General AI",
+      "topics": [
+        "Multimodal"
+      ],
+      "capabilities": [],
+      "capabilityGroups": [
+        "Multimodal Perception"
+      ],
+      "directions": [
+        "factuality",
+        "visual-reasoning"
+      ],
+      "authors": [],
+      "publication": {
+        "status": "acceptance_claimed",
+        "venue": "poster presentation at the Muslims in Machine Learning (MusIML) Workshop at NeurIPS 2026"
+      },
+      "links": {
+        "report": "https://arxiv.org/abs/2610.22009",
+        "pdf": "https://arxiv.org/pdf/2610.22009",
+        "code": "https://github.com/NiazTahi/Visual-Sanad"
+      },
+      "attention": {
+        "githubStars": null,
+        "hfPaperUpvotes": null,
+        "datasetDownloads": null
+      },
+      "attentionScore": null,
+      "attentionRank": null,
+      "forecast": 30,
+      "forecastReason": "The domain is culturally specific and the artifact appears limited to a workshop paper snapshot, which constrains broad early attention.",
+      "forecastConfidence": "Low",
+      "forecastHorizon": "7d"
+    },
+    {
+      "id": "bm_valcon-benchmarking-and-enhancing-value-co_bc6d3a25",
+      "name": "VALCON",
+      "title": "VALCON",
+      "description": "VALCON is a benchmark suite with three suites (VAB-Consistency, VAB-Boundary, VAB-Challenge) that pairs an LLM's generation of value-conditioned question-answer samples with its own judgments under the same value principles, scoring self-reflective consistency across roles.",
+      "oneLine": "VALCON is a benchmark suite with three suites (VAB-Consistency, VAB-Boundary, VAB-Challenge) that pairs an LLM's generation of value-conditioned question-answer samples with its own judgments under the same value principles, scoring self-reflective consistency across roles.",
+      "releasedAt": "2026-10-15",
+      "readiness": "Runnable",
+      "area": "Language & Knowledge",
+      "primaryDomain": "General AI",
+      "topics": [
+        "cs.CL"
+      ],
+      "capabilities": [],
+      "capabilityGroups": [
+        "Knowledge & Reasoning"
+      ],
+      "directions": [
+        "safety-alignment"
+      ],
+      "authors": [],
+      "publication": {
+        "status": "acceptance_claimed",
+        "venue": "Findings of the Association for Computational Linguistics: EMNLP 2026"
+      },
+      "links": {
+        "report": "https://arxiv.org/abs/2610.21304",
+        "pdf": "https://arxiv.org/pdf/2610.21304",
+        "code": "https://github.com/tjunlp-lab/VALCON"
+      },
+      "attention": {
+        "githubStars": null,
+        "hfPaperUpvotes": null,
+        "datasetDownloads": null
+      },
+      "attentionScore": null,
+      "attentionRank": null,
+      "forecast": 52,
+      "forecastReason": "The suite covers a broad LLM alignment question with released bilingual data and code, which supports interest among alignment and evaluation researchers.",
+      "forecastConfidence": "Medium",
+      "forecastHorizon": "7d"
+    }
+  ],
+  "directions": []
+}

@@ -49,8 +49,9 @@ test('a clicked directory link expands nested Files entries and can still open a
   const names = ['React','useState','useEffect','useRef','useCallback','useUISettings','WorkspaceFileGlyph','workspaceFileTone','FilePreview','FolderOpen','RefreshCw','Plus','ChevronDown','ChevronRight','ChevronLeft','ChevronsLeft','ChevronsRight','Maximize2','Minimize2','X','MenuSurface','MenuItem','MenuDivider'];
   const values = [React,React.useState,React.useEffect,React.useRef,React.useCallback,() => ({ t: value => value }),icon,() => 'file',FilePreview,...Array(names.length - 9).fill(icon)];
   const { FilesView, setDirectoryChildren, ensureDirectoryPath } = new Function(...names, 'workspacePathName', `${code}\nreturn { FilesView, setDirectoryChildren, ensureDirectoryPath };`)(...values, workspacePathName);
-  const { code: openerCode } = await transformWithOxc(section(app, '  async function openChangedFile(', '\n  function askAIAboutPaper('), 'path-opener.tsx');
-  const openerFactory = new Function('pathOpenRequestRef','executionWorkspace','executionWorkspaceRef','desktopBridge','setFileTree','setFileError','setDirectoryRequest','openWorkbench','setPaperOpenRequest','setMainSection','openFilePane','setSelectedFilePath','setSelectedFile','setFileLoading','setDirectoryChildren','ensureDirectoryPath', `${openerCode}\nreturn openChangedFile;`);
+  const openerSource = section(app, '  function isCurrentFileWorkspace(', '\n  function updateFileScope(') + section(app, '  async function openChangedFile(', '\n  function askAIAboutPaper(');
+  const { code: openerCode } = await transformWithOxc(openerSource, 'path-opener.tsx');
+  const openerFactory = new Function('pathOpenRequestRef','executionWorkspace','executionWorkspaceRef','desktopBridge','setFileTree','setFileError','setDirectoryRequest','openWorkbench','setPaperOpenRequest','setMainSection','openFilePane','setSelectedFilePath','setSelectedFile','setFileLoading','setDirectoryChildren','ensureDirectoryPath','fileWorkspaceVersion','fileWorkspaceVersionRef', `${openerCode}\nreturn openChangedFile;`);
   const noOp = () => {};
   const fileReads = [];
   function Harness() {
@@ -60,7 +61,7 @@ test('a clicked directory link expands nested Files entries and can still open a
     const [file, setSelectedFile] = React.useState(() => readWorkspaceFile(root, 'old.md'));
     const [error, setFileError] = React.useState('previous error');
     const [, setFileLoading] = React.useState(false);
-    const pathOpenRequestRef = React.useRef(0), executionWorkspaceRef = React.useRef(root);
+    const pathOpenRequestRef = React.useRef(0), executionWorkspaceRef = React.useRef(root), fileWorkspaceVersionRef = React.useRef(0);
     const clearRequest = React.useCallback(id => setDirectoryRequest(current => current?.id === id ? null : current), []);
     const openFilePane = React.useCallback(async filePath => {
       fileReads.push(filePath);
@@ -73,7 +74,7 @@ test('a clicked directory link expands nested Files entries and can still open a
       setFileTree(current => ({ ...current, entries: setDirectoryChildren(current.entries, directory, listing.entries) }));
     }, []);
     const bridge = { inspectWorkspacePath: async (_workspace, filePath) => inspectWorkspacePath(root, filePath), listWorkspaceFiles: async (_workspace, directory = "") => listWorkspaceDirectory(root, directory) };
-    const openChangedFile = openerFactory(pathOpenRequestRef, root, executionWorkspaceRef, bridge, setFileTree, setFileError, setDirectoryRequest, noOp, noOp, noOp, openFilePane, setSelectedFilePath, setSelectedFile, setFileLoading, setDirectoryChildren, ensureDirectoryPath);
+    const openChangedFile = openerFactory(pathOpenRequestRef, root, executionWorkspaceRef, bridge, setFileTree, setFileError, setDirectoryRequest, noOp, noOp, noOp, openFilePane, setSelectedFilePath, setSelectedFile, setFileLoading, setDirectoryChildren, ensureDirectoryPath, fileWorkspaceVersionRef.current, fileWorkspaceVersionRef);
     return React.createElement(React.Fragment, null,
       React.createElement(links.WorkspaceMarkdownProvider, { workspace: root, onOpenFile: openChangedFile }, React.createElement(markdown.default, { urlTransform: links.workspaceMarkdownUrlTransform, components: { a: links.WorkspaceMarkdownLink } }, '[Skills](.codex/skills) [Nested](node_modules/nested) [Missing](missing-folder)')),
       React.createElement(FilesView, { workspace: root, tree, selectedPath, directoryRequest, onDirectoryRequestHandled: clearRequest, file, error,
@@ -118,14 +119,15 @@ test('a clicked directory link expands nested Files entries and can still open a
 test('newer path requests win over slower directory inspection', async () => {
   const app = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8');
   const { transformWithOxc } = await import('vite');
-  const { code } = await transformWithOxc(section(app, '  async function openChangedFile(', '\n  function askAIAboutPaper('), 'path-opener-race.tsx');
-  const openerFactory = new Function('pathOpenRequestRef','executionWorkspace','executionWorkspaceRef','desktopBridge','setFileTree','setFileError','setDirectoryRequest','openWorkbench','setPaperOpenRequest','setMainSection','openFilePane','setSelectedFilePath','setSelectedFile','setFileLoading','setDirectoryChildren','ensureDirectoryPath', `${code}\nreturn openChangedFile;`);
-  const request = { current: 0 }, workspace = { current: '/workspace' }, actions = [];
+  const openerSource = section(app, '  function isCurrentFileWorkspace(', '\n  function updateFileScope(') + section(app, '  async function openChangedFile(', '\n  function askAIAboutPaper(');
+  const { code } = await transformWithOxc(openerSource, 'path-opener-race.tsx');
+  const openerFactory = new Function('pathOpenRequestRef','executionWorkspace','executionWorkspaceRef','desktopBridge','setFileTree','setFileError','setDirectoryRequest','openWorkbench','setPaperOpenRequest','setMainSection','openFilePane','setSelectedFilePath','setSelectedFile','setFileLoading','setDirectoryChildren','ensureDirectoryPath','fileWorkspaceVersion','fileWorkspaceVersionRef', `${code}\nreturn openChangedFile;`);
+  const request = { current: 0 }, workspace = { current: '/workspace' }, version = { current: 0 }, actions = [];
   let release;
   const delayed = new Promise(resolve => { release = resolve; });
   const bridge = { inspectWorkspacePath: async (_root, filePath) => filePath === 'slow' ? delayed : { path: filePath, type: 'file' }, listWorkspaceFiles: async () => ({ entries: [] }) };
   const noOp = () => {};
-  const open = openerFactory(request, '/workspace', workspace, bridge, noOp, noOp, value => actions.push(['directory', value.path]), noOp, noOp, noOp, value => actions.push(['file', value]), noOp, noOp, noOp, noOp, noOp);
+  const open = openerFactory(request, '/workspace', workspace, bridge, noOp, noOp, value => actions.push(['directory', value.path]), noOp, noOp, noOp, value => actions.push(['file', value]), noOp, noOp, noOp, noOp, noOp, version.current, version);
   const first = open('slow');
   await open('current.md');
   release({ path: 'slow', type: 'directory' });
@@ -139,5 +141,17 @@ test('newer path requests win over slower directory inspection', async () => {
   workspace.current = '/another-workspace';
   releaseNext({ path: 'stale', type: 'directory' });
   await staleWorkspace;
+  assert.deepEqual(actions, [['file', 'current.md']]);
+
+  workspace.current = '/workspace';
+  let releaseRoundTrip;
+  bridge.inspectWorkspacePath = async () => new Promise(resolve => { releaseRoundTrip = resolve; });
+  const roundTrip = open('round-trip');
+  workspace.current = '/another-workspace';
+  version.current++;
+  workspace.current = '/workspace';
+  version.current++;
+  releaseRoundTrip({ path: 'round-trip', type: 'directory' });
+  await roundTrip;
   assert.deepEqual(actions, [['file', 'current.md']]);
 });
