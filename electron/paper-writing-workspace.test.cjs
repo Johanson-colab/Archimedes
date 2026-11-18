@@ -453,6 +453,105 @@ test("projects sharing one execution folder restore their own manuscript selecti
   assert.equal(document.querySelector('.latex-editor-textarea').value, source("A edit remains owned by the original file"));
 });
 
+for (const olderFirst of [true, false]) {
+  const order = olderFirst ? "older read resolves first" : "newer read resolves first";
+  for (const cached of [true, false]) {
+    test(`shared ${cached ? "cached" : "uncached"} source keeps the latest read when the ${order}`, async t => {
+      const pending = [];
+      let hold = false;
+      const options = {
+        projectId: "project-a",
+        read: async (root, name, preview) => {
+          const snapshot = preview(root, name);
+          if (hold) {
+            const gate = deferred();
+            pending.push(gate);
+            await gate.promise;
+          }
+          return snapshot;
+        },
+        compile: async () => ({ ok: true, preview_url: "https://example.invalid/manuscript.pdf", diagnostics: [], log: "Saved preview" }),
+      };
+      const f = await fixture(t, options);
+      const name = cached ? "paper/main.tex" : "paper/part.tex";
+      const target = path.join(f.a, name);
+      if (!cached) fs.writeFileSync(target, "Original section\n");
+      if (cached) {
+        await f.render(f.a, 1); await autoCompileOff();
+        options.projectId = "project-b";
+        await f.render(f.a, 2); await click("Recompile");
+        options.projectId = "project-a";
+        await f.render(f.a, null);
+      }
+      hold = true;
+      if (cached) await click(name);
+      else await f.render(f.a, 1, name);
+      assert.equal(pending.length, 1);
+      const fresh = cached ? source("Agent added a new result") : "Agent added a new section\n";
+      fs.writeFileSync(target, fresh);
+      options.projectId = "project-b";
+      await f.render(f.a, cached ? null : 2, name);
+      assert.equal(pending.length, 2);
+      const current = () => document.querySelector(".latex-editor-textarea");
+      if (cached) {
+        assert.equal(current().readOnly, true);
+        assert.match(document.querySelector("iframe").src, /manuscript\.pdf$/);
+      }
+
+      const resolve = index => React.act(async () => pending[index].resolve());
+      await resolve(olderFirst ? 0 : 1);
+      if (olderFirst && cached) assert.equal(current().readOnly, true);
+      if (!olderFirst) assert.equal(current().value, fresh, "a newer read can commit before the obsolete request finishes");
+      await resolve(olderFirst ? 1 : 0);
+      assert.equal(current().readOnly, false);
+      assert.equal(current().value, fresh);
+      if (cached) assert.equal(document.querySelector("iframe"), null, "changed sources invalidate B's previous preview");
+      options.projectId = "project-a";
+      await f.render(f.a, null, undefined, false);
+      assert.equal(current().value, fresh, "A also settles its selection on the shared latest document");
+
+      // Continue from the fresh source and persist it through the normal departure save.
+      hold = false;
+      await f.render(f.a, null);
+      const edited = fresh + "% User edit\n";
+      await edit(edited, name);
+      await f.render(f.b, null); await settle();
+      assert.equal(fs.readFileSync(target, "utf8"), edited);
+    });
+  }
+}
+
+test("sharing a document keeps dirty text and retains the preview after an unchanged refresh", async t => {
+  const saved = deferred();
+  const options = {
+    projectId: "project-a",
+    write: async () => saved.promise,
+    compile: async () => ({ ok: true, preview_url: "https://example.invalid/manuscript.pdf", diagnostics: [], log: "Saved preview" }),
+  };
+  const f = await fixture(t, options);
+  await f.render(f.a, 1); await autoCompileOff();
+  options.projectId = "project-b";
+  await f.render(f.a, 2); await click("Recompile");
+  options.projectId = "project-a";
+  await f.render(f.a, null);
+  options.projectId = "project-b";
+  await f.render(f.a, null);
+  assert.match(document.querySelector("iframe").src, /manuscript\.pdf$/);
+
+  options.projectId = "project-a";
+  await f.render(f.a, null);
+  const draft = source("Edited in the shared draft");
+  await edit(draft);
+  const before = f.reads.length;
+  options.projectId = "project-b";
+  await f.render(f.a, null);
+  assert.equal(f.reads.length, before, "a saved or pending disk read must not replace a local unsaved draft");
+  assert.equal(document.querySelector(".latex-editor-textarea").value, draft);
+  await React.act(async () => saved.resolve());
+  assert.equal(f.disk(f.a), draft);
+  assert.equal(document.querySelector(".latex-editor-textarea").value, draft);
+});
+
 test("returning to a clean cached manuscript reloads external edits before the next save", async t => {
   const f = await fixture(t);
   await f.render(f.a); await autoCompileOff();

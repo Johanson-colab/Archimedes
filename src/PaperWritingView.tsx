@@ -9,7 +9,7 @@ import { Tab, Tabs } from "./Tabs";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import { findSourceMatches, sourceMarksByLine, type SourceMark } from "./paper-source-search";
-import { createWritingDocument, createWritingScope, editWritingDocument, saveWritingDocument, readWritingLocation, rememberWritingLocation, type WritingScope } from "./paper-writing-state";
+import { createWritingScope, editWritingDocument, readWritingDocument, saveWritingDocument, readWritingLocation, rememberWritingLocation, type WritingScope } from "./paper-writing-state";
 import "./paper-source-search.css";
 import "./paper-writing-workspace.css";
 
@@ -144,7 +144,10 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
   if (!scope) {
     scope = createWritingScope(workspace);
     const sameRoot = [...scopesRef.current.values()].find(item => item.workspace === workspace);
-    if (sameRoot) scope.documents = sameRoot.documents;
+    if (sameRoot) {
+      scope.documents = sameRoot.documents;
+      scope.documentReads = sameRoot.documentReads;
+    }
     scopesRef.current.set(scopeKey, scope);
   }
   const owner = scope;
@@ -244,21 +247,14 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     }
     const previous = owner.documents.get(owner.selectedPath);
     if (previous && previous.draft !== previous.savedDraft) void saveWritingDocument(previous, bridge.writeWorkspaceFile, refreshScope).catch(() => {});
-    const version = cached?.version;
+    const savedAtStart = cached?.savedDraft;
     refreshScope();
     try {
-      const next = keepDraft ? cached.file : await bridge.readWorkspaceFile(owner.workspace, path);
+      const opened = keepDraft ? cached : await readWritingDocument(owner, path, bridge.readWorkspaceFile);
       if (request !== owner.openSequence) return;
-      let opened = owner.documents.get(path);
-      if (!opened) { opened = createWritingDocument(owner.workspace, next); owner.documents.set(path, opened); }
-      else if (opened.version === version && opened.draft === opened.savedDraft) {
-        const changed = opened.savedDraft !== (next.content || "");
-        opened.file = next; opened.draft = next.content || ""; opened.savedDraft = opened.draft;
-        if (!refreshClean || changed) opened.version += 1;
-        if (refreshClean && changed) {
-          ++owner.compileSequence; owner.compileTarget = "";
-          owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
-        }
+      if (refreshClean && savedAtStart !== opened.savedDraft) {
+        ++owner.compileSequence; owner.compileTarget = "";
+        owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
       }
       owner.selectedPath = path;
       owner.activeProblem = null; owner.error = ""; owner.activeDirectory = projectRoot(path);

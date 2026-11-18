@@ -23,6 +23,7 @@ export function createWritingScope(workspace: string) {
     mainPath: "",
     selectedPath: "",
     documents: new Map<string, WritingDocument>(),
+    documentReads: new Map<string, Promise<WritingDocument>>(),
     expanded: new Set<string>(),
     activeDirectory: "",
     error: "",
@@ -58,6 +59,37 @@ export type WritingScope = ReturnType<typeof createWritingScope>;
 export function createWritingDocument(workspace: string, file: WorkspaceFilePreview): WritingDocument {
   const content = file.content || "";
   return { workspace, file, draft: content, savedDraft: content, saveState: "saved", error: "", version: 0, saveQueue: Promise.resolve() };
+}
+
+/** One read per root/path owns the cached bytes, even across project selections. */
+export function readWritingDocument(
+  { workspace, documents, documentReads }: WritingScope,
+  path: string,
+  read: ResearchDeskBridge["readWorkspaceFile"],
+): Promise<WritingDocument> {
+  const version = documents.get(path)?.version;
+  const pending: Promise<WritingDocument> = Promise.resolve().then(() => read(workspace, path)).then(file => {
+    const latest = documentReads.get(path)!;
+    if (latest !== pending) return latest;
+    const document = documents.get(path);
+    if (!document) {
+      const opened = createWritingDocument(workspace, file);
+      documents.set(path, opened);
+      return opened;
+    }
+    if (document.version === version && document.draft === document.savedDraft && document.saveState === "saved") {
+      document.file = file;
+      document.draft = file.content || "";
+      document.savedDraft = document.draft;
+    }
+    return document;
+  }).catch(error => {
+    const latest = documentReads.get(path)!;
+    if (latest !== pending) return latest;
+    throw error;
+  });
+  documentReads.set(path, pending);
+  return pending;
 }
 
 export function editWritingDocument(document: WritingDocument, content: string) {
