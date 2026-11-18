@@ -84,6 +84,7 @@ const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
 const windowWorkspaces = new Map();
 const windowStartupWorkspaces = new Map();
+const windowApprovalClaims = new Map();
 const windowPreviewTokens = new Map();
 const previewTokenWorkspaces = new Map();
 const workspaceWatchers = new Map();
@@ -159,8 +160,18 @@ function stopWorkspaceWatcher(senderId) {
 }
 
 function setWindowWorkspace(senderId, workspace) {
+  if (windowWorkspaces.get(senderId) !== workspace) releaseWindowApprovalClaim(senderId);
   windowWorkspaces.set(senderId, workspace);
   return createPreviewToken(senderId, workspace);
+}
+
+function releaseWindowApprovalClaim(senderId) {
+  const claim = windowApprovalClaims.get(senderId);
+  if (!claim) return;
+  windowApprovalClaims.delete(senderId);
+  if (![...windowApprovalClaims.values()].some(({ workspace, threadId }) => workspace === claim.workspace && threadId === claim.threadId)) {
+    agent.setApprovalSurface(claim.threadId, false, claim.workspace);
+  }
 }
 
 function createPreviewToken(senderId, workspace) {
@@ -310,6 +321,7 @@ function createWindow(workspace) {
   }
 
   browserWindow.on("closed", () => {
+    releaseWindowApprovalClaim(senderId);
     closeWindowTerminals(senderId);
     stopWorkspaceWatcher(senderId);
     void presence?.leave(String(senderId));
@@ -2283,9 +2295,20 @@ app.whenReady().then(async () => {
     return action;
   });
 
-  ipcMain.handle("agent:claim-approvals", (_event, threadId, claimed) => {
+  ipcMain.handle("agent:claim-approvals", (event, threadId, claimed, requestedWorkspace) => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread ID is required.");
-    return { claimed: agent.setApprovalSurface(threadId, Boolean(claimed)) };
+    const senderId = event.sender.id;
+    const workspace = windowWorkspaces.get(senderId);
+    if (!workspace || (requestedWorkspace && requestedWorkspace !== workspace)) return { claimed: false };
+    const existing = windowApprovalClaims.get(senderId);
+    if (existing?.threadId === threadId) {
+      if (!claimed) releaseWindowApprovalClaim(senderId);
+      return { claimed: Boolean(claimed) };
+    }
+    if (!claimed) return { claimed: false };
+    releaseWindowApprovalClaim(senderId);
+    windowApprovalClaims.set(senderId, { workspace, threadId });
+    return { claimed: agent.setApprovalSurface(threadId, true, workspace) };
   });
 
   ipcMain.handle("agent:interrupt", (_event, threadId) => {

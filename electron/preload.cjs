@@ -205,7 +205,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listCodexModelCatalog: (input) => ipcRenderer.invoke("agent-backend:codex-models", input),
   steerNativeAgent: (threadId, text, workspace) => ipcRenderer.invoke("agent:native-steer", { threadId, text, workspace }),
   answerNativeAgentQuestion: (threadId, questionId, answers, workspace) => ipcRenderer.invoke("agent:native-answer", { threadId, questionId, answers, workspace }),
-  claimApprovals: (threadId, claimed) => ipcRenderer.invoke("agent:claim-approvals", threadId, claimed),
+  claimApprovals: (threadId, claimed, workspace) => ipcRenderer.invoke("agent:claim-approvals", threadId, claimed, workspace),
   runProactiveReply: (input) => ipcRenderer.invoke("proactive:reply", input),
   prepareFigurePlan: (input) => ipcRenderer.invoke("figure-forge:prepare", input),
   analyzeFigureReferences: (input) => ipcRenderer.invoke("figure-forge:analyze-references", input),

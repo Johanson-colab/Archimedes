@@ -1540,10 +1540,10 @@ function App() {
   // the only one whose prompts can actually be answered. Claiming it here lets
   // the agent veto a write instead of waiting for a prompt nobody can see.
   useEffect(() => {
-    if (!activeThreadId || typeof desktopBridge?.claimApprovals !== "function") return;
-    void desktopBridge.claimApprovals(activeThreadId, true).catch(() => {});
-    return () => { void desktopBridge.claimApprovals(activeThreadId, false).catch(() => {}); };
-  }, [activeThreadId]);
+    if (!workspace || !activeThreadId || typeof desktopBridge?.claimApprovals !== "function") return;
+    void desktopBridge.claimApprovals(activeThreadId, true, workspace).catch(() => {});
+    return () => { void desktopBridge.claimApprovals(activeThreadId, false, workspace).catch(() => {}); };
+  }, [activeThreadId, workspace]);
   useEffect(() => {
     if (!activeProjectId || !authState?.user || typeof desktopBridge?.joinProjectPresence !== "function") {
       setPresenceMembers([]);

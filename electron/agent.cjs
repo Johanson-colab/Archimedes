@@ -1216,8 +1216,8 @@ function hasApprovalSurface(threadId) {
   return hasClaimedSurface(defaultStore.runtimeThreadId(threadId));
 }
 
-function setApprovalSurface(threadId, active) {
-  return claimApprovalSurface(defaultStore.runtimeThreadId(threadId), active);
+function setApprovalSurface(threadId, active, workspace) {
+  return claimApprovalSurface(defaultStore.runtimeThreadId(threadId, workspace), active);
 }
 
 module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, setApprovalSurface, translatePaperSelection };

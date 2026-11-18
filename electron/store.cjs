@@ -87,8 +87,8 @@ function closeAllWorkspaces() {
   for (const state of workspaceStates.values()) closeState(state);
 }
 
-function runtimeThreadId(threadId) {
-  return JSON.stringify([activeWorkspace() || "", threadId]);
+function runtimeThreadId(threadId, workspace = activeWorkspace()) {
+  return JSON.stringify([workspace || "", threadId]);
 }
 let localIdentity = {
   userId: "local-user",
