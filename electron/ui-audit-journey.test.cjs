@@ -19,6 +19,7 @@ const tokens = fs.readFileSync(path.join(root, "src", "tokens.css"), "utf8");
 const summarizer = fs.readFileSync(path.join(root, "electron", "journey-summarizer.cjs"), "utf8");
 const snapshots = fs.readFileSync(path.join(root, "electron", "journey-snapshots.cjs"), "utf8");
 const eventState = fs.readFileSync(path.join(root, "src", "journeyEventState.ts"), "utf8");
+const chatTimeline = fs.readFileSync(path.join(root, "src", "ChatActivityTimeline.tsx"), "utf8");
 const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
 
 test("journey lives in Workbench > Research path with all controls", () => {
@@ -119,6 +120,15 @@ test("journey story uses chapters, a scrubber, evidence, and a pinned next move"
   assert.match(journey, /collectTouchedPaths/);
   assert.match(journey, /function episodeLabel/);
   assert.match(eventState, /export function eventFailedAnswer/);
+  assert.match(eventState, /export function eventIncomplete/);
+  assert.match(journey, /eventIncomplete/);
+  assert.match(journey, /hasIncomplete/);
+  assert.match(journey, /turnIncomplete/);
+  assert.match(journey, /status === "incomplete"\) return "Incomplete"/);
+  assert.match(chatTimeline, /eventIncomplete/);
+  assert.match(chatTimeline, /t\("Incomplete"\)/);
+  assert.match(css, /\.chat-activity-footer\.incomplete/);
+  assert.match(css, /\.journey-scrubber-bars > button\.incomplete/);
   assert.match(journey, /if \(!active && mapOpen\) setMapOpen\(false\)/);
   assert.match(journey, /function openTrajectoryAt/);
   assert.match(journey, /Jump to first new/);

@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { chapterChunkStatus, eventFailedAnswer, eventHasError, isUnresolvedError, latestAnswerOrdinal } = require("../src/journeyEventState.ts");
+const { chapterChunkStatus, eventFailedAnswer, eventHasError, eventIncomplete, isUnresolvedError, latestAnswerOrdinal } = require("../src/journeyEventState.ts");
 
 function event(sequence, type, payload = {}) {
   return { id: `event-${sequence}`, turn_id: "turn-1", sequence, type, payload, created_at: "2026-10-25T00:00:00.000Z" };
@@ -80,6 +80,33 @@ test("only the final chunk of a turn waits for an answer", () => {
   assert.equal(chapterChunkStatus({ hasAnswer: true, hasFailure: true, lastInTurn: true, turnFailed: true }), "error");
   assert.equal(chapterChunkStatus({ hasAnswer: false, hasFailure: false, lastInTurn: true, turnFailed: true }), "error");
   assert.equal(chapterChunkStatus({ hasAnswer: false, hasFailure: false, lastInTurn: false, turnFailed: true }), "done");
+});
+
+test("incomplete answers are distinct from successful, failed, and pending ones", () => {
+  assert.equal(eventIncomplete(event(1, "assistant_message", { text: "partial", status: "incomplete" })), true);
+  assert.equal(eventIncomplete(event(2, "model_incomplete", { code: "MODEL_RESPONSE_INCOMPLETE", reason: "length" })), true);
+  assert.equal(eventIncomplete(event(3, "assistant_message", { text: "done", status: "completed" })), false);
+  assert.equal(eventIncomplete(event(4, "assistant_message", { text: "failed", status: "failed" })), false);
+  assert.equal(eventIncomplete(event(5, "tool_result", { content: "ok" })), false);
+  assert.equal(eventFailedAnswer(event(6, "assistant_message", { text: "partial", status: "incomplete" })), false, "incomplete is not a hard error");
+});
+
+test("incomplete answers do not become the successful resolution boundary", () => {
+  const events = [
+    event(1, "assistant_message", { text: "previous answer", status: "completed" }),
+    event(2, "tool_result", { content: JSON.stringify({ error: "exit 1" }) }),
+    event(3, "assistant_message", { text: "partial answer", status: "incomplete" }),
+    event(4, "model_incomplete", { code: "MODEL_RESPONSE_INCOMPLETE", reason: "missing_terminal" }),
+  ];
+  const latest = latestAnswerOrdinal(events);
+  assert.equal(latest, 1);
+  assert.equal(isUnresolvedError(events[1], latest, 1), true, "errors from the incomplete turn stay open");
+});
+
+test("chapter chunks report incomplete instead of done or waiting", () => {
+  assert.equal(chapterChunkStatus({ hasAnswer: true, hasFailure: false, hasIncomplete: true, lastInTurn: true, turnFailed: false }), "incomplete");
+  assert.equal(chapterChunkStatus({ hasAnswer: false, hasFailure: false, lastInTurn: true, turnFailed: false, turnIncomplete: true }), "incomplete");
+  assert.equal(chapterChunkStatus({ hasAnswer: false, hasFailure: false, hasIncomplete: true, lastInTurn: false, turnFailed: false }), "incomplete");
 });
 
 test("an error on the final assistant response stays unresolved", () => {  const events = [

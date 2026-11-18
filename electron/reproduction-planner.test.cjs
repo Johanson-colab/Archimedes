@@ -40,8 +40,8 @@ test("a broken first reply is retried once and the retry is used", async () => {
   const runAgent = async ({ prompt }) => {
     calls += 1;
     return calls === 1
-      ? { response: "I think the steps are: install, then run." }
-      : { response: JSON.stringify(CONTRACT) };
+      ? { response: "I think the steps are: install, then run.", status: "completed" }
+      : { response: JSON.stringify(CONTRACT), status: "completed" };
   };
   const warnings = [];
   const contract = await planReproduction({
@@ -59,11 +59,71 @@ test("a broken first reply is retried once and the retry is used", async () => {
 });
 
 test("two unusable replies surface the original reason", async () => {
-  const runAgent = async () => ({ response: "no json at all" });
+  const runAgent = async () => ({ response: "no json at all", status: "completed" });
   await assert.rejects(
     planReproduction({ paper: PAPER, pages: [], repoUrl: "", repoItem: null, workspace: "/tmp", runAgent }),
     /stopped before finishing/,
   );
+});
+
+test("a parseable contract from an incomplete response is rejected after one retry", async () => {
+  let calls = 0;
+  const runAgent = async () => {
+    calls += 1;
+    return {
+      response: JSON.stringify(CONTRACT),
+      status: "incomplete",
+      error: { code: "MODEL_RESPONSE_INCOMPLETE", reason: "length" },
+    };
+  };
+  await assert.rejects(
+    planReproduction({ paper: PAPER, pages: [], repoUrl: "", repoItem: null, workspace: "/tmp", runAgent }),
+    (error) => {
+      assert.match(error.message, /incomplete/i);
+      assert.match(error.message, /length/);
+      assert.match(error.message, /Reproduce Table 1/, "the partial response is kept in the error");
+      return true;
+    },
+  );
+  assert.equal(calls, 2);
+});
+
+test("an incomplete first reply is retried and a completed retry is accepted", async () => {
+  let calls = 0;
+  const runAgent = async () => {
+    calls += 1;
+    return calls === 1
+      ? { response: JSON.stringify(CONTRACT), status: "incomplete", error: { code: "MODEL_RESPONSE_INCOMPLETE", reason: "missing_terminal" } }
+      : { response: JSON.stringify(CONTRACT), status: "completed" };
+  };
+  const warnings = [];
+  const contract = await planReproduction({
+    paper: PAPER,
+    pages: [],
+    repoUrl: "",
+    repoItem: null,
+    workspace: "/tmp",
+    runAgent,
+    emit: (payload) => { if (payload.type === "warning") warnings.push(payload.detail); },
+  });
+  assert.equal(calls, 2);
+  assert.equal(contract.claims.length, 1);
+  assert.equal(warnings.length, 1);
+});
+
+test("interrupted or failed parseable replies are rejected after one retry", async () => {
+  for (const status of ["interrupted", "failed"]) {
+    let calls = 0;
+    const runAgent = async () => {
+      calls += 1;
+      return { response: JSON.stringify(CONTRACT), status };
+    };
+    await assert.rejects(
+      planReproduction({ paper: PAPER, pages: [], repoUrl: "", repoItem: null, workspace: "/tmp", runAgent }),
+      new RegExp(status, "i"),
+    );
+    assert.equal(calls, 2);
+  }
 });
 
 test("names come from .env.example, not only from the model", () => {
