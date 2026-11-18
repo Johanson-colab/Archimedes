@@ -49,3 +49,17 @@ Before (`4fbe6d9`), the editor stayed on the main file and remembered it as the 
 After (`7043554`), the editor reopened and remembered `paper/results.tex`. The main document stayed `paper/main.tex`.
 
 ![After, results.tex is active while main.tex remains the main document](restore-after.png)
+
+## Open a source edited outside Writing
+
+Both production Electron builds used the same 1,180 × 900 Charcoal viewport
+and a temporary manuscript. Open `results.tex`, open `main.tex`, then update
+`results.tex` on disk. Return to `results.tex` while its read is delayed.
+
+| Before (`85648a0`) | After (`db9f857`) |
+| --- | --- |
+| ![Cached results are already editable](clean-source-read-before.png) | ![Writing waits for the source read before enabling editing](clean-source-read-after.png) |
+
+Typing ahead of the read overwrote the disk update in the earlier build. In
+the updated build, the read completes before the newly selected file is
+editable. Subsequent typing preserved the disk update in the saved file.
