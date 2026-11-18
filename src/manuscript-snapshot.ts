@@ -7,6 +7,7 @@ export interface ManuscriptSourceFile {
 export interface ManuscriptSourceManifest {
   workspace: string;
   source_path: string;
+  resolved_main?: string;
   project_path: string;
   coverage: 'manuscript-directory';
   source_version: string;

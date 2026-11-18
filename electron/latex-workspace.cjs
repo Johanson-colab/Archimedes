@@ -284,11 +284,10 @@ function manuscriptDiagnostic(messageKey, detail) {
 async function compileLatexDocument(root, requestedPath, options = {}) {
   root = workspaceFiles.workspacePath(root);
   const sourcePath = normalizePaperPath(requestedPath);
-  const absoluteSource = workspaceFiles.workspacePath(root, sourcePath);
-  if (!fs.statSync(absoluteSource).isFile()) throw new Error("The selected LaTeX document is not a file.");
+  const startedSource = captureManuscriptSources(root, sourcePath);
+  const absoluteSource = path.join(root, startedSource.resolved_main);
   const sourceDirectory = path.dirname(absoluteSource);
   const documentName = path.basename(absoluteSource, ".tex");
-  const startedSource = captureManuscriptSources(root, sourcePath);
   const requestedSource = options.requestedSource || startedSource;
   const buildId = randomUUID();
   const buildKey = createHash("sha1").update(sourcePath).digest("hex").slice(0, 12);

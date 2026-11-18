@@ -157,6 +157,26 @@ test("directory mutations still invalidate a receipt when a watcher delivers no 
   assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
 });
 
+test("a desktop metadata notification does not explain a missed change to directory entries", async t => {
+  const root = fixture(t);
+  fs.writeFileSync(path.join(root, "paper/.DS_Store"), "earlier metadata");
+  let notify;
+  t.mock.method(fs, "watch", (_directory, _options, listener) => {
+    notify = listener;
+    return Object.assign(new EventEmitter(), { close() {} });
+  });
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic",
+    spawnImpl: transientCompilerFixture("generated.tex", { onCreated() {
+      fs.writeFileSync(path.join(root, "paper/.DS_Store"), "later metadata");
+      notify("change", ".DS_Store");
+    } }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
 test("intermediates written in the configured compiler output directory do not invalidate the receipt", async t => {
   const root = fixture(t);
   const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("main.aux", { inBuildDirectory: true }) });
@@ -266,6 +286,26 @@ test("retargeting a linked main file in the same source directory invalidates it
   fs.unlinkSync(entry);
   fs.symlinkSync(path.join(root, "paper/section.tex"), entry, "file");
   assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("the compiler and the starting snapshot share the resolved main file", async t => {
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root, "entry"));
+  const entry = path.join(root, "entry/main.tex");
+  fs.symlinkSync(path.join(root, "paper/main.tex"), entry, "file");
+  const requestedSource = captureManuscriptSources(root, "entry/main.tex");
+  const realpath = fs.realpathSync;
+  let reads = 0;
+  t.mock.method(fs, "realpathSync", function(file, ...args) {
+    if (file === entry && ++reads === 1) return path.join(root, "paper/section.tex");
+    return realpath(file, ...args);
+  });
+  const result = await compileLatexDocument(root, "entry/main.tex", {
+    executable: "tectonic", requestedSource,
+    spawnImpl() { throw new Error("Unexpected invocation on the retargeted document"); },
+  });
+  assert.equal(result.engine, "not-started");
+  assert.equal(result.source_snapshot.status, "stale");
 });
 
 test("repeated no-output builds retain the last PDF and a bounded set of diagnostic logs", async t => {

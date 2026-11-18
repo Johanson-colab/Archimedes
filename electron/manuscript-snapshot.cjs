@@ -61,7 +61,7 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directo
     return { finish: async () => ({ available: false, error: error.message, transient_inputs: [] }), close: () => {} };
   }
   const changedPaths = new Set();
-  const observedParents = new Set();
+  const renamedParents = new Set();
   const directoryTimes = new Map();
   let watcher, unavailable = "", unidentified = false, closed = false;
   const fail = (error) => { if (!unavailable) unavailable = error?.message || String(error); };
@@ -76,12 +76,12 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directo
     for (const name of directories) {
       directoryTimes.set(name, fs.statSync(workspacePath(workspace, name), { bigint: true }).mtimeNs);
     }
-    watcher = fs.watch(directory, { recursive: true, persistent: false }, (_event, filename) => {
+    watcher = fs.watch(directory, { recursive: true, persistent: false }, (eventType, filename) => {
       if (!filename) { unidentified = true; return; }
       const observed = normalizeObservedPath(filename, directory);
-      if (observed) {
-        observedParents.add(path.posix.dirname(absolute(observed)));
-        if (!isIgnoredObservationPath(observed)) changedPaths.add(observed);
+      if (observed && !isIgnoredObservationPath(observed)) {
+        if (eventType === "rename") renamedParents.add(path.posix.dirname(absolute(observed)));
+        changedPaths.add(observed);
       }
     });
     watcher.on("error", (error) => { fail(error); close(); });
@@ -97,7 +97,7 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directo
       // Some filesystems coalesce create/delete events. Directory modification
       // times still reveal an unobserved entry change across the compile.
       for (const [name, before] of directoryTimes) {
-        if (!observedParents.has(name) && fs.statSync(workspacePath(workspace, name), { bigint: true }).mtimeNs !== before) {
+        if (!renamedParents.has(name) && fs.statSync(workspacePath(workspace, name), { bigint: true }).mtimeNs !== before) {
           return { available: false, error: "A manuscript directory changed without a corresponding file event.", transient_inputs: [] };
         }
       }
@@ -132,6 +132,7 @@ function fileDigest(file) {
 function captureManuscriptSources(root, sourcePath) {
   const workspace = workspacePath(root);
   const source = workspacePath(workspace, sourcePath);
+  if (!fs.statSync(source).isFile()) throw new Error("The selected LaTeX document is not a file.");
   const directory = path.dirname(source);
   const files = [], observations = [], untracked = [], directories = [];
   let bytes = 0;
@@ -156,7 +157,7 @@ function captureManuscriptSources(root, sourcePath) {
   // Keep the existing version format for ordinary manuscript paths.
   const resolvedMain = relative(workspace, source);
   const inputs = resolvedMain === sourcePath ? { files, untracked } : { files, untracked, resolvedMain };
-  return { workspace, source_path: sourcePath, project_path: relative(workspace, directory), coverage: "manuscript-directory", directories, source_version: hash(JSON.stringify(inputs)), observation_version: hash(JSON.stringify(observations)), files, total_bytes: bytes, untracked_inputs: untracked, excluded_directories: [...EXCLUDED_DIRECTORIES] };
+  return { workspace, source_path: sourcePath, resolved_main: resolvedMain, project_path: relative(workspace, directory), coverage: "manuscript-directory", directories, source_version: hash(JSON.stringify(inputs)), observation_version: hash(JSON.stringify(observations)), files, total_bytes: bytes, untracked_inputs: untracked, excluded_directories: [...EXCLUDED_DIRECTORIES] };
 }
 
 function artifact(root, file) {
