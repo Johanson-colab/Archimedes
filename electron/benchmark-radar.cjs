@@ -3,34 +3,16 @@ const path = require("node:path");
 
 const { normalizeRecord, readIndexFile, refreshPublicIndex, indexPayload, PUBLIC_INDEX_URL } = require("./benchmark-radar-index.cjs");
 
-let cachedLocalPayload = null;
-let refreshInFlight = null;
-
-function radarRoots() {
-  // An explicit path is a deployment contract, not a hint. Falling back to a
-  // neighboring checkout would silently show unrelated/stale data instead.
-  if (process.env.BENCHMARK_RADAR_ROOT) return [process.env.BENCHMARK_RADAR_ROOT];
-  return [
-    path.resolve(__dirname, "..", "..", "benchmark-radar"),
-    path.resolve(process.cwd(), "..", "benchmark-radar"),
-  ];
-}
-
-function isRadarRoot(candidate) {
-  return Boolean(candidate)
-    && fs.existsSync(path.join(candidate, "data", "benchmarks_index.json"))
-    && fs.existsSync(path.join(candidate, "data", "library_index.json"));
-}
+const refreshes = new Map();
 
 function resolveRadarRoot() {
   const explicit = process.env.BENCHMARK_RADAR_ROOT;
-  if (explicit) {
-    if (!isRadarRoot(explicit)) {
-      throw new Error("Benchmark Radar data was not found at BENCHMARK_RADAR_ROOT. Point it at a checkout containing data/benchmarks_index.json and data/library_index.json.");
-    }
-    return explicit;
+  if (!explicit) return null;
+  if (!fs.existsSync(path.join(explicit, "data", "benchmarks_index.json"))
+    || !fs.existsSync(path.join(explicit, "data", "library_index.json"))) {
+    throw new Error("Benchmark Radar data was not found at BENCHMARK_RADAR_ROOT. Point it at a checkout containing data/benchmarks_index.json and data/library_index.json.");
   }
-  return radarRoots().find(isRadarRoot) || null;
+  return explicit;
 }
 
 function readJson(filePath) {
@@ -68,34 +50,48 @@ function newestIndex(cached, seed) {
   return (cached.updatedAt || "") >= (seed.updatedAt || "") ? { index: cached, source: "cached" } : { index: seed, source: "bundled" };
 }
 
-function scheduleRefresh(options) {
-  if (options.allowNetwork === false || !options.cachePath || refreshInFlight) return;
-  refreshInFlight = refreshPublicIndex({ cachePath: options.cachePath, url: options.url, ttlMs: options.ttlMs })
-    .catch(() => {})
-    .finally(() => { refreshInFlight = null; });
+// Share concurrent renderer requests without leaving a background refresh that
+// finishes after its caller has already received an obsolete snapshot.
+function refreshIndex(options) {
+  const key = `${options.cachePath || ""}:${options.url || PUBLIC_INDEX_URL}`;
+  if (!refreshes.has(key)) {
+    const request = refreshPublicIndex(options).finally(() => {
+      if (refreshes.get(key) === request) refreshes.delete(key);
+    });
+    refreshes.set(key, request);
+  }
+  return refreshes.get(key);
 }
 
 async function getBenchmarkRadarData(options = {}) {
   const root = resolveRadarRoot();
-  if (root) {
-    if (!cachedLocalPayload || cachedLocalPayload.sourceRoot !== root) cachedLocalPayload = localPayload(root);
-    return cachedLocalPayload;
-  }
+  // An explicit development override is reread on every call, including Refresh.
+  if (root) return localPayload(root);
 
   const cached = readIndexFile(options.cachePath);
   const seed = readIndexFile(options.seedPath);
   const best = newestIndex(cached, seed);
-  if (best) {
-    scheduleRefresh(options);
-    return indexPayload(best.index, { source: best.source, sourceRoot: options.cachePath || PUBLIC_INDEX_URL });
+  const payload = (entry, extra = {}) => indexPayload(entry.index, {
+    source: entry.source,
+    sourceRoot: entry.source === "bundled" ? options.seedPath : options.cachePath || PUBLIC_INDEX_URL,
+    ...extra,
+  });
+  if (options.allowNetwork === false) {
+    if (best) return payload(best);
+    throw new Error("Benchmark Radar data was not found. Connect to the internet once to download the public index, or set BENCHMARK_RADAR_ROOT.");
   }
 
-  if (options.allowNetwork === false) throw new Error("Benchmark Radar data was not found. Connect to the internet once to download the public index, or set BENCHMARK_RADAR_ROOT.");
   try {
-    const result = await refreshPublicIndex({ cachePath: options.cachePath, url: options.url, ttlMs: options.ttlMs, force: true });
-    return indexPayload(result.index, { source: "remote", sourceRoot: PUBLIC_INDEX_URL });
+    const result = await refreshIndex(options);
+    const current = newestIndex(result.index, seed);
+    if (!current) throw new Error("Benchmark Radar returned no usable data.");
+    if (current.source === "cached" && !result.skipped) {
+      return payload({ ...current, source: "remote" }, { sourceRoot: options.url || PUBLIC_INDEX_URL });
+    }
+    return payload(current);
   } catch (failure) {
-    const detail = failure instanceof Error ? failure.message : String(failure);
+    const detail = (failure instanceof Error ? failure.message : String(failure)).slice(0, 300);
+    if (best) return { ...payload(best), refreshError: detail };
     throw new Error(`Benchmark Radar data is unavailable. ${detail} Connect to the internet once, or set BENCHMARK_RADAR_ROOT.`);
   }
 }

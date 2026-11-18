@@ -158,6 +158,34 @@ function extractJson(content) {
   return parseContract(content);
 }
 
+/**
+ * An incomplete turn can still end in parseable JSON - for example a plan cut
+ * off after its first claims. Only a completed response is allowed to become a
+ * contract; otherwise the partial object would be published as a runbook.
+ */
+function completedResponseError(result) {
+  const status = typeof result?.status === "string" ? result.status.toLowerCase() : "unknown";
+  if (status === "completed") return null;
+  const failure = result?.error && typeof result.error === "object" ? result.error : {};
+  const condition = [failure.code, failure.reason].filter((value) => typeof value === "string" && value.trim()).join(": ");
+  const response = typeof result?.response === "string" ? result.response.replace(/\s+/g, " ").trim() : "";
+  const excerpt = response.length > 240 ? `${response.slice(0, 120)}…${response.slice(-120)}` : response;
+  const detail = [
+    status === "incomplete"
+      ? `The planner response was incomplete${condition ? ` (${condition})` : ""}`
+      : `The planner response did not complete (status: ${status})`,
+    typeof failure.message === "string" && failure.message.trim() ? failure.message.trim() : "",
+    excerpt ? `Partial response: ${excerpt}` : "",
+  ].filter(Boolean).join(". ");
+  return Object.assign(new Error(`${detail}. A reproduction contract is accepted only from a completed response.`), { code: "PLANNER_RESPONSE_INCOMPLETE" });
+}
+
+function parseCompletedContract(result) {
+  const failure = completedResponseError(result);
+  if (failure) throw failure;
+  return parseContract(result?.response);
+}
+
 async function planReproduction({ paper, pages, review, repoUrl, repoItem, workspace, runAgent, emit = () => {} }) {
   if (typeof runAgent !== "function") throw new Error("A model runtime is required to plan a reproduction.");
   const prompt = buildPrompt({ paper, pages, review, repoUrl, hasRepository: Boolean(repoItem) });
@@ -174,7 +202,7 @@ async function planReproduction({ paper, pages, review, repoUrl, repoItem, works
 
   let parsed;
   try {
-    parsed = parseContract(result?.response);
+    parsed = parseCompletedContract(result);
   } catch (error) {
     // One retry, asked for the same work in a smaller shape. A second silent
     // failure is worth showing to the user with the reason attached.
@@ -187,9 +215,9 @@ async function planReproduction({ paper, pages, review, repoUrl, repoItem, works
       contextItems,
     });
     try {
-      parsed = parseContract(retry?.response);
-    } catch {
-      throw error;
+      parsed = parseCompletedContract(retry);
+    } catch (retryError) {
+      throw retryError.code === "PLANNER_RESPONSE_INCOMPLETE" ? retryError : error;
     }
   }
   const contract = normalizeContract(parsed, { paperTitle: paper?.title || "" });
