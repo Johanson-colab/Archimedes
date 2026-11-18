@@ -1,13 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-function electronBinary() {
-  const moduleRoot = path.dirname(require.resolve('electron/package.json'));
-  const relative = fs.readFileSync(path.join(moduleRoot, 'path.txt'), 'utf8').trim();
-  const binary = path.join(moduleRoot, 'dist', relative);
-  if (!fs.existsSync(binary)) throw new Error('Install the locked Electron desktop runtime before running the resource audit.');
-  return binary;
-}
+const { electronBinary } = require('./electron-runtime.cjs');
 
 const directory = process.argv[2];
 if (!directory || !fs.existsSync(path.join(directory, 'entry.cjs'))) {
