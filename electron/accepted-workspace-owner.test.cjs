@@ -54,6 +54,16 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   });
   assert.equal(handlers.get("paper-review-app:list-papers")(event).at(0).notes, "A notes", "indirect libraryStore consumers retain A");
 
+  const reviewStart = source.indexOf('  ipcMain.handle("paper-review-app:create",');
+  const reviewEnd = source.indexOf('  ipcMain.handle("paper-review-app:get-run",', reviewStart);
+  new Function("scope", `with(scope) { ${source.slice(reviewStart, reviewEnd)} }`)({
+    ipcMain: ipc, store, windowWorkspaces, resolveWorkspace: fs.realpathSync,
+    paperReview: { createRun: (_input, options) => options.workspace },
+  });
+  const review = handlers.get("paper-review-app:create");
+  assert.equal(await review(event, { workspace: b, source: { kind: "library" } }), a);
+  assert.equal(await review(event, { workspace: b, source: { kind: "pdf" } }), b);
+
   await helpers.openFolderFromMenu();
   assert.deepEqual(proposals, [["menu:open-folder", b]]);
   assert.equal(handlers.get("library:owner")(event), a, "an ignored menu proposal does not switch IPC ownership");
@@ -83,4 +93,20 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
     assert.equal(handlers.get(channel)(event), "available", channel);
   }
   assert.throws(() => handlers.get("library:owner")(event), /ENOENT|exist/);
+});
+
+test("a window that vetoes Quit keeps its detached research database open", t => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-quit-owner-")));
+  const owner = store.createWorkspaceStore(root);
+  t.after(() => { store.closeAllWorkspaces(); fs.rmSync(root, { recursive: true, force: true }); });
+  const app = new (require("node:events").EventEmitter)();
+  const registration = source.slice(source.lastIndexOf('app.on(', source.indexOf('  closeAllNativeClients();')));
+  new Function("app", "store", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence", registration)(
+    app, store, () => {}, () => {}, null, null,
+  );
+  app.emit("before-quit");
+  owner.updatePaper("seed-react", { notes: "finished after the canceled quit" });
+  assert.equal(owner.getPaper("seed-react").notes, "finished after the canceled quit");
+  app.emit("will-quit");
+  assert.throws(() => owner.getPaper("seed-react"), /Open a workspace/);
 });

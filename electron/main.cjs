@@ -901,7 +901,9 @@ app.whenReady().then(async () => {
     return result.canceled ? "" : result.filePaths[0] || "";
   });
   ipcMain.handle("paper-review-app:create", async (event, input = {}) => {
-    const resolvedWorkspace = resolveWorkspace(input?.workspace || windowWorkspaces.get(event.sender.id));
+    const resolvedWorkspace = input.source?.kind === "library"
+      ? store.currentStore().workspace
+      : resolveWorkspace(input.workspace || windowWorkspaces.get(event.sender.id));
     const sender = event.sender;
     return paperReview.createRun(input, {
       workspace: resolvedWorkspace,
@@ -2583,7 +2585,7 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
 });
 
-app.on("before-quit", () => {
+app.on("will-quit", () => {
   closeAllNativeClients();
   closeAllTerminals();
   collaborationServer?.close?.();
