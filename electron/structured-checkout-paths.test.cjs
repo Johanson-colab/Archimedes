@@ -58,9 +58,12 @@ test("the real pilot never falls back to another file after a structured read-li
   for (const action of ["edit_file", "read_file"]) {
     fs.writeFileSync(fallback, '"value":"old"\n');
     const decisions = [{ action, path: "demo/config.json", old: '"old"', new: '"new"' }, { action: "ask", question: "stop" }];
-    await assert.rejects(runPilot({ repoName: "demo", steps: [{ id: "edit", title: "Edit config" }], backend,
+    const result = await runPilot({ repoName: "demo", steps: [{ id: "edit", title: "Edit config" }], backend,
       complete: async () => ({ json: decisions.shift() }),
-    }), /structured-read limit/);
+    });
+    assert.equal(result.status, "failed");
+    assert.match(result.summary, /structured-read limit/);
+    assert.equal(result.steps[0].id, "edit");
     assert.equal(fs.readFileSync(fallback, "utf8"), '"value":"old"\n');
     assert.equal(fs.readFileSync(requested, "utf8"), large);
   }

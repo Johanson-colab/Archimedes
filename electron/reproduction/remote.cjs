@@ -248,7 +248,7 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     async writeRepoFile(relativePath, content) {
       const checked = remotePathChecks(repo, relativePath, { quote: quoteRemotePath, write: true });
       const payload = String(content ?? "");
-      const result = await run(`${checked.commands}; cat > ${quoteRemotePath(checked.path)}`, { timeoutMs: 120_000, login: false, stdin: payload });
+      const result = await run(`umask 022; ${checked.commands}; cat > ${quoteRemotePath(checked.path)}`, { timeoutMs: 120_000, login: false, stdin: payload });
       if (result.code !== 0) throw new Error(`Could not write ${relativePath}: ${String(result.output || result.error || "Operation stopped").trim().slice(-300)}`);
       return { path: String(relativePath), bytes: Buffer.byteLength(payload) };
     },
