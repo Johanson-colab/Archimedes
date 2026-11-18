@@ -34,7 +34,8 @@ test("app shutdown interrupts active API work and rejects a later startup", asyn
 
 test("the actual quit handler waits for agent shutdown and prevents duplicate cleanup", async () => {
   const source = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
-  const start = source.indexOf('app.on("before-quit",');
+  const start = source.indexOf('app.on("will-quit",');
+  assert.ok(start > 0, "cleanup waits for the post-window-close will-quit event");
   let release;
   const gate = new Promise(resolve => { release = resolve; });
   const calls = [];

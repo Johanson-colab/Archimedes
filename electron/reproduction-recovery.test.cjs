@@ -18,14 +18,20 @@ test("a run left running by a killed app is reconciled on the next open", () => 
     const run = store.createReproductionRun({ reproductionId: reproduction.id });
     store.updateReproduction(reproduction.id, { status: "provisioning" });
 
-    // Reopening is what the app does after a restart.
     store.openWorkspace(other);
     store.openWorkspace(root);
+    assert.equal(store.getReproduction(reproduction.id).status, "provisioning");
 
-    const after = store.getReproduction(reproduction.id);
+    const { execFileSync } = require("node:child_process");
+    const recovered = execFileSync(process.execPath, ["-e", `
+      const store = require("./store.cjs");
+      store.openWorkspace(process.argv[1]);
+      console.log(JSON.stringify([store.getReproduction(process.argv[2]), store.getReproductionRun(process.argv[3])]));
+    `, root, reproduction.id, run.id], { cwd: __dirname, encoding: "utf8" });
+    const [after, afterRun] = JSON.parse(recovered);
     assert.equal(after.status, "blocked");
     assert.match(after.error, /app stopped while this was running/i);
-    assert.equal(store.getReproductionRun(run.id).status, "interrupted");
+    assert.equal(afterRun.status, "interrupted");
   } finally {
     store.openWorkspace(other);
     fs.rmSync(root, { recursive: true, force: true });
@@ -79,7 +85,24 @@ test("a fresh process recovers interrupted turns, pending approvals and commands
     const persisted = owner.getResearchThread(ids.persisted);
     assert.equal(persisted.turns[0].status, "completed");
     assert.equal(persisted.turns[0].assistant_message, "Durable completed output");
+    const answers = persisted.events.filter(event => event.type === "assistant_message");
+    assert.equal(answers.length, 1);
+    assert.equal(answers[0].payload.text, "Durable completed output");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("switching data folders preserves a live turn and its pending approval", t => {
+  const root = workspace(), other = workspace();
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(other, { recursive: true, force: true }); });
+  store.openWorkspace(root);
+  const thread = store.createResearchThread({ prompt: "live", mode: "free-chat" });
+  const task = store.startTask({ prompt: "live" });
+  store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt: "live", mode: "free-chat" });
+  const action = store.createAction({ taskId: task.id, kind: "command", payload: { command: "sample" } });
+  store.openWorkspace(other);
+  store.openWorkspace(root);
+  assert.equal(store.getResearchThread(thread.id).turns[0].status, "running");
+  assert.equal(store.getAction(action.id).status, "pending");
 });

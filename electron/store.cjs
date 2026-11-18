@@ -18,6 +18,7 @@ const WORKSPACE_KINDS = new Set(["shared", "worktree", "sandbox"]);
 const SANDBOX_SKIP = new Set([".git", ".archimedes", "node_modules", "dist", "build", ".next"]);
 let database;
 let activeWorkspace;
+const recoveredDatabases = new Map();
 let localIdentity = {
   userId: "local-user",
   displayName: "Local user",
@@ -913,6 +914,10 @@ function reconcileInterruptedResearch(db) {
       const sequence = db.prepare("SELECT COALESCE(MAX(sequence), 0) + 1 AS value FROM research_events WHERE turn_id = ?").get(turn.id).value;
       db.prepare("INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at) VALUES (?, ?, ?, ?, 'run_recovered', ?, ?)")
         .run(randomUUID(), turn.thread_id, turn.id, sequence, JSON.stringify({ status, reason: "owning_process_exited" }), now);
+      if (status === "completed" && !db.prepare("SELECT 1 FROM research_events WHERE turn_id = ? AND type = 'assistant_message'").get(turn.id)) {
+        db.prepare("INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at) VALUES (?, ?, ?, ?, 'assistant_message', ?, ?)")
+          .run(randomUUID(), turn.thread_id, turn.id, sequence + 1, JSON.stringify({ text: response, status }), now);
+      }
     }
     for (const threadId of new Set(turns.map(turn => turn.thread_id))) {
       const running = db.prepare("SELECT 1 FROM research_turns WHERE thread_id = ? AND status = 'running' LIMIT 1").get(threadId);
@@ -952,8 +957,15 @@ function openWorkspace(workspacePath) {
   activeWorkspace = workspacePath;
   schema(database);
   backfillPaperRepositories(database);
-  reconcileInterruptedReproductions(database);
-  reconcileInterruptedResearch(database);
+  // Window switches reopen the same file while its turns are still running.
+  const canonicalDatabase = fs.realpathSync(databasePath);
+  const file = fs.statSync(canonicalDatabase, { bigint: true });
+  const identity = `${file.dev}:${file.ino}:${file.birthtimeNs}`;
+  if (recoveredDatabases.get(canonicalDatabase) !== identity) {
+    reconcileInterruptedReproductions(database);
+    reconcileInterruptedResearch(database);
+    recoveredDatabases.set(canonicalDatabase, identity);
+  }
   migrateLegacyTasks(database);
   seedLibraries(database);
   ensureProjectLibraries(database);

@@ -2587,7 +2587,8 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
 });
 
-app.on("before-quit", (event) => {
+// Electron reaches will-quit only after every window has accepted closing.
+app.on("will-quit", (event) => {
   if (readyToQuit) return;
   event.preventDefault();
   if (quitting) return;
