@@ -1,13 +1,14 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-// Benchmark Radar publishes one public index for the dashboard. The desktop
-// workspace reads a snapshot of it instead of requiring a neighbouring checkout.
-const PUBLIC_INDEX_URL = "https://benchmark-radar.org/data/benchmark-index.json";
-const CACHE_SCHEMA = 1;
+// The original Claire1217/benchmark-radar project publishes separate Radar and
+// Library indexes. The .org domain belongs to a different catalog.
+const PUBLIC_INDEX_URL = "https://benchmark-radar.com/data/benchmarks_index.json";
+const PUBLIC_LIBRARY_INDEX_URL = "https://benchmark-radar.com/data/library_index.json";
+const CACHE_SCHEMA = 2;
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_INDEX_BYTES = 32 * 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 function text(value, limit = 1600) {
   return typeof value === "string" ? value.slice(0, limit) : "";
@@ -59,7 +60,10 @@ function normalizeRecord(record) {
     attention: attention(record.attention),
     attentionScore: Number.isFinite(ranking["90d"]?.score) ? ranking["90d"].score : null,
     attentionRank: Number.isFinite(ranking["90d"]?.rank) ? ranking["90d"].rank : null,
-    forecast: Number.isFinite(record.attentionForecast?.score) ? record.attentionForecast.score : null,
+    forecast: Number.isFinite(record.attentionForecast?.score) ? Math.max(0, Math.min(100, record.attentionForecast.score)) : null,
+    forecastReason: text(record.attentionForecast?.reason, 700),
+    forecastConfidence: text(record.attentionForecast?.confidence, 32),
+    forecastHorizon: text(record.attentionForecast?.horizon, 32),
   };
 }
 
@@ -94,6 +98,8 @@ function adaptPublicRecord(record) {
       paper: httpsUrl(released.source_url) || httpsUrl(record.source_url),
       code: repository ? httpsUrl(`https://github.com/${repository}`) : "",
     },
+    readiness: text(record.readiness, 80),
+    attentionForecast: record.attentionForecast || record.attention_forecast,
     attention: {
       githubStars: Number.isFinite(signals.github_stars) ? signals.github_stars : null,
       hfPaperUpvotes: Number.isFinite(signals.hf_paper_upvotes) ? signals.hf_paper_upvotes : null,
@@ -127,8 +133,30 @@ function normalizePublicIndex(payload) {
   return { updatedAt: latestCollected(payload.benchmarks), records, directions };
 }
 
+function normalizeCanonicalIndexes(radar, library) {
+  if (!Array.isArray(radar?.records) || !Array.isArray(library?.records)) {
+    throw new Error("Benchmark Radar returned an unexpected index.");
+  }
+  const visible = records => records.filter(record => record && record.displayEligible !== false)
+    .map(normalizeRecord).filter(record => record.id && record.name);
+  const radarRecords = visible(radar.records);
+  const records = visible(library.records);
+  if (!radarRecords.length || !records.length) throw new Error("Benchmark Radar returned an empty index.");
+  const taxonomy = library.manifest?.libraryTaxonomy || library.manifest?.researchTaxonomy || {};
+  const counts = new Map();
+  for (const record of records) for (const id of record.directions) counts.set(id, (counts.get(id) || 0) + 1);
+  const directions = (Array.isArray(taxonomy.directions) ? taxonomy.directions : []).map(direction => ({
+    id: text(direction?.id, 120), name: text(direction?.name, 180),
+    section: text(direction?.section, 120), count: counts.get(direction?.id) || 0,
+  })).filter(direction => direction.id && direction.name);
+  return {
+    updatedAt: [text(radar.manifest?.dataAsOf, 32), text(library.manifest?.dataAsOf, 32)].sort().at(-1) || "",
+    radarRecords, records, directions,
+  };
+}
+
 function validIndex(value) {
-  return Boolean(value && value.schema === CACHE_SCHEMA && Array.isArray(value.records) && Array.isArray(value.directions));
+  return Boolean(value && [1, CACHE_SCHEMA].includes(value.schema) && Array.isArray(value.records) && Array.isArray(value.directions));
 }
 
 function readIndexFile(filePath) {
@@ -142,7 +170,12 @@ function readIndexFile(filePath) {
 }
 
 function writeIndexFile(filePath, index) {
-  const envelope = { schema: CACHE_SCHEMA, updatedAt: text(index.updatedAt, 32), fetchedAt: text(index.fetchedAt, 40), etag: text(index.etag, 400), records: index.records, directions: index.directions };
+  const envelope = {
+    schema: CACHE_SCHEMA, sourceUrl: text(index.sourceUrl, 700),
+    updatedAt: text(index.updatedAt, 32), fetchedAt: text(index.fetchedAt, 40), etag: text(index.etag, 400),
+    records: index.records, directions: index.directions,
+    ...(Array.isArray(index.radarRecords) ? { radarRecords: index.radarRecords } : {}),
+  };
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, JSON.stringify(envelope), "utf8");
@@ -150,36 +183,51 @@ function writeIndexFile(filePath, index) {
   return envelope;
 }
 
-async function fetchPublicIndex({ url = PUBLIC_INDEX_URL, fetchImpl = globalThis.fetch, etag = "", timeoutMs = REQUEST_TIMEOUT_MS, now = new Date() } = {}) {
+async function fetchPublicIndex({ url = PUBLIC_INDEX_URL, libraryUrl = PUBLIC_LIBRARY_INDEX_URL, fetchImpl = globalThis.fetch, etag = "", timeoutMs = REQUEST_TIMEOUT_MS, now = new Date() } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("Benchmark Radar cannot download its public index in this runtime.");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const headers = { accept: "application/json" };
-    if (etag) headers["if-none-match"] = etag;
-    const response = await fetchImpl(url, { headers, signal: controller.signal });
-    if (response.status === 304) return { notModified: true };
-    if (!response.ok) throw new Error(`Benchmark Radar returned HTTP ${response.status}.`);
-    const declared = Number(response.headers?.get?.("content-length"));
-    if (Number.isFinite(declared) && declared > MAX_INDEX_BYTES) throw new Error("Benchmark Radar returned an index that is too large.");
-    const body = await response.text();
-    if (body.length > MAX_INDEX_BYTES) throw new Error("Benchmark Radar returned an index that is too large.");
-    const index = normalizePublicIndex(JSON.parse(body));
+    const download = async (target, conditional = "") => {
+      const headers = { accept: "application/json" };
+      if (conditional) headers["if-none-match"] = conditional;
+      const response = await fetchImpl(target, { headers, signal: controller.signal });
+      if (response.status === 304) return { notModified: true };
+      if (!response.ok) throw new Error(`Benchmark Radar returned HTTP ${response.status}.`);
+      const declared = Number(response.headers?.get?.("content-length"));
+      if (Number.isFinite(declared) && declared > MAX_INDEX_BYTES) throw new Error("Benchmark Radar returned an index that is too large.");
+      const body = await response.text();
+      if (Buffer.byteLength(body, "utf8") > MAX_INDEX_BYTES) throw new Error("Benchmark Radar returned an index that is too large.");
+      return { payload: JSON.parse(body), etag: text(response.headers?.get?.("etag"), 400) };
+    };
+    const radar = await download(url, etag);
+    if (radar.notModified) return { notModified: true };
+    let index;
+    if (Array.isArray(radar.payload?.records)) {
+      // Commit the pair atomically. Do not reuse a single-file ETag for this
+      // pair: Library can change independently of the Radar response.
+      const library = await download(libraryUrl);
+      index = normalizeCanonicalIndexes(radar.payload, library.payload);
+      return { index: { ...index, sourceUrl: url }, etag: "", fetchedAt: now.toISOString() };
+    }
+    // Retain support for importing an explicitly supplied legacy-format index.
+    index = normalizePublicIndex(radar.payload);
     if (!index.records.length) throw new Error("Benchmark Radar returned an empty index.");
-    return { index, etag: text(response.headers?.get?.("etag"), 400), fetchedAt: now.toISOString() };
+    return { index: { ...index, sourceUrl: url }, etag: radar.etag, fetchedAt: now.toISOString() };
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function refreshPublicIndex({ cachePath = "", url = PUBLIC_INDEX_URL, fetchImpl, ttlMs = DEFAULT_TTL_MS, now = new Date(), timeoutMs, force = false } = {}) {
+async function refreshPublicIndex({ cachePath = "", url = PUBLIC_INDEX_URL, libraryUrl = PUBLIC_LIBRARY_INDEX_URL, fetchImpl, ttlMs = DEFAULT_TTL_MS, now = new Date(), timeoutMs, force = false } = {}) {
   const cached = readIndexFile(cachePath);
   const fetchedAt = cached?.fetchedAt ? Date.parse(cached.fetchedAt) : Number.NaN;
-  if (!force && Number.isFinite(fetchedAt) && now.getTime() - fetchedAt < ttlMs) return { index: cached, refreshed: false, skipped: true };
-  const result = await fetchPublicIndex({ url, fetchImpl, etag: cached?.etag || "", now, ...(timeoutMs ? { timeoutMs } : {}) });
+  const trusted = cached?.schema === CACHE_SCHEMA && cached.sourceUrl === url;
+  if (!force && trusted && Number.isFinite(fetchedAt) && now.getTime() - fetchedAt < ttlMs) return { index: cached, refreshed: false, skipped: true };
+  const result = await fetchPublicIndex({ url, libraryUrl, fetchImpl, etag: trusted ? cached?.etag || "" : "", now, ...(timeoutMs ? { timeoutMs } : {}) });
   if (result.notModified) {
     if (cached && cachePath) writeIndexFile(cachePath, { ...cached, fetchedAt: now.toISOString() });
-    return { index: cached, refreshed: false, skipped: false };
+    return { index: cached ? { ...cached, fetchedAt: now.toISOString() } : null, refreshed: false, skipped: false };
   }
   const envelope = { ...result.index, fetchedAt: result.fetchedAt, etag: result.etag };
   if (cachePath) writeIndexFile(cachePath, envelope);
@@ -192,7 +240,8 @@ function indexPayload(index, { source = "cached", sourceRoot = PUBLIC_INDEX_URL 
     source,
     sourceRoot,
     updatedAt: text(index?.updatedAt, 32),
-    radar: records,
+    fetchedAt: text(index?.fetchedAt, 40),
+    radar: Array.isArray(index?.radarRecords) ? index.radarRecords : records,
     library: records,
     directions: Array.isArray(index?.directions) ? index.directions : [],
   };
@@ -200,11 +249,13 @@ function indexPayload(index, { source = "cached", sourceRoot = PUBLIC_INDEX_URL 
 
 module.exports = {
   PUBLIC_INDEX_URL,
+  PUBLIC_LIBRARY_INDEX_URL,
   CACHE_SCHEMA,
   DEFAULT_TTL_MS,
   normalizeRecord,
   adaptPublicRecord,
   normalizePublicIndex,
+  normalizeCanonicalIndexes,
   readIndexFile,
   writeIndexFile,
   fetchPublicIndex,

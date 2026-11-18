@@ -20,6 +20,7 @@ const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-radar-ui-"))
 const seed = readIndexFile(seedPath);
 if (!seed) throw new Error(`No bundled Benchmark Radar index at ${path.relative(root, seedPath)}. Run npm run radar:sync first.`);
 const payload = indexPayload(seed, { source: "remote" });
+const newest = [...payload.radar].sort((a, b) => b.releasedAt.localeCompare(a.releasedAt) || a.name.localeCompare(b.name))[0];
 fs.mkdirSync(output, { recursive: true });
 const from = (file) => JSON.stringify(path.join(root, "src", file));
 
@@ -28,13 +29,14 @@ fs.writeFileSync(path.join(temporary, "index.html"), '<div id="fixture-toolbar" 
 fs.writeFileSync(path.join(temporary, "entry.tsx"), `
 import {createRoot} from 'react-dom/client';
 import BenchmarkRadarView from ${from("BenchmarkRadarView.tsx")};
+import {UISettingsProvider} from ${from("i18n.tsx")};
 import ${from("tokens.css")};
 import ${from("styles.css")};
 import ${from("typography.css")};
 import payload from './payload.json';
 (window as unknown as { researchDesk: unknown }).researchDesk = { getBenchmarkRadarData: async () => payload };
 document.documentElement.dataset.theme = new URLSearchParams(location.search).get('theme') || 'paper';
-createRoot(document.getElementById('root')!).render(<BenchmarkRadarView />);
+createRoot(document.getElementById('root')!).render(<UISettingsProvider><BenchmarkRadarView /></UISettingsProvider>);
 `);
 
 try {
@@ -44,6 +46,7 @@ try {
   fs.writeFileSync(runner, `
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
+const assert = require('node:assert/strict');
 app.commandLine.appendSwitch('disable-gpu');
 app.setPath('userData', ${JSON.stringify(path.join(temporary, "profile"))});
 app.whenReady().then(async () => {
@@ -59,7 +62,9 @@ app.whenReady().then(async () => {
     }
     if (!ready) throw new Error('Benchmark Radar fixture did not render');
     await new Promise(resolve => setTimeout(resolve, 800));
-    const summary = await win.webContents.executeJavaScript("({ rows: document.querySelectorAll('.benchmark-row').length, note: document.querySelector('.module-toolbar-note')?.textContent || '', overflow: document.documentElement.scrollWidth > innerWidth })");
+    const summary = await win.webContents.executeJavaScript("({ rows: document.querySelectorAll('.benchmark-row').length, first: document.querySelector('.benchmark-row h2')?.textContent, note: document.querySelector('.module-toolbar-note')?.textContent || '', overflow: document.documentElement.scrollWidth > innerWidth })");
+    assert.equal(summary.first, ${JSON.stringify(newest.name)});
+    assert.equal(summary.overflow, false);
     fs.writeFileSync(${JSON.stringify(output)} + '/' + theme + '.png', (await win.webContents.capturePage()).toPNG());
     await win.webContents.executeJavaScript("document.querySelectorAll('.benchmark-tabs button')[1]?.click()");
     for (let attempt = 0; attempt < 60; attempt++) {

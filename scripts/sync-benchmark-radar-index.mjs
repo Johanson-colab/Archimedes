@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-const { PUBLIC_INDEX_URL, fetchPublicIndex, writeIndexFile } = require("../electron/benchmark-radar-index.cjs");
+const { PUBLIC_INDEX_URL, PUBLIC_LIBRARY_INDEX_URL, fetchPublicIndex, writeIndexFile } = require("../electron/benchmark-radar-index.cjs");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const argument = (name, fallback) => {
@@ -15,14 +15,15 @@ const argument = (name, fallback) => {
 };
 
 const url = argument("url", PUBLIC_INDEX_URL);
+const libraryUrl = argument("library-url", PUBLIC_LIBRARY_INDEX_URL);
 const output = path.resolve(root, argument("out", path.join("electron", "assets", "benchmark-radar", "public-index.json")));
 
 try {
-  const result = await fetchPublicIndex({ url, timeoutMs: 240_000 });
+  const result = await fetchPublicIndex({ url, libraryUrl, timeoutMs: 240_000 });
   const index = { ...result.index, fetchedAt: result.fetchedAt, etag: result.etag };
   writeIndexFile(output, index);
   const bytes = fs.statSync(output).size;
-  console.log(JSON.stringify({ source: url, output: path.relative(root, output), updatedAt: index.updatedAt, records: index.records.length, directions: index.directions.length, megabytes: Number((bytes / 1024 / 1024).toFixed(2)) }, null, 2));
+  console.log(JSON.stringify({ source: url, output: path.relative(root, output), updatedAt: index.updatedAt, radar: index.radarRecords?.length ?? index.records.length, records: index.records.length, directions: index.directions.length, megabytes: Number((bytes / 1024 / 1024).toFixed(2)) }, null, 2));
 } catch (failure) {
   console.error(`Could not refresh the Benchmark Radar index: ${failure instanceof Error ? failure.message : failure}`);
   process.exitCode = 1;

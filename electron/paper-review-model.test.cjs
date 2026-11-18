@@ -38,7 +38,7 @@ test("OpenAI-compatible requests carry the model, messages and usage", async () 
   const fetchImpl = async (url, options) => {
     captured = { url, options, body: JSON.parse(options.body) };
     return jsonResponse({
-      choices: [{ message: { content: '{"ok":true}' } }],
+      choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }],
       usage: { prompt_tokens: 11, completion_tokens: 7 },
     });
   };
@@ -56,6 +56,7 @@ test("Anthropic requests use messages and the system field", async () => {
   const fetchImpl = async (url, options) => {
     captured = { url, body: JSON.parse(options.body), headers: options.headers };
     return jsonResponse({
+      stop_reason: "end_turn",
       content: [{ type: "text", text: '{"ok":true}' }],
       usage: { input_tokens: 9, output_tokens: 4 },
     });
@@ -73,7 +74,7 @@ test("malformed JSON gets one schema-preserving repair pass", async () => {
   const fetchImpl = async () => {
     calls += 1;
     return jsonResponse({
-      choices: [{ message: { content: calls === 1 ? "I cannot obey that." : '{"repaired":true}' } }],
+      choices: [{ finish_reason: "stop", message: { content: calls === 1 ? "I cannot obey that." : '{"repaired":true}' } }],
       usage: { prompt_tokens: 5, completion_tokens: 3 },
     });
   };
@@ -94,7 +95,7 @@ test("reasoning endpoints that reject temperature are retried without it", async
       return { ok: false, status: 400, text: async () => "temperature is unsupported for this model", json: async () => ({}) };
     }
     assert.equal(Object.hasOwn(body, "temperature"), false);
-    return jsonResponse({ choices: [{ message: { content: '{"ok":true}' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } });
+    return jsonResponse({ choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } });
   };
   const result = await model.completeJson({ ...baseModel, model: "reasoning-model" }, { system: "system", prompt: "prompt", fetchImpl });
   assert.deepEqual(result.json, { ok: true });

@@ -131,7 +131,7 @@ test("dirty file changes are protected when the workbench closes", () => {
   assert.match(app, /Hide the workbench\?/);
   assert.match(app, /Unsaved file changes stay in the editor\./);
   assert.match(app, /confirm\(\{ title: "Hide the workbench\?"/);
-  assert.match(app, /Object\.values\(fileDraftsRef\.current\)\.some\(isDraftDirty\)/);
+  assert.match(app, /hasDirtyFileEditorScopes\(fileEditorScopesRef\.current\)/);
 });
 
 test("agent trajectory mirrors the OpenCode context structure", () => {
