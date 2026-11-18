@@ -131,8 +131,8 @@ function HighlightLine({ text, problem, marks, activeMatch }: { text: string; pr
 
 export type PaperOpenRequest = { path: string; token: number } | null;
 
-export default function PaperWritingView({ bridge, workspace, projectId, openRequest, onRefresh, onAskAI, active = true }: {
-  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; openRequest: PaperOpenRequest; onRefresh: () => Promise<void> | void; onAskAI: (path: string) => void; active?: boolean;
+export default function PaperWritingView({ bridge, workspace, projectId = null, threadId = null, openRequest, onRefresh, onAskAI, active = true }: {
+  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; threadId?: string | null; openRequest: PaperOpenRequest; onRefresh: () => Promise<void> | void; onAskAI: (path: string) => void; active?: boolean;
 }) {
   const { t } = useUISettings();
   const scopesRef = useRef(new Map<string, WritingScope>());
@@ -148,6 +148,8 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     scopesRef.current.set(scopeKey, scope);
   }
   const owner = scope;
+  const activeCompileContext = useRef({ owner, threadId });
+  activeCompileContext.current = { owner, threadId };
   function scoped<K extends keyof WritingScope>(key: K): [WritingScope[K], React.Dispatch<React.SetStateAction<WritingScope[K]>>] {
     return [owner[key], (action) => { owner[key] = typeof action === "function" ? (action as (current: WritingScope[K]) => WritingScope[K])(owner[key]) : action; refreshScope(); }];
   }
@@ -362,11 +364,15 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
       const result = await bridge.compileLatexDocument(owner.workspace, target, requestId);
       if (sequence !== owner.compileSequence) return;
       setCompileResult({ ...result, preview_url: result.ok ? result.preview_url : undefined }); setCompileState(result.ok ? "success" : "error"); setActiveProblem(result.ok ? null : result.diagnostics.find((item) => item.line)?.line ?? null);
-      if (!result.ok && result.diagnostics.length) {
+      if (!result.ok && result.diagnostics.length && mountedRef.current &&
+          activeCompileContext.current.owner === owner && activeCompileContext.current.threadId === threadId) {
         const diagnostic = result.diagnostics.find((item) => item.line) ?? result.diagnostics[0];
         const output = result.diagnostics.slice(0, 3).map((item) => `${item.line ? `line ${item.line}: ` : ""}${item.message}`).join("\n");
         emitProactiveSignal({
           source: "latex",
+          workspace: owner.workspace,
+          projectId,
+          threadId,
           title: `Build failed: ${diagnostic.message.slice(0, 90)}`,
           whyNow: `The last LaTeX build of ${target}${diagnostic.line ? ` failed on line ${diagnostic.line}` : " failed"}.`,
           evidence: [{
@@ -383,14 +389,14 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
             text: `The LaTeX build failed. Help me fix it without changing the argument.\n\nFile: ${target}${diagnostic.line ? `\nLine: ${diagnostic.line}` : ""}\nProblem: ${diagnostic.message}\n\nBuild log:\n${(result.log ?? output).slice(0, 1600)}`,
           },
           confidence: 0.9,
-          fingerprint: fingerprintFor("latex", `${target}:${diagnostic.line ?? 0}:${diagnostic.message}:${result.diagnostics.length}`),
+          fingerprint: fingerprintFor("latex", JSON.stringify([owner.workspace, projectId, threadId, target, diagnostic.line, diagnostic.message, result.diagnostics.length])),
         });
       }
     } catch (nextError) {
       if (sequence !== owner.compileSequence) return;
       setCompileState("error"); setError(nextError instanceof Error ? nextError.message : String(nextError));
     }
-  }, [bridge, compileRequestPrefix, mainPath, owner, refreshScope, t]);
+  }, [bridge, compileRequestPrefix, mainPath, owner, projectId, refreshScope, t, threadId]);
 
   useEffect(() => bridge.onLatexCompileProgress?.((input) => {
     const target = [...scopesRef.current.values()].find(item => item.workspace === input.workspace && item.compileRequestId === input.requestId);

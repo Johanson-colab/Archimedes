@@ -119,6 +119,27 @@ test("the hook gates on composer focus and uses the dock as the shown boundary",
   assert.match(hook, /archimedes-proactive-open/);
 });
 
+test("accepting a LaTeX suggestion after switching projects leaves it available in the original conversation", async () => {
+  const { transformWithOxc } = await import("vite");
+  const source = hook.match(/  const accept = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/)[0];
+  const { code } = await transformWithOxc(source, "proactive-accept.ts", {});
+  const accepted = [], staged = [], notices = [];
+  const contextRef = { current: { workspace: "/review/b", projectId: "b", threadId: "thread-b" } };
+  const accept = new Function("useCallback", "contextRef", "onNotice", "setState", "markSuggestionAccepted", "onRun", `${code}\nreturn accept;`)(
+    (callback) => callback, contextRef, (notice) => notices.push(notice), (update) => update({}),
+    (_state, id) => accepted.push(id), (suggestion) => staged.push(suggestion),
+  );
+  const suggestion = { id: "a-failure", source: "latex", action: { kind: "insert" }, workspace: "/review/a", projectId: "a", threadId: "thread-a" };
+  accept(suggestion);
+  assert.deepEqual(accepted, []);
+  assert.deepEqual(staged, []);
+  assert.match(notices[0], /Return to the source manuscript conversation/);
+  contextRef.current = { workspace: suggestion.workspace, projectId: suggestion.projectId, threadId: suggestion.threadId };
+  accept(suggestion);
+  assert.deepEqual(accepted, ["a-failure"]);
+  assert.deepEqual(staged, [suggestion]);
+});
+
 test("L0 signals are emitted by the surfaces that own the evidence", () => {
   assert.match(library, /emitProactiveSignal/);
   assert.match(library, /source: "search"/);

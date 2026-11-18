@@ -6,6 +6,7 @@ const { test, before, after } = require("node:test");
 const { JSDOM } = require("jsdom");
 
 let dom, React, createRoot, Writing;
+const proactiveSignals = [];
 before(async () => {
   dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost", pretendToBeVisual: true });
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
@@ -24,7 +25,7 @@ before(async () => {
     Dialog: props => props.open ? React.createElement(props.as || "div", { role: "dialog", onSubmit: props.onSubmit }, props.children) : null,
     StateView: props => React.createElement("div", null, props.title, props.description, props.action),
     PaperTemplateLibrary: () => null, paperTemplates: [{ id: "fake" }], SharedNoteEditor: () => null,
-    fingerprintFor: () => "fake", emitProactiveSignal() {},
+    fingerprintFor: (_source, value) => value, emitProactiveSignal: (signal) => proactiveSignals.push(signal),
   };
   const tabsSource = fs.readFileSync(path.join(__dirname, "../src/Tabs.tsx"), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export /g, "");
   const tabs = await transformWithOxc(tabsSource, "Tabs.tsx", { jsx: { runtime: "classic" } });
@@ -74,7 +75,7 @@ async function fixture(t, overrides = {}) {
   };
   let reactRoot = createRoot(document.getElementById("root"));
   const render = (workspace, token = 1, filePath = "paper/main.tex") => React.act(async () => reactRoot.render(React.createElement(Writing, {
-    bridge, workspace, projectId: overrides.projectId || (workspace === a ? "a" : "b"), openRequest: token === null ? null : { path: filePath, token }, onRefresh() {}, onAskAI() {},
+    bridge, workspace, projectId: overrides.projectId || (workspace === a ? "a" : "b"), threadId: workspace === a ? "thread-a" : "thread-b", openRequest: token === null ? null : { path: filePath, token }, onRefresh() {}, onAskAI() {},
   })));
   t.after(async () => { await React.act(async () => reactRoot.unmount()); fs.rmSync(directory, { recursive: true, force: true }); });
   return { a, b, render, restart: async workspace => { await React.act(async () => reactRoot.unmount()); reactRoot = createRoot(document.getElementById("root")); await render(workspace, null); }, reads, writes, compiles, disk: root => fs.readFileSync(path.join(root, "paper/main.tex"), "utf8"), progress: event => progress?.(event) };
@@ -170,6 +171,25 @@ test("late reads, compile progress and build results update only their owner sco
   await f.render(f.a, 2);
   assert.equal(document.querySelector('textarea').value, source("Project A original"));
   assert.match(document.querySelector('iframe').src, /\/a\.pdf$/);
+});
+
+test("a late LaTeX failure stays in its source project instead of suggesting a fix in another project", async t => {
+  const compileA = deferred();
+  const failure = { ok: false, diagnostics: [{ line: 3, message: "Missing citation file" }], log: "citation file missing", duration_ms: 1 };
+  const f = await fixture(t, { compile: root => root === f.a ? compileA.promise : failure });
+  const signalsBefore = proactiveSignals.length;
+  await f.render(f.a, 1); await autoCompileOff(); await click("Recompile");
+  await f.render(f.b, 2);
+  await React.act(async () => compileA.resolve(failure));
+  assert.equal(proactiveSignals.length, signalsBefore);
+  assert.equal(document.querySelector(".latex-diagnostics"), null);
+
+  await click("Recompile");
+  assert.equal(proactiveSignals.length, signalsBefore + 1);
+  const { workspace, projectId, threadId } = proactiveSignals.at(-1);
+  assert.deepEqual({ workspace, projectId, threadId }, { workspace: f.b, projectId: "b", threadId: "thread-b" });
+  await f.render(f.a, null);
+  assert.match(document.querySelector(".latex-diagnostics").textContent, /Missing citation file/);
 });
 
 test("failed departure autosaves keep the original draft and expose its save error on return", async t => {
