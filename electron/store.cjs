@@ -62,13 +62,17 @@ function captureStore() {
   } };
 }
 
+function sameDatabaseFile(file, other) {
+  return file?.dev === other.dev && file.ino === other.ino;
+}
+
 function createWorkspaceStore(workspace) {
   const root = normalizeWorkspacePath(workspace);
   if (!root) throw new Error("A data workspace is required.");
   let state = workspaceStates.get(root);
   if (state?.database) {
     const file = fs.statSync(state.databaseFile.path, { bigint: true, throwIfNoEntry: false });
-    if (file?.ino !== state.databaseFile.ino || file?.dev !== state.databaseFile.dev) {
+    if (!sameDatabaseFile(file, state.databaseFile)) {
       closeState(state);
       if (state.leases) throw new Error("The workspace database was replaced while work was still running. Reopen the folder after that work finishes.");
       state = null;
@@ -1016,8 +1020,20 @@ function initializeWorkspace(state, workspacePath) {
   const legacyName = ["ax", "iom"].join("");
   const legacyDir = path.join(workspacePath, `.${legacyName}`);
   const legacyDatabasePath = path.join(legacyDir, `${legacyName}.db`);
+  const databaseFile = fs.statSync(databasePath, { bigint: true, throwIfNoEntry: false });
+  const legacyFile = !databaseFile && fs.statSync(legacyDatabasePath, { bigint: true, throwIfNoEntry: false });
+  const opened = [...workspaceStates.values()].find(other => sameDatabaseFile(databaseFile || legacyFile, other.databaseFile));
+  if (opened && opened !== state) {
+    // SQLite's WAL and shared-memory sidecars are path-based even when the DB file is linked.
+    const original = fs.statSync(opened.databaseFile.path, { bigint: true, throwIfNoEntry: false });
+    if (sameDatabaseFile(original, opened.databaseFile) && fs.realpathSync(opened.workspace) !== workspacePath) {
+      throw new Error("This research database is already open from another workspace folder.");
+    }
+    if (opened.leases) throw new Error("The workspace data folder moved while work was still running. Let it finish or stop it in the original window, then reopen the moved folder.");
+    closeState(opened);
+  }
   fs.mkdirSync(dataDir, { recursive: true });
-  if (!fs.existsSync(databasePath) && fs.existsSync(legacyDatabasePath)) {
+  if (legacyFile) {
     fs.renameSync(legacyDatabasePath, databasePath);
     for (const suffix of ["-wal", "-shm"]) {
       const legacySidecar = `${legacyDatabasePath}${suffix}`;

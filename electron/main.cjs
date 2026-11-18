@@ -2322,9 +2322,10 @@ app.whenReady().then(async () => {
     return { claimed: agent.setApprovalSurface(threadId, true, workspace) };
   });
 
-  ipcMain.handle("agent:interrupt", (_event, threadId) => {
+  ipcMain.handle("agent:interrupt", (event, threadId) => {
     if (typeof threadId !== "string") throw new Error("A research thread ID is required.");
-    return { interrupted: agent.interruptAgent(threadId) };
+    const workspace = windowWorkspaces.get(event.sender.id);
+    return { interrupted: Boolean(workspace && agent.interruptAgent(threadId, workspace)) };
   });
 
   ipcMain.handle("terminal:run", (event, { command, cwd, actionId }) => {

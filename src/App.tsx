@@ -1382,6 +1382,7 @@ function App() {
   const [trajectoryEvents, setTrajectoryEvents] = useState<ResearchEvent[]>([]);
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [workspaceOpenError, setWorkspaceOpenError] = useState("");
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
   const [threads, setThreads] = useState<ResearchThread[]>([]);
@@ -2284,9 +2285,15 @@ function App() {
   async function loadWorkspace(workspacePath: string) {
     if (agentBusy || sideBusy || commandLockRef.current) return;
     if (hasDirtyFileEditorScopes(fileEditorScopesRef.current) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
+    const snapshot = await desktopBridge.openWorkspace(workspacePath).catch(error => {
+      const message = error instanceof Error ? error.message : String(error);
+      setWorkspaceOpenError(message.replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, ""));
+      return null;
+    });
+    if (!snapshot) return;
+    setWorkspaceOpenError("");
     clearPendingAssistantDeltas();
     setWorkspaceReady(false);
-    const snapshot = await desktopBridge.openWorkspace(workspacePath);
     setSideThread(null);
     setWorkspace(snapshot.workspace);
     setProjects(snapshot.projects ?? []);
@@ -3802,6 +3809,11 @@ function App() {
         onClose={() => setModal(null)}
         onCreateFile={() => void createFile()}
       />
+      <Dialog open={Boolean(workspaceOpenError)} onClose={() => setWorkspaceOpenError("")} role="alertdialog" size="compact" ariaLabelledBy="workspace-open-error-heading" ariaDescribedBy="workspace-open-error-message">
+        <header className="app-dialog-header"><h2 id="workspace-open-error-heading">{t("Unable to open workspace")}</h2></header>
+        <div className="app-dialog-body" id="workspace-open-error-message">{t(workspaceOpenError)}</div>
+        <footer className="app-dialog-footer"><button className="primary-button" onClick={() => setWorkspaceOpenError("")}>{t("Close")}</button></footer>
+      </Dialog>
       <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={executionWorkspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
       <AuthModal
         open={authModalOpen}

@@ -1205,8 +1205,8 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
   }
 }
 
-function interruptAgent(threadId) {
-  const controller = activeRuns.get(defaultStore.runtimeThreadId(threadId));
+function interruptAgent(threadId, workspace) {
+  const controller = activeRuns.get(defaultStore.runtimeThreadId(threadId, workspace));
   if (!controller) return false;
   controller.abort();
   return true;

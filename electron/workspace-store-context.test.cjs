@@ -7,7 +7,7 @@ const model = require("./model-config.cjs");
 const { DatabaseSync } = require("node:sqlite");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
-const { createWorkspaceIpc } = require("./workspace-context.cjs");
+const { createWorkspaceIpc, isWorkspaceDataChannel } = require("./workspace-context.cjs");
 
 function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-store-owner-")));
@@ -151,7 +151,18 @@ test("same imported thread id in two data stores has independent running/stop/ap
   const runningA = agent.runAgent({ dataStore: a, threadId, workspace: roots.a, prompt: "A" });
   const runningB = agent.runAgent({ dataStore: b, threadId, workspace: roots.b, prompt: "B" });
   await arrived.promise;
-  assert.equal(a.run(() => agent.interruptAgent(threadId)), true);
+  fs.renameSync(roots.a, path.join(roots.root, "moved-while-waiting"));
+  const handlers = new Map(), windowWorkspaces = new Map([[1, roots.a], [2, roots.b]]);
+  const ipcMain = createWorkspaceIpc({
+    ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, store,
+    workspaceForEvent: (event, channel) => isWorkspaceDataChannel(channel) ? windowWorkspaces.get(event.sender.id) : null,
+  });
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = main.indexOf('  ipcMain.handle("agent:interrupt",'), end = main.indexOf('  ipcMain.handle("terminal:run",', start);
+  new Function("ipcMain", "agent", "windowWorkspaces", main.slice(start, end))(ipcMain, agent, windowWorkspaces);
+  const stop = handlers.get("agent:interrupt");
+  assert.deepEqual(stop({ sender: { id: 3 } }, threadId), { interrupted: false });
+  assert.deepEqual(stop({ sender: { id: 1 } }, threadId), { interrupted: true });
   const resultA = await runningA;
   assert.equal(resultA.status, "interrupted");
   assert.equal(b.getResearchThread(threadId).status, "running");
@@ -161,6 +172,56 @@ test("same imported thread id in two data stores has independent running/stop/ap
   assert.equal(resultB.thread.workspace_path, roots.b);
   assert.equal(resultB.thread.turns[0].assistant_message, "B completed independently");
   assert.equal(a.getResearchThread(threadId).turns[0].status, "interrupted");
+});
+
+test("a moved database cannot start a second turn while its original owner is running", async t => {
+  const { root, a, executionA } = fixture(t);
+  const owner = store.createWorkspaceStore(a);
+  const project = owner.createResearchProject({ name: "Unchanged execution folder", workspacePath: executionA });
+  const workspace = owner.defaultProjectWorkspace(project.id);
+  const thread = owner.createResearchThread({ projectId: project.id, workspaceId: workspace.id, workspacePath: executionA, mode: "free-chat" });
+  const moved = path.join(root, "moved-data");
+  model.initializeModelConfig(path.join(root, "settings"));
+  model.saveModelConfig({ provider: "custom", baseUrl: "https://context.invalid/v1", model: "fake", apiKey: "fake-not-a-credential" });
+  const arrived = deferred(), finish = deferred(), previousFetch = global.fetch;
+  let modelCalls = 0;
+  global.fetch = async () => {
+    if (++modelCalls === 1) {
+      arrived.resolve();
+      await finish.promise;
+    }
+    return { ok: true, headers: { get: () => "application/json" }, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "Result from the original execution folder" } }] }) };
+  };
+  t.after(() => { global.fetch = previousFetch; });
+  const run = (dataStore, prompt) => agent.runAgent({ dataStore, threadId: thread.id, workspace: executionA, prompt });
+  const pending = run(owner, "Original turn");
+  await arrived.promise;
+  fs.renameSync(a, moved);
+  try {
+    await assert.rejects(async () => run(store.createWorkspaceStore(moved), "Duplicate turn"), /data folder moved while work was still running/);
+    assert.equal(modelCalls, 1);
+    assert.equal(owner.getResearchThread(thread.id).status, "running");
+  } finally {
+    finish.resolve();
+    await pending;
+  }
+  const reopened = store.createWorkspaceStore(moved);
+  assert.equal(reopened.workspace, moved);
+  const saved = reopened.getResearchThread(thread.id);
+  assert.equal(saved.status, "idle");
+  assert.equal(saved.workspace_path, executionA);
+  assert.deepEqual(saved.turns.map(turn => turn.assistant_message), ["Result from the original execution folder"]);
+  assert.equal((await run(reopened, "Continue after moving")).status, "completed");
+});
+
+test("distinct workspace folders cannot open two handles to one SQLite file", t => {
+  const { a, b } = fixture(t);
+  const owner = store.createWorkspaceStore(a);
+  fs.mkdirSync(path.join(b, ".archimedes"));
+  fs.linkSync(path.join(a, ".archimedes/archimedes.db"), path.join(b, ".archimedes/archimedes.db"));
+  assert.throws(() => store.createWorkspaceStore(b), /research database is already open from another workspace folder/);
+  assert.equal(store.createWorkspaceStore(a), owner);
+  assert.equal(owner.workspace, a);
 });
 
 test("a detached experiment persists its outcome to the original database after a folder replacement", async t => {
