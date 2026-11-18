@@ -46,6 +46,8 @@ export function createWritingScope(workspace: string) {
     activeProblem: null as number | null,
     activationSequence: 0,
     openSequence: 0,
+    pendingActivation: 0,
+    pendingOpen: 0,
     compileSequence: 0,
     directoryRequests: new Map<string, number>(),
   };

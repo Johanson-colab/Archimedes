@@ -308,6 +308,28 @@ test("returning to Writing reloads the manuscript root and expanded source direc
   assert.match(document.querySelector(".latex-editor-textarea").value, /Project A original/);
 });
 
+test("re-entering a scope does not replace its explicitly opening manuscript with a cached file", async t => {
+  const started = deferred(), complete = deferred();
+  const f = await fixture(t, { read: async (root, name, preview) => {
+    if (name === "other/main.tex") {
+      started.resolve();
+      await complete.promise;
+    }
+    return preview(root, name);
+  } });
+  fs.mkdirSync(path.join(f.a, "other"));
+  fs.writeFileSync(path.join(f.a, "other/main.tex"), source("Requested other manuscript"));
+  await f.render(f.a); await autoCompileOff();
+  await f.render(f.a, 2, "other/main.tex");
+  await started.promise;
+  await f.render(f.b, null);
+  await f.render(f.a, 2, "other/main.tex");
+  await React.act(async () => complete.resolve());
+  assert.match(document.querySelector(".latex-editor-textarea").value, /Requested other manuscript/);
+  assert.equal(document.querySelector(".paper-main-document select").value, "other/main.tex");
+  assert.equal(f.reads.filter(({ name }) => name === "paper/main.tex").length, 1);
+});
+
 test('a main document at the execution root opens in place and a removed recent document returns to the chooser', async t => {
   const f = await fixture(t);
   fs.writeFileSync(path.join(f.a, 'root.tex'), source('Root manuscript'));

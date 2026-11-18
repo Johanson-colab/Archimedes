@@ -233,6 +233,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     if (refreshClean && (!cached || cached.draft !== cached.savedDraft || cached.saveState !== "saved")) return;
     const request = ++owner.openSequence;
     if (!refreshClean) {
+      owner.pendingOpen = request;
       owner.compileTarget = "";
       ++owner.compileSequence;
       owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
@@ -263,38 +264,41 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
       refreshScope();
     } catch (nextError) {
       if (request === owner.openSequence) { owner.error = nextError instanceof Error ? nextError.message : String(nextError); refreshScope(); }
+    } finally {
+      if (owner.pendingOpen === request) owner.pendingOpen = 0;
     }
   }, [bridge, owner, refreshScope]);
 
   const activateProject = useCallback(async (path: string) => {
     const request = ++owner.activationSequence;
+    owner.pendingActivation = request;
     const openSequence = owner.openSequence;
     const isCurrent = () => request === owner.activationSequence && owner.openSequence === openSequence;
-    let projects: LatexProjectSummary[];
-    try { projects = await bridge.listLatexProjects(owner.workspace); }
-    catch (error) {
+    try {
+      const projects = await bridge.listLatexProjects(owner.workspace);
+      if (!isCurrent()) return;
+      owner.projects = projects;
+      const contains = (main: string) => {
+        const directory = projectRoot(main);
+        return !directory || path.startsWith(`${directory}/`);
+      };
+      const main = projects.find(item => item.path === path && item.main)?.path
+        || (owner.mainPath && contains(owner.mainPath) ? owner.mainPath : "")
+        || projects.filter(item => item.main && contains(item.path)).sort((a, b) => projectRoot(b.path).length - projectRoot(a.path).length)[0]?.path
+        || (ext(path) === "tex" ? path : "");
+      const root = projectRoot(main || path) || ".";
+      owner.compileTarget = "";
+      ++owner.compileSequence;
+      setCompileResult(null); setCompileLog(""); setCompileState("idle");
+      owner.mainPath = main;
+      setActiveProject(root); setActiveDirectory(root); setExpanded(new Set([root])); setChooserOpen(false); setError("");
+      await loadDirectory(root, true);
+      if (isCurrent()) await openFile(path);
+    } catch (error) {
       if (isCurrent()) { owner.error = error instanceof Error ? error.message : String(error); refreshScope(); }
-      return;
+    } finally {
+      if (owner.pendingActivation === request) owner.pendingActivation = 0;
     }
-    if (!isCurrent()) return;
-    owner.projects = projects;
-    const contains = (main: string) => {
-      const directory = projectRoot(main);
-      return !directory || path.startsWith(`${directory}/`);
-    };
-    const main = projects.find(item => item.path === path && item.main)?.path
-      || (owner.mainPath && contains(owner.mainPath) ? owner.mainPath : "")
-      || projects.filter(item => item.main && contains(item.path)).sort((a, b) => projectRoot(b.path).length - projectRoot(a.path).length)[0]?.path
-      || (ext(path) === "tex" ? path : "");
-    const root = projectRoot(main || path) || ".";
-    owner.compileTarget = "";
-    ++owner.compileSequence;
-    setCompileResult(null); setCompileLog(""); setCompileState("idle");
-    owner.mainPath = main;
-    setActiveProject(root); setActiveDirectory(root); setExpanded(new Set([root])); setChooserOpen(false); setError("");
-    await loadDirectory(root, true);
-    if (!isCurrent()) return;
-    await openFile(path);
   }, [bridge, loadDirectory, openFile, owner, refreshScope]);
 
   const refreshProjects = useCallback(async () => {
@@ -335,7 +339,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     void refreshProjects();
     // A fresh root listing lets the existing expanded nodes reload their children.
     if (owner.activeProject) void loadDirectory(owner.activeProject, true);
-    if (owner.selectedPath) void openFile(owner.selectedPath, true);
+    if (owner.selectedPath && !owner.pendingActivation && !owner.pendingOpen) void openFile(owner.selectedPath, true);
   }, [active, loadDirectory, openFile, owner, refreshProjects]);
   useEffect(() => {
     if (!activeProject || !mainPath || !file?.path) return;
