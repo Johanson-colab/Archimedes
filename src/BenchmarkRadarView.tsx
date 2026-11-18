@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Bookmark, BookmarkCheck, ExternalLink, LibraryBig, LoaderCircle, Radar, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bookmark, BookmarkCheck, ExternalLink, LibraryBig, LoaderCircle, Radar, RefreshCw, Search } from "lucide-react";
 import ToolbarActions from "./ToolbarActions";
+import { useUISettings } from "./i18n";
 import { Tabs, Tab } from "./Tabs";
 
 import { StateView } from "./StateView";
@@ -43,7 +44,6 @@ function signalText(record: BenchmarkRadarRecord) {
   if (record.attention.hfPaperUpvotes != null) signals.push(`${record.attention.hfPaperUpvotes.toLocaleString()} HF votes`);
   if (record.attention.githubStars != null) signals.push(`${record.attention.githubStars.toLocaleString()} GitHub stars`);
   if (record.attentionScore != null) signals.push(`Attention ${record.attentionScore}`);
-  if (record.forecast != null) signals.push(`Forecast ${record.forecast}`);
   return signals.join(" · ") || "Attention not measured yet";
 }
 
@@ -60,6 +60,8 @@ function SaveButton({ record, saved, onToggle }: { record: BenchmarkRadarRecord;
 }
 
 function BenchmarkRow({ record, saved, onToggle, radar = false, directionNames }: { record: BenchmarkRadarRecord; saved: boolean; onToggle: () => void; radar?: boolean; directionNames?: Map<string, string> }) {
+  const { t } = useUISettings();
+  const hasCode = Boolean(record.links.code) || ["runnable", "maintained"].includes(record.readiness.toLowerCase());
   const labels = (record.directions.length ? record.directions.map((id) => directionNames?.get(id) ?? id) : [...record.capabilityGroups, ...record.topics]).slice(0, 3);
   return <article className={radar ? "benchmark-row radar" : "benchmark-row"}>
     {radar && <div className="benchmark-date"><small>Released</small><strong>{formatDate(record.releasedAt)}</strong></div>}
@@ -67,7 +69,14 @@ function BenchmarkRow({ record, saved, onToggle, radar = false, directionNames }
       <div className="benchmark-row-heading"><h2>{record.name}</h2>{record.publication.venue && <span>{record.publication.venue}</span>}</div>
       <p>{record.description || record.oneLine || "No benchmark summary is available."}</p>
       {labels.length > 0 && <div className="benchmark-tags">{labels.map((label) => <span key={label}>{label}</span>)}</div>}
-      <div className="benchmark-signal">{record.readiness && <b>{record.readiness}</b>}<span>{signalText(record)}</span></div>
+      <div className="benchmark-signal">{(record.readiness || hasCode) && <b title={hasCode ? t("A code link is available. Archimedes has not verified that it runs.") : undefined}>{hasCode ? t("Code available") : record.readiness}</b>}<span>{signalText(record)}</span></div>
+      {record.forecast != null && <details className="benchmark-forecast">
+        <summary>{t("Attention forecast")}: {record.forecast}/100</summary>
+        <p>{t("An upstream AI estimate of future attention, not benchmark quality or a measured result.")}</p>
+        {record.forecastHorizon && <p>{t("Forecast horizon")}: {record.forecastHorizon === "7d" ? t("7 days") : record.forecastHorizon}</p>}
+        {record.forecastConfidence && <p>{t("Forecast confidence")}: {t(record.forecastConfidence)}</p>}
+        {record.forecastReason ? <p>{record.forecastReason}</p> : <p>{t("The source did not provide forecast details.")}</p>}
+      </details>}
       <ResourceLinks record={record} />
     </div>
     <SaveButton record={record} saved={saved} onToggle={onToggle} />
@@ -75,12 +84,15 @@ function BenchmarkRow({ record, saved, onToggle, radar = false, directionNames }
 }
 
 export default function BenchmarkRadarView() {
+  const { t } = useUISettings();
+  const refresh = useRef<() => Promise<void>>(async () => {});
+  const [refreshing, setRefreshing] = useState(true);
   const [data, setData] = useState<BenchmarkRadarData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RadarTab>("radar");
   const [windowName, setWindowName] = useState<TimeWindow>("latest");
-  const [radarSort, setRadarSort] = useState<RadarSort>("attention");
+  const [radarSort, setRadarSort] = useState<RadarSort>("newest");
   const [librarySort, setLibrarySort] = useState<LibrarySort>("attention");
   const [query, setQuery] = useState("");
   const [direction, setDirection] = useState("");
@@ -88,14 +100,41 @@ export default function BenchmarkRadarView() {
 
   useEffect(() => {
     let active = true;
-    void window.researchDesk.getBenchmarkRadarData().then((payload) => {
-      if (!active) return;
-      setData(payload);
-      setError("");
-    }).catch((failure: unknown) => {
-      if (active) setError(failure instanceof Error ? failure.message : String(failure));
-    }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    let inFlight = false;
+    const load = async (force = false) => {
+      if (!active || inFlight) return;
+      inFlight = true;
+      setRefreshing(true);
+      try {
+        const payload = await window.researchDesk.getBenchmarkRadarData({ refresh: force });
+        if (active) { setData(payload); setError(""); }
+      } catch (failure) {
+        if (active) setError(failure instanceof Error ? failure.message : String(failure));
+      } finally {
+        inFlight = false;
+        if (active) { setLoading(false); setRefreshing(false); }
+      }
+    };
+    refresh.current = () => load(true);
+    // Render saved data immediately, then apply the result of the online check
+    // to this mounted view. No renderer event subscriptions or unbounded polling.
+    void (async () => {
+      try {
+        const cached = await window.researchDesk.getBenchmarkRadarData({ cachedOnly: true });
+        if (active) { setData(cached); setLoading(false); }
+      } catch { /* A first launch may not have a usable snapshot. */ }
+      if (active) await load();
+    })();
+    const checkVisible = () => { if (document.visibilityState === "visible") void load(); };
+    const timer = window.setInterval(checkVisible, 6 * 60 * 60 * 1000);
+    window.addEventListener("focus", checkVisible);
+    document.addEventListener("visibilitychange", checkVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", checkVisible);
+      document.removeEventListener("visibilitychange", checkVisible);
+    };
   }, []);
 
   function toggleSaved(id: string) {
@@ -109,8 +148,7 @@ export default function BenchmarkRadarView() {
 
   const radarRecords = useMemo(() => {
     if (!data) return [];
-    const newestDate = data.radar.reduce((latest, record) => dateValue(record.releasedAt) > dateValue(latest) ? record.releasedAt : latest, "");
-    const cutoffAnchor = dateValue(data.updatedAt) || dateValue(newestDate);
+    const cutoffAnchor = dateValue(new Date().toISOString().slice(0, 10));
     const cutoff = cutoffAnchor - (windowName === "30d" ? 30 : windowName === "90d" ? 90 : 0) * 86_400_000;
     // The public index can publish a single benchmark on its newest date, so
     // "Latest" shows the newest releases rather than only that one day.
@@ -139,7 +177,7 @@ export default function BenchmarkRadarView() {
   const directionNames = useMemo(() => new Map((data?.directions ?? []).map((item) => [item.id, item.name])), [data]);
 
   if (loading) return <main className="benchmark-radar-page"><StateView tone="loading" className="benchmark-loading" icon={<LoaderCircle className="spin" size={25} />} title="Loading Benchmark Radar…" /></main>;
-  if (!data) return <main className="benchmark-radar-page"><StateView tone="error" className="benchmark-loading" icon={<Radar size={26} />} title="Benchmark Radar is unavailable" description={error || "The local Benchmark Radar dataset could not be opened."} /></main>;
+  if (!data) return <main className="benchmark-radar-page"><StateView tone="error" className="benchmark-loading" icon={<Radar size={26} />} title={t("Benchmark Radar is unavailable")} description={error || t("No saved benchmark data is available. Connect to the internet and try again.")} action={<button className="benchmark-refresh" disabled={refreshing} onClick={() => void refresh.current()}>{t("Try again")}</button>} /></main>;
 
   return <main className="benchmark-radar-page">
     <ToolbarActions><span className="module-toolbar-note"><Radar size={12} />Updated {data.updatedAt || "locally"} · {data.library.length.toLocaleString()} indexed{data.source ? ` · ${SOURCE_LABELS[data.source]}` : ""}</span></ToolbarActions>
@@ -149,12 +187,20 @@ export default function BenchmarkRadarView() {
         <Tab value="radar" icon={<Radar size={14} />}>Radar</Tab>
         <Tab value="library" icon={<LibraryBig size={14} />}>Library</Tab>
       </Tabs>
-      <span>{saved.size} saved</span>
+      <div className="benchmark-header-actions"><span>{saved.size} saved</span><button className="benchmark-refresh" disabled={refreshing} onClick={() => void refresh.current()}>
+        <RefreshCw size={14} className={refreshing ? "spin" : undefined} />{refreshing ? t("Checking for updates…") : data.source === "local" ? t("Reload local data") : t("Refresh")}
+      </button></div>
     </div>
 
+    <div className="benchmark-data-status" role="status" aria-live="polite">
+      <span>{t("Data as of {date}", { date: data.updatedAt || t("Unknown") })} · {t(SOURCE_LABELS[data.source])}</span>
+      <span>{data.fetchedAt && Number.isFinite(Date.parse(data.fetchedAt)) ? t("Last checked: {time}", { time: new Date(data.fetchedAt).toLocaleString() }) : data.source === "local" ? t("Development data override is active.") : t("This snapshot has not been checked online yet.")}</span>
+      {refreshing && <span>{t("Checking for updates…")}</span>}
+      {(error || data.refreshError) && <p className="benchmark-update-warning" title={error || data.refreshError}>{t("Could not update. Showing saved data; use Refresh to try again.")}</p>}
+    </div>
     {tab === "radar" ? <section className="benchmark-radar-content">
-      <div className="benchmark-intro"><div><h2>Emerging AI benchmarks</h2><p>New public evaluations from the latest Benchmark Radar release feed, ranked by observable attention where signals are available.</p></div><strong>{radarRecords.length}<small> latest releases</small></strong></div>
-      <div className="benchmark-controls"><div><span>Time window</span><div className="benchmark-segmented">{(["latest", "30d", "90d"] as TimeWindow[]).map((item) => <button key={item} className={windowName === item ? "active" : ""} onClick={() => setWindowName(item)}>{item === "latest" ? "Latest" : item.replace("d", " days")}</button>)}</div></div><div><span>Sort by</span><div className="benchmark-segmented">{(["attention", "newest"] as RadarSort[]).map((item) => <button key={item} className={radarSort === item ? "active" : ""} onClick={() => setRadarSort(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></div></div>
+      <div className="benchmark-intro"><div><h2>Emerging AI benchmarks</h2><p>New public evaluations from the latest Benchmark Radar release feed, ranked by observable attention where signals are available.</p><p className="benchmark-method-note">{t("Attention uses public signals. Code availability has not been execution-tested by Archimedes.")}</p></div><strong>{radarRecords.length}<small> latest releases</small></strong></div>
+      <div className="benchmark-controls" title={t("Time windows are relative to today.")}><div><span>Time window</span><div className="benchmark-segmented">{(["latest", "30d", "90d"] as TimeWindow[]).map((item) => <button key={item} className={windowName === item ? "active" : ""} onClick={() => setWindowName(item)}>{item === "latest" ? "Latest" : item.replace("d", " days")}</button>)}</div></div><div><span>Sort by</span><div className="benchmark-segmented">{(["attention", "newest"] as RadarSort[]).map((item) => <button key={item} className={radarSort === item ? "active" : ""} onClick={() => setRadarSort(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></div></div>
       <div className="benchmark-results-heading"><h2>Rising benchmarks <small>{radarRecords.length} results</small></h2></div>
       <div className="benchmark-list">{radarRecords.length ? radarRecords.map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} radar directionNames={directionNames} />) : <StateView compact className="benchmark-empty" description="No releases match this time window." />}</div>
     </section> : <section className="benchmark-library-layout">

@@ -6,7 +6,7 @@ function successfulResponse() {
   return {
     ok: true,
     headers: { get: () => "application/json" },
-    json: async () => ({ choices: [{ message: { role: "assistant", content: "OK" } }] }),
+    json: async () => ({ choices: [{ finish_reason: "stop", message: { role: "assistant", content: "OK" } }] }),
   };
 }
 
@@ -21,7 +21,7 @@ test("large tool-free reconstruction requests reject truncated model output", as
     const config = { provider: "custom", baseUrl: "https://example.test/v1", model: "vision", apiKey: "test-key" };
     await assert.rejects(complete(config, [{ role: "user", content: "Test" }], { allowTools: false, maxOutputTokens: 32768, allowLargeOutput: true, requireComplete: true }), /truncated/);
     assert.equal(sent.max_tokens, 32768);
-    await complete(config, [{ role: "user", content: "Test" }], { allowTools: false, maxOutputTokens: 32768 });
+    await assert.rejects(complete(config, [{ role: "user", content: "Test" }], { allowTools: false, maxOutputTokens: 32768 }), /truncated/);
     assert.equal(sent.max_tokens, 8192);
   } finally { global.fetch = originalFetch; }
 });
@@ -60,7 +60,7 @@ test("retries a nonstandard empty stream as a non-streaming completion", async (
       return {
         ok: true,
         headers: { get: () => "text/event-stream" },
-        body: new ReadableStream({ start(controller) { controller.enqueue(encoder.encode('data: {"type":"response.output_text.delta","delta":"OK"}\\n\\n')); controller.close(); } }),
+        body: new ReadableStream({ start(controller) { controller.enqueue(encoder.encode('data: {"type":"response.output_text.delta","delta":"OK"}\n\n')); controller.close(); } }),
       };
     }
     return successfulResponse();

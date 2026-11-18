@@ -8,9 +8,9 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
-    "desktop": "electron .",
+    "desktop": "node scripts/electron-runtime.cjs --check && electron .",
     "dev:renderer": "vite",
-    "dev:electron": "wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "dev:electron": "node scripts/electron-runtime.cjs --check && wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "package:desktop": "npm run build && electron-builder --config electron-builder.config.cjs --dir --publish never",
@@ -21,13 +21,17 @@
     "radar:sync": "node scripts/sync-benchmark-radar-index.mjs",
     "check:theme": "node scripts/check-theme-tokens.mjs",
     "codemod:theme": "node scripts/codemod-theme-colors.mjs",
-    "test": "node --test electron/*.test.cjs electron/figure-forge-upstream-*.mjs electron/agent/*.test.cjs server/*.test.cjs && node scripts/check-theme-tokens.mjs",
+    "test": "node scripts/run-tests.cjs --all && node scripts/check-theme-tokens.mjs",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "postinstall": "npm run rebuild:native",
     "server:start": "node server/index.cjs",
     "server:test": "node --test server/*.test.cjs",
     "server:supabase": "node server/index-supabase.cjs",
-    "server:lan": "node server/index-lan.cjs"
+    "server:lan": "node server/index-lan.cjs",
+    "prepare:desktop": "node scripts/electron-runtime.cjs --prepare",
+    "check:desktop": "node scripts/electron-runtime.cjs --check",
+    "test:core": "node scripts/run-tests.cjs --core",
+    "test:desktop": "node scripts/run-tests.cjs --desktop"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",

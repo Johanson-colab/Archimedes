@@ -18,6 +18,16 @@ export function eventFailedAnswer(event: ResearchEvent): boolean {
   return typeof payload.error === "string" && payload.error.trim().length > 0;
 }
 
+// An incomplete turn kept its partial text, but that text is not a successful
+// final answer. A `model_incomplete` event marks the same condition even when
+// the assistant message has not been read back yet.
+export function eventIncomplete(event: ResearchEvent): boolean {
+  if (event.type.toLowerCase() === "model_incomplete") return true;
+  if (event.type !== "assistant_message") return false;
+  const status = payloadRecord(event.payload).status;
+  return typeof status === "string" && status.toLowerCase() === "incomplete";
+}
+
 export function eventHasError(event: ResearchEvent): boolean {
   const payload = payloadRecord(event.payload);
   if (event.type.toLowerCase().includes("error")) return true;
@@ -51,15 +61,18 @@ export function isUnresolvedError(event: ResearchEvent, latestAnswer: number, in
 }
 
 // Journey slices a long turn into fixed-size chunks. Only the final chunk can
-// be waiting for the turn's answer, and a failed answer fails that chunk
-// instead of silently completing it.
-export function chapterChunkStatus({ hasAnswer, hasFailure, lastInTurn, turnFailed }: {
+// be waiting for the turn's answer, and a failed or incomplete answer marks
+// that chunk instead of silently completing it.
+export function chapterChunkStatus({ hasAnswer, hasFailure, hasIncomplete = false, lastInTurn, turnFailed, turnIncomplete = false }: {
   hasAnswer: boolean;
   hasFailure: boolean;
+  hasIncomplete?: boolean;
   lastInTurn: boolean;
   turnFailed: boolean;
-}): "done" | "open" | "error" {
+  turnIncomplete?: boolean;
+}): "done" | "open" | "incomplete" | "error" {
   if (hasFailure || (turnFailed && lastInTurn)) return "error";
+  if (hasIncomplete || (turnIncomplete && lastInTurn)) return "incomplete";
   if (!lastInTurn) return "done";
   return hasAnswer ? "done" : "open";
 }
