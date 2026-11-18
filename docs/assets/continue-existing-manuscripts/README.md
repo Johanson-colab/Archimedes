@@ -63,3 +63,20 @@ and a temporary manuscript. Open `results.tex`, open `main.tex`, then update
 Typing ahead of the read overwrote the disk update in the earlier build. In
 the updated build, the read completes before the newly selected file is
 editable. Subsequent typing preserved the disk update in the saved file.
+
+## Two projects reopen the same source
+
+Both production Electron builds used the same 1,180 × 900 Charcoal viewport.
+Two disposable projects opened the same `paper/main.tex`. The first project
+started reading the old contents. An external edit inserted the calibration
+line. The second project then reopened Writing and read the updated file.
+
+| Before (`e85e4a0`) | After (`1f5ef35`) |
+| --- | --- |
+| ![The second project shows the older saved text without the calibration line](shared-read-before.png) | ![The second project shows the calibration line from the newer read](shared-read-after.png) |
+
+The captures release the older response first. The earlier build showed the
+old draft as saved, then its next autosave erased the calibration line. The
+fixed build showed the updated source and kept the line in the next autosave.
+Releasing the newer response first produced the same safe result on the fixed
+build.
