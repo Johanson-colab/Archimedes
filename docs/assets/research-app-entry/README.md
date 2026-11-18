@@ -14,3 +14,9 @@ content are identical.
 The screenshots do not exercise MinerU authentication. They show presentation
 of an entry failure only. The effective-harness behavior of the model setup hint
 is covered by `electron/research-app-entry-notice.test.cjs`.
+
+The composer pair uses the full App renderer in Electron at 1440 × 1000, Charcoal and English, with the API harness selected and no configured key. Both captures use the same local welcome assets and empty conversation. The before capture uses upstream main at `0637139`. The after capture shows the setup hint and **Configure model**. Clicking the button opened the Settings dialog.
+
+| Before | After |
+| --- | --- |
+| ![Composer before model setup hint](composer-before.png) | ![Composer with model setup hint and action](composer-after.png) |
