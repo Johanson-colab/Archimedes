@@ -2299,9 +2299,10 @@ function App() {
   }
 
   async function openDataWorkspace(workspacePath: string) {
+    const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
+      .replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, "");
     const snapshot = await desktopBridge.openWorkspace(workspacePath).catch(error => {
-      const message = error instanceof Error ? error.message : String(error);
-      setWorkspaceOpenError(message.replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, ""));
+      setWorkspaceOpenError(errorMessage(error));
       return null;
     });
     if (!snapshot) return;
@@ -2317,7 +2318,11 @@ function App() {
       setArchivedThreads(snapshot.archivedThreads ?? []);
       setWorkspaces(snapshot.workspaces ?? []);
     });
-    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace).catch(() => ({ entries: [], count: 0, truncated: false }));
+    const readErrors: string[] = [];
+    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace).catch(error => {
+      readErrors.push(errorMessage(error));
+      return { entries: [], count: 0, truncated: false };
+    });
 
     // Reopen the project the user was last looking at. Falling back to the most
     // recent thread alone lands people in whichever project they last chatted
@@ -2343,7 +2348,10 @@ function App() {
       ? snapshot.threads.find((candidate) => candidate.project_id === restoreProjectId) ?? null
       : snapshot.threads[0] ?? null;
 
-    const thread = restoreThread ? await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace).catch(() => null) : null;
+    const thread = restoreThread ? await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace).catch(error => {
+      readErrors.push(errorMessage(error));
+      return null;
+    }) : null;
     flushSync(() => {
       setFileTree(nextTree);
       setLoadingDirectories(new Set());
@@ -2367,6 +2375,7 @@ function App() {
       setChangeSets(thread?.changeSets ?? []);
       const action = snapshot.actions.find((candidate) => candidate.status === "pending");
       setPendingAction(action ? { ...action, source: "agent" } : null);
+      setWorkspaceOpenError(readErrors.join("\n"));
       setWorkspaceReady(true);
     });
   }
