@@ -74,8 +74,8 @@ async function fixture(t, overrides = {}) {
     onLatexCompileProgress: callback => { progress = callback; return () => { progress = undefined; }; },
   };
   let reactRoot = createRoot(document.getElementById("root"));
-  const render = (workspace, token = 1, filePath = "paper/main.tex") => React.act(async () => reactRoot.render(React.createElement(Writing, {
-    bridge, workspace, projectId: overrides.projectId || (workspace === a ? "a" : "b"), threadId: workspace === a ? "thread-a" : "thread-b", openRequest: token === null ? null : { path: filePath, token }, onRefresh() {}, onAskAI() {},
+  const render = (workspace, token = 1, filePath = "paper/main.tex", active = true) => React.act(async () => reactRoot.render(React.createElement(Writing, {
+    bridge, workspace, projectId: overrides.projectId || (workspace === a ? "a" : "b"), threadId: workspace === a ? "thread-a" : "thread-b", openRequest: token === null ? null : { path: filePath, token }, onRefresh() {}, onAskAI() {}, active,
   })));
   t.after(async () => { await React.act(async () => reactRoot.unmount()); fs.rmSync(directory, { recursive: true, force: true }); });
   return { a, b, render, restart: async workspace => { await React.act(async () => reactRoot.unmount()); reactRoot = createRoot(document.getElementById("root")); await render(workspace, null); }, reads, writes, compiles, disk: root => fs.readFileSync(path.join(root, "paper/main.tex"), "utf8"), progress: event => progress?.(event) };
@@ -278,6 +278,33 @@ test('Writing opens existing manuscripts before templates and restores the chose
   assert.equal(document.querySelector('.latex-editor-textarea').value, 'A section body\n');
   assert.equal(document.querySelector('.paper-main-document select').value, 'paper/alternate.tex');
   assert.equal(f.compiles.length, 0, 'opening and restoring manuscripts does not need a compiler');
+});
+
+test("returning to Writing while the main document reopens restores the remembered source", async t => {
+  const mainRead = deferred(), mainStarted = deferred();
+  let restoring = false;
+  const f = await fixture(t, { read: async (root, name, preview) => {
+    if (restoring && name === "paper/main.tex") {
+      mainStarted.resolve();
+      await mainRead.promise;
+    }
+    return preview(root, name);
+  } });
+  fs.writeFileSync(path.join(f.a, "paper/remembered.tex"), "Remembered source");
+  await f.render(f.a); await autoCompileOff();
+  await click("paper/remembered.tex");
+
+  restoring = true;
+  await f.restart(f.a);
+  await mainStarted.promise;
+  await f.render(f.a, null, undefined, false);
+  await f.render(f.a, null);
+  await React.act(async () => mainRead.resolve());
+
+  assert.equal(document.querySelector('.latex-editor-textarea').value, "Remembered source");
+  assert.equal(document.querySelector('.paper-main-document select').value, "paper/main.tex");
+  const { readWritingLocation } = await import("../src/paper-writing-state.ts");
+  assert.equal(readWritingLocation(window.localStorage, f.a, "a").selectedPath, "paper/remembered.tex");
 });
 
 test("a tree selection wins over the remembered source while the main document is reopening", async t => {

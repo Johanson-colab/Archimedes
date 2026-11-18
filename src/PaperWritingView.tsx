@@ -318,7 +318,7 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
           const activation = owner.activationSequence + 1;
           const mainOpen = owner.openSequence + 1;
           await activateProject(saved.mainPath);
-          if (request !== owner.projectListSequence || owner.activationSequence !== activation || owner.openSequence !== mainOpen
+          if (owner.activationSequence !== activation || owner.openSequence !== mainOpen
             || owner.mainPath !== saved.mainPath || owner.selectedPath !== saved.mainPath) return;
           if (saved.selectedPath !== saved.mainPath && (saved.projectPath === "." || saved.selectedPath.startsWith(`${saved.projectPath}/`))) {
             const nextOpen = owner.openSequence + 1;
