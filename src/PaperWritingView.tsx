@@ -466,12 +466,13 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     const name = createName.trim().replaceAll("\\", "/").replace(/^\/+/, "");
     if (!name || !createKind || !activeProject) return;
     const parent = activeDirectory || activeProject;
+    const entryPath = parent === "." ? name : `${parent}/${name}`;
     try {
       if (createKind === "file") {
-        const created = await bridge.createLatexFile(workspace, `${parent}/${name}`);
+        const created = await bridge.createLatexFile(workspace, entryPath);
         setCreateKind(null); await loadDirectory(parent, parent === activeProject); await openFile(created.path);
       } else {
-        const created = await bridge.createLatexDirectory(workspace, `${parent}/${name}`);
+        const created = await bridge.createLatexDirectory(workspace, entryPath);
         setCreateKind(null); setActiveDirectory(created.path); setExpanded((current) => new Set(current).add(created.path)); await loadDirectory(parent, parent === activeProject);
       }
       await onRefresh();

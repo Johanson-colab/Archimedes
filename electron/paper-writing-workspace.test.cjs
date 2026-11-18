@@ -21,7 +21,7 @@ before(async () => {
   const scope = { React, ...React, ...helpers, ...search,
     ...Object.fromEntries(names.map(name => [name, icons[name]])),
     useUISettings: () => ({ t: value => value }),
-    Dialog: props => props.open ? React.createElement("div", { role: "dialog" }, props.children) : null,
+    Dialog: props => props.open ? React.createElement(props.as || "div", { role: "dialog", onSubmit: props.onSubmit }, props.children) : null,
     StateView: props => React.createElement("div", null, props.title, props.description, props.action),
     PaperTemplateLibrary: () => null, paperTemplates: [{ id: "fake" }], SharedNoteEditor: () => null,
     fingerprintFor: () => "fake", emitProactiveSignal() {},
@@ -57,6 +57,8 @@ async function fixture(t, overrides = {}) {
   const bridge = {
     listLatexProjects: async root => overrides.listProjects ? overrides.listProjects(root) : require("./latex-workspace.cjs").listLatexProjects(root),
     listWorkspaceFiles: async (root, parent) => require("./workspace-files.cjs").listWorkspaceDirectory(root, parent),
+    createLatexFile: async (root, name) => require("./latex-workspace.cjs").createLatexFile(root, name),
+    createLatexDirectory: async (root, name) => require("./latex-workspace.cjs").createLatexDirectory(root, name),
     readWorkspaceFile: async (root, name) => { reads.push({ root, name }); return overrides.read ? overrides.read(root, name, preview) : preview(root, name); },
     writeWorkspaceFile: async (root, name, content) => {
       writes.push({ root, name, content });
@@ -363,4 +365,34 @@ test("opening supporting sources preserves or resolves the actual manuscript com
     await click("Recompile"); await settle();
     assert.equal(f.compiles.at(-1).name, "paper/main.tex");
   }
+});
+
+test("a root-level manuscript can create files and folders through the Writing dialog", async t => {
+  const f = await fixture(t);
+  fs.writeFileSync(path.join(f.a, "root.tex"), source("Top-level manuscript"));
+  await f.render(f.a, 1, "root.tex");
+  await autoCompileOff();
+  for (const [label, kind] of [["New LaTeX file", "file"], ["New folder", "directory"]]) {
+    await click(label);
+    const form = document.querySelector('form[role="dialog"]');
+    const name = form.querySelector("input").value;
+    await React.act(async () => form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
+    const entry = fs.statSync(path.join(f.a, name));
+    assert.equal(kind === "file" ? entry.isFile() : entry.isDirectory(), true);
+  }
+});
+
+test("preview addresses stay with the execution folder that produced the manuscript", () => {
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const body = main.slice(main.indexOf("function setWindowWorkspace("), main.indexOf("function workspaceStatePath("));
+  const tokens = new Map();
+  const api = new Function("randomUUID", "windowWorkspaces", "windowPreviewTokens", "previewTokenWorkspaces",
+    body + "\nreturn {setWindowWorkspace, createPreviewToken};")(require("node:crypto").randomUUID, new Map(), new Map(), tokens);
+  api.setWindowWorkspace(1, "/data");
+  const first = api.createPreviewToken(1, "/project-a");
+  const second = api.createPreviewToken(1, "/project-b");
+  assert.notEqual(first, second);
+  assert.equal(tokens.get(first), "/project-a");
+  assert.equal(api.createPreviewToken(1, "/project-a"), first);
+  assert.equal(tokens.get(second), "/project-b");
 });
