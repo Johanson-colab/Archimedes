@@ -23,7 +23,7 @@ async function describeFile(root, input, signal) {
   return { path: path.relative(realRoot, target).split(path.sep).join("/"), sha256: hash.digest("hex"), sizeBytes: after.size };
 }
 
-async function recordExperimentEvidence({ runId, threadId, workspace, metrics = {}, artifacts = [], turnId = null, signal = null } = {}) {
+async function recordExperimentEvidence({ runId, threadId, workspace, metrics = {}, artifacts = [], turnId = null, signal = null, isRequestActive = () => true } = {}) {
   const run = store.getExperimentRun(runId);
   if (!run || run.thread_id !== threadId) throw new Error("Experiment run not found in this session.");
   if (!store.canAccessProject(run.project_id, "editor")) throw new Error("You do not have permission to record experiment evidence.");
@@ -40,7 +40,7 @@ async function recordExperimentEvidence({ runId, threadId, workspace, metrics = 
   if (runRoot !== activeRoot && !runRoot.startsWith(`${activeRoot}${path.sep}`)) throw new Error("The run workspace is outside the active workspace.");
   const files = [];
   for (const file of artifacts) files.push(await describeFile(runRoot, file, signal));
-  if (signal?.aborted) throw new Error("Experiment evidence recording was interrupted.");
+  if (signal?.aborted || !isRequestActive()) throw new Error("Experiment evidence recording was interrupted.");
   return store.addExperimentEvidence({ runId, turnId, metrics, artifacts: files });
 }
 

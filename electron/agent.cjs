@@ -772,7 +772,7 @@ async function waitForExperimentRun(runId, timeoutSeconds = 20) {
   return { ...run, log_tail: log.text };
 }
 
-async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort }, args) {
+async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, isRequestActive = () => true }, args) {
   const name = call.function.name;
 
   if (name === "list_skills") return { content: JSON.stringify({ skills: discoverSkills(root) }) };
@@ -1165,7 +1165,10 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
       return { content: JSON.stringify({ approved: false }) };
     }
-    if (signal?.aborted) throw new Error("The research turn was interrupted before creating the worktree.");
+    if (signal?.aborted || !isRequestActive()) {
+      if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+      throw new Error("The experiment request ended before creating the worktree.");
+    }
     const result = store.createExperimentWorkspace(experiment.id, { parentRunId: base.parentRunId });
     return { content: JSON.stringify({ approved: true, ...result, relative_path: relativePath(root, result.workspace.root), notice: "Only committed code is present; uncommitted and untracked files were not copied." }) };
   }
@@ -1205,7 +1208,10 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     if (!decision.approved) {
       return { action: store.getAction(action.id), content: JSON.stringify({ approved: false, reason: decision.reason, action_id: action.id, kind: "experiment_run" }) };
     }
-    if (signal?.aborted) throw new Error("The research turn was interrupted before the experiment started.");
+    if (signal?.aborted || !isRequestActive()) {
+      if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
+      throw new Error("The experiment request ended before the experiment started.");
+    }
     const started = experimentRunner.startExperimentRun({
       projectId: thread.project_id,
       threadId,
@@ -1261,7 +1267,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
 
   if (name === "record_experiment_evidence") {
     sessionExperimentRun({ threadId, runId: args.run_id });
-    const run = await experimentEvidence.recordExperimentEvidence({ runId: args.run_id, threadId, workspace: root, turnId, metrics: args.metrics || {}, artifacts: args.artifacts || [], signal });
+    const run = await experimentEvidence.recordExperimentEvidence({ runId: args.run_id, threadId, workspace: root, turnId, metrics: args.metrics || {}, artifacts: args.artifacts || [], signal, isRequestActive });
     emit({ type: "tool", title: "Experiment evidence recorded", detail: `Run ${run.id}`, experimentRun: run });
     recordEvent({ type: "experiment_run", payload: { run } });
     return { content: JSON.stringify({ run_id: run.id, report: run.evidence.at(-1), notice: "Metrics and artifacts were reported by the agent; file paths and hashes are references and may change." }) };
@@ -1515,12 +1521,12 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       const liveExperimentAllowed = ["research", "experiment-setup"].includes(mode)
         && externalBackend.permissionMode !== "read-only" && externalBackend.permissionMode !== "plan";
       const experimentToolNames = new Set(["create_experiment", "prepare_experiment_workspace", "run_experiment", "wait_experiment", "read_experiment_log", "record_experiment_activity", "record_experiment_evidence", "create_experiment_result"]);
-      const invokeExperimentTool = async (name, args, requestSignal) => {
+      const invokeExperimentTool = async (name, args, requestSignal, isRequestActive = () => true) => {
         if (!liveExperimentAllowed || !experimentToolNames.has(name)) throw new Error("This experiment tool is unavailable in this session.");
         experimentToolsUsed = true;
         const call = { id: randomUUID(), function: { name, arguments: JSON.stringify(args) } };
         const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call,
-          emit: emitTurn, recordEvent, signal: requestSignal, capabilities: { write: "ask", command: "ask" }, registry: toolRegistry });
+          emit: emitTurn, recordEvent, signal: requestSignal, isRequestActive, preflight: () => { if (!isRequestActive()) throw new Error("The experiment request has ended."); }, capabilities: { write: "ask", command: "ask" }, registry: toolRegistry });
         if (result.action) actions.push(result.action);
         return JSON.parse(result.content);
       };

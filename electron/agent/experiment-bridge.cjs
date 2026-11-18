@@ -1,14 +1,13 @@
-// Per-turn, local-only bridge. The native agent invokes a bundled CLI, while
-// the Electron process retains session validation and command approvals.
+// Per-turn local mailbox. Native harnesses can write inside their workspace
+// without requiring network/socket permissions; the main process keeps the
+// session scope, tool validation and command approval checks.
 const fs = require("node:fs");
-const net = require("node:net");
 const path = require("node:path");
 const { randomBytes, timingSafeEqual } = require("node:crypto");
 
 const MAX_REQUEST = 128 * 1024;
 const MAX_RESPONSE = 1024 * 1024;
 const ALLOWED = new Set(["create_experiment", "prepare_experiment_workspace", "run_experiment", "wait_experiment", "read_experiment_log", "record_experiment_activity", "record_experiment_evidence", "create_experiment_result"]);
-
 function quote(value) { return `'${String(value).replaceAll("'", "'\\''")}'`; }
 
 async function createExperimentBridge({ workspace, invoke, signal, executable = process.execPath } = {}) {
@@ -22,81 +21,84 @@ async function createExperimentBridge({ workspace, invoke, signal, executable = 
   if (stat.isSymbolicLink() || !stat.isDirectory() || fs.realpathSync(appDirectory) !== appDirectory) throw new Error("The experiment bridge requires a local .archimedes folder.");
   const folder = fs.mkdtempSync(path.join(appDirectory, "bridge-"));
   fs.chmodSync(folder, 0o700);
-  const socketPath = path.join(folder, "s");
-  if (Buffer.byteLength(socketPath) > 100) { fs.rmdirSync(folder); throw new Error("The workspace path is too long for the experiment bridge."); }
   const secret = randomBytes(32).toString("hex");
   const credentialPath = path.join(folder, "connection.json");
-  fs.writeFileSync(credentialPath, JSON.stringify({ socketPath, secret }), { mode: 0o600, flag: "wx" });
-  const sockets = new Set();
-  const active = new Set();
-  let closed = false, used = false;
-  const server = net.createServer((socket) => {
-    if (closed || sockets.size >= 8) { socket.destroy(); return; }
-    sockets.add(socket);
-    const requestAbort = new AbortController();
-    let data = "", consumed = false, responding = false;
-    socket.setEncoding("utf8");
-    socket.setTimeout(180_000, () => socket.destroy());
-    socket.on("error", () => {});
-    socket.on("close", () => { sockets.delete(socket); if (!responding) requestAbort.abort(); });
-    const respond = (value) => {
-      if (socket.destroyed) return;
-      let output = JSON.stringify(value);
-      if (Buffer.byteLength(output) > MAX_RESPONSE) output = JSON.stringify({ error: "Experiment bridge response exceeded the size limit." });
-      responding = true;
-      socket.end(`${output}\n`);
-    };
-    socket.on("data", (chunk) => {
-      if (consumed) return;
-      data += chunk;
-      if (Buffer.byteLength(data) > MAX_REQUEST) { consumed = true; respond({ error: "Experiment request exceeded the size limit." }); return; }
-      const end = data.indexOf("\n");
-      if (end < 0) return;
-      consumed = true;
+  fs.writeFileSync(credentialPath, JSON.stringify({ directory: folder, secret }), { mode: 0o600, flag: "wx" });
+  let closed = false, used = false, active = null;
+  const handled = new Set();
+  const ownedFiles = new Set([credentialPath]);
+  function send(file, value) {
+    if (closed) return;
+    let output = JSON.stringify(value);
+    if (Buffer.byteLength(output) > MAX_RESPONSE) output = JSON.stringify({ error: "Experiment bridge response exceeded the size limit." });
+    try { fs.writeFileSync(file, output, { mode: 0o600, flag: "wx" }); ownedFiles.add(file); } catch { /* caller disappeared or file already exists */ }
+  }
+  function scan() {
+    if (closed) return;
+    let names;
+    try { names = fs.readdirSync(folder); } catch { return; }
+    for (const name of names) {
+      const match = /^([a-f0-9]{32})\.request$/.exec(name);
+      if (!match || handled.has(name)) continue;
+      if (handled.size >= 256) return;
+      handled.add(name);
+      const requestPath = path.join(folder, name), responsePath = path.join(folder, `${match[1]}.response`);
       let request;
-      try { request = JSON.parse(data.slice(0, end)); } catch { respond({ error: "Invalid experiment request." }); return; }
+      try {
+        const info = fs.lstatSync(requestPath);
+        if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_REQUEST) throw new Error("Invalid request.");
+        request = JSON.parse(fs.readFileSync(requestPath, "utf8"));
+      } catch { send(responsePath, { error: "Invalid experiment request." }); continue; }
       const provided = typeof request?.secret === "string" ? Buffer.from(request.secret) : Buffer.alloc(0);
       const expected = Buffer.from(secret);
-      if (provided.length !== expected.length || !timingSafeEqual(provided, expected) || !ALLOWED.has(request.method) || !request.arguments || typeof request.arguments !== "object" || Array.isArray(request.arguments)) {
-        respond({ error: "Experiment request is not authorized or is invalid." }); return;
+      if (provided.length !== expected.length || !timingSafeEqual(provided, expected) || !ALLOWED.has(request.method) || !request.arguments || typeof request.arguments !== "object" || Array.isArray(request.arguments) || !Number.isSafeInteger(request.pid) || request.pid < 1) {
+        send(responsePath, { error: "Experiment request is not authorized or is invalid." }); continue;
       }
-      if (active.size >= 1) { respond({ error: "Another experiment request is still in progress. Retry after it completes." }); return; }
+      ownedFiles.add(requestPath);
+      if (active) { send(responsePath, { error: "Another experiment request is still in progress. Retry after it completes." }); continue; }
       used = true;
-      active.add(requestAbort);
-      Promise.resolve().then(() => invoke(request.method, request.arguments, requestAbort.signal))
-        .then((result) => respond({ result }), (error) => respond({ error: String(error?.message || error).slice(0, 2000) }))
-        .finally(() => active.delete(requestAbort));
-    });
-  });
+      const requestAbort = new AbortController();
+      active = requestAbort;
+      // Check both the lease and client process immediately before an approved
+      // operation starts, as well as periodically while waiting for approval.
+      const isRequestActive = () => {
+        if (closed || requestAbort.signal.aborted) return false;
+        try { if (Date.now() - fs.statSync(requestPath).mtimeMs > 6000) return false; process.kill(request.pid, 0); return true; }
+        catch { return false; }
+      };
+      const lease = setInterval(() => { if (!isRequestActive()) requestAbort.abort(); }, 500);
+      lease.unref?.();
+      Promise.resolve().then(() => invoke(request.method, request.arguments, requestAbort.signal, isRequestActive))
+        .then((result) => { if (!requestAbort.signal.aborted) send(responsePath, { result }); }, (error) => { if (!requestAbort.signal.aborted) send(responsePath, { error: String(error?.message || error).slice(0, 2000) }); })
+        .finally(() => { clearInterval(lease); if (active === requestAbort) active = null; });
+    }
+  }
+  const poll = setInterval(scan, 100);
+  poll.unref?.();
   const close = () => {
     if (closed) return;
     closed = true;
+    clearInterval(poll);
     signal?.removeEventListener("abort", close);
-    for (const controller of active) controller.abort();
-    for (const socket of sockets) socket.destroy();
-    try { server.close(); } catch { /* server did not start */ }
-    // Only remove files created by this bridge, never arbitrary workspace data.
-    for (const file of [socketPath, credentialPath]) { try { fs.unlinkSync(file); } catch { /* already removed */ } }
-    try { fs.rmdirSync(folder); } catch { /* leave unexpected contents intact */ }
+    active?.abort();
+    for (const file of ownedFiles) { try { fs.unlinkSync(file); } catch { /* already removed */ } }
+    try { fs.rmdirSync(folder); } catch { /* preserve unexpected or caller-owned files */ }
   };
-  try {
-    await new Promise((resolve, reject) => { server.once("error", reject); server.listen(socketPath, () => { server.removeListener("error", reject); resolve(); }); });
-    fs.chmodSync(socketPath, 0o600);
-  } catch (error) { close(); throw error; }
   signal?.addEventListener("abort", close, { once: true });
   if (signal?.aborted) { close(); throw new Error("The research turn has already ended."); }
   const cli = path.join(__dirname, "experiment-bridge-cli.cjs");
   const command = `ELECTRON_RUN_AS_NODE=1 ${quote(executable)} ${quote(cli)} ${quote(credentialPath)}`;
   const instructions = [
-    "Live Archimedes experiment tools are available for this turn. If direct experiment tools are available, use them. Otherwise use the local CLI below; if sandbox access to its local socket is denied, request native approval rather than disabling sandbox protection. Use only when the user explicitly asks to undertake or run an experiment. Never repeat an existing run.",
+    "Live Archimedes experiment tools are available for this turn. If direct experiment tools are available, use them. Otherwise use the local CLI below. Use only when the user explicitly asks to undertake or run an experiment. Never repeat an existing run.",
     `Command prefix: ${command}`,
     "Invoke as: <prefix> <tool_name> '<JSON object>'. It returns JSON. Use exact existing idea/experiment ids or titles from the conversation; do not guess an ambiguous idea.",
     'Example: <prefix> create_experiment \'{"idea":"<idea title>","title":"<experiment title>"}\'',
     'Use record_experiment_activity with {"experiment":"...","category":"preparation|reproduction|baseline|implementation|execution|repair|observation","status":"started|completed|failed|note","title":"..."} to report actual observed work without creating extra graph nodes.',
-    'For formal execution use run_experiment with {"experiment":"...","command":"..."}; it requests approval and returns a run id. Use wait_experiment, read_experiment_log, record_experiment_evidence and create_experiment_result as needed. Worktree creation via prepare_experiment_workspace also requires approval.',
+    'Worktree: prepare_experiment_workspace {"experiment":"..."} (for a child add "parent_run_id"). It requests approval and returns workspace information.',
+    'Formal execution: run_experiment {"experiment":"...","command":"...","use_experiment_workspace":true} to run inside that worktree. Do not pass a "workspace" field: use_experiment_workspace selects it. Optional "cwd" is relative to the chosen workspace. This requests approval and returns run_id.',
+    'Wait: wait_experiment {"run_id":"...","timeout_seconds":20}. Logs: read_experiment_log {"run_id":"..."}. Evidence: record_experiment_evidence {"run_id":"...","metrics":{"accuracy":0.9},"artifacts":["results/plot.png"]}. Result: create_experiment_result {"run_id":"...","verdict":"inconclusive","reasoning":"..."}. Use only documented fields.',
     "Ordinary shell commands are not automatically formal experiment runs. Do not emit fenced experiment directives after using the live bridge. Do not reveal or copy the connection file.",
   ].join("\n");
   return { instructions, credentialPath, close, wasUsed: () => used };
 }
-
 module.exports = { createExperimentBridge };

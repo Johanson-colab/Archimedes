@@ -1,9 +1,8 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
-const { execFile } = require("node:child_process");
+const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
 const test = require("node:test");
 const { createExperimentBridge } = require("./experiment-bridge.cjs");
@@ -32,9 +31,9 @@ test("live bridge records session-scoped work and is revoked at turn end", async
     let approval;
     agent.setApprovalSurface(thread.id, true);
     const controller = new AbortController();
-    bridge = await createExperimentBridge({ workspace: root, signal: controller.signal, invoke: async (name, args, signal) => {
+    bridge = await createExperimentBridge({ workspace: root, signal: controller.signal, invoke: async (name, args, signal, isRequestActive) => {
       const result = await agent.executeTool({ registry: agent.createToolRegistry(), root, threadId: thread.id, taskId: task.id, turnId: turn.id,
-        call: { id: `call-${name}`, function: { name, arguments: JSON.stringify(args) } }, capabilities: { write: "ask", command: "ask" }, signal,
+        call: { id: `call-${name}`, function: { name, arguments: JSON.stringify(args) } }, capabilities: { write: "ask", command: "ask" }, signal, isRequestActive,
         emit: (event) => { if (event.type === "approval") approval = event.action; }, recordEvent: () => {} });
       return JSON.parse(result.content);
     } });
@@ -63,6 +62,17 @@ test("live bridge records session-scoped work and is revoked at turn end", async
     assert.equal((await rejected).approved, false);
     assert.equal(store.listExperimentRuns({ nodeId: second.experiment_id }).length, 0);
     await assert.rejects(() => invoke(bridge, "execute_shell", { command: "true" }), /not authorized or is invalid/);
+    const disconnected = await invoke(bridge, "create_experiment", { idea: idea.id, title: "Disconnected experiment" });
+    approval = null;
+    const child = spawn(process.execPath, [cli, bridge.credentialPath, "run_experiment", JSON.stringify({ experiment: disconnected.experiment_id, command: "true" })], { stdio: "ignore" });
+    for (let i = 0; i < 200 && !approval; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.ok(approval);
+    child.kill("SIGKILL");
+    await new Promise((resolve) => child.once("exit", resolve));
+    agent.resolveApproval(approval.id, true);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(store.listExperimentRuns({ nodeId: disconnected.experiment_id }).length, 0);
+    assert.equal(store.getAction(approval.id).status, "rejected");
     const third = await invoke(bridge, "create_experiment", { idea: idea.id, title: "Interrupted experiment" });
     approval = null;
     const interrupted = invoke(bridge, "run_experiment", { experiment: third.experiment_id, command: "true" }).catch((error) => error);
@@ -90,13 +100,14 @@ test("bridge rejects requests without the per-turn secret", async () => {
     let called = false;
     bridge = await createExperimentBridge({ workspace: root, invoke: async () => { called = true; } });
     const connection = JSON.parse(fs.readFileSync(bridge.credentialPath, "utf8"));
-    const reply = await new Promise((resolve, reject) => {
-      const socket = net.createConnection(connection.socketPath);
-      socket.setEncoding("utf8"); socket.on("error", reject);
-      socket.on("connect", () => socket.write(JSON.stringify({ secret: "wrong", method: "create_experiment", arguments: {} }) + "\n"));
-      socket.on("data", (data) => resolve(JSON.parse(data)));
-    });
+    const id = "a".repeat(32);
+    const requestPath = path.join(connection.directory, `${id}.request`);
+    const responsePath = path.join(connection.directory, `${id}.response`);
+    fs.writeFileSync(requestPath, JSON.stringify({ secret: "wrong", method: "create_experiment", arguments: {}, pid: process.pid }));
+    for (let i = 0; i < 100 && !fs.existsSync(responsePath); i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    const reply = JSON.parse(fs.readFileSync(responsePath, "utf8"));
     assert.match(reply.error, /not authorized/);
+    fs.unlinkSync(requestPath);
     assert.equal(called, false);
   } finally { bridge?.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
@@ -122,5 +133,18 @@ test("interrupt revokes pending requests without deleting unrelated files", asyn
     assert.equal(cancelled, true);
     assert.equal(fs.readFileSync(unexpected, "utf8"), "preserve");
     assert.equal(fs.existsSync(bridge.credentialPath), false);
+  } finally { bridge?.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("the bundled Electron runtime can invoke the live CLI in Node mode", async (t) => {
+  let electron;
+  try { electron = require("electron"); } catch { t.skip("Electron runtime not installed"); return; }
+  if (typeof electron !== "string" || !fs.existsSync(electron)) { t.skip("Electron executable unavailable"); return; }
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ab-"));
+  let bridge;
+  try {
+    bridge = await createExperimentBridge({ workspace: root, invoke: async (method) => ({ method }) });
+    const result = await exec(electron, [cli, bridge.credentialPath, "create_experiment", "{}"], { timeout: 5000, env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" } });
+    assert.equal(JSON.parse(result.stdout).method, "create_experiment");
   } finally { bridge?.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
