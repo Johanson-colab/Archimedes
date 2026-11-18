@@ -2567,18 +2567,18 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   targetLibraryIdRef.current = targetLibraryId;
   const [response, setResponse] = useState<DailyDiscoveryResponse | null>(saved?.response || null);
   const [responseKey, setResponseKey] = useState(() => saved?.response ? dailyFeedKey(saved) : "");
-  const [feedError, setFeedError] = useState<{ key: string; message: string } | null>(() => saved?.response?.warning ? { key: dailyFeedKey(saved), message: saved.response.warning } : null);
+  const [feedError, setFeedError] = useState<{ key: string; message: string; showingPrevious?: boolean } | null>(() => saved?.response?.warning ? { key: dailyFeedKey(saved), message: saved.response.warning } : null);
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<string | null>(null);
   const [previewPaper, setPreviewPaper] = useState<DailyPaper | null>(null);
   const [error, setError] = useState(saved?.deepResponse?.warning || "");
-  const [membershipError, setMembershipError] = useState("");
+  const [membershipError, setMembershipError] = useState<string | null>(null);
   const [newLibraryName, setNewLibraryName] = useState("");
   const [newLibraryOpen, setNewLibraryOpen] = useState(false);
   const [creatingLibrary, setCreatingLibrary] = useState(false);
   const creatingLibraryRef = useRef(false);
-  const [libraryCreationError, setLibraryCreationError] = useState("");
+  const [libraryCreationError, setLibraryCreationError] = useState<string | null>(null);
   const [libraryRefreshError, setLibraryRefreshError] = useState("");
   const [persistenceError, setPersistenceError] = useState("");
   const alive = useRef(true);
@@ -2590,7 +2590,8 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const cachedFeedKey = useRef(saved?.response ? responseKey : "");
   const currentFeedKey = dailyFeedKey({ mode, range, topic, searchKind, submittedQuery });
   const displayedResponse = responseKey === currentFeedKey ? response : null;
-  const displayedFeedError = feedError?.key === currentFeedKey ? feedError.message : "";
+  const matchingFeedError = feedError?.key === currentFeedKey ? feedError : null;
+  const displayedFeedError = matchingFeedError ? matchingFeedError.message || t("The daily paper feed could not be refreshed.") : "";
   const feedPending = !displayedFeedError && (loading || responseKey !== currentFeedKey);
   useEffect(() => {
     try {
@@ -2605,10 +2606,10 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   useEffect(() => {
     let active = true;
     setAdded(new Set());
-    setMembershipError("");
+    setMembershipError(null);
     if (selectedLibraryId && bridge.listLibraryPapers) void bridge.listLibraryPapers(selectedLibraryId).then((papers) => {
       if (active) setAdded((current) => new Set([...current, ...papers.map(discoveryPaperKey)]));
-    }).catch((cause) => { if (active) setMembershipError(readableError(cause, "Saved papers could not be checked.")); });
+    }).catch((cause) => { if (active) setMembershipError(readableError(cause, "")); });
     return () => { active = false; };
   }, [bridge, selectedLibraryId]);
   const searchActive = mode !== "conference" && Boolean(submittedQuery);
@@ -2640,9 +2641,11 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
       setFeedError(nextResponse.warning ? { key: cacheKey, message: nextResponse.warning } : null);
     } catch (discoverError) {
       if (requestId !== feedRequestId.current) return;
-      const message = readableError(discoverError, "The daily paper feed could not be refreshed.");
-      const previous = responseKeyRef.current === cacheKey ? responseRef.current : null;
-      setFeedError({ key: cacheKey, message: previous ? `${message} Showing the previous results.` : message });
+      setFeedError({
+        key: cacheKey,
+        message: readableError(discoverError, ""),
+        showingPrevious: responseKeyRef.current === cacheKey && Boolean(responseRef.current),
+      });
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
@@ -2724,7 +2727,7 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
       if (alive.current && targetLibraryIdRef.current === targetLibraryId) setAdded((current) => new Set(current).add(key));
       await onImported();
     } catch (addError) {
-      if (alive.current) setError(readableError(addError, "The paper could not be saved."));
+      if (alive.current) setError(readableError(addError, t("The paper could not be saved.")));
     } finally {
       if (alive.current) setAdding(null);
     }
@@ -2735,7 +2738,7 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
     if (!name || creatingLibraryRef.current) return;
     creatingLibraryRef.current = true;
     setCreatingLibrary(true);
-    setLibraryCreationError("");
+    setLibraryCreationError(null);
     setLibraryRefreshError("");
     try {
       const created = await bridge.createLibrary({ projectId, name });
@@ -2748,7 +2751,7 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
       catch {
         if (alive.current) setLibraryRefreshError(t("The library was created, but the list could not be refreshed."));
       }
-    } catch (cause) { if (alive.current) setLibraryCreationError(readableError(cause, "The library could not be created.")); }
+    } catch (cause) { if (alive.current) setLibraryCreationError(readableError(cause, "")); }
     finally { creatingLibraryRef.current = false; if (alive.current) setCreatingLibrary(false); }
   }
 
@@ -2767,12 +2770,12 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
       <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} disabled={searchActive} title={searchActive ? "Clear search before switching discovery modes" : "Search official conference catalogs"} onClick={() => setMode("conference")}><GraduationCap size={16} />Top conference search</button>
       {mode !== "conference" && !searchActive && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
-      <button className="secondary-button" aria-expanded={newLibraryOpen} onClick={() => { setNewLibraryOpen((current) => !current); setLibraryCreationError(""); }}>{t("New library")}</button>
+      <button className="secondary-button" aria-expanded={newLibraryOpen} onClick={() => { setNewLibraryOpen((current) => !current); setLibraryCreationError(null); }}>{t("New library")}</button>
     </div>
     {persistenceError && <InlineNotice tone="warning">{persistenceError}</InlineNotice>}
     {libraryRefreshError && <InlineNotice tone="warning">{libraryRefreshError}</InlineNotice>}
     {newLibraryOpen && <div className="daily-create-library"><label>{t("New discovery library")}<input autoFocus aria-label={t("New discovery library")} value={newLibraryName} onChange={(event) => setNewLibraryName(event.target.value)} placeholder={t("Library name")} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) void createLibrary(); }} /></label><button className="secondary-button" disabled={creatingLibrary || !newLibraryName.trim()} onClick={() => void createLibrary()}>{t("Create library here")}</button></div>}
-    {newLibraryOpen && libraryCreationError && <InlineNotice tone="danger" className="library-error">{libraryCreationError}</InlineNotice>}
+    {newLibraryOpen && libraryCreationError !== null && <InlineNotice tone="danger" className="library-error">{libraryCreationError || t("The library could not be created.")}</InlineNotice>}
     <FilterGroup label="AI research topic" className="daily-topic-filter">{DAILY_TOPICS.map((item) => <FilterButton key={item.id} active={topic === item.id} disabled={searchActive && searchKind === "deep"} title={searchActive && searchKind === "deep" ? "Clear deep search to change its topic constraint" : item.description} onClick={() => setTopic(item.id)}>{item.label}</FilterButton>)}</FilterGroup>
     {mode === "conference" ? <ConferenceDiscovery storageKey={`${storageKey}:conference`} bridge={bridge} targetLibraryId={selectedLibraryId} topic={topic} onImported={onImported} /> : <>
     <div className={searchKind === "deep" ? "daily-search-panel deep" : "daily-search-panel"}>
@@ -2785,10 +2788,10 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
       </div>
       {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && displayedResponse ? ` · ${displayedResponse.cached ? "cached" : "live"} · updated ${formatFeedTime(displayedResponse.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}{searchKind === "quick" && searchActive && displayedResponse?.options?.topic === "all" && topic !== "all" ? " · title search across all topics" : ""}</span></div>}
     </div>
-    {displayedFeedError && <InlineNotice tone="danger" className="library-error">{displayedFeedError}</InlineNotice>}
-    {membershipError && <InlineNotice tone="danger" className="library-error">{membershipError}</InlineNotice>}
+    {displayedFeedError && <InlineNotice tone="danger" className="library-error">{matchingFeedError?.showingPrevious ? t("{message} Showing the previous results.", { message: displayedFeedError }) : displayedFeedError}</InlineNotice>}
+    {membershipError !== null && <InlineNotice tone="danger" className="library-error">{membershipError || t("Saved papers could not be checked.")}</InlineNotice>}
     {error && <InlineNotice tone={deepResponse ? "warning" : "danger"} className={deepResponse ? "daily-search-warning" : "library-error"}>{error}</InlineNotice>}
-    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : feedPending && !displayedResponse ? <LoadingState /> : displayedFeedError && !displayedResponse ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : feedPending && !displayedResponse ? <LoadingState /> : displayedFeedError && !displayedResponse ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title={t("Could not load the live feed")} description={t("arXiv may be responding slowly. Your library is unaffected.")} action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />{t("Retry")}</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = discoveryPaperKey(paper);
       const isAdded = added.has(key);
       const isAdding = adding === key;

@@ -17,7 +17,8 @@ const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }
 const PAGE_SIZE = 40;
 const CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // Keep in step with the official catalog cache in Electron.
 function errorMessage(error: unknown) {
-  return String(error).replace(/^Error:\s*/, "").replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, "");
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return message.replace(/^Error invoking remote method '[^']+':\s*/, "").replace(/^Error:\s*/, "").trim();
 }
 function feedKey(value: { conference: ConferenceId; year: number; presentation: ConferencePresentation | "all"; topic: DailyDiscoveryTopic; submittedQuery: string; offset: number }) {
   return JSON.stringify([value.conference, value.year, value.presentation, value.topic, value.submittedQuery, value.offset]);
@@ -59,7 +60,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   const loadError = visibleFeed?.error ?? "";
   const loading = visibleFeed ? visibleFeed.loading : true;
   const [error, setError] = useState("");
-  const [membershipError, setMembershipError] = useState("");
+  const [membershipError, setMembershipError] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [storageError, setStorageError] = useState("");
@@ -69,7 +70,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
   useEffect(() => {
     let active = true;
     setAdded(new Set());
-    setMembershipError("");
+    setMembershipError(null);
     if (targetLibraryId && bridge.listLibraryPapers) void bridge.listLibraryPapers(targetLibraryId).then((papers) => {
       if (active) setAdded((current) => new Set([...current, ...papers.map((paper) => `${targetLibraryId}:${discoveryPaperKey(paper)}`)]));
     }).catch((cause) => { if (active) setMembershipError(errorMessage(cause)); });
@@ -157,7 +158,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
       <span>{response ? `${response.total.toLocaleString()} papers` : `${selected.label} ${year}`}</span>
     </div>
     {loadError && <InlineNotice tone="danger" className="library-error">{loadError}</InlineNotice>}
-    {membershipError && <InlineNotice tone="danger" className="library-error">{membershipError}</InlineNotice>}
+    {membershipError !== null && <InlineNotice tone="danger" className="library-error">{membershipError || t("Saved papers could not be checked.")}</InlineNotice>}
     {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
     {response && <div className="conference-catalog-status">
       <span><GraduationCap size={14} />{selected.label} {year} · {response.catalog_total.toLocaleString()} papers · {response.status === "not_held" ? "No edition" : response.status === "not_published" ? "Awaiting official publication" : response.stale ? "Cached, refresh pending" : response.cached ? "Cached" : "Official catalog"}</span>

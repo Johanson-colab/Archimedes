@@ -8,7 +8,11 @@ const store = require("./store.cjs");
 const fixture = require("./test-support/discovery-fixture.cjs");
 let dom, React, createRoot, scope;
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-const t = (key) => key;
+let language = "en";
+const t = (key, values) => {
+  const template = language === "zh" ? scope.library[key] ?? scope.misc[key] ?? key : key;
+  return values ? template.replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match) : template;
+};
 before(async () => {
   dom = new JSDOM('<div id="root"></div>', { url: "http://localhost", pretendToBeVisual: true });
   for (const key of ["window", "document", "HTMLElement", "Node"]) global[key] = dom.window[key];
@@ -38,6 +42,8 @@ before(async () => {
   }
   await load("discovery-state.ts", ["discoveryPaperFields", "discoveryPaperKey", "discoveryStorageKey", "readDiscoverySnapshot", "writeDiscoverySnapshot"]);
   await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
+  await load("i18n/translations/library.ts", ["library"]);
+  await load("i18n/translations/misc.ts", ["misc"]);
   scope.conferenceCatalog = require("../shared/conferences.json");
   scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
   await load("ConferenceDiscovery.tsx", ["ConferenceDiscovery"]);
@@ -308,6 +314,43 @@ test("a failed daily query does not show results from the previous topic", async
     assert.ok(document.body.textContent.includes("Daily current fixture"), "matching results remain visible on a failed refresh");
     assert.ok(document.body.textContent.includes("Showing the previous results."), "the fallback is labeled when results still match the controls");
   } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("discovery renders failed refresh, library creation and membership in the selected language", async () => {
+  const cases = {
+    en: ["The daily paper feed could not be refreshed. Showing the previous results.", "Saved papers could not be checked.", "The library could not be created."],
+    zh: ["无法刷新每日论文动态。正在显示上一次的结果。", "无法核查已保存的论文。", "无法创建文献库。"],
+  };
+  for (const [locale, [feed, membership, creation]] of Object.entries(cases)) {
+    let unmount;
+    language = locale;
+    const unavailable = async () => { throw new Error(); };
+    const bridge = {
+      discoverDailyPapers: async (options) => options.forceRefresh ? unavailable() : fixture.feed(options),
+      searchConferencePapers: async (options) => conferenceResponse(options),
+      listLibraryPapers: unavailable,
+      createLibrary: unavailable,
+    };
+    try {
+      unmount = await mount(scope.DailyDiscovery, {
+        storageKey: `localized-failure-${locale}`, bridge,
+        libraries: [{ id: "library", name: "Library" }], loadingLibraries: false, onImported: async () => {},
+      });
+      await click("Refresh");
+      assert.ok(document.querySelector(".daily-paper-list"));
+      assert.ok(document.body.textContent.includes(feed));
+      assert.ok(document.body.textContent.includes(membership));
+      await click(t("New library"));
+      await input(document.querySelector(".daily-create-library input"), "New collection");
+      await click(t("Create library here"));
+      assert.ok(document.body.textContent.includes(creation));
+      await click("Top conference search");
+      assert.ok(document.querySelector(".conference-discovery").textContent.includes(membership));
+    } finally {
+      if (unmount) await unmount();
+      language = "en";
+    }
+  }
 });
 
 test("an explicit conference open beats saved daily mode without breaking normal restore", async () => {
