@@ -49,6 +49,18 @@ test("changing budget placement does not invent modifications and ordinary text 
   assert.equal(changed.status, "modified"); assert.equal(changed.additions, 2); assert.equal(changed.deletions, 1);
 });
 
+test("ordinary files with generated-environment names remain in change receipts", t => {
+  const root = fixture(t);
+  fs.writeFileSync(path.join(root, "venv"), "original");
+  fs.writeFileSync(path.join(root, ".venv"), "original");
+  const before = snapshotWorkspace(root);
+  assert.equal(before.coverage.generatedDirectories, 0);
+  for (const name of ["venv", ".venv"]) fs.appendFileSync(path.join(root, name), " changed");
+  assert.deepEqual(compareWorkspaceSnapshots(before, snapshotWorkspace(root)).map(({ path, status }) => [path, status]), [
+    [".venv", "modified"], ["venv", "modified"],
+  ]);
+});
+
 test("an approved command persists scan coverage and only reports actual read limits", async t => {
   const root = fixture(t);
   for (let index = 0; index < 10; index++) fs.writeFileSync(path.join(root, `${index}.txt`), "a".repeat(900_000));

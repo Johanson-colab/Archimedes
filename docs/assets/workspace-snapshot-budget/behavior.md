@@ -26,3 +26,9 @@ invented change. An actual approved command writes a file and persists both its
 change receipt and scan coverage. The measurements concern snapshot I/O; elapsed
 time printed by the script is one local observation rather than a UI latency or
 memory benchmark.
+
+The screenshots show the actual chat activity component in Electron at 980 × 480, Charcoal and Chinese. Both report a scan that exceeded the text budget before an approved command and finished within budget afterward. The before capture uses `ccdfd47`. The after capture translates the warning, phase, counts and reason into Chinese. The same data survives a conversation reopen.
+
+| Before | After |
+| --- | --- |
+| ![English scan warning in the Chinese activity view](coverage-before.png) | ![Localized scan warning and counts](coverage-after.png) |

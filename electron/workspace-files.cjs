@@ -17,7 +17,6 @@ const MAX_TEXT_BYTES = 2_000_000;
 const MAX_SNAPSHOT_TEXT_BYTES = 1_000_000;
 const MAX_SNAPSHOT_TOTAL_TEXT_BYTES = 8_000_000;
 const SNAPSHOT_GENERATED_DIRECTORY_NAMES = new Set([".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".nox"]);
-const SNAPSHOT_IGNORED_NAMES = new Set([...IGNORED_NAMES, ...SNAPSHOT_GENERATED_DIRECTORY_NAMES]);
 
 function normalizeRelative(value = "") {
   return String(value || "").replaceAll("\\", "/").replace(/^\/+/, "");
@@ -168,10 +167,11 @@ function snapshotWorkspace(root) {
     }
     for (const entry of entries) {
       if (files.size >= MAX_SNAPSHOT_ENTRIES) { coverage.entryLimitReached = true; break; }
-      if (SNAPSHOT_IGNORED_NAMES.has(entry.name) || entry.isSymbolicLink()) {
+      const generatedDirectory = entry.isDirectory() && SNAPSHOT_GENERATED_DIRECTORY_NAMES.has(entry.name);
+      if (IGNORED_NAMES.has(entry.name) || generatedDirectory || entry.isSymbolicLink()) {
         if (entry.isDirectory()) {
           coverage.ignoredDirectories += 1;
-          if (SNAPSHOT_GENERATED_DIRECTORY_NAMES.has(entry.name)) coverage.generatedDirectories += 1;
+          if (generatedDirectory) coverage.generatedDirectories += 1;
         }
         continue;
       }
