@@ -77,6 +77,8 @@ test("research-app entry errors render as a dismissible alert overlay", async ()
   assert.ok(noticeLine, "the main workspace renders the entry notice");
   assert.match(noticeLine, /onDismiss=\{\(\) => setAppEntryError\(""\)\}/);
   assert.doesNotMatch(noticeLine, /composer-attachment-error/);
+  assert.match(source, /\n        <\/div>\n        \{appEntryError && <ResearchAppEntryNotice[^\n]+\n        <AgentLayer/,
+    "the notice is a sibling of the scrollable view within .main-workspace");
 });
 
 test("the entry notice stays bounded, top-centered and scrollable above full-height views", () => {

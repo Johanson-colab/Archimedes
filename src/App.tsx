@@ -3607,7 +3607,6 @@ function App() {
             />
           )}
           {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
-          {appEntryError && <ResearchAppEntryNotice message={appEntryError} onDismiss={() => setAppEntryError("")} dismissLabel={t("Dismiss")} />}
           <Suspense fallback={null}>
             {/* View host sidebar-modules: one looping projection, semantics derived from the module registry (keepMounted/cacheClass/requiresWorkspace/open gate). */}
             {(Object.entries(sidebarModuleContent) as [string, ReactNode][]).map(([id, content]) => {
@@ -3632,6 +3631,7 @@ function App() {
               onRestore={() => { setMainSection("chat"); openWorkbench("files"); }} />
           )}
         </div>
+        {appEntryError && <ResearchAppEntryNotice message={appEntryError} onDismiss={() => setAppEntryError("")} dismissLabel={t("Dismiss")} />}
         <AgentLayer
           proactiveOpen={proactive.open}
           researchOpen={researchPanelOpen}
