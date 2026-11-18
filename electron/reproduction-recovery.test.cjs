@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { DatabaseSync } = require("node:sqlite");
 const store = require("./store.cjs");
 
 function workspace() {
@@ -55,6 +56,7 @@ test("a verified reproduction is left alone", () => {
 test("a fresh process recovers interrupted turns, pending approvals and commands without rewriting completed output", () => {
   const { spawnSync } = require("node:child_process"), path = require("node:path");
   const root = workspace();
+  const englishNotice = "The app closed while this turn was running. You can continue in this chat. Check any partial changes before continuing.";
   try {
     const child = spawnSync(process.execPath, ["-e", `
       const store = require(${JSON.stringify(path.join(__dirname, "store.cjs"))});
@@ -67,11 +69,13 @@ test("a fresh process recovers interrupted turns, pending approvals and commands
       }
       const orphan = turn('orphan');
       const persisted = turn('finished task only');
+      const sameText = turn(process.argv[2]);
       store.finishTask(persisted.task.id,{response:'Durable completed output',status:'completed'});
+      store.finishTask(sameText.task.id,{response:process.argv[2],status:'completed'});
       const action=store.createAction({taskId:orphan.task.id,kind:'command',payload:{command:'never executed'}});
       const command=store.startCommand({command:'old command',cwd:process.argv[1]});
-      process.stdout.write(JSON.stringify({orphan:orphan.thread.id,persisted:persisted.thread.id,action:action.id,command:command.id}));
-    `, root], { encoding: "utf8" });
+      process.stdout.write(JSON.stringify({orphan:orphan.thread.id,persisted:persisted.thread.id,sameText:sameText.thread.id,action:action.id,command:command.id}));
+    `, root, englishNotice], { encoding: "utf8" });
     assert.equal(child.status, 0, child.stderr);
     const ids = JSON.parse(child.stdout);
     store.openWorkspace(root);
@@ -80,6 +84,9 @@ test("a fresh process recovers interrupted turns, pending approvals and commands
     assert.equal(orphan.status, "idle");
     assert.equal(orphan.turns[0].status, "interrupted");
     assert.equal(orphan.events.at(-1).type, "run_recovered");
+    assert.equal(orphan.events.at(-1).payload.generated_notice, true);
+    assert.equal(orphan.messages.at(-1).recoveryNotice, true);
+    assert.equal(orphan.messages.at(-1).text, englishNotice);
     assert.equal(owner.getAction(ids.action).status, "rejected");
     assert.equal(owner.getSnapshot().commands.find(command => command.id === ids.command).status, "interrupted");
     const persisted = owner.getResearchThread(ids.persisted);
@@ -88,6 +95,18 @@ test("a fresh process recovers interrupted turns, pending approvals and commands
     const answers = persisted.events.filter(event => event.type === "assistant_message");
     assert.equal(answers.length, 1);
     assert.equal(answers[0].payload.text, "Durable completed output");
+    assert.equal(persisted.messages.at(-1).recoveryNotice, undefined);
+    const sameText = owner.getResearchThread(ids.sameText);
+    assert.deepEqual(sameText.messages.map(({ text, recoveryNotice }) => [text, recoveryNotice]), [
+      [englishNotice, undefined], [englishNotice, undefined],
+    ], "genuine user and model text with identical wording is not marked as a notice");
+    const db = new DatabaseSync(path.join(root, ".archimedes", "archimedes.db"));
+    try {
+      db.prepare("UPDATE research_events SET payload_json = json_remove(payload_json, '$.generated_notice') WHERE thread_id = ? AND type = 'run_recovered'").run(ids.orphan);
+    } finally { db.close(); }
+    const legacy = owner.getResearchThread(ids.orphan);
+    assert.equal(legacy.events.at(-1).payload.generated_notice, undefined);
+    assert.equal(legacy.messages.at(-1).recoveryNotice, true, "a previously saved recovery row is recognized");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -105,4 +124,40 @@ test("switching data folders preserves a live turn and its pending approval", t 
   store.openWorkspace(root);
   assert.equal(store.getResearchThread(thread.id).turns[0].status, "running");
   assert.equal(store.getAction(action.id).status, "pending");
+});
+
+test("conversation surfaces translate only marked recovery notices", async () => {
+  const React = require("react");
+  const { renderToStaticMarkup } = require("react-dom/server");
+  const { transformWithOxc } = await import("vite");
+  const directory = path.join(__dirname, "../src");
+  const translations = fs.readFileSync(path.join(directory, "i18n/translations/conversation.ts"), "utf8").replace("export const", "const");
+  const { code: translationCode } = await transformWithOxc(translations, "conversation.ts");
+  const chinese = new Function(`${translationCode}\nreturn conversation;`)();
+  const englishNotice = "The app closed while this turn was running. You can continue in this chat. Check any partial changes before continuing.";
+  assert.equal(chinese[englishNotice], "这一轮运行时应用已关闭。你可以在此对话中继续。继续前请检查是否有只完成了一部分的修改。");
+  let language = "zh";
+  const text = ({ content, text, children }) => React.createElement("p", null, content || text || children);
+  const bindings = {
+    React, memo: React.memo,
+    useUISettings: () => ({ t: key => language === "zh" ? chinese[key] ?? key : key }),
+    MarkdownMessage: text, StreamingMarkdownMessage: text, PaperChatMarkdown: text, ReactMarkdown: text, remarkGfm: () => {},
+  };
+  for (const [file, name] of [["App.tsx", "ConversationMessage"], ["SideConversation.tsx", "SideMessage"], ["LibraryView.tsx", "PaperChatMessageRow"]]) {
+    const source = fs.readFileSync(path.join(directory, file), "utf8");
+    const start = source.indexOf(`const ${name} = memo(`);
+    const end = source.indexOf("\n});", start) + 4;
+    assert.ok(start >= 0 && end > start, name);
+    const { code } = await transformWithOxc(source.slice(start, end), file, { jsx: { runtime: "classic" } });
+    const Component = new Function(...Object.keys(bindings), `${code}\nreturn ${name};`)(...Object.values(bindings));
+    const render = (role, recoveryNotice) => renderToStaticMarkup(React.createElement(Component, {
+      message: { id: "message", role, text: englishNotice, recoveryNotice },
+    }));
+    language = "zh";
+    assert.ok(render("assistant", true).includes(chinese[englishNotice]), name);
+    assert.ok(render("assistant", false).includes(englishNotice), name);
+    assert.ok(render("user", false).includes(englishNotice), name);
+    language = "en";
+    assert.ok(render("assistant", true).includes(englishNotice), name);
+  }
 });

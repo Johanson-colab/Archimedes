@@ -1817,6 +1817,7 @@ interface ResearchThreadMessage {
   turn_id: string;
   role: "user" | "assistant";
   text: string;
+  recoveryNotice?: boolean;
   sources?: ResearchSource[];
   created_at: string;
 }
