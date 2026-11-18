@@ -152,6 +152,11 @@ test("compiler intermediates written and removed during compilation do not inval
 test("desktop metadata updates leave the PDF and source receipt current", async t => {
   const root = fixture(t);
   const names = [".DS_Store", "Thumbs.db", "figures/._plot.png"];
+  // A Finder or Explorer metadata change in an existing project must leave its
+  // receipt current, including when bytes change without a directory-entry event.
+  const version = captureManuscriptSources(root, "paper/main.tex").source_version;
+  for (const name of names) fs.writeFileSync(path.join(root, "paper", name), "initial metadata");
+  assert.equal(captureManuscriptSources(root, "paper/main.tex").source_version, version);
   const result = await compileLatexDocument(root, "paper/main.tex", {
     executable: "tectonic",
     spawnImpl: compilerFixture(cwd => {
