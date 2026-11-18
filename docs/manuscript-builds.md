@@ -53,3 +53,5 @@ cleanup errors; a failure to remove an old preview does not invalidate an
 otherwise successful compile. The shared runtime `tex-cache` and `xdg-cache`
 contain downloaded TeX dependencies separately from manuscript output. Preview
 cleanup does not clear those caches.
+
+The preview quota keeps the five most recent PDF-bearing builds. Up to five additional log-only receipts are kept for failed or stale attempts, so retries cannot evict the last PDF. A linked main document is verified against its resolved target as well as the files in its manuscript directory.

@@ -163,7 +163,11 @@ function captureManuscriptSources(root, sourcePath) {
     }
   }
   visit(directory);
-  return { workspace, source_path: sourcePath, project_path: relative(workspace, directory), coverage: "manuscript-directory", directories, source_version: hash(JSON.stringify({ files, untracked })), observation_version: hash(JSON.stringify(observations)), files, total_bytes: bytes, untracked_inputs: untracked, excluded_directories: [...EXCLUDED_DIRECTORIES] };
+  // A linked entry point can change documents without changing its target directory.
+  // Keep the existing version format for ordinary manuscript paths.
+  const resolvedMain = relative(workspace, source);
+  const inputs = resolvedMain === sourcePath ? { files, untracked } : { files, untracked, resolvedMain };
+  return { workspace, source_path: sourcePath, project_path: relative(workspace, directory), coverage: "manuscript-directory", directories, source_version: hash(JSON.stringify(inputs)), observation_version: hash(JSON.stringify(observations)), files, total_bytes: bytes, untracked_inputs: untracked, excluded_directories: [...EXCLUDED_DIRECTORIES] };
 }
 
 function artifact(root, file) {
@@ -226,23 +230,26 @@ function readManuscriptSnapshot(root, manifestPath) {
   };
 }
 
-/** Retain five completed previews per document; never active builds. */
+/** Retain five PDF previews and five log-only receipts per document. */
 function pruneManuscriptPreviews(root, manifestPath, keep = 5) {
   const workspace = workspacePath(root), currentFile = workspacePath(workspace, manifestPath);
   const current = JSON.parse(fs.readFileSync(currentFile, "utf8"));
   const parent = path.dirname(path.dirname(currentFile));
-  const previews = [], removed = [], errors = [];
+  const previews = [], withoutPdf = [], removed = [], errors = [];
   for (const entry of fs.readdirSync(parent, { withFileTypes: true })) {
     if (!entry.isDirectory() || !/^[a-f0-9-]+$/.test(entry.name)) continue;
     const directory = path.join(parent, entry.name), manifest = path.join(directory, "source-snapshot.json");
     if (!fs.existsSync(manifest)) continue;
     try {
       const snapshot = JSON.parse(fs.readFileSync(manifest, "utf8"));
-      if (snapshot.workspace === workspace && snapshot.source_path === current.source_path) previews.push({ directory, created: snapshot.created_at, current: manifest === currentFile });
+      if (snapshot.workspace !== workspace || snapshot.source_path !== current.source_path) continue;
+      const group = snapshot.pdf ? previews : withoutPdf;
+      group.push({ directory, created: snapshot.created_at, current: manifest === currentFile });
     } catch { /* Unknown or incomplete directories are not disposable previews. */ }
   }
-  previews.sort((a, b) => Number(b.current) - Number(a.current) || b.created.localeCompare(a.created) || b.directory.localeCompare(a.directory));
-  for (const item of previews.slice(keep)) {
+  const newestFirst = (a, b) => Number(b.current) - Number(a.current) || b.created.localeCompare(a.created) || b.directory.localeCompare(a.directory);
+  const expired = [...previews.sort(newestFirst).slice(keep), ...withoutPdf.sort(newestFirst).slice(keep)];
+  for (const item of expired) {
     try { fs.rmSync(item.directory, { recursive: true }); removed.push(relative(workspace, item.directory)); }
     catch (error) { errors.push({ path: relative(workspace, item.directory), message: error.message }); }
   }

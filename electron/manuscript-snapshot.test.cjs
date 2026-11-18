@@ -236,6 +236,34 @@ test("the actual preload and snapshot handler recheck disk bytes at handoff time
   assert.equal(checked.current, false); assert.equal(checked.source_matches, false); assert.equal(checked.pdf_matches, true);
 });
 
+test("retargeting a linked main file in the same source directory invalidates its receipt", async t => {
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root, "entry"));
+  const entry = path.join(root, "entry/main.tex");
+  fs.symlinkSync(path.join(root, "paper/main.tex"), entry, "file");
+  const result = await compileLatexDocument(root, "entry/main.tex", { executable: "tectonic", spawnImpl: compilerFixture() });
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, true);
+  fs.unlinkSync(entry);
+  fs.symlinkSync(path.join(root, "paper/section.tex"), entry, "file");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("repeated no-output builds retain the last PDF and a bounded set of diagnostic logs", async t => {
+  const root = fixture(t);
+  const source = "paper/main.tex";
+  const options = { executable: "tectonic", spawnImpl: compilerFixture() };
+  const success = await compileLatexDocument(root, source, options);
+  const requestedSource = success.source_snapshot.requested_source;
+  fs.appendFileSync(path.join(root, "paper/section.tex"), " updated");
+  for (let i = 0; i < 7; i++) {
+    const failed = await compileLatexDocument(root, source, { ...options, requestedSource });
+    assert.equal(failed.source_snapshot.pdf, null);
+  }
+  const parent = path.dirname(path.dirname(path.join(root, success.source_snapshot.manifest_path)));
+  assert.equal(fs.readdirSync(parent).length, 6);
+  assert.equal(readManuscriptSnapshot(root, success.source_snapshot.manifest_path).pdf_matches, true);
+});
+
 test("queued builds coalesce unchanged inputs, distinguish changed section/bib, and preserve root ownership", async t => {
   const a = fixture(t), b = fixture(t), runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-compiler-cache-"));
   t.after(() => fs.rmSync(runtimeRoot, { recursive: true, force: true }));
