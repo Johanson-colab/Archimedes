@@ -268,13 +268,15 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
 
   const activateProject = useCallback(async (path: string) => {
     const request = ++owner.activationSequence;
+    const openSequence = owner.openSequence;
+    const isCurrent = () => request === owner.activationSequence && owner.openSequence === openSequence;
     let projects: LatexProjectSummary[];
     try { projects = await bridge.listLatexProjects(owner.workspace); }
     catch (error) {
-      if (request === owner.activationSequence) { owner.error = error instanceof Error ? error.message : String(error); refreshScope(); }
+      if (isCurrent()) { owner.error = error instanceof Error ? error.message : String(error); refreshScope(); }
       return;
     }
-    if (request !== owner.activationSequence) return;
+    if (!isCurrent()) return;
     owner.projects = projects;
     const contains = (main: string) => {
       const directory = projectRoot(main);
@@ -291,7 +293,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     owner.mainPath = main;
     setActiveProject(root); setActiveDirectory(root); setExpanded(new Set([root])); setChooserOpen(false); setError("");
     await loadDirectory(root, true);
-    if (request !== owner.activationSequence) return;
+    if (!isCurrent()) return;
     await openFile(path);
   }, [bridge, loadDirectory, openFile, owner, refreshScope]);
 
@@ -307,9 +309,11 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
         owner.restorationAttempted = true;
         const saved = readWritingLocation(window.localStorage, owner.workspace, projectId);
         if (saved && found.some((item) => item.path === saved.mainPath)) {
+          const activation = owner.activationSequence + 1;
+          const mainOpen = owner.openSequence + 1;
           await activateProject(saved.mainPath);
-          if (request !== owner.projectListSequence || owner.mainPath !== saved.mainPath) return;
-          const activation = owner.activationSequence;
+          if (request !== owner.projectListSequence || owner.activationSequence !== activation || owner.openSequence !== mainOpen
+            || owner.mainPath !== saved.mainPath || owner.selectedPath !== saved.mainPath) return;
           if (saved.selectedPath !== saved.mainPath && (saved.projectPath === "." || saved.selectedPath.startsWith(`${saved.projectPath}/`))) {
             const nextOpen = owner.openSequence + 1;
             await openFile(saved.selectedPath);
@@ -329,8 +333,10 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
   useEffect(() => {
     if (!active) return;
     void refreshProjects();
+    // A fresh root listing lets the existing expanded nodes reload their children.
+    if (owner.activeProject) void loadDirectory(owner.activeProject, true);
     if (owner.selectedPath) void openFile(owner.selectedPath, true);
-  }, [active, openFile, owner, refreshProjects]);
+  }, [active, loadDirectory, openFile, owner, refreshProjects]);
   useEffect(() => {
     if (!activeProject || !mainPath || !file?.path) return;
     rememberWritingLocation(window.localStorage, owner.workspace, projectId, { projectPath: activeProject, mainPath, selectedPath: file.path });

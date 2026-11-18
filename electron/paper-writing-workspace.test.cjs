@@ -260,6 +260,54 @@ test('Writing opens existing manuscripts before templates and restores the chose
   assert.equal(f.compiles.length, 0, 'opening and restoring manuscripts does not need a compiler');
 });
 
+test("a tree selection wins over the remembered source while the main document is reopening", async t => {
+  const mainRead = deferred(), mainStarted = deferred();
+  let restoring = false;
+  const f = await fixture(t, { read: async (root, name, preview) => {
+    if (restoring && name === "paper/main.tex") {
+      mainStarted.resolve();
+      await mainRead.promise;
+    }
+    return preview(root, name);
+  } });
+  fs.writeFileSync(path.join(f.a, "paper/remembered.tex"), "Remembered source");
+  fs.writeFileSync(path.join(f.a, "paper/newer.tex"), "Newly selected source");
+  await f.render(f.a); await autoCompileOff();
+  await click("paper/remembered.tex");
+
+  restoring = true;
+  await f.restart(f.a);
+  await mainStarted.promise;
+  await click("paper/newer.tex");
+  await React.act(async () => mainRead.resolve());
+
+  assert.equal(document.querySelector('.latex-editor-textarea').value, "Newly selected source");
+  assert.equal(document.querySelector('.paper-main-document select').value, "paper/main.tex");
+  assert.equal(f.reads.filter(({ name }) => name === "paper/remembered.tex").length, 1);
+});
+
+test("returning to Writing reloads the manuscript root and expanded source directories", async t => {
+  const f = await fixture(t);
+  const folder = path.join(f.a, "paper/sections/examples");
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(f.a, "paper/old.bib"), "Old bibliography");
+  fs.writeFileSync(path.join(folder, "old.tex"), "Old example");
+  await f.render(f.a); await autoCompileOff();
+  await click("paper/sections");
+  await click("paper/sections/examples");
+  assert.ok(document.querySelector('[title="paper/sections/examples/old.tex"]'));
+  await f.render(f.b, null);
+
+  fs.renameSync(path.join(f.a, "paper/old.bib"), path.join(f.a, "paper/new.bib"));
+  fs.renameSync(path.join(folder, "old.tex"), path.join(folder, "new.tex"));
+  await f.render(f.a, null);
+  assert.ok(document.querySelector('[title="paper/new.bib"]'));
+  assert.ok(document.querySelector('[title="paper/sections/examples/new.tex"]'));
+  assert.equal(document.querySelector('[title="paper/old.bib"]'), null);
+  assert.equal(document.querySelector('[title="paper/sections/examples/old.tex"]'), null);
+  assert.match(document.querySelector(".latex-editor-textarea").value, /Project A original/);
+});
+
 test('a main document at the execution root opens in place and a removed recent document returns to the chooser', async t => {
   const f = await fixture(t);
   fs.writeFileSync(path.join(f.a, 'root.tex'), source('Root manuscript'));
