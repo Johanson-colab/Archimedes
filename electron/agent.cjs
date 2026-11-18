@@ -870,7 +870,8 @@ function applyDelta(accumulator, delta, onTextDelta) {
 }
 
 async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, requireComplete = false, sessionId = "archimedes-internal" }) {
-  const tokenLimit = Number.isFinite(Number(maxOutputTokens)) ? Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32768 : 8192, Math.round(Number(maxOutputTokens)))) : 0;
+  const requestedLimit = Number.isFinite(Number(maxOutputTokens)) ? Number(maxOutputTokens) : Number(config.maxOutputTokens) || 0;
+  const tokenLimit = requestedLimit > 0 ? Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32768 : 8192, Math.round(requestedLimit))) : 0;
   if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens: tokenLimit, allowLargeOutput, requireComplete, sessionId });
   const nativeReasoning = openAiReasoningOptions(config, reasoningEffort);
   const request = { model: config.model, messages, stream: true, ...nativeReasoning };

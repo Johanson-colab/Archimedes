@@ -1,10 +1,8 @@
-const fs = require("node:fs");
-const path = require("node:path");
 const { buildModelRequestOptions, formatConnectionError, sanitizeHeaders, sanitizeSessionHeader } = require("./model-request-headers.cjs");
+const modelRegistry = require("./model-registry.cjs");
 
 const PROVIDERS = new Set(["openai", "anthropic", "gemini", "glm", "minimax", "deepseek", "qwen", "moonshot", "openrouter", "custom"]);
 const ROLES = new Set(["agent", "proactive"]);
-let configPath = "";
 
 function normalizeRole(role) {
   return ROLES.has(role) ? role : "agent";
@@ -22,41 +20,7 @@ function environmentConfig() {
 }
 
 function initializeModelConfig(userDataPath) {
-  configPath = path.join(userDataPath, "model-config.json");
-}
-
-function readSavedConfig() {
-  if (!configPath || !fs.existsSync(configPath)) return null;
-  try {
-    const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    if (!parsed || typeof parsed !== "object") return null;
-    // v1 stored one flat config. v2 stores named roles so Proactive can use a
-    // different (usually cheaper) model from the main research Agent.
-    if (Object.hasOwn(parsed, "agent") || Object.hasOwn(parsed, "proactive")) {
-      return {
-        agent: parsed.agent && typeof parsed.agent === "object" ? parsed.agent : null,
-        proactive: parsed.proactive && typeof parsed.proactive === "object" ? parsed.proactive : null,
-      };
-    }
-    return { agent: parsed, proactive: null };
-  } catch {
-    return null;
-  }
-}
-
-function readRoleConfig(role) {
-  const saved = readSavedConfig();
-  return saved ? saved[normalizeRole(role)] : null;
-}
-
-function writeSavedConfig(saved) {
-  if (!configPath) throw new Error("Model configuration storage is not ready.");
-  const next = {};
-  if (saved.agent) next.agent = saved.agent;
-  if (saved.proactive) next.proactive = saved.proactive;
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
-  try { fs.chmodSync(configPath, 0o600); } catch { /* Windows and some filesystems ignore POSIX modes. */ }
+  modelRegistry.initializeModelRegistry(userDataPath);
 }
 
 function normalizeBaseUrl(value) {
@@ -105,11 +69,16 @@ function extractModelIds(payload) {
 function getActiveModelConfig(role = "agent") {
   const normalizedRole = normalizeRole(role);
   const fallback = environmentConfig();
-  const own = readRoleConfig(normalizedRole);
-  const inherited = normalizedRole === "proactive" && !own ? readRoleConfig("agent") : null;
+  const own = modelRegistry.getRoleModel(normalizedRole);
+  const inherited = normalizedRole === "proactive" && !own ? modelRegistry.getRoleModel("agent") : null;
   const saved = own || inherited;
-  if (!saved) return { ...fallback, role: normalizedRole, inheritedFromAgent: false };
+  if (!saved) return { ...fallback, role: normalizedRole, inheritedFromAgent: false, modelId: "", modelLabel: "", contextWindowTokens: 0, maxOutputTokens: 0, capabilities: {} };
   return {
+    modelId: saved.id,
+    modelLabel: saved.label || "",
+    contextWindowTokens: saved.contextWindowTokens || 0,
+    maxOutputTokens: saved.maxOutputTokens || 0,
+    capabilities: saved.capabilities || {},
     provider: PROVIDERS.has(saved.provider) ? saved.provider : "custom",
     baseUrl: saved.baseUrl || fallback.baseUrl,
     model: saved.model || fallback.model,
@@ -123,7 +92,7 @@ function getActiveModelConfig(role = "agent") {
 }
 
 function connectionSettings(input, current, provider, baseUrl) {
-  const saved = current.provider === provider && normalizeBaseUrl(current.baseUrl) === baseUrl ? current : {};
+  const saved = current?.provider === provider && normalizeBaseUrl(current.baseUrl) === baseUrl ? current : {};
   const sessionHeader = input.sessionHeader === undefined ? saved.sessionHeader : input.sessionHeader;
   const fixedValue = saved.sessionHeader?.strategy === "fixed" &&
     saved.sessionHeader.name.toLowerCase() === String(sessionHeader?.name || "").trim().toLowerCase()
@@ -139,9 +108,9 @@ function connectionSettings(input, current, provider, baseUrl) {
 }
 
 async function listProviderModels(input = {}, role = "agent") {
-  const current = getActiveModelConfig(role);
-  const provider = PROVIDERS.has(input.provider) ? input.provider : current.provider;
-  const baseUrl = normalizeBaseUrl(input.baseUrl || current.baseUrl);
+  const current = profileForInput(input, role);
+  const provider = PROVIDERS.has(input.provider) ? input.provider : (current?.provider || "custom");
+  const baseUrl = normalizeBaseUrl(input.baseUrl || current?.baseUrl);
   const config = connectionSettings(input, current, provider, baseUrl);
   if (!config.apiKey && provider !== "openrouter") throw new Error("Enter or save this provider's API key before refreshing its live model catalog.");
 
@@ -168,54 +137,75 @@ async function listProviderModels(input = {}, role = "agent") {
 function getPublicModelConfig(role = "agent") {
   const normalizedRole = normalizeRole(role);
   const config = getActiveModelConfig(normalizedRole);
-  const own = readRoleConfig(normalizedRole);
-  const inherited = normalizedRole === "proactive" && !own && Boolean(readRoleConfig("agent"));
+  const own = modelRegistry.getRoleModel(normalizedRole);
+  const inherited = normalizedRole === "proactive" && !own && Boolean(modelRegistry.getRoleModel("agent"));
   return {
     provider: config.provider,
     baseUrl: config.baseUrl,
     model: config.model,
-    hasApiKey: Boolean(config.apiKey),
-    hasCustomHeaders: Boolean(Object.keys(config.headers || {}).length),
-    sessionHeader: config.sessionHeader ? {
-      name: config.sessionHeader.name,
-      strategy: config.sessionHeader.strategy,
-      hasValue: Boolean(config.sessionHeader.value),
-    } : null,
-    userAgent: config.userAgent,
+    ...modelRegistry.publicConnectionSettings(config),
+    modelId: config.modelId,
+    modelLabel: config.modelLabel,
+    contextWindowTokens: config.contextWindowTokens,
+    maxOutputTokens: config.maxOutputTokens,
+    capabilities: config.capabilities,
     source: own ? "saved" : inherited ? "agent" : "environment",
     role: normalizedRole,
     inheritedFromAgent: inherited,
   };
 }
 
-function saveModelConfig(input = {}, role = "agent") {
-  if (!configPath) throw new Error("Model configuration storage is not ready.");
-  const normalizedRole = normalizeRole(role);
-  const saved = readSavedConfig() ?? { agent: null, proactive: null };
-  if (normalizedRole === "proactive" && input.useAgent === true) {
-    saved.proactive = null;
-    writeSavedConfig(saved);
-    return getPublicModelConfig("proactive");
+function profileForInput(input, role) {
+  if (input?.id === null) return null;
+  if (typeof input?.id === "string") {
+    const profile = modelRegistry.getModel(input.id);
+    if (!profile) throw new Error("The selected model is not in the registry.");
+    return profile;
   }
-  const previous = getActiveModelConfig(normalizedRole);
+  return getActiveModelConfig(role);
+}
+
+function saveProfile(input, previous, role) {
   const provider = PROVIDERS.has(input.provider) ? input.provider : "custom";
   const baseUrl = normalizeBaseUrl(input.baseUrl);
   const model = validateModelId(baseUrl, input.model);
   const connection = connectionSettings(input, previous, provider, baseUrl);
   if (!connection.apiKey || connection.apiKey.length > 2_000) throw new Error("Enter a valid API key.");
-  saved[normalizedRole] = { provider, baseUrl, model, ...connection };
-  writeSavedConfig(saved);
+  return modelRegistry.saveModel({
+    id: input.id || previous?.id || (previous?.inheritedFromAgent ? undefined : previous?.modelId),
+    label: input.label || previous?.label || previous?.modelLabel || model,
+    provider,
+    baseUrl,
+    model,
+    ...connection,
+    contextWindowTokens: Number(input.contextWindowTokens ?? previous?.contextWindowTokens) || 0,
+    maxOutputTokens: Number(input.maxOutputTokens ?? previous?.maxOutputTokens) || 0,
+    capabilities: input.capabilities || previous?.capabilities || {},
+  }, role);
+}
+
+function saveModelConfig(input = {}, role = "agent") {
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === "proactive" && input.useAgent === true) {
+    modelRegistry.setRoleModel("proactive", null);
+  } else {
+    saveProfile(input, profileForInput(input, normalizedRole), normalizedRole);
+  }
   return getPublicModelConfig(normalizedRole);
 }
 
+function saveModelProfile(input = {}) {
+  return saveProfile(input, modelRegistry.getModel(input.id));
+}
+
 async function testModelConfig(input = null, role = "agent") {
-  const current = getActiveModelConfig(role);
-  const provider = PROVIDERS.has(input?.provider) ? input.provider : current.provider;
-  const baseUrl = normalizeBaseUrl(input?.baseUrl || current.baseUrl);
+  const current = profileForInput(input, role);
+  const provider = PROVIDERS.has(input?.provider) ? input.provider : (current?.provider || "custom");
+  const baseUrl = normalizeBaseUrl(input?.baseUrl || current?.baseUrl);
   const candidate = {
     provider,
     baseUrl,
-    model: validateModelId(baseUrl, input?.model || current.model),
+    model: validateModelId(baseUrl, input?.model || current?.model),
     ...connectionSettings(input || {}, current, provider, baseUrl),
   };
   if (!candidate.apiKey) throw new Error("Add an API key before testing the connection.");
@@ -255,11 +245,17 @@ async function testModelConfig(input = null, role = "agent") {
 }
 
 module.exports = {
+  deleteModelProfile: modelRegistry.deleteModel,
   getActiveModelConfig,
+  getModelProfile: modelRegistry.getPublicModel,
   getPublicModelConfig,
+  getRoleAssignments: modelRegistry.getRoleAssignments,
   initializeModelConfig,
+  listModelProfiles: modelRegistry.listModels,
   listProviderModels,
+  saveModelProfile,
   saveModelConfig,
+  setRoleModel: modelRegistry.setRoleModel,
   testModelConfig,
   extractModelIds,
   normalizeRole,

@@ -1,0 +1,136 @@
+{
+  "paper": {
+    "before": {
+      "settings": {
+        "theme": "paper",
+        "viewport": [
+          1560,
+          980,
+          2
+        ],
+        "registry": false,
+        "profiles": [],
+        "model": "research-fast",
+        "limitInputs": [],
+        "noHorizontalOverflow": true,
+        "hasVisibleHeaderSecret": false
+      },
+      "composer": {
+        "theme": "paper",
+        "viewport": [
+          1560,
+          980,
+          2
+        ],
+        "menu": true,
+        "label": "Archimedes"
+      }
+    },
+    "after": {
+      "settings": {
+        "theme": "paper",
+        "viewport": [
+          1560,
+          980,
+          2
+        ],
+        "registry": true,
+        "profiles": [
+          "New model",
+          "research-fast (imported)",
+          "research-deep (imported)"
+        ],
+        "model": "research-fast",
+        "limitInputs": [
+          {
+            "label": "Context window (tokens)",
+            "value": 24000
+          },
+          {
+            "label": "Max output (tokens)",
+            "value": 321
+          }
+        ],
+        "noHorizontalOverflow": true,
+        "hasVisibleHeaderSecret": false
+      },
+      "composer": {
+        "theme": "paper",
+        "viewport": [
+          1560,
+          980,
+          2
+        ],
+        "menu": true,
+        "label": "Archimedes research-fast (imported)"
+      }
+    }
+  },
+  "charcoal": {
+    "before": {
+      "settings": {
+        "theme": "charcoal",
+        "viewport": [
+          1560,
+          980,
+          2
+        ],
+        "registry": false,
+        "profiles": [],
+        "model": "research-fast",
+        "limitInputs": [],
+        "noHorizontalOverflow": true,
+        "hasVisibleHeaderSecret": false
+      },
+      "composer": {
+        "theme": "charcoal",
+        "viewport": [
+          1560,
+          980,
+          2
+        ],
+        "menu": true,
+        "label": "Archimedes"
+      }
+    },
+    "after": {
+      "settings": {
+        "theme": "charcoal",
+        "viewport": [
+          1560,
+          980,
+          2
+        ],
+        "registry": true,
+        "profiles": [
+          "New model",
+          "research-fast (imported)",
+          "research-deep (imported)"
+        ],
+        "model": "research-fast",
+        "limitInputs": [
+          {
+            "label": "Context window (tokens)",
+            "value": 24000
+          },
+          {
+            "label": "Max output (tokens)",
+            "value": 321
+          }
+        ],
+        "noHorizontalOverflow": true,
+        "hasVisibleHeaderSecret": false
+      },
+      "composer": {
+        "theme": "charcoal",
+        "viewport": [
+          1560,
+          980,
+          2
+        ],
+        "menu": true,
+        "label": "Archimedes research-fast (imported)"
+      }
+    }
+  }
+}

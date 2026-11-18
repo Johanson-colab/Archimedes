@@ -1686,7 +1686,7 @@ function App() {
       if (active) setModelCapabilities(previewModelCapabilities);
     });
     return () => { active = false; };
-  }, [activeModelConfig?.provider, activeModelConfig?.model]);
+  }, [activeModelConfig]);
 
   useEffect(() => {
     if (modelCapabilities.thinkingEfforts.length && !modelCapabilities.thinkingEfforts.includes(reasoningEffort)) {
@@ -3580,6 +3580,7 @@ function App() {
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={selectedNativeBackend}
+              modelLabel={activeModelConfig?.hasApiKey ? activeModelConfig.modelLabel || activeModelConfig.model : ""}
               harnessBound={Boolean(boundHarness)}
               onHarnessChange={async (backend) => {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
@@ -4105,7 +4106,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, modelLabel, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4114,6 +4115,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
+  modelLabel?: string;
   harnessBound: boolean;
   onHarnessChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
   nativeQuestions: NativeAgentQuestion[];
@@ -4712,7 +4714,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
         {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+          <HarnessPicker backend={nativeBackend?.backend || "api"} modelLabel={modelLabel} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
           <button
             type="button"
             className="composer-context"

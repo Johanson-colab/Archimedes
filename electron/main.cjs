@@ -1125,6 +1125,15 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("model-config:get", (_event, role) => modelConfig.getPublicModelConfig(role));
+  ipcMain.handle("model-registry:list", () => modelConfig.listModelProfiles());
+  ipcMain.handle("model-registry:save", (_event, input = {}) => modelConfig.saveModelProfile(input));
+  ipcMain.handle("model-registry:delete", (_event, id) => modelConfig.deleteModelProfile(id));
+  ipcMain.handle("model-registry:role", (_event, role) => modelConfig.getPublicModelConfig(role));
+  ipcMain.handle("model-registry:set-role", (_event, role, id) => {
+    modelConfig.setRoleModel(role, id);
+    return modelConfig.getPublicModelConfig(role);
+  });
+  ipcMain.handle("model-registry:assignments", () => modelConfig.getRoleAssignments());
   ipcMain.handle("agent-backend:get", () => agentBackendConfig.get());
   ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
   ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));

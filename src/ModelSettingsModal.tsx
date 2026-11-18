@@ -75,12 +75,17 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   const [sessionStrategy, setSessionStrategy] = useState<ModelSessionHeaderConfig["strategy"]>("thread");
   const [sessionHeaderValue, setSessionHeaderValue] = useState("");
   const [userAgent, setUserAgent] = useState("");
+  const [contextWindowTokens, setContextWindowTokens] = useState("");
+  const [maxOutputTokens, setMaxOutputTokens] = useState("");
+  const [profiles, setProfiles] = useState<PublicModelProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>();
   const [savedConfig, setSavedConfig] = useState<PublicModelConfig | null>(null);
-  const sameConnection = savedConfig?.provider === provider && savedConfig.baseUrl === baseUrl.trim().replace(/\/+$/, "");
-  const hasApiKey = Boolean(sameConnection && savedConfig?.hasApiKey);
-  const hasCustomHeaders = Boolean(sameConnection && savedConfig?.hasCustomHeaders);
-  const hasFixedSessionValue = Boolean(sameConnection && savedConfig?.sessionHeader?.hasValue &&
-    savedConfig.sessionHeader.name.toLowerCase() === sessionHeaderName.trim().toLowerCase());
+  const savedConnection = selectedProfileId === undefined ? savedConfig : profiles.find((profile) => profile.id === selectedProfileId);
+  const sameConnection = savedConnection?.provider === provider && savedConnection.baseUrl === baseUrl.trim().replace(/\/+$/, "");
+  const hasApiKey = Boolean(sameConnection && savedConnection?.hasApiKey);
+  const hasCustomHeaders = Boolean(sameConnection && savedConnection?.hasCustomHeaders);
+  const hasFixedSessionValue = Boolean(sameConnection && savedConnection?.sessionHeader?.hasValue &&
+    savedConnection.sessionHeader.name.toLowerCase() === sessionHeaderName.trim().toLowerCase());
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,48 +103,106 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   const filteredModels = useMemo(() => availableModels.filter((name) => name.toLowerCase().includes(modelSearch.toLowerCase())), [availableModels, modelSearch]);
   const activeModel = filteredModels[Math.min(activeModelIndex, Math.max(0, filteredModels.length - 1))] ?? "";
 
+  async function loadProfiles() {
+    const list = await bridge.listModelProfiles?.() ?? [];
+    setProfiles(list);
+    return list;
+  }
+
+  function selectProfile(profile: PublicModelProfile) {
+    setSelectedProfileId(profile.id);
+    loadConnectionFields(profile);
+    setFeedback({ kind: "idle", text: "" });
+  }
+
+  function newProfile() {
+    setSelectedProfileId(null);
+    loadConnectionFields({ provider: "custom", baseUrl: "", model: "" });
+    setFeedback({ kind: "idle", text: t("New model profile. Save to add it to the registry.") });
+  }
+
+  async function deleteProfile() {
+    if (!selectedProfileId) return;
+    setSaving(true);
+    try {
+      await bridge.deleteModelProfile?.(selectedProfileId);
+      const list = await loadProfiles();
+      const config = await bridge.getModelConfig(role);
+      setSavedConfig(config);
+      onSaved(config);
+      const currentProfile = list.find((profile) => profile.id === config.modelId) || list[0];
+      if (currentProfile) selectProfile(currentProfile);
+      else newProfile();
+      setFeedback({ kind: "success", text: t("Model profile deleted.") });
+    } catch (error) {
+      setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function assignRole(targetRole: ModelRole) {
+    if (!selectedProfileId) return;
+    setSaving(true);
+    try {
+      const config = await bridge.setModelRole(targetRole, selectedProfileId);
+      if (targetRole === role) {
+        setSavedConfig(config);
+        onSaved(config);
+      }
+      setFeedback({ kind: "success", text: t("Assigned model profile to {role}.", { role: targetRole === "agent" ? "Agent" : "Proactive" }) });
+    } catch (error) {
+      setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setFeedback({ kind: "idle", text: "" });
-    void bridge.getModelConfig(role).then((config) => {
+    void Promise.all([bridge.getModelConfig(role), loadProfiles()]).then(([config]) => {
+      setSavedConfig(config);
+      setSelectedProfileId(config.inheritedFromAgent ? undefined : config.modelId || undefined);
       loadConnectionFields(config);
-      setCatalogModels([]);
-      setCatalogError("");
-      setModelMenuOpen(false);
-      setModelSearch("");
     }).catch((error) => setFeedback({ kind: "error", text: String(error) })).finally(() => setLoading(false));
   }, [bridge, open, role]);
 
-  function loadConnectionFields(config: PublicModelConfig) {
+  function loadConnectionFields(config: Pick<PublicModelConfig, "provider" | "baseUrl" | "model" | "sessionHeader" | "userAgent" | "contextWindowTokens" | "maxOutputTokens">) {
     setProvider(config.provider);
     setBaseUrl(config.baseUrl);
     setModel(config.model);
-    setSavedConfig(config);
     setApiKey("");
     setHeadersText("");
     setSessionHeaderName(config.sessionHeader?.name || "");
     setSessionStrategy(config.sessionHeader?.strategy || "thread");
     setSessionHeaderValue("");
     setUserAgent(config.userAgent || "");
+    setContextWindowTokens(String(config.contextWindowTokens || ""));
+    setMaxOutputTokens(String(config.maxOutputTokens || ""));
+    setCatalogModels([]);
+    setCatalogError("");
+    setModelMenuOpen(false);
+    setModelSearch("");
   }
 
   function chooseProvider(next: typeof providers[number]) {
     setProvider(next.id);
     setApiKey("");
     if (next.id === "custom") {
-      setBaseUrl(savedConfig?.provider === "custom" ? savedConfig.baseUrl : "");
-      setModel(savedConfig?.provider === "custom" ? savedConfig.model : "");
+      setBaseUrl(savedConnection?.provider === "custom" ? savedConnection.baseUrl : "");
+      setModel(savedConnection?.provider === "custom" ? savedConnection.model : "");
     } else {
       setBaseUrl(next.baseUrl);
       setModel(next.models[0] || "");
     }
-    const sameProvider = savedConfig?.provider === next.id;
+    const sameProvider = savedConnection?.provider === next.id;
     setHeadersText("");
-    setSessionHeaderName(sameProvider ? savedConfig.sessionHeader?.name || "" : "");
-    setSessionStrategy(sameProvider ? savedConfig.sessionHeader?.strategy || "thread" : "thread");
+    setSessionHeaderName(sameProvider ? savedConnection.sessionHeader?.name || "" : "");
+    setSessionStrategy(sameProvider ? savedConnection.sessionHeader?.strategy || "thread" : "thread");
     setSessionHeaderValue("");
-    setUserAgent(sameProvider ? savedConfig.userAgent || "" : "");
+    setUserAgent(sameProvider ? savedConnection.userAgent || "" : "");
     setCatalogModels([]);
     setCatalogError("");
     setModelMenuOpen(false);
@@ -164,9 +227,12 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     const value = sessionHeaderValue.trim();
     if (name && sessionStrategy === "fixed" && !value && !hasFixedSessionValue) throw new Error(t("Enter a fixed session header value."));
     return {
+      id: selectedProfileId,
       headers,
       sessionHeader: name ? { name, strategy: sessionStrategy, ...(sessionStrategy === "fixed" && value ? { value } : {}) } : null,
       userAgent: userAgent.trim(),
+      contextWindowTokens: Number(contextWindowTokens) || 0,
+      maxOutputTokens: Number(maxOutputTokens) || 0,
     };
   }
 
@@ -270,6 +336,9 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setFeedback({ kind: "idle", text: "" });
     try {
       const config = await bridge.saveModelConfig({ provider, baseUrl, model, apiKey, ...requestExtras() }, role);
+      await loadProfiles();
+      setSavedConfig(config);
+      setSelectedProfileId(config.modelId || undefined);
       loadConnectionFields(config);
       onSaved(config);
       setFeedback({ kind: "success", text: proactiveRole ? `Saved ${config.model}. Proactive replies and live observation will use this model.` : t("Saved {model}. API-backed features will use this model.", { model: config.model }) });
@@ -285,6 +354,8 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setFeedback({ kind: "idle", text: "" });
     try {
       const config = await bridge.saveModelConfig({ provider, baseUrl, model, useAgent: true }, role);
+      setSavedConfig(config);
+      setSelectedProfileId(undefined);
       loadConnectionFields(config);
       onSaved(config);
       setFeedback({ kind: "success", text: "Proactive agent will inherit the main Agent's model." });
@@ -320,6 +391,15 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
 
         <div className="provider-config">
           {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />{t("Loading configuration")}</div> : <>
+            <div className="model-registry-bar">
+              <label><span>{t("Saved models")}</span><select className="settings-select" aria-label={t("Saved models")} disabled={saving} value={selectedProfileId || ""} onChange={(event) => { const profile = profiles.find((item) => item.id === event.target.value); if (profile) selectProfile(profile); else newProfile(); }}><option value="">{t("New model")}</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}</select></label>
+              <div className="model-registry-actions">
+                <button type="button" className="secondary-button" disabled={saving} onClick={newProfile}>{t("New")}</button>
+                <button type="button" className="secondary-button" disabled={saving || !selectedProfileId} onClick={() => void deleteProfile()}>{t("Delete")}</button>
+                <button type="button" className="secondary-button" disabled={saving || !selectedProfileId} onClick={() => void assignRole("agent")}>{t("Use for Agent")}</button>
+                <button type="button" className="secondary-button" disabled={saving || !selectedProfileId} onClick={() => void assignRole("proactive")}>{t("Use for Proactive")}</button>
+              </div>
+            </div>
             {proactiveRole && savedConfig?.inheritedFromAgent && <div className="model-inherited-note"><Sparkle size={13} /><span>{t("Currently inheriting the main Agent model. Save below to give Proactive agent its own model.")}</span></div>}
             <div className="provider-config-title">{selected.icon && <span className="provider-icon large">{selected.icon}</span>}<div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>
             <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /><small className="model-field-hint">{t("Enter the base URL. Archimedes appends {endpoint}.", { endpoint: provider === "anthropic" ? "/messages" : "/chat/completions" })}</small></label>
@@ -357,6 +437,10 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
             </div>
             {sessionStrategy === "fixed" && <label><span>{t("Fixed session header value")}</span><input type="password" value={sessionHeaderValue} onChange={(event) => setSessionHeaderValue(event.target.value)} placeholder={hasFixedSessionValue ? t("Saved securely · enter a new value to replace") : ""} autoComplete="off" spellCheck={false} /></label>}
             <label><span>{t("User-Agent")}</span><input value={userAgent} onChange={(event) => setUserAgent(event.target.value)} placeholder="Archimedes/0.1.0" spellCheck={false} /></label>
+            <div className="model-session-header">
+              <label><span>{t("Context window (tokens)")}</span><input type="number" min={0} value={contextWindowTokens} onChange={(event) => setContextWindowTokens(event.target.value)} placeholder="128000" /></label>
+              <label><span>{t("Max output (tokens)")}</span><input type="number" min={0} value={maxOutputTokens} onChange={(event) => setMaxOutputTokens(event.target.value)} placeholder="8192" /></label>
+            </div>
             <div className="model-security-note"><Key size={13} /><span>{t("The API key is stored in Electron user data and never returned to the page.")}</span></div>
             {!proactiveRole && executionPreferences && <div className="model-execution-preferences">
               {executionPreferences.capabilities.thinkingEfforts.length > 0 && <label><span>{t("Thinking effort")}</span><select className="settings-select" aria-label={t("Thinking effort")} value={executionPreferences.reasoningEffort} onChange={(event) => executionPreferences.onReasoningEffort(event.target.value as ReasoningEffort)}>{executionPreferences.capabilities.thinkingEfforts.map((value) => <option key={value} value={value}>{t(value === "low" ? "Low" : value === "high" ? "High" : "Medium")}</option>)}</select></label>}

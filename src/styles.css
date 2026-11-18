@@ -565,6 +565,10 @@ html[data-theme="charcoal"] .provider-brand-mono { filter: invert(1); }
 .model-session-header { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 10px; }
 .model-session-header label { margin-top: 12px; }
 .model-session-header input, .model-session-header select { width: 100%; min-width: 0; }
+.provider-config .model-registry-bar { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--night-line); border-radius: 5px; background: var(--night-panel); }
+.provider-config .model-registry-bar label { margin-top: 0; min-width: 0; }
+.model-registry-bar select { width: 100%; min-width: 0; }
+.model-registry-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .model-settings-panel > .model-feedback { margin: 4px 0 8px; overflow-wrap: anywhere; }
 .model-feedback { display: flex; align-items: flex-start; gap: 7px; margin-top: 16px; padding: 9px 10px; border-radius: 5px; font-size: 10px; line-height: 1.45; }
 .model-feedback.success { color: #286249; background: #edf6f0; border: 1px solid #cde3d5; }

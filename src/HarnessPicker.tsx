@@ -8,8 +8,9 @@ import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
 import "./harness-picker.css";
 
-export default function HarnessPicker({ backend, bound, busy, onChange, onSettings }: {
+export default function HarnessPicker({ backend, modelLabel, bound, busy, onChange, onSettings }: {
   backend: AgentBackendConfig["backend"];
+  modelLabel?: string;
   bound: boolean;
   busy: boolean;
   onChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
@@ -22,6 +23,8 @@ export default function HarnessPicker({ backend, bound, busy, onChange, onSettin
   const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (busy) setOpen(false); }, [busy]);
   const label = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", api: "Archimedes" }[backend];
+  const model = backend === "api" ? modelLabel : "";
+  const accessibleLabel = `${t("Harness")}: ${label}${model ? `, ${t("Model")}: ${model}` : ""}`;
   const brand = (id: string) => id === "api" ? <ArchimedesMark size={16} variant="small" /> : <img className={`provider-brand-logo${id === "claude" ? "" : " provider-brand-mono"}`} src={id === "codex" ? openaiLogo : id === "claude" ? claudeLogo : opencodeLogo} alt="" />;
   async function choose(next: AgentBackendConfig["backend"]) {
     if (saving || busy) return;
@@ -31,8 +34,8 @@ export default function HarnessPicker({ backend, bound, busy, onChange, onSettin
     finally { setSaving(false); }
   }
   return <div className="harness-picker">
-    <button ref={trigger} type="button" className="composer-tool harness-picker-trigger" disabled={busy || saving} aria-label={`${t("Harness")}: ${label}`} aria-haspopup="menu" aria-expanded={open && !busy} onClick={() => { setError(""); setOpen((value) => !value); }}>
-      <span className="harness-brand" aria-hidden="true">{brand(backend)}</span><span>{label}</span><ChevronDown size={13} />
+    <button ref={trigger} type="button" className="composer-tool harness-picker-trigger" disabled={busy || saving} aria-label={accessibleLabel} aria-haspopup="menu" aria-expanded={open && !busy} onClick={() => { setError(""); setOpen((value) => !value); }}>
+      <span className="harness-brand" aria-hidden="true">{brand(backend)}</span><span>{label}</span>{model && <span className="harness-model-label" title={model}>{model}</span>}<ChevronDown size={13} />
     </button>
     <MenuSurface open={open && !busy} onClose={() => setOpen(false)} anchorRef={trigger} placement="top-start" width={250} className="harness-picker-menu" ariaLabel={t("Harnesses")}>
       {bound && <p className="harness-picker-notice">{t("Start a new chat to use this agent")}</p>}

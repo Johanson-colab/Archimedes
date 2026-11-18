@@ -25,15 +25,22 @@ function supportsExtraLongContext(config = {}) {
 }
 
 function getModelCapabilities(config = {}) {
-  const nativeThinking = isNativeThinkingModel(config);
-  const extraLongContext = supportsExtraLongContext(config);
+  const explicit = config.capabilities && typeof config.capabilities === "object" ? config.capabilities : {};
+  const nativeThinking = explicit.nativeThinking === undefined ? isNativeThinkingModel(config) : Boolean(explicit.nativeThinking);
+  const extraLongContext = explicit.extraLongContext === undefined ? supportsExtraLongContext(config) : Boolean(explicit.extraLongContext);
+  const standard = Number(config.contextWindowTokens) > 0 ? Number(config.contextWindowTokens) : STANDARD_CONTEXT_CHARS;
+  const extraLong = Number(config.contextWindowTokens) > 0 ? Number(config.contextWindowTokens) : EXTRA_LONG_CONTEXT_CHARS;
   return {
-    thinkingEfforts: nativeThinking ? THINKING_EFFORTS : [],
-    contextLengths: extraLongContext ? CONTEXT_LENGTHS : ["standard"],
+    thinkingEfforts: Array.isArray(explicit.thinkingEfforts) ? explicit.thinkingEfforts : (nativeThinking ? THINKING_EFFORTS : []),
+    contextLengths: Array.isArray(explicit.contextLengths) ? explicit.contextLengths : (extraLongContext ? CONTEXT_LENGTHS : ["standard"]),
     nativeThinking,
+    supportsVision: Boolean(explicit.supportsVision),
+    supportsTools: explicit.supportsTools === undefined ? true : Boolean(explicit.supportsTools),
+    maxOutputTokens: Number(config.maxOutputTokens) || 0,
+    contextWindowTokens: Number(config.contextWindowTokens) || 0,
     contextCharacterLimits: {
-      standard: STANDARD_CONTEXT_CHARS,
-      "extra-long": EXTRA_LONG_CONTEXT_CHARS,
+      standard,
+      "extra-long": extraLong,
     },
   };
 }
