@@ -196,6 +196,7 @@ export const library: Record<string, string> = {
   "Sync shared libraries": "同步共享文献库",
   "Syncing…": "同步中…",
   "The illustrated reading could not be restored.": "无法恢复图文精读。",
+  "The library was created, but the list could not be refreshed.": "文献库已创建，但未能刷新列表。",
   "The PDF could not be imported.": "无法导入 PDF。",
   "The public PDF can be cached locally and opened in the reader.": "公开 PDF 可以缓存到本地，并在阅读器中打开。",
   "This paper will be removed from the selected library.": "论文将从当前文献库中移除。",

@@ -52,7 +52,7 @@ export function readDiscoverySnapshot(storage: Storage, key: string): DiscoveryS
     if (!saved || !["latest", "trending", "conference"].includes(saved.mode) || !["quick", "deep"].includes(saved.searchKind) || typeof saved.query !== "string" || typeof saved.submittedQuery !== "string") return null;
     if (saved.response && (!Array.isArray(saved.response.papers) || !Array.isArray(saved.response.providers))) return null;
     if (saved.deepResponse && (!Array.isArray(saved.deepResponse.results) || !saved.deepResponse.plan || !Array.isArray(saved.deepResponse.providers))) return null;
-    return { ...saved, targetLibraryId: saved.targetLibraryId || "" };
+    return { ...saved, targetLibraryId: saved.targetLibraryId || "", response: saved.response ? { ...saved.response, cached: true } : null };
   } catch { return null; }
 }
 

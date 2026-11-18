@@ -8,6 +8,6 @@ const paper = {
   categories: ["cs.AI"], upvotes: 0, github_url: "", github_stars: 0,
 };
 function feed(input = {}) {
-  return { papers: [paper], providers: ["local fixture"], options: { mode: "latest", range: "7d", topic: "all", categories: [], query: "", limit: 60, ...input }, fetched_at: "2026-11-16T00:00:00.000Z", cached: false, stale: true, warning: "Fixture fallback; no model was used." };
+  return { papers: [paper], providers: ["local fixture"], options: { mode: "latest", range: "7d", topic: "all", categories: [], query: "", limit: 60, ...input }, fetched_at: new Date().toISOString(), cached: false, stale: true, warning: "Fixture fallback; no model was used." };
 }
 module.exports = { paper, feed };

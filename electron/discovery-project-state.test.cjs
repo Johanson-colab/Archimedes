@@ -42,6 +42,7 @@ before(async () => {
   scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
   await load("ConferenceDiscovery.tsx", ["ConferenceDiscovery"]);
   await load("LibraryView.tsx", ["DailyDiscovery"], (text) => text.slice(text.indexOf("function DailyDiscovery("), text.indexOf("\nfunction DailyPaperPreview")) + text.slice(text.indexOf("\nfunction DeepSearchResults")));
+  await load("LibraryView.tsx", ["DailyLibraryView"], (text) => text.slice(text.indexOf("function DailyLibraryView("), text.indexOf("\nfunction PaperInspector")));
 });
 after(() => { dom.window.close(); for (const key of ["window", "document", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"]) delete global[key]; });
 
@@ -340,4 +341,49 @@ test("a save that completes after leaving discovery still refreshes its host", a
     await React.act(async () => { resolveSave(); await tick(); });
     assert.equal(imported, 1, mode);
   }
+});
+
+test("an aged saved daily response remains visible until its normal revalidation finishes", async () => {
+  const storageKey = "aged-feed";
+  const response = { ...fixture.feed(), fetched_at: new Date(Date.now() - 40 * 60 * 1000).toISOString() };
+  window.localStorage.setItem(storageKey, JSON.stringify({ mode: "latest", range: "7d", topic: "all",
+    searchKind: "quick", query: "", submittedQuery: "", targetLibraryId: "library", response, deepResponse: null }));
+  let finishRequest;
+  const bridge = {
+    discoverDailyPapers: options => {
+      assert.equal(options.forceRefresh, false, "use the desktop's ordinary refresh policy");
+      return new Promise((resolve) => { finishRequest = () => resolve({ ...fixture.feed(options), papers: [{ ...fixture.paper, title: "Refreshed papers" }] }); });
+    },
+  };
+  const unmount = await mount(scope.DailyDiscovery, { storageKey, bridge, libraries: [{ id: "library", name: "Library" }], loadingLibraries: false, onImported: async () => {} });
+  try {
+    assert.equal(typeof finishRequest, "function");
+    assert.match(document.body.textContent, /Evidence handoff fixture/);
+    assert.match(document.querySelector(".daily-search-meta").textContent, /cached/);
+    await React.act(async () => { finishRequest(); await tick(); });
+    assert.match(document.body.textContent, /Refreshed papers/);
+    assert.doesNotMatch(document.body.textContent, /Evidence handoff fixture/);
+  } finally { await unmount(); }
+});
+
+test("a created library stays selected when reloading libraries fails", async () => {
+  let listCalls = 0, createCalls = 0;
+  const bridge = {
+    listLibraries: async () => {
+      if (listCalls++) throw new Error("Fixture list unavailable");
+      return [{ id: "existing", name: "Existing collection" }];
+    },
+    createLibrary: async () => { createCalls += 1; return { id: "new", name: "New collection" }; },
+    discoverDailyPapers: async options => fixture.feed(options),
+  };
+  const unmount = await mount(scope.DailyLibraryView, { bridge, dataRoot: "create-refresh-failure", projectId: "test-project", refreshVersion: 0 });
+  try {
+    await click("New library");
+    await input(document.querySelector('[aria-label="New discovery library"]'), "New collection");
+    await click("Create library here");
+    assert.equal(createCalls, 1);
+    assert.equal(document.querySelector('[aria-label="New discovery library"]'), null);
+    assert.equal(document.querySelector(".daily-save-target select").value, "new");
+    assert.match(document.body.textContent, /The library was created, but the list could not be refreshed/);
+  } finally { await unmount(); }
 });

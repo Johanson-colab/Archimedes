@@ -220,7 +220,8 @@ function DailyLibraryView({ bridge, dataRoot, projectId, initialMode, refreshVer
     void loadLibraries().catch(() => {});
     return () => { alive.current = false; };
   }, [loadLibraries, refreshVersion]);
-  return <DailyDiscovery storageKey={discoveryStorageKey(dataRoot, projectId)} projectId={projectId} initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => {
+  return <DailyDiscovery storageKey={discoveryStorageKey(dataRoot, projectId)} projectId={projectId} initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async (created) => {
+    if (created && alive.current) setLibraries((current) => current.some((item) => item.id === created.id) ? current : [...current, created]);
     onLibraryImported?.();
     if (alive.current) await loadLibraries();
   }} />;
@@ -2550,7 +2551,7 @@ function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: Research
   </div>;
 }
 
-function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { storageKey: string; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
+function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { storageKey: string; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: (created?: ResearchLibrary) => Promise<void> }) {
   const { t } = useUISettings();
   const [saved] = useState(() => readDiscoverySnapshot(window.localStorage, storageKey));
   const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode === "conference" ? "conference" : saved?.mode || initialMode);
@@ -2577,6 +2578,7 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const [creatingLibrary, setCreatingLibrary] = useState(false);
   const creatingLibraryRef = useRef(false);
   const [libraryCreationError, setLibraryCreationError] = useState("");
+  const [libraryRefreshError, setLibraryRefreshError] = useState("");
   const [persistenceError, setPersistenceError] = useState("");
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -2610,7 +2612,10 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const loadFeed = useCallback(async (forceRefresh = false) => {
     if (mode === "conference" || (searchKind === "deep" && submittedQuery)) return;
     const cacheKey = dailyFeedKey({ mode, range, topic, searchKind, submittedQuery });
-    if (!forceRefresh && cachedFeedKey.current === cacheKey && responseRef.current) {
+    // Keep the visible saved result while the desktop feed revalidates after
+    // its normal twenty-minute cache lifetime.
+    const age = Date.now() - Date.parse(responseRef.current?.fetched_at ?? "");
+    if (!forceRefresh && cachedFeedKey.current === cacheKey && responseRef.current && age >= 0 && age < 20 * 60 * 1000) {
       responseKeyRef.current = cacheKey;
       setResponseKey(cacheKey);
       setResponse(responseRef.current);
@@ -2728,11 +2733,18 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
     creatingLibraryRef.current = true;
     setCreatingLibrary(true);
     setLibraryCreationError("");
+    setLibraryRefreshError("");
     try {
       const created = await bridge.createLibrary({ projectId, name });
-      await onImported();
-      if (!alive.current) return;
-      setTargetLibraryId(created.id); setNewLibraryName(""); setNewLibraryOpen(false);
+      if (alive.current) {
+        setTargetLibraryId(created.id);
+        setNewLibraryName("");
+        setNewLibraryOpen(false);
+      }
+      try { await onImported(created); }
+      catch {
+        if (alive.current) setLibraryRefreshError(t("The library was created, but the list could not be refreshed."));
+      }
     } catch (cause) { if (alive.current) setLibraryCreationError(readableError(cause, "The library could not be created.")); }
     finally { creatingLibraryRef.current = false; if (alive.current) setCreatingLibrary(false); }
   }
@@ -2755,6 +2767,7 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
       <button className="secondary-button" aria-expanded={newLibraryOpen} onClick={() => { setNewLibraryOpen((current) => !current); setLibraryCreationError(""); }}>{t("New library")}</button>
     </div>
     {persistenceError && <InlineNotice tone="warning">{persistenceError}</InlineNotice>}
+    {libraryRefreshError && <InlineNotice tone="warning">{libraryRefreshError}</InlineNotice>}
     {newLibraryOpen && <div className="daily-create-library"><label>{t("New discovery library")}<input autoFocus aria-label={t("New discovery library")} value={newLibraryName} onChange={(event) => setNewLibraryName(event.target.value)} placeholder={t("Library name")} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) void createLibrary(); }} /></label><button className="secondary-button" disabled={creatingLibrary || !newLibraryName.trim()} onClick={() => void createLibrary()}>{t("Create library here")}</button></div>}
     {newLibraryOpen && libraryCreationError && <InlineNotice tone="danger" className="library-error">{libraryCreationError}</InlineNotice>}
     <FilterGroup label="AI research topic" className="daily-topic-filter">{DAILY_TOPICS.map((item) => <FilterButton key={item.id} active={topic === item.id} disabled={searchActive && searchKind === "deep"} title={searchActive && searchKind === "deep" ? "Clear deep search to change its topic constraint" : item.description} onClick={() => setTopic(item.id)}>{item.label}</FilterButton>)}</FilterGroup>
