@@ -9,6 +9,7 @@ import { StateView } from "./StateView";
 import { LibraryPaperNotes, type LibraryNoteDrafts } from "./LibraryPaperNotes";
 import { createLibraryRequestQueue, libraryDocumentKey, matchLibraryPaper, sortLibraryPapers, uniqueLibraryPapers, type LibraryDocument, type PaperReaderSession } from "./library-workspace-state";
 import "./library-workspace.css";
+import BibliographyDialog from "./BibliographyDialog";
 
 type PaperPatch = Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1];
 type LibraryInput = { name: string; description: string; color: string };
@@ -60,6 +61,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
   const [editor, setEditor] = useState<ResearchLibrary | "new" | null>(null);
   const [importLibraryId, setImportLibraryId] = useState<string | null>(null);
   const [importPicker, setImportPicker] = useState(false);
+  const [bibliographyLibraryId, setBibliographyLibraryId] = useState<string | null>(null);
   const [importChoice, setImportChoice] = useState("");
   const [menuLibrary, setMenuLibrary] = useState<ResearchLibrary | null>(null);
   const menuRef = useRef<HTMLButtonElement | null>(null);
@@ -164,6 +166,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
   const visiblePapers = useMemo(() => sortLibraryPapers((scope && scope !== "all" ? catalog[scope] || [] : allPapers).filter((paper) => matchLibraryPaper(paper, query) && (filter === "all" || (filter === "starred" ? paper.starred : paper.reading_status === filter))), sort), [allPapers, catalog, filter, query, scope, sort]);
   const selectedPaper = visiblePapers.find((paper) => paper.id === selectedPaperId) ?? visiblePapers[0];
   const importLibrary = libraries.find((candidate) => candidate.id === importLibraryId);
+  const bibliographyLibrary = libraries.find((candidate) => candidate.id === bibliographyLibraryId);
   const busy = scope && scope !== "all" ? loadingIds.has(scope) : loadingIds.size > 0;
 
   function canNavigate() {
@@ -315,7 +318,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
           if (!paper) return null;
           return <div className={`library-document-tab${activeDocument === key ? " active" : ""}`} key={key}><button role="tab" aria-selected={activeDocument === key} onClick={() => { if (canNavigate()) setActiveDocument(key); }} title={paper.title}>{document.kind === "notes" ? <FilePen size={14} /> : <FileText size={14} />}<span>{document.kind === "notes" ? `${t("Notes")} · ` : ""}{paper.title}</span></button><button className="library-document-close" aria-label={t("Close {name}", { name: paper.title })} onClick={() => closeDocument(document)}><X size={13} /></button></div>;
         })}</div>
-        <div className="library-workspace-actions"><button className="icon-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync cloud")} aria-label={t("Sync cloud")}>{cloudBusy ? <LoaderCircle className="spin" size={15} /> : <Cloud size={15} />}</button><button className="primary-button" onClick={beginImport}><Plus size={14} />{t("Import paper")}</button></div>
+        <div className="library-workspace-actions"><button className="icon-button" disabled={!projectId || cloudBusy} onClick={() => void syncLibraries()} title={t("Sync cloud")} aria-label={t("Sync cloud")}>{cloudBusy ? <LoaderCircle className="spin" size={15} /> : <Cloud size={15} />}</button><button className="secondary-button" disabled={!libraries.length} onClick={() => setBibliographyLibraryId(library?.id || libraries[0].id)}>{t("BibTeX interchange")}</button><button className="primary-button" onClick={beginImport}><Plus size={14} />{t("Import paper")}</button></div>
       </div>
       {(error || notice) && <div className="library-workspace-notices"><InlineNotice tone={error ? "danger" : "info"}>{error || notice}</InlineNotice><button className="icon-button" aria-label={t("Dismiss notice")} onClick={() => { setError(""); setNotice(""); }}><X size={14} /></button></div>}
       {currentDocument && documentPaper && documentLibrary ? <div className="library-document-content" key={libraryDocumentKey(currentDocument)}>
@@ -335,6 +338,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
       </div>}
     </div>
     <MenuSurface open={Boolean(menuLibrary) && active} onClose={() => setMenuLibrary(null)} anchorRef={menuRef} ariaLabel={t("Folder actions")} width={220}><MenuItem icon={<Pencil size={14} />} onClick={() => { setEditor(menuLibrary); setMenuLibrary(null); }}>{t("Edit library")}</MenuItem><MenuItem icon={<Trash size={14} />} danger onClick={() => { const target = menuLibrary; setMenuLibrary(null); if (target) void deleteLibrary(target); }}>{t("Delete library")}</MenuItem></MenuSurface>
+    {bibliographyLibrary && <BibliographyDialog bridge={bridge} library={bibliographyLibrary} onClose={() => setBibliographyLibraryId(null)} onChanged={async () => { await Promise.all([loadPapers(bibliographyLibrary.id, true), loadLibraries()]); onLibraryImported?.(); }} />}
     {renderEditor({ editor, onClose: () => setEditor(null), onSave: saveLibrary })}
     {importLibrary && renderImport({ library: importLibrary, open: active, onClose: () => setImportLibraryId(null), onImport: importPaper, onLocalImported: refreshImportedPaper })}
     <Dialog open={active && importPicker} onClose={() => setImportPicker(false)} size="compact" ariaLabel={t("Choose a library")} className="library-import-picker"><header><h2>{t("Choose a library")}</h2></header><p>{t("Select the folder where the imported paper should be saved.")}</p><select aria-label={t("Choose a library")} value={importChoice} onChange={(event) => setImportChoice(event.target.value)}>{libraries.map((folder) => <option value={folder.id} key={folder.id}>{folder.name}</option>)}</select><footer><button className="secondary-button" onClick={() => setImportPicker(false)}>{t("Cancel")}</button><button className="primary-button" disabled={!importChoice} onClick={() => { setImportPicker(false); setImportLibraryId(importChoice); }}>{t("Continue")}</button></footer></Dialog>

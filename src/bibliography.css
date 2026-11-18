@@ -1,0 +1,35 @@
+.app-dialog.workspace-modal.bibliography-dialog textarea {
+  min-height: 120px;
+  margin-top: 12px;
+  color: var(--text-primary);
+  background: var(--surface-control);
+  border-color: var(--border-soft);
+  font-family: var(--font-mono);
+}
+.app-dialog.workspace-modal.bibliography-dialog input[type="file"] {
+  padding: 6px 0;
+  background: transparent;
+  border: 0;
+}
+.app-dialog.bibliography-dialog .external-paper { display: block; }
+.app-dialog.bibliography-dialog .external-paper label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 400;
+}
+.app-dialog.workspace-modal.bibliography-dialog input[type="checkbox"] {
+  flex: 0 0 16px;
+  width: 16px;
+  min-height: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.app-dialog.bibliography-dialog footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+}

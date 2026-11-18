@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { BookOpen, ChevronDown, FileCode2, Search, SquareTerminal, Wrench } from "lucide-react";
 import { useUISettings } from "./i18n";
-import { eventFailedAnswer } from "./journeyEventState";
+import { eventFailedAnswer, eventIncomplete } from "./journeyEventState";
 
 type ActivityEvent = {
   title: string;
@@ -174,6 +174,7 @@ export default function ChatActivityTimeline({
   const stepCountLabel = t(steps.length === 1 ? "{count} step" : "{count} steps", { count: steps.length });
   const lastAnswer = [...rawEvents].reverse().find((event) => event.type === "assistant_message");
   const failed = !busy && Boolean(lastAnswer && eventFailedAnswer(lastAnswer));
+  const incomplete = !busy && Boolean(lastAnswer && eventIncomplete(lastAnswer));
 
   if (!steps.length && !busy) return null;
 
@@ -227,8 +228,8 @@ export default function ChatActivityTimeline({
           {showAll ? t("Show less") : t("Show {count} more", { count: steps.length - 4 })}
         </button>}
       </div>}
-      {!busy && <div className={`chat-activity-footer${failed ? " failed" : ""}`}>
-        <strong>{failed ? t("Stopped with an error") : t("Completed")}</strong>
+      {!busy && <div className={`chat-activity-footer${failed ? " failed" : incomplete ? " incomplete" : ""}`}>
+        <strong>{failed ? t("Stopped with an error") : incomplete ? t("Incomplete") : t("Completed")}</strong>
         {sources > 0 && <><span className="chat-activity-footer-sep">·</span><span>{t("{count} sources", { count: sources })}</span></>}
       </div>}
     </div>
