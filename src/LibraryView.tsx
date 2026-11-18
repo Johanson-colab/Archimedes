@@ -220,7 +220,10 @@ function DailyLibraryView({ bridge, dataRoot, projectId, initialMode, refreshVer
     void loadLibraries().catch(() => {});
     return () => { alive.current = false; };
   }, [loadLibraries, refreshVersion]);
-  return <DailyDiscovery storageKey={discoveryStorageKey(dataRoot, projectId)} projectId={projectId} initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => { await loadLibraries(); onLibraryImported?.(); }} />;
+  return <DailyDiscovery storageKey={discoveryStorageKey(dataRoot, projectId)} projectId={projectId} initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => {
+    onLibraryImported?.();
+    if (alive.current) await loadLibraries();
+  }} />;
 }
 
 function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void; noteDrafts: LibraryNoteDrafts }) {
@@ -2577,7 +2580,6 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const [persistenceError, setPersistenceError] = useState("");
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const savedPaperRequestId = useRef(0);
   const feedRequestId = useRef(0);
   const deepRequestId = useRef(0);
   const responseRef = useRef<DailyDiscoveryResponse | null>(saved?.response || null);
@@ -2598,10 +2600,9 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
   useEffect(() => {
     let active = true;
-    const request = ++savedPaperRequestId.current;
     setAdded(new Set());
     if (targetLibraryId && bridge.listLibraryPapers) void bridge.listLibraryPapers(targetLibraryId).then((papers) => {
-      if (active && request === savedPaperRequestId.current) setAdded(new Set(papers.map((paper) => discoveryPaperKey(paper))));
+      if (active) setAdded((current) => new Set([...current, ...papers.map(discoveryPaperKey)]));
     }).catch((cause) => { if (active) setError(readableError(cause, "Saved papers could not be checked.")); });
     return () => { active = false; };
   }, [bridge, targetLibraryId]);
@@ -2708,18 +2709,16 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
   async function add(paper: DailyPaper | AcademicSearchResult) {
     if (!targetLibraryId) return;
     const key = discoveryPaperKey(paper);
-    savedPaperRequestId.current += 1;
     setAdding(key);
     setError("");
     try {
       await bridge.addLibraryPaper(targetLibraryId, paper);
-      if (!alive.current) return;
-      if (targetLibraryIdRef.current === targetLibraryId) setAdded((current) => new Set(current).add(key));
+      if (alive.current && targetLibraryIdRef.current === targetLibraryId) setAdded((current) => new Set(current).add(key));
       await onImported();
     } catch (addError) {
-      setError(readableError(addError, "The paper could not be saved."));
+      if (alive.current) setError(readableError(addError, "The paper could not be saved."));
     } finally {
-      setAdding(null);
+      if (alive.current) setAdding(null);
     }
   }
 
@@ -2731,12 +2730,11 @@ function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge,
     setLibraryCreationError("");
     try {
       const created = await bridge.createLibrary({ projectId, name });
-      if (!alive.current) return;
       await onImported();
       if (!alive.current) return;
       setTargetLibraryId(created.id); setNewLibraryName(""); setNewLibraryOpen(false);
-    } catch (cause) { setLibraryCreationError(readableError(cause, "The library could not be created.")); }
-    finally { creatingLibraryRef.current = false; setCreatingLibrary(false); }
+    } catch (cause) { if (alive.current) setLibraryCreationError(readableError(cause, "The library could not be created.")); }
+    finally { creatingLibraryRef.current = false; if (alive.current) setCreatingLibrary(false); }
   }
 
   return <section className="library-page daily-page">

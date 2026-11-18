@@ -306,3 +306,38 @@ test("the arXiv match remains saved when a different feed omits the DOI", () => 
   const trending = { ...latest, doi: "", arxiv_id: "2611.12345" };
   assert.equal(scope.discoveryPaperKey(latest), scope.discoveryPaperKey(trending));
 });
+
+test("saving while library membership loads keeps both saved markers", async () => {
+  const existing = { ...fixture.paper, external_id: "doi:10.5555/existing", doi: "10.5555/existing", title: "Previously saved" };
+  let resolveMembership;
+  const bridge = {
+    discoverDailyPapers: async (options) => ({ ...fixture.feed(options), papers: [fixture.paper, existing] }),
+    listLibraryPapers: () => new Promise((resolve) => { resolveMembership = resolve; }),
+    addLibraryPaper: async () => {},
+  };
+  const unmount = await mount(scope.DailyDiscovery, { storageKey: "membership-delay", bridge, libraries: [{ id: "library", name: "Library" }], loadingLibraries: false, onImported: async () => {} });
+  try {
+    await click("Save");
+    await React.act(async () => { resolveMembership([existing]); await tick(); });
+    assert.equal(document.querySelectorAll(".daily-paper-list .imported").length, 2);
+  } finally { await unmount(); }
+});
+
+test("a save that completes after leaving discovery still refreshes its host", async () => {
+  for (const mode of ["latest", "conference"]) {
+    let resolveSave, imported = 0;
+    const bridge = {
+      discoverDailyPapers: async (options) => fixture.feed(options),
+      searchConferencePapers: async (options) => conferenceResponse(options, [conferencePaper("Conference candidate")]),
+      addLibraryPaper: () => new Promise((resolve) => { resolveSave = resolve; }),
+    };
+    const unmount = await mount(scope.DailyDiscovery, {
+      storageKey: `late-import-${mode}`, initialMode: mode, bridge, libraries: [{ id: "library", name: "Library" }],
+      loadingLibraries: false, onImported: async () => { imported += 1; },
+    });
+    await click("Save");
+    await unmount();
+    await React.act(async () => { resolveSave(); await tick(); });
+    assert.equal(imported, 1, mode);
+  }
+});

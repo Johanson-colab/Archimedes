@@ -67,7 +67,7 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
     let active = true;
     setAdded(new Set());
     if (targetLibraryId && bridge.listLibraryPapers) void bridge.listLibraryPapers(targetLibraryId).then((papers) => {
-      if (active) setAdded(new Set(papers.map((paper) => `${targetLibraryId}:${discoveryPaperKey(paper)}`)));
+      if (active) setAdded((current) => new Set([...current, ...papers.map((paper) => `${targetLibraryId}:${discoveryPaperKey(paper)}`)]));
     }).catch((cause) => { if (active) setError(errorMessage(cause)); });
     return () => { active = false; };
   }, [bridge, targetLibraryId]);
@@ -105,11 +105,10 @@ export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryI
     setAdding(key);
     try {
       await bridge.addLibraryPaper(targetLibraryId, paper);
-      if (!alive.current) return;
-      setAdded((current) => new Set(current).add(key));
+      if (alive.current) setAdded((current) => new Set(current).add(key));
       await onImported();
-    } catch (failure) { setError(errorMessage(failure)); }
-    finally { setAdding(null); }
+    } catch (failure) { if (alive.current) setError(errorMessage(failure)); }
+    finally { if (alive.current) setAdding(null); }
   }
   return <div className="conference-discovery">
     {storageError && <InlineNotice tone="warning">{storageError}</InlineNotice>}
