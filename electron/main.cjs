@@ -1731,8 +1731,9 @@ app.whenReady().then(async () => {
     return importLocalPaper({ workspace: resolvedWorkspace, libraryId, localPath: result.filePaths[0], store });
   });
 
-  ipcMain.handle("library:update-paper", (_event, { paperId, patch }) => {
+  ipcMain.handle("library:update-paper", (_event, { paperId, patch, dataRoot }) => {
     if (typeof paperId !== "string" || !patch || typeof patch !== "object") throw new Error("A paper and update payload are required.");
+    if (dataRoot && dataRoot !== store.currentStore().workspace) throw new Error("This paper belongs to another data folder.");
     return store.updatePaper(paperId, patch);
   });
 

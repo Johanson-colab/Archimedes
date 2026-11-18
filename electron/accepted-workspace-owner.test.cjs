@@ -98,6 +98,14 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   const linkType = process.platform === "win32" ? "junction" : "dir";
   fs.symlinkSync(b, alias, linkType);
   assert.equal(handlers.get("workspace:open")(event, alias).workspace, b);
+  const updateStart = source.indexOf('  ipcMain.handle("library:update-paper",');
+  const updateEnd = source.indexOf('  ipcMain.handle("library:remove-paper",', updateStart);
+  new Function("ipcMain", "store", source.slice(updateStart, updateEnd))(ipc, store);
+  const updatePaper = handlers.get("library:update-paper");
+  assert.throws(() => updatePaper(event, { paperId: "seed-react", dataRoot: a, patch: { notes: "A unsent notes", starred: true, reading_status: "read" } }), /another data folder/);
+  assert.equal(ownerA.getPaper("seed-react").notes, "A notes");
+  assert.equal(ownerB.getPaper("seed-react").notes, "B notes");
+  updatePaper(event, { paperId: "seed-react", dataRoot: b, patch: { notes: "B saved notes" } });
   fs.unlinkSync(alias);
   fs.symlinkSync(a, alias, linkType);
   assert.equal(ownerA.run(() => agent.hasApprovalSurface(sharedThread)), false);
@@ -106,7 +114,7 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   assert.equal(ownerB.run(() => agent.hasApprovalSurface(sharedThread)), true);
   helpers.releaseWindowApprovalClaim(event.sender.id);
   assert.equal(ownerB.run(() => agent.hasApprovalSurface(sharedThread)), false);
-  assert.equal(handlers.get("paper-review-app:list-papers")(event).at(0).notes, "B notes", "indirect libraryStore consumers follow accepted B");
+  assert.equal(handlers.get("paper-review-app:list-papers")(event).at(0).notes, "B saved notes", "indirect libraryStore consumers follow accepted B");
   const bToken = helpers.createPreviewToken(1, b);
   helpers.readerStateForWindow(1, a, "paper");
   assert.equal(handlers.get("library:owner")(event), b, "a late A preview does not restore A as the data owner");

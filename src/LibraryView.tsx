@@ -191,7 +191,7 @@ export default function LibraryView(props: LibraryViewProps) {
   const { bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject } = props;
   if (mode === "library") return <LibraryWorkspace
     key={`${workspace}:${projectId || "local"}`}
-    bridge={bridge} projectId={projectId} active={active} refreshVersion={libraryRefreshVersion}
+    bridge={bridge} workspace={workspace} projectId={projectId} active={active} refreshVersion={libraryRefreshVersion}
     onLibraryImported={onLibraryImported} onOpenProject={onOpenProject}
     renderReader={(readerProps) => <PaperReadingWorkbench {...readerProps} bridge={bridge} workspace={workspace} projectId={projectId} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} onReproduceOpened={onReproduceOpened} />}
     renderInspector={(inspectorProps) => <PaperInspector {...inspectorProps} />}

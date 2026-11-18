@@ -23,6 +23,7 @@ type ReaderProps = {
 };
 type Props = {
   bridge: ResearchDeskBridge;
+  workspace: string;
   projectId?: string | null;
   active: boolean;
   refreshVersion: number;
@@ -34,7 +35,7 @@ type Props = {
   renderImport: (props: { library: ResearchLibrary; open: boolean; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void>; onLocalImported: () => Promise<void> }) => ReactNode;
 };
 
-export default function LibraryWorkspace({ bridge, projectId, active, refreshVersion, onLibraryImported, onOpenProject, renderReader, renderInspector, renderEditor, renderImport }: Props) {
+export default function LibraryWorkspace({ bridge, workspace, projectId, active, refreshVersion, onLibraryImported, onOpenProject, renderReader, renderInspector, renderEditor, renderImport }: Props) {
   const { t } = useUISettings();
   const confirm = useConfirm();
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
@@ -206,7 +207,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
     if (activeDocument === key) setActiveDocument(remaining.length ? libraryDocumentKey(remaining.at(-1)!) : null);
   }
   const updatePaper = useCallback(async (paperId: string, patch: PaperPatch) => {
-    const updated = await bridge.updateLibraryPaper(paperId, patch);
+    const updated = await bridge.updateLibraryPaper(paperId, patch, workspace);
     if (!mounted.current) return;
     const next = { ...catalogRef.current };
     for (const [id, papers] of Object.entries(next)) {
@@ -216,7 +217,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
     }
     catalogRef.current = next;
     setCatalog(next);
-  }, [bridge]);
+  }, [bridge, workspace]);
   async function removePaper(paper: LibraryPaper) {
     const libraryId = paperLibraryId(paper);
     if (!libraryId || !(await confirm({ title: t("Remove paper?"), description: t("This paper will be removed from the selected library."), confirmLabel: t("Remove"), destructive: true }))) return;

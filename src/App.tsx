@@ -1,4 +1,5 @@
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
 import remarkGfm from "remark-gfm";
@@ -1383,6 +1384,7 @@ function App() {
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceOpenError, setWorkspaceOpenError] = useState("");
+  const workspaceOpeningDialogRef = useRef<HTMLDialogElement>(null);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
   const [threads, setThreads] = useState<ResearchThread[]>([]);
@@ -2277,40 +2279,45 @@ function App() {
   }, [activeProjectId, agentBusy]);
 
   async function chooseWorkspace() {
-    if (agentBusy || sideBusy || commandLockRef.current) return;
+    if (agentBusy || sideBusy || commandLockRef.current || workspaceOpeningDialogRef.current?.open) return;
     const selected = await desktopBridge.chooseWorkspace();
     if (selected) await loadWorkspace(selected);
   }
 
   async function loadWorkspace(workspacePath: string) {
-    if (agentBusy || sideBusy || commandLockRef.current) return;
+    const opening = workspaceOpeningDialogRef.current;
+    if (!opening || opening.open || agentBusy || sideBusy || commandLockRef.current) return;
     if (hasDirtyFileEditorScopes(fileEditorScopesRef.current) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
+    if (opening.open) return;
+    // The native modal blocks stale controls, including portaled dialogs, before IPC.
+    opening.showModal();
+    try {
+      await openDataWorkspace(workspacePath);
+    } finally {
+      opening.close();
+    }
+  }
+
+  async function openDataWorkspace(workspacePath: string) {
     const snapshot = await desktopBridge.openWorkspace(workspacePath).catch(error => {
       const message = error instanceof Error ? error.message : String(error);
       setWorkspaceOpenError(message.replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, ""));
       return null;
     });
     if (!snapshot) return;
-    setWorkspaceOpenError("");
-    clearPendingAssistantDeltas();
-    setWorkspaceReady(false);
-    setSideThread(null);
-    setWorkspace(snapshot.workspace);
-    setProjects(snapshot.projects ?? []);
-    setArchivedProjects(snapshot.archivedProjects ?? []);
-    setThreads(snapshot.threads);
-    setArchivedThreads(snapshot.archivedThreads ?? []);
-    setWorkspaces(snapshot.workspaces ?? []);
-    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace);
-    setFileTree(nextTree);
-    setLoadingDirectories(new Set());
-    openFilesRef.current = [];
-    setOpenFiles([]);
-    setSelectedFilePath(null);
-    setSelectedFile(null);
-    setFileError("");
-    replaceFileEditorScopes({});
-    setWorkspaceReady(true);
+    flushSync(() => {
+      setWorkspaceOpenError("");
+      clearPendingAssistantDeltas();
+      setWorkspaceReady(false);
+      setSideThread(null);
+      setWorkspace(snapshot.workspace);
+      setProjects(snapshot.projects ?? []);
+      setArchivedProjects(snapshot.archivedProjects ?? []);
+      setThreads(snapshot.threads);
+      setArchivedThreads(snapshot.archivedThreads ?? []);
+      setWorkspaces(snapshot.workspaces ?? []);
+    });
+    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace).catch(() => ({ entries: [], count: 0, truncated: false }));
 
     // Reopen the project the user was last looking at. Falling back to the most
     // recent thread alone lands people in whichever project they last chatted
@@ -2336,34 +2343,32 @@ function App() {
       ? snapshot.threads.find((candidate) => candidate.project_id === restoreProjectId) ?? null
       : snapshot.threads[0] ?? null;
 
-    if (restoreThread) {
-      const thread = await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace);
-      setMessages(thread.messages.length ? thread.messages : initialMessages);
-      setTrajectoryEvents(thread.events ?? []);
+    const thread = restoreThread ? await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace).catch(() => null) : null;
+    flushSync(() => {
+      setFileTree(nextTree);
+      setLoadingDirectories(new Set());
+      openFilesRef.current = [];
+      setOpenFiles([]);
+      setSelectedFilePath(null);
+      setSelectedFile(null);
+      setFileError("");
+      replaceFileEditorScopes({});
+      setMessages(thread?.messages.length ? thread.messages : initialMessages);
+      setTrajectoryEvents(thread?.events ?? []);
       setEvents([]);
-      setActiveThreadId(thread.id);
-      setBoundHarness(thread.harness ?? null);
-      setActiveProjectId(thread.project_id);
-      if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
-      setResearchMode(chatModeFromThread(thread.mode, thread.events));
-      setChangeSets(thread.changeSets ?? []);
-    } else {
-      setMessages(initialMessages);
-      setTrajectoryEvents([]);
-      setEvents([]);
-      setActiveThreadId(null);
-      setBoundHarness(null);
-      const nextProjectId = restoreProjectId ?? snapshot.projects?.[0]?.id ?? null;
+      setActiveThreadId(thread?.id ?? null);
+      setBoundHarness(thread?.harness ?? null);
+      const nextProjectId = thread?.project_id ?? restoreProjectId ?? snapshot.projects?.[0]?.id ?? null;
       setActiveProjectId(nextProjectId);
       const nextWorkspace = (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId && entry.is_default)
         ?? (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId);
-      setActiveWorkspaceId(nextWorkspace?.id ?? null);
-      setChangeSets([]);
-    }
-
-    const action = snapshot.actions.find((candidate) => candidate.status === "pending");
-    setPendingAction(action ? { ...action, source: "agent" } : null);
-
+      setActiveWorkspaceId(thread?.workspace_id ?? nextWorkspace?.id ?? null);
+      if (thread) setResearchMode(chatModeFromThread(thread.mode, thread.events));
+      setChangeSets(thread?.changeSets ?? []);
+      const action = snapshot.actions.find((candidate) => candidate.status === "pending");
+      setPendingAction(action ? { ...action, source: "agent" } : null);
+      setWorkspaceReady(true);
+    });
   }
 
   function replaceFileEditorScopes(next: FileEditorScopes) {
@@ -2472,7 +2477,7 @@ function App() {
   }
 
   function startNewTask(projectId = activeProjectId, workspaceId = activeWorkspaceId) {
-    if (agentBusy) return;
+    if (agentBusy || workspaceOpeningDialogRef.current?.open) return;
     writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
     setMainSection("chat");
     clearPendingAssistantDeltas();
@@ -2553,6 +2558,7 @@ function App() {
   }
 
   async function openResearchThread(threadSummary: ResearchThread) {
+    if (workspaceOpeningDialogRef.current?.open) return;
     if (sideThread?.id === threadSummary.id) {
       if (sideBusy) return;
       setSideThread(null);
@@ -2866,7 +2872,7 @@ function App() {
     const question = draft.trim();
     const submittedContext = submittedContextOverride ?? contextItems;
     const hasPastedImage = submittedContext.some((item) => item.type === "image");
-    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current) return false;
+    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current || workspaceOpeningDialogRef.current?.open) return false;
     const requestPrompt = question || "Please analyze the attached image.";
     const submittedThreadId = forceNew ? null : activeThreadIdRef.current;
 
@@ -3919,6 +3925,10 @@ function App() {
       />
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
+      <dialog ref={workspaceOpeningDialogRef} className="app-dialog app-dialog-compact workspace-opening-dialog" aria-label={t("Opening workspace")}
+        onCancel={(event) => event.preventDefault()} onKeyDown={(event) => event.stopPropagation()}>
+        <div role="status"><LoaderCircle className="spin" size={16} />{t("Opening workspace")}</div>
+      </dialog>
     </main>
   );
 }

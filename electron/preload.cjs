@@ -177,7 +177,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   getPaperBibliography: (paperId) => ipcRenderer.invoke("library:get-bibliography", { paperId }),
   setPaperBibliography: (paperId, patch) => ipcRenderer.invoke("library:set-bibliography", { paperId, patch }),
   repairLibraryPaperMetadata: (paperId, patch) => ipcRenderer.invoke("library:repair-metadata", { paperId, patch }),
-  updateLibraryPaper: (paperId, patch) => ipcRenderer.invoke("library:update-paper", { paperId, patch }),
+  updateLibraryPaper: (paperId, patch, dataRoot) => ipcRenderer.invoke("library:update-paper", { paperId, patch, dataRoot }),
   removeLibraryPaper: (libraryId, paperId) => ipcRenderer.invoke("library:remove-paper", { libraryId, paperId }),
   getLibraryPaperReader: (paperId, workspace, projectId) => ipcRenderer.invoke("library:get-reader", { paperId, workspace, projectId }),
   getLibraryPaperChatThread: (paperId, workspace, projectId) => ipcRenderer.invoke("library:get-paper-chat-thread", { paperId, workspace, projectId }),
