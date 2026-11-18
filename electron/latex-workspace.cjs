@@ -323,7 +323,7 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   // Observe the manuscript tree before spawn: a helper can create and remove
   // an input (for example a generated .tex section) while the compiler runs,
   // and the finished byte capture alone would never see it.
-  const observation = watchManuscriptDirectory(root, startedSource.project_path, { knownInputs: startedSource.files.map((file) => file.path), directories: startedSource.directories, sourcePath });
+  const observation = watchManuscriptDirectory(root, startedSource.project_path, { knownInputs: startedSource.files.map((file) => file.path), directories: startedSource.directories });
   let run, manuscriptObservation;
   try {
     run = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });

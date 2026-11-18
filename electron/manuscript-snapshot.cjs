@@ -10,14 +10,6 @@ const MAX_BYTES = 500 * 1024 * 1024;
 // OS asynchronously (macOS FSEvents batches them), so the compiler can exit
 // before the last create/delete pair reaches the callback.
 const OBSERVATION_SETTLE_MS = 100;
-// Files LaTeX engines and helper tools regenerate next to the document.  They
-// are outputs, not manuscript inputs.  Keep this list to compound suffixes so
-// real inputs such as .tex, .bib, .sty, .cls, .png or .jpg are never excluded.
-const COMPILER_INTERMEDIATE_SUFFIXES = Object.freeze([
-  ".synctex.gz", ".synctex", ".run.xml", ".fdb_latexmk",
-  ".aux", ".log", ".toc", ".out", ".fls", ".bbl", ".blg", ".nav", ".snm",
-  ".vrb", ".idx", ".ind", ".ilg", ".lof", ".lot", ".bcf", ".xdv", ".dvi",
-]);
 const OS_METADATA_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini", ".localized"]);
 const hash = data => createHash("sha256").update(data).digest("hex");
 const relative = (root, file) => path.relative(root, file).split(path.sep).join("/") || ".";
@@ -27,11 +19,9 @@ function isOsMetadata(filename) {
   return OS_METADATA_NAMES.has(name) || name.startsWith("._");
 }
 
-function isIgnoredObservationPath(relativePath, mainStem) {
+function isIgnoredObservationPath(relativePath) {
   const parts = relativePath.split("/");
-  if (parts.some((part) => EXCLUDED_DIRECTORIES.has(part))) return true;
-  if (isOsMetadata(parts.at(-1))) return true;
-  return COMPILER_INTERMEDIATE_SUFFIXES.some((suffix) => relativePath.toLowerCase() === mainStem + suffix);
+  return parts.some((part) => EXCLUDED_DIRECTORIES.has(part)) || isOsMetadata(parts.at(-1));
 }
 
 function normalizeObservedPath(filename, directory) {
@@ -62,7 +52,7 @@ async function settleObservationWindow(ms) {
  * reports paths; contents are not copied because transient files may already
  * be gone when the build finishes.
  */
-function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directories = [], sourcePath = "", settleMs = OBSERVATION_SETTLE_MS } = {}) {
+function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directories = [], settleMs = OBSERVATION_SETTLE_MS } = {}) {
   let workspace, directory;
   try {
     workspace = workspacePath(root);
@@ -73,7 +63,6 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directo
   const changedPaths = new Set();
   const observedParents = new Set();
   const directoryTimes = new Map();
-  const mainStem = path.posix.basename(sourcePath, ".tex").toLowerCase();
   let watcher, unavailable = "", unidentified = false, closed = false;
   const fail = (error) => { if (!unavailable) unavailable = error?.message || String(error); };
   const close = () => {
@@ -92,7 +81,7 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directo
       const observed = normalizeObservedPath(filename, directory);
       if (observed) {
         observedParents.add(path.posix.dirname(absolute(observed)));
-        if (!isIgnoredObservationPath(observed, mainStem)) changedPaths.add(observed);
+        if (!isIgnoredObservationPath(observed)) changedPaths.add(observed);
       }
     });
     watcher.on("error", (error) => { fail(error); close(); });

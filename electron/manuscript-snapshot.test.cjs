@@ -36,14 +36,14 @@ function compilerFixture(onStart = () => {}, delay = 0) {
   };
 }
 
-function transientCompilerFixture(relativePath) {
+function transientCompilerFixture(relativePath, { inBuildDirectory = false } = {}) {
   return (_command, args, options) => {
     const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => {};
     const text = fs.readFileSync(path.join(options.cwd, "section.tex"), "utf8");
     const out = args[args.indexOf("--outdir") + 1];
     fs.writeFileSync(path.join(out, "main.pdf"), `%PDF-controlled-fixture ${text}`);
     setImmediate(() => {
-      const transient = path.join(options.cwd, relativePath);
+      const transient = path.join(inBuildDirectory ? out : options.cwd, relativePath);
       fs.writeFileSync(transient, "Generated while the compiler ran");
       fs.unlinkSync(transient);
       child.stdout.emit("data", `Controlled compiler: ${text}\n`);
@@ -128,6 +128,17 @@ test("a transient PDF graphic cannot certify the compiled manuscript", async t =
   assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
 });
 
+test("a bibliography supplied in the manuscript directory during compilation invalidates the receipt", async t => {
+  const root = fixture(t);
+  fs.appendFileSync(path.join(root, "paper/main.tex"), "\\input{main.bbl}\n");
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic", spawnImpl: transientCompilerFixture("main.bbl"),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
 test("directory mutations still invalidate a receipt when a watcher delivers no filenames", async t => {
   const root = fixture(t);
   t.mock.method(fs, "watch", () => Object.assign(new EventEmitter(), { close() {} }));
@@ -137,9 +148,9 @@ test("directory mutations still invalidate a receipt when a watcher delivers no 
   assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
 });
 
-test("compiler intermediates written and removed during compilation do not invalidate the receipt", async t => {
+test("intermediates written in the configured compiler output directory do not invalidate the receipt", async t => {
   const root = fixture(t);
-  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("main.aux") });
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("main.aux", { inBuildDirectory: true }) });
   assert.equal(result.ok, true);
   assert.equal(result.source_snapshot.status, "current");
   assert.deepEqual(result.source_snapshot.transient_inputs, []);

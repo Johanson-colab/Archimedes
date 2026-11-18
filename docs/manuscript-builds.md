@@ -34,7 +34,7 @@ The source coverage is explicitly `manuscript-directory`. It excludes
 `.archimedes`, `.git`, `node_modules`, `dist`, `build`, `.next`, `.venv`,
 `venv`, `__pycache__` and `.cache` directories. These include generated build
 output and common environment caches, so a build does not invalidate itself
-by writing its own output. Symbolic links are listed as untracked inputs;
+by writing its own output. A bibliography or other temporary file created in the manuscript source directory may be an input even when its name resembles a compiler intermediate. Symbolic links are listed as untracked inputs;
 their targets are not followed, and such a successful build has an
 `unverified` receipt rather than `current`. Preview remains available.
 Inputs outside the manuscript directory, excluded folders, installed TeX
