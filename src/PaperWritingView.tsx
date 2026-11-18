@@ -271,9 +271,11 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
       }
     } catch (nextError) {
       if (sequence !== compileSequence.current) return;
-      setCompileState("error"); setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setCompileState("error");
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      setError(t(message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")));
     }
-  }, [bridge, mainPath, workspace]);
+  }, [bridge, mainPath, t, workspace]);
 
   useEffect(() => bridge.onLatexCompileProgress?.((input) => {
     if (input.path === compileTargetRef.current) {

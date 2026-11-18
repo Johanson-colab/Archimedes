@@ -16,17 +16,17 @@ const OBSERVATION_SETTLE_MS = 100;
 const COMPILER_INTERMEDIATE_SUFFIXES = Object.freeze([
   ".synctex.gz", ".synctex", ".run.xml", ".fdb_latexmk",
   ".aux", ".log", ".toc", ".out", ".fls", ".bbl", ".blg", ".nav", ".snm",
-  ".vrb", ".idx", ".ind", ".ilg", ".lof", ".lot", ".bcf", ".xdv", ".dvi", ".pdf",
+  ".vrb", ".idx", ".ind", ".ilg", ".lof", ".lot", ".bcf", ".xdv", ".dvi",
 ]);
 const OS_METADATA_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini", ".localized"]);
 const hash = data => createHash("sha256").update(data).digest("hex");
 const relative = (root, file) => path.relative(root, file).split(path.sep).join("/") || ".";
 
-function isIgnoredObservationPath(relativePath) {
+function isIgnoredObservationPath(relativePath, mainStem) {
   const parts = relativePath.split("/"), name = parts.at(-1).toLowerCase();
   if (parts.some((part) => EXCLUDED_DIRECTORIES.has(part))) return true;
   if (OS_METADATA_NAMES.has(name) || name.startsWith("._")) return true;
-  return COMPILER_INTERMEDIATE_SUFFIXES.some((suffix) => name.endsWith(suffix));
+  return COMPILER_INTERMEDIATE_SUFFIXES.some((suffix) => relativePath.toLowerCase() === mainStem + suffix);
 }
 
 function normalizeObservedPath(filename, directory) {
@@ -57,7 +57,7 @@ async function settleObservationWindow(ms) {
  * reports paths; contents are not copied because transient files may already
  * be gone when the build finishes.
  */
-function watchManuscriptDirectory(root, projectPath, { knownInputs = [], settleMs = OBSERVATION_SETTLE_MS } = {}) {
+function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directories = [], sourcePath = "", settleMs = OBSERVATION_SETTLE_MS } = {}) {
   let workspace, directory;
   try {
     workspace = workspacePath(root);
@@ -66,6 +66,9 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], settleM
     return { finish: async () => ({ available: false, error: error.message, transient_inputs: [] }), close: () => {} };
   }
   const changedPaths = new Set();
+  const observedParents = new Set();
+  const directoryTimes = new Map();
+  const mainStem = path.posix.basename(sourcePath, ".tex").toLowerCase();
   let watcher, unavailable = "", unidentified = false, closed = false;
   const fail = (error) => { if (!unavailable) unavailable = error?.message || String(error); };
   const close = () => {
@@ -76,10 +79,16 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], settleM
   const absolute = (observed) => projectPath && projectPath !== "." ? `${projectPath}/${observed}` : observed;
 
   try {
+    for (const name of directories) {
+      directoryTimes.set(name, fs.statSync(workspacePath(workspace, name), { bigint: true }).mtimeNs);
+    }
     watcher = fs.watch(directory, { recursive: true, persistent: false }, (_event, filename) => {
       if (!filename) { unidentified = true; return; }
       const observed = normalizeObservedPath(filename, directory);
-      if (observed && !isIgnoredObservationPath(observed)) changedPaths.add(observed);
+      if (observed) {
+        observedParents.add(path.posix.dirname(absolute(observed)));
+        if (!isIgnoredObservationPath(observed, mainStem)) changedPaths.add(observed);
+      }
     });
     watcher.on("error", (error) => { fail(error); close(); });
   } catch (error) { fail(error); }
@@ -91,6 +100,13 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], settleM
       close();
       if (unavailable) return { available: false, error: unavailable, transient_inputs: [] };
       if (unidentified) return { available: false, error: "The manuscript directory watcher reported a change without a path.", transient_inputs: [] };
+      // Some filesystems coalesce create/delete events. Directory modification
+      // times still reveal an unobserved entry change across the compile.
+      for (const [name, before] of directoryTimes) {
+        if (!observedParents.has(name) && fs.statSync(workspacePath(workspace, name), { bigint: true }).mtimeNs !== before) {
+          return { available: false, error: "A manuscript directory changed without a corresponding file event.", transient_inputs: [] };
+        }
+      }
       const known = new Set(knownInputs);
       const transientInputs = [...changedPaths]
         .map(absolute)
@@ -123,9 +139,10 @@ function captureManuscriptSources(root, sourcePath) {
   const workspace = workspacePath(root);
   const source = workspacePath(workspace, sourcePath);
   const directory = path.dirname(source);
-  const files = [], observations = [], untracked = [];
+  const files = [], observations = [], untracked = [], directories = [];
   let bytes = 0;
   function visit(current) {
+    directories.push(relative(workspace, current));
     for (const entry of fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const file = path.join(current, entry.name);
       if (entry.isDirectory()) { if (!EXCLUDED_DIRECTORIES.has(entry.name)) visit(file); continue; }
@@ -140,7 +157,7 @@ function captureManuscriptSources(root, sourcePath) {
     }
   }
   visit(directory);
-  return { workspace, source_path: sourcePath, project_path: relative(workspace, directory), coverage: "manuscript-directory", source_version: hash(JSON.stringify({ files, untracked })), observation_version: hash(JSON.stringify(observations)), files, total_bytes: bytes, untracked_inputs: untracked, excluded_directories: [...EXCLUDED_DIRECTORIES] };
+  return { workspace, source_path: sourcePath, project_path: relative(workspace, directory), coverage: "manuscript-directory", directories, source_version: hash(JSON.stringify({ files, untracked })), observation_version: hash(JSON.stringify(observations)), files, total_bytes: bytes, untracked_inputs: untracked, excluded_directories: [...EXCLUDED_DIRECTORIES] };
 }
 
 function artifact(root, file) {

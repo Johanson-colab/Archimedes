@@ -120,6 +120,22 @@ test("a manuscript input created and removed during compilation never certifies 
   assert.match(checked.verification_reason, /paper\/generated\.tex/);
 });
 
+test("a transient PDF graphic cannot certify the compiled manuscript", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("figures/plot-extra.pdf") });
+  assert.equal(result.ok, true);
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("directory mutations still invalidate a receipt when a watcher delivers no filenames", async t => {
+  const root = fixture(t);
+  t.mock.method(fs, "watch", () => Object.assign(new EventEmitter(), { close() {} }));
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("figures/plot-extra.pdf") });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
 test("compiler intermediates written and removed during compilation do not invalidate the receipt", async t => {
   const root = fixture(t);
   const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("main.aux") });
