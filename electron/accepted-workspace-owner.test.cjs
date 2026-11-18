@@ -30,7 +30,7 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   const bindingStart = source.indexOf("  const ipcMain = createWorkspaceIpc(");
   const bindingEnd = source.indexOf("\n  });", bindingStart) + 6;
   const ipc = new Function("scope", `with(scope) { ${source.slice(bindingStart,bindingEnd)}; return ipcMain; }`)({
-    createWorkspaceIpc, isWorkspaceDataChannel, store, windowWorkspaces, resolveWorkspace: fs.realpathSync,
+    createWorkspaceIpc, isWorkspaceDataChannel, store, windowWorkspaces, resolveWorkspace: path.resolve,
     electronIpcMain: { handle: (name, callback) => handlers.set(name, callback) },
   });
   ipc.handle("library:owner", () => store.currentStore().workspace);
@@ -49,8 +49,13 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   assert.equal(handlers.get("library:owner")(event), a, "an ignored menu proposal does not switch IPC ownership");
   const openStart = source.indexOf('  ipcMain.handle("workspace:open",');
   const openEnd = source.indexOf('  ipcMain.handle("workspace:list-files",', openStart);
-  new Function("scope", `with(scope) { ${source.slice(openStart, openEnd)} }`)({ ipcMain: ipc, store, resolveWorkspace: fs.realpathSync, setWindowWorkspace: helpers.setWindowWorkspace, rememberWorkspace() {}, watchWorkspace() {} });
-  handlers.get("workspace:open")(event, b);
+  new Function("scope", `with(scope) { ${source.slice(openStart, openEnd)} }`)({ ipcMain: ipc, store, setWindowWorkspace: helpers.setWindowWorkspace, rememberWorkspace() {}, watchWorkspace() {} });
+  const alias = path.join(root, "selected-folder");
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+  fs.symlinkSync(b, alias, linkType);
+  assert.equal(handlers.get("workspace:open")(event, alias).workspace, b);
+  fs.unlinkSync(alias);
+  fs.symlinkSync(a, alias, linkType);
   assert.equal(handlers.get("paper-review-app:list-papers")(event).at(0).notes, "B notes", "indirect libraryStore consumers follow accepted B");
   const bToken = helpers.createPreviewToken(1, b);
   helpers.readerStateForWindow(1, a, "paper");

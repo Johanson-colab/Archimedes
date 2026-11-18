@@ -83,6 +83,7 @@ const sidebarPlugins = require("./sidebar-plugins.cjs");
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
 const windowWorkspaces = new Map();
+const windowStartupWorkspaces = new Map();
 const windowPreviewTokens = new Map();
 const previewTokenWorkspaces = new Map();
 const workspaceWatchers = new Map();
@@ -299,7 +300,7 @@ function createWindow(workspace) {
     });
     if (browserTab) hardenBrowserSession(guestContents.session);
   });
-  if (workspace) setWindowWorkspace(senderId, resolveWorkspace(workspace));
+  if (workspace) windowStartupWorkspaces.set(senderId, resolveWorkspace(workspace));
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
@@ -314,6 +315,7 @@ function createWindow(workspace) {
     void presence?.leave(String(senderId));
     for (const token of windowPreviewTokens.get(senderId)?.values() ?? []) previewTokenWorkspaces.delete(token);
     windowPreviewTokens.delete(senderId);
+    windowStartupWorkspaces.delete(senderId);
     windowWorkspaces.delete(senderId);
   });
 
@@ -738,7 +740,7 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("window:initial-workspace", (event) => {
-    return windowWorkspaces.get(event.sender.id) ?? null;
+    return windowWorkspaces.get(event.sender.id) ?? windowStartupWorkspaces.get(event.sender.id) ?? null;
   });
 
   ipcMain.handle("window:set-titlebar-theme", (event, theme) => {
@@ -922,12 +924,11 @@ app.whenReady().then(async () => {
     return { filename: "SKILL.md", content: fs.readFileSync(manifest, "utf8") };
   });
 
-  ipcMain.handle("workspace:open", (event, requestedWorkspace) => {
-    const workspace = resolveWorkspace(requestedWorkspace);
+  ipcMain.handle("workspace:open", (event) => {
     const snapshot = store.getSnapshot();
-    rememberWorkspace(workspace);
-    watchWorkspace(event.sender, workspace);
-    setWindowWorkspace(event.sender.id, workspace);
+    rememberWorkspace(snapshot.workspace);
+    watchWorkspace(event.sender, snapshot.workspace);
+    setWindowWorkspace(event.sender.id, snapshot.workspace);
     return snapshot;
   });
 

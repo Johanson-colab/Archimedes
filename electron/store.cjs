@@ -66,6 +66,14 @@ function createWorkspaceStore(workspace) {
   const root = normalizeWorkspacePath(workspace);
   if (!root) throw new Error("A data workspace is required.");
   let state = workspaceStates.get(root);
+  if (state?.database) {
+    const file = fs.statSync(state.databaseFile.path, { bigint: true, throwIfNoEntry: false });
+    if (file?.ino !== state.databaseFile.ino || file?.dev !== state.databaseFile.dev) {
+      closeState(state);
+      if (state.leases) throw new Error("The workspace database was replaced while work was still running. Reopen the folder after that work finishes.");
+      state = null;
+    }
+  }
   if (!state) state = { workspace: root, database: null, leases: 0, managed: true, closing: false };
   state.managed = true;
   return workspaceContext.run(state, () => {
@@ -827,8 +835,6 @@ function setLocalIdentity(identity) {
     deviceId: String(identity.deviceId || ""),
     deviceName: String(identity.deviceName || ""),
   };
-  const database = currentState().database;
-  if (database) ensureLocalUser(database);
   return localIdentity;
 }
 
@@ -915,8 +921,13 @@ function ensureDefaultProject(db) {
 
 
 function requireDatabase() {
-  const database = currentState().database;
+  const state = currentState();
+  const database = state.database;
   if (!database) throw new Error("Open a workspace before accessing its research data.");
+  if (state.localIdentity !== localIdentity) {
+    ensureLocalUser(database);
+    state.localIdentity = localIdentity;
+  }
   return database;
 }
 
@@ -1016,10 +1027,13 @@ function initializeWorkspace(state, workspacePath) {
   }
   const database = new DatabaseSync(databasePath);
   state.database = database;
+  const { ino, dev } = fs.statSync(databasePath, { bigint: true });
+  state.databaseFile = { path: databasePath, ino, dev };
   state.workspace = workspacePath;
   state.closing = false;
   workspaceStates.set(workspacePath, state);
   schema(database);
+  state.localIdentity = localIdentity;
   canonicalizeStoredWorkspacePaths(database);
   backfillPaperRepositories(database);
   reconcileInterruptedReproductions(database);

@@ -37,6 +37,45 @@ test("canonical aliases share one data store and same-ID runtime identities rema
   assert.throws(() => a.openWorkspace(f.b), /different data workspace/);
 });
 
+test("reopening a restored directory uses its replacement database", t => {
+  const { root, a, b } = fixture(t);
+  const original = store.createWorkspaceStore(a);
+  original.saveTask({ prompt: "Original A", response: "", status: "completed" });
+  const replacement = store.createWorkspaceStore(b);
+  replacement.saveTask({ prompt: "Restored A", response: "", status: "completed" });
+  replacement.close();
+
+  const originalDirectory = path.join(root, "original");
+  fs.renameSync(a, originalDirectory);
+  fs.renameSync(b, a);
+
+  const restored = store.createWorkspaceStore(a);
+  assert.notEqual(restored, original);
+  assert.deepEqual(restored.getSnapshot().tasks.map(task => task.prompt), ["Restored A"]);
+  restored.saveTask({ prompt: "Saved after restore", response: "", status: "completed" });
+  restored.close();
+  assert.deepEqual(store.createWorkspaceStore(a).getSnapshot().tasks.map(task => task.prompt).sort(), ["Restored A", "Saved after restore"]);
+  assert.deepEqual(store.createWorkspaceStore(originalDirectory).getSnapshot().tasks.map(task => task.prompt), ["Original A"]);
+});
+
+test("a profile rename updates both stores on use without opening an unavailable directory", t => {
+  const { root, a, b } = fixture(t);
+  const ownerA = store.createWorkspaceStore(a), ownerB = store.createWorkspaceStore(b);
+  const projectA = ownerA.listResearchProjects().at(0).id;
+  const projectB = ownerB.listResearchProjects().at(0).id;
+  const profile = { userId: "local-user", displayName: "Local user", deviceId: "local-device", deviceName: "This device" };
+  const temporarilyUnavailable = path.join(root, "unavailable");
+  fs.renameSync(b, temporarilyUnavailable);
+  t.after(() => store.setLocalIdentity(profile));
+
+  store.setLocalIdentity({ ...profile, displayName: "Renamed researcher" });
+  assert.equal(ownerA.listProjectMembers(projectA).find(member => member.user_id === profile.userId).display_name, "Renamed researcher");
+
+  fs.renameSync(temporarilyUnavailable, b);
+  const reopened = store.createWorkspaceStore(b);
+  assert.equal(reopened.listProjectMembers(projectB).find(member => member.user_id === profile.userId).display_name, "Renamed researcher");
+});
+
 test("a synchronously failing IPC invocation releases its store lease", t => {
   const f = fixture(t), handlers = new Map(), a = store.createWorkspaceStore(f.a);
   const ipc = createWorkspaceIpc({ ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, store, workspaceForEvent: () => f.a });
