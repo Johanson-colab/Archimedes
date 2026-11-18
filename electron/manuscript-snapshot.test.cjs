@@ -177,6 +177,25 @@ test("a desktop metadata notification does not explain a missed change to direct
   assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
 });
 
+test("a surviving sibling directory cannot explain away a missed compiler input", async t => {
+  const root = fixture(t);
+  let notify;
+  t.mock.method(fs, "watch", (_directory, _options, listener) => {
+    notify = listener;
+    return Object.assign(new EventEmitter(), { close() {} });
+  });
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic",
+    spawnImpl: transientCompilerFixture("generated.tex", { onCreated() {
+      fs.mkdirSync(path.join(root, "paper/scratch"));
+      notify("rename", "scratch");
+    } }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
 test("intermediates written in the configured compiler output directory do not invalidate the receipt", async t => {
   const root = fixture(t);
   const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("main.aux", { inBuildDirectory: true }) });

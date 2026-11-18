@@ -61,7 +61,6 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directo
     return { finish: async () => ({ available: false, error: error.message, transient_inputs: [] }), close: () => {} };
   }
   const changedPaths = new Set();
-  const renamedParents = new Set();
   const directoryTimes = new Map();
   let watcher, unavailable = "", unidentified = false, closed = false;
   const fail = (error) => { if (!unavailable) unavailable = error?.message || String(error); };
@@ -76,13 +75,10 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directo
     for (const name of directories) {
       directoryTimes.set(name, fs.statSync(workspacePath(workspace, name), { bigint: true }).mtimeNs);
     }
-    watcher = fs.watch(directory, { recursive: true, persistent: false }, (eventType, filename) => {
+    watcher = fs.watch(directory, { recursive: true, persistent: false }, (_eventType, filename) => {
       if (!filename) { unidentified = true; return; }
       const observed = normalizeObservedPath(filename, directory);
-      if (observed && !isIgnoredObservationPath(observed)) {
-        if (eventType === "rename") renamedParents.add(path.posix.dirname(absolute(observed)));
-        changedPaths.add(observed);
-      }
+      if (observed && !isIgnoredObservationPath(observed)) changedPaths.add(observed);
     });
     watcher.on("error", (error) => { fail(error); close(); });
   } catch (error) { fail(error); }
@@ -94,18 +90,20 @@ function watchManuscriptDirectory(root, projectPath, { knownInputs = [], directo
       close();
       if (unavailable) return { available: false, error: unavailable, transient_inputs: [] };
       if (unidentified) return { available: false, error: "The manuscript directory watcher reported a change without a path.", transient_inputs: [] };
-      // Some filesystems coalesce create/delete events. Directory modification
-      // times still reveal an unobserved entry change across the compile.
-      for (const [name, before] of directoryTimes) {
-        if (!renamedParents.has(name) && fs.statSync(workspacePath(workspace, name), { bigint: true }).mtimeNs !== before) {
-          return { available: false, error: "A manuscript directory changed without a corresponding file event.", transient_inputs: [] };
-        }
-      }
       const known = new Set(knownInputs);
       const transientInputs = [...changedPaths]
         .map(absolute)
         .filter((relativePath) => !known.has(relativePath) && !pathStillExists(workspace, relativePath))
         .sort();
+      // Named transient files already prevent certification. Without one, a
+      // changed directory may include entries the watcher silently coalesced.
+      if (transientInputs.length === 0) {
+        for (const [name, before] of directoryTimes) {
+          if (fs.statSync(workspacePath(workspace, name), { bigint: true }).mtimeNs !== before) {
+            return { available: false, error: "The manuscript directory changed during compilation and its inputs could not be verified.", transient_inputs: [] };
+          }
+        }
+      }
       return { available: true, error: "", transient_inputs: transientInputs };
     } catch (error) {
       return { available: false, error: error.message, transient_inputs: [] };

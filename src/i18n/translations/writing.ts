@@ -95,6 +95,7 @@ export const writing: Record<string, string> = {
   "The compiler stopped producing output. Check Internet access and the system HTTP proxy, then retry. Downloaded dependencies are retained; see the build log below.": "编译器长时间没有新输出。请检查网络与系统 HTTP 代理后重试；已下载的依赖会保留。详细原因请查看下方编译日志。",
   "The first build exceeded its preparation time limit. Downloaded dependencies are retained. Retry to continue using the cache; see the build log below.": "首次编译超过准备时限。已下载的依赖会保留，重试会继续使用缓存。请查看下方编译日志。",
   "The first build needs Internet access to download fonts and packages. Check the connection and click Recompile. Previously downloaded dependencies are cached locally.": "首次编译需要联网下载字体和宏包。请检查网络后点击重新编译；已下载的依赖会缓存在本地。",
+  "The manuscript directory changed during compilation and its inputs could not be verified.": "编译期间稿件目录发生了变化，无法核实本次编译使用的输入文件。",
   "The manuscript directory could not be observed during compilation. The PDF is available for preview only. {detail}": "编译期间未能监测稿件目录。此 PDF 仅供预览。{detail}",
   "The manuscript directory exceeds the 10,000 file / 500 MiB source snapshot limit. Choose a dedicated paper folder.": "稿件目录超过源文件快照上限（10,000 个文件或 500 MiB）。请选择专门存放稿件的文件夹。",
   "The manuscript directory watcher reported a change without a path.": "监测到稿件目录发生变化，但未收到文件路径。",
