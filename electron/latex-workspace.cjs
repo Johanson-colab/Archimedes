@@ -277,6 +277,10 @@ function compilerKind(executable) {
   return "pdflatex";
 }
 
+function manuscriptDiagnostic(messageKey, detail) {
+  return { line: null, message: messageKey.replace("{detail}", () => detail).trimEnd(), messageKey, detail };
+}
+
 async function compileLatexDocument(root, requestedPath, options = {}) {
   root = workspaceFiles.workspacePath(root);
   const sourcePath = normalizePaperPath(requestedPath);
@@ -343,18 +347,18 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   catch (error) { finishedSource = { ...startedSource, source_version: null, observation_version: null, verification_error: error.message }; }
   const snapshot = writeManuscriptSnapshot({ root, buildDirectory, buildId, requested: requestedSource, started: startedSource, finished: finishedSource, pdfPath: hasPdf ? absolutePdf : null, log: String(run.output || log), compiled: ok, engine: path.basename(executable), observation: manuscriptObservation });
   const previewCleanup = pruneManuscriptPreviews(root, snapshot.manifest_path);
-  if (snapshot.transient_inputs.length) diagnostics.unshift({
-    line: null,
-    message: `The compiler created and removed manuscript files during this build: ${snapshot.transient_inputs.join(", ")}. The PDF preview is available, but the build cannot be certified as current because those files may have supplied inputs. Compile again before using it as the final PDF.`,
-  });
+  if (snapshot.transient_inputs.length) diagnostics.unshift(manuscriptDiagnostic(
+    "Compile again before using this PDF. Temporary files created during compilation may have affected the result: {detail}",
+    snapshot.transient_inputs.join(", "),
+  ));
   if (snapshot.source_changed) {
     ok = false;
     diagnostics.unshift({ line: null, message: "The manuscript sources changed during compilation. Compile again before using this PDF." });
   }
-  if (!snapshot.observation.available && snapshot.status === "unverified") diagnostics.unshift({
-    line: null,
-    message: `The manuscript directory could not be observed during compilation${snapshot.observation.error ? `: ${snapshot.observation.error}` : "."} The PDF preview is available but cannot be certified as current.`,
-  });
+  if (!snapshot.observation.available && snapshot.status === "unverified") diagnostics.unshift(manuscriptDiagnostic(
+    "The manuscript directory could not be observed during compilation. The PDF is available for preview only. {detail}",
+    snapshot.observation.error,
+  ));
   if (run.timedOut) diagnostics.unshift({
     line: null, message: "LaTeX compilation timed out.",
     help: run.timeoutReason === "idle"

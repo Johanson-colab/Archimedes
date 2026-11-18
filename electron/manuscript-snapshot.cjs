@@ -22,10 +22,15 @@ const OS_METADATA_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini", ".lo
 const hash = data => createHash("sha256").update(data).digest("hex");
 const relative = (root, file) => path.relative(root, file).split(path.sep).join("/") || ".";
 
+function isOsMetadata(filename) {
+  const name = filename.toLowerCase();
+  return OS_METADATA_NAMES.has(name) || name.startsWith("._");
+}
+
 function isIgnoredObservationPath(relativePath, mainStem) {
-  const parts = relativePath.split("/"), name = parts.at(-1).toLowerCase();
+  const parts = relativePath.split("/");
   if (parts.some((part) => EXCLUDED_DIRECTORIES.has(part))) return true;
-  if (OS_METADATA_NAMES.has(name) || name.startsWith("._")) return true;
+  if (isOsMetadata(parts.at(-1))) return true;
   return COMPILER_INTERMEDIATE_SUFFIXES.some((suffix) => relativePath.toLowerCase() === mainStem + suffix);
 }
 
@@ -144,6 +149,7 @@ function captureManuscriptSources(root, sourcePath) {
   function visit(current) {
     directories.push(relative(workspace, current));
     for (const entry of fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (isOsMetadata(entry.name)) continue;
       const file = path.join(current, entry.name);
       if (entry.isDirectory()) { if (!EXCLUDED_DIRECTORIES.has(entry.name)) visit(file); continue; }
       if (entry.isSymbolicLink()) { untracked.push({ path: relative(workspace, file), target: fs.readlinkSync(file), reason: "symbolic-link input is not included in this directory snapshot" }); continue; }

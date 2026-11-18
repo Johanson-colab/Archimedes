@@ -25,7 +25,10 @@ the second was 7,525 bytes with SHA-256
 `bfb2895e9f44c08a3c26b628bbc893274502a0946259fcf988524d8779def365`.
 Each receipt also retained its 2,400-byte compiler output log with a hash.
 
-This change has no new visual surface. The existing PDF preview continues to
-display a successful current build; this evidence checks the underlying files
-and receipts rather than presenting identical editor screenshots as a visual
-change. Timings describe these small warm-cache fixtures, not a benchmark.
+## When a section changes during a build
+
+Both screenshots show the Electron Writing view at 1320 × 820 with the same manuscript, theme and layout. A controlled compiler read the value 12, then the section on disk changed to 18 before the PDF was returned. The baseline showed a successful build with 12 in the preview. The updated editor flags the source change and withholds the stale preview. These screenshots use a controlled compiler to make the timing reproducible. The file and hash observations above used real Tectonic.
+
+| Before | After |
+| --- | --- |
+| ![Writing shows the old PDF as a successful build](before.png) | ![Writing reports the source change and withholds the stale PDF](after.png) |

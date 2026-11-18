@@ -112,6 +112,7 @@ test("a manuscript input created and removed during compilation never certifies 
   assert.equal(result.source_snapshot.source_changed, false);
   assert.deepEqual(result.source_snapshot.transient_inputs, ["paper/generated.tex"]);
   assert.match(result.diagnostics[0].message, /paper\/generated\.tex/);
+  assert.equal(result.diagnostics[0].detail, "paper/generated.tex");
   assert.equal(fs.existsSync(path.join(root, "paper/generated.tex")), false, "the input is gone when the receipt is written");
   const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
   assert.equal(checked.source_matches, true);
@@ -146,6 +147,20 @@ test("compiler intermediates written and removed during compilation do not inval
   const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
   assert.equal(checked.current, true);
   assert.equal(checked.verification_reason, "");
+});
+
+test("desktop metadata updates leave the PDF and source receipt current", async t => {
+  const root = fixture(t);
+  const names = [".DS_Store", "Thumbs.db", "figures/._plot.png"];
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic",
+    spawnImpl: compilerFixture(cwd => {
+      for (const name of names) fs.writeFileSync(path.join(cwd, name), "metadata");
+    }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "current");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, true);
 });
 
 test("a normal compile remains current and records no transient inputs", async t => {
