@@ -8,10 +8,12 @@ const asar = require("@electron/asar");
 async function prepareAudit({ sourceArchive, out = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-wasm-audit-")) } = {}) {
   const stage = path.join(out, "stage");
   const assets = path.join(stage, "dist/assets");
+  fs.mkdirSync(out, { recursive: true });
+  fs.mkdirSync(stage); // Existing assets must never satisfy a later audit.
   fs.mkdirSync(assets, { recursive: true });
   if (sourceArchive) {
-    for (const file of asar.listPackage(sourceArchive)) {
-      const name = file.replace(/^\//, "");
+    const entries = asar.listPackage(sourceArchive).map(file => file.replaceAll("\\", "/").replace(/^\//, ""));
+    for (const name of entries) {
       if (!name.startsWith("dist/assets/")) continue;
       const entry = asar.statFile(sourceArchive, name);
       if (entry.files) continue;
@@ -19,7 +21,7 @@ async function prepareAudit({ sourceArchive, out = fs.mkdtempSync(path.join(os.t
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, asar.extractFile(sourceArchive, name));
     }
-    if (asar.listPackage(sourceArchive).some(file => file.startsWith("/node_modules/onnxruntime-node/"))) throw new Error("The packaged app still includes onnxruntime-node.");
+    if (entries.some(file => file.startsWith("node_modules/onnxruntime-node/"))) throw new Error("The packaged app still includes onnxruntime-node.");
   } else fs.cpSync(path.join(__dirname, "../dist/assets"), assets, { recursive: true });
   const names = fs.readdirSync(assets);
   const worker = names.find(file => /^semantic-worker-.*\.js$/.test(file));
