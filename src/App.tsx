@@ -72,7 +72,7 @@ import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
 import { moveSidebarOrder, orderSidebarIds, readSidebarOrder, reconcileSidebarOrder, writeSidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
 import { type PaperOpenRequest } from "./PaperWritingView";
-import { createFileDraft, formatFileComment, isDraftDirty, isEditableFile, markDraftSaved, mergeRefreshedFiles, prepareFileContent, toEditorText, type FileComment, type FileDraft, type FileSelection } from "./file-editor";
+import { createFileDraft, finishFileEditorSave, formatFileComment, getFileEditorScope, hasDirtyFileEditorScopes, isDraftDirty, isEditableFile, mergeRefreshedFiles, prepareFileContent, toEditorText, updateFileEditorScope, type FileComment, type FileDraft, type FileEditorScope, type FileEditorScopes, type FileSelection } from "./file-editor";
 import { shortcutMatches } from "./file-text-size";
 import { previewLibraryBridge } from "./library-preview";
 import AgentLayer from "./AgentLayer";
@@ -1487,16 +1487,12 @@ function App() {
   const [projectFolderError, setProjectFolderError] = useState("");
   const [projectToRemove, setProjectToRemove] = useState<ResearchProject | null>(null);
   const [fileName, setFileName] = useState("");
-  const [fileDrafts, setFileDrafts] = useState<Record<string, FileDraft>>({});
-  const [fileSaving, setFileSaving] = useState<Set<string>>(new Set());
-  const [fileConflicts, setFileConflicts] = useState<Record<string, string>>({});
-  const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+  const [fileEditorScopes, setFileEditorScopes] = useState<FileEditorScopes>({});
   const [composerRequest, setComposerRequest] = useState<{ id: string; text: string; mode?: "append" | "replace" } | null>(null);
   const activeThreadIdRef = useRef<string | null>(null);
   const threadOpenRequestRef = useRef(0);
   const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
-  const fileDraftsRef = useRef<Record<string, FileDraft>>({});
-  const fileSavingRef = useRef<Set<string>>(new Set());
+  const fileEditorScopesRef = useRef<FileEditorScopes>({});
   const noteValuesRef = useRef<Record<string, string>>({});
   const noteKeyRef = useRef("draft");
   const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
@@ -1568,7 +1564,12 @@ function App() {
   // project folder → primary workspace.
   const executionWorkspace = activeThread?.workspace_path || activeWorkspace?.root || activeProject?.workspace_path || workspace;
   const executionWorkspaceRef = useRef(executionWorkspace);
+  const fileWorkspaceVersionRef = useRef(0);
+  if (executionWorkspaceRef.current !== executionWorkspace) fileWorkspaceVersionRef.current += 1;
   executionWorkspaceRef.current = executionWorkspace;
+  const fileWorkspaceVersion = fileWorkspaceVersionRef.current;
+  const fileEditorScope = getFileEditorScope(fileEditorScopes, executionWorkspace);
+  const { drafts: fileDrafts, saving: fileSaving, conflicts: fileConflicts, errors: fileErrors } = fileEditorScope;
   const draftNoteKey = `draft:${workspace || "workspace"}`;
   const noteKey = activeThreadId ?? draftNoteKey;
   const noteValue = noteLoadedKey === noteKey ? noteValues[noteKey] ?? "" : "";
@@ -2046,7 +2047,7 @@ function App() {
   }
 
   async function closeWorkbench() {
-    if (Object.values(fileDraftsRef.current).some(isDraftDirty) && !(await confirm({ title: "Hide the workbench?", description: "Unsaved file changes stay in the editor.", confirmLabel: "Hide workbench" }))) return;
+    if (hasDirtyFileEditorScopes(fileEditorScopesRef.current) && !(await confirm({ title: "Hide the workbench?", description: "Unsaved file changes stay in the editor.", confirmLabel: "Hide workbench" }))) return;
     setWorkbenchOpen(false);
   }
 
@@ -2149,7 +2150,7 @@ function App() {
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!Object.values(fileDraftsRef.current).some(isDraftDirty)) return;
+      if (!hasDirtyFileEditorScopes(fileEditorScopesRef.current)) return;
       event.preventDefault();
       event.returnValue = "";
     };
@@ -2212,7 +2213,7 @@ function App() {
         queueAssistantDelta(event);
         return;
       }
-      if (event.type === "complete" || event.type === "failed" || event.type === "interrupted") {
+      if (event.type === "complete" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted") {
         flushAssistantDeltas();
         setInterrupting(false);
         setNativeQuestions((current) => current.filter((item) => Boolean(event.threadId) && item.threadId !== event.threadId));
@@ -2222,7 +2223,7 @@ function App() {
         setPendingAction({ ...event.action, source: "agent" });
         if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
-      const state = event.type === "complete" || event.type === "artifact" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
+      const state = event.type === "complete" || event.type === "artifact" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
       setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
     });
     return unsubscribe;
@@ -2252,6 +2253,9 @@ function App() {
     setSelectedFilePath(null);
     setSelectedFile(null);
     setFileError("");
+    setFileLoading(false);
+    setDirectoryRequest(null);
+    setLoadingDirectories(new Set());
     void refreshWorkspaceFiles();
   }, [executionWorkspace, workspaceReady]);
 
@@ -2279,7 +2283,7 @@ function App() {
 
   async function loadWorkspace(workspacePath: string) {
     if (agentBusy || sideBusy || commandLockRef.current) return;
-    if (Object.values(fileDraftsRef.current).some(isDraftDirty) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
+    if (hasDirtyFileEditorScopes(fileEditorScopesRef.current) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
     clearPendingAssistantDeltas();
     setWorkspaceReady(false);
     const snapshot = await desktopBridge.openWorkspace(workspacePath);
@@ -2298,11 +2302,7 @@ function App() {
     setSelectedFilePath(null);
     setSelectedFile(null);
     setFileError("");
-    setDrafts({});
-    fileSavingRef.current = new Set();
-    setFileSaving(new Set());
-    setFileConflicts({});
-    setFileErrors({});
+    replaceFileEditorScopes({});
     setWorkspaceReady(true);
 
     // Reopen the project the user was last looking at. Falling back to the most
@@ -2359,65 +2359,97 @@ function App() {
 
   }
 
-  function setDrafts(next: Record<string, FileDraft>) {
-    fileDraftsRef.current = next;
-    setFileDrafts(next);
+  function replaceFileEditorScopes(next: FileEditorScopes) {
+    fileEditorScopesRef.current = next;
+    setFileEditorScopes(next);
   }
 
-  function setFileSavingPath(filePath: string, saving: boolean) {
-    const next = new Set(fileSavingRef.current);
-    if (saving) next.add(filePath); else next.delete(filePath);
-    fileSavingRef.current = next;
-    setFileSaving(next);
+  function isCurrentFileWorkspace(ownerWorkspace: string, version: number) {
+    return ownerWorkspace === executionWorkspaceRef.current && version === fileWorkspaceVersionRef.current;
+  }
+
+  function updateFileScope(workspace: string, update: (scope: FileEditorScope) => FileEditorScope) {
+    replaceFileEditorScopes(updateFileEditorScope(fileEditorScopesRef.current, workspace, update));
+  }
+
+  function setFileConflicts(next: Record<string, string> | ((current: Record<string, string>) => Record<string, string>), workspace = executionWorkspace) {
+    updateFileScope(workspace, (scope) => ({ ...scope, conflicts: typeof next === "function" ? next(scope.conflicts) : next }));
+  }
+
+  function setFileErrors(next: Record<string, string> | ((current: Record<string, string>) => Record<string, string>), workspace = executionWorkspace) {
+    updateFileScope(workspace, (scope) => ({ ...scope, errors: typeof next === "function" ? next(scope.errors) : next }));
+  }
+
+  function setDrafts(next: Record<string, FileDraft>, workspace = executionWorkspace) {
+    updateFileScope(workspace, (scope) => ({ ...scope, drafts: next }));
+  }
+
+  function setFileSavingPath(filePath: string, saving: boolean, workspace = executionWorkspace) {
+    updateFileScope(workspace, (scope) => {
+      const next = new Set(scope.saving);
+      if (saving) next.add(filePath); else next.delete(filePath);
+      return { ...scope, saving: next };
+    });
   }
 
   function ensureFileDraft(file: WorkspaceFilePreview) {
     if (!isEditableFile(file)) return;
-    const current = fileDraftsRef.current[file.path];
+    const drafts = getFileEditorScope(fileEditorScopesRef.current, executionWorkspace).drafts;
+    const current = drafts[file.path];
     const draft = createFileDraft(file);
     if (!draft || (current && isDraftDirty(current))) return;
-    setDrafts({ ...fileDraftsRef.current, [file.path]: draft });
+    setDrafts({ ...drafts, [file.path]: draft });
   }
 
   async function refreshWorkspaceFiles() {
     if (!executionWorkspace) return;
+    const ownerWorkspace = executionWorkspace;
+    const ownerVersion = fileWorkspaceVersion;
     try {
-      const nextTree = await desktopBridge.listWorkspaceFiles(executionWorkspace);
+      const nextTree = await desktopBridge.listWorkspaceFiles(ownerWorkspace);
+      if (!isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) return;
       setFileTree(nextTree);
       const currentOpenFiles = openFilesRef.current;
       if (currentOpenFiles.length) {
         const refreshedFiles = await Promise.all(currentOpenFiles.map(async (file) => {
           try {
-            return await desktopBridge.readWorkspaceFile(executionWorkspace, file.path);
+            return await desktopBridge.readWorkspaceFile(ownerWorkspace, file.path);
           } catch {
             return file;
           }
         }));
-        const merged = mergeRefreshedFiles(currentOpenFiles, refreshedFiles, fileDraftsRef.current, fileSavingRef.current);
+        if (!isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) return;
+        const scope = getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace);
+        const merged = mergeRefreshedFiles(currentOpenFiles, refreshedFiles, scope.drafts, scope.saving);
         openFilesRef.current = merged.files;
         setOpenFiles(merged.files);
         setFileConflicts(merged.conflicts);
         if (selectedFilePath) setSelectedFile(merged.files.find((file) => file.path === selectedFilePath) ?? null);
       }
     } catch (error) {
-      setFileError(error instanceof Error ? error.message : String(error));
+      if (isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) setFileError(error instanceof Error ? error.message : String(error));
     }
   }
 
   async function loadWorkspaceDirectory(directory: string) {
     if (!executionWorkspace || !directory) return;
+    const ownerWorkspace = executionWorkspace;
+    const ownerVersion = fileWorkspaceVersion;
     setLoadingDirectories((current) => new Set(current).add(directory));
     try {
-      const listing = await desktopBridge.listWorkspaceFiles(executionWorkspace, directory);
+      const listing = await desktopBridge.listWorkspaceFiles(ownerWorkspace, directory);
+      if (!isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) return;
       setFileTree((current) => ({ ...current, entries: setDirectoryChildren(current.entries, directory, listing.entries) }));
     } catch {
-      setFileTree((current) => ({ ...current, entries: setDirectoryChildren(current.entries, directory, []) }));
+      if (isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) setFileTree((current) => ({ ...current, entries: setDirectoryChildren(current.entries, directory, []) }));
     } finally {
-      setLoadingDirectories((current) => {
-        const next = new Set(current);
-        next.delete(directory);
-        return next;
-      });
+      if (isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) {
+        setLoadingDirectories((current) => {
+          const next = new Set(current);
+          next.delete(directory);
+          return next;
+        });
+      }
     }
   }
 
@@ -2917,7 +2949,7 @@ function App() {
   async function openFilePane(filePath: string, surface: "workbench" | "page" = "workbench") {
     const request = ++pathOpenRequestRef.current;
     const requestWorkspace = executionWorkspace;
-    const isCurrent = () => request === pathOpenRequestRef.current && requestWorkspace === executionWorkspaceRef.current;
+    const isCurrent = () => request === pathOpenRequestRef.current && isCurrentFileWorkspace(requestWorkspace, fileWorkspaceVersion);
     setDirectoryRequest(null);
     if (surface === "page") setMainSection("files");
     else openWorkbench("files");
@@ -2955,7 +2987,7 @@ function App() {
   async function openChangedFile(filePath: string) {
     const request = ++pathOpenRequestRef.current;
     const requestWorkspace = executionWorkspace;
-    const isCurrent = () => request === pathOpenRequestRef.current && requestWorkspace === executionWorkspaceRef.current;
+    const isCurrent = () => request === pathOpenRequestRef.current && isCurrentFileWorkspace(requestWorkspace, fileWorkspaceVersion);
     try {
       const entry = await desktopBridge.inspectWorkspacePath(requestWorkspace, filePath);
       if (!isCurrent()) return;
@@ -3014,14 +3046,18 @@ function App() {
   }
 
   async function closeFilePane(filePath: string) {
-    if (isDraftDirty(fileDraftsRef.current[filePath]) && !(await confirm({ title: "Discard unsaved changes?", description: `${filePath} has changes that have not been saved.`, confirmLabel: "Discard changes", destructive: true }))) return;
+    const ownerWorkspace = executionWorkspace;
+    const ownerVersion = fileWorkspaceVersion;
+    const scope = getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace);
+    if (isDraftDirty(scope.drafts[filePath]) && !(await confirm({ title: "Discard unsaved changes?", description: `${filePath} has changes that have not been saved.`, confirmLabel: "Discard changes", destructive: true }))) return;
+    if (!isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) return;
     const current = openFilesRef.current;
     const closedIndex = current.findIndex((file) => file.path === filePath);
     if (closedIndex < 0) return;
     const next = current.filter((file) => file.path !== filePath);
     openFilesRef.current = next;
     setOpenFiles(next);
-    const nextDrafts = { ...fileDraftsRef.current };
+    const nextDrafts = { ...getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace).drafts };
     delete nextDrafts[filePath];
     setDrafts(nextDrafts);
     setFileConflicts((current) => withoutKey(current, filePath));
@@ -3034,16 +3070,20 @@ function App() {
   }
 
   async function closeOtherFilePanes(keepPath: string) {
+    const ownerWorkspace = executionWorkspace;
+    const ownerVersion = fileWorkspaceVersion;
     const current = openFilesRef.current;
     const closing = current.filter((file) => file.path !== keepPath);
     if (closing.length === 0) return;
-    const dirtyCount = closing.filter((file) => isDraftDirty(fileDraftsRef.current[file.path])).length;
+    const scope = getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace);
+    const dirtyCount = closing.filter((file) => isDraftDirty(scope.drafts[file.path])).length;
     if (dirtyCount > 0 && !(await confirm({ title: "Close other files?", description: `${dirtyCount} other file${dirtyCount === 1 ? "" : "s"} have unsaved changes.`, confirmLabel: "Close others", destructive: true }))) return;
+    if (!isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) return;
     const keep = current.find((file) => file.path === keepPath) ?? null;
     const next = keep ? [keep] : [];
     openFilesRef.current = next;
     setOpenFiles(next);
-    const nextDrafts = { ...fileDraftsRef.current };
+    const nextDrafts = { ...getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace).drafts };
     for (const file of closing) delete nextDrafts[file.path];
     setDrafts(nextDrafts);
     setFileConflicts((records) => closing.reduce((acc, file) => withoutKey(acc, file.path), records));
@@ -3055,10 +3095,14 @@ function App() {
   }
 
   async function closeAllFilePanes() {
+    const ownerWorkspace = executionWorkspace;
+    const ownerVersion = fileWorkspaceVersion;
     const current = openFilesRef.current;
     if (current.length === 0) return;
-    const dirtyCount = current.filter((file) => isDraftDirty(fileDraftsRef.current[file.path])).length;
+    const scope = getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace);
+    const dirtyCount = current.filter((file) => isDraftDirty(scope.drafts[file.path])).length;
     if (dirtyCount > 0 && !(await confirm({ title: "Close all files?", description: `${dirtyCount} file${dirtyCount === 1 ? "" : "s"} have unsaved changes.`, confirmLabel: "Close all", destructive: true }))) return;
+    if (!isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) return;
     openFilesRef.current = [];
     setOpenFiles([]);
     setDrafts({});
@@ -3071,47 +3115,51 @@ function App() {
   }
 
   function updateFileDraft(filePath: string, content: string) {
-    const draft = fileDraftsRef.current[filePath];
+    const drafts = getFileEditorScope(fileEditorScopesRef.current, executionWorkspace).drafts;
+    const draft = drafts[filePath];
     if (!draft || draft.content === content) return;
-    setDrafts({ ...fileDraftsRef.current, [filePath]: { ...draft, content } });
+    setDrafts({ ...drafts, [filePath]: { ...draft, content } });
     setFileErrors((current) => withoutKey(current, filePath));
   }
 
   async function saveFile(filePath: string) {
-    const draft = fileDraftsRef.current[filePath];
+    const ownerWorkspace = executionWorkspace;
+    const ownerVersion = fileWorkspaceVersion;
+    const scope = getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace);
+    const draft = scope.drafts[filePath];
     if (!draft || !isDraftDirty(draft)) return;
+    if (scope.saving.has(filePath)) return;
     const contentAtSave = draft.content;
-    setFileSavingPath(filePath, true);
-    setFileErrors((current) => withoutKey(current, filePath));
+    setFileSavingPath(filePath, true, ownerWorkspace);
+    setFileErrors((current) => withoutKey(current, filePath), ownerWorkspace);
     try {
-      const saved = await desktopBridge.writeWorkspaceFile(executionWorkspace, filePath, prepareFileContent(draft));
+      const saved = await desktopBridge.writeWorkspaceFile(ownerWorkspace, filePath, prepareFileContent(draft));
       const savedContent = toEditorText(saved.content ?? contentAtSave);
-      const latest = fileDraftsRef.current[filePath];
-      if (latest) {
-        setDrafts({
-          ...fileDraftsRef.current,
-          [filePath]: markDraftSaved({ ...latest, savedContent }, savedContent, saved.modifiedAt),
-        });
-      }
+      replaceFileEditorScopes(finishFileEditorSave(fileEditorScopesRef.current, ownerWorkspace, filePath, savedContent, saved.modifiedAt));
+      if (!isCurrentFileWorkspace(ownerWorkspace, ownerVersion)) return;
       const updateFile = (file: WorkspaceFilePreview) => file.path === filePath
         ? { ...file, ...saved, content: saved.content ?? file.content }
         : file;
       openFilesRef.current = openFilesRef.current.map(updateFile);
       setOpenFiles(openFilesRef.current);
       setSelectedFile((current) => current ? updateFile(current) : current);
-      setFileConflicts((current) => withoutKey(current, filePath));
     } catch (error) {
-      setFileErrors((current) => ({ ...current, [filePath]: error instanceof Error ? error.message : String(error) }));
+      setFileErrors((current) => ({ ...current, [filePath]: error instanceof Error ? error.message : String(error) }), ownerWorkspace);
     } finally {
-      setFileSavingPath(filePath, false);
+      setFileSavingPath(filePath, false, ownerWorkspace);
     }
   }
 
   async function reloadFile(filePath: string) {
+    const ownerWorkspace = executionWorkspace;
+    const ownerVersion = fileWorkspaceVersion;
+    const requestedDraft = getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace).drafts[filePath];
     try {
-      const file = await desktopBridge.readWorkspaceFile(executionWorkspace, filePath);
+      const file = await desktopBridge.readWorkspaceFile(ownerWorkspace, filePath);
+      if (!isCurrentFileWorkspace(ownerWorkspace, ownerVersion)
+        || getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace).drafts[filePath] !== requestedDraft) return;
       const draft = createFileDraft(file);
-      const nextDrafts = { ...fileDraftsRef.current };
+      const nextDrafts = { ...getFileEditorScope(fileEditorScopesRef.current, ownerWorkspace).drafts };
       if (draft) nextDrafts[filePath] = draft;
       else delete nextDrafts[filePath];
       setDrafts(nextDrafts);
@@ -3121,15 +3169,16 @@ function App() {
       setFileConflicts((current) => withoutKey(current, filePath));
       setFileErrors((current) => withoutKey(current, filePath));
     } catch (error) {
-      setFileErrors((current) => ({ ...current, [filePath]: error instanceof Error ? error.message : String(error) }));
+      setFileErrors((current) => ({ ...current, [filePath]: error instanceof Error ? error.message : String(error) }), ownerWorkspace);
     }
   }
 
   function dismissFileConflict(filePath: string) {
     const onDisk = fileConflicts[filePath];
-    const draft = fileDraftsRef.current[filePath];
+    const drafts = getFileEditorScope(fileEditorScopesRef.current, executionWorkspace).drafts;
+    const draft = drafts[filePath];
     if (draft && onDisk !== undefined) {
-      setDrafts({ ...fileDraftsRef.current, [filePath]: { ...draft, savedContent: onDisk } });
+      setDrafts({ ...drafts, [filePath]: { ...draft, savedContent: onDisk } });
     }
     setFileConflicts((current) => withoutKey(current, filePath));
   }

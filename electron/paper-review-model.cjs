@@ -1,4 +1,5 @@
 const modelConfig = require("./model-config.cjs");
+const { assertModelCompletion } = require("./agent/model-completion.cjs");
 
 /**
  * Minimal text-completion adapter for Paper review.
@@ -142,6 +143,14 @@ function readUsage(payload, anthropic) {
   };
 }
 
+function completedPayload(payload, anthropic) {
+  assertModelCompletion({ provider: anthropic ? "anthropic" : "openai",
+    finishReason: anthropic ? payload?.stop_reason : payload?.choices?.[0]?.finish_reason,
+    partialResponse: textFromPayload(payload, anthropic),
+  });
+  return { payload, usage: readUsage(payload, anthropic) };
+}
+
 async function requestJson(model, { system, prompt, maxTokens = DEFAULT_MAX_TOKENS, signal, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, allowTemperatureRetry = true }) {
   const anthropic = isAnthropic(model);
   const request = anthropic ? anthropicRequest(model, { system, prompt, maxTokens }) : openAiRequest(model, { system, prompt, maxTokens });
@@ -173,7 +182,7 @@ async function requestJson(model, { system, prompt, maxTokens = DEFAULT_MAX_TOKE
         });
         if (retryResponse.ok) {
           const payload = await retryResponse.json();
-          return { payload, usage: readUsage(payload, anthropic) };
+          return completedPayload(payload, anthropic);
         }
         const retryDetail = (await retryResponse.text()).slice(0, 800);
         throw new Error(`Model request failed (${retryResponse.status}): ${retryDetail}`);
@@ -181,7 +190,7 @@ async function requestJson(model, { system, prompt, maxTokens = DEFAULT_MAX_TOKE
       throw new Error(`Model request failed (${response.status}): ${detail}`);
     }
     const payload = await response.json();
-    return { payload, usage: readUsage(payload, anthropic) };
+    return completedPayload(payload, anthropic);
   } catch (error) {
     if (controller.signal.aborted && signal?.aborted) throw new Error("Paper review was cancelled.");
     if (error?.name === "AbortError") throw new Error("The model request timed out.");

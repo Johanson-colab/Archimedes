@@ -1699,7 +1699,10 @@ app.whenReady().then(async () => {
     return deepSearchPapers(input, { modelConfig: modelConfig.getActiveModelConfig() });
   });
 
-  ipcMain.handle("benchmark-radar:get-data", () => getBenchmarkRadarData({
+  ipcMain.handle("benchmark-radar:get-data", (_event, input) => getBenchmarkRadarData({
+    allowNetwork: input?.cachedOnly !== true,
+    force: input?.refresh === true,
+    fetchImpl: (...args) => net.fetch(...args),
     cachePath: path.join(app.getPath("userData"), "benchmark-radar", "public-index.json"),
     seedPath: path.join(__dirname, "assets", "benchmark-radar", "public-index.json"),
   }));
@@ -1711,6 +1714,10 @@ app.whenReady().then(async () => {
     if (paper.title.length > 1000 || String(paper.abstract || "").length > 100_000) throw new Error("Paper metadata is too large.");
     return store.addPaper(libraryId, paper);
   });
+
+  ipcMain.handle("library:get-bibliography", (_event, { paperId }) => store.getPaperBibliography(paperId));
+  ipcMain.handle("library:set-bibliography", (_event, { paperId, patch }) => store.setPaperBibliography(paperId, patch));
+  ipcMain.handle("library:repair-metadata", (_event, { paperId, patch }) => store.repairLibraryPaperMetadata(paperId, patch));
 
   ipcMain.handle("library:import-local-pdf", async (event, { libraryId, workspace } = {}) => {
     if (typeof libraryId !== "string") throw new Error("Choose a library before importing a paper.");

@@ -58,9 +58,9 @@ test('approved command output reaches the next model request, and denial never e
   global.fetch = async (_url, options) => {
     const request = JSON.parse(options.body);
     count += 1;
-    if (count === 1) return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: '', tool_calls: [{ id: 'call1', type: 'function', function: { name: 'propose_command', arguments: JSON.stringify({ command: "printf 'verified-result'; printf 'created' > generated.txt; exit 7" }) } }] } }] }) };
+    if (count === 1) return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ finish_reason: 'tool_calls', message: { role: 'assistant', content: '', tool_calls: [{ id: 'call1', type: 'function', function: { name: 'propose_command', arguments: JSON.stringify({ command: "printf 'verified-result'; printf 'created' > generated.txt; exit 7" }) } }] } }] }) };
     toolResult = JSON.parse(request.messages.find(m => m.role === 'tool').content);
-    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { role: 'assistant', content: 'Observed the failure.' } }] }) };
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'Observed the failure.' } }] }) };
   };
   const result = await agent.runAgent({ prompt: 'Run a check', workspace: root, mode: 'free-chat', origin: 'research', capabilities: { command: 'ask', write: 'ask' }, emit: event => {
     if (event.type === 'approval') {

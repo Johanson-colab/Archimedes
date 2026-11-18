@@ -30,9 +30,10 @@ function gitOutput(root, args) {
  */
 function detectGitState(root) {
   if (typeof root !== "string" || !root.trim()) return "none";
-  const resolved = path.resolve(root);
+  let resolved;
   let stat;
   try {
+    resolved = fs.realpathSync(path.resolve(root));
     stat = fs.statSync(resolved);
   } catch {
     return "none";
@@ -62,7 +63,12 @@ function detectGitState(root) {
   // A malformed `.git` can fall through to a repository in a parent folder.
   // The project root must be the actual top-level work tree.
   const topLevel = gitOutput(resolved, ["rev-parse", "--show-toplevel"]);
-  if (!topLevel || path.resolve(topLevel) !== resolved) return "suspicious";
+  if (!topLevel) return "suspicious";
+  try {
+    if (fs.realpathSync(topLevel) !== resolved) return "suspicious";
+  } catch {
+    return "suspicious";
+  }
   const head = runGit(resolved, ["rev-parse", "--verify", "--quiet", "HEAD"]);
   if (head.error || head.status !== 0) {
     const hasRefs = gitOutput(resolved, ["for-each-ref", "--count=1", "--format=%(refname)"]);

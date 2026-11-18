@@ -10,6 +10,7 @@ export const composer: Record<string, string> = {
   "Back": "后退",
   "Describe the research direction for Idea Spark...": "描述要交给 Idea Spark 的研究方向……",
   "Idea Spark": "Idea Spark",
+  "Incomplete": "未完成",
   "Plugins": "插件",
   "Reading research context": "正在读取研究上下文",
   "Remove Idea Spark": "移除 Idea Spark",

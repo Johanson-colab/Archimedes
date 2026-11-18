@@ -202,10 +202,13 @@ interface ResearchDeskBridge {
       step?: ReproductionRunStep;
     }) => void) => () => void;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
-    getBenchmarkRadarData: () => Promise<BenchmarkRadarData>;
+    getBenchmarkRadarData: (options?: { cachedOnly?: boolean; refresh?: boolean }) => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
     importLocalLibraryPaper: (libraryId: string, workspace?: string) => Promise<LibraryPaper | null>;
     addLibraryPaper: (libraryId: string, paper: AcademicSearchResult) => Promise<LibraryPaper>;
+    getPaperBibliography: (paperId: string) => Promise<{ paper_id: string; citekey: string; entryType: string; updated_at: string | null }>;
+    setPaperBibliography: (paperId: string, patch: { citekey?: string; entryType?: string }) => Promise<{ paper_id: string; citekey: string; entryType: string; updated_at: string | null }>;
+    repairLibraryPaperMetadata: (paperId: string, patch: import("./bibliography").MetadataPatch) => Promise<LibraryPaper>;
     updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     getLibraryPaperReader: (paperId: string, workspace?: string, projectId?: string | null) => Promise<PaperReaderState>;
@@ -1420,6 +1423,8 @@ interface LibraryPaper extends AcademicSearchResult {
   updated_at: string;
   github_url: string;
   github_stars: number;
+  citekey?: string;
+  entry_type?: string;
 }
 
 interface PaperReaderAsset {
@@ -1880,18 +1885,22 @@ interface AgentRunResult {
   taskId: string;
   response: string;
   status: string;
+  error?: ModelIncompleteFailure;
   actions: AgentAction[];
   thread: ResearchThreadDetail;
 }
 
+interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
+
 interface AgentEvent {
-  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "incomplete" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
   title: string;
   detail: string;
   threadId?: string;
   turnId?: string;
   delta?: string;
   clientRunId?: string;
+  error?: ModelIncompleteFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
   toolCall?: { id?: string; name?: string; source: string; status: "running" | "completed" | "failed" | "interrupted"; durationMs: number };
@@ -2080,6 +2089,9 @@ interface BenchmarkRadarRecord {
   attentionScore: number | null;
   attentionRank: number | null;
   forecast: number | null;
+  forecastReason?: string;
+  forecastConfidence?: string;
+  forecastHorizon?: string;
 }
 
 interface BenchmarkRadarDirection {
@@ -2090,6 +2102,8 @@ interface BenchmarkRadarDirection {
 }
 
 interface BenchmarkRadarData {
+  fetchedAt?: string;
+  refreshError?: string;
   source: "local" | "remote" | "cached" | "bundled";
   sourceRoot: string;
   updatedAt: string;

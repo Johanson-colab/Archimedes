@@ -1,3 +1,4 @@
+import { matchBibliographyPaper, type MetadataPatch } from "./bibliography";
 import seedData from "../shared/library-seeds.json";
 
 const now = new Date().toISOString();
@@ -140,8 +141,7 @@ export const previewLibraryBridge = {
     };
   },
   addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult) => {
-    const existing = [...previewPapers.values()].find((candidate) => candidate.arxiv_id && candidate.arxiv_id === paper.arxiv_id)
-      ?? [...previewPapers.values()].find((candidate) => candidate.title === paper.title);
+    const existing = matchBibliographyPaper(paper, [...previewPapers.values()]);
     const id = existing?.id ?? crypto.randomUUID();
     if (!existing) {
       previewPapers.set(id, {
@@ -163,6 +163,22 @@ export const previewLibraryBridge = {
     links.add(id);
     refreshCount(libraryId);
     return { ...(previewPapers.get(id) as LibraryPaper) };
+  },
+  getPaperBibliography: async (paperId: string) => {
+    const paper = previewPapers.get(paperId);
+    if (!paper) throw new Error("Paper not found.");
+    return { paper_id: paperId, citekey: paper.citekey || "", entryType: paper.entry_type || "article", updated_at: paper.updated_at };
+  },
+  setPaperBibliography: async (paperId: string, input: { citekey: string; entryType: string }) => {
+    const paper = previewPapers.get(paperId);
+    if (!paper) throw new Error("Paper not found.");
+    Object.assign(paper, { citekey: input.citekey, entry_type: input.entryType, updated_at: new Date().toISOString() });
+    return { paper_id: paperId, ...input, updated_at: paper.updated_at };
+  },
+  repairLibraryPaperMetadata: async (paperId: string, patch: MetadataPatch) => {
+    const paper = previewPapers.get(paperId);
+    if (!paper) throw new Error("Paper not found.");
+    Object.assign(paper, patch, { updated_at: new Date().toISOString() }); return { ...paper };
   },
   updateLibraryPaper: async (paperId: string, patch: Partial<LibraryPaper>) => {
     const paper = previewPapers.get(paperId);
