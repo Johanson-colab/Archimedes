@@ -26,3 +26,9 @@ The FigureForge pair reproduces a failed **Browse extensions** action from the c
 | Before | After |
 | --- | --- |
 | ![Scrolled FigureForge after an invisible failure](scroll-before.png) | ![Scrolled FigureForge with a visible warning](scroll-after.png) |
+
+Both Research Apps settings captures use the full App renderer in Electron at 1440 × 1000, Charcoal and English, with matching default visibility preferences. The dialog is scrolled to the row's containing category in each capture. At `0637139`, **Data charts** appears under **Analysis & visualization**. The branch shows **Paper chart references** under **Resources & evidence** with the same inactive sidebar switch.
+
+| Before | After |
+| --- | --- |
+| ![Data charts under Analysis and visualization](apps-settings-before.png) | ![Paper chart references under Resources and evidence](apps-settings-after.png) |
