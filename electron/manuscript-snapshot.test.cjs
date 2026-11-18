@@ -36,7 +36,7 @@ function compilerFixture(onStart = () => {}, delay = 0) {
   };
 }
 
-function transientCompilerFixture(relativePath, { inBuildDirectory = false } = {}) {
+function transientCompilerFixture(relativePath, { inBuildDirectory = false, onCreated } = {}) {
   return (_command, args, options) => {
     const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => {};
     const text = fs.readFileSync(path.join(options.cwd, "section.tex"), "utf8");
@@ -45,6 +45,7 @@ function transientCompilerFixture(relativePath, { inBuildDirectory = false } = {
     setImmediate(() => {
       const transient = path.join(inBuildDirectory ? out : options.cwd, relativePath);
       fs.writeFileSync(transient, "Generated while the compiler ran");
+      onCreated?.(relativePath);
       fs.unlinkSync(transient);
       child.stdout.emit("data", `Controlled compiler: ${text}\n`);
       child.emit("close", 0, null);
@@ -105,7 +106,15 @@ test("removing a source while compiling retains an inspectable stale build", asy
 
 test("a manuscript input created and removed during compilation never certifies the PDF as current", async t => {
   const root = fixture(t);
-  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("generated.tex") });
+  let reportEvent;
+  t.mock.method(fs, "watch", (_directory, _options, listener) => {
+    reportEvent = listener;
+    return Object.assign(new EventEmitter(), { close() {} });
+  });
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic",
+    spawnImpl: transientCompilerFixture("generated.tex", { onCreated: name => reportEvent("rename", name) }),
+  });
   assert.equal(result.ok, true, "the compiler preview remains available");
   assert.match(result.pdf_path, /main\.pdf$/);
   assert.equal(result.source_snapshot.status, "unverified");
