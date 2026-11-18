@@ -82,6 +82,7 @@ export const writing: Record<string, string> = {
   "Open an existing manuscript, or create a new paper from a template.": "打开已有稿件，或从模板新建论文。",
   "Open official source": "打开官方来源",
   "Open {path}": "打开 {path}",
+  "Opening source…": "正在打开源文件…",
   "Preparing compiler": "正在准备编译引擎",
   "Preparing template…": "正在准备模板…",
   "Preprint": "预印本",

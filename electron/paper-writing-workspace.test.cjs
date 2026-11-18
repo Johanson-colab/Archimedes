@@ -467,6 +467,62 @@ test("returning to a clean cached manuscript reloads external edits before the n
   assert.equal(f.disk(f.a), latest);
 });
 
+test("a delayed clean tree selection commits the fresh source before allowing edits", async t => {
+  const read = deferred();
+  let waiting = false;
+  const part = "paper/part.tex";
+  const f = await fixture(t, { read: async (root, name, preview) => {
+    if (waiting && name === part) await read.promise;
+    return preview(root, name);
+  } });
+  const partFile = path.join(f.a, part);
+  fs.writeFileSync(partFile, "Original section\n");
+  await f.render(f.a); await autoCompileOff();
+  await click(part);
+  await click("paper/main.tex");
+  fs.writeFileSync(partFile, "Agent updated the section\n");
+  waiting = true;
+  await click(part);
+  const current = () => document.querySelector(".latex-editor-textarea");
+  assert.equal(current().getAttribute("aria-label"), "Edit paper/main.tex");
+  assert.equal(current().readOnly, true);
+  assert.equal(document.querySelector(".paper-save-state").textContent, "Opening source…");
+  await React.act(async () => read.resolve());
+  assert.equal(current().readOnly, false);
+  assert.equal(current().value, "Agent updated the section\n");
+  await edit("Agent updated the section\nUser continued the edit\n", part);
+  await click("paper/main.tex");
+  assert.equal(fs.readFileSync(partFile, "utf8"), "Agent updated the section\nUser continued the edit\n");
+});
+
+test("a failed source read leaves the previous selection and a newer selection supersedes a slow read", async t => {
+  let pending;
+  const part = "paper/part.tex", second = "paper/second.tex";
+  const f = await fixture(t, { read: async (root, name, preview) => {
+    if (name === part && pending) await pending.promise;
+    return preview(root, name);
+  } });
+  fs.writeFileSync(path.join(f.a, part), "Cached section\n");
+  fs.writeFileSync(path.join(f.a, second), "Another section\n");
+  await f.render(f.a); await autoCompileOff();
+  await click(part);
+  await click("paper/main.tex");
+  pending = deferred();
+  await click(part);
+  await React.act(async () => pending.reject(new Error("The selected source could not be read.")));
+  const current = () => document.querySelector(".latex-editor-textarea");
+  assert.equal(current().getAttribute("aria-label"), "Edit paper/main.tex");
+  assert.equal(current().readOnly, false);
+  assert.match(document.querySelector(".latex-diagnostics").textContent, /selected source could not be read/);
+  pending = deferred();
+  await click(part);
+  await click(second);
+  assert.equal(current().readOnly, false);
+  assert.equal(current().value, "Another section\n");
+  await React.act(async () => pending.resolve());
+  assert.equal(current().value, "Another section\n");
+});
+
 test("opening supporting sources preserves or resolves the actual manuscript compile target", async t => {
   const f = await fixture(t);
   fs.mkdirSync(path.join(f.a, "paper/sections"));
