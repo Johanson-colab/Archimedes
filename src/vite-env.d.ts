@@ -1882,6 +1882,19 @@ interface AgentRunResult {
   thread: ResearchThreadDetail;
 }
 
+interface WorkspaceSnapshotScanCoverage {
+  entries: number;
+  metadataOnly: number;
+  ignoredDirectories: number;
+  entryLimitReached: boolean;
+  byteBudgetReached: boolean;
+}
+
+interface WorkspaceSnapshotCoverage {
+  before: WorkspaceSnapshotScanCoverage;
+  after: WorkspaceSnapshotScanCoverage;
+}
+
 interface AgentEvent {
   type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
   title: string;
@@ -1892,6 +1905,7 @@ interface AgentEvent {
   clientRunId?: string;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
+  snapshotCoverage?: WorkspaceSnapshotCoverage;
   toolCall?: { id?: string; name?: string; source: string; status: "running" | "completed" | "failed" | "interrupted"; durationMs: number };
   activity?: NativeAgentActivity;
   usage?: NativeAgentUsage | null;

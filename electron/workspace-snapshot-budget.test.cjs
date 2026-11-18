@@ -85,9 +85,7 @@ test("an approved command persists scan coverage and only reports actual read li
   assert.equal(coverageEvent.payload.after.metadataOnly, action.payload.snapshotCoverage.after.metadataOnly);
   const limitedNotice = events.find(event => event.title === "Workspace change scan is limited");
   assert.ok(limitedNotice);
-  assert.match(limitedNotice.detail, /After scan:/);
-  assert.match(limitedNotice.detail, /ignored director(y|ies) skipped/);
-  assert.doesNotMatch(limitedNotice.detail, /generated/);
+  assert.deepEqual(limitedNotice.snapshotCoverage, action.payload.snapshotCoverage);
   fs.rmSync(path.join(root, ".venv"), { recursive: true, force: true });
   for (let index = 0; index < 10; index++) fs.unlinkSync(path.join(root, `${index}.txt`));
   fs.mkdirSync(path.join(root, ".git"));
@@ -142,10 +140,7 @@ test("a command that removes its own large files still reports the limited befor
   assert.deepEqual(coverageEvent.payload, action.payload.snapshotCoverage);
   const limitedNotice = events.find(event => event.title === "Workspace change scan is limited");
   assert.ok(limitedNotice);
-  assert.match(limitedNotice.detail, /^Before scan:/);
-  assert.match(limitedNotice.detail, /[0-9]+ ignored directories skipped/);
-  assert.match(limitedNotice.detail, /text byte budget reached/);
-  assert.doesNotMatch(limitedNotice.detail, /After scan:|generated/);
+  assert.deepEqual(limitedNotice.snapshotCoverage, action.payload.snapshotCoverage);
   const ordinary = await agent.executeTool({
     ...context,
     call: { id: "ordinary-small-command", type: "function", function: { name: "propose_command", arguments: JSON.stringify({ command: 'node -e "require(\'fs\').writeFileSync(\'second.txt\', \'ok\')"' }) } },

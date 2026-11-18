@@ -31,25 +31,6 @@ const MAX_FILE_BYTES = 64_000;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
 
-function snapshotCoverageLimits(coverage) {
-  if (!coverage) return [];
-  const limits = [];
-  if (coverage.entryLimitReached) limits.push("file limit reached");
-  if (coverage.byteBudgetReached) limits.push("text byte budget reached");
-  return limits;
-}
-
-function describeSnapshotScan(label, coverage) {
-  const limits = snapshotCoverageLimits(coverage);
-  if (!limits.length) return "";
-  const ignored = `${coverage.ignoredDirectories} ignored ${coverage.ignoredDirectories === 1 ? "directory" : "directories"} skipped`;
-  return `${label} scan: ${coverage.entries} files · ${coverage.metadataOnly} tracked by size/time · ${ignored} · ${limits.join(" and ")}`;
-}
-
-function describeSnapshotCoverage({ before, after }) {
-  return [describeSnapshotScan("Before", before), describeSnapshotScan("After", after)].filter(Boolean).join("; ");
-}
-
 const tools = [
   {
     type: "function",
@@ -859,10 +840,9 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
         const changes = compareWorkspaceSnapshots(before, after);
         const snapshotCoverage = { before: before.coverage, after: after.coverage };
         store.updateActionPayload(action.id, { snapshotCoverage });
-        const coverageDetail = describeSnapshotCoverage(snapshotCoverage);
-        if (coverageDetail) {
+        if ([before.coverage, after.coverage].some((scan) => scan.entryLimitReached || scan.byteBudgetReached)) {
           recordEvent({ type: "workspace_snapshot_coverage", payload: snapshotCoverage });
-          emit({ type: "tool", title: "Workspace change scan is limited", detail: coverageDetail });
+          emit({ type: "tool", title: "Workspace change scan is limited", detail: "", snapshotCoverage });
         }
         if (changes.length) {
           const updated = store.updateActionPayload(action.id, { changes });
