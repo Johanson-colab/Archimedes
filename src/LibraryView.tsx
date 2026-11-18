@@ -894,13 +894,13 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         capabilities: { write: "deny", command: "deny" },
         // Paper chats live under their paper, not in the workspace sidebar.
         origin: "paper",
+        paperId: paper.id,
         title: paper.title,
         clientRunId,
       });
       setChatThreadId(result.threadId);
       setChatMessages((current) => [...current, { role: "assistant", text: result.response }]);
-      try { await bridge.setLibraryPaperChatThread(paper.id, result.threadId, workspace, projectId); }
-      catch (saveError) { setError(readableError(saveError, "The paper conversation completed but could not be saved.")); }
+      if (result.paperChatSaveError) setError(result.paperChatSaveError);
     } catch (askError) {
       setChatMessages((current) => [...current, { role: "assistant", text: `I could not answer that yet: ${readableError(askError, "Agent request failed.")}` }]);
     } finally {

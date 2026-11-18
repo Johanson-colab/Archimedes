@@ -64,6 +64,29 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   assert.equal(await review(event, { workspace: b, source: { kind: "library" } }), a);
   assert.equal(await review(event, { workspace: b, source: { kind: "pdf" } }), b);
 
+  const runStart = source.indexOf('  ipcMain.handle("agent:run",');
+  const runEnd = source.indexOf('  ipcMain.handle("paper-review:run",', runStart);
+  let finishReply, started;
+  const pending = new Promise(resolve => { started = resolve; });
+  const paperThread = ownerA.createResearchThread({ prompt: "Read paper", mode: "free-chat", kind: "paper", workspacePath: a });
+  const fakeAgent = { runAgent: () => { started(); return new Promise(resolve => { finishReply = resolve; }); } };
+  new Function("scope", `with(scope) { ${source.slice(runStart, runEnd)} }`)({
+    ipcMain: ipc, store, resolveWorkspace: fs.realpathSync, sanitizeAgentContext: async () => [],
+    agentBackendConfig: { get: () => ({ backend: "api" }) }, modelConfig: { getActiveModelConfig: () => ({}) },
+    normalizeReasoningEffort: () => "medium", normalizeContextLength: () => "standard", agent: fakeAgent,
+    runWindowAgent: ({ run }) => run({ emit() {} }),
+  });
+  const reply = handlers.get("agent:run")(event, { prompt: "Read this", origin: "paper", paperId: "seed-react", workspace: a, projectId: paperThread.project_id });
+  await pending;
+  helpers.setWindowWorkspace(1, b);
+  finishReply({ threadId: paperThread.id, response: "A saved answer" });
+  const saved = await reply;
+  assert.equal(saved.paperChatSaveError, undefined);
+  assert.equal(ownerA.getPaperChatThread("seed-react", paperThread.project_id).id, paperThread.id);
+  assert.equal(ownerB.getPaperChatThread("seed-react"), null);
+  helpers.setWindowWorkspace(1, a);
+  claim(event, sharedThread, true, a);
+
   await helpers.openFolderFromMenu();
   assert.deepEqual(proposals, [["menu:open-folder", b]]);
   assert.equal(handlers.get("library:owner")(event), a, "an ignored menu proposal does not switch IPC ownership");

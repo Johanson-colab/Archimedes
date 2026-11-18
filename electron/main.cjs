@@ -1909,8 +1909,9 @@ app.whenReady().then(async () => {
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
     if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
-    return runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
-      dataStore: store.currentStore(),
+    const dataStore = store.currentStore();
+    const result = await runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
+      dataStore,
       externalBackend,
       researchSkill: input.researchSkill,
       mineruToken: input.mineruToken || undefined,
@@ -1931,6 +1932,11 @@ app.whenReady().then(async () => {
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => emit({ ...payload, ...(clientRunId ? { clientRunId } : {}) }),
     }) });
+    if (input.origin === "paper" && typeof input.paperId === "string") {
+      try { dataStore.setPaperChatThread(input.paperId, result.threadId, input.projectId); }
+      catch (error) { return { ...result, paperChatSaveError: error.message || String(error) }; }
+    }
+    return result;
   });
 
   ipcMain.handle("paper-review:run", async (event, input = {}) => {
