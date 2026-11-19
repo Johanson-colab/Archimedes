@@ -440,3 +440,17 @@ test("the API run tool waits for approval and starts a recorded run", async () =
     }
   });
 });
+
+test('managed experiment receives explicitly shared environment variables', async t => {
+  const { setEnvironmentVault } = require('./environment-vault.cjs');
+  setEnvironmentVault({ shared: () => ({ HF_TOKEN: 'synthetic-test-token' }) });
+  t.after(() => setEnvironmentVault(null));
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const thread = threadFor(project.id); const { experiment } = experimentFor(project.id, thread.id);
+    const command = `${JSON.stringify(process.execPath)} -e "process.exit(process.env.HF_TOKEN?.length === 20 ? 0 : 1)"`;
+    const started = runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, command, cwd: root, workspace: root });
+    const final = await started.completion;
+    assert.equal(final.status, 'succeeded');
+    assert.doesNotMatch(fs.readFileSync(final.log_path, 'utf8'), /synthetic-test-token/);
+  });
+});

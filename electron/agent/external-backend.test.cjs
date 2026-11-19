@@ -188,3 +188,10 @@ test('Claude and OpenCode receive the per-turn live experiment entry', async () 
   assert.match(JSON.stringify(sent),/LIVE_EXPERIMENT_BRIDGE_MARKER/);
  }
 });
+
+test('only opted-in environment variables reach native turns, not extraction', async t => {
+ const { setEnvironmentVault } = require('../environment-vault.cjs');
+ setEnvironmentVault({ shared: () => ({ HF_TOKEN: 'synthetic-test-token' }) }); t.after(() => setEnvironmentVault(null));
+ const normal = options(); await runNative(normal); assert.equal(Fixture.last.options.env.HF_TOKEN, 'synthetic-test-token');
+ const extraction = options(); extraction.turn.task_id = 'research-graph-extraction'; await runNative(extraction); assert.equal(Fixture.last.options.env, undefined);
+});

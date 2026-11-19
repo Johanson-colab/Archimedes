@@ -61,6 +61,8 @@ const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
+const { createEnvironmentVault, setEnvironmentVault } = require("./environment-vault.cjs");
+let environmentVault;
 const sshServers = require("./ssh-servers.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { createDailyFigureCache } = require("./daily-figure-cache.cjs");
@@ -648,6 +650,8 @@ app.whenReady().then(async () => {
   modelConfig.initializeModelConfig(app.getPath("userData"));
   agentBackendConfig.initialize(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"));
+  environmentVault = createEnvironmentVault({ directory: app.getPath("userData"), safeStorage });
+  setEnvironmentVault(environmentVault);
   // Passwords and reproduction tokens share one OS keychain-backed codec; both
   // are useless if the machine cannot encrypt, so both refuse to save instead.
   const secretCodec = {
@@ -1211,6 +1215,9 @@ app.whenReady().then(async () => {
     return sshServers.testConnection(target);
   });
 
+  ipcMain.handle("environment:list", () => environmentVault.list());
+  ipcMain.handle("environment:save", (_event, input) => environmentVault.save(input));
+  ipcMain.handle("environment:remove", (_event, name) => environmentVault.remove(name));
   ipcMain.handle("web-search:get-config", () => webSearch.getPublicWebSearchConfig());
 
   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));

@@ -432,3 +432,12 @@ test('paper reading attaches the bundled skill to the native Codex turn', async 
   assert.ok(fs.existsSync(skill.path));
   assert.equal(f.peer().calls.find(c => c.method === 'thread/start').params.sandbox, 'read-only');
 });
+
+test('shared variables reach native Codex turns but not ephemeral extraction', async t => {
+  const { setEnvironmentVault } = require('../environment-vault.cjs');
+  setEnvironmentVault({ shared: () => ({ HF_TOKEN: 'synthetic-test-token' }) }); t.after(() => setEnvironmentVault(null));
+  const normal = fixture(p => complete(p)); await backend.runCodex(normal.args);
+  assert.equal(normal.peer().options.env.HF_TOKEN, 'synthetic-test-token');
+  const extraction = fixture(p => complete(p), { ephemeral: true }); await backend.runCodex(extraction.args);
+  assert.equal(extraction.peer().options.env, undefined);
+});

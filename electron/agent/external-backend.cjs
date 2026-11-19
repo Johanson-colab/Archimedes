@@ -1,3 +1,4 @@
+const { getSharedEnvironment } = require("../environment-vault.cjs");
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -45,7 +46,8 @@ async function runExternal(options) {
   const input = backend === 'claude' ? claudePrompt(prompt, contextItems) : openCodePrompt(prompt, contextItems);
   if (Buffer.byteLength(JSON.stringify(input)) > 8 * 1024 * 1024 - 1000) throw new Error('Native attachments exceed the protocol limit. No request was sent.');
   const launch = backend === 'claude' ? claudeLaunch({ config, root, resume, binding, skill }) : opencodeLaunch({ config, root });
-  const client = new Client({ ...launch, ...(mineruToken ? { env: { MINERU_API_TOKEN: mineruToken } } : {}) });
+  const launchEnv = { ...(turn.task_id === "research-graph-extraction" ? {} : getSharedEnvironment()), ...(mineruToken ? { MINERU_API_TOKEN: mineruToken } : {}) };
+  const client = new Client({ ...launch, ...(Object.keys(launchEnv).length ? { env: launchEnv } : {}) });
   let response = '', streamed = false, settled = false, sent = false, resultStatus = 'failed';
   const approvals = new Map(), resolved = new Set(), items = new Map();
   const pendingActivities = new Set(), persistedActivities = new Set();

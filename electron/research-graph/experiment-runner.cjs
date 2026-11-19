@@ -1,3 +1,4 @@
+const { getSharedEnvironment } = require("../environment-vault.cjs");
 const { spawn, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -142,7 +143,7 @@ function startExperimentRun({
   try {
     child = spawn(shell, args, {
       cwd: runCwd,
-      env: { ...process.env },
+      env: { ...process.env, ...getSharedEnvironment() },
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (error) {

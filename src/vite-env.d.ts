@@ -175,6 +175,9 @@ interface ResearchDeskBridge {
     saveSshServer: (input: SshServerDraft) => Promise<SshServer>;
     deleteSshServer: (id: string) => Promise<boolean>;
     testSshServer: (input: Partial<SshServerDraft>) => Promise<SshServerTest>;
+    listEnvironmentVariables: () => Promise<Array<{ name: string; shared: boolean }>>;
+    saveEnvironmentVariable: (input: { name: string; value: string; shared: boolean }) => Promise<Array<{ name: string; shared: boolean }>>;
+    removeEnvironmentVariable: (name: string) => Promise<Array<{ name: string; shared: boolean }>>;
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: (projectId?: string | null) => Promise<ResearchLibrary[]>;

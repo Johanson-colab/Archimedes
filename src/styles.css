@@ -10554,3 +10554,17 @@ html[data-file-icons="opencode"] .workspace-tree-row.is-directory .tree-file-ico
 .local-paper-import strong { color: var(--text-primary); font-size: 13px; }
 .local-paper-import small { color: var(--text-muted); line-height: 1.5; }
 .local-paper-import button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+
+.environment-variables { margin-bottom: 24px; }
+.environment-variable-list { margin-top: 12px; }
+.environment-variable-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-soft); }
+.environment-variable-row:last-child { border-bottom: 0; }
+.environment-variable-name { display: grid; gap: 3px; min-width: 170px; flex: 1; }
+.environment-variable-name code { overflow-wrap: anywhere; font-size: 12px; }
+.environment-variable-name small { color: var(--text-muted); font-size: 11px; }
+.environment-variable-row input { flex: 1 1 180px; min-width: 0; }
+.environment-variable-row button, .environment-add button { display: inline-flex; align-items: center; gap: 5px; }
+.environment-add { display: flex; gap: 8px; margin-top: 12px; }
+.environment-add input { flex: 1; min-width: 0; }
+.environment-share { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; color: var(--text-muted); font-size: 11px; }
+.environment-share input { flex: none; width: auto; }

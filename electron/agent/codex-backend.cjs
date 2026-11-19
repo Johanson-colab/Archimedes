@@ -1,3 +1,4 @@
+const { getSharedEnvironment } = require("../environment-vault.cjs");
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -153,7 +154,8 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     : prepareResearchSkill({ workspace: root, backend: 'codex', thread, requested: researchSkill, emit, recordEvent });
   const ideaSpark = ideaSparkControls(researchSkill);
   const developerInstructions = skill?.instructions || ideaSpark.developerInstructions;
-  const client = new Client({ binary: config.binary, appServerArgs: ideaSpark.appServerArgs, ...(mineruToken ? { env: { MINERU_API_TOKEN: mineruToken } } : {}) });
+  const launchEnv = { ...(!ephemeral && !compaction ? getSharedEnvironment() : {}), ...(mineruToken ? { MINERU_API_TOKEN: mineruToken } : {}) };
+  const client = new Client({ binary: config.binary, appServerArgs: ideaSpark.appServerArgs, ...(Object.keys(launchEnv).length ? { env: launchEnv } : {}) });
   const events = createNativeEvents({ emit, recordEvent, onError: (error) => {
     try { finish(error); }
     finally { client.close(); }
