@@ -124,7 +124,8 @@ test("search keys migrate to the encrypted environment vault and work without ag
   saveWebSearchConfig({ provider: 'exa' });
   assert.equal(getPublicWebSearchConfig().provider, 'exa');
   vault.remove('EXA_API_KEY');
-  assert.equal(getPublicWebSearchConfig().hasApiKey, false);
+  assert.equal(getPublicWebSearchConfig().provider, 'tavily');
+  assert.equal(getPublicWebSearchConfig().hasApiKey, true);
 });
 
 test('keeps legacy search credentials usable when encrypted storage is unavailable', t => {
@@ -136,4 +137,26 @@ test('keeps legacy search credentials usable when encrypted storage is unavailab
   initializeWebSearch(directory, vault);
   assert.equal(getPublicWebSearchConfig().hasApiKey, true);
   assert.match(fs.readFileSync(path.join(directory, 'web-search-config.json'), 'utf8'), /legacy-key/);
+});
+
+
+test("automatically selects a configured search key, retaining the prior choice where possible", async t => {
+  const { createEnvironmentVault } = require('./environment-vault.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'search-auto-'));
+  t.after(() => { initializeWebSearch(''); fs.rmSync(directory, { recursive: true, force: true }); });
+  const safeStorage = { isEncryptionAvailable: () => true, encryptString: s => Buffer.from(s), decryptString: b => b.toString() };
+  const vault = createEnvironmentVault({ directory, safeStorage });
+  initializeWebSearch(directory, vault);
+  vault.save({ name: 'EXA_API_KEY', value: 'exa-key' });
+  let requested;
+  await searchWeb({ query: 'test' }, { fetchImpl: async (url, request) => { requested = { url, request }; return { ok: true, json: async () => ({ results: [] }) }; } });
+  assert.match(requested.url, /api\.exa\.ai/);
+  assert.equal(requested.request.headers['x-api-key'], 'exa-key');
+  assert.equal(getPublicWebSearchConfig().provider, 'exa');
+  vault.save({ name: 'BRAVE_SEARCH_API_KEY', value: 'brave-key' });
+  assert.equal(getPublicWebSearchConfig().provider, 'brave');
+  saveWebSearchConfig({ provider: 'exa' });
+  assert.equal(getPublicWebSearchConfig().provider, 'exa');
+  vault.remove('EXA_API_KEY');
+  assert.equal(getPublicWebSearchConfig().provider, 'brave');
 });

@@ -47,9 +47,15 @@ function activeKey(provider, config = readConfig()) {
   return String((environmentVault && environmentVault.get(KEY_NAMES[provider])) || config.apiKeys[provider] || (provider === "brave" ? process.env.ARCHIMEDES_WEB_SEARCH_API_KEY : "") || "");
 }
 
+function configuredProvider(config) {
+  if (activeKey(config.provider, config)) return config.provider;
+  return [...PROVIDERS].find(provider => activeKey(provider, config)) || config.provider;
+}
+
 function getPublicWebSearchConfig() {
   const config = readConfig();
-  return { provider: config.provider, hasApiKey: Boolean(activeKey(config.provider, config)), configuredProviders: [...PROVIDERS].filter((provider) => Boolean(activeKey(provider, config))) };
+  const provider = configuredProvider(config);
+  return { provider, hasApiKey: Boolean(activeKey(provider, config)), configuredProviders: [...PROVIDERS].filter((item) => Boolean(activeKey(item, config))) };
 }
 
 function saveWebSearchConfig(input = {}) {
@@ -157,7 +163,8 @@ async function searchOne(query, input, options, domains) {
 async function searchWeb(input = {}, options = {}) {
   const queries = normalizeQueries(input);
   const domains = normalizeDomains(input.domains);
-  const provider = options.provider || readConfig().provider;
+  const config = readConfig();
+  const provider = options.provider || configuredProvider(config);
   if (!PROVIDERS.has(provider)) throw new Error("Unsupported web search provider.");
   const apiKey = options.apiKey || activeKey(provider);
   if (!apiKey) throw new Error(provider === "brave"

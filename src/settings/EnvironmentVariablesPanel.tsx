@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useUISettings } from "../i18n";
-import { SettingsGroup, SettingsRow, SettingsSection } from "../SettingsPrimitives";
+import { SettingsGroup, SettingsSection } from "../SettingsPrimitives";
 
 const PRESETS = ["OPENAI_API_KEY", "TINKER_API_KEY", "HF_TOKEN", "WANDB_API_KEY", "OPENALEX_API_KEY", "BRAVE_SEARCH_API_KEY", "TAVILY_API_KEY", "EXA_API_KEY", "FIRECRAWL_API_KEY"];
 
 export default function EnvironmentVariablesPanel({ bridge }: { bridge: ResearchDeskBridge }) {
   const { t } = useUISettings();
-  const [provider, setProvider] = useState<WebSearchProviderId>("brave");
-  const [searchBusy, setSearchBusy] = useState(false);
-  const [searchError, setSearchError] = useState("");
   const [names, setNames] = useState<Array<{ name: string; shared: boolean }>>([]);
   const [sharing, setSharing] = useState<Record<string, boolean>>({});
   const [values, setValues] = useState<Record<string, string>>({});
@@ -18,13 +15,6 @@ export default function EnvironmentVariablesPanel({ bridge }: { bridge: Research
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState("");
   useEffect(() => { let active = true; void bridge.listEnvironmentVariables().then(value => { if (active) setNames(value); }).catch(error => { if (active) setFeedback(String(error)); }); return () => { active = false; }; }, [bridge]);
-  useEffect(() => { let active = true; void bridge.getWebSearchConfig().then(config => { if (active) setProvider(config.provider); }).catch(error => { if (active) setFeedback(String(error)); }); return () => { active = false; }; }, [bridge]);
-  async function chooseProvider(next: WebSearchProviderId) {
-    setSearchBusy(true); setSearchError("");
-    try { const result = await bridge.saveWebSearchConfig({ provider: next, apiKey: "" }); setProvider(result.provider); }
-    catch (error) { setSearchError(String(error).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?|^Error:\s*/, "")); }
-    finally { setSearchBusy(false); }
-  }
   const rows = [...new Set([...PRESETS, ...names.map(item => item.name), ...extra])];
   function add() {
     const name = custom.trim();
@@ -46,15 +36,7 @@ export default function EnvironmentVariablesPanel({ bridge }: { bridge: Research
   }
   return <div className="settings-sections environment-variables">
     <SettingsSection title={t("Environment variables")}>
-      <p className="settings-group-note">{t("Save keys using system encryption. Search keys are used by Archimedes. Opt in separately to share keys with native agents and managed experiment runs.")}</p>
-      <SettingsGroup>
-        <SettingsRow title={t("Search provider")} description={t("Choose the web search provider; configure its API key below.")}>
-          <select className="settings-select" aria-label={t("Search provider")} value={provider} disabled={searchBusy} onChange={event => void chooseProvider(event.target.value as WebSearchProviderId)}>
-            <option value="brave">Brave Search</option><option value="tavily">Tavily</option><option value="exa">Exa</option><option value="firecrawl">Firecrawl</option>
-          </select>
-        </SettingsRow>
-      </SettingsGroup>
-      {searchError && <p className="settings-group-note" role="alert">{searchError}</p>}
+      <p className="settings-group-note">{t("Save keys using system encryption. Web search uses the previously selected configured service, or the first available key in Brave, Tavily, Exa, Firecrawl order. Share keys with native agents and runs only if selected.")}</p>
       <SettingsGroup className="environment-variable-list">
         {rows.map(name => <div className="environment-variable-row" key={name}>
           <div className="environment-variable-name"><code>{name}</code><small>{names.some(item => item.name === name) ? t("Saved") : t("Not configured")}</small></div>
