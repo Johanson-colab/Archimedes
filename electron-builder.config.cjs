@@ -39,6 +39,12 @@ module.exports = {
     icon: "electron/assets/app-icon.icns",
     target: ["dmg"],
     category: "public.app-category.productivity",
+    // macOS terminates the process when it asks for microphone access without
+    // a usage string. Voice input is opt-in, but the description must exist in
+    // Info.plist before the first getUserMedia call.
+    extendInfo: {
+      NSMicrophoneUsageDescription: "Archimedes uses the microphone only while you hold the voice input button, so your message can be transcribed.",
+    },
   },
   dmg: {
     icon: "electron/assets/app-icon.icns",

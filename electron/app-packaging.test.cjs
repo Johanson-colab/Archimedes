@@ -26,6 +26,13 @@ test("macOS bundle and DMG both reference the ICNS and keep native dependency re
   assert.equal(config.publish, null);
 });
 
+test("macOS Info.plist declares microphone access for the opt-in voice input", () => {
+  const description = config.mac.extendInfo?.NSMicrophoneUsageDescription;
+  assert.equal(typeof description, "string");
+  assert.match(description, /microphone/i);
+  assert.match(description, /voice input/i);
+});
+
 test("packaged Dock and window icons resolve outside ASAR, with development fallbacks", () => {
   const resources = path.join(root, "fake-resources");
   assert.equal(windowIconPath("win32", resources), path.join(resources, "icons/app-icon.ico"));

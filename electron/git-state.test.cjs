@@ -62,6 +62,7 @@ test("a broken .git entry is suspicious", () => {
 });
 
 
+
 test("a symlink to a repository root is recognized without accepting a subdirectory", () => {
   const parent = folder("git-symlink");
   const repo = path.join(parent, "repo");
@@ -80,5 +81,33 @@ test("a symlink to a repository root is recognized without accepting a subdirect
     assert.equal(detectGitState(path.join(alias, "child")), "none");
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("directory aliases share Git state without accepting a parent repository", () => {
+  const root = folder("git-alias");
+  const repo = path.join(root, "repo");
+  const alias = path.join(root, "alias");
+  fs.mkdirSync(repo);
+  fs.symlinkSync(repo, alias, process.platform === "win32" ? "junction" : "dir");
+  try {
+    runGit(repo, "init");
+    assert.equal(detectGitState(fs.realpathSync(repo)), "empty");
+    assert.equal(detectGitState(alias), "empty");
+    fs.writeFileSync(path.join(repo, "README.md"), "# Alias\n");
+    runGit(repo, "config", "user.email", "test@example.com");
+    runGit(repo, "config", "user.name", "Test");
+    runGit(repo, "add", "README.md");
+    runGit(repo, "commit", "-m", "Initial commit");
+    assert.equal(detectGitState(fs.realpathSync(repo)), "ready");
+    assert.equal(detectGitState(alias), "ready");
+    assert.equal(gitBranch(alias), gitBranch(fs.realpathSync(repo)));
+
+    fs.mkdirSync(path.join(repo, "child", ".git"), { recursive: true });
+    assert.equal(detectGitState(path.join(alias, "child")), "suspicious");
+    assert.equal(detectGitState(path.join(fs.realpathSync(repo), "child")), "suspicious");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+
   }
 });

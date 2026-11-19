@@ -8,6 +8,56 @@ export interface FileDraft {
   modifiedAt: string;
 }
 
+export interface FileEditorScope {
+  drafts: Record<string, FileDraft>;
+  saving: Set<string>;
+  conflicts: Record<string, string>;
+  errors: Record<string, string>;
+}
+
+export type FileEditorScopes = Record<string, FileEditorScope>;
+
+const emptyFileEditorScope: FileEditorScope = {
+  drafts: {}, saving: new Set(), conflicts: {}, errors: {},
+};
+
+export function getFileEditorScope(scopes: FileEditorScopes, workspace: string): FileEditorScope {
+  return scopes[workspace] ?? emptyFileEditorScope;
+}
+
+export function updateFileEditorScope(
+  scopes: FileEditorScopes,
+  workspace: string,
+  update: (scope: FileEditorScope) => FileEditorScope,
+): FileEditorScopes {
+  return { ...scopes, [workspace]: update(getFileEditorScope(scopes, workspace)) };
+}
+
+export function hasDirtyFileEditorScopes(scopes: FileEditorScopes) {
+  return Object.values(scopes).some((scope) => Object.values(scope.drafts).some(isDraftDirty));
+}
+
+/** Complete a save in its owning root without replacing later edits or another root's draft. */
+export function finishFileEditorSave(
+  scopes: FileEditorScopes,
+  workspace: string,
+  filePath: string,
+  savedContent: string,
+  modifiedAt: string,
+): FileEditorScopes {
+  return updateFileEditorScope(scopes, workspace, (scope) => {
+    const latest = scope.drafts[filePath];
+    if (!latest) return scope;
+    const conflicts = { ...scope.conflicts };
+    delete conflicts[filePath];
+    return {
+      ...scope,
+      drafts: { ...scope.drafts, [filePath]: markDraftSaved(latest, savedContent, modifiedAt) },
+      conflicts,
+    };
+  });
+}
+
 export interface FileSelection {
   startLine: number;
   endLine: number;

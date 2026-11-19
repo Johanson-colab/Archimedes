@@ -1,0 +1,16 @@
+[
+  {
+    "theme": "paper",
+    "stage": "before",
+    "overflow": false,
+    "refreshAndFallback": false,
+    "cleanup": false
+  },
+  {
+    "theme": "charcoal",
+    "stage": "before",
+    "overflow": false,
+    "refreshAndFallback": false,
+    "cleanup": false
+  }
+]

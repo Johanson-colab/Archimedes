@@ -1,13 +1,16 @@
 # Archimedes
 
-> A local-first research-agent suite for discovering evidence, reading papers, inspecting code, running research work, and writing with traceability.
-
 <p align="center">
-  <img src="docs/assets/readme/archimedes-hero-1.webp" alt="Archimedes research chat, original paper reader, Daily papers, and Canvas">
+  <a href="README.md"><img src="https://img.shields.io/badge/English-111111?style=for-the-badge" alt="English"></a>
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-9a6a06?style=for-the-badge" alt="中文"></a>
 </p>
 
+> A local-first research-agent suite for discovering evidence, reading papers, inspecting code, running research work, and writing with traceability.
+
+**Website:** [archimedes-research.com](https://archimedes-research.com)
+
 <p align="center">
-  <img src="docs/assets/readme/archimedes-hero-2.webp" alt="Archimedes Workbench Files and Trajectory, Paper writing, and Image creation">
+  <img src="docs/assets/readme/archimedes-hero-light.webp" alt="Archimedes research workspace with research chat, agent activity, and Files">
 </p>
 
 Archimedes is not a generic chat shell with a paper list attached. Its center of gravity is the research loop: question → sources → evidence → implementation → experiment → writing. It runs as an Electron desktop application, keeps workspace data local by default, and leaves model and search providers configurable rather than locked to one vendor.
@@ -26,7 +29,7 @@ The goal is a working local Electron desktop install, not just the web preview.
 
 1. Verify that Git and Node.js 20+ are available.
 2. Clone the repository into a sensible local folder and cd into it.
-3. Run `npm install` and let the native terminal-module rebuild finish.
+3. Run `npm install`, let the native terminal-module rebuild finish, then run `npm run prepare:desktop` explicitly.
 4. Create `.env.local` from `.env.example` using the platform-appropriate command.
    Do not ask me to paste API keys into chat. Pause and let me fill in the model configuration directly, then continue.
 5. Start the app with `npm run dev`. Confirm that the Electron window opens.
@@ -45,6 +48,7 @@ Prerequisites: [Git](https://git-scm.com/downloads) and a current Node.js LTS re
 git clone https://github.com/Johanson-colab/Archimedes.git
 cd Archimedes
 npm install
+npm run prepare:desktop
 cp .env.example .env.local    # macOS / Linux
 npm run dev
 ```
@@ -115,10 +119,15 @@ Model providers and search providers are independent. Configure models in the in
 ## Validate
 
 ```bash
+npm run prepare:desktop
 npm run lint
 npm run build
 npm test
 ```
+
+`prepare:desktop` prepares the Electron binary explicitly with a three-minute timeout. `check:desktop` checks an existing binary without starting a download. For a slow connection, `ARCHIMEDES_DESKTOP_PREPARE_TIMEOUT_MS` can be set up to 600000. A missing runtime produces a preparation message before startup or the full test run.
+
+`npm test` includes both real Electron layout regressions and needs a desktop display (use `xvfb-run npm test` on headless Linux). `test:core` runs the non-desktop inventory for iteration; `test:desktop` runs the two desktop checks. The full PR gate continues to use `npm test`.
 
 ## More
 

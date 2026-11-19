@@ -1,0 +1,27 @@
+[
+  {
+    "src": "./welcome/archimedes-hero.jpg",
+    "width": 1800,
+    "height": 805
+  },
+  {
+    "src": "./welcome/idea-discovery.jpg",
+    "width": 1100,
+    "height": 733
+  },
+  {
+    "src": "./welcome/literature-research.jpg",
+    "width": 1100,
+    "height": 733
+  },
+  {
+    "src": "./welcome/paper-replication.jpg",
+    "width": 1100,
+    "height": 733
+  },
+  {
+    "src": "./welcome/illustration-generation.jpg",
+    "width": 1100,
+    "height": 733
+  }
+]

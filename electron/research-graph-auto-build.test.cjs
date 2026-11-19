@@ -655,7 +655,7 @@ test("a completed API Research turn schedules a background graph build", async (
       return {
         ok: true,
         headers: { get: () => "application/json" },
-        json: async () => ({ choices: [{ message }] }),
+        json: async () => ({ choices: [{ message, finish_reason: "stop" }] }),
       };
     };
     try {

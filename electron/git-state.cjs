@@ -30,9 +30,10 @@ function gitOutput(root, args) {
  */
 function detectGitState(root) {
   if (typeof root !== "string" || !root.trim()) return "none";
-  const resolved = path.resolve(root);
+  let resolved;
   let stat;
   try {
+    resolved = fs.realpathSync(path.resolve(root));
     stat = fs.statSync(resolved);
   } catch {
     return "none";
@@ -63,10 +64,9 @@ function detectGitState(root) {
   // The project root must be the actual top-level work tree.
   const topLevel = gitOutput(resolved, ["rev-parse", "--show-toplevel"]);
   if (!topLevel) return "suspicious";
-  // Git resolves symlinks (including macOS /var -> /private/var), so compare
-  // canonical paths without accepting a parent repository as this project.
+  // Both paths resolve to the actual directory, including symlinked workspaces.
   try {
-    if (fs.realpathSync(topLevel) !== fs.realpathSync(resolved)) return "suspicious";
+    if (fs.realpathSync(topLevel) !== resolved) return "suspicious";
   } catch {
     return "suspicious";
   }

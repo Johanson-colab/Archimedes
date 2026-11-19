@@ -27,7 +27,7 @@ before(async () => {
     Object.assign(scope, values);
     return values;
   }
-  metadata = await load("research-apps.ts", ["researchAppCategories", "researchAppCategory", "researchAppMetadata", "defaultDisabledResearchApps"]);
+  metadata = await load("research-apps.ts", ["researchAppCategories", "researchAppCategory", "researchAppMetadata", "defaultDisabledResearchApps", "isBetaResearchApp"]);
   registry = await load("sidebar-registry.tsx", ["coreSidebarEntries", "sidebarEntries", "registerPluginEntries"]);
   await load("SettingsPrimitives.tsx", ["SettingsSection", "SettingsGroup", "SettingsRow", "SettingsSwitch"]);
   ({ PluginsSettingsPanel: Panel } = await load("PluginsSettingsPanel.tsx", ["PluginsSettingsPanel"]));
@@ -57,7 +57,7 @@ async function mount(overrides = {}, onCoreModuleEnabled) {
 const headings = () => [...document.querySelectorAll("h3")].map((node) => node.textContent);
 const row = (name) => [...document.querySelectorAll(".settings-row")].find((node) => node.querySelector(".settings-row-title")?.textContent === name);
 
-test("all twelve built-ins appear once in the five issue categories with eight enabled", async () => {
+test("all twelve built-ins appear once in the five issue categories with four enabled", async () => {
   const unmount = await mount();
   try {
     assert.deepEqual(headings(), ["Discovery & tracking", "Resources & evidence", "Experiments & evaluation", "Analysis & visualization", "Writing & delivery"]);
@@ -66,7 +66,7 @@ test("all twelve built-ins appear once in the five issue categories with eight e
       assert.equal(row(name)?.closest("section").querySelector("h3").textContent, headings()[index]);
     }
     assert.equal(document.querySelectorAll('[role="switch"]').length, 12);
-    assert.equal(document.querySelectorAll('[role="switch"][aria-checked="true"]').length, 8);
+    assert.equal(document.querySelectorAll('[role="switch"][aria-checked="true"]').length, 4);
     assert.ok(!document.body.textContent.includes("Sidebar layout"));
     assert.ok(!document.body.textContent.includes("Micro app"));
     await React.act(async () => row("News").querySelector("button").click());
@@ -110,7 +110,7 @@ test("legacy and categorized plugins share the catalog without duplicate install
 });
 
 test("sidebar order is independent of category; explicit plugin metadata overrides legacy sections", () => {
-  assert.deepEqual(registry.sidebarEntries().filter((entry) => !metadata.defaultDisabledResearchApps.includes(entry.id)).map((entry) => entry.id), ["library", "daily", "reproduce", "image-creation", "data-charts", "data-analysis", "writing", "paper-to-slides"]);
+  assert.deepEqual(registry.sidebarEntries().filter((entry) => !metadata.defaultDisabledResearchApps.includes(entry.id)).map((entry) => entry.id), ["library", "daily", "data-analysis", "writing"]);
   assert.equal(metadata.researchAppCategory({ id: "custom", researchCategory: "experiments", section: "create" }), "experiments");
   assert.equal(metadata.researchAppCategory({ id: "legacy", section: "knowledge" }), "evidence");
   assert.equal(metadata.researchAppCategory({ id: "unknown", researchCategory: "invalid" }), "evidence");

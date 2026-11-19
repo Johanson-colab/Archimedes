@@ -5,6 +5,12 @@ export const researchAppCategories = metadata.categories as Array<{ id: Research
 export const researchAppMetadata = metadata.apps;
 export const defaultDisabledResearchApps = Object.entries(metadata.apps).filter(([, app]) => !app.defaultEnabled).map(([id]) => id);
 
+/** Apps that ship behind a beta label: usable, but their inputs or outputs are incomplete. */
+export function isBetaResearchApp(id: string) {
+  const apps = metadata.apps as Record<string, { beta?: boolean }>;
+  return Boolean(apps[id]?.beta);
+}
+
 /** Explicit app metadata wins; legacy plugins remain discoverable without new manifests. */
 export function researchAppCategory(app: { id: string; researchCategory?: string; section?: string }): ResearchAppCategory {
   if (researchAppCategories.some((category) => category.id === app.researchCategory)) return app.researchCategory as ResearchAppCategory;
