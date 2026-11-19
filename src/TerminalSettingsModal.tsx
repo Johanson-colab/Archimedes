@@ -57,7 +57,7 @@ export default function TerminalSettingsModal({ open, mode, settings, workspace,
   const shellOptions = platform === "win32" ? WINDOWS_SHELLS : POSIX_SHELLS;
   const externalOptions: Array<{ value: TerminalExternalTerminal; label: string }> = platform === "win32"
     ? [
-      { value: "auto", label: "Windows Terminal · recommended" },
+      { value: "auto", label: "Auto · Windows Terminal or selected shell" },
       { value: "wezterm", label: "WezTerm" },
       { value: "tabby", label: "Tabby" },
       { value: "none", label: "Do not open external terminal" },
