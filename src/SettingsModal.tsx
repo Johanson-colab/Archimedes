@@ -4,7 +4,6 @@ import AccountSettingsPanel from "./AccountSettingsPanel";
 import ModelSettingsModal, { type ModelExecutionPreferences } from "./ModelSettingsModal";
 import PluginsSettingsPanel from "./PluginsSettingsPanel";
 import SshServersPanel from "./SshServersPanel";
-import WebSearchSettingsModal from "./WebSearchSettingsModal";
 import EnvironmentVariablesPanel from "./settings/EnvironmentVariablesPanel";
 import { Dialog } from "./Dialog";
 import type { AppearanceSettings, AppTheme, ThemePreset } from "./appearance";
@@ -217,7 +216,7 @@ export default function SettingsModal({
             activeThreadId={activeThreadId}
             onProjectsChanged={onProjectsChanged}
           />}
-          {location.section === "web" && <><EnvironmentVariablesPanel bridge={bridge} /><WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} /></>}
+          {location.section === "web" && <EnvironmentVariablesPanel bridge={bridge} />}
           {location.section === "ssh" && <SshServersPanel bridge={bridge} />}
         </div>
       </div>

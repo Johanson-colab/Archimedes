@@ -105,3 +105,35 @@ test("Firecrawl news results use the news response group", async () => {
   });
   assert.equal(result.results[0].source, "news");
 });
+
+test("search keys migrate to the encrypted environment vault and work without agent sharing", async t => {
+  const { createEnvironmentVault } = require('./environment-vault.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'search-vault-'));
+  t.after(() => { initializeWebSearch(''); fs.rmSync(directory, { recursive: true, force: true }); });
+  const safeStorage = { isEncryptionAvailable: () => true, encryptString: s => Buffer.from(s.split('').reverse().join('')), decryptString: b => b.toString().split('').reverse().join('') };
+  const vault = createEnvironmentVault({ directory, safeStorage });
+  fs.writeFileSync(path.join(directory, 'web-search-config.json'), JSON.stringify({ provider: 'tavily', apiKeys: { tavily: 'legacy-key' } }));
+  initializeWebSearch(directory, vault);
+  assert.deepEqual(vault.list(), [{ name: 'TAVILY_API_KEY', shared: false }]);
+  assert.doesNotMatch(fs.readFileSync(path.join(directory, 'web-search-config.json'), 'utf8'), /legacy-key/);
+  assert.deepEqual({ ...vault.shared() }, {});
+  let authorization;
+  await searchWeb({ query: 'test' }, { fetchImpl: async (_url, request) => { authorization = request.headers.Authorization; return { ok: true, json: async () => ({ results: [] }) }; } });
+  assert.equal(authorization, 'Bearer legacy-key');
+  vault.save({ name: 'EXA_API_KEY', value: 'new-key', shared: false });
+  saveWebSearchConfig({ provider: 'exa' });
+  assert.equal(getPublicWebSearchConfig().provider, 'exa');
+  vault.remove('EXA_API_KEY');
+  assert.equal(getPublicWebSearchConfig().hasApiKey, false);
+});
+
+test('keeps legacy search credentials usable when encrypted storage is unavailable', t => {
+  const { createEnvironmentVault } = require('./environment-vault.cjs');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'search-vault-'));
+  t.after(() => { initializeWebSearch(''); fs.rmSync(directory, { recursive: true, force: true }); });
+  fs.writeFileSync(path.join(directory, 'web-search-config.json'), JSON.stringify({ provider: 'brave', apiKeys: { brave: 'legacy-key' } }));
+  const vault = createEnvironmentVault({ directory, safeStorage: { isEncryptionAvailable: () => false } });
+  initializeWebSearch(directory, vault);
+  assert.equal(getPublicWebSearchConfig().hasApiKey, true);
+  assert.match(fs.readFileSync(path.join(directory, 'web-search-config.json'), 'utf8'), /legacy-key/);
+});

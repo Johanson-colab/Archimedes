@@ -649,9 +649,9 @@ app.whenReady().then(async () => {
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
   modelConfig.initializeModelConfig(app.getPath("userData"));
   agentBackendConfig.initialize(app.getPath("userData"));
-  webSearch.initializeWebSearch(app.getPath("userData"));
   environmentVault = createEnvironmentVault({ directory: app.getPath("userData"), safeStorage });
   setEnvironmentVault(environmentVault);
+  webSearch.initializeWebSearch(app.getPath("userData"), environmentVault);
   // Passwords and reproduction tokens share one OS keychain-backed codec; both
   // are useless if the machine cannot encrypt, so both refuse to save instead.
   const secretCodec = {

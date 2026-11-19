@@ -39,6 +39,13 @@ function createEnvironmentVault({ directory, safeStorage }) {
     return list();
   }
   function remove(name) { validateName(name); const entries = read(); delete entries[name]; write(entries); return list(); }
+  function get(name) {
+    validateName(name);
+    const entry = read()[name];
+    if (!entry) return "";
+    try { return safeStorage.decryptString(Buffer.from(entry.encrypted, "base64")); }
+    catch { throw new Error(`Could not decrypt environment variable ${name}.`); }
+  }
   function shared() {
     const result = Object.create(null);
     for (const [name, entry] of Object.entries(read())) {
@@ -48,6 +55,6 @@ function createEnvironmentVault({ directory, safeStorage }) {
     }
     return result;
   }
-  return { list, save, remove, shared }; 
+  return { list, save, remove, shared, get };
 }
 module.exports = { createEnvironmentVault, setEnvironmentVault, getSharedEnvironment };
