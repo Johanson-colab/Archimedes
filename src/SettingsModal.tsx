@@ -42,6 +42,7 @@ type SettingsModalProps = {
   onModelSaved: (config: PublicModelConfig) => void;
   executionPreferences?: ModelExecutionPreferences;
   workspace: string;
+  modelWorkspace?: string;
   workspaceReady: boolean;
   agentBusy: boolean;
   onChooseWorkspace: () => void;
@@ -91,6 +92,7 @@ export default function SettingsModal({
   onModelSaved,
   executionPreferences,
   workspace,
+  modelWorkspace,
   workspaceReady,
   agentBusy,
   onChooseWorkspace,
@@ -201,7 +203,7 @@ export default function SettingsModal({
             sessionTools={sessionTools}
             onSessionToolsChange={onSessionToolsChange}
           />}
-          {location.section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} />}
+          {location.section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} workspace={modelWorkspace || workspace} />}
           {location.section === "plugins" && <PluginsSettingsPanel bridge={bridge} workspace={workspace} onPluginsChanged={onPluginsChanged} disabledCoreModules={disabledCoreModules} onCoreModuleEnabled={onCoreModuleEnabled} />}
           {location.section === "workspace" && <WorkspaceSettingsHub
             view={subview}

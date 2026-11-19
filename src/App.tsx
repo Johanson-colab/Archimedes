@@ -932,6 +932,7 @@ const previewBridge = {
   saveAgentBackendConfig: async () => { throw new Error("External Agent backends require the desktop app."); },
   checkAgentBackend: async () => { throw new Error("Codex detection requires the desktop app."); },
   listCodexModelCatalog: async () => { throw new Error("Codex detection requires the desktop app."); },
+  listOpenCodeModelCatalog: async () => { throw new Error("OpenCode detection requires the desktop app."); },
   steerNativeAgent: async () => { throw new Error("Native steering requires the desktop app."); },
   answerNativeAgentQuestion: async () => { throw new Error("Native questions require the desktop app."); },
   getModelCapabilities: async () => previewModelCapabilities,
@@ -3880,6 +3881,7 @@ function App() {
         onModelSaved={setActiveModelConfig}
         executionPreferences={{ reasoningEffort, contextLength, capabilities: modelCapabilities, onReasoningEffort: setReasoningEffort, onContextLength: setContextLength }}
         workspace={workspace}
+        modelWorkspace={executionWorkspace}
         workspaceReady={workspaceReady}
         agentBusy={agentBusy}
         onChooseWorkspace={() => void chooseWorkspace()}
