@@ -131,8 +131,11 @@ test("L0 signals are emitted by the surfaces that own the evidence", () => {
   assert.match(paper, /Ask AI to fix/);
 });
 
-test("toolbar opens the floating panels without stealing focus", () => {
-  assert.match(app, /className=\{researchPanelOpen \? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"\}/);
+test("research graph is available beside the Research composer; proactive stays in the toolbar", () => {
+  assert.doesNotMatch(app, /className=\{researchPanelOpen \? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"\}/);
+  assert.match(app, /predictedMode === "research" \|\| \(!showWelcome && researchMode === "experiment-setup"\)/);
+  assert.match(app, /className="research-graph-entry"/);
+  assert.match(app, /aria-pressed=\{researchGraphOpen\}/);
   assert.match(app, /className=\{proactive\.open \? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"\}/);
   assert.match(app, /dock-badge/);
   assert.match(app, /aria-pressed=\{proactive\.open\}/);
