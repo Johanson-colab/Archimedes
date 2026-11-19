@@ -47,6 +47,19 @@ const click = async element => { assert.ok(element, 'expected a clickable elemen
 const byText = text => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === text);
 const props = { projectId: 'p', threadId: 't', projectName: 'Research', threadTitle: 'Session', hasThread: true, mode: 'experiment-setup', onOpenThread() {}, onCollapse() {} };
 
+test('failed extraction remains visible after reload and retries the original turn', async () => {
+  const { bridge } = fixture();
+  const events = [{ turn_id: 'turn-1', type: 'graph_failed' }];
+  let requested;
+  window.researchDesk = { ...bridge, getResearchThread: async () => ({ events }), retryResearchGraphExtraction: async input => { requested = input; events.push({ turn_id: 'turn-1', type: 'graph_checked' }); return { ok: true }; } };
+  await mounted(Panel, props, async () => {
+    assert.match(document.querySelector('.research-graph-extraction').textContent, /Graph extraction failed/);
+    await click(byText('Retry extraction'));
+    assert.deepEqual(requested, { threadId: 't', turnId: 'turn-1' });
+    assert.match(document.querySelector('.research-graph-extraction').textContent, /Graph checked; no new nodes/);
+  });
+});
+
 test('full activity retains citations and feedback; History reveals retracted and archived nodes', async () => {
   const { bridge } = fixture(); let input;
   window.researchDesk = { ...bridge, listResearchGraph: async value => { input = value; return bridge.listResearchGraph(); } };

@@ -7,6 +7,7 @@ const MAX_PROMPT_GRAPH_NODES = 80;
 const MAX_PROMPT_GRAPH_EDGES = 120;
 const MAX_RESPONSE_CHARS = 24_000;
 const EXTRACTION_TIMEOUT_MS = 120_000;
+const inFlight = new Set();
 
 function clip(value, max) {
   const text = String(value || "");
@@ -214,6 +215,7 @@ async function extractWithNative({ runNative, config, workspace, prompt, signal 
     emit: () => {},
     recordEvent: () => {},
     bindings: { get: () => null, save: () => {} },
+    ephemeral: config.backend === "codex",
     approve: async () => false,
     timeoutMs: EXTRACTION_TIMEOUT_MS,
   });
@@ -253,16 +255,19 @@ async function maybeAutoBuild({
   const trimmedPrompt = String(userPrompt || "").trim();
   if (trimmedPrompt.length <= 12 && /^(你好|您好|hi|hello|hey|嗨|在吗|早上好|晚上好|谢谢|thanks|thank you)[!！。.\s]*$/i.test(trimmedPrompt)) return null;
   if (alreadyApplied(threadId, turnId)) return null;
+  const key = `${threadId}:${turnId}`;
+  if (inFlight.has(key)) throw new Error("Graph extraction is already in progress for this turn.");
 
-  const listedGraph = graph.listGraph({ projectId, threadId });
-  const prompt = buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGraph, stage: mode });
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   if (signal?.aborted) controller.abort();
   else signal?.addEventListener("abort", onAbort, { once: true });
   const timer = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT_MS);
-  emit({ type: "graph_update_pending", title: "Research graph", detail: "Extracting research objects from this turn" });
+  inFlight.add(key);
   try {
+    emit({ type: "graph_update_pending", title: "Research graph", detail: "Extracting research objects from this turn" });
+    const listedGraph = graph.listGraph({ projectId, threadId });
+    const prompt = buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGraph, stage: mode });
     const runExtraction = async (nextPrompt) => {
       const text = backend === "api"
         ? await extractWithApi({ complete, config, prompt: nextPrompt, signal: controller.signal })
@@ -340,7 +345,7 @@ async function maybeAutoBuild({
     emit({
       type: "graph_update",
       title: "Research graph",
-      detail: "No graph changes were detected",
+      detail: "Graph extraction failed. Retry from Research graph.",
       graph: {
         projectId,
         threadId,
@@ -350,11 +355,12 @@ async function maybeAutoBuild({
         nodeCount: 0,
         edgeCount: 0,
         skippedNodeCount: 0,
-        reason: "no_new_objects",
+        reason: "extraction_failed",
       },
     });
     return null;
   } finally {
+    inFlight.delete(key);
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
   }

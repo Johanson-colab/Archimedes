@@ -1059,6 +1059,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("research-graph:restore", (_event, input = {}) => researchGraph.restoreNode(input));
   ipcMain.handle("research-graph:set-status", (_event, input = {}) => researchGraph.setNodeStatus(input));
   ipcMain.handle("research-graph:validate", (_event, input = {}) => researchGraph.validateGraph(input));
+  ipcMain.handle("research-graph:retry-extraction", async (event, input = {}) => {
+    if (typeof input.threadId !== "string" || typeof input.turnId !== "string") throw new Error("A research thread and turn are required.");
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender));
+    if (!dataWorkspace) throw new Error("Open a workspace before retrying graph extraction.");
+    store.openWorkspace(dataWorkspace);
+    return agent.retryGraphExtraction({ threadId: input.threadId, turnId: input.turnId, dataWorkspace, backendConfig: agentBackendConfig.get() });
+  });
   ipcMain.handle("experiment-activity:list", (_event, input = {}) => store.listExperimentActivities(input));
   ipcMain.handle("experiment-run:list", (_event, input = {}) => store.listExperimentRuns(input));
   ipcMain.handle("experiment-run:start", (event, input = {}) => {

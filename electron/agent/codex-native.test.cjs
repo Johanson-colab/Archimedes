@@ -21,7 +21,7 @@ function fixture(scenario, overrides = {}) {
       if (method === 'account/read') return { account: {} };
       if (method === 'config/read') return { config: { model: 'm' } };
       if (method === 'model/list') return { data: [{ id: 'm', model: 'm', displayName: 'Model', isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: 'high' }], defaultReasoningEffort: 'high' }] };
-      if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'native-thread' } };
+      if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'native-thread', ephemeral: params.ephemeral === true && !scenario.unsupportedEphemeral } };
       if (method === 'turn/start' || method === 'thread/compact/start') {
         setImmediate(() => scenario(peer));
         return { turn: { id: 'native-turn' } };
@@ -43,6 +43,17 @@ function complete(peer, text = 'Answer') {
   peer.send('item/completed', { item: { id: 'final', type: 'agentMessage', phase: 'final_answer', text } });
   peer.send('turn/completed', { turn: { id: 'native-turn', status: 'completed' } });
 }
+
+test('temporary Codex tasks request an ephemeral thread and reject an unconfirmed session before sending the prompt', async () => {
+  const f = fixture(p => complete(p), { ephemeral: true });
+  await backend.runCodex(f.args);
+  assert.equal(f.peer().calls.find(x => x.method === 'thread/start').params.ephemeral, true);
+  const unsupported = () => {};
+  unsupported.unsupportedEphemeral = true;
+  const older = fixture(unsupported, { ephemeral: true });
+  await assert.rejects(backend.runCodex(older.args), /did not confirm a temporary session/);
+  assert.equal(older.peer().calls.some(x => x.method === 'turn/start'), false);
+});
 
 test('native setup omits API instructions and resumes native history without reimport', async () => {
   const f = fixture(p => complete(p));

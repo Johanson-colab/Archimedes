@@ -15,6 +15,8 @@ type Props = {
   threadTitle: string;
   hasThread: boolean;
   mode: string;
+  workspace?: string;
+  extractionPending?: boolean;
   version?: number;
   update?: ResearchGraphUpdate | null;
   pinned?: boolean;
@@ -30,6 +32,8 @@ export default function ResearchGraphPanel({
   projectName,
   threadTitle,
   hasThread,
+  workspace,
+  extractionPending = false,
   version = 0,
   update = null,
   pinned = false,
@@ -52,8 +56,26 @@ export default function ResearchGraphPanel({
   const [undoing, setUndoing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [failedTurns, setFailedTurns] = useState<string[]>([]);
+  const [extractionChecked, setExtractionChecked] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState("");
 
   useEffect(() => { setGraph(null); setRuns([]); setActivities([]); setSelectedId(null); setFocusedId(null); setInspectorOpen(false); }, [projectId, threadId]);
+
+  useEffect(() => {
+    setFailedTurns([]); setExtractionChecked(false); setRetryError("");
+    if (!threadId || !window.researchDesk?.getResearchThread) return;
+    let cancelled = false;
+    window.researchDesk.getResearchThread(threadId, workspace).then((thread) => {
+      if (cancelled) return;
+      const latest = new Map<string, string>();
+      for (const event of thread.events || []) if (["graph_failed", "graph_checked", "graph_applied"].includes(event.type)) latest.set(event.turn_id, event.type);
+      setFailedTurns([...latest.entries()].filter(([, type]) => type === "graph_failed").map(([id]) => id).reverse());
+      setExtractionChecked([...latest.values()].at(-1) === "graph_checked");
+    }).catch(() => { if (!cancelled) setRetryError(t("Could not load graph extraction status.")); });
+    return () => { cancelled = true; };
+  }, [threadId, workspace, version, refreshKey, t]);
 
   useEffect(() => {
     if (!projectId || !threadId) {
@@ -180,6 +202,18 @@ export default function ResearchGraphPanel({
 
   const refresh = () => setRefreshKey((key) => key + 1);
 
+  const retryExtraction = async () => {
+    if (!threadId || !failedTurns[0] || retrying || !window.researchDesk?.retryResearchGraphExtraction) return;
+    setRetrying(true); setRetryError("");
+    try {
+      const result = await window.researchDesk.retryResearchGraphExtraction({ threadId, turnId: failedTurns[0] });
+      if (!result.ok) setRetryError(t("Graph extraction failed. Try again."));
+      refresh();
+    } catch (cause) {
+      setRetryError(cause instanceof Error ? cause.message : t("Graph extraction failed. Try again."));
+    } finally { setRetrying(false); }
+  };
+
   const undoUpdate = async () => {
     if (!update || undoing || !window.researchDesk?.archiveResearchNode) return;
     setUndoing(true);
@@ -265,6 +299,10 @@ export default function ResearchGraphPanel({
   </>;
 
   const content = <div className={expanded ? "research-graph-content expanded" : "research-graph-content"}>
+    {(extractionPending || retrying || failedTurns.length > 0 || retryError || extractionChecked) && <div className="research-graph-extraction" role="status" aria-live="polite">
+      <span>{retrying || extractionPending ? t("Updating research graph…") : retryError || (failedTurns.length ? t("Graph extraction failed. Try again.") : t("Graph checked; no new nodes."))}{!retrying && !extractionPending && failedTurns.length > 1 ? ` · ${failedTurns.length}` : ""}</span>
+      {!retrying && !extractionPending && failedTurns.length > 0 && <button type="button" onClick={() => void retryExtraction()}>{t("Retry extraction")}</button>}
+    </div>}
     {update && update.projectId === projectId && update.threadId === threadId && update.nodeCount + update.edgeCount + (update.superseded?.length ?? 0) > 0 && dismissedUpdate !== update.turnId && (
       <div className="research-graph-update" role="status" aria-live="polite">
         <span>{t("Research graph updated")} · +{update.nodeCount} {t("nodes")} · +{update.edgeCount} {t("edges")}{update.superseded?.length ? ` · ${update.superseded.length} ${t("previous ideas moved to history")}` : ""}</span>

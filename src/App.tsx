@@ -1447,6 +1447,7 @@ function App() {
   const [researchPanelOpen, setResearchPanelOpen] = useState(readResearchPanelOpen);
   const [researchGraphAvailable, setResearchGraphAvailable] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
+  const [graphPending, setGraphPending] = useState<Record<string, boolean>>({});
   const [graphUpdate, setGraphUpdate] = useState<ResearchGraphUpdate | null>(null);
   const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
   const [proactiveNotice, setProactiveNotice] = useState("");
@@ -2180,6 +2181,15 @@ function App() {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
       if (event.clientRunId?.startsWith("side-chat:") || event.clientRunId?.startsWith("paper-chat:")) return;
       const isGraphEvent = event.type === "graph_update" || event.type === "graph_update_pending";
+      if (isGraphEvent && event.threadId && event.turnId) {
+        const key = `${event.threadId}:${event.turnId}`;
+        setGraphPending((current) => {
+          const next = { ...current };
+          if (event.type === "graph_update_pending") next[key] = true;
+          else delete next[key];
+          return next;
+        });
+      }
       if (event.threadId && !isGraphEvent) {
         setRunningThreadId(event.threadId);
         if (!activeThreadIdRef.current) {
@@ -3691,6 +3701,8 @@ function App() {
             threadTitle={pathThread?.title ?? t("No active session")}
             hasThread={Boolean(pathThread)}
             mode={pathMode}
+            workspace={workspace}
+            extractionPending={Boolean(pathThread && Object.keys(graphPending).some((key) => key.startsWith(`${pathThread.id}:`)))}
             version={graphVersion}
             update={graphUpdate}
             pinned={pathIsPinned}

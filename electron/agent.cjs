@@ -1736,4 +1736,22 @@ function interruptAgent(threadId) {
   return true;
 }
 
-module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, runAgent, setApprovalSurface, translatePaperSelection };
+async function retryGraphExtraction({ threadId, turnId, dataWorkspace, backendConfig }) {
+  const thread = store.getResearchThread(threadId);
+  if (!thread.project_id || !store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to update this research graph.");
+  const turn = thread.turns.find((item) => item.id === turnId);
+  if (!turn || turn.status !== "completed" || !["research", "experiment-setup"].includes(turn.mode)) throw new Error("This turn cannot be retried.");
+  const latest = (thread.events || []).filter((event) => event.turn_id === turnId && ["graph_failed", "graph_checked", "graph_applied"].includes(event.type)).at(-1);
+  if (latest?.type !== "graph_failed") throw new Error("This graph extraction no longer needs a retry.");
+  const backend = thread.harness || "api";
+  const config = backend === "api" ? getActiveModelConfig() : { ...backendConfig, ...backendConfig?.profiles?.[backend], backend };
+  const workspace = thread.workspace_path || store.getResearchProject(thread.project_id)?.workspace_path || dataWorkspace;
+  const result = await graphAutoBuild.maybeAutoBuild({
+    projectId: thread.project_id, threadId, turnId, mode: turn.mode, origin: "research", backend, config, workspace,
+    userPrompt: turn.user_message, assistantResponse: turn.assistant_message,
+    recordEvent: (event) => store.appendResearchEvent({ threadId, turnId, ...event }), complete, runNative,
+  });
+  return { ok: Boolean(result) };
+}
+
+module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, retryGraphExtraction, runAgent, setApprovalSurface, translatePaperSelection };

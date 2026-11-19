@@ -135,13 +135,14 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   return { answered: true };
 }
 
-async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, experimentBridgeInstructions = "", experimentDynamicTools = [], invokeExperimentTool = null, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false }) {
+async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, experimentBridgeInstructions = "", experimentDynamicTools = [], invokeExperimentTool = null, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false, ephemeral = false }) {
   const root = fs.realpathSync(workspace);
   const policy = nativePolicy(config, root);
   const attachments = nativeContext(contextItems);
   const previousTurnId = compaction ? thread.turns?.at(-1)?.id : (thread.turns || []).filter(item => item.id !== turn.id).at(-1)?.id || null;
   const binding = bindings.get();
   const resume = canResume(binding, { workspace: root, model: config.model, previousTurnId });
+  if (ephemeral && (resume || compaction)) throw new Error('Temporary Codex tasks cannot resume or compact a saved session.');
   if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
   if (thread.id && activeNativeRuns.has(thread.id)) throw new Error('This chat already has an active native Codex operation.');
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
@@ -287,7 +288,8 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     const account = await client.request('account/read', { refreshToken: false });
     if (!account?.account) throw new Error('Codex is not signed in. Run codex login, then retry.');
     await validateNativeChoice(client, config, root);
-    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : experimentDynamicTools.length ? { dynamicTools: experimentDynamicTools } : {}) });
+    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(ephemeral ? { ephemeral: true } : {}), ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : experimentDynamicTools.length ? { dynamicTools: experimentDynamicTools } : {}) });
+    if (ephemeral && result?.thread?.ephemeral !== true) throw new Error('This Codex version did not confirm a temporary session. Update Codex and retry; no graph extraction prompt was sent.');
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');
     if (resume && active.nativeThreadId !== binding.native_thread_id) throw new Error('Codex returned a different native thread while resuming. No request was replayed.');

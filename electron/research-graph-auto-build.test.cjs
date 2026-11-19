@@ -429,7 +429,25 @@ test("maybeAutoBuild records a failure event when both API attempts fail", async
     assert.equal(result, null);
     assert.ok(records.some((event) => event.type === "graph_failed"));
     assert.ok(events.some((event) => event.type === "graph_update" && event.graph.nodeCount === 0));
+    assert.equal(events.find((event) => event.type === "graph_update").graph.reason, "extraction_failed");
     assert.equal(store.listResearchGraph({ projectId: project.id }).nodes.length, 0);
+  });
+});
+
+test("retry extracts only a failed completed turn and records success without duplicating nodes", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
+    modelConfig.initializeModelConfig(root);
+    fs.writeFileSync(path.join(root, "model-config.json"), JSON.stringify({ provider: "custom", baseUrl: "https://example.test/v1", model: "fixture", apiKey: "test" }));
+    const { thread, turn } = threadFor(project.id);
+    store.finishResearchTurn(turn.id, { response: "The answer proposes a severity sweep.", status: "completed" });
+    store.appendResearchEvent({ threadId: thread.id, turnId: turn.id, type: "graph_failed", payload: { reason: "temporary error" } });
+    const originalFetch = global.fetch;
+    global.fetch = async () => ({ ok: true, headers: { get: () => "application/json" }, json: async () => ({ choices: [{ message: { role: "assistant", content: JSON.stringify(autoChainPatch) }, finish_reason: "stop" }] }) });
+    try {
+      assert.deepEqual(await agent.retryGraphExtraction({ threadId: thread.id, turnId: turn.id, dataWorkspace: root }), { ok: true });
+      assert.equal(store.listResearchGraph({ projectId: project.id, threadId: thread.id }).nodes.length, 3);
+      await assert.rejects(agent.retryGraphExtraction({ threadId: thread.id, turnId: turn.id, dataWorkspace: root }), /no longer needs a retry/);
+    } finally { global.fetch = originalFetch; }
   });
 });
 
