@@ -24,15 +24,12 @@ type Props = {
   onCollapse: () => void;
 };
 
-const IDEA_STAGE_EDGES = new Set(["generates", "refines", "merges"]);
-
 export default function ResearchGraphPanel({
   projectId,
   threadId,
   projectName,
   threadTitle,
   hasThread,
-  mode,
   version = 0,
   update = null,
   pinned = false,
@@ -55,15 +52,8 @@ export default function ResearchGraphPanel({
   const [undoing, setUndoing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [viewStage, setViewStage] = useState<"ideas" | "experiments" | "all">(mode === "experiment-setup" ? "experiments" : "ideas");
 
   useEffect(() => { setGraph(null); setRuns([]); setActivities([]); setSelectedId(null); setFocusedId(null); setInspectorOpen(false); }, [projectId, threadId]);
-
-  useEffect(() => {
-    setViewStage(mode === "experiment-setup" ? "experiments" : "ideas");
-  }, [mode]);
-
-  const ideaStage = viewStage === "ideas";
 
   useEffect(() => {
     if (!projectId || !threadId) {
@@ -143,11 +133,7 @@ export default function ResearchGraphPanel({
     return unsubscribe;
   }, [threadId]);
 
-  const stageNodes = useMemo(() => {
-    if (!graph) return [];
-    if (ideaStage) return graph.nodes.filter((node) => node.kind === "question" || node.kind === "idea");
-    return viewStage === "all" ? graph.nodes : graph.nodes.filter((node) => node.kind !== "writing");
-  }, [graph, ideaStage, viewStage]);
+  const stageNodes = graph?.nodes ?? [];
   const runsByNode = useMemo(() => {
     const map = new Map<string, ExperimentRun[]>();
     for (const run of runs) {
@@ -183,16 +169,14 @@ export default function ResearchGraphPanel({
       ...graph,
       nodes,
       edges: graph.edges.filter((edge) =>
-        (!ideaStage || IDEA_STAGE_EDGES.has(edge.kind))
-        && visibleIds.has(edge.from_node)
+        visibleIds.has(edge.from_node)
         && visibleIds.has(edge.to_node)),
     }, focusedId && pathEvents.length ? new Map([[focusedId, pathEvents.length]]) : new Map());
-  }, [graph, stageNodes, showHistory, ideaStage, focusedId, pathEvents]);
+  }, [graph, stageNodes, showHistory, focusedId, pathEvents]);
   const selectedNode = layout?.nodes.find(({ node }) => node.id === selectedId)?.node ?? layout?.nodes[0]?.node ?? null;
   const visibleFocusId = layout?.nodes.some(({ node }) => node.id === focusedId) ? focusedId : null;
   const retractedCount = stageNodes.filter((node) => node.status === "retracted" || node.archived).length;
   const visibleNodeCount = showHistory ? stageNodes.length : stageNodes.length - retractedCount;
-  const hasExperiments = graph?.nodes.some((node) => node.kind === "experiment") ?? false;
 
   const refresh = () => setRefreshKey((key) => key + 1);
 
@@ -231,11 +215,6 @@ export default function ResearchGraphPanel({
   };
 
   const actions = <>
-    {(graph?.nodes.length || hasExperiments || mode === "experiment-setup") ? <div className="research-graph-stage-switch" role="group" aria-label={t("Research graph stage")}>
-      <button type="button" className={viewStage === "ideas" ? "active" : ""} aria-pressed={viewStage === "ideas"} onClick={() => setViewStage("ideas")}>{t("Ideas")}</button>
-      <button type="button" className={viewStage === "experiments" ? "active" : ""} aria-pressed={viewStage === "experiments"} onClick={() => setViewStage("experiments")}>{t("Experiments")}</button>
-      <button type="button" className={viewStage === "all" ? "active" : ""} aria-pressed={viewStage === "all"} onClick={() => setViewStage("all")}>{t("All activity")}</button>
-    </div> : null}
     {onTogglePin && <button
       className={pinned ? "agent-path-icon on" : "agent-path-icon"}
       onClick={onTogglePin}
@@ -289,7 +268,6 @@ export default function ResearchGraphPanel({
     {update && update.projectId === projectId && update.threadId === threadId && update.nodeCount + update.edgeCount + (update.superseded?.length ?? 0) > 0 && dismissedUpdate !== update.turnId && (
       <div className="research-graph-update" role="status" aria-live="polite">
         <span>{t("Research graph updated")} · +{update.nodeCount} {t("nodes")} · +{update.edgeCount} {t("edges")}{update.superseded?.length ? ` · ${update.superseded.length} ${t("previous ideas moved to history")}` : ""}</span>
-        {ideaStage && update.createdNodeIds.some((id) => graph?.nodes.some((node) => node.id === id && (node.kind === "experiment" || node.kind === "result"))) && <button type="button" onClick={() => setViewStage("experiments")}>{t("View experiments")}</button>}
         {(update.createdNodeIds.length > 0 || (update.superseded?.length ?? 0) > 0) && <button type="button" disabled={undoing} onClick={() => void undoUpdate()}>{t(undoing ? "Undoing…" : "Undo")}</button>}
         <button type="button" className="research-graph-update-dismiss" onClick={() => setDismissedUpdate(update.turnId)} aria-label={t("Dismiss")} title={t("Dismiss")}><X size={11} /></button>
       </div>
@@ -320,7 +298,6 @@ export default function ResearchGraphPanel({
           return related ? [{ nodeId: related.id, title: related.title, relation: edge.kind, revisionId: incoming ? edge.from_revision : edge.to_revision, incoming }] : [];
         })}
         onSelectNode={id => {
-          setViewStage("all");
           if (graph?.nodes.some(node => node.id === id && (node.archived || node.status === "retracted"))) setShowHistory(true);
           setSelectedId(id);
           setFocusedId(id);

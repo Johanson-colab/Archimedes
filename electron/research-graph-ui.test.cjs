@@ -50,13 +50,16 @@ const props = { projectId: 'p', threadId: 't', projectName: 'Research', threadTi
 test('full activity retains citations and feedback; History reveals retracted and archived nodes', async () => {
   const { bridge } = fixture(); let input;
   window.researchDesk = { ...bridge, listResearchGraph: async value => { input = value; return bridge.listResearchGraph(); } };
-  await mounted(Panel, props, async () => {
+  await mounted(Panel, props, async ({ render }) => {
     assert.equal(input.includeArchived, true);
-    assert.equal(document.querySelector('[title="draft"].research-graph-node'), null);
-    await click(byText('All activity'));
+    assert.equal(byText('Ideas'), undefined);
+    assert.equal(byText('Experiments'), undefined);
     assert.ok(document.querySelector('.research-graph-edge.kind-cites'));
     assert.ok(document.querySelector('.research-graph-edge.kind-supports.feedback'));
     assert.ok(document.querySelector('[title="draft"].research-graph-node'));
+    await render({ ...props, mode: 'research' });
+    assert.ok(document.querySelector('[title="exp"].research-graph-node'));
+    assert.ok(document.querySelector('[title="result"].research-graph-node'));
     const markerShapes = ['question', 'idea', 'experiment', 'result', 'writing'].map(kind => {
       const shape = document.querySelector(`.research-lineage-marker.kind-${kind} .research-lineage-dot`);
       assert.ok(shape, `the ${kind} marker is visible`);
@@ -223,7 +226,7 @@ test('selected experiment shows recorded run milestones on its path without turn
     assert.match(events[0].textContent, /Agent-reported/);
     assert.match(events[1].textContent, /Run started/);
     assert.match(events[2].textContent, /Run succeeded/);
-    assert.equal(document.querySelectorAll('.research-graph-node').length, 4);
+    assert.equal(document.querySelectorAll('.research-graph-node').length, 5);
     assert.ok(parseFloat(result.style.top) >= before + 90);
     await click(experiment);
     assert.equal(document.querySelectorAll('.research-path-event').length, 0);

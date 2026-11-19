@@ -20,13 +20,8 @@ test("Research mode refreshes the graph from automatic graph-update events", () 
   assert.match(app, /onTogglePin=\{togglePathPin\}/);
   assert.match(app, /mode=\{pathMode\}/);
   assert.match(app, /researchMode === "experiment-setup"/);
-  assert.match(panel, /const \[viewStage, setViewStage\] = useState<"ideas" \| "experiments" \| "all">/);
-  assert.match(panel, /const ideaStage = viewStage === "ideas"/);
   assert.match(panel, /layoutLineage\(/);
-  assert.match(panel, /className="research-graph-stage-switch"/);
-  assert.match(panel, /setViewStage\("experiments"\)/);
-  assert.match(panel, /const IDEA_STAGE_EDGES = new Set\(\["generates", "refines", "merges"\]\)/);
-  assert.match(panel, /setViewStage\("all"\)/);
+  assert.doesNotMatch(panel, /research-graph-stage-switch|setViewStage/);
   assert.match(panel, /listExperimentRuns\(\{ projectId, threadId \}\)/);
   assert.match(panel, /onExperimentRunUpdate/);
   assert.doesNotMatch(panel, /createQuestion|createChild|updateNodePlan|startExperiment\(|createResult\(/);
@@ -50,7 +45,7 @@ test("the graph hides superseded ideas until History is opened", () => {
   assert.match(panel, /previous ideas moved to history/);
   assert.match(css, /\.research-graph-node\.status-retracted \{ opacity: \.5; \}/);
   assert.match(css, /\.research-graph-edge\.secondary \{/);
-  assert.match(css, /\.research-graph-stage-switch \{/);
+  assert.match(css, /\.research-graph-expanded-head \.agent-path-icon:hover:not\(:disabled\)/);
 });
 
 test("Agent turns schedule a background graph build for Research mode", () => {
