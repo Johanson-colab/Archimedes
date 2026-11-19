@@ -119,7 +119,7 @@ test("API and Agent tabs keep separate actions, keyboard navigation and unsaved 
     await input("Codex model", "draft-native-model");
     await click("API models");
     await click("Harnesses");
-    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "draft-native-model");
+    assert.equal(document.querySelector('.agent-backend-fields input[role=combobox]').value, "draft-native-model");
     assert.deepEqual(calls.savedBackends, []);
     assert.deepEqual(calls.checkedBackends, []);
     await click("API models");
@@ -139,7 +139,8 @@ test("checking Codex does not activate it; explicit activation and API reset per
     assert.deepEqual(calls.savedBackends, []);
     assert.ok(!document.querySelector(".agent-backend-card .agent-backend-active"));
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connected");
-    assert.equal(document.querySelector("datalist option").value, "native-model");
+    await React.act(async () => document.querySelector('.agent-backend-fields input[role=combobox]').click());
+    assert.match(document.querySelector(".agent-opencode-model-menu").textContent, /native-model/);
     await input("Codex model", "native-model");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connection not checked");
     await click("Use Codex");
@@ -260,7 +261,8 @@ test("agent cards collapse without changing the backend and binary edits invalid
     await click("Check Codex");
     await input("Codex executable", "/different/codex");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connection not checked");
-    assert.equal(document.querySelectorAll("datalist option").length, 0);
+    await React.act(async () => document.querySelector('.agent-backend-fields input[role=combobox]').click());
+    assert.doesNotMatch(document.querySelector(".agent-opencode-model-menu").textContent, /native-model/);
   } finally { await cleanup(); }
 });
 
@@ -377,17 +379,41 @@ test("Claude and OpenCode settings use independent drafts and explicit native ac
     assert.equal(document.querySelector('.agent-backend-fields input').value, "opencode");
     await input("OpenCode model", "provider/model");
     await click("Claude Code");
-    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "sonnet");
-    assert.equal(document.querySelector('datalist option').value, "native-model");
+    assert.equal(document.querySelector('.agent-backend-fields input[role=combobox]').value, "sonnet");
+    await React.act(async () => document.querySelector('.agent-backend-fields input[role=combobox]').click());
+    assert.match(document.querySelector('.agent-opencode-model-menu').textContent, /native-model/);
     await click("Use Claude Code");
     assert.equal(calls.savedBackends.at(-1).backend, "claude");
     assert.equal(calls.savedBackends.at(-1).model, "sonnet");
     await click("Use API harness");
     assert.equal(calls.savedBackends.at(-1).backend, "api");
     assert.equal(calls.savedBackends.at(-1).binary, "codex");
-    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "sonnet");
+    assert.equal(document.querySelector('.agent-backend-fields input[role=combobox]').value, "sonnet");
     await click("Codex");
-    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "codex-draft");
+    assert.equal(document.querySelector('.agent-backend-fields input[role=combobox]').value, "codex-draft");
+  } finally { await cleanup(); }
+});
+
+test("Codex and Claude model pickers share the searchable menu and preserve default and manual values", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click("Harnesses");
+    for (const [backend, label, defaultLabel] of [["Codex", "Codex model", "Codex default"], ["Claude Code", "Claude Code model", "Claude default"]]) {
+      if (backend === "Claude Code") { await click(backend); await click("Check Claude Code"); }
+      const field = document.getElementById([...document.querySelectorAll("label")].find(node => node.textContent === label).htmlFor);
+      await React.act(async () => field.click());
+      assert.equal(field.getAttribute("role"), "combobox");
+      assert.equal(document.querySelector(".agent-opencode-model-menu").style.width, "360px");
+      await input(label, "native");
+      assert.match(document.querySelector(".agent-opencode-model-menu").textContent, /native-model/);
+      await click("native-model");
+      assert.equal(field.value, "native-model");
+      await React.act(async () => field.click());
+      await click(defaultLabel);
+      assert.equal(field.value, "");
+      await input(label, "custom-model");
+      assert.equal(field.value, "custom-model");
+    }
   } finally { await cleanup(); }
 });
 
