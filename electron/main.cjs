@@ -3,6 +3,7 @@ const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
 const fs = require("node:fs");
+const { initialWindowBounds } = require("./window-bounds.cjs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const pty = require("node-pty");
@@ -168,13 +169,11 @@ function titleBarOverlay(theme) {
 }
 
 function createWindow(workspace) {
+  const { screen } = require("electron");
   const overlay = process.platform === "win32";
   const initialTheme = nativeTheme.shouldUseDarkColors ? "charcoal" : "paper";
   const browserWindow = new BrowserWindow({
-    width: 1560,
-    height: 980,
-    minWidth: 1100,
-    minHeight: 720,
+    ...initialWindowBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea),
     backgroundColor: initialTheme === "paper" ? "#f6f7f5" : "#111111",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : overlay ? "hidden" : undefined,
     titleBarOverlay: overlay ? titleBarOverlay(initialTheme) : undefined,
