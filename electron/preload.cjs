@@ -76,6 +76,26 @@ contextBridge.exposeInMainWorld("researchDesk", {
   getResearchThread: (threadId, workspace) => ipcRenderer.invoke("research-thread:get", { threadId, workspace }),
   getResearchTurnImage: (threadId, turnId, position, workspace) => ipcRenderer.invoke("research-thread:attachment-image", { threadId, turnId, position, workspace }),
   getResearchSnapshot: () => ipcRenderer.invoke("research:snapshot"),
+  createResearchNode: (input) => ipcRenderer.invoke("research-graph:create-node", input),
+  reviseResearchNode: (input) => ipcRenderer.invoke("research-graph:revise-node", input),
+  linkResearchNodes: (input) => ipcRenderer.invoke("research-graph:link", input),
+  listResearchGraph: (input) => ipcRenderer.invoke("research-graph:list", input),
+  getResearchNodeHistory: (nodeId) => ipcRenderer.invoke("research-graph:history", { nodeId }),
+  archiveResearchNode: (nodeId, reason = "") => ipcRenderer.invoke("research-graph:archive", { nodeId, reason }),
+  restoreResearchNode: (nodeId) => ipcRenderer.invoke("research-graph:restore", { nodeId }),
+  setResearchNodeStatus: (nodeId, status, reason = "") => ipcRenderer.invoke("research-graph:set-status", { nodeId, status, reason }),
+  validateResearchGraph: (projectId, threadId = null) => ipcRenderer.invoke("research-graph:validate", { projectId, threadId }),
+  listExperimentActivities: (input) => ipcRenderer.invoke("experiment-activity:list", input),
+  listExperimentRuns: (input) => ipcRenderer.invoke("experiment-run:list", input),
+  startExperimentRun: (input) => ipcRenderer.invoke("experiment-run:start", input),
+  cancelExperimentRun: (runId) => ipcRenderer.invoke("experiment-run:cancel", runId),
+  readExperimentRunLog: (runId, maxBytes) => ipcRenderer.invoke("experiment-run:log", { runId, maxBytes }),
+  createResultFromRun: (input) => ipcRenderer.invoke("experiment-run:result", input),
+  onExperimentRunUpdate: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("experiment-run:update", listener);
+    return () => ipcRenderer.removeListener("experiment-run:update", listener);
+  },
   createResearchThread: (input) => ipcRenderer.invoke("research-thread:create", input),
   forkResearchThread: (threadId, workspace, side = false) => ipcRenderer.invoke("research-thread:fork", { threadId, workspace, side }),
   undoResearchTurn: (threadId, workspace) => ipcRenderer.invoke("research-thread:undo", { threadId, workspace }),

@@ -27,7 +27,7 @@ function boundedText(value, max) {
   return '';
 }
 async function runExternal(options) {
-  const { config, workspace, thread, turn, contextItems = [], researchSkill, mineruToken, bindings, emit = () => {}, recordEvent = () => {}, approve = async () => false, signal = new AbortController().signal, Client = NativeProcess, timeoutMs = 30 * 60_000 } = options;
+  const { config, workspace, thread, turn, contextItems = [], researchSkill, mineruToken, experimentBridgeInstructions = "", bindings, emit = () => {}, recordEvent = () => {}, approve = async () => false, signal = new AbortController().signal, Client = NativeProcess, timeoutMs = 30 * 60_000 } = options;
   assertPolicy(config);
   const backend = config.backend, title = backend === 'claude' ? 'Claude Code' : 'OpenCode';
   const root = fs.realpathSync(workspace);
@@ -41,7 +41,7 @@ async function runExternal(options) {
   const skill = prepareResearchSkill({ workspace: root, backend, thread, requested: researchSkill, emit, recordEvent });
   // ACP has no developer-instructions field. Native skill discovery is paired
   // with an explicit per-turn workflow request; no user config is overwritten.
-  const prompt = (backend === 'opencode' && skill ? `${skill.instructions}\n\nUser request:\n` : '') + codex.userPrompt(thread, turn, resume, attachments);
+  const prompt = (backend === 'opencode' && skill ? `${skill.instructions}\n\nUser request:\n` : '') + codex.userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
   const input = backend === 'claude' ? claudePrompt(prompt, contextItems) : openCodePrompt(prompt, contextItems);
   if (Buffer.byteLength(JSON.stringify(input)) > 8 * 1024 * 1024 - 1000) throw new Error('Native attachments exceed the protocol limit. No request was sent.');
   const launch = backend === 'claude' ? claudeLaunch({ config, root, resume, binding, skill }) : opencodeLaunch({ config, root });

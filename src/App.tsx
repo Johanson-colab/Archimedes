@@ -77,6 +77,7 @@ import { shortcutMatches } from "./file-text-size";
 import { previewLibraryBridge } from "./library-preview";
 import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
+import ResearchGraphPanel from "./research-graph/ResearchGraphPanel";
 import ProactiveAgentPanel from "./ProactiveAgentPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
@@ -1444,6 +1445,8 @@ function App() {
   const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
   const [journeyNotice, setJourneyNotice] = useState("");
   const [researchPanelOpen, setResearchPanelOpen] = useState(readResearchPanelOpen);
+  const [graphVersion, setGraphVersion] = useState(0);
+  const [graphUpdate, setGraphUpdate] = useState<ResearchGraphUpdate | null>(null);
   const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
   const [proactiveNotice, setProactiveNotice] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
@@ -1588,6 +1591,8 @@ function App() {
   const pathProject = projects.find((project) => project.id === (pathThread?.project_id ?? activeProjectId)) ?? null;
   const pathIsPinned = Boolean(pinnedPathThreadId);
   const pathThreadInactive = Boolean(pinnedPathThreadId && !pathThreadIsActive);
+  const pathMode = pathThreadIsActive ? researchMode : (pathThread?.mode ?? researchMode);
+  const showResearchGraph = pathMode === "research" || pathMode === "idea-spark" || pathMode === "experiment-setup";
   const proactive = useProactiveAgent({
     messages,
     thread: activeThread ? { id: activeThread.id, title: activeThread.title, status: activeThread.status } : null,
@@ -2173,7 +2178,8 @@ function App() {
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
       if (event.clientRunId?.startsWith("side-chat:") || event.clientRunId?.startsWith("paper-chat:")) return;
-      if (event.threadId) {
+      const isGraphEvent = event.type === "graph_update" || event.type === "graph_update_pending";
+      if (event.threadId && !isGraphEvent) {
         setRunningThreadId(event.threadId);
         if (!activeThreadIdRef.current) {
           activeThreadIdRef.current = event.threadId;
@@ -2198,6 +2204,17 @@ function App() {
         }
       }
       if (event.type === "artifact") setArtifactsVersion((current) => current + 1);
+      if (event.experimentRun) setGraphVersion((current) => current + 1);
+      if (event.type === "graph_update") {
+        setGraphVersion((current) => current + 1);
+        if (event.graph) setGraphUpdate(event.graph);
+        if (!event.graph || event.graph.nodeCount + event.graph.edgeCount + (event.graph.superseded?.length ?? 0) === 0) {
+          if (!event.threadId || activeThreadIdRef.current === event.threadId) {
+            setEvents((current) => current.filter((item) => item.title !== event.title));
+          }
+          return;
+        }
+      }
       if (event.type === "workspace_change" && event.changeSet) {
         if (!event.threadId || activeThreadIdRef.current === event.threadId) setChangeSets((current) => upsertChangeSet(current, event.changeSet!));
         return;
@@ -2223,7 +2240,8 @@ function App() {
         setPendingAction({ ...event.action, source: "agent" });
         if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
-      const state = event.type === "complete" || event.type === "artifact" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
+      if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
+      const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
       setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
     });
     return unsubscribe;
@@ -2338,7 +2356,7 @@ function App() {
       setBoundHarness(thread.harness ?? null);
       setActiveProjectId(thread.project_id);
       if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
-      setResearchMode(chatModeFromThread(thread.mode, thread.events));
+      setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
     } else {
       setMessages(initialMessages);
@@ -2571,7 +2589,7 @@ function App() {
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
       setEvents([]);
-      setResearchMode(chatModeFromThread(thread.mode, thread.events));
+      setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
       const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
       setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
@@ -3661,7 +3679,21 @@ function App() {
             onOpenSettings={() => { setSettingsSection("proactive"); setSettingsOpen(true); }}
             onCollapse={() => proactive.setOpen(false)}
           />}
-          research={<ResearchPathPanel
+          research={showResearchGraph ? <ResearchGraphPanel
+            projectId={pathProject?.id ?? activeProjectId ?? null}
+            threadId={pathThread?.id ?? null}
+            projectName={pathProject?.name ?? t("No project")}
+            threadTitle={pathThread?.title ?? t("No active session")}
+            hasThread={Boolean(pathThread)}
+            mode={pathMode}
+            version={graphVersion}
+            update={graphUpdate}
+            pinned={pathIsPinned}
+            threadInactive={pathThreadInactive}
+            onTogglePin={togglePathPin}
+            onOpenThread={openPathThread}
+            onCollapse={() => setResearchPanelOpen(false)}
+          /> : <ResearchPathPanel
             stages={researchStages}
             activeStage={pathStage}
             acceptedStages={pathAcceptedStages}
@@ -4563,7 +4595,11 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     }
     const draft = prompt;
     const submittedContext = contextItems;
-    const submittedMode: ResearchMode = pendingResearchSkill ? "research" : predictedMode;
+    const submittedMode: ResearchMode = pendingResearchSkill
+      ? "research"
+      : researchMode === "experiment-setup"
+        ? "experiment-setup"
+        : predictedMode;
     rememberPrompt(draft);
     setPrompt("");
     setComposerError("");

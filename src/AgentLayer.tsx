@@ -10,7 +10,7 @@ const MIN_WIDTH = 340;
 const MIN_HEIGHT = 220;
 const EDGE = 12;
 const DEFAULT_PROACTIVE = { w: 440, h: 300 };
-const DEFAULT_RESEARCH = { w: 560, h: 220 };
+const DEFAULT_RESEARCH = { w: 620, h: 460 };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -53,6 +53,12 @@ function readLayout(): LayerLayout {
         // the current type scale. Grow only the untouched default.
         if (id === "proactive" && panel.w === 400 && panel.h === 220) {
           next[id] = { x: panel.x, y: panel.y, ...DEFAULT_PROACTIVE };
+          continue;
+        }
+        // The Research graph dock was originally 760×520. Compact the untouched
+        // default now that graph nodes and lanes are smaller.
+        if (id === "research" && panel.w === 760 && panel.h === 520) {
+          next[id] = { x: panel.x, y: panel.y, ...DEFAULT_RESEARCH };
           continue;
         }
         next[id] = { x: panel.x, y: panel.y, w: panel.w, h: panel.h };

@@ -69,6 +69,9 @@ const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
 const store = require("./store.cjs");
+const researchGraph = require("./research-graph/service.cjs");
+const experimentRunner = require("./research-graph/experiment-runner.cjs");
+const experimentRuns = require("./research-graph/experiment-runs.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
@@ -1044,6 +1047,35 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
+  ipcMain.handle("research-graph:create-node", (_event, input = {}) => {
+    if (input.kind === "result") throw new Error("Results are created from completed runs.");
+    return researchGraph.createNode(input);
+  });
+  ipcMain.handle("research-graph:revise-node", (_event, input = {}) => researchGraph.reviseNode(input));
+  ipcMain.handle("research-graph:link", (_event, input = {}) => researchGraph.linkNodes(input));
+  ipcMain.handle("research-graph:list", (_event, input = {}) => researchGraph.listGraph(input));
+  ipcMain.handle("research-graph:history", (_event, input = {}) => researchGraph.getNodeHistory(input.nodeId));
+  ipcMain.handle("research-graph:archive", (_event, input = {}) => researchGraph.archiveNode(input));
+  ipcMain.handle("research-graph:restore", (_event, input = {}) => researchGraph.restoreNode(input));
+  ipcMain.handle("research-graph:set-status", (_event, input = {}) => researchGraph.setNodeStatus(input));
+  ipcMain.handle("research-graph:validate", (_event, input = {}) => researchGraph.validateGraph(input));
+  ipcMain.handle("experiment-activity:list", (_event, input = {}) => store.listExperimentActivities(input));
+  ipcMain.handle("experiment-run:list", (_event, input = {}) => store.listExperimentRuns(input));
+  ipcMain.handle("experiment-run:start", (event, input = {}) => {
+    if (typeof input.workspace !== "string" || !input.workspace.trim()) throw new Error("A workspace is required to start an experiment run.");
+    const workspace = resolveWorkspace(input.workspace);
+    const started = experimentRunner.startExperimentRun({
+      ...input,
+      workspace,
+      onUpdate: (run) => {
+        if (!event.sender.isDestroyed()) event.sender.send("experiment-run:update", run);
+      },
+    });
+    return started.run;
+  });
+  ipcMain.handle("experiment-run:cancel", (_event, runId) => experimentRunner.cancelExperimentRun(runId));
+  ipcMain.handle("experiment-run:log", (_event, input = {}) => experimentRuns.readExperimentRunLog(input));
+  ipcMain.handle("experiment-run:result", (_event, input = {}) => researchGraph.createResultFromRun(input));
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
     nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeAgent.compactNative(input) },
@@ -2596,6 +2628,7 @@ app.on("activate", () => {
 app.on("before-quit", () => {
   closeAllNativeClients();
   closeAllTerminals();
+  experimentRunner.shutdownExperimentRuns();
   collaborationServer?.close?.();
   void presence?.closeAll();
 });
