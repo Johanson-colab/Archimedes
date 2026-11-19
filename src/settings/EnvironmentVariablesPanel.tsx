@@ -3,7 +3,7 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { useUISettings } from "../i18n";
 import { SettingsGroup, SettingsSection } from "../SettingsPrimitives";
 
-const PRESETS = ["OPENAI_API_KEY", "TINKER_API_KEY", "HF_TOKEN", "WANDB_API_KEY", "OPENALEX_API_KEY", "BRAVE_SEARCH_API_KEY", "TAVILY_API_KEY", "EXA_API_KEY", "FIRECRAWL_API_KEY"];
+const PRESETS = ["OPENAI_API_KEY", "TINKER_API_KEY", "HF_TOKEN", "WANDB_API_KEY", "OPENALEX_API_KEY", "BRAVE_SEARCH_API_KEY", "TAVILY_API_KEY"];
 
 export default function EnvironmentVariablesPanel({ bridge }: { bridge: ResearchDeskBridge }) {
   const { t } = useUISettings();
