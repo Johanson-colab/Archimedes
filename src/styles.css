@@ -6552,6 +6552,8 @@ html:not([data-theme="paper"]) .terminal-tab.active { background: #211c18; }
 .agent-path-icon.on { color: var(--accent); }
 .agent-path-icon:disabled { opacity: .35; }
 .agent-opencode-model-anchor { display: flex; width: 100%; align-items: center; gap: 5px; }
+.agent-backend-fields .agent-opencode-model-control { min-width: 0; flex-direction: column; align-items: stretch; gap: 6px; }
+.agent-opencode-model-control .agent-backend-note { margin: 0; }
 .agent-opencode-model-anchor input { min-width: 0; flex: 1; }
 .agent-opencode-refresh { display: grid; width: 30px; height: 30px; flex: none; place-items: center; color: var(--text-muted); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
 .agent-opencode-refresh:hover:not(:disabled) { color: var(--text-primary); background: var(--surface-control-active); }

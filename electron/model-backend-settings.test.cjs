@@ -399,6 +399,9 @@ test("OpenCode discovers, searches and selects models while preserving a manual 
     const field = document.getElementById([...document.querySelectorAll("label")].find(node => node.textContent === "OpenCode model").htmlFor);
     await React.act(async () => { field.focus(); await new Promise(resolve => setTimeout(resolve, 0)); });
     assert.match(document.querySelector('.agent-opencode-model-menu').textContent, /opencode-go\/qwen3.7-plus/);
+    assert.equal(document.querySelector('.agent-opencode-model-menu').style.width, '360px');
+    assert.equal(document.querySelector('.agent-opencode-model-menu').style.maxWidth, 'calc(100vw - 16px)');
+    assert.ok(field.closest('.agent-opencode-model-control'), 'model input and help use the dedicated stacked layout');
     await input("OpenCode model", "qwen");
     assert.match(document.querySelector('.agent-opencode-model-menu').textContent, /qwen3.7-plus/);
     assert.doesNotMatch(document.querySelector('.agent-opencode-model-menu').textContent, /opencode-go\/hy4/);
