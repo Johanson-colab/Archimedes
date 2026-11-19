@@ -1445,6 +1445,7 @@ function App() {
   const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
   const [journeyNotice, setJourneyNotice] = useState("");
   const [researchPanelOpen, setResearchPanelOpen] = useState(readResearchPanelOpen);
+  const [researchGraphAvailable, setResearchGraphAvailable] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
   const [graphUpdate, setGraphUpdate] = useState<ResearchGraphUpdate | null>(null);
   const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
@@ -3558,6 +3559,13 @@ function App() {
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
             </div>}
+            {mainSection === "chat" && researchGraphAvailable && <button
+              className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
+              onClick={() => { if (!activeThreadId && !pathIsPinned) setResearchMode("research"); setResearchPanelOpen((open) => !open); }}
+              title={researchPanelOpen ? t("Hide Research path") : t("Show Research path")}
+              aria-label={researchPanelOpen ? t("Hide Research path") : t("Show Research path")}
+              aria-pressed={researchPanelOpen}
+            ><Route size={16} /></button>}
             {activeThreadId && sessionTools.showSnapshots && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
             {activeThreadId && sessionTools.showComments && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
             <button
@@ -3618,6 +3626,7 @@ function App() {
               researchMode={researchMode}
               onResearchMode={setResearchMode}
               researchGraphOpen={researchPanelOpen}
+              onResearchGraphAvailability={setResearchGraphAvailable}
               onToggleResearchGraph={(newSession) => {
                 if (newSession && !pathIsPinned) setResearchMode("research");
                 setResearchPanelOpen((open) => !open);
@@ -4133,7 +4142,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4157,6 +4166,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   researchMode: ResearchMode;
   researchGraphOpen: boolean;
   onToggleResearchGraph: (newSession: boolean) => void;
+  onResearchGraphAvailability: (available: boolean) => void;
   reasoningEffort: ReasoningEffort;
   contextLength: ContextLength;
   modelCapabilities: ModelCapabilities;
@@ -4280,6 +4290,9 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   }, [prompt]);
 
   const predictedMode: NewChatMode = showWelcome ? newChatMode : chatModeFromThread(researchMode, trajectoryEvents);
+  useEffect(() => {
+    onResearchGraphAvailability(predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup"));
+  }, [onResearchGraphAvailability, predictedMode, researchMode, showWelcome]);
   useEffect(() => {
     if (showWelcome) setPendingResearchSkill(null);
   }, [showWelcome]);
@@ -4643,16 +4656,11 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
-      {(showWelcome || predictedMode === "research" || researchMode === "experiment-setup") && <div className="research-composer-tools">
-        {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
+      {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
           if (mode !== "research" && researchGraphOpen) onToggleResearchGraph(false);
           setNewChatMode(mode);
           setPrompt((current) => draftForNewChatMode(current, mode));
         }} />}
-        {(predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup")) && <button type="button" className="research-graph-entry" onClick={() => onToggleResearchGraph(showWelcome)} aria-pressed={researchGraphOpen} title={t(researchGraphOpen ? "Hide Research path" : "Show Research path")}>
-          <Route size={14} aria-hidden="true" /><span>{t("Research graph")}</span>
-        </button>}
-      </div>}
       {nativeQuestions.length > 0 && <div className="native-question-stack">{nativeQuestions.map((question) => <NativeQuestionCard key={question.id} question={question} onAnswer={onNativeAnswer} />)}</div>}
       <div
         ref={composerBoxRef}

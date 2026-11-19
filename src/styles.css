@@ -1307,11 +1307,6 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .change-card-expand:hover { color: #282825; background: #e9e9e5; }
 
 .conversation-composer-wrap { width: min(100%, 820px); margin: 0 auto; padding: 0 30px 12px; }
-.research-composer-tools { display: flex; min-width: 0; align-items: center; gap: 8px; margin-bottom: 8px; }
-.research-composer-tools .new-chat-mode-picker { margin: 0; }
-.research-graph-entry { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 9px; color: var(--text-secondary); background: var(--surface-control); border: 1px solid var(--border-soft); border-radius: 6px; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
-.research-graph-entry:hover, .research-graph-entry[aria-pressed="true"] { color: var(--accent); background: var(--surface-control-active); }
-.research-graph-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .conversation-composer {
   position: relative;
   overflow: visible;
