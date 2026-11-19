@@ -95,6 +95,11 @@ npm install
 
 `npm install` also rebuilds the native terminal dependency for Electron. Let it finish before starting the app.
 
+On Windows PowerShell, use `npm.cmd` if script execution policy blocks `npm.ps1`.
+Installation first checks the bundled Windows terminal binaries in Electron;
+Visual Studio C++ Build Tools are only needed if that check fails and a source rebuild is required.
+For a local production build, run `npm.cmd run build`, then `npm.cmd run desktop`.
+
 ### 3. Add a model key
 
 Create your local configuration file:
