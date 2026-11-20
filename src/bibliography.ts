@@ -155,8 +155,16 @@ const identifierFields = [
   ['s2_id', (value: string) => value.trim().toLowerCase()], ['arxiv_id', arxiv], ['doi', doi],
 ] as const;
 
+export function hasConflictingBibliographyIdentifiers(first: AcademicSearchResult, second: AcademicSearchResult) {
+  return identifierFields.some(([field, normalize]) => {
+    const a = normalize(first[field] || "");
+    const b = normalize(second[field] || "");
+    return a && b && a !== b;
+  });
+}
+
 export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming: AcademicSearchResult, papers: T[], { strongOnly = false, titleAlreadyMatched = false }: { strongOnly?: boolean; titleAlreadyMatched?: boolean } = {}) {
-  const compatible = (paper: AcademicSearchResult) => !identifierFields.some(([field, normalize]) => incoming[field] && paper[field] && normalize(incoming[field]) !== normalize(paper[field]));
+  const compatible = (paper: AcademicSearchResult) => !hasConflictingBibliographyIdentifiers(incoming, paper);
   for (const [field, normalize] of identifierFields) {
     if (!incoming[field]) continue;
     const matched = papers.find(paper => paper[field] && normalize(incoming[field]) === normalize(paper[field]) && compatible(paper));
@@ -170,10 +178,10 @@ export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming:
 // replacing its saved metadata. Keep the whole learned identity together.
 export function paperWithLearnedIdentifiers(paper: BibliographyPaper, original: AcademicSearchResult, representative: AcademicSearchResult) {
   if (!identifierFields.some(([field]) => !original[field] && representative[field])) return paper;
-  const identifiers = Object.fromEntries(identifierFields
+  const identifiers = identifierFields
     .filter(([field]) => !paper[field] && representative[field])
-    .map(([field]) => [field, representative[field]]));
-  return { ...paper, ...identifiers };
+    .map(([field]) => [field, representative[field]]);
+  return identifiers.length ? { ...paper, ...Object.fromEntries(identifiers) } : paper;
 }
 
 export function metadataDifferences(entry: AcademicSearchResult, current: AcademicSearchResult): MetadataPatch {
@@ -252,5 +260,16 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
     for (const identity of identities) addIdentity(identity, representative);
     if (titleKey) addIdentity(titleKey, representative);
   });
-  return { repeatedRows, representatives };
+  // A strong alias can make two retained rows claim the same identifier.
+  // Detect contradictions after the batch has finished learning aliases.
+  const conflictingPapers = new Set<AcademicSearchResult>();
+  for (const [identity, group] of byIdentity) {
+    if (identity.startsWith("title:") || group.size < 2) continue;
+    const papers = [...group];
+    for (const paper of papers) {
+      if (papers.some(other => hasConflictingBibliographyIdentifiers(paper, other))) conflictingPapers.add(paper);
+    }
+  }
+  const conflictingRows = new Set([...representatives].filter(([, paper]) => conflictingPapers.has(paper)).map(([index]) => index));
+  return { repeatedRows, representatives, conflictingRows };
 }

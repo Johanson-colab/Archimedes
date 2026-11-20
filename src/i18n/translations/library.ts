@@ -41,6 +41,7 @@ export const library: Record<string, string> = {
   "Collapse {name}": "收起 {name}",
   "Comment": "评论",
   "Completed": "已完成",
+  "Conflicting DOI or arXiv IDs: edit the source before importing": "DOI 或 arXiv 标识冲突：请修改原文后再导入",
   "Continue reading": "继续阅读",
   "Core contribution": "核心贡献",
   "Create a folder to start collecting papers.": "新建文件夹，开始收集论文。",

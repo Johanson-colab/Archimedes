@@ -35,7 +35,7 @@ before(async () => {
     const result = new Function(...Object.keys(scope), `${code.replace(/^export \{\};?$/gm, "")}\nreturn {${names.join(",")}};`)(...Object.values(scope));
     Object.assign(scope, result);
   }
-  await load("bibliography.ts", ["parseBibliography", "indexBibliographyBatch", "exportBibliography", "matchBibliographyPaper", "metadataDifferences", "paperWithLearnedIdentifiers", "citationKeyIdentity"]);
+  await load("bibliography.ts", ["parseBibliography", "indexBibliographyBatch", "exportBibliography", "matchBibliographyPaper", "hasConflictingBibliographyIdentifiers", "metadataDifferences", "paperWithLearnedIdentifiers", "citationKeyIdentity"]);
   await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
   scope.conferenceCatalog = require("../shared/conferences.json");
   scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
@@ -317,5 +317,66 @@ test("a title alias from a strong match deduplicates a later compatible row, whi
     assert.equal(papers.length, 2);
     assert.equal(papers.find(paper => paper.title === "Canonical experiment title").arxiv_id, "2401.01234");
     assert.equal(papers.find(paper => paper.title === "Alternate experiment title").arxiv_id, "2401.05678");
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("a selected title repair preserves the paper ID resolved for a later row", async () => {
+  const data = database("BibTeX title repair"); let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    const saved = data.db.addPaper(library.id, { title: "Original field experiment", authors: [], doi: "10.5555/field" });
+    data.db.updatePaper(saved.id, { notes: "Keep the field notes" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    const field = document.querySelector('[aria-label="BibTeX source"]');
+    await input(field, [
+      '@inproceedings{field,title={Corrected field experiment},doi={10.5555/field}}',
+      '@article{oldTitle,title={Original field experiment}}',
+    ].join("\n"));
+    const rows = [...document.querySelectorAll("article.external-paper")];
+    assert.match(rows[1].textContent, /Existing paper/);
+    const titleRepair = [...rows[0].querySelectorAll("label")].find(node => node.textContent.startsWith("Repair selected metadata: title:"));
+    await React.act(async () => { titleRepair.querySelector("input").click(); await tick(); });
+    await click("Import selected references");
+
+    const papers = data.db.listPapers(library.id);
+    assert.deepEqual(papers.map(paper => [paper.id, paper.title, paper.notes, paper.citekey, paper.entry_type]), [
+      [saved.id, "Corrected field experiment", "Keep the field notes", "field", "inproceedings"],
+    ]);
+    assert.equal([...document.querySelectorAll("article small")].filter(row => row.textContent.includes("Imported")).length, 2);
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("contradictory identifier claims are blocked before writing and unrelated rows can be imported", async () => {
+  const data = database("BibTeX identifier claims"); let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    const field = document.querySelector('[aria-label="BibTeX source"]');
+    const source = [
+      '@article{first,title={Phase transition},doi={10.5555/phase-first}}',
+      '@article{alias,title={Phase transition measurements},doi={10.5555/phase-first},eprint={2401.01234}}',
+      '@article{conflict,title={Thermal measurements},doi={10.5555/thermal},eprint={2401.01234}}',
+      '@article{independent,title={Independent result},doi={10.5555/independent}}',
+    ];
+    await input(field, source.join("\n"));
+    const status = [...document.querySelectorAll("article.external-paper")].map(row => [row.querySelector("small").textContent, row.querySelector("input").disabled]);
+    assert.equal(data.db.listPapers(library.id).length, 0);
+    await click("Import selected references");
+    const firstImport = data.db.listPapers(library.id);
+    assert.deepEqual(firstImport.map(paper => paper.doi), ["10.5555/independent"]);
+    const reason = "Conflicting DOI or arXiv IDs: edit the source before importing";
+    assert.deepEqual(status, [[reason, true], ["Duplicate in this import", true], [reason, true], ["New paper", false]]);
+
+    source[2] = source[2].replace("2401.01234", "2401.05678");
+    await input(field, source.join("\n"));
+    await click("Import selected references");
+    const papers = data.db.listPapers(library.id);
+    assert.deepEqual(papers.map(paper => [paper.doi, paper.arxiv_id]).sort(), [
+      ["10.5555/independent", ""], ["10.5555/phase-first", "2401.01234"], ["10.5555/thermal", "2401.05678"],
+    ]);
+    assert.equal(papers.find(paper => paper.doi === "10.5555/independent").id, firstImport[0].id);
+    await input(field, source.join("\n") + "\n");
+    await click("Import selected references");
+    assert.deepEqual(data.db.listPapers(library.id).map(paper => paper.id).sort(), papers.map(paper => paper.id).sort());
   } finally { if (unmount) await unmount(); data.close(); }
 });
