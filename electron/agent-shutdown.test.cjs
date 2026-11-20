@@ -42,14 +42,13 @@ test("the actual quit handler waits for agent shutdown and prevents duplicate cl
   let handler, prevented = 0;
   const event = { preventDefault: () => { prevented++; } };
   const app = { on: (_name, callback) => { handler = callback; }, quit: () => { calls.push("quit"); handler(event); } };
-  new Function("app", "store", "agent", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence",
-    `let readyToQuit = false, quitting = false;\n${source.slice(start)}`)(app, {}, { shutdownAgents: async () => { calls.push("agents"); await gate; } }, () => calls.push("native"), () => calls.push("terminals"), { close: () => calls.push("server") }, { closeAll: () => calls.push("presence") });
+  new Function("app", "store", "agent", "closeAllNativeClients", "closeAllTerminals", "experimentRunner", "collaborationServer", "presence",
+    `let readyToQuit = false, quitting = false;\n${source.slice(start)}`)(app, {}, { shutdownAgents: async () => { calls.push("agents"); await gate; } }, () => calls.push("native"), () => calls.push("terminals"), { shutdownExperimentRuns: () => calls.push("experiments") }, { close: () => calls.push("server") }, { closeAll: () => calls.push("presence") });
   handler(event); handler(event);
   await Promise.resolve();
-  assert.deepEqual(calls, ["native", "terminals", "agents"]);
+  assert.deepEqual(calls, ["native", "terminals", "experiments", "agents"]);
   assert.equal(prevented, 2);
   release();
   await new Promise(setImmediate);
-  assert.equal(calls.filter(call => call === "agents").length, 1);
-  assert.equal(calls.filter(call => call === "quit").length, 1);
+  assert.deepEqual(calls, ["native", "terminals", "experiments", "agents", "server", "presence", "quit"]);
 });

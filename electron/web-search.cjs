@@ -3,9 +3,33 @@ const path = require("node:path");
 
 const PROVIDERS = new Set(["brave", "tavily", "exa", "firecrawl"]);
 let configPath = "";
+let environmentVault = null;
+const KEY_NAMES = { brave: "BRAVE_SEARCH_API_KEY", tavily: "TAVILY_API_KEY", exa: "EXA_API_KEY", firecrawl: "FIRECRAWL_API_KEY" };
 
-function initializeWebSearch(userDataPath) {
+function initializeWebSearch(userDataPath, vault = null) {
   configPath = path.join(userDataPath, "web-search-config.json");
+  environmentVault = vault;
+  if (!vault || !userDataPath || !fs.existsSync(configPath)) return;
+  const config = readConfig();
+  let existing;
+  try { existing = new Set(vault.list().map(entry => entry.name)); }
+  catch { return; }
+  let changed = false;
+  for (const [provider, name] of Object.entries(KEY_NAMES)) {
+    if (!config.apiKeys[provider]) continue;
+    try {
+      if (!existing.has(name)) vault.save({ name, value: config.apiKeys[provider], shared: false });
+      else if (vault.get(name) !== config.apiKeys[provider]) continue; // Preserve conflicting legacy credentials.
+      delete config.apiKeys[provider];
+      changed = true;
+    } catch { /* Keep the old key available if system encryption is unavailable. */ }
+  }
+  if (changed) {
+    const temp = `${configPath}.${process.pid}.${require("node:crypto").randomUUID()}.tmp`;
+    try { fs.writeFileSync(temp, JSON.stringify(config), { mode: 0o600, flag: "wx" }); fs.renameSync(temp, configPath); }
+    catch { /* The original file remains usable; retry migration on next launch. */ }
+    finally { try { fs.unlinkSync(temp); } catch {} }
+  }
 }
 
 function readConfig() {
@@ -20,12 +44,18 @@ function readConfig() {
 }
 
 function activeKey(provider, config = readConfig()) {
-  return String(config.apiKeys[provider] || (provider === "brave" ? process.env.ARCHIMEDES_WEB_SEARCH_API_KEY : "") || "");
+  return String((environmentVault && environmentVault.get(KEY_NAMES[provider])) || config.apiKeys[provider] || (provider === "brave" ? process.env.ARCHIMEDES_WEB_SEARCH_API_KEY : "") || "");
+}
+
+function configuredProvider(config) {
+  if (activeKey(config.provider, config)) return config.provider;
+  return [...PROVIDERS].find(provider => activeKey(provider, config)) || config.provider;
 }
 
 function getPublicWebSearchConfig() {
   const config = readConfig();
-  return { provider: config.provider, hasApiKey: Boolean(activeKey(config.provider, config)), configuredProviders: [...PROVIDERS].filter((provider) => Boolean(activeKey(provider, config))) };
+  const provider = configuredProvider(config);
+  return { provider, hasApiKey: Boolean(activeKey(provider, config)), configuredProviders: [...PROVIDERS].filter((item) => Boolean(activeKey(item, config))) };
 }
 
 function saveWebSearchConfig(input = {}) {
@@ -35,7 +65,8 @@ function saveWebSearchConfig(input = {}) {
   const apiKey = String(input.apiKey || "").trim();
   if (apiKey.length > 2_000) throw new Error("Enter a valid API key.");
   const config = readConfig();
-  if (apiKey) config.apiKeys[provider] = apiKey;
+  if (apiKey && environmentVault) { environmentVault.save({ name: KEY_NAMES[provider], value: apiKey, shared: environmentVault.list().find(entry => entry.name === KEY_NAMES[provider])?.shared || false }); delete config.apiKeys[provider]; }
+  else if (apiKey) config.apiKeys[provider] = apiKey;
   if (!activeKey(provider, config)) throw new Error(`Enter a ${provider} API key before selecting this provider.`);
   config.provider = provider;
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -132,7 +163,8 @@ async function searchOne(query, input, options, domains) {
 async function searchWeb(input = {}, options = {}) {
   const queries = normalizeQueries(input);
   const domains = normalizeDomains(input.domains);
-  const provider = options.provider || readConfig().provider;
+  const config = readConfig();
+  const provider = options.provider || configuredProvider(config);
   if (!PROVIDERS.has(provider)) throw new Error("Unsupported web search provider.");
   const apiKey = options.apiKey || activeKey(provider);
   if (!apiKey) throw new Error(provider === "brave"

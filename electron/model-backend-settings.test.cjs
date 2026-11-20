@@ -69,6 +69,7 @@ function bridge(overrides = {}) {
     getAgentBackendConfig: async () => { calls.loadedBackends++; return { backend: "api", binary: "codex", model: "" }; },
     saveAgentBackendConfig: async (config) => { calls.savedBackends.push(config); return config; },
     listCodexModelCatalog: async (config) => { calls.loadedCatalogs.push(config); return { models: [{ id: "native-model", label: "Native model", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "high" }], effectiveModelId: "native-model" }; },
+    listOpenCodeModelCatalog: async () => ({ models: [{ id: "opencode-go/qwen3.7-plus", label: "opencode-go/qwen3.7-plus" }, { id: "opencode-go/hy4", label: "opencode-go/hy4" }] }),
     checkAgentBackend: async (config) => { calls.checkedBackends.push(config); return { ready: true, models: [{ id: "native-model", label: "Native model" }], message: "Connected" }; },
     ...overrides,
   };
@@ -118,7 +119,7 @@ test("API and Agent tabs keep separate actions, keyboard navigation and unsaved 
     await input("Codex model", "draft-native-model");
     await click("API models");
     await click("Harnesses");
-    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "draft-native-model");
+    assert.equal(document.querySelector('.agent-backend-fields input[role=combobox]').value, "draft-native-model");
     assert.deepEqual(calls.savedBackends, []);
     assert.deepEqual(calls.checkedBackends, []);
     await click("API models");
@@ -138,7 +139,8 @@ test("checking Codex does not activate it; explicit activation and API reset per
     assert.deepEqual(calls.savedBackends, []);
     assert.ok(!document.querySelector(".agent-backend-card .agent-backend-active"));
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connected");
-    assert.equal(document.querySelector("datalist option").value, "native-model");
+    await React.act(async () => document.querySelector('.agent-backend-fields input[role=combobox]').click());
+    assert.match(document.querySelector(".agent-opencode-model-menu").textContent, /native-model/);
     await input("Codex model", "native-model");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connection not checked");
     await click("Use Codex");
@@ -259,7 +261,8 @@ test("agent cards collapse without changing the backend and binary edits invalid
     await click("Check Codex");
     await input("Codex executable", "/different/codex");
     assert.equal(document.querySelector(".agent-connection-status").textContent, "Connection not checked");
-    assert.equal(document.querySelectorAll("datalist option").length, 0);
+    await React.act(async () => document.querySelector('.agent-backend-fields input[role=combobox]').click());
+    assert.doesNotMatch(document.querySelector(".agent-opencode-model-menu").textContent, /native-model/);
   } finally { await cleanup(); }
 });
 
@@ -376,17 +379,67 @@ test("Claude and OpenCode settings use independent drafts and explicit native ac
     assert.equal(document.querySelector('.agent-backend-fields input').value, "opencode");
     await input("OpenCode model", "provider/model");
     await click("Claude Code");
-    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "sonnet");
-    assert.equal(document.querySelector('datalist option').value, "native-model");
+    assert.equal(document.querySelector('.agent-backend-fields input[role=combobox]').value, "sonnet");
+    await React.act(async () => document.querySelector('.agent-backend-fields input[role=combobox]').click());
+    assert.match(document.querySelector('.agent-opencode-model-menu').textContent, /native-model/);
     await click("Use Claude Code");
     assert.equal(calls.savedBackends.at(-1).backend, "claude");
     assert.equal(calls.savedBackends.at(-1).model, "sonnet");
     await click("Use API harness");
     assert.equal(calls.savedBackends.at(-1).backend, "api");
     assert.equal(calls.savedBackends.at(-1).binary, "codex");
-    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "sonnet");
+    assert.equal(document.querySelector('.agent-backend-fields input[role=combobox]').value, "sonnet");
     await click("Codex");
-    assert.equal(document.querySelector('.agent-backend-fields input[list]').value, "codex-draft");
+    assert.equal(document.querySelector('.agent-backend-fields input[role=combobox]').value, "codex-draft");
+  } finally { await cleanup(); }
+});
+
+test("Codex and Claude model pickers share the searchable menu and preserve default and manual values", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click("Harnesses");
+    for (const [backend, label, defaultLabel] of [["Codex", "Codex model", "Codex default"], ["Claude Code", "Claude Code model", "Claude default"]]) {
+      if (backend === "Claude Code") { await click(backend); await click("Check Claude Code"); }
+      const field = document.getElementById([...document.querySelectorAll("label")].find(node => node.textContent === label).htmlFor);
+      await React.act(async () => field.click());
+      assert.equal(field.getAttribute("role"), "combobox");
+      assert.equal(document.querySelector(".agent-opencode-model-menu").style.width, "360px");
+      await input(label, "native");
+      assert.match(document.querySelector(".agent-opencode-model-menu").textContent, /native-model/);
+      await click("native-model");
+      assert.equal(field.value, "native-model");
+      await React.act(async () => field.click());
+      await click(defaultLabel);
+      assert.equal(field.value, "");
+      await input(label, "custom-model");
+      assert.equal(field.value, "custom-model");
+    }
+  } finally { await cleanup(); }
+});
+
+test("OpenCode discovers, searches and selects models while preserving a manual fallback", async () => {
+  const cleanup = await mount(bridge({ checkAgentBackend: async () => ({ ready: true, models: [], message: "Connected" }) }));
+  try {
+    await click("Harnesses");
+    await click("OpenCode");
+    const field = document.getElementById([...document.querySelectorAll("label")].find(node => node.textContent === "OpenCode model").htmlFor);
+    await React.act(async () => { field.focus(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    assert.match(document.querySelector('.agent-opencode-model-menu').textContent, /opencode-go\/qwen3.7-plus/);
+    assert.equal(document.querySelector('.agent-opencode-model-menu').style.width, '360px');
+    assert.equal(document.querySelector('.agent-opencode-model-menu').style.maxWidth, 'calc(100vw - 16px)');
+    assert.ok(field.closest('.agent-opencode-model-control'), 'model input and help use the dedicated stacked layout');
+    await input("OpenCode model", "qwen");
+    assert.match(document.querySelector('.agent-opencode-model-menu').textContent, /qwen3.7-plus/);
+    assert.doesNotMatch(document.querySelector('.agent-opencode-model-menu').textContent, /opencode-go\/hy4/);
+    await click("opencode-go/qwen3.7-plus");
+    assert.equal(field.value, "opencode-go/qwen3.7-plus");
+    await click("Check OpenCode");
+    await React.act(async () => field.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })));
+    assert.match(document.querySelector('.agent-opencode-model-menu').textContent, /opencode-go\/qwen3.7-plus/);
+    await click("Use OpenCode");
+    assert.equal(calls.savedBackends.at(-1).model, "opencode-go/qwen3.7-plus");
+    await input("OpenCode model", "custom/my-model");
+    assert.equal(field.value, "custom/my-model");
   } finally { await cleanup(); }
 });
 

@@ -4,9 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { BookOpenCheck, Download, LoaderCircle, Square } from "lucide-react";
-import PaperPresentationDeck from "./PaperPresentationDeck";
 import PaperDeepReadingDocument from "./PaperDeepReadingDocument";
-import { Tab, Tabs } from "./Tabs";
 import { InlineNotice } from "./InlineNotice";
 import { useUISettings } from "./i18n";
 import "./paper-deep-reading.css";
@@ -14,15 +12,14 @@ import "./paper-deep-reading.css";
 type ReviewPaper = Pick<LibraryPaper, "id" | "title" | "authors" | "year" | "venue" | "abstract" | "url" | "pdf_url">;
 function errorMessage(error: unknown) { return (error instanceof Error ? error.message : String(error)).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, ""); }
 
-export default function PaperReviewWorkbench({ bridge, workspace, projectId, paper, pageCount, ready, pdfUrl = "", onOpenSource, onInternalReviewThreadsDeleted }: {
-  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; paper: ReviewPaper; pageCount: number; ready: boolean; pdfUrl?: string;
+export default function PaperReviewWorkbench({ bridge, workspace, projectId, paper, pageCount, ready, onOpenSource, onInternalReviewThreadsDeleted }: {
+  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; paper: ReviewPaper; pageCount: number; ready: boolean;
   onOpenSource?: (page: number) => void; onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
 }) {
   const { t, language } = useUISettings();
   const [readingLanguage, setReadingLanguage] = useState<"zh" | "en">(language);
   useEffect(() => setReadingLanguage(language), [language]);
   const bridgeReady = typeof bridge.cancelPaperDeepReading === "function" && typeof bridge.exportPaperDeepReading === "function";
-  const [view, setView] = useState<"reading" | "presentation">("reading");
   const [saved, setSaved] = useState<StoredPaperReview | null>(null);
   const [html, setHtml] = useState("");
   const [running, setRunning] = useState(false);
@@ -45,7 +42,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
 
   useEffect(() => {
     const request = ++generation.current;
-    setRunning(false); setSaved(null); setHtml(""); setError(""); setNotice(""); setView("reading"); setRestoring(true);
+    setRunning(false); setSaved(null); setHtml(""); setError(""); setNotice(""); setRestoring(true);
     void bridge.getPaperReview(paper.id, workspace, projectId).then(record => {
       if (request !== generation.current || runId.current) return;
       setSaved(record); setHtml(record?.readingHtml || "");
@@ -85,14 +82,12 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     finally { setExporting(false); }
   }
 
-  return <div className={`paper-deep-workbench${view === "presentation" ? " presentation-active" : ""}`}>
+  return <div className="paper-deep-workbench">
     <header className="paper-deep-toolbar">
-      <Tabs value={view} onChange={v => setView(v as "reading" | "presentation")} label={t("Interactive paper outputs")} variant="segmented">
-        <Tab value="reading">{t("Reading")}</Tab><Tab value="presentation" disabled={!saved?.summary}>{t("Presentation")}</Tab>
-      </Tabs>
+      <strong className="paper-deep-toolbar-title">{t("Reading")}</strong>
       <span className="paper-deep-status" role="status">{running ? stages[stage] || stages.chapter : html ? t("Reading ready") : ""}</span>
       <div className="paper-deep-actions">
-        {html && view === "reading" && <button className="secondary-button" aria-label={readingLanguage === "zh" ? "Switch reading to English" : "切换精读为中文"} onClick={() => setReadingLanguage(current => current === "zh" ? "en" : "zh")}>{readingLanguage === "zh" ? "English" : "中文"}</button>}
+        {html && <button className="secondary-button" aria-label={readingLanguage === "zh" ? "Switch reading to English" : "切换精读为中文"} onClick={() => setReadingLanguage(current => current === "zh" ? "en" : "zh")}>{readingLanguage === "zh" ? "English" : "中文"}</button>}
         {html && <button className="secondary-button" disabled={exporting || running} onClick={() => void exportReading()}>{exporting ? <LoaderCircle className="spin" size={14} /> : <Download size={14} />}{t("Export reading")}</button>}
         {running ? <button className="secondary-button" onClick={() => { if (runId.current) void bridge.cancelPaperDeepReading(runId.current).catch(cause => setError(errorMessage(cause))); }}><Square size={13} />{t("Stop")}</button> : <button className="primary-button" disabled={!ready || !workspace || restoring || !bridgeReady} onClick={() => void runReading()}>{t(saved ? "Read again" : "Generate reading")}</button>}
       </div>
@@ -100,7 +95,7 @@ export default function PaperReviewWorkbench({ bridge, workspace, projectId, pap
     {!bridgeReady && <InlineNotice tone="warning" className="paper-deep-notice">{t("Restart Archimedes to enable illustrated paper readings.")}</InlineNotice>}
     {error && <InlineNotice tone="danger" className="paper-deep-notice">{error}</InlineNotice>}
     {notice && <InlineNotice tone="info" className="paper-deep-notice">{notice}</InlineNotice>}
-    {view === "presentation" ? <PaperPresentationDeck bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={pageCount} pdfUrl={pdfUrl} reviewReady={Boolean(saved?.summary)} reviewUpdatedAt={saved?.updated_at || ""} /> : html ? <PaperDeepReadingDocument html={html} title={t("Interactive paper")} pageCount={pageCount} onOpenSource={onOpenSource} readingLanguage={readingLanguage} /> : <div className="paper-deep-empty">
+    {html ? <PaperDeepReadingDocument html={html} title={t("Interactive paper")} pageCount={pageCount} onOpenSource={onOpenSource} readingLanguage={readingLanguage} /> : <div className="paper-deep-empty">
       <div className="paper-deep-intro">
         <section className="paper-deep-hero">
           <div className="paper-deep-eyebrow"><BookOpenCheck size={16} strokeWidth={1.6} /> {t("INTERACTIVE READING")}</div>
