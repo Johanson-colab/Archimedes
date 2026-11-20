@@ -49,7 +49,7 @@ const doi = (value: string) => value.trim().replace(/^https?:\/\/(?:dx\.)?doi\.o
 const arxiv = (value: string) => value.trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//, "").replace(/^arxiv:\s*/, "").replace(/\.pdf$/, "").replace(/v\d+$/, "");
 const arxivUrl = (value: string) => /^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//i.test(value);
 const arxivId = (value: string) => /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})$/.test(arxiv(value));
-const title = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const title = (value: string) => (value.includes("\\") ? plain(value) : value).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 function splitAuthors(value: string) {
   const authors: string[] = [];
@@ -227,6 +227,14 @@ export function exportBibliography(papers: BibliographyPaper[]) {
       if (character === "~") return "\\textasciitilde{}";
       return "\\" + character;
     });
-    return `@${paper.entry_type || "article"}{${keys[index]},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${field === "author" ? paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ") : escape(value)}}`).join(",\n")}\n}`;
+    const formatValue = (field: string, value: string) => {
+      if (field === "url" || field === "doi" || field === "eprint") {
+        return value.replace(/[{}\\]/g, character => encodeURIComponent(character));
+      }
+      if (field === "author") return paper.authors.map(author =>
+        /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ");
+      return escape(value);
+    };
+    return `@${paper.entry_type || "article"}{${keys[index]},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${formatValue(field, value)}}`).join(",\n")}\n}`;
   }).join("\n\n") + "\n";
 }

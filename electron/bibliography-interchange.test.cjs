@@ -257,3 +257,32 @@ test("leaving a BibTeX import stops subsequent operations after an in-flight add
     assert.equal(data.db.listPapers(library.id).length, 1, "the already-issued add still completes in its original store");
   } finally { if (unmount) await unmount(); data.close(); }
 });
+
+test("URL fields retain literal URI characters instead of text-mode TeX commands", () => {
+  const url = "https://example.org/~alice/a_b?x=%2F&y=2#item";
+  const paper = { ...fixture.paper, url, id: "uri-1", citekey: "url", entry_type: "article" };
+  const exported = scope.exportBibliography([paper]);
+  assert.ok(exported.includes(`url = {${url}}`), exported);
+  assert.equal(scope.parseBibliography(exported).entries[0].paper.url, url);
+});
+
+test("a repeat import finds a previously stored TeX-accented title and offers to repair it", async () => {
+  const data = database("Legacy accents"); let unmount;
+  try {
+    const library = data.db.createLibrary({ projectId: data.project.id, name: "References" });
+    const source = String.raw`@article{legacy,title={Garc\'ia}}`;
+    const { paper } = scope.parseBibliography(source).entries[0];
+    const old = data.db.addPaper(library.id, { ...paper, title: String.raw`Garc\'ia` });
+    data.db.setPaperBibliography(old.id, { citekey: "legacy", entryType: "article" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), source);
+    const repair = [...document.querySelectorAll("label")].find(label => label.textContent.includes("title"));
+    assert.ok(repair, document.body.textContent);
+    await React.act(async () => { repair.querySelector("input").click(); await tick(); });
+    await click("Import selected references");
+    assert.deepEqual(data.db.listPapers(library.id).map(row => [row.id, row.title, row.citekey]), [[old.id, "García", "legacy"]]);
+  } finally {
+    if (unmount) await unmount();
+    data.close();
+  }
+});
