@@ -32,3 +32,9 @@ Both Research Apps settings captures use the full App renderer in Electron at 14
 | Before | After |
 | --- | --- |
 | ![Data charts under Analysis and visualization](apps-settings-before.png) | ![Paper chart references under Resources and evidence](apps-settings-after.png) |
+
+The command palette comparison uses the application palette, app command definitions, and the same search text in Electron at 1100 × 720, Charcoal and English. Both apps are enabled. With the exact query **Data charts**, Enter targets **Data analysis** at `41e7084` and **Paper chart references** at `0082ce5`.
+
+| Before | After |
+| --- | --- |
+| ![Data analysis ranks first for the old chart app name](palette-alias-before.png) | ![Paper chart references ranks first for its exact alias](palette-alias-after.png) |
